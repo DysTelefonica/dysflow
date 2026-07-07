@@ -12,8 +12,10 @@ import {
   type DysflowMcpServices,
   type DysflowMcpTool,
   type McpWriteAccessResolver,
+  extractAccessPathFromInput,
   resolveInScopeSecrets,
   translateCoreResultToMcpContent,
+  withHumanCompileReminder,
 } from "./result-translation.js";
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
@@ -129,9 +131,15 @@ export function createDispatchTool(
       switch (route.kind) {
         case "vba-sync":
           if (services.vbaSyncToolService !== undefined) {
-            return translateCoreResultToMcpContent(
-              await services.vbaSyncToolService.execute(name, input),
-            );
+            // PR-1 (issue #762, v1.20.0) — wrap the vba-sync result with the
+            // human-compile reminder surface when the per-project pending flag
+            // is set. The flag is keyed by `accessPath`, sourced from the
+            // caller's input (explicit override) or the project config.
+            const coreResult = await services.vbaSyncToolService.execute(name, input);
+            const mcpResult = translateCoreResultToMcpContent(coreResult);
+            const accessPath = extractAccessPathFromInput(input);
+            if (accessPath === undefined) return mcpResult;
+            return withHumanCompileReminder(mcpResult, { toolName: name, accessPath });
           }
           return {
             isError: true,

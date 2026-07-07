@@ -18,7 +18,11 @@ import type {
   McpToolResult,
   McpWriteAccessResolver,
 } from "./result-translation.js";
-import { translateCoreResultToMcpContent } from "./result-translation.js";
+import {
+  extractAccessPathFromInput,
+  translateCoreResultToMcpContent,
+  withHumanCompileReminder,
+} from "./result-translation.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
 import { validateInput } from "./validator.js";
@@ -90,9 +94,16 @@ export async function handleMcpVbaExecute(
   );
   if (allowlistError !== undefined) return allowlistError;
 
-  return translateCoreResultToMcpContent(
-    await services.vbaService.execute(request, context?.sendProgress),
-  );
+  const coreResult = await services.vbaService.execute(request, context?.sendProgress);
+  const mcpResult = translateCoreResultToMcpContent(coreResult);
+  // PR-1 (issue #762, v1.20.0) — surface the human-compile reminder on
+  // `dysflow_vba_execute` (and the legacy `run_vba` alias that calls this
+  // same handler). The access path is sourced from the request that the
+  // schema-validated input produced.
+  return withHumanCompileReminder(mcpResult, {
+    toolName: "dysflow_vba_execute",
+    accessPath: extractAccessPathFromInput(request) ?? "",
+  });
 }
 
 export async function handleMcpQueryExecute(

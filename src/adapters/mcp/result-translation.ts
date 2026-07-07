@@ -14,6 +14,11 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
+import {
+  getHumanCompileState,
+  HUMAN_COMPILE_REMINDER_TEXT,
+  isHumanCompilePending,
+} from "../../core/runtime/human-compile-state.js";
 import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
@@ -165,4 +170,97 @@ export function resolveInScopeSecrets(
 ): string[] | undefined {
   const secrets = values.filter((v): v is string => typeof v === "string" && v.length > 0);
   return secrets.length > 0 ? secrets : undefined;
+}
+
+// ─── Human-compile reminder (v1.20.0, issue #762) ──────────────────────────
+
+/**
+ * Tools whose successful result carries the `humanCompileReminder` field
+ * when the per-project `humanCompilePending` flag is set. Read-only tools
+ * (export, list, verify, query-read) are intentionally excluded — the
+ * reminder only applies to "I'm about to test" or "I just changed the binary"
+ * tool surfaces.
+ */
+const HUMAN_COMPILE_REMINDER_TOOLS: ReadonlySet<string> = new Set([
+  "import_modules",
+  "import_all",
+  "delete_module",
+  "test_vba",
+  "run_vba",
+  "dysflow_vba_execute",
+]);
+
+/**
+ * PR-1 (issue #762) — wrap a translated `McpToolResult` to add the
+ * `humanCompileReminder` field when:
+ *   1. The tool is one of the reminder-bearing tools.
+ *   2. The result is a successful (`ok: true`) envelope.
+ *   3. The structured data is NOT a `dryRun: true` plan-shaped result
+ *      (reminders are only surfaced for real operations).
+ *   4. The per-project `humanCompilePending` flag is set.
+ *
+ * The field carries the reminder text with the actual `lastPersistenceAt`
+ * ISO timestamp substituted for the `<ISO timestamp>` placeholder, so a
+ * consumer can grep for `DYSFLOW_HUMAN_COMPILE_REMINDER` in logs and read
+ * the persistence timestamp directly off the structured result.
+ *
+ * Reminder emission is additive: failures keep their `<CODE>: <message>`
+ * envelope verbatim, and existing consumers that ignore the new field keep
+ * working unchanged.
+ */
+export function withHumanCompileReminder(
+  result: McpToolResult,
+  options: { toolName: string; accessPath: string },
+): McpToolResult {
+  if (result.isError || result.ok === false) return result;
+  if (!HUMAN_COMPILE_REMINDER_TOOLS.has(options.toolName)) return result;
+  if (typeof options.accessPath !== "string" || options.accessPath.length === 0) return result;
+  if (!isHumanCompilePending(options.accessPath)) return result;
+
+  const first = result.content[0];
+  if (first === undefined) return result;
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(first.text) as Record<string, unknown>;
+  } catch {
+    // Non-JSON success content (rare — produced by inline paths). Skip.
+    return result;
+  }
+  // Skip plan-shaped (dry-run) results — the runtime did NOT persist, so the
+  // reminder must not surface ("the user has nothing new to compile yet").
+  if (parsed.dryRun === true) return result;
+
+  const state = getHumanCompileState(options.accessPath);
+  if (state.lastPersistenceAt === undefined) return result;
+
+  const reminder = HUMAN_COMPILE_REMINDER_TEXT.replace(
+    "<ISO timestamp>",
+    state.lastPersistenceAt.toISOString(),
+  );
+  return {
+    ...result,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ ...parsed, humanCompileReminder: reminder }),
+      },
+    ],
+  };
+}
+
+/**
+ * Extract the access path from a tool input. Accepts the explicit override
+ * fields (`accessPath`, `accessDbPath`, `databasePath`, `sourcePath`) that
+ * the MCP wire protocol allows, so the reminder emitter works regardless of
+ * which alias the caller used.
+ */
+export function extractAccessPathFromInput(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const obj = input as Record<string, unknown>;
+  for (const key of ["accessPath", "accessDbPath", "databasePath", "sourcePath"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return undefined;
 }
