@@ -926,8 +926,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_validate_manifest",
-      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_validate_manifest.summary}`,
+      name: "validate_manifest",
+      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.validate_manifest.summary}`,
       inputSchema: VALIDATE_MANIFEST_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);

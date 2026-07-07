@@ -31,7 +31,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #705 — read-only dead-code analysis over the supplied modules map.
     "detect_dead_code",
     // #703 — read-only VBA test manifest validation.
-    "dysflow_validate_manifest",
+    "validate_manifest",
     // #704 — read-only VBA module pre-import linting.
     "lint_module",
     // #760 — read-only project-config resolution without Access.
