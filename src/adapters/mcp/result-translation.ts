@@ -246,8 +246,10 @@ export function stringifyForMcp(value: unknown): string {
   // fall back to the deep normalizer which replaces cycles and converts
   // non-serializable leaves into representative strings.
   try {
-    const direct = JSON.stringify(value);
-    if (direct !== undefined) return direct;
+    if (!requiresDeepNormalization(value, new WeakSet())) {
+      const direct = JSON.stringify(value);
+      if (direct !== undefined) return direct;
+    }
   } catch {
     // Swallow — the deep normalizer handles circular references and
     // BigInt/function children by emitting representative placeholders.
@@ -323,6 +325,30 @@ function normalizeRecursive(value: unknown, seen: WeakSet<object>, depth: number
   } finally {
     // Allow the same object to appear in NON-cyclic sibling branches of the
     // walk; only re-entry from a currently-open ancestor should be cut off.
+    seen.delete(obj);
+  }
+}
+
+function requiresDeepNormalization(value: unknown, seen: WeakSet<object>, depth = 0): boolean {
+  if (depth > MAX_NORMALIZE_DEPTH) return true;
+  if (value === null || value === undefined) return false;
+  const kind = typeof value;
+  if (kind === "bigint" || kind === "symbol" || kind === "function") return true;
+  if (kind !== "object") return false;
+  if (value instanceof Error) return true;
+
+  const obj = value as object;
+  if (seen.has(obj)) return true;
+  seen.add(obj);
+
+  try {
+    const children = Array.isArray(obj)
+      ? obj
+      : Object.keys(obj as Record<string, unknown>).map(
+          (key) => (obj as Record<string, unknown>)[key],
+        );
+    return children.some((child) => requiresDeepNormalization(child, seen, depth + 1));
+  } finally {
     seen.delete(obj);
   }
 }

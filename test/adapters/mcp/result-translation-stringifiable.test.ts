@@ -228,6 +228,35 @@ describe("translateCoreResultToMcpContent — JSON-stringifiable normalization (
       const text = result.content[0]?.text ?? "";
       expect(() => JSON.parse(text)).not.toThrow();
     });
+
+    it("preserves a nested function as a diagnostic string instead of dropping the property", () => {
+      // Native JSON.stringify({ fn: () => {} }) returns "{}". F14 requires the
+      // nested value to remain observable so consumers do not lose diagnostics.
+      function nestedHelper() {
+        return "diagnostic";
+      }
+      const result = translateCoreResultToMcpContent(
+        successResult({ id: "handler-1", fn: nestedHelper }),
+      );
+
+      const payload = readPayload<{ id: string; fn?: string }>(result);
+      expect(payload.id).toBe("handler-1");
+      expect(payload).toHaveProperty("fn");
+      expect(payload.fn).toContain("nestedHelper");
+    });
+
+    it("preserves a nested Symbol as a diagnostic string instead of dropping the property", () => {
+      // Native JSON.stringify({ marker: Symbol("mcp") }) returns "{}". The
+      // symbol description must remain visible in the MCP text payload.
+      const result = translateCoreResultToMcpContent(
+        successResult({ id: "symbol-case", marker: Symbol("mcp-marker") }),
+      );
+
+      const payload = readPayload<{ id: string; marker?: string }>(result);
+      expect(payload.id).toBe("symbol-case");
+      expect(payload).toHaveProperty("marker");
+      expect(payload.marker).toBe("Symbol(mcp-marker)");
+    });
   });
 
   describe("edge — undefined nested values are handled, content text always a string", () => {
