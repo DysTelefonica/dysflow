@@ -435,7 +435,7 @@ export const MODERN_TOOL_NAMES = [
   // issue #701 — read-only VBA procedure introspection
   "list_procedures",
   "get_procedure",
-  "dysflow_find_references",
+  "find_references",
   // issue #705 — read-only dead-code detection
   "dysflow_detect_dead_code",
   // issue #703 — read-only VBA test manifest validation
@@ -692,8 +692,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_find_references",
-      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.dysflow_find_references.summary}`,
+      name: "find_references",
+      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.find_references.summary}`,
       inputSchema: FIND_REFERENCES_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, FIND_REFERENCES_SCHEMA);

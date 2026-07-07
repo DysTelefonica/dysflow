@@ -27,7 +27,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // PowerShell runner DYSFLOW_RESULT output.
     "list_procedures",
     "get_procedure",
-    "dysflow_find_references",
+    "find_references",
     // #705 — read-only dead-code analysis over the supplied modules map.
     "dysflow_detect_dead_code",
     // #703 — read-only VBA test manifest validation.
