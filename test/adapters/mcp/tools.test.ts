@@ -169,7 +169,7 @@ describe("MCP tool registration over core services", () => {
     const expectedModernToolNames = [
       "query_execute",
       "doctor",
-      "dysflow_access_operations_list",
+      "list_access_operations",
       "dysflow_access_cleanup",
       "dysflow_access_force_cleanup_orphaned",
     ];

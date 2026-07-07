@@ -428,7 +428,7 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
 export const MODERN_TOOL_NAMES = [
   "query_execute",
   "doctor",
-  "dysflow_access_operations_list",
+  "list_access_operations",
   "dysflow_access_cleanup",
   "dysflow_access_force_cleanup_orphaned",
   "dysflow_get_capabilities",
@@ -516,8 +516,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_access_operations_list",
-      description: `List recent Dysflow Access operation records, including operationId, PID/process metadata when known, status, and target path. This is read-only and kills nothing. ${MCP_TOOL_CONTRACTS.dysflow_access_operations_list.summary}`,
+      name: "list_access_operations",
+      description: `List recent Dysflow Access operation records, including operationId, PID/process metadata when known, status, and target path. This is read-only and kills nothing. ${MCP_TOOL_CONTRACTS.list_access_operations.summary}`,
       inputSchema: NO_INPUT_SCHEMA,
       handler: async () => handleMcpAccessOperationsList(services),
     },

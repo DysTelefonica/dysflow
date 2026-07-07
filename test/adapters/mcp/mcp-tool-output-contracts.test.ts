@@ -15,7 +15,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // tool. It aggregates capability metadata; it never touches Access.
     "query_execute",
     "doctor",
-    "dysflow_access_operations_list",
+    "list_access_operations",
     "dysflow_access_cleanup",
     "dysflow_access_force_cleanup_orphaned",
     // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED

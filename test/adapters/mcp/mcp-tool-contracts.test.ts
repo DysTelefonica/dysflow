@@ -106,9 +106,9 @@ describe("MCP tool contract metadata", () => {
     expect(descriptions.doctor).toContain("includeEnvironment");
     expect(descriptions.doctor).toContain("accessPath");
 
-    expect(descriptions.dysflow_access_operations_list).toContain("operationId");
-    expect(descriptions.dysflow_access_operations_list).toContain("PID");
-    expect(descriptions.dysflow_access_operations_list).toContain("read-only");
+    expect(descriptions.list_access_operations).toContain("operationId");
+    expect(descriptions.list_access_operations).toContain("PID");
+    expect(descriptions.list_access_operations).toContain("read-only");
 
     expect(descriptions.dysflow_access_cleanup).toContain("operationId");
     expect(descriptions.dysflow_access_cleanup).toContain("force: true");
