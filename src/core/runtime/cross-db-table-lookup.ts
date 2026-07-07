@@ -39,10 +39,7 @@
  */
 
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import type {
-  AccessQueryRequest,
-  OperationResult,
-} from "../contracts/index.js";
+import type { AccessQueryRequest, OperationResult } from "../contracts/index.js";
 
 /**
  * Semantic role of a configured database. `frontend` is the project's
@@ -100,9 +97,15 @@ export type CrossDbTableResult =
  * resolved query and returns the structured `OperationResult`. The
  * runner's implementation runs the same code path that `run()` does
  * minus the lock acquisition.
+ *
+ * The lookup carries `config` along with `request` because the runner
+ * needs the resolved `accessDbPath` / `backendPassword` / `timeoutMs`
+ * to build the PowerShell arguments. `config` is the SAME config the
+ * parent call holds — the lookup does not load or mutate it.
  */
 export type CrossDbTableProbeExecutor = (
   request: AccessQueryRequest,
+  config: DysflowConfig,
 ) => Promise<OperationResult<unknown>>;
 
 export type CrossDbTableRunner = {
@@ -116,10 +119,7 @@ export type CrossDbTableRunner = {
  * invariant (issue #716) and `action: "get_schema"` is the canonical
  * table-existence probe.
  */
-function buildProbeRequest(
-  databasePath: string,
-  tableName: string,
-): AccessQueryRequest {
+function buildProbeRequest(databasePath: string, tableName: string): AccessQueryRequest {
   return {
     action: "get_schema",
     mode: "read",
@@ -134,16 +134,30 @@ function buildProbeRequest(
   };
 }
 
-function probeOk(
+function probeData(
   result: OperationResult<unknown>,
-): boolean {
-  // The probe succeeds when the runner returned `ok: true`. Defensive:
-  // `result.data === undefined` is treated as "not found" — we never
-  // want to claim a databaseRole when the runner reports a malformed
-  // empty envelope.
-  if (!result.ok) return false;
-  if (result.data === undefined) return false;
-  return true;
+): { ok: true; data: Record<string, unknown> } | { ok: false } {
+  // The probe succeeds when the runner returned `ok: true` AND the
+  // payload is a record with a non-empty `schema` array. The PowerShell
+  // runner emits `{ "schema": [...] }` for `get_schema`; a non-existent
+  // table either throws (exit code != 0) or returns `{ "schema": [] }`.
+  // We treat both shapes as "not found" — claiming a databaseRole on
+  // an empty schema would lie to the caller.
+  if (!result.ok) return { ok: false };
+  const data = result.data;
+  if (data === undefined) return { ok: false };
+  if (!isRecord(data)) return { ok: false };
+  return { ok: true, data };
+}
+
+function schemaIsNonEmpty(data: Record<string, unknown>): boolean {
+  const schema = data.schema;
+  if (!Array.isArray(schema)) return false;
+  return schema.length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -206,13 +220,14 @@ export async function lookupTableAcrossDatabases(
   }
   if (backend === undefined) {
     // Only the frontend is configured. Single-DB project.
-    const frontendResult = await runner.runProbe(buildProbeRequest(frontend, tableName));
-    if (probeOk(frontendResult)) {
+    const frontendResult = await runner.runProbe(buildProbeRequest(frontend, tableName), config);
+    const frontendProbe = probeData(frontendResult);
+    if (frontendProbe.ok && schemaIsNonEmpty(frontendProbe.data)) {
       return {
         ok: true,
         databaseRole: "frontend",
         databasePath: frontend,
-        schema: frontendResult.data,
+        schema: frontendProbe.data,
       };
     }
     return {
@@ -223,11 +238,13 @@ export async function lookupTableAcrossDatabases(
   }
 
   // Both DBs are configured. Probe backend first, then frontend.
-  const backendResult = await runner.runProbe(buildProbeRequest(backend, tableName));
-  const backendHit = probeOk(backendResult);
+  const backendResult = await runner.runProbe(buildProbeRequest(backend, tableName), config);
+  const backendProbe = probeData(backendResult);
+  const backendHit = backendProbe.ok && schemaIsNonEmpty(backendProbe.data);
 
-  const frontendResult = await runner.runProbe(buildProbeRequest(frontend, tableName));
-  const frontendHit = probeOk(frontendResult);
+  const frontendResult = await runner.runProbe(buildProbeRequest(frontend, tableName), config);
+  const frontendProbe = probeData(frontendResult);
+  const frontendHit = frontendProbe.ok && schemaIsNonEmpty(frontendProbe.data);
 
   if (backendHit && frontendHit) {
     return {
@@ -244,20 +261,20 @@ export async function lookupTableAcrossDatabases(
     };
   }
 
-  if (backendHit) {
+  if (backendHit && backendProbe.ok) {
     return {
       ok: true,
       databaseRole: "backend",
       databasePath: backend,
-      schema: backendResult.data,
+      schema: backendProbe.data,
     };
   }
-  if (frontendHit) {
+  if (frontendHit && frontendProbe.ok) {
     return {
       ok: true,
       databaseRole: "frontend",
       databasePath: frontend,
-      schema: frontendResult.data,
+      schema: frontendProbe.data,
     };
   }
   return {

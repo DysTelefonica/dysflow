@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
+import type { OperationResult } from "../../../src/core/contracts/index.js";
 import type {
   AccessRunner,
   AccessRunnerOperation,
@@ -34,6 +35,13 @@ class CapturingRunner implements AccessRunner {
       diagnostics: [],
       durationMs: 0,
     } as { ok: true; data: TData } & never;
+  }
+
+  // v1.20.0 (#763 + #764) — cross-DB lookup seam. Not exercised by
+  // the dry-run tests in this file; the VBA dry-run short-circuits
+  // before ever reaching the runner.
+  async runProbe<TData>(): Promise<OperationResult<TData>> {
+    throw new Error("CapturingRunner.runProbe: not exercised by dry-run tests");
   }
 }
 
@@ -130,6 +138,11 @@ describe("AccessVbaService — dryRun:true short-circuits the runner", () => {
       // because the fake never resolves.
       async run<_TData = unknown>() {
         throw new Error("runner.run should not have been called");
+      },
+      // v1.20.0 (#763 + #764) — cross-DB lookup seam. Not exercised by
+      // dry-run tests (the short-circuit never reaches the runner).
+      async runProbe<_TData = unknown>(): Promise<OperationResult<_TData>> {
+        throw new Error("runner.runProbe should not have been called");
       },
     };
     const service = new AccessVbaService({ runner: explodingRunner, config });

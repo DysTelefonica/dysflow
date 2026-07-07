@@ -26,6 +26,10 @@ import {
   resolveAccessOperationRegistry,
   toOperationMetadata,
 } from "../operations/access-operation-registry.js";
+import {
+  type CrossDbTableRunner,
+  lookupTableAcrossDatabases,
+} from "../runtime/cross-db-table-lookup.js";
 import { isRecord, sanitizeSecrets } from "../utils/index.js";
 
 export type {
@@ -109,6 +113,34 @@ export type AccessRunner = {
     operation: AccessRunnerOperation,
     config?: DysflowConfig,
     options?: AccessRunnerRunOptions,
+  ): Promise<OperationResult<TData>>;
+  /**
+   * v1.20.0 (issues #763 + #764) — internal probe seam that runs a query
+   * WITHOUT acquiring the cross-process file lock. Used exclusively by
+   * `cross-db-table-lookup` (the cross-DB table lookup primitive).
+   *
+   * Why this exists:
+   *   - Calling `run()` recursively would deadlock on the cross-process
+   *     lock (the lock is keyed by `config.accessDbPath` and the parent
+   *     call already holds it).
+   *   - The auto-mode resolution path (and the no-target cross-DB
+   *     detection) MUST consult both DBs without re-entering the lock.
+   *
+   * Contract:
+   *   - `runProbe` MUST only be called from within a `run()` invocation
+   *     that is already holding the cross-process lock. Production
+   *     code MUST NOT call it directly — only `cross-db-table-lookup.ts`
+   *     is allowed to.
+   *   - The probe uses the same `runLockedOperation` body as `run()`
+   *     minus the lock acquisition. The result envelope is identical.
+   *   - The probe MUST NOT create an operation-registry record. The
+   *     parent call's record covers the whole flow.
+   *
+   * Implementation lives on `AccessPowerShellRunner.runProbe` (below).
+   */
+  runProbe<TData = unknown>(
+    request: AccessQueryRequest,
+    config: DysflowConfig,
   ): Promise<OperationResult<TData>>;
 };
 /**
@@ -225,6 +257,88 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
   }
 
+  /**
+   * v1.20.0 (issues #763 + #764) — internal probe seam for the cross-DB
+   * table lookup primitive. Runs a query WITHOUT acquiring the cross-process
+   * file lock and WITHOUT creating an operation-registry record.
+   *
+   * MUST only be called from within a `run()` invocation that is already
+   * holding the lock. Production code does not call this directly — only
+   * `cross-db-table-lookup.ts` does.
+   *
+   * The probe request MUST carry an explicit `databasePath` so the
+   * auto-mode branch in `runLockedOperation` is bypassed. The probe MUST
+   * NOT carry `target` (set it to `undefined`).
+   */
+  async runProbe<TData = unknown>(
+    request: AccessQueryRequest,
+    config: DysflowConfig,
+  ): Promise<OperationResult<TData>> {
+    const operation: AccessRunnerOperation = { kind: "query", request };
+    // Synthetic probe operation id; we do NOT register the probe with
+    // the operation registry (the parent `run()` invocation's record
+    // covers the whole flow). The id is purely for executor logging.
+    const operationId = `probe-${this.operationIdFactory()}`;
+    const dynamicBackendPassword =
+      request.backendPassword !== undefined ? request.backendPassword : config.backendPassword;
+    const secrets = [config.accessPassword, dynamicBackendPassword].filter(
+      (secret): secret is string => Boolean(secret),
+    );
+    const execution = await this.executor(
+      "powershell.exe",
+      buildPowerShellArguments(this.scriptPath, operation, config, operationId),
+      {
+        timeoutMs: config.timeoutMs,
+        operationId,
+        accessPath: config.accessDbPath,
+        env: buildPowerShellEnvironment(config, operation),
+        // No-op `onAccessProcessCaptured`: probes do not update the
+        // parent's operation registry (no registry entry was created for
+        // the probe — the parent's `run()` invocation owns the record).
+        onAccessProcessCaptured: async () => {
+          /* probe: registry update is the parent's responsibility */
+        },
+      },
+    );
+
+    if (execution.timedOut) {
+      return failureResult(
+        createDysflowError("RUNNER_TIMEOUT", `Probe timed out after ${config.timeoutMs}ms.`, {
+          retryable: true,
+        }),
+        { durationMs: execution.durationMs },
+      );
+    }
+    if (execution.exitCode !== 0) {
+      const safeOutput = sanitizeSecrets(
+        execution.stderr || execution.stdout || "No runner output.",
+        secrets,
+      );
+      return failureResult(
+        createDysflowError(
+          "RUNNER_FAILED",
+          `Probe failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+        ),
+        { durationMs: execution.durationMs },
+      );
+    }
+    try {
+      return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
+        durationMs: execution.durationMs,
+      });
+    } catch (parseError) {
+      const underlyingMessage =
+        parseError instanceof Error ? parseError.message : String(parseError);
+      return failureResult(
+        createDysflowError(
+          "RUNNER_INVALID_JSON",
+          `Probe produced invalid JSON output: ${underlyingMessage}`,
+        ),
+        { durationMs: execution.durationMs },
+      );
+    }
+  }
+
   private async runLockedOperation<TData = unknown>(
     operation: AccessRunnerOperation,
     config: DysflowConfig,
@@ -236,34 +350,99 @@ export class AccessPowerShellRunner implements AccessRunner {
   ): Promise<OperationResult<TData>> {
     let finalOperation = operation;
     if (operation.kind === "query") {
+      // #763 — when the caller passed `target: "auto"` and did not supply
+      // an explicit `databasePath` or `backendPath`, resolve the target
+      // via the cross-DB table lookup primitive. The lookup probes
+      // `config.backendPath` first, then `config.accessDbPath`, and:
+      //   - On a single-DB hit → sets `databasePath` and clears `target`.
+      //   - On ambiguous → returns ACCESS_TABLE_AMBIGUOUS.
+      //   - On not-found → returns ACCESS_TABLE_NOT_FOUND (the runner
+      //     falls through to the existing CONFIG_MISSING_TARGET_PATH
+      //     guard, preserving the v1.19.0 behaviour for that edge).
+      //
+      // Auto-mode requires a `tableName`; without one the lookup cannot
+      // resolve a "which DB has this table" answer. In that case we
+      // refuse with a structured error rather than picking a DB at random.
+      if (
+        operation.request.target === "auto" &&
+        !operation.request.databasePath &&
+        !operation.request.backendPath
+      ) {
+        if (operation.request.tableName === undefined || operation.request.tableName.length === 0) {
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              "Cannot resolve target='auto': the request requires a tableName so the cross-DB lookup can decide which configured database contains the table. Pass tableName in the request, or pass an explicit target ('frontend' | 'backend') or databasePath.",
+            ),
+          );
+        }
+        const runner = this as unknown as CrossDbTableRunner;
+        const lookup = await lookupTableAcrossDatabases(
+          config,
+          operation.request.tableName,
+          runner,
+        );
+        if (!lookup.ok) {
+          if (lookup.error === "ACCESS_TABLE_AMBIGUOUS") {
+            return failureResult(
+              createDysflowError(lookup.error, lookup.message, {
+                details: {
+                  roles: lookup.details.roles,
+                  candidates: lookup.details.candidates,
+                },
+              }),
+            );
+          }
+          // ACCESS_TABLE_NOT_FOUND — fall through to the existing
+          // CONFIG_MISSING_TARGET_PATH guard below.
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              `target='auto' could not locate the table in either configured database (backend or frontend). ${lookup.message}`,
+            ),
+          );
+        }
+        // Single-DB answer — set the resolved databasePath and clear target.
+        finalOperation = {
+          ...operation,
+          request: {
+            ...operation.request,
+            databasePath: lookup.databasePath,
+            target: undefined,
+          },
+        };
+      }
+
       // #716 — when the caller passed a semantic `target` (frontend/backend)
       // and did not supply an explicit `databasePath` or `backendPath`,
       // resolve it from the project config. Explicit paths always win so
       // callers can still override the configured target per-call.
       if (
-        operation.request.target !== undefined &&
-        !operation.request.databasePath &&
-        !operation.request.backendPath
+        finalOperation.kind === "query" &&
+        finalOperation.request.target !== undefined &&
+        finalOperation.request.target !== "auto" &&
+        !finalOperation.request.databasePath &&
+        !finalOperation.request.backendPath
       ) {
-        if (operation.request.target === "backend" && config.backendPath) {
+        if (finalOperation.request.target === "backend" && config.backendPath) {
           finalOperation = {
-            ...operation,
+            ...finalOperation,
             request: {
-              ...operation.request,
+              ...finalOperation.request,
               backendPath: config.backendPath,
               target: undefined,
             },
           };
-        } else if (operation.request.target === "frontend" && config.accessDbPath) {
+        } else if (finalOperation.request.target === "frontend" && config.accessDbPath) {
           finalOperation = {
-            ...operation,
+            ...finalOperation,
             request: {
-              ...operation.request,
+              ...finalOperation.request,
               databasePath: config.accessDbPath,
               target: undefined,
             },
           };
-        } else if (operation.request.target === "frontend" && config.backendPath) {
+        } else if (finalOperation.request.target === "frontend" && config.backendPath) {
           // Frontend target requested but no frontend path is configured —
           // fall back to a structured error rather than silently switching
           // to the backend (which would violate the caller's intent).
@@ -273,7 +452,7 @@ export class AccessPowerShellRunner implements AccessRunner {
               "Cannot resolve frontend target: project config does not declare accessPath. Pass databasePath explicitly or set accessPath in .dysflow/project.json.",
             ),
           );
-        } else if (operation.request.target === "backend") {
+        } else if (finalOperation.request.target === "backend") {
           return failureResult(
             createDysflowError(
               "CONFIG_MISSING_TARGET_PATH",
@@ -281,6 +460,61 @@ export class AccessPowerShellRunner implements AccessRunner {
             ),
           );
         }
+      }
+
+      // #764 — when the caller did NOT pass `target` / `databasePath` /
+      // `backendPath` AND the request carries a `tableName`, run the
+      // cross-DB table lookup. This catches the "non-deterministic
+      // answer on ambiguous tables" footgun where the caller used to
+      // get either the backend's or the frontend's row set without
+      // knowing which one was queried. Now the lookup reports the
+      // ambiguity as a typed error and, on a single-DB answer, sets
+      // the resolved `databasePath` so the rest of the runner path
+      // executes against the right DB.
+      if (
+        finalOperation.kind === "query" &&
+        finalOperation.request.target === undefined &&
+        finalOperation.request.databasePath === undefined &&
+        finalOperation.request.backendPath === undefined &&
+        finalOperation.request.tableName !== undefined &&
+        finalOperation.request.tableName.length > 0
+      ) {
+        const runner = this as unknown as CrossDbTableRunner;
+        const lookup = await lookupTableAcrossDatabases(
+          config,
+          finalOperation.request.tableName,
+          runner,
+        );
+        if (!lookup.ok) {
+          if (lookup.error === "ACCESS_TABLE_AMBIGUOUS") {
+            return failureResult(
+              createDysflowError(lookup.error, lookup.message, {
+                details: {
+                  roles: lookup.details.roles,
+                  candidates: lookup.details.candidates,
+                },
+              }),
+            );
+          }
+          // ACCESS_TABLE_NOT_FOUND — fall through to the existing
+          // CONFIG_MISSING_TARGET_PATH guard below. The default-backend
+          // fallback MUST NOT silently switch DBs when the lookup said
+          // the table is in neither.
+          return failureResult(
+            createDysflowError(
+              "CONFIG_MISSING_TARGET_PATH",
+              `Could not locate the table in either configured database (backend or frontend). ${lookup.message} Pass an explicit target ('frontend' | 'backend' | 'auto') or databasePath to disambiguate.`,
+            ),
+          );
+        }
+        // Single-DB answer — set the resolved databasePath.
+        finalOperation = {
+          ...finalOperation,
+          request: {
+            ...finalOperation.request,
+            databasePath: lookup.databasePath,
+          },
+        };
       }
 
       // Default the read/write target to the project's configured

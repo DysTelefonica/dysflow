@@ -1756,11 +1756,18 @@ describe("Cross-process lock for .accdb", () => {
 
   /**
    * Build a fake executor that returns "table found" for the databases in
-   * `hits` and ACCESS_TABLE_NOT_FOUND for the rest. Discriminates by the
+   * `hits` and `{ schema: [] }` for the rest. Discriminates by the
    * resolved `databasePath` / `backendPath` in the `-PayloadJson` arg.
+   *
+   * Matches the PowerShell runner's `Invoke-GetSchemaAction` output:
+   *   - Hit  → `{ schema: [{ name, type, ... }, ...] }`
+   *   - Miss → `{ schema: [] }`
+   * The cross-DB lookup's `probeOk` checks for a non-empty `schema`
+   * array (see `src/core/runtime/cross-db-table-lookup.ts`).
    */
   function makeFakeExecutor(
     hits: { backend?: boolean; frontend?: boolean },
+    fakeBackendPath: string,
   ): {
     executor: PowerShellExecutor;
     calls: Array<{ databasePath?: string; backendPath?: string }>;
@@ -1769,15 +1776,10 @@ describe("Cross-process lock for .accdb", () => {
     const executor: PowerShellExecutor = async (_command, args) => {
       const idx = args.indexOf("-PayloadJson");
       const raw = idx >= 0 ? args[idx + 1] : undefined;
-      const payload =
-        typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      const payload = typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : {};
       calls.push({
-        ...(typeof payload.databasePath === "string"
-          ? { databasePath: payload.databasePath }
-          : {}),
-        ...(typeof payload.backendPath === "string"
-          ? { backendPath: payload.backendPath }
-          : {}),
+        ...(typeof payload.databasePath === "string" ? { databasePath: payload.databasePath } : {}),
+        ...(typeof payload.backendPath === "string" ? { backendPath: payload.backendPath } : {}),
       });
       const path =
         typeof payload.databasePath === "string"
@@ -1785,12 +1787,13 @@ describe("Cross-process lock for .accdb", () => {
           : typeof payload.backendPath === "string"
             ? payload.backendPath
             : "";
-      const isBackend = path === fakeBackend;
+      const isBackend = path === fakeBackendPath;
       const hit = isBackend ? hits.backend : hits.frontend;
       if (hit === true) {
         return {
           exitCode: 0,
-          stdout: 'DYSFLOW_RESULT {"tableName":"TbPeople","columns":["id","name"]}',
+          stdout:
+            'DYSFLOW_RESULT {"schema":[{"name":"id","type":4,"size":null,"required":true,"allowZeroLength":false},{"name":"name","type":10,"size":255,"required":false,"allowZeroLength":true}]}',
           stderr: "",
           durationMs: 1,
           timedOut: false,
@@ -1798,7 +1801,7 @@ describe("Cross-process lock for .accdb", () => {
       }
       return {
         exitCode: 0,
-        stdout: "DYSFLOW_RESULT {}",
+        stdout: 'DYSFLOW_RESULT {"schema":[]}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -1807,22 +1810,17 @@ describe("Cross-process lock for .accdb", () => {
     return { executor, calls };
   }
 
-  let fakeAccdbForAuto = "";
-  let fakeBackendForAuto = "";
-
   it("query: target='auto' resolves to backend when the table exists in backend only (#763)", async () => {
     const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-be-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false });
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false }, fakeBackend);
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,
@@ -1858,14 +1856,12 @@ describe("Cross-process lock for .accdb", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-fe-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: false, frontend: true });
+      const { executor, calls } = makeFakeExecutor({ backend: false, frontend: true }, fakeBackend);
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,
@@ -1899,14 +1895,12 @@ describe("Cross-process lock for .accdb", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-auto-amb-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true });
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true }, fakeBackend);
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,
@@ -1950,14 +1944,12 @@ describe("Cross-process lock for .accdb", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-amb-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true });
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: true }, fakeBackend);
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,
@@ -1996,14 +1988,12 @@ describe("Cross-process lock for .accdb", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-be-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false });
+      const { executor, calls } = makeFakeExecutor({ backend: true, frontend: false }, fakeBackend);
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,
@@ -2039,14 +2029,15 @@ describe("Cross-process lock for .accdb", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "dysflow-runner-no-target-miss-"));
-    fakeAccdbForAuto = join(dir, "front.accdb");
-    fakeBackendForAuto = join(dir, "backend.accdb");
-    writeFileSync(fakeAccdbForAuto, "");
-    writeFileSync(fakeBackendForAuto, "");
+    const fakeFrontend = join(dir, "front.accdb");
+    const fakeBackend = join(dir, "backend.accdb");
+    writeFileSync(fakeFrontend, "");
+    writeFileSync(fakeBackend, "");
     try {
-      const fakeFrontend = fakeAccdbForAuto;
-      const fakeBackend = fakeBackendForAuto;
-      const { executor, calls } = makeFakeExecutor({ backend: false, frontend: false });
+      const { executor, calls } = makeFakeExecutor(
+        { backend: false, frontend: false },
+        fakeBackend,
+      );
       const runner = new AccessPowerShellRunner({
         lockFileSystem: nodeLockFileSystem,
         executor,

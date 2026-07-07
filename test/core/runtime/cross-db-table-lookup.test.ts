@@ -38,12 +38,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import {
-  type CrossDbTableResult,
   type CrossDbTableProbeExecutor,
+  type CrossDbTableResult,
   lookupTableAcrossDatabases,
 } from "../../../src/core/runtime/cross-db-table-lookup";
-import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 
 /**
  * Minimal in-test stub of `AccessRunner` so we can drive the lookup
@@ -60,7 +60,6 @@ let frontendPath = "";
 let backendPath = "";
 let bothDbConfig: DysflowConfig;
 let frontendOnlyConfig: DysflowConfig;
-let backendOnlyConfig: DysflowConfig;
 
 beforeAll(() => {
   tmpRoot = mkdtempSync(join(tmpdir(), "cross-db-lookup-suite-"));
@@ -86,10 +85,6 @@ beforeAll(() => {
     ...bothDbConfig,
     backendPath: undefined,
   };
-  backendOnlyConfig = {
-    ...bothDbConfig,
-    accessDbPath: backendPath,
-  };
 });
 
 afterAll(() => {
@@ -97,30 +92,35 @@ afterAll(() => {
 });
 
 /** Convenience: a runner whose executor reports `hits` per-database. */
-function fakeRunnerWith(
-  hits: Partial<Record<"frontend" | "backend", boolean>>,
-  schemaPayload: unknown = { columns: ["id", "name"] },
-): { runner: FakeRunner; calls: { databasePath: string; table: string }[] } {
+function fakeRunnerWith(hits: Partial<Record<"frontend" | "backend", boolean>>): {
+  runner: FakeRunner;
+  calls: { databasePath: string; table: string }[];
+} {
   const calls: { databasePath: string; table: string }[] = [];
-  const runProbe: CrossDbTableProbeExecutor = async (request) => {
+  const runProbe: CrossDbTableProbeExecutor = async (request, _config) => {
     calls.push({ databasePath: request.databasePath ?? "", table: request.tableName ?? "" });
     const path = request.databasePath ?? "";
     const hit = path === backendPath ? hits.backend : hits.frontend;
     if (hit === true) {
+      // Match the PowerShell runner's `Invoke-GetSchemaAction` shape:
+      // `{ "schema": [<columns...>] }` for a found table.
       return {
         ok: true as const,
-        data: schemaPayload,
+        data: {
+          schema: [
+            { name: "id", type: 4, size: null, required: true, allowZeroLength: false },
+            { name: "name", type: 10, size: 255, required: false, allowZeroLength: true },
+          ],
+        },
         diagnostics: [],
         durationMs: 1,
       };
     }
+    // Match the PowerShell runner's `get_schema` for a non-existent
+    // table: `{ "schema": [] }`. The lookup treats this as "not found".
     return {
-      ok: false as const,
-      error: {
-        code: "ACCESS_TABLE_NOT_FOUND",
-        message: `Table '${request.tableName}' was not found in ${request.databasePath}`,
-        retryable: false,
-      },
+      ok: true as const,
+      data: { schema: [] },
       diagnostics: [],
       durationMs: 1,
     };
@@ -136,7 +136,12 @@ describe("cross-db-table-lookup (#763 + #764) — happy paths", () => {
     if (!result.ok) throw new Error("expected ok");
     expect(result.databaseRole).toBe("backend");
     expect(result.databasePath).toBe(backendPath);
-    expect(result.schema).toEqual({ columns: ["id", "name"] });
+    expect(result.schema).toEqual({
+      schema: [
+        { name: "id", type: 4, size: null, required: true, allowZeroLength: false },
+        { name: "name", type: 10, size: 255, required: false, allowZeroLength: true },
+      ],
+    });
     // Cardinality: both DBs are consulted (we always probe both so the
     // lookup can distinguish "single-DB" from "ambiguous"). The frontend
     // probe comes back negative, so the result is the backend answer.
@@ -170,8 +175,10 @@ describe("cross-db-table-lookup (#764) — sad path: ambiguous table", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected error");
     expect(result.error).toBe("ACCESS_TABLE_AMBIGUOUS");
-    expect(result.details).toBeDefined();
-    if (!result.details) throw new Error("expected details");
+    // Narrow: the union type only has `details` on the AMBIGUOUS branch.
+    if (result.error !== "ACCESS_TABLE_AMBIGUOUS") {
+      throw new Error("narrowing failed");
+    }
     expect(result.details.roles).toEqual(["backend", "frontend"]);
     // Order of roles does not matter to consumers — sort before asserting.
     expect([...result.details.roles].sort()).toEqual(["backend", "frontend"]);
