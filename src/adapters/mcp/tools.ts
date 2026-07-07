@@ -22,9 +22,9 @@ import {
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import { handleMcpAccessOrphanCleanup, handleMcpQueryExecute } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
-import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { createResolveProjectTool } from "./resolve-project-tool.js";
 
 export {
   ALIAS_TOOL_NAMES,

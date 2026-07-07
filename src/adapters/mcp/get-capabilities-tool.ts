@@ -223,7 +223,7 @@ export function createGetCapabilitiesTool(opts: {
 
   return {
     name: "get_capabilities",
-    description:       `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);
