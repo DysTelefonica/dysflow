@@ -492,4 +492,64 @@ describe("access-query-request-mapper", () => {
       expect(request.target).toBeUndefined();
     });
   });
+
+  // -----------------------------------------------------------------
+  // PR-2 of v1.20.0 (issues #763 + #764) — `target: "auto"` is a NEW
+  // third enum value (#763). The mapper MUST accept it like the other
+  // roles so the consumer can opt into the cross-DB lookup primitive.
+  // Behavior-preserving refactors (e.g. extracting the picker) MUST NOT
+  // flip these tests red; they assert on the public surface (enum
+  // membership + round-trip via pickQueryTarget / pickOverrides /
+  // buildQueryReadRequest).
+  // -----------------------------------------------------------------
+
+  describe("target (#763) — auto enum value", () => {
+    it("VALID_QUERY_TARGETS exposes 'auto' alongside 'frontend' and 'backend'", () => {
+      expect([...VALID_QUERY_TARGETS].sort()).toEqual(["auto", "backend", "frontend"]);
+    });
+
+    it("isValidQueryTarget accepts 'auto' (and still rejects everything else)", () => {
+      expect(isValidQueryTarget("auto")).toBe(true);
+      expect(isValidQueryTarget("frontend")).toBe(true);
+      expect(isValidQueryTarget("backend")).toBe(true);
+      expect(isValidQueryTarget("AUTO")).toBe(false);
+      expect(isValidQueryTarget("auto ")).toBe(false);
+      expect(isValidQueryTarget(123)).toBe(false);
+      expect(isValidQueryTarget(undefined)).toBe(false);
+      expect(isValidQueryTarget(null)).toBe(false);
+    });
+
+    it("pickQueryTarget returns 'auto' when given 'auto' and undefined otherwise", () => {
+      expect(pickQueryTarget({ target: "auto" })).toBe("auto");
+      expect(pickQueryTarget({ target: "frontend" })).toBe("frontend");
+      expect(pickQueryTarget({ target: "backend" })).toBe("backend");
+      expect(pickQueryTarget({})).toBeUndefined();
+    });
+
+    it("pickOverrides surfaces target='auto' as part of the override slice", () => {
+      const result = pickOverrides({ projectId: "p", target: "auto" });
+      expect(result.target).toBe("auto");
+      expect(result.projectId).toBe("p");
+    });
+
+    it("buildQueryReadRequest for get_schema passes target='auto' through to the request", () => {
+      const request = buildQueryReadRequest("get_schema", {
+        projectId: "p",
+        target: "auto",
+        tableName: "TbConfiguracionBackends",
+      });
+      expect(request.target).toBe("auto");
+      expect(request.tableName).toBe("TbConfiguracionBackends");
+      expect(request.projectId).toBe("p");
+    });
+
+    it("buildQueryReadRequest for count_rows preserves target='auto' + tableName", () => {
+      const request = buildQueryReadRequest("count_rows", {
+        target: "auto",
+        table: "People",
+      });
+      expect(request.target).toBe("auto");
+      expect(request.tableName).toBe("People");
+    });
+  });
 });
