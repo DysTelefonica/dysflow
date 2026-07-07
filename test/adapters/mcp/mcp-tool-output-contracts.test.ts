@@ -14,7 +14,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
     // tool. It aggregates capability metadata; it never touches Access.
     "query_execute",
-    "dysflow_doctor",
+    "doctor",
     "dysflow_access_operations_list",
     "dysflow_access_cleanup",
     "dysflow_access_force_cleanup_orphaned",

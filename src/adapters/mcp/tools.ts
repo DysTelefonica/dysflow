@@ -427,7 +427,7 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
  */
 export const MODERN_TOOL_NAMES = [
   "query_execute",
-  "dysflow_doctor",
+  "doctor",
   "dysflow_access_operations_list",
   "dysflow_access_cleanup",
   "dysflow_access_force_cleanup_orphaned",
@@ -505,8 +505,8 @@ export function createDysflowMcpTools(
         ),
     },
     {
-      name: "dysflow_doctor",
-      description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.dysflow_doctor.summary}`,
+      name: "doctor",
+      description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.doctor.summary}`,
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DOCTOR_SCHEMA);

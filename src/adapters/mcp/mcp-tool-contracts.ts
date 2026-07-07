@@ -130,7 +130,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     dryRunDefault: true,
     summary: "Read/write MCP contract; write mode is write-gated and honors dryRun/apply.",
   },
-  dysflow_doctor: {
+  doctor: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",

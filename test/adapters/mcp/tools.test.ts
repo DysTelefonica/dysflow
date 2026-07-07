@@ -130,7 +130,7 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      tools.find((tool) => tool.name === "dysflow_doctor")?.handler({ includeEnvironment: true }),
+      tools.find((tool) => tool.name === "doctor")?.handler({ includeEnvironment: true }),
     ).resolves.toEqual({
       content: [
         {
@@ -168,7 +168,7 @@ describe("MCP tool registration over core services", () => {
     const toolNames = tools.map((tool) => tool.name);
     const expectedModernToolNames = [
       "query_execute",
-      "dysflow_doctor",
+      "doctor",
       "dysflow_access_operations_list",
       "dysflow_access_cleanup",
       "dysflow_access_force_cleanup_orphaned",
@@ -258,7 +258,7 @@ describe("MCP tool registration over core services", () => {
 
     await expect(
       tools
-        .find((tool) => tool.name === "dysflow_doctor")
+        .find((tool) => tool.name === "doctor")
         ?.handler({ contextId: "00-no-conformidades-staging-clean" }),
     ).resolves.toMatchObject({ isError: false });
     await expect(

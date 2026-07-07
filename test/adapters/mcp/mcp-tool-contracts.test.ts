@@ -102,9 +102,9 @@ describe("MCP tool contract metadata", () => {
     expect(descriptions.query_execute).toContain("apply");
     expect(descriptions.query_execute).toContain("MCP_WRITES_DISABLED");
 
-    expect(descriptions.dysflow_doctor).toContain("projectId");
-    expect(descriptions.dysflow_doctor).toContain("includeEnvironment");
-    expect(descriptions.dysflow_doctor).toContain("accessPath");
+    expect(descriptions.doctor).toContain("projectId");
+    expect(descriptions.doctor).toContain("includeEnvironment");
+    expect(descriptions.doctor).toContain("accessPath");
 
     expect(descriptions.dysflow_access_operations_list).toContain("operationId");
     expect(descriptions.dysflow_access_operations_list).toContain("PID");
