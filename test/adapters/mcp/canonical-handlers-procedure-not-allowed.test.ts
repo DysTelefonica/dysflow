@@ -32,10 +32,10 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
     expect(error?.content[0]?.text).toContain("Sync");
   });
 
-  it("includes a remediation hint mentioning dysflow_get_capabilities in the body", () => {
+  it("includes a remediation hint mentioning get_capabilities in the body", () => {
     const error = ensureProcedureAllowed("DeleteAll", ["Refresh"], undefined);
     expect(error).toBeDefined();
-    expect(error?.content[0]?.text).toContain("dysflow_get_capabilities");
+    expect(error?.content[0]?.text).toContain("get_capabilities");
   });
 
   it("exposes a structured error envelope with code, message, allowedProcedures, remediation", () => {
@@ -44,7 +44,7 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
     expect(error?.error?.code).toBe("MCP_PROCEDURE_NOT_ALLOWED");
     expect(error?.error?.message).toContain("DeleteAll");
     expect(error?.error?.allowedProcedures).toEqual(["Refresh", "Sync"]);
-    expect(error?.error?.remediation).toContain("dysflow_get_capabilities");
+    expect(error?.error?.remediation).toContain("get_capabilities");
   });
 
   it("structured error.allowedProcedures reflects the list active at the time of the call", () => {

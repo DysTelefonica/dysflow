@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   type AccessQueryRequest,
-  type AccessVbaRequest,
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -21,19 +20,11 @@ import {
   listVbaProcedures,
 } from "../../core/services/vba-procedure-service.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
-import { buildCleanupRequest } from "./alias-tools.js";
-import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
-import {
-  handleMcpAccessCleanup,
-  handleMcpAccessOperationsList,
-  handleMcpAccessOrphanCleanup,
-  handleMcpQueryExecute,
-  handleMcpVbaExecute,
-} from "./canonical-handlers.js";
+import { handleMcpAccessOrphanCleanup, handleMcpQueryExecute } from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
-import { createResolveProjectTool } from "./dysflow-resolve-project-tool.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { createResolveProjectTool } from "./resolve-project-tool.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -61,18 +52,15 @@ import type {
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import {
-  CLEANUP_SCHEMA,
   DETECT_DEAD_CODE_SCHEMA,
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
   LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
-  NO_INPUT_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
   VALIDATE_MANIFEST_SCHEMA,
-  VBA_EXECUTE_SCHEMA,
 } from "./schemas.js";
 import { validateInput } from "./validator.js";
 
@@ -426,25 +414,26 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
  * Exported for contract testing and regression guards.
  */
 export const MODERN_TOOL_NAMES = [
-  "dysflow_vba_execute",
-  "dysflow_query_execute",
-  "dysflow_doctor",
-  "dysflow_access_operations_list",
-  "dysflow_access_cleanup",
-  "dysflow_access_force_cleanup_orphaned",
-  "dysflow_get_capabilities",
+  "query_execute",
+  "doctor",
+  // #777 (Opción A cont.) — `list_access_operations` and
+  // `cleanup_access_operation` were REMOVED from MODERN_TOOL_NAMES;
+  // the canonical aliases (with bespoke handlers in alias-tools.ts)
+  // are owned by `aliasContracts`, not `modernContracts`.
+  "access_force_cleanup_orphaned",
+  "get_capabilities",
   // issue #701 — read-only VBA procedure introspection
-  "dysflow_list_procedures",
-  "dysflow_get_procedure",
-  "dysflow_find_references",
-  // issue #705 — read-only dead-code detection
-  "dysflow_detect_dead_code",
-  // issue #703 — read-only VBA test manifest validation
-  "dysflow_validate_manifest",
-  // issue #704 — read-only VBA module pre-import linting
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  // #705 — read-only dead-code analysis over the supplied modules map.
+  "detect_dead_code",
+  // #703 — read-only VBA test manifest validation before `test_vba`.
+  "validate_manifest",
+  // #704 — read-only VBA module pre-import linting.
   "lint_module",
-  // Round-3 Item 1 — project config re-resolution
-  "dysflow_resolve_project",
+  // Round-3 Item 1 — project config re-resolution companion tool
+  "resolve_project",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -487,26 +476,8 @@ export function createDysflowMcpTools(
 ): DysflowMcpTool[] {
   const currentTools: DysflowMcpTool[] = [
     {
-      name: "dysflow_vba_execute",
-      description: `Execute one public VBA procedure by procedureName with optional moduleName and arguments. Requires an already compiled project. PR1a (#621 F1): the adapter now defaults to deny — a call without an 'allowedProcedures' allowlist (project config) AND without dryRun:true is refused with MCP_INPUT_INVALID. PR-4 (#659): when the allowlist IS configured but the procedure is not in it, the refusal emits MCP_PROCEDURE_NOT_ALLOWED (distinct structured code) with error.allowedProcedures and error.remediation; the legacy MCP_INPUT_INVALID body prefix is preserved for backward compat. Pass dryRun:true in the request body to use the explicit escape hatch. ${MCP_TOOL_CONTRACTS.dysflow_vba_execute.summary}`,
-      inputSchema: VBA_EXECUTE_SCHEMA,
-      handler: async (input, context) => {
-        // #674 — resolve the allowlist per input so the gate sees the
-        // allowlist of the project the input targets, not the startup one.
-        const resolvedAllowed = await resolveAllowedProceduresFor(allowedProcedures, input);
-        return handleMcpVbaExecute(
-          input,
-          VBA_EXECUTE_SCHEMA,
-          services,
-          resolvedAllowed,
-          (validatedInput) => validatedInput as AccessVbaRequest,
-          context,
-        );
-      },
-    },
-    {
-      name: "dysflow_query_execute",
-      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.dysflow_query_execute.summary}`,
+      name: "query_execute",
+      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpQueryExecute(
@@ -524,8 +495,8 @@ export function createDysflowMcpTools(
         ),
     },
     {
-      name: "dysflow_doctor",
-      description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.dysflow_doctor.summary}`,
+      name: "doctor",
+      description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.doctor.summary}`,
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DOCTOR_SCHEMA);
@@ -535,41 +506,15 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_access_operations_list",
-      description: `List recent Dysflow Access operation records, including operationId, PID/process metadata when known, status, and target path. This is read-only and kills nothing. ${MCP_TOOL_CONTRACTS.dysflow_access_operations_list.summary}`,
-      inputSchema: NO_INPUT_SCHEMA,
-      handler: async () => handleMcpAccessOperationsList(services),
-    },
-    {
-      name: "dysflow_access_cleanup",
-      description: `Reconcile or clean a tracked Access operation by operationId and accessPath. Without force it only inspects/reconciles eligible terminal records and kills nothing; force: true may kill a Dysflow-owned process and is write-gated with MCP_WRITES_DISABLED when writes are off. ${MCP_TOOL_CONTRACTS.dysflow_access_cleanup.summary}`,
-      inputSchema: CLEANUP_SCHEMA,
-      handler: async (input) =>
-        handleMcpAccessCleanup(
-          input,
-          CLEANUP_SCHEMA,
-          services,
-          writesEnabled,
-          writeAccessResolver,
-          // PR2 (#621 F2 / #6b) — modern/legacy alias parity. The previous
-          // bare cast dropped every field except operationId/accessPath/force.
-          // The legacy `cleanup_access_operation` already uses
-          // `buildCleanupRequest`, which projects the full optional surface
-          // (projectId, contextId, backendPath, destinationRoot, projectRoot,
-          // timeoutMs, strictContext, expectedAccessPath, expectedProjectRoot,
-          // expectedDestinationRoot). Use the same builder here so both
-          // surfaces carry the same field set forward to the cleanup service.
-          // The core service does not yet enforce strictContext
-          // (`AccessOperationCleanupService.cleanup` signature accepts only
-          // `{operationId, accessPath, force?}`); that ripples through to a
-          // follow-up PR. For now the modern surface at least preserves the
-          // param instead of silently dropping it.
-          (validatedInput) => buildCleanupRequest(validatedInput),
-        ),
-    },
-    {
-      name: "dysflow_access_force_cleanup_orphaned",
-      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.dysflow_access_force_cleanup_orphaned.summary}`,
+      // #777 (Opción A cont.) — the canonical `list_access_operations`
+      // and `cleanup_access_operation` registrations live exclusively
+      // in `alias-tools.ts` (`buildAliasTools`). Both aliases have
+      // bespoke handlers that were in place before this rename. The
+      // former bespoke registrations in this file (under their legacy
+      // `dysflow_access_operations_list` / `dysflow_access_cleanup`
+      // names) are REMOVED entirely; the alias is the sole source.
+      name: "access_force_cleanup_orphaned",
+      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(
@@ -593,7 +538,7 @@ export function createDysflowMcpTools(
     // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
     // aggregated `McpCapabilitySnapshot` for the live MCP adapter. The tool
     // is registered in `MODERN_TOOL_NAMES` above and surfaces its contract
-    // summary through `MCP_TOOL_CONTRACTS.dysflow_get_capabilities` (added in
+    // summary through `MCP_TOOL_CONTRACTS.get_capabilities` (added in
     // `mcp-tool-contracts.ts`). It is intentionally read-only — it never
     // touches Access, never spawns PowerShell, and is never write-gated.
     createGetCapabilitiesTool({
@@ -606,8 +551,8 @@ export function createDysflowMcpTools(
     }),
     // issue #701 — read-only VBA procedure introspection
     {
-      name: "dysflow_list_procedures",
-      description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_list_procedures.summary}`,
+      name: "list_procedures",
+      description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.list_procedures.summary}`,
       inputSchema: LIST_PROCEDURES_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, LIST_PROCEDURES_SCHEMA);
@@ -648,8 +593,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_get_procedure",
-      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_get_procedure.summary}`,
+      name: "get_procedure",
+      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.get_procedure.summary}`,
       inputSchema: GET_PROCEDURE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, GET_PROCEDURE_SCHEMA);
@@ -711,8 +656,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_find_references",
-      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.dysflow_find_references.summary}`,
+      name: "find_references",
+      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.find_references.summary}`,
       inputSchema: FIND_REFERENCES_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, FIND_REFERENCES_SCHEMA);
@@ -870,8 +815,8 @@ export function createDysflowMcpTools(
     // via the Access context). It never opens Access, never spawns
     // PowerShell, and never consults the write gate.
     {
-      name: "dysflow_detect_dead_code",
-      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`dysflow_find_references\` (#701). ${MCP_TOOL_CONTRACTS.dysflow_detect_dead_code.summary}`,
+      name: "detect_dead_code",
+      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`find_references\` (#701). ${MCP_TOOL_CONTRACTS.detect_dead_code.summary}`,
       inputSchema: DETECT_DEAD_CODE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DETECT_DEAD_CODE_SCHEMA);
@@ -945,8 +890,8 @@ export function createDysflowMcpTools(
       },
     },
     {
-      name: "dysflow_validate_manifest",
-      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.dysflow_validate_manifest.summary}`,
+      name: "validate_manifest",
+      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.validate_manifest.summary}`,
       inputSchema: VALIDATE_MANIFEST_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);

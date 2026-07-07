@@ -48,7 +48,7 @@ export class AccessQueryService {
     if (request.mode === "read" && typeof request.sql === "string" && request.sql.trim() !== "") {
       if (!looksLikeReadOnlySql(request.sql)) {
         const keyword = detectWriteSqlKeyword(request.sql);
-        const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`;
+        const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or query_execute with mode "write" for write operations.`;
         return failureResult(createDysflowError("INVALID_READ_ONLY_QUERY", forbiddenMessage));
       }
     }

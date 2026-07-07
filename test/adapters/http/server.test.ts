@@ -68,7 +68,7 @@ function createFakeServices(overrides: Partial<HttpServices> = {}) {
           return failureResult(
             createDysflowError(
               "INVALID_READ_ONLY_QUERY",
-              `${keyword} statements are not allowed in read-only queries. Use exec_sql or dysflow_query_execute with mode "write" for write operations.`,
+              `${keyword} statements are not allowed in read-only queries. Use exec_sql or query_execute with mode "write" for write operations.`,
             ),
           );
         }

@@ -253,13 +253,21 @@ export function buildAliasTools(
       name: "run_vba",
       description: TOOL_DESCRIPTIONS.run_vba,
       inputSchema: runVbaSchema,
-      handler: async (input) => {
+      handler: async (input, context) => {
         // #674 — per-input allowlist resolution. The legacy array form is
         // treated as frozen; the resolver form is called per input so the
         // gate sees the allowlist of the project the input targets.
+        // #777 (Opción A cont.) — context (sendProgress) forwarded so
+        // `run_vba` keeps the modern tool's progress semantics after the
+        // legacy `dysflow_vba_execute` was removed.
         const resolved = await resolveAllowedProceduresFor(allowedProcedures, input);
-        return handleMcpVbaExecute(input, runVbaSchema, services, resolved, (validatedInput) =>
-          buildRunVbaRequest(validatedInput),
+        return handleMcpVbaExecute(
+          input,
+          runVbaSchema,
+          services,
+          resolved,
+          (validatedInput) => buildRunVbaRequest(validatedInput),
+          context,
         );
       },
     },

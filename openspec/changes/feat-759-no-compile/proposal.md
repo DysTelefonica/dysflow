@@ -41,7 +41,7 @@ Inventory totals from `exploration.md`: **3 tool files + 2 schema files + 1 PS f
 
 ### Modified capabilities
 - **vba-manager-actions** — save-only persistence (`acCmdSaveAllModules` = 280) becomes the canonical mutation path. Compile removed. Spec adds an ADDED Requirement: "Save-only persistence (no compile)" codifying that mutations persist via 280 and never invoke 126.
-- **mcp-stdio-adapter** — `compile_vba` tool removed from `VBA_SYNC_TOOL_NAMES` and `MCP_TOOL_ROUTES`. `compile` and `rollbackOnCompileFail` removed from `import_modules` / `import_all` Zod schemas (`additionalProperties:false` rejects unknown params with `MCP_INPUT_INVALID`). `dysflow_dysflow_get_capabilities.toolsVisible` decreases by 1.
+- **mcp-stdio-adapter** — `compile_vba` tool removed from `VBA_SYNC_TOOL_NAMES` and `MCP_TOOL_ROUTES`. `compile` and `rollbackOnCompileFail` removed from `import_modules` / `import_all` Zod schemas (`additionalProperties:false` rejects unknown params with `MCP_INPUT_INVALID`). `dysflow_get_capabilities.toolsVisible` decreases by 1.
 - **mcp-tool-contracts** — `EXECUTION_MAPPINGS.compile_vba` removed; `tool-parity-registry.ts` `compile_vba` description removed; error taxonomy drops `VBA_COMPILE_ERROR`; `mcp-tool-action-map` and `mcp-tool-action-map-source` test fixtures drop the `compile_vba` action.
 - **access-operation-contracts** — no requirement that mutations compile the project; the mutation contract is "persisted via save-only".
 
@@ -62,7 +62,7 @@ Per-slice approach with strict-TDD discipline. Each task follows RED → GREEN.
   2. **GREEN**: remove `SCHEMA_PROPS.compile` from `schema-props.ts:144–148`; drop `compile` and `rollbackOnCompileFail` from `import_modules` / `import_all` schemas in `vba-sync-schemas.ts:89,94–98,115`; drop the `truthy(params.compile)` check in `vba-execution-adapter.ts:executeTestVba`; drop `COMPILE_MAPPING` and the post-import compile block from `vba-modules-adapter.ts:26–31`; drop the HTTP mirror in `http-schemas.ts` + `http/server.ts`.
 
 - **Slice 3 (TS, vitest + E2E)**:
-  1. **RED**: vitest tests asserting `dysflow_dysflow_get_capabilities.toolsVisible` (current: 68) drops to 67; `compile_vba` is not in `VBA_SYNC_TOOL_NAMES`; not in `MCP_TOOL_ROUTES`; not in `EXECUTION_MAPPINGS`; not in `tool-parity-registry.ts`; calling it via dispatch returns tool-not-found; `VBA_COMPILE_ERROR` is unreachable.
+  1. **RED**: vitest tests asserting `dysflow_get_capabilities.toolsVisible` (current: 68) drops to 67; `compile_vba` is not in `VBA_SYNC_TOOL_NAMES`; not in `MCP_TOOL_ROUTES`; not in `EXECUTION_MAPPINGS`; not in `tool-parity-registry.ts`; calling it via dispatch returns tool-not-found; `VBA_COMPILE_ERROR` is unreachable.
   2. **GREEN**: remove `compile_vba` from `mcp-tool-registry.ts:11`; remove the route from `dispatch-routes.ts`; remove the schema from `vba-sync-schemas.ts:161–165`; remove the description from `tool-parity-registry.ts`; remove `EXECUTION_MAPPINGS.compile_vba` from `vba-execution-adapter.ts:25`; remove `handles()` / `execute()` branches from `vba-sync-adapter.ts`; remove the `dispatch-factory.ts` mention; remove `Invoke-CompileAction`, `Invoke-CompileVbaProject`, `New-CompileFailureResult` from `scripts/dysflow-vba-manager.ps1`; remove `VBA_COMPILE_ERROR` from error taxonomy (adapters + PS). Delete the obsolete test files: `test/e2e/compile-error-capture.e2e.test.ts`, `test/quality-gates/mcp-e2e-compile-vba-mojibake-pin.test.ts`. Update `E2E_testing/mcp-e2e.mjs` (drop `compile:false` and the `compile_vba` call at `:280`).
 
 - **Slice 4 (docs sweep)**:
@@ -130,7 +130,7 @@ Each AC is verifiable by a test, a grep audit, or a structured tool result.
 - The `:2252` Pester test of "delete force/friction branch compiles" no longer references 126. Grep audit on `scripts/tests/`.
 
 **Slice 3:**
-- `toolsVisible` from `dysflow_dysflow_get_capabilities` does not include `compile_vba`; total count drops by 1 (current 68 → 67). Vitest unit test on `dysflow-get-capabilities-tool.test.ts` and a real-MCP smoke test.
+- `toolsVisible` from `dysflow_get_capabilities` does not include `compile_vba`; total count drops by 1 (current 68 → 67). Vitest unit test on `dysflow-get-capabilities-tool.test.ts` and a real-MCP smoke test.
 - `VBA_SYNC_TOOL_NAMES` does not contain `compile_vba`. Vitest unit test.
 - `MCP_TOOL_ROUTES` has no `compile_vba` key (TypeScript compile enforces this).
 - `vba-sync-schemas.ts` has no `compile_vba` schema. Grep audit.
@@ -204,7 +204,7 @@ PR boundary keeps Slice 1 reviewable as a focused bug fix and prevents consumers
 
 - All four slices green in CI (`pnpm test`, `pnpm test:e2e`, `Invoke-Pester`, `pnpm build`, `pnpm lint`).
 - Audit script `grep -rnE '\bcompile\b' $WORKING_DOCS` returns **zero matches** in working docs and **zero matches** in `src/`, `scripts/`, live `openspec/specs/**`, `tool-parity-registry.ts`, and `mcp-tool-contracts`.
-- `dysflow_dysflow_get_capabilities.toolsVisible` = 67 (was 68).
+- `dysflow_get_capabilities.toolsVisible` = 67 (was 68).
 - `VBA_COMPILE_ERROR` is unreachable from any code path.
 - `RunCommand(126)` is gone from `scripts/dysflow-vba-manager.ps1` (the only call sites were inside `Invoke-CompileVbaProject` and the three persistence paths, all of which are removed or changed to 280).
 - Adversarial review judges (loaded via `judgment-day` skill after PR-2 lands) confirm no residual compile surface — in code, in tests, in docs, in error taxonomy, in OpenSpec specs, in tool-parity-registry descriptions.

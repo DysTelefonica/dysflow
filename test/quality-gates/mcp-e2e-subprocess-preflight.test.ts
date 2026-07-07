@@ -122,15 +122,15 @@ describe("mcp-e2e record() — real leaked subprocess detected at preflight", ()
     await expect(
       record(ctx, {
         area: "diagnostics",
-        tool: "dysflow_doctor",
+        tool: "doctor",
         args: {},
         options: { expected: "success" },
       }),
-    ).rejects.toThrow(/mcp-e2e: REFUSE-START before dysflow_doctor/);
+    ).rejects.toThrow(/mcp-e2e: REFUSE-START before doctor/);
 
     // Preflight row was pushed; the tool never ran (callMcp would have thrown).
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.tool).toBe("dysflow_doctor:preflight");
+    expect(rows[0]?.tool).toBe("doctor:preflight");
     expect(rows[0]?.pass).toBe(false);
     expect(rows[0]?.summary).toContain(`pids=${leakedPid}`);
     expect(processObj.exitCode).toBe(1);

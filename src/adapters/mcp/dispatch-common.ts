@@ -97,7 +97,7 @@ export function invalidInput(message: string, remediation?: string): McpToolResu
  *
  * The `allowedProcedures` parameter is the array active at the time of
  * the call — verbatim, NOT a snapshot — so a consumer can introspect it
- * from the same code path that backs `dysflow_get_capabilities`
+ * from the same code path that backs `get_capabilities`
  * (`getCapabilitiesAll` → `config.allowedProcedures`).
  */
 export function procedureNotAllowed(
@@ -107,7 +107,7 @@ export function procedureNotAllowed(
   const allowedJson = JSON.stringify([...allowedProcedures]);
   const remediation =
     `Add '${procedureName}' to the 'allowedProcedures' allowlist in ` +
-    `.dysflow/project.json, or call 'dysflow_get_capabilities' to introspect ` +
+    `.dysflow/project.json, or call 'get_capabilities' to introspect ` +
     `the current allowlist before retrying.`;
   const message =
     `Procedure '${procedureName}' is not in the configured allowedProcedures ` +

@@ -70,7 +70,7 @@ Additive + read-only. Revert commits; no state migration, no Access binary touch
 ## Success Criteria
 
 - [ ] All RED tests GREEN; `pnpm test` clean.
-- [ ] `dysflow_detect_dead_code` in `dysflow_get_capabilities` + `docs/mcp-examples.md`.
+- [ ] `dysflow_detect_dead_code` in `get_capabilities` + `docs/mcp-examples.md`.
 - [ ] Real binary: `AutoExec`, control-event handlers, string / comment / substring refs correctly classified.
 - [ ] `findVbaReferences` contract for non-dead-code callers unchanged.
 - [ ] #705 closed with commit SHA + test reference; #615 closed as duplicate.

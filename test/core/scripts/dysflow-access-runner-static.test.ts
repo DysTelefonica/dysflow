@@ -34,8 +34,7 @@ function readScript(): string {
  */
 function extractDiagnosticsBranch(script: string): string | null {
   const re = /if\s*\(\s*\$Operation\s*-eq\s*'diagnostics'\s*\)\s*\{/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(script)) !== null) {
+  for (const match of script.matchAll(re)) {
     const openIdx = match.index + match[0].length - 1; // index of `{`
     let depth = 0;
     let endIdx = -1;
@@ -67,8 +66,7 @@ function extractDiagnosticsBranch(script: string): string | null {
  */
 function diagnosticsBranchIndex(script: string): number {
   const re = /if\s*\(\s*\$Operation\s*-eq\s*'diagnostics'\s*\)\s*\{/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(script)) !== null) {
+  for (const match of script.matchAll(re)) {
     // Find the matching `}` at the same depth.
     const openIdx = match.index + match[0].length - 1; // index of `{`
     let depth = 0;

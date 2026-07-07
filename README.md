@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**67 visible MCP tools · Windows / Node 20+**
+**64 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 67 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
+- A platform with 64 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
 
 ### It is not
 
@@ -107,7 +107,7 @@ Every `dysflow` invocation that starts Access records an operation with:
 
 ### 2) Cleanup is explicit, owned, and validated
 
-`dysflow_access_cleanup`/`cleanup_access_operation` only succeeds when all safety checks pass.
+`cleanup_access_operation`/`cleanup_access_operation` only succeeds when all safety checks pass.
 Cleanup targets **only Dysflow-owned Access processes** with attribution through an operation id, marker file, PID record, and process start time. Matching by process name, database path, or command line alone is diagnostic only; it is not ownership and must report/block instead of terminating Access.
 
 Refusal examples include:
@@ -137,7 +137,7 @@ Refusal examples include:
 
 Set `allowedProcedures` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
 
-- MCP `dysflow_vba_execute`
+- MCP `run_vba`
 - MCP `run_vba`
 - HTTP `POST /vba/execute`
 
@@ -306,7 +306,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 1. List operations:
 
    ```text
-   dysflow_access_operations_list { "projectId": "my-access-project" }
+   list_access_operations { "projectId": "my-access-project" }
    ```
 
    Alias:
@@ -318,7 +318,7 @@ Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json
 2. Cleanup a specific operation id returned by the list call:
 
    ```text
-   dysflow_access_cleanup {
+   cleanup_access_operation {
      "accessPath": "C:\\data\\mydb.accdb",
      "operationId": "<operation-id>"
    }
@@ -382,7 +382,7 @@ This writes `.dysflow/project.json` with repo-relative paths and default `destin
 Normal calls should stay short and use the active repo/worktree config. `projectId` is the canonical trace identity and should match the Engram project name when Engram is available. `contextId` is only for a distinct run/context id; do not duplicate `projectId` and `contextId` with the same value.
 
 ```text
-dysflow_doctor { "projectId": "00-no-conformidades-staging-clean" }
+doctor { "projectId": "00-no-conformidades-staging-clean" }
 ```
 
 To align an existing repo config with the Engram project name, run:
@@ -489,7 +489,7 @@ Dysflow keeps Access PID ownership state separate from stable project configurat
    └─ operations.json            # volatile Access operation registry, git-ignored
 ```
 
-`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `dysflow_access_cleanup` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
+`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `cleanup_access_operation` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
 
 ---
 
@@ -544,7 +544,7 @@ Many MCP tools share common context and override parameters:
 
 ### Core MCP Tools
 
-#### `dysflow_vba_execute`
+#### `run_vba`
 Execute a public VBA procedure via COM automation. Enforces `allowedProcedures` when configured.
 * **Parameters**:
   - `procedureName` (string, **required**): Public VBA procedure name to execute.
@@ -553,42 +553,42 @@ Execute a public VBA procedure via COM automation. Enforces `allowedProcedures` 
   - `projectId`, `contextId` (optional)
   - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
 
-#### `dysflow_query_execute`
+#### `query_execute`
 Run arbitrary SQL statements. Writes are guarded by the write-safety model.
 * **Parameters**:
   - `sql` (string, **required**): SQL query to run.
   - `mode` (string, **required**): Execution mode (`read` or `write`).
   - `projectId`, `contextId` (optional)
 
-#### `dysflow_doctor`
+#### `doctor`
 Run diagnostics on the MCP connection, Access installation, and configuration.
 * **Parameters**:
   - `includeEnvironment` (boolean, optional): True to query environment settings and logs.
   - `projectId`, `contextId` (optional)
   - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
 
-#### `dysflow_access_operations_list`
+#### `list_access_operations`
 Retrieve active and completed Access operation handles managed by Dysflow.
 * **Parameters**: None.
 
-#### `dysflow_access_cleanup`
+#### `cleanup_access_operation`
 Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
   - `operationId` (string, **required**): Handle ID of the operation to clean.
   - `accessPath` (string, **required**): Database file path associated with the target operation.
   - `force` (boolean, optional): Terminate immediately. Requires writes to be enabled (`MCP_WRITES_DISABLED` is returned when writes are off); non-force cleanup is always allowed.
 
-#### `dysflow_access_force_cleanup_orphaned`
+#### `access_force_cleanup_orphaned`
 List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
-#### `dysflow_get_capabilities`
+#### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. The snapshot surfaces the running adapter version, MCP surface, process- and project-level write flags, projectId resolution outcome, the `allowedProcedures` allowlist, the global `dryRun` default, the count of tools visible in `tools/list`, and the list of write-class tools currently permitted.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
 
-#### `dysflow_list_procedures`
+#### `list_procedures`
 List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
@@ -597,7 +597,7 @@ List VBA procedures in a source module without opening Access. The tool parses i
   - `source` (string, optional): Inline VBA source text.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
-#### `dysflow_get_procedure`
+#### `get_procedure`
 Retrieve one VBA procedure body from a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root. Read-only.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
@@ -605,7 +605,7 @@ Retrieve one VBA procedure body from a source module without opening Access. The
   - `source` (string, optional): Inline VBA source text.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
-#### `dysflow_find_references`
+#### `find_references`
 Find all references to a given symbol across a set of modules. The tool parses inline `modules` when supplied, otherwise it resolves modules from the configured source root and/or exports them from the binary. Read-only.
 * **Parameters**:
   - `symbol` (string, **required**): Symbol name to find references for.
@@ -614,7 +614,7 @@ Find all references to a given symbol across a set of modules. The tool parses i
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
-#### `dysflow_detect_dead_code`
+#### `detect_dead_code`
 Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem. Read-only.
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
@@ -622,7 +622,7 @@ Find VBA procedures and module-level declarations defined but never referenced. 
   - `module` (string, optional): Module-name constraint; restricts the analysis to a single module and elevates risk for surviving private-procedure findings.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
-#### `dysflow_validate_manifest`
+#### `validate_manifest`
 Validate a VBA test manifest before running `test_vba`. The tool parses an inline `manifest` or reads `testsPath`/`path`, resolves VBA source modules from the configured source root unless inline `modules` are supplied, and returns `valid`, separate `errors`/`warnings`, and a `summary`. Read-only.
 * **Parameters**:
   - `testsPath` / `path` (string, optional): VBA test manifest path. Relative paths resolve against the project root.
@@ -639,8 +639,8 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
 
-#### `dysflow_resolve_project`
-Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `dysflow_get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+#### `resolve_project`
+Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
@@ -670,7 +670,7 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
   - On failure the result is `ok: false` with code `VBA_TESTS_FAILED`. The message names the failing procedures, and `error.details` carries the structured per-procedure report: `{ failedCount, failures[], results[] }`, where each failure keeps `procedure`, `error`, `logs`, `durationMs`, and `payload`.
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
-* **`dysflow_validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
+* **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
   - Returns a validation report with `valid`, separate `errors` and `warnings` arrays, and a `summary` containing test and diagnostic counts.
@@ -875,8 +875,8 @@ See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 3. Validate config: `dysflow setup` or `dysflow doctor`
 4. Start MCP: `dysflow mcp`
 5. Run MCP client session (OpenCode, etc.)
-6. On automation error/timeouts, inspect `dysflow_access_operations_list`
-7. Clean up owned operation explicitly via `dysflow_access_cleanup`
+6. On automation error/timeouts, inspect `list_access_operations`
+7. Clean up owned operation explicitly via `cleanup_access_operation`
 
 ### Updating Dysflow
 

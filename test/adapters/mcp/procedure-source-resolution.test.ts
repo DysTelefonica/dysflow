@@ -48,7 +48,7 @@ type ProcedureDetailResponse = {
   body: string;
 };
 
-describe("dysflow_list_procedures — source resolution from disk", () => {
+describe("list_procedures — source resolution from disk", () => {
   const tempDir = join(process.env.TEMP ?? "/tmp", `procedure-test-${Date.now()}`);
 
   beforeAll(async () => {
@@ -81,8 +81,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
   it("resolves module from disk when source is omitted and destinationRoot is provided", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({
       module: "TestModule",
@@ -101,8 +101,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
   it("returns MODULE_NOT_FOUND when module file does not exist on disk", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({
       module: "NonExistentModule",
@@ -115,8 +115,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
   it("does not resolve path-like module names outside managed source folders", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({
       module: "../Escape",
@@ -129,8 +129,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
   it("returns MODULE_NOT_FOUND when destinationRoot is not provided", async () => {
     const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({
       module: "AnyModule",
@@ -154,8 +154,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
           destinationRoot: tempDir,
         }),
     );
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await tool.handler({ module: "TestModule" });
 
@@ -166,8 +166,8 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
 
   it("kind filter returns only matching procedure kinds", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (tool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const tool = tools.find((t) => t.name === "list_procedures");
+    if (tool === undefined) throw new Error("list_procedures tool not found");
 
     // Filter for Sub only
     const subResult = await tool.handler({
@@ -197,7 +197,7 @@ describe("dysflow_list_procedures — source resolution from disk", () => {
   });
 });
 
-describe("dysflow_get_procedure — source resolution from disk", () => {
+describe("get_procedure — source resolution from disk", () => {
   const tempDir = join(process.env.TEMP ?? "/tmp", `procedure-get-test-${Date.now()}`);
 
   beforeAll(async () => {
@@ -224,8 +224,8 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
   it("resolves module from disk when source is omitted and destinationRoot is provided", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (tool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const tool = tools.find((t) => t.name === "get_procedure");
+    if (tool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await tool.handler({
       module: "Calculator",
@@ -245,8 +245,8 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
   it("returns MODULE_NOT_FOUND when module file does not exist on disk", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (tool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const tool = tools.find((t) => t.name === "get_procedure");
+    if (tool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await tool.handler({
       module: "NonExistentClass",
@@ -260,8 +260,8 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
   it("returns MODULE_NOT_FOUND when destinationRoot is not provided", async () => {
     const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
-    const tool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (tool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const tool = tools.find((t) => t.name === "get_procedure");
+    if (tool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await tool.handler({
       module: "AnyModule",
@@ -286,8 +286,8 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
           destinationRoot: tempDir,
         }),
     );
-    const tool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (tool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const tool = tools.find((t) => t.name === "get_procedure");
+    if (tool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await tool.handler({ module: "Calculator", procedure: "Add" });
 
@@ -298,8 +298,8 @@ describe("dysflow_get_procedure — source resolution from disk", () => {
 
   it("returns PROCEDURE_NOT_FOUND when procedure exists in module but name doesn't match", async () => {
     const tools = createToolsWithMockContext(tempDir);
-    const tool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (tool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const tool = tools.find((t) => t.name === "get_procedure");
+    if (tool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await tool.handler({
       module: "Calculator",
@@ -356,10 +356,10 @@ describe("issue #713 merged VBA tools — project context source resolution", ()
     );
   }
 
-  it("dysflow_find_references resolves project source modules when explicit source paths are omitted", async () => {
+  it("find_references resolves project source modules when explicit source paths are omitted", async () => {
     const tools = makeToolsWithProjectContext();
-    const tool = tools.find((t) => t.name === "dysflow_find_references");
-    if (tool === undefined) throw new Error("dysflow_find_references tool not found");
+    const tool = tools.find((t) => t.name === "find_references");
+    if (tool === undefined) throw new Error("find_references tool not found");
 
     const result = await tool.handler({
       projectId: "configured-project",
@@ -380,10 +380,10 @@ describe("issue #713 merged VBA tools — project context source resolution", ()
     ]);
   });
 
-  it("dysflow_detect_dead_code resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
+  it("detect_dead_code resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
     const tools = makeToolsWithProjectContext();
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
-    if (tool === undefined) throw new Error("dysflow_detect_dead_code tool not found");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
+    if (tool === undefined) throw new Error("detect_dead_code tool not found");
 
     const result = await tool.handler({ projectId: "configured-project", scope: "source" });
 
@@ -400,10 +400,10 @@ describe("issue #713 merged VBA tools — project context source resolution", ()
     );
   });
 
-  it("dysflow_validate_manifest resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
+  it("validate_manifest resolves project source modules when explicit modules/destinationRoot are omitted", async () => {
     const tools = makeToolsWithProjectContext();
-    const tool = tools.find((t) => t.name === "dysflow_validate_manifest");
-    if (tool === undefined) throw new Error("dysflow_validate_manifest tool not found");
+    const tool = tools.find((t) => t.name === "validate_manifest");
+    if (tool === undefined) throw new Error("validate_manifest tool not found");
 
     const result = await tool.handler({
       projectId: "configured-project",
@@ -431,7 +431,7 @@ describe("issue #713 merged VBA tools — project context source resolution", ()
 // caller's path. Inline `source` is exempt — the caller already supplied
 // the bytes, so there is nothing on disk to validate.
 // ---------------------------------------------------------------------------
-describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root containment", () => {
+describe("list_procedures / get_procedure — strict source-root containment", () => {
   // The configured project root that the MCP access context will resolve to.
   const configuredRoot = join(process.env.TEMP ?? "/tmp", `procedure-configured-${Date.now()}`);
   // A totally unrelated directory the caller is trying to read from.
@@ -477,8 +477,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
   it("reads the configured project root when no explicit destinationRoot is provided", async () => {
     const tools = makeToolsWithConfiguredRoot();
-    const listTool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (listTool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const listTool = tools.find((t) => t.name === "list_procedures");
+    if (listTool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await listTool.handler({ module: "ConfiguredModule" });
 
@@ -489,8 +489,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
   it("rejects an explicit destinationRoot that points outside the configured project", async () => {
     const tools = makeToolsWithConfiguredRoot();
-    const listTool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (listTool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const listTool = tools.find((t) => t.name === "list_procedures");
+    if (listTool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await listTool.handler({
       module: "LeakedProc",
@@ -517,8 +517,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
   it("rejects an explicit destinationRoot that is a sibling of the configured project", async () => {
     const tools = makeToolsWithConfiguredRoot();
-    const getTool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (getTool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const getTool = tools.find((t) => t.name === "get_procedure");
+    if (getTool === undefined) throw new Error("get_procedure tool not found");
 
     const siblingRoot = join(process.env.TEMP ?? "/tmp", `procedure-sibling-${Date.now()}`);
     await mkdir(join(siblingRoot, "modules"), { recursive: true });
@@ -550,8 +550,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
 
   it("accepts an explicit destinationRoot that is byte-equivalent to the configured root", async () => {
     const tools = makeToolsWithConfiguredRoot();
-    const listTool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (listTool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const listTool = tools.find((t) => t.name === "list_procedures");
+    if (listTool === undefined) throw new Error("list_procedures tool not found");
 
     // Pass the SAME root back — must still resolve. This is the
     // "I trust the configured root and I'm passing it through for symmetry"
@@ -573,8 +573,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     if (process.platform !== "win32") return;
 
     const tools = makeToolsWithConfiguredRoot();
-    const listTool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (listTool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const listTool = tools.find((t) => t.name === "list_procedures");
+    if (listTool === undefined) throw new Error("list_procedures tool not found");
 
     const normalized = configuredRoot.replace(/\\/g, "/");
     const result = await listTool.handler({
@@ -602,8 +602,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
           // destinationRoot intentionally undefined → tools should refuse.
         }),
     );
-    const listTool = tools.find((t) => t.name === "dysflow_list_procedures");
-    if (listTool === undefined) throw new Error("dysflow_list_procedures tool not found");
+    const listTool = tools.find((t) => t.name === "list_procedures");
+    if (listTool === undefined) throw new Error("list_procedures tool not found");
 
     const result = await listTool.handler({
       module: "LeakedProc",
@@ -631,8 +631,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
           retryable: false,
         }),
     );
-    const getTool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (getTool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const getTool = tools.find((t) => t.name === "get_procedure");
+    if (getTool === undefined) throw new Error("get_procedure tool not found");
 
     const result = await getTool.handler({
       module: "LeakedProc",
@@ -651,8 +651,8 @@ describe("dysflow_list_procedures / dysflow_get_procedure — strict source-root
     // occurs and no source-root containment is required. This pins the
     // existing inline-source contract from the review.
     const tools = makeToolsWithConfiguredRoot();
-    const getTool = tools.find((t) => t.name === "dysflow_get_procedure");
-    if (getTool === undefined) throw new Error("dysflow_get_procedure tool not found");
+    const getTool = tools.find((t) => t.name === "get_procedure");
+    if (getTool === undefined) throw new Error("get_procedure tool not found");
 
     const inlineSource = ["Public Sub InlineProc()", "    Dim x As Long", "End Sub"].join("\r\n");
 

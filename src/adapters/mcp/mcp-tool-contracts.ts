@@ -124,81 +124,72 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
 };
 
 const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
-  dysflow_vba_execute: {
-    access: "conditional-write",
-    writeGate: "conditional",
-    summary:
-      "Conditional-write MCP contract; VBA execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
-  },
-  dysflow_query_execute: {
+  query_execute: {
     access: "read-write",
     writeGate: "conditional",
     dryRunDefault: true,
     summary: "Read/write MCP contract; write mode is write-gated and honors dryRun/apply.",
   },
-  dysflow_doctor: {
+  doctor: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  dysflow_access_operations_list: {
-    access: "read-only",
-    writeGate: "none",
-    summary: "Read-only MCP contract.",
-  },
-  dysflow_access_cleanup: aliasContracts.cleanup_access_operation,
-  dysflow_access_force_cleanup_orphaned: {
+  // #777 (Opción A cont.) — `list_access_operations` and
+  // `cleanup_access_operation` were REMOVED from this group; they
+  // are pre-existing aliases in `aliasContracts` (alias-tools.ts).
+  access_force_cleanup_orphaned: {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
       "Conditional-write MCP contract; orphan cleanup is read-only when listing and write-gated when confirmPid can kill a process.",
   },
-  // Round-3 Item 1 — `dysflow_resolve_project` re-resolves
+  // Round-3 Item 1 — `resolve_project` re-resolves
   // `.dysflow/project.json` from disk so a consumer can ask "what would
   // the MCP think if I passed THIS projectId?" without round-tripping
   // through the MCP restart cycle. Read-only.
-  dysflow_resolve_project: {
+  resolve_project: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  // PR-1 (issue #656) — `dysflow_get_capabilities` is the read-only gate
+  // PR-1 (issue #656) — `get_capabilities` is the read-only gate
   // introspection surface (#655 umbrella). It aggregates the static contract
   // metadata with the live process- and project-level state. It never opens
   // Access, never spawns PowerShell, and is never write-gated.
-  dysflow_get_capabilities: {
+  get_capabilities: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
   // issue #701 — read-only VBA procedure introspection
-  dysflow_list_procedures: {
+  list_procedures: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  dysflow_get_procedure: {
+  get_procedure: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  dysflow_find_references: {
+  find_references: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-  // issue #705 — `dysflow_detect_dead_code` is the read-only dead-code
+  // issue #705 — `detect_dead_code` is the read-only dead-code
   // analysis surface. The handler is the modern MCP counterpart to the
   // pure `detectDeadCode` core function: it never opens Access, never
   // spawns PowerShell, and never mutates the filesystem. Like its #701
   // siblings it is never write-gated and stays available in --disable-writes.
-  dysflow_detect_dead_code: {
+  detect_dead_code: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
   // issue #703 — read-only VBA test manifest validation before `test_vba`.
-  dysflow_validate_manifest: {
+  validate_manifest: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",

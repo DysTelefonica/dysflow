@@ -93,7 +93,7 @@ afterEach(() => {
 });
 
 describe.skipIf(!canRunAccessE2e)("Access runner read-only path (#750)", () => {
-  it("dysflow_doctor (diagnostics) does NOT modify the .accdb on disk", async () => {
+  it("doctor (diagnostics) does NOT modify the .accdb on disk", async () => {
     const workspace = createAccessFixtureWorkspace();
     workspaces.push(workspace);
     const accessDbPath = join(workspace.root, "NoConformidades.accdb");
@@ -128,7 +128,7 @@ describe.skipIf(!canRunAccessE2e)("Access runner read-only path (#750)", () => {
   // E2E because SaveAsText (the export action) inherently opens the .accdb,
   // and Access rewrites some metadata on close even when the runner
   // writes nothing. The read-only contract for export is verified by:
-  //   - this file's dysflow_doctor test (the canonical read-only path)
+  //   - this file's doctor test (the canonical read-only path)
   //   - `test/core/scripts/dysflow-access-runner-static.test.ts` (static
   //     analysis of the PowerShell runner script)
   //   - `test/core/runner/access-runner-readlock.test.ts` (unit test of

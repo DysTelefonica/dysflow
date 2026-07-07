@@ -55,7 +55,7 @@ function resolveAccessContext(accessPath = "C:/project/app.accdb", projectRoot =
   return async () => successResult({ accessPath, projectRoot });
 }
 
-describe("dysflow_access_force_cleanup_orphaned tool", () => {
+describe("access_force_cleanup_orphaned tool", () => {
   it("is registered with the correct name and schema", () => {
     const fakeOrphan = new FakeOrphanCleanupService();
     const tools = createDysflowMcpTools(
@@ -70,7 +70,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     expect(tool).toBeDefined();
     expect(tool?.inputSchema).toMatchObject({
       type: "object",
@@ -84,8 +84,8 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
     });
   });
 
-  it("MODERN_TOOL_NAMES includes dysflow_access_force_cleanup_orphaned", () => {
-    expect(MODERN_TOOL_NAMES).toContain("dysflow_access_force_cleanup_orphaned");
+  it("MODERN_TOOL_NAMES includes access_force_cleanup_orphaned", () => {
+    expect(MODERN_TOOL_NAMES).toContain("access_force_cleanup_orphaned");
   });
 
   it("handler returns success when service returns success and schema is valid", async () => {
@@ -110,7 +110,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({
       accessPath: "C:/project/app.accdb",
       confirmPid: 12345,
@@ -149,7 +149,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({
       accessPath: "C:/project/app.accdb",
       confirmPid: 12345,
@@ -170,7 +170,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: 12345 });
 
     expect(result?.isError).toBe(true);
@@ -201,7 +201,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
 
     expect(result?.isError).toBe(false);
@@ -236,7 +236,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
 
     expect(result?.isError).toBe(false);
@@ -261,7 +261,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: 0 });
 
     expect(result?.isError).toBe(true);
@@ -282,7 +282,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb", confirmPid: -1 });
 
     expect(result?.isError).toBe(true);
@@ -303,7 +303,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({
       accessPath: "C:/project/app.accdb",
       confirmPid: "not-a-number",
@@ -335,7 +335,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({
       accessPath: "C:/project/app.accdb",
       confirmPid: 12345,
@@ -361,7 +361,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext(),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ accessPath: "C:/project/app.accdb" });
 
     expect(result?.isError).toBe(true);
@@ -375,7 +375,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       orphanCleanupService: fakeOrphan,
     } as DysflowMcpServices);
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ confirmPid: 12345 });
 
     expect(result?.isError).toBe(true);
@@ -396,7 +396,7 @@ describe("dysflow_access_force_cleanup_orphaned tool", () => {
       resolveAccessContext("C:/repo/default.accdb", "C:/repo"),
     );
 
-    const tool = tools.find((t) => t.name === "dysflow_access_force_cleanup_orphaned");
+    const tool = tools.find((t) => t.name === "access_force_cleanup_orphaned");
     const result = await tool?.handler({ projectId: "dysflow", confirmPid: 12345 });
 
     expect(result?.isError).toBe(false);

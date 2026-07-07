@@ -11,30 +11,35 @@ import type { AccessVbaResult } from "../../../src/core/services/vba-service";
 
 const OUTPUT_CONTRACT_GROUPS = {
   modernCoreService: [
-    "dysflow_vba_execute",
-    "dysflow_query_execute",
-    "dysflow_doctor",
-    "dysflow_access_operations_list",
-    "dysflow_access_cleanup",
-    "dysflow_access_force_cleanup_orphaned",
-    // PR-1 (#656) — `dysflow_get_capabilities` is a read-only modern service
+    // PR-1 (#656) — `get_capabilities` is a read-only modern service
     // tool. It aggregates capability metadata; it never touches Access.
-    "dysflow_get_capabilities",
+    "query_execute",
+    "doctor",
+    // #777 (Opción A cont.) — `list_access_operations` and
+    // `cleanup_access_operation` were REMOVED from this group; they
+    // are pre-existing aliases (lives in `modernServiceAliases` below)
+    // registered in `alias-tools.ts`.
+    "access_force_cleanup_orphaned",
+    // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED
+    // completely. The canonical `run_vba` is a pre-existing alias in
+    // `alias-tools.ts` (lives in `modernServiceAliases` below); it is no
+    // longer a modern tool name in this group.
+    "get_capabilities",
     // #701 — read-only modern service tools that parse VBA source text without
     // PowerShell runner DYSFLOW_RESULT output.
-    "dysflow_list_procedures",
-    "dysflow_get_procedure",
-    "dysflow_find_references",
+    "list_procedures",
+    "get_procedure",
+    "find_references",
     // #705 — read-only dead-code analysis over the supplied modules map.
-    "dysflow_detect_dead_code",
+    "detect_dead_code",
     // #703 — read-only VBA test manifest validation.
-    "dysflow_validate_manifest",
+    "validate_manifest",
     // #704 — read-only VBA module pre-import linting.
     "lint_module",
     // #760 — read-only project-config resolution without Access.
-    "dysflow_resolve_project",
+    "resolve_project",
   ],
-  modernServiceAliases: ["run_vba"],
+  modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [
     "export_modules",
     "export_all",
@@ -90,7 +95,12 @@ const OUTPUT_CONTRACT_GROUPS = {
     "compact_repair",
     "relink_directory",
   ],
-  operationCleanupAliases: ["list_access_operations", "cleanup_access_operation"],
+  // #777 (Opción A cont.) — `list_access_operations` and
+  // `cleanup_access_operation` were REMOVED from the
+  // `operationCleanupAliases` group; they now live exclusively
+  // in `modernServiceAliases` along with `run_vba`. Each tool is
+  // in exactly one group (the test below asserts that invariant).
+  operationCleanupAliases: [],
 } as const satisfies Record<string, readonly string[]>;
 
 class FakeVbaService {
@@ -161,10 +171,24 @@ describe("MCP tool output contract inventory", () => {
     ).toEqual([]);
   });
 
-  it("documents that run_vba is a modern service alias, not a VBA manager DYSFLOW_RESULT tool", () => {
-    expect(OUTPUT_CONTRACT_GROUPS.modernServiceAliases).toEqual(["run_vba"]);
+  it("documents that the canonical VBA service aliases are not VBA manager DYSFLOW_RESULT tools", () => {
+    // #777 (Opción A cont.) — three canonical names live in the
+    // `alias-tools.ts` alias group: `run_vba`, `list_access_operations`,
+    // and `cleanup_access_operation`. They are NOT in MODERN_TOOL_NAMES
+    // (which only lists bespoke registrations) and NOT in the VBA
+    // manager DYSFLOW_RESULT group (which lists vbaSync dispatch tools).
+    expect(OUTPUT_CONTRACT_GROUPS.modernServiceAliases).toEqual(
+      expect.arrayContaining(["run_vba", "list_access_operations", "cleanup_access_operation"]),
+    );
+    expect(OUTPUT_CONTRACT_GROUPS.modernServiceAliases).toHaveLength(3);
     expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain("run_vba");
+    expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain("list_access_operations");
+    expect(OUTPUT_CONTRACT_GROUPS.vbaManagerDysflowResult).not.toContain(
+      "cleanup_access_operation",
+    );
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("run_vba");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("list_access_operations");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("cleanup_access_operation");
   });
 
   it("translates cleanup service output for modern and alias cleanup tools through the same MCP contract", async () => {
@@ -178,7 +202,7 @@ describe("MCP tool output contract inventory", () => {
       force: true,
     };
 
-    for (const toolName of ["dysflow_access_cleanup", "cleanup_access_operation"] as const) {
+    for (const toolName of ["cleanup_access_operation", "cleanup_access_operation"] as const) {
       const tool = tools.find((candidate) => candidate.name === toolName);
       expect(tool, `${toolName} should be registered`).toBeDefined();
       if (tool === undefined) throw new Error(`${toolName} was not registered`);

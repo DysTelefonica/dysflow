@@ -11,7 +11,7 @@
  *   5. `EXECUTION_MAPPINGS.compile_vba` — vba-execution-adapter.ts:25
  *   6. `handles()` returns false for compile_vba — vba-modules-adapter.ts +
  *      vba-execution-adapter.ts + vba-sync-adapter.ts
- *   7. `dysflow_dysflow_get_capabilities.toolsVisible` — drops by exactly 1
+ *   7. `dysflow_get_capabilities.toolsVisible` — drops by exactly 1
  *      (68 -> 67).
  *
  * Mirrors the registration pin pattern from
@@ -34,7 +34,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 /**
  * Computed tools count: every non-hidden tool exposed by tools/list
  * after the in-process `createDysflowMcpTools` factory + the hidden-stub
- * registry. We compare against the dynamic list (not the hard-coded 67)
+ * registry. We compare against the dynamic list (not the hard-coded 64)
  * so the test does NOT drift on unrelated tool additions.
  */
 function advertisedToolCount(): number {
@@ -79,14 +79,18 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     expect(VbaModulesAdapter.handles("compile_vba")).toBe(false);
   });
 
-  it("advertised MCP tool count drops by exactly 1 (68 -> 67) — #759 / v1.19.0 hard break", () => {
-    // Regress anchor: pinning the absolute delta (the tool removed is compile_vba)
-    // — not the absolute count. The current count for v1.19.0 is 67; bumps in
-    // future minor versions need their own pin.
-    // This test is the source of truth for the delta.
+  it("advertised MCP tool count is 64 after #777 Opción A cont. (68 -> 67 -> 66 -> 64)", () => {
+    // #759 removed `compile_vba` (v1.19.0): 68 -> 67.
+    // #777 Opción A (58405eb2) renamed 7 dysflow_* tools whose canonical
+    //   forms already existed in alias-tools.ts: count unchanged at 67.
+    // #777 Opción A cont. (this PR) renames 11 dysflow_* bespoke tools.
+    //   Three of them — `dysflow_vba_execute`, `dysflow_access_operations_list`,
+    //   `dysflow_access_cleanup` — drop the legacy bespoke registration
+    //   entirely (the canonical alias is the sole source). The other 8 are
+    //   bespoke-to-bespoke renames: count unchanged. Net: 67 -> 64.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
-    // Pin the post-removal count explicitly for v1.19.0. Update this to the
-    // matching value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(67);
+    // Pin the post-removal count explicitly. Update this to the matching
+    // value at the time of any future tool surface change.
+    expect(advertisedToolCount()).toBe(64);
   });
 });

@@ -18,11 +18,11 @@ import { successResult } from "../../../src/core/contracts/index.js";
  * (`test/quality-gates/mcp-e2e-suite-contracts.test.ts`) cannot drift from this unit pin.
  */
 const ISSUE_713_REQUIRED_TOOLS = [
-  "dysflow_list_procedures",
-  "dysflow_get_procedure",
-  "dysflow_find_references",
-  "dysflow_detect_dead_code",
-  "dysflow_validate_manifest",
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  "detect_dead_code",
+  "validate_manifest",
 ] as const;
 
 describe("advertised MCP tool surface", () => {
@@ -37,10 +37,10 @@ describe("advertised MCP tool surface", () => {
   it(`advertises exactly ${EXPECTED_ADVERTISED_TOOL_COUNT} non-hidden tools (matches the MCP server tools/list)`, () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
-    // PR-1 (#656) added dysflow_get_capabilities.
-    // #701 added dysflow_list_procedures + dysflow_get_procedure.
-    // #705 added dysflow_detect_dead_code.
-    // #703 added dysflow_validate_manifest.
+    // PR-1 (#656) added get_capabilities.
+    // #701 added list_procedures + get_procedure.
+    // #705 added detect_dead_code.
+    // #703 added validate_manifest.
     // #704 added lint_module.
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     // Guard the label format too — the e2e suite-contracts pin asserts on this string.
@@ -53,5 +53,13 @@ describe("advertised MCP tool surface", () => {
 
   it("advertises a duplicate-free set", () => {
     expect(new Set(advertised).size).toBe(advertised.length);
+  });
+
+  it("does not advertise any tool whose name starts with 'dysflow_' (#777 cont.)", () => {
+    // Opción A directive: "no legacy ni non legacy, todos han de ser iguales".
+    // The previous 11 (#777) and these 2 (get_capabilities, resolve_project)
+    // are the LAST tools still carrying the dysflow_ prefix.
+    const dysflowPrefixed = advertised.filter((name) => name.startsWith("dysflow_"));
+    expect(dysflowPrefixed).toEqual([]);
   });
 });

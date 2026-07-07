@@ -174,22 +174,22 @@ rows.push({
     : `missing=${missingIssue713Tools.join(",")}`,
 });
 
-await record("diagnostics", "dysflow_doctor", { projectId, includeEnvironment: true });
-await record("query", "dysflow_query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
-await record("vba", "dysflow_vba_execute", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
-await record("operations", "dysflow_access_operations_list", {});
-await record("operations", "dysflow_access_cleanup", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
-await record("operations", "dysflow_access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
+await record("diagnostics", "doctor", { projectId, includeEnvironment: true });
+await record("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
+await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
+await record("operations", "list_access_operations", {});
+await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
+await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
 // Same harness shape as every other tool — record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
-await record("capabilities", "dysflow_get_capabilities", { projectId });
+await record("capabilities", "get_capabilities", { projectId });
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
   // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
   const crossStart = Date.now();
-  const cross = await callMcp("tools/call", { name: "dysflow_get_capabilities", arguments: { projectId } });
+  const cross = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
   const crossMs = Date.now() - crossStart;
   const crossRow = (() => {
     if (cross.timedOut) return { pass: false, summary: "timeout" };
@@ -206,13 +206,13 @@ await record("capabilities", "dysflow_get_capabilities", { projectId });
         : `drift: snapshot.toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length}`,
     };
   })();
-  rows.push({ area: "capabilities", tool: "dysflow_get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
-  console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tdysflow_get_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
+  rows.push({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
+  console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tget_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
 }
 
 await record("query", "query_sql", { projectId, ...backendTarget, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades" });
 await record("security", "query_sql", { projectId, sql: "DROP TABLE TbConfiguracion" }, { expected: "error" });
-await record("security", "dysflow_query_execute", { projectId, sql: "DELETE FROM TbNoConformidades", mode: "read" }, { expected: "error" });
+await record("security", "query_execute", { projectId, sql: "DELETE FROM TbNoConformidades", mode: "read" }, { expected: "error" });
 await record("query", "list_tables", { projectId, ...backendTarget });
 await record("query", "get_schema", { projectId, ...backendTarget, tableName: "TbNoConformidades" });
 await record("query", "count_rows", { projectId, accessPath, backendPath, tableName: "TbNoConformidades" });
@@ -325,8 +325,8 @@ await record("legacy", "cleanup_access_operation", { operationId: "missing-opera
 await record("legacy", "list_access_operations", {});
 
 // issue #701 — read-only VBA procedure introspection tools. These tests
-// exercise both new visible MCP tools (`dysflow_list_procedures` and
-// `dysflow_get_procedure`) through a live `tools/call` JSON-RPC round-trip.
+// exercise both new visible MCP tools (`list_procedures` and
+// `get_procedure`) through a live `tools/call` JSON-RPC round-trip.
 // Inline `source` is used to keep these rows hermetic — the inline path does
 // NOT touch Access or the project filesystem, so the success path does not
 // depend on the fixture's actual modules being present. A second pair of
@@ -348,18 +348,18 @@ const inlineSourceFixture = [
   "    DysflowMcpE2E_GetValue = 7",
   "End Function",
 ].join("\r\n");
-await record("vba-introspection", "dysflow_list_procedures", {
+await record("vba-introspection", "list_procedures", {
   projectId,
   module: "DysflowMcpE2EInline",
   source: inlineSourceFixture,
 });
-await record("vba-introspection", "dysflow_get_procedure", {
+await record("vba-introspection", "get_procedure", {
   projectId,
   module: "DysflowMcpE2EInline",
   procedure: "DysflowMcpE2E_DoWork",
   source: inlineSourceFixture,
 });
-await record("vba-introspection", "dysflow_get_procedure", {
+await record("vba-introspection", "get_procedure", {
   projectId,
   module: "DysflowMcpE2EInline",
   procedure: "NonExistentDysflowMcpE2EProc",
@@ -369,7 +369,7 @@ await record("vba-introspection", "dysflow_get_procedure", {
 // match the configured project root must be refused. Inline `source` is
 // omitted so the only way to find the module would be a disk read, which
 // the adapter must NOT perform for an out-of-project path.
-await record("vba-introspection", "dysflow_list_procedures", {
+await record("vba-introspection", "list_procedures", {
   projectId,
   module: "DysflowMcpE2EAny",
   destinationRoot: "C:/dysflow-mcp-e2e-not-the-project",
@@ -382,7 +382,7 @@ await record("vba-introspection", "dysflow_list_procedures", {
 // check inside `resolveVbaSourceFile` rejects any caller-supplied
 // `destinationRoot` that does not match the configured root, so a
 // sandbox-root `destinationRoot` would falsely fail with MODULE_NOT_FOUND.
-await record("vba-introspection", "dysflow_list_procedures", {
+await record("vba-introspection", "list_procedures", {
   projectId,
   module: existingModuleName,
   // Inline `source` keeps the assertion hermetic; the on-disk path is
@@ -390,7 +390,7 @@ await record("vba-introspection", "dysflow_list_procedures", {
   // already points at.
   source: await readFile(join(scriptDir, "src", "modules", `${existingModuleName}.bas`), "utf-8"),
 });
-await record("vba-manifest", "dysflow_validate_manifest", {
+await record("vba-manifest", "validate_manifest", {
   projectId,
   manifest: { tests: [{ procedure: "DysflowMcpE2E_DoWork", args: [] }] },
   modules: { DysflowMcpE2EInline: inlineSourceFixture },

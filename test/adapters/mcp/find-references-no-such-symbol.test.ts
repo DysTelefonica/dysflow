@@ -10,10 +10,10 @@ function makeBaseServices() {
   };
 }
 
-describe("dysflow_find_references — typed error when symbol does not exist (NOT empty array)", () => {
+describe("find_references — typed error when symbol does not exist (NOT empty array)", () => {
   it("returns isError:true with SYMBOL_NOT_FOUND rather than a silent empty references array", async () => {
     const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
-    const tool = tools.find((t) => t.name === "dysflow_find_references");
+    const tool = tools.find((t) => t.name === "find_references");
     expect(tool).toBeDefined();
 
     const result = (await tool?.handler({

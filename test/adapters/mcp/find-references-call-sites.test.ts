@@ -10,7 +10,7 @@ function makeBaseServices() {
   };
 }
 
-describe("dysflow_find_references — returns call sites of a symbol", () => {
+describe("find_references — returns call sites of a symbol", () => {
   it("returns every call site of the symbol across the binary scope", async () => {
     const sourceFixture = [
       "Option Explicit",
@@ -29,7 +29,7 @@ describe("dysflow_find_references — returns call sites of a symbol", () => {
     ];
 
     const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
-    const tool = tools.find((t) => t.name === "dysflow_find_references");
+    const tool = tools.find((t) => t.name === "find_references");
     expect(tool).toBeDefined();
 
     const result = (await tool?.handler({

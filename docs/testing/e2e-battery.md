@@ -47,18 +47,18 @@ E2E_testing/
 **Áreas cubiertas** (etiquetas en la columna `area` del informe):
 
 - `protocol` — `tools/list`, `advertised-tool-count`, `:zombie-check` por herramienta
-- `diagnostics` — `dysflow_doctor`
+- `diagnostics` — `doctor`
 - `query` — `query_sql`, `list_tables`, `get_schema`, `count_rows`, `get_relationships`, etc.
 - `security` — guardia de solo-lectura contra `DROP`/`DELETE`
 - `vba` — `dysflow_vba_execute` con allowlist
-- `vba-introspection` — `dysflow_list_procedures` + `dysflow_get_procedure` (#701):
+- `vba-introspection` — `list_procedures` + `get_procedure` (#701):
   - inline `source` happy path para los dos tools
   - inline `source` con `procedure` inexistente (camino de error tipado)
   - `destinationRoot` externo rechazado por source-root containment
   - resolución desde disco contra el árbol fuente del sandbox (happy path)
-- `vba-manifest` — `dysflow_validate_manifest` (#703): validación previa del manifest de tests VBA sin ejecutar `test_vba`
-- `operations` — `dysflow_access_operations_list` / `cleanup` / `force_cleanup_orphaned`
-- `capabilities` — `dysflow_get_capabilities` snapshot + cross-check vs `advertised.length`
+- `vba-manifest` — `validate_manifest` (#703): validación previa del manifest de tests VBA sin ejecutar `test_vba`
+- `operations` — `list_access_operations` / `cleanup` / `force_cleanup_orphaned`
+- `capabilities` — `get_capabilities` snapshot + cross-check vs `advertised.length`
 - `maintenance` — `compact_repair` (dry-run + apply con password real)
 - `links` — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - `write` — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
@@ -121,7 +121,7 @@ pnpm test:e2e:mcp    # equivalente a: node E2E_testing/mcp-e2e.mjs
 Por cada herramienta el harness imprime una línea tabular:
 
 ```text
-PASS   dysflow_query_execute            142ms   {"RowCount":1534}
+PASS   query_execute            142ms   {"RowCount":1534}
 PASS   query_sql                        128ms   {"RowCount":1534}
 PASS   compact_repair                   2415ms  {"dryRun":true,...}
 # feat-759-no-compile (v1.19.0) — the legacy "FAIL compile_vba"
@@ -273,7 +273,7 @@ de `callMcp`. Las comprobaciones de zombies **solo** consultan esos PIDs y sus d
 
 > Nunca ejecutes `Stop-Process -Name MSACCESS -Force` para "limpiar" antes del E2E. Si
 > hay un `MSACCESS.EXE` que pertenece al suite, déjalo terminar por sí solo o usa
-> `dysflow_access_force_cleanup_orphaned` con el PID explícito. La regla está vigente
+> `access_force_cleanup_orphaned` con el PID explícito. La regla está vigente
 > en `dysflow-msaccess-cleanup-only` (ver bloque en el AGENTS raíz).
 
 ## Relación con la suite unit (cheap gates)
@@ -352,9 +352,9 @@ deben moverse juntos:
 | E2E runtime | `E2E_testing/mcp-e2e.mjs:158` | `pass: advertised.length === 67` |
 | Meta-guard | `test/quality-gates/mcp-e2e-suite-contracts.test.ts` | El harness importa el contador compartido `EXPECTED_ADVERTISED_TOOL_COUNT` |
 
-`dysflow_get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
+`get_capabilities` (PR #656) emite un snapshot con `toolsVisible`, que la batería
 cruza con `advertised.length` para detectar drift entre el pin unit y el servidor en vivo
-(fila `dysflow_get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
+(fila `get_capabilities:toolsVisible-matches-advertised`). Si el snapshot dice
 `toolsVisible=66` y el pin dice 67, el cross-check falla aunque las herramientas
 individuales pasen.
 
@@ -401,7 +401,7 @@ redirija al install de producción (issue #475). Si necesitas otra, usa
 4. **No "arregles" STOP-ON-FAIL** relajando el driver. La regla existe porque una
    herramienta rota puede acumular zombies; la solución es arreglar la herramienta.
 5. **No elimines `MSACCESS.EXE` huérfanos con `Stop-Process -Name MSACCESS`.** Si
-   necesitas forzar, usa `dysflow_access_force_cleanup_orphaned` con el `confirmPid`
+   necesitas forzar, usa `access_force_cleanup_orphaned` con el `confirmPid`
    que el informe te da.
 
 ## Documentos relacionados

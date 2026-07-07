@@ -109,7 +109,7 @@ export type VbaSyncAdapterOptions = {
    * at the adapter boundary. When undefined or empty, `test_vba` refuses
    * execution unless the caller passes `dryRun: true` (the same semantics
    * as the MCP-handler gate in `canonical-handlers.ts:ensureProcedureAllowed`,
-   * which already covers `run_vba` / `dysflow_vba_execute`).
+   * which already covers `run_vba`).
    *
    * #757 (F7) — accepts a per-input RESOLVER (function) as well as a frozen
    * array. The composition root passes a resolver so `test_vba` re-reads the
@@ -451,7 +451,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       const remediation =
         `dysflow already attempted to reap the orphaned Access process on this timeout. ` +
         `If an MSACCESS.EXE still holds ${accessPath ?? "the target binary"}, list orphans with ` +
-        `dysflow_access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
+        `access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
         `Consider raising timeoutMs for large projects.`;
       return failureResult(
         createDysflowError(

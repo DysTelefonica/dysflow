@@ -45,7 +45,7 @@ Each dead-code entry MUST include: `symbol`, `module`, `kind` (`sub` \| `functio
 
 The system MUST register `dysflow_detect_dead_code` through the **modern MCP tool path** alongside the `#701` procedure tools (`dysflow_list_procedures`, `dysflow_get_procedure`, `dysflow_find_references`). Specifically the system MUST:
 
-- Append `"dysflow_detect_dead_code"` to `MODERN_TOOL_NAMES` (`src/adapters/mcp/tools.ts`) so the tool is visible in `dysflow_get_capabilities.toolsVisible` regardless of write-gate state.
+- Append `"dysflow_detect_dead_code"` to `MODERN_TOOL_NAMES` (`src/adapters/mcp/tools.ts`) so the tool is visible in `get_capabilities.toolsVisible` regardless of write-gate state.
 - Add a `modernContracts.dysflow_detect_dead_code` entry with `access: "read-only"` and `writeGate: "none"` (`src/adapters/mcp/mcp-tool-contracts.ts`).
 - Declare `DETECT_DEAD_CODE_SCHEMA` (`src/adapters/mcp/schemas/dysflow-schemas.ts`) with `scope` required, `modules` optional for project-source fallback, and `additionalProperties: false` so unknown fields are rejected at parse time.
 - Wire a custom handler that runs the pure core function over inline modules or the resolved project source tree; fallback failure or a missing module constraint MUST return a typed `MODULE_NOT_FOUND` envelope. The handler MUST never open Access nor spawn PowerShell.

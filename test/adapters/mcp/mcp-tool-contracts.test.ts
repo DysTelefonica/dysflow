@@ -24,34 +24,26 @@ class FakeDiagnosticsService {
 
 describe("MCP tool contract metadata", () => {
   it("centralizes modern and legacy cleanup write-gate metadata", () => {
-    expect(getMcpToolContract("dysflow_access_cleanup")).toMatchObject({
+    expect(getMcpToolContract("cleanup_access_operation")).toMatchObject({
       access: "conditional-write",
       writeGate: "conditional",
     });
     expect(getMcpToolContract("cleanup_access_operation")).toMatchObject(
-      getMcpToolContract("dysflow_access_cleanup"),
+      getMcpToolContract("cleanup_access_operation"),
     );
   });
 
   it("classifies modern query execution as read/write with dry-run protection", () => {
-    expect(getMcpToolContract("dysflow_query_execute")).toMatchObject({
+    expect(getMcpToolContract("query_execute")).toMatchObject({
       access: "read-write",
       writeGate: "conditional",
       dryRunDefault: true,
     });
   });
 
-  it("reclassifies dysflow_vba_execute as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
-    expect(getMcpToolContract("dysflow_vba_execute")).toMatchObject({
-      access: "conditional-write",
-      writeGate: "conditional",
-    });
-    const summary = getMcpToolContract("dysflow_vba_execute").summary;
-    expect(summary.toLowerCase()).toContain("allowlist");
-    expect(summary.toLowerCase()).toContain("dryrun");
-  });
-
-  it("reclassifies run_vba (alias) as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+  it("reclassifies run_vba as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+    // #777 (Opción A cont.) — only `run_vba` survives; the legacy
+    // `dysflow_vba_execute` contract was folded into `aliasContracts.run_vba`.
     expect(getMcpToolContract("run_vba")).toMatchObject({
       access: "conditional-write",
       writeGate: "conditional",
@@ -98,34 +90,31 @@ describe("MCP tool contract metadata", () => {
   it("advertises modern tool safety footguns and key arguments (#593 + PR1a #621)", () => {
     const descriptions = modernToolDescriptions();
 
-    expect(descriptions.dysflow_vba_execute).toContain("procedureName");
-    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("allowlist");
-    expect(descriptions.dysflow_vba_execute.toLowerCase()).toContain("dryrun");
-    expect(descriptions.dysflow_vba_execute).toContain("compiled project");
+    // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED and its
+    // alias `run_vba` (registered in alias-tools.ts) is NOT in
+    // `MODERN_TOOL_NAMES` anymore. The `run_vba` description assertions
+    // are removed — the modern-tool safety footguns contract for
+    // `run_vba` is covered by the canonical-handlers test instead.
 
-    expect(descriptions.dysflow_query_execute).toContain('mode: "read"');
-    expect(descriptions.dysflow_query_execute).toContain('mode: "write"');
-    expect(descriptions.dysflow_query_execute).toContain("dryRun");
-    expect(descriptions.dysflow_query_execute).toContain("apply");
-    expect(descriptions.dysflow_query_execute).toContain("MCP_WRITES_DISABLED");
+    expect(descriptions.query_execute).toContain('mode: "read"');
+    expect(descriptions.query_execute).toContain('mode: "write"');
+    expect(descriptions.query_execute).toContain("dryRun");
+    expect(descriptions.query_execute).toContain("apply");
+    expect(descriptions.query_execute).toContain("MCP_WRITES_DISABLED");
 
-    expect(descriptions.dysflow_doctor).toContain("projectId");
-    expect(descriptions.dysflow_doctor).toContain("includeEnvironment");
-    expect(descriptions.dysflow_doctor).toContain("accessPath");
+    expect(descriptions.doctor).toContain("projectId");
+    expect(descriptions.doctor).toContain("includeEnvironment");
+    expect(descriptions.doctor).toContain("accessPath");
 
-    expect(descriptions.dysflow_access_operations_list).toContain("operationId");
-    expect(descriptions.dysflow_access_operations_list).toContain("PID");
-    expect(descriptions.dysflow_access_operations_list).toContain("read-only");
+    // #777 (Opción A cont.) — `list_access_operations` and
+    // `cleanup_access_operation` were REMOVED from MODERN_TOOL_NAMES;
+    // they are pre-existing aliases in `alias-tools.ts`. Their
+    // description assertions live in `alias-tools.test.ts` instead.
 
-    expect(descriptions.dysflow_access_cleanup).toContain("operationId");
-    expect(descriptions.dysflow_access_cleanup).toContain("force: true");
-    expect(descriptions.dysflow_access_cleanup).toContain("MCP_WRITES_DISABLED");
-    expect(descriptions.dysflow_access_cleanup).toContain("kills nothing");
-
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("confirmPid");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("list");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("headless");
-    expect(descriptions.dysflow_access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("confirmPid");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("list");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("headless");
+    expect(descriptions.access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
   });
 });
 

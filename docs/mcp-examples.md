@@ -61,7 +61,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 ### 3. Executing SQL & Scripts
 
 #### Run a Read-only Select Query
-*   **Tool**: `dysflow_query_execute`
+*   **Tool**: `query_execute`
 *   **Arguments**:
     ```json
     {
@@ -72,7 +72,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     ```
 
 #### Apply a Database Write Query (Update/Insert)
-*   **Tool**: `dysflow_query_execute`
+*   **Tool**: `query_execute`
 *   **Arguments**:
     ```json
     {
@@ -178,7 +178,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 ### 6. Cycle & Diagnostics
 
 #### Reconcile Operations Registry and Clean Stale PIDs
-*   **Tool**: `dysflow_access_cleanup`
+*   **Tool**: `cleanup_access_operation`
 *   **Arguments**:
     ```json
     {
@@ -187,7 +187,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     ```
 
 #### Terminate a Stuck/Locked Access Instance (Write-gated)
-*   **Tool**: `dysflow_access_cleanup`
+*   **Tool**: `cleanup_access_operation`
 *   **Arguments**:
     ```json
     {
@@ -197,14 +197,14 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     ```
 
 #### List Orphan Headless MSACCESS Processes Holding Database Locks
-*   **Tool**: `dysflow_access_force_cleanup_orphaned`
+*   **Tool**: `access_force_cleanup_orphaned`
 *   **Arguments**:
     ```json
     {}
     ```
 
 #### Kill a Specific Orphaned Process by PID (Write-gated)
-*   **Tool**: `dysflow_access_force_cleanup_orphaned`
+*   **Tool**: `access_force_cleanup_orphaned`
 *   **Arguments**:
     ```json
     {
@@ -217,7 +217,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 ### 7. Dead-Code Analysis (Read-only, #705)
 
 #### Detect Dead Code Across Inline Modules
-*   **Tool**: `dysflow_detect_dead_code`
+*   **Tool**: `detect_dead_code`
 *   **Arguments**:
     ```json
     {
@@ -254,7 +254,7 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     ```
 
 #### Restrict Detection to a Single Module
-*   **Tool**: `dysflow_detect_dead_code`
+*   **Tool**: `detect_dead_code`
 *   **Arguments**:
     ```json
     {

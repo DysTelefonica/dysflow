@@ -9,8 +9,8 @@ import {
 /**
  * Regression tests for the pure VBA procedure parser.
  *
- * The parser is the authoritative source for both the MCP `dysflow_list_procedures`
- * and `dysflow_get_procedure` tools (issue #701) and for any future consumer that
+ * The parser is the authoritative source for both the MCP `list_procedures`
+ * and `get_procedure` tools (issue #701) and for any future consumer that
  * wants to introspect VBA source text. It lives in `src/core/services/` so it is
  * free of filesystem and Access concerns — every test here is purely string-in,
  * string-out.

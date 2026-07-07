@@ -53,12 +53,12 @@ The canonical harness `mcp-e2e.mjs` exercises every user-visible MCP tool agains
 writes). Areas currently covered:
 
 - **protocol** — `tools/list`, `advertised-tool-count`, `:zombie-check` per tool
-- **diagnostics** — `dysflow_doctor`
+- **diagnostics** — `doctor`
 - **query** — read-side tools (`query_sql`, `list_tables`, `get_schema`, `count_rows`, etc.)
 - **security** — read-only guard against DROP/DELETE
-- **vba** — `dysflow_vba_execute` allowlist enforcement
-- **operations** — `dysflow_access_operations_list` / `cleanup` / `force_cleanup_orphaned`
-- **capabilities** — `dysflow_get_capabilities` snapshot + toolsVisible-vs-advertised cross-check
+- **vba** — `run_vba` allowlist enforcement
+- **operations** — `list_access_operations` / `cleanup` / `force_cleanup_orphaned`
+- **capabilities** — `get_capabilities` snapshot + toolsVisible-vs-advertised cross-check
 - **maintenance** — `compact_repair` (dry-run + apply)
 - **links** — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - **write** — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
@@ -84,10 +84,10 @@ If you bypass `record()`, you lose all three. Don't.
 
 ```javascript
 // Correct — uses the suite helper, gets preflight + zombie check for free.
-await record("capabilities", "dysflow_get_capabilities", { projectId });
+await record("capabilities", "get_capabilities", { projectId });
 
 // Wrong — bypasses the helper. You get raw output but lose all safety invariants.
-const raw = await callMcp("tools/call", { name: "dysflow_get_capabilities", arguments: { projectId } });
+const raw = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
 ```
 
 ### Adding coverage for a new tool
@@ -184,7 +184,7 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
   goes through the same wiring the harness tests — keep the suite close to that reality.
 - **Never kill `MSACCESS.EXE` by process name.** The harness's PID tracking only works if you
   let suite-owned children exit on their own. If you must force-kill, go through
-  `dysflow_access_force_cleanup_orphaned` (or `dysflow_access_cleanup` with the recorded
+  `access_force_cleanup_orphaned` (or `cleanup_access_operation` with the recorded
   `operationId` + `accessPath`). `Stop-Process -Name MSACCESS -Force` is a hard ban.
 - **The fixtures are destructive by design.** `E2E_testing/NoConformidades.accdb` and
   `NoConformidades_Datos.accdb` are test assets. The harness copies them to a temp sandbox

@@ -109,7 +109,7 @@ Verified by the test "query: target='auto' resolves to backend when the table ex
 | Tests RED→GREEN with `web-tdd-philosophy` discipline | ✅ | Each slice ships RED → GREEN → REFACTOR; the lookup unit tests are fixture-gated (mkdtempSync per-test) and assert cardinality (2 calls for ambiguous, 1 for frontend-only-config). |
 | Audit script returns zero matches in NEW code | ✅ | 1 documentation comment + 0 functional additions (audit above). |
 | All existing tests stay green (2417/2419 at v1.19.0+PR-1 baseline) | ✅ | 2435/2437 after PR-2 (no regressions, +18 new tests). |
-| `dysflow_get_capabilities.toolsVisible` unchanged from v1.19.0 | ✅ | No tool additions, no tool removals, no schema enum widening at the MCP boundary. |
+| `get_capabilities.toolsVisible` unchanged from v1.19.0 | ✅ | No tool additions, no tool removals, no schema enum widening at the MCP boundary. |
 
 ## Deviations from spec
 

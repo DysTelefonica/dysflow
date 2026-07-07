@@ -3,7 +3,7 @@ import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/ada
 import { successResult } from "../../../src/core/contracts/index";
 
 /**
- * Phase 5 (issue #705 — `detect-dead-code`): `dysflow_detect_dead_code` is a
+ * Phase 5 (issue #705 — `detect-dead-code`): `detect_dead_code` is a
  * read-only tool. It MUST remain available regardless of the MCP write-gate
  * state — invoking it from `--disable-writes` runs must NOT return
  * `MCP_WRITES_DISABLED`, and the tool MUST appear in the registered
@@ -22,10 +22,10 @@ function makeBaseServices(): DysflowMcpServices {
   };
 }
 
-describe("dysflow_detect_dead_code — read-only tools stay available when writes are disabled (#705)", () => {
+describe("detect_dead_code — read-only tools stay available when writes are disabled (#705)", () => {
   it("is registered AND the handler succeeds when the write gate is closed", async () => {
     const tools = createDysflowMcpTools(makeBaseServices(), false);
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
     const result = await tool?.handler({

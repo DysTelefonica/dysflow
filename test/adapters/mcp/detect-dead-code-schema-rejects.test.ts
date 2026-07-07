@@ -4,7 +4,7 @@ import { successResult } from "../../../src/core/contracts/index";
 
 /**
  * Phase 3 (issue #705 — `detect-dead-code`): the input schema for
- * `dysflow_detect_dead_code` MUST reject unknown properties (`additionalProperties:
+ * `detect_dead_code` MUST reject unknown properties (`additionalProperties:
  * false`) and bad scope values so the runtime can refuse ill-formed calls
  * without invoking the handler.
  *
@@ -21,10 +21,10 @@ function makeBaseServices(): DysflowMcpServices {
   };
 }
 
-describe("dysflow_detect_dead_code — input schema rejects bad input (#705)", () => {
+describe("detect_dead_code — input schema rejects bad input (#705)", () => {
   it("returns isError:true (MCP_INPUT_INVALID) when scope is not in the enum", async () => {
     const tools = createDysflowMcpTools(makeBaseServices());
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
     const result = await tool?.handler({
@@ -40,7 +40,7 @@ describe("dysflow_detect_dead_code — input schema rejects bad input (#705)", (
 
   it("returns isError:true when unknown extra fields are present (additionalProperties:false)", async () => {
     const tools = createDysflowMcpTools(makeBaseServices());
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
     const result = await tool?.handler({
@@ -63,7 +63,7 @@ describe("dysflow_detect_dead_code — input schema rejects bad input (#705)", (
   // fallback and make the handler unreachable.
   it("accepts input without inline modules and returns MODULE_NOT_FOUND when the fallback cannot resolve anything", async () => {
     const tools = createDysflowMcpTools(makeBaseServices());
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
     const result = await tool?.handler({
@@ -80,7 +80,7 @@ describe("dysflow_detect_dead_code — input schema rejects bad input (#705)", (
 
   it("accepts input without inline modules but with destinationRoot mismatch — also MODULE_NOT_FOUND", async () => {
     const tools = createDysflowMcpTools(makeBaseServices());
-    const tool = tools.find((t) => t.name === "dysflow_detect_dead_code");
+    const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
     const result = await tool?.handler({

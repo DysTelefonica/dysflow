@@ -22,8 +22,8 @@ function getTool(accessContextResolver?: Parameters<typeof createDysflowMcpTools
     undefined,
     accessContextResolver,
   );
-  const tool = tools.find((t) => t.name === "dysflow_validate_manifest");
-  if (tool === undefined) throw new Error("dysflow_validate_manifest tool not found");
+  const tool = tools.find((t) => t.name === "validate_manifest");
+  if (tool === undefined) throw new Error("validate_manifest tool not found");
   return tool;
 }
 
@@ -37,7 +37,7 @@ const modules = {
   ].join("\r\n"),
 };
 
-describe("dysflow_validate_manifest", () => {
+describe("validate_manifest", () => {
   it("returns a valid report for a manifest whose procedures and args match", async () => {
     const result = await getTool().handler({
       manifest: { tests: [{ procedure: "Test_WithArgs", args: ["fixture", 1], tags: ["smoke"] }] },
