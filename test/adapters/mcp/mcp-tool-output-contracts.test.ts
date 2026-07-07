@@ -29,7 +29,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     "get_procedure",
     "find_references",
     // #705 — read-only dead-code analysis over the supplied modules map.
-    "dysflow_detect_dead_code",
+    "detect_dead_code",
     // #703 — read-only VBA test manifest validation.
     "dysflow_validate_manifest",
     // #704 — read-only VBA module pre-import linting.

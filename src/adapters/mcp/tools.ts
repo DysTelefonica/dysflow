@@ -851,8 +851,8 @@ export function createDysflowMcpTools(
     // via the Access context). It never opens Access, never spawns
     // PowerShell, and never consults the write gate.
     {
-      name: "dysflow_detect_dead_code",
-      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`dysflow_find_references\` (#701). ${MCP_TOOL_CONTRACTS.dysflow_detect_dead_code.summary}`,
+      name: "detect_dead_code",
+      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`find_references\` (#701). ${MCP_TOOL_CONTRACTS.detect_dead_code.summary}`,
       inputSchema: DETECT_DEAD_CODE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, DETECT_DEAD_CODE_SCHEMA);

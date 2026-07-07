@@ -188,7 +188,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
   // pure `detectDeadCode` core function: it never opens Access, never
   // spawns PowerShell, and never mutates the filesystem. Like its #701
   // siblings it is never write-gated and stays available in --disable-writes.
-  dysflow_detect_dead_code: {
+  detect_dead_code: {
     access: "read-only",
     writeGate: "none",
     summary: "Read-only MCP contract.",
