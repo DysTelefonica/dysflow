@@ -618,11 +618,55 @@ export function normalizeFormPropertyValues(text: string, fileType: string): str
   // renderings of the same value compare equal. The capture stops before
   // the trailing whitespace so the canonical form has exactly one space
   // between `=` and `TOGGLE` regardless of the input.
-  const TOGGLE_VALUE_RE = /^(\s*[A-Za-z_]\w*\s*=)\s*(?:NotDefault|0|-1)\s*$/;
+  const TOGGLE_VALUE_RE = /^(\s*)([A-Za-z_]\w*)(\s*=)\s*(?:NotDefault|0|-1)\s*$/;
+  // #T15 inspector fix: the previous name-agnostic match collapsed ANY property
+  // whose value was 0 or -1, including positional ones (Left, Top, Width, etc.)
+  // where 0 vs -1 IS a runtime-visible UI change, not Access serialization
+  // noise. We now restrict the toggle normalization to the known toggle
+  // properties Access actually serializes as 0/NotDefault/-1. Non-toggle
+  // numeric properties keep their literal values and stay functional in
+  // the diff.
+  const TOGGLE_PROPERTY_NAMES = new Set([
+    // Form/report control booleans (the canonical four)
+    "Visible",
+    "Enabled",
+    "Locked",
+    "TabStop",
+    // Section-level booleans
+    "CanGrow",
+    "CanShrink",
+    "AutoLabel",
+    "AutoTab",
+    "NewRowOrCol",
+    // Form-level booleans
+    "AllowDeletions",
+    "AllowAdditions",
+    "AllowEdits",
+    "RecordSelectors",
+    "NavigationButtons",
+    "DividingLines",
+    "StatusBar",
+    "ControlBox",
+    "MinMaxButtons",
+    "CloseButton",
+    "DataEntry",
+    "Modal",
+    "PopUp",
+    "Cycle",
+    "Default",
+    // Report-level
+    "AutoResize",
+  ]);
   return normalizeEventProcedureOrderWithinPropertyRuns(
     text
       .split("\n")
-      .map((line) => line.replace(TOGGLE_VALUE_RE, "$1 TOGGLE"))
+      .map((line) => {
+        const match = TOGGLE_VALUE_RE.exec(line);
+        if (match === null) return line;
+        const propertyName = match[2] ?? "";
+        if (!TOGGLE_PROPERTY_NAMES.has(propertyName)) return line;
+        return `${match[1] ?? ""}${propertyName}${match[3] ?? ""} TOGGLE`;
+      })
       .join("\n"),
   );
 }

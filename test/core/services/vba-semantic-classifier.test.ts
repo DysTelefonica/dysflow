@@ -1729,6 +1729,92 @@ describe("FORM_NOISE_KEYS shared module (#B.1, #624, PR 2)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// #T15 — toggle normalization MUST be name-scoped (inspector finding, regression
+// guard for the name-agnostic TOGGLE_VALUE_RE that previously matched any
+// `<name> = 0|<name> = -1` line). Properties like Left/Top/Width are numeric,
+// not toggle; their 0 vs -1 (or 0 vs 0) values are runtime-visible UI changes,
+// not Access serialization noise.
+// ---------------------------------------------------------------------------
+
+describe("toggle normalization is name-scoped (#T15 inspector)", () => {
+  it("does NOT normalize `Left = 0` vs `Left = -1` (Left is positional, not a toggle)", () => {
+    const src = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Left =0\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n        Left =-1\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).not.toBe("formSerializationOnly");
+    expect(result.actionable).toBe(true);
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+  });
+
+  it("does NOT normalize `Width =9070` vs `Width =9071` (Width is non-toggle, different values stay functional)", () => {
+    const src = `Version =21\nBegin Form\n    Width =9070\n    Begin Label\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Width =9071\n    Begin Label\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+    expect(result.classification).not.toBe("formSerializationOnly");
+  });
+
+  it("does NOT normalize `Top = 0` vs `Top = 100` even though both are 0-or-numeric (Top is positional)", () => {
+    const src = `Version =21\nBegin Form\n    Begin Label\n        Top =0\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Begin Label\n        Top =100\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+
+  it("STILL normalizes `Visible = NotDefault` vs `Visible = 0` (Visible stays on the toggle whitelist — regression guard)", () => {
+    const src = `Version =21\nBegin Form\n    Begin Label\n        Visible = NotDefault\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Begin Label\n        Visible =0\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("STILL normalizes `Enabled = 0` vs `Enabled = -1` (Enabled is on the whitelist)", () => {
+    const src = `Version =21\nBegin Form\n    Begin Label\n        Enabled =0\n    End\nEnd`;
+    const bin = `Version =21\nBegin Form\n    Begin Label\n        Enabled =-1\n    End\nEnd`;
+
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.classification).toBe("formSerializationOnly");
+    expect(result.actionable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // #T14 — encodingOnly MUST NOT hide a glyph change inside a runtime-visible
 // string literal (inspector finding, regression guard for the post-normalization
 // sites at vba-semantic-classifier.ts:951-954 and :1029-1032 which previously
