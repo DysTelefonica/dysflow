@@ -606,7 +606,7 @@ describe("vba-module-lint-service", () => {
         "Option Compare Database",
         "Option Explicit",
         "",
-        "Public Const ConstanteConTilde As String = \"Sí\"",
+        'Public Const ConstanteConTilde As String = "Sí"',
         "Public Function AñoActual() As Integer",
         "    AñoActual = 2026",
         "End Function",
