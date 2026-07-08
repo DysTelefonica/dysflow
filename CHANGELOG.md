@@ -1,5 +1,34 @@
 # Changelog
 
+## [v2.1.2] - 2026-07-08
+
+Patch release. Wires the v2.1.0 risk-based write execution policy into the MCP dispatch path and enforces the export-source guard at runtime. Closes #785; delivers the runtime half of #783.
+
+### Fixed
+
+- **mcp** (#785): dispatch seam was advertising `effectiveDryRunDefault` in `get_capabilities` (v2.1.0) but never consulting it at the call path. The `writeExecutionPolicy` value is now threaded from `createDysflowMcpTools` through `registerMcpTools` and `createDispatchTool`; the new helper `resolveEffectiveDryRunInput(name, mode, input)` runs at the dispatch boundary AFTER the deprecation strip and schema validation. With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and `test_vba` reach the runner without explicit flags; `safe-by-default` projects keep the historical `dryRun: true` default byte-for-byte.
+- **mcp** (#785 / #783 partial): `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is now live at runtime. In `developer` mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with a structured envelope (`code`, `destination`, `sourceRoot`, `remediation`). `confirmOverwriteSource: true` bypasses the guard. Source-root resolution prefers the MCP access-context resolver, falling back to the caller's own `destinationRoot` only when the resolver is unavailable.
+- **vba-modules**: dropped the implicit `params.dryRun !== false` rule at `vba-modules-adapter.ts`. The dispatch seam now owns the policy-driven default; the adapter honors explicit `dryRun` / `apply` only.
+- **vba-execution**: contract pin update at the `test_vba` gate clarifying that the dispatch seam is the source of the effective dryRun default; the existing `test_vba` gate semantics were already at the simplified state from Round-3 Item 5 (re-applied after #786's hotfix re-merged on top of main).
+- **schema**: added `confirmOverwriteSource` to `export_modules` and `export_all` schemas (with `additionalProperties: false`) so the opt-in acknowledgment can be passed through MCP dispatch without `MCP_INPUT_INVALID`.
+
+### Changed
+
+- **mcp**: optional parameters added to the dispatch registration chain: `createDysflowMcpTools` → `registerMcpTools` → `createDispatchTool` now thread `writeExecutionPolicy` (defaults to `"safe-by-default"`) and `accessContextResolver`. Both are optional; existing call sites preserve byte-for-byte behavior. Production wiring (via `createDysflowMcpTools`) forwards both.
+- **hard rules preserved**: the write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `allowedProcedures`) is still authoritative; the new policy does not bypass any of these. Explicit caller intent (`dryRun`, `apply`) always wins over the policy default.
+- **README**: §3b now documents the v2.1.2 runtime enforcement (was deferred from v2.1.0). The "Runtime enforcement live in v2.1.2" paragraph pins the contract for consumers reading the docs.
+- **docs**: `openspec/changes/wire-write-policy-runtime-785/` is the source of truth (proposal, design, tasks).
+
+### Test discipline
+
+- ~100 new test atoms across 6 new test files (`write-execution-dispatch.test.ts`, `vba-modules-adapter-write-policy.test.ts`, `vba-execution-adapter-write-policy.test.ts`, `export-source-guard.test.ts`, `write-execution-dispatch-confirmation.test.ts`, `dispatch-write-policy-overrides.test.ts`, `capabilities-effective-default-consistency.test.ts`).
+- Full suite on the rebased branch (v2.1.1 + #785): **2725 passed / 1 skipped / 1 todo (2727 total)**. No regressions in the v2.1.1 / v2.1.0 / v2.0.x lanes.
+
+### Follow-up (out of scope for v2.1.2, tracked in #783)
+
+- Alias per-call gating refinement for `cleanup_access_operation(force)` / `access_force_cleanup_orphaned(confirmPid)` — already correctly enforced; #783 lists it as documentation-only.
+- `developer-mode-extra-strict` mode — extends `confirmOverwriteSource` to non-export tools. New feature, tracked in #783.
+
 ## [v2.1.1] - 2026-07-08
 
 Patch release. Fixes `vba_inline_execution`, which failed on every call with
