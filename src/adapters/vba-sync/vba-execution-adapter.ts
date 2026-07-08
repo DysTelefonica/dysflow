@@ -365,6 +365,15 @@ End Function
     // what would have run. The schema gates dryRun via
     // `additionalProperties: false`, so the only way to reach this branch is
     // with the flag explicitly set to `true`.
+    //
+    // Issue #785 (v2.1.1, capa 3) — the dispatch seam (capa 1) is the single
+    // source of truth for the policy-driven effective dryRun default. By the
+    // time the adapter is invoked through the MCP boundary, the helper has
+    // already injected the policy default. This adapter therefore observes
+    // a fully-decided `params.dryRun` — the implicit absence-default has been
+    // removed; only explicit `dryRun === true` short-circuits here. Direct
+    // adapter callers (no dispatch seam) bypass the policy default and
+    // reach the runner unless they pass `dryRun: true` explicitly.
     if (params.dryRun === true) {
       return successResult({
         dryRun: true,
@@ -416,6 +425,14 @@ End Function
     // #674 AllowedProcedures contract.
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
+      // Issue #785 (v2.1.1, capa 3) — the gate's `params.dryRun !== true`
+      // check is the inverse of the dispatcher-seam's "plan mode" signal.
+      // When the dispatch seam injected `dryRun: false` (developer + routine
+      // dev-write), `params.dryRun` is `false` here and this branch fires:
+      // the gate refuses the execute-mode call when the allowlist is missing,
+      // even when the operator enabled developer mode opt-in. The MCP contract
+      // is "no allowlist = no plan-less execution"; `dryRun: true` (dispatcher
+      // or explicit) bypasses this refusal because the call is in plan mode.
       if (params.dryRun !== true) {
         // F23 — best-effort config-path lookup so the refusal envelope names
         // the actual `.dysflow/project.json` the resolver was consulting.
