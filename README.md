@@ -202,6 +202,8 @@ EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION
 
 The check is implemented in `src/core/utils/path-overlap.ts` (`pathOverlapsSourceRoot`); see `test/core/utils/path-overlap.test.ts` for the truth table (exact match, nested managed folder, external path, Windows case-insensitive).
 
+**Runtime enforcement live in v2.1.1** (issue #785). v2.1.0 shipped the surface — `get_capabilities.effectiveDryRunDefault` and the `(mode, risk)` truth table — but the dispatch layer did not yet consult the resolved policy. v2.1.1 wires `writeExecutionPolicy` from `createDysflowMcpTools` through `registerMcpTools` and `createDispatchTool`, and the new helper `resolveEffectiveDryRunInput(name, mode, input)` runs at the dispatch boundary. With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and `test_vba` now reach the runner without explicit flags; `safe-by-default` projects keep the historical `dryRun: true` default byte-for-byte. The v2.1.0 promise of `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is finally live: in developer mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with the structured envelope shown above; `confirmOverwriteSource: true` bypasses the guard. The hard gates (`allowWrites`, `allowedProcedures`, explicit `dryRun`/`apply`) continue to win — explicit caller intent always wins over the policy default. See `openspec/changes/wire-write-policy-runtime-785/` for the full SDD change.
+
 ### 4) VBA procedure allowlist
 
 Set `allowedProcedures` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
