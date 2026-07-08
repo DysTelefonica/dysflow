@@ -440,40 +440,72 @@ export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
 
 // ─── Main factory ─────────────────────────────────────────────────────────────
 
-export function createDysflowMcpTools(
-  services: DysflowMcpServices,
-  writesEnabled = false,
-  writeAccessResolver?: McpWriteAccessResolver,
-  env: Record<string, string | undefined> = process.env,
+/**
+ * Options bag for {@link createDysflowMcpTools}.
+ *
+ * Replaces the legacy positional-argument signature (#781 P3). All fields are
+ * optional except `services`; defaults mirror the previous positional defaults
+ * so behavior is unchanged for callers that omit a field. Naming tweaks:
+ *   - `writesEnabled` -> `writes`
+ *   - `lintRulesOverride` -> `lintOverrides`
+ *
+ * `accessDbPath` is kept on the options bag (not in the issue's example list)
+ * because the stdio entry point forwards it to the capabilities snapshot so
+ * the per-project `humanCompilePending` flag surfaces from the process-local
+ * cache.
+ */
+export type CreateDysflowMcpToolsOptions = {
+  services: DysflowMcpServices;
+  writes?: boolean;
+  writeAccessResolver?: McpWriteAccessResolver;
+  env?: Record<string, string | undefined>;
   allowedProcedures?:
     | readonly string[]
-    | import("./allowed-procedures-resolver.js").AllowedProcedures,
-  accessContextResolver: McpAccessContextResolver = async () =>
-    failureResult(
-      createDysflowError(
-        "ORPHAN_CLEANUP_PATH_UNRESOLVED",
-        "accessPath must be provided or .dysflow/project.json must declare one.",
-      ),
-    ),
+    | import("./allowed-procedures-resolver.js").AllowedProcedures;
+  accessContextResolver?: McpAccessContextResolver;
   // PR-1 (issue #656) — capabilities snapshot needs the project-level
   // allowWrites flag and the resolved projectId. Both default to
-  // `writesEnabled` / `undefined` so existing callers (no .dysflow/project.json
-  // resolved at this layer) keep working unchanged.
-  allowWrites: boolean = writesEnabled,
-  projectId: string | undefined = undefined,
+  // `options.writes` / `undefined` so existing callers (no
+  // .dysflow/project.json resolved at this layer) keep working unchanged.
+  allowWrites?: boolean;
+  projectId?: string;
   // #731 — per-rule lint overrides from `.dysflow/project.json`
   // `capabilities.lint.rules`. When omitted, the lint service keeps its
   // strict greenfield behavior (no per-rule opt-outs, no legacy
   // auto-detection).
-  lintRulesOverride: Readonly<
+  lintOverrides?: Readonly<
     Partial<Record<VbaModuleLintRule, { enabled: boolean; reason?: string }>>
-  > = {},
+  >;
   // PR-1 (issue #762, v1.20.0) — front-end `.accdb` path used to surface
   // the per-project `humanCompilePending` flag in the capabilities snapshot.
   // When omitted, the snapshot reports `humanCompilePending: false` (no
   // project in scope at startup).
-  accessDbPath?: string,
-): DysflowMcpTool[] {
+  accessDbPath?: string;
+};
+
+export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
+  const {
+    services,
+    writes: writesEnabled = false,
+    writeAccessResolver,
+    env = process.env,
+    allowedProcedures,
+    accessContextResolver: accessContextResolverInput,
+    allowWrites,
+    projectId,
+    lintOverrides: lintRulesOverride = {},
+    accessDbPath,
+  } = options;
+  const accessContextResolver: McpAccessContextResolver =
+    accessContextResolverInput ??
+    (async () =>
+      failureResult(
+        createDysflowError(
+          "ORPHAN_CLEANUP_PATH_UNRESOLVED",
+          "accessPath must be provided or .dysflow/project.json must declare one.",
+        ),
+      ));
+  const writesAllowedForCapabilities = allowWrites ?? writesEnabled;
   const currentTools: DysflowMcpTool[] = [
     {
       name: "query_execute",
@@ -546,7 +578,7 @@ export function createDysflowMcpTools(
       writeAccessResolver,
       allowedProcedures,
       projectId,
-      allowWrites,
+      allowWrites: writesAllowedForCapabilities,
       accessDbPath,
     }),
     // issue #701 — read-only VBA procedure introspection

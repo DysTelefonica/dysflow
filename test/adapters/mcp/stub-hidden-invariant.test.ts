@@ -58,7 +58,10 @@ describe("zero-hidden-tools policy — registry is the single source of truth (#
   });
 
   it("no registered tool is hidden — tools/list projects every tool", () => {
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     const hidden = tools.filter((t) => t.hidden === true).map((t) => t.name);
     expect(hidden, "no registered tool may be hidden").toEqual([]);

@@ -52,15 +52,15 @@ class FakeDiagnosticsService {
 
 function toolByName(name: string, writesEnabled = false) {
   const vbaSyncToolService = new FakeVbaSyncToolService();
-  const tools = createDysflowMcpTools(
-    {
+  const tools = createDysflowMcpTools({
+    services: {
       vbaService: new FakeVbaService(),
       vbaSyncToolService,
       queryService: new FakeQueryService(),
       diagnosticsService: new FakeDiagnosticsService(),
     },
-    writesEnabled,
-  );
+    writes: writesEnabled,
+  });
   const tool = tools.find((candidate) => candidate.name === name);
   if (!tool) throw new Error(`Tool not registered: ${name}`);
   return { tool, vbaSyncToolService };

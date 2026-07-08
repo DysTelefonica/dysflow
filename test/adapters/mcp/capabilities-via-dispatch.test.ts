@@ -38,13 +38,11 @@ function makeServices() {
 describe("get_capabilities via dispatch harness (#656)", () => {
   it("is reachable and the allowlist propagates through the registration chain", async () => {
     const allowedProcedures = ["Test_Alpha", "Test_Beta"] as const;
-    const tools = createDysflowMcpTools(
-      makeServices(),
-      true, // writesEnabled
-      undefined, // no per-input resolver
-      process.env,
-      allowedProcedures, // project allowlist
-    );
+    const tools = createDysflowMcpTools({
+      services: makeServices(),
+      writes: true,
+      allowedProcedures: allowedProcedures,
+    });
 
     const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool, "tool must be reachable through the dispatch chain").toBeDefined();

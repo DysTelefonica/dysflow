@@ -13,19 +13,15 @@ function makeBaseServices() {
 }
 
 function createToolsWithMockContext(tempDir: string) {
-  return createDysflowMcpTools(
-    makeBaseServices() as DysflowMcpServices,
-    false,
-    undefined,
-    process.env,
-    undefined,
-    async () =>
+  return createDysflowMcpTools({
+    services: makeBaseServices() as DysflowMcpServices,
+    accessContextResolver: async () =>
       successResult({
         accessPath: join(tempDir, "dummy.accdb"),
         projectRoot: tempDir,
         destinationRoot: tempDir,
       }),
-  );
+  });
 }
 
 function parseJsonContent<T>(text: string | undefined): T {
@@ -128,7 +124,7 @@ describe("list_procedures — source resolution from disk", () => {
   });
 
   it("returns MODULE_NOT_FOUND when destinationRoot is not provided", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "list_procedures");
     if (tool === undefined) throw new Error("list_procedures tool not found");
 
@@ -141,19 +137,15 @@ describe("list_procedures — source resolution from disk", () => {
   });
 
   it("resolves destinationRoot from the MCP access context when the caller omits it", async () => {
-    const tools = createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    const tools = createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         successResult({
           accessPath: join(tempDir, "dummy.accdb"),
           projectRoot: tempDir,
           destinationRoot: tempDir,
         }),
-    );
+    });
     const tool = tools.find((t) => t.name === "list_procedures");
     if (tool === undefined) throw new Error("list_procedures tool not found");
 
@@ -259,7 +251,7 @@ describe("get_procedure — source resolution from disk", () => {
   });
 
   it("returns MODULE_NOT_FOUND when destinationRoot is not provided", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "get_procedure");
     if (tool === undefined) throw new Error("get_procedure tool not found");
 
@@ -273,19 +265,15 @@ describe("get_procedure — source resolution from disk", () => {
   });
 
   it("resolves destinationRoot from the MCP access context when the caller omits it", async () => {
-    const tools = createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    const tools = createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         successResult({
           accessPath: join(tempDir, "dummy.accdb"),
           projectRoot: tempDir,
           destinationRoot: tempDir,
         }),
-    );
+    });
     const tool = tools.find((t) => t.name === "get_procedure");
     if (tool === undefined) throw new Error("get_procedure tool not found");
 
@@ -341,19 +329,15 @@ describe("issue #713 merged VBA tools — project context source resolution", ()
   });
 
   function makeToolsWithProjectContext() {
-    return createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    return createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         successResult({
           accessPath: join(tempDir, "dummy.accdb"),
           projectRoot: tempDir,
           destinationRoot: tempDir,
         }),
-    );
+    });
   }
 
   it("find_references resolves project source modules when explicit source paths are omitted", async () => {
@@ -460,19 +444,15 @@ describe("list_procedures / get_procedure — strict source-root containment", (
   });
 
   function makeToolsWithConfiguredRoot() {
-    return createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    return createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         successResult({
           accessPath: join(configuredRoot, "dummy.accdb"),
           projectRoot: configuredRoot,
           destinationRoot: configuredRoot,
         }),
-    );
+    });
   }
 
   it("reads the configured project root when no explicit destinationRoot is provided", async () => {
@@ -589,19 +569,14 @@ describe("list_procedures / get_procedure — strict source-root containment", (
     // When the resolver returns success but the project config lacks a
     // destinationRoot, an explicit destinationRoot must NOT be enough to
     // read from disk. The tools should refuse.
-    const tools = createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    const tools = createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         successResult({
           accessPath: join(configuredRoot, "dummy.accdb"),
           projectRoot: configuredRoot,
-          // destinationRoot intentionally undefined → tools should refuse.
         }),
-    );
+    });
     const listTool = tools.find((t) => t.name === "list_procedures");
     if (listTool === undefined) throw new Error("list_procedures tool not found");
 
@@ -618,19 +593,15 @@ describe("list_procedures / get_procedure — strict source-root containment", (
 
   it("ignores explicit destinationRoot when the resolver returns an error envelope", async () => {
     const { failureResult } = await import("../../../src/core/contracts/index");
-    const tools = createDysflowMcpTools(
-      makeBaseServices() as DysflowMcpServices,
-      false,
-      undefined,
-      process.env,
-      undefined,
-      async () =>
+    const tools = createDysflowMcpTools({
+      services: makeBaseServices() as DysflowMcpServices,
+      accessContextResolver: async () =>
         failureResult({
           code: "ORPHAN_CLEANUP_PATH_UNRESOLVED",
           message: "no .dysflow/project.json",
           retryable: false,
         }),
-    );
+    });
     const getTool = tools.find((t) => t.name === "get_procedure");
     if (getTool === undefined) throw new Error("get_procedure tool not found");
 

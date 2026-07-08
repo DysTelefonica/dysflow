@@ -74,9 +74,11 @@ describe("MCP tool contract metadata", () => {
 
   it("advertises each modern tool contract in its description", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(),
-      queryService: new FakeQueryService(),
-      diagnosticsService: new FakeDiagnosticsService(),
+      services: {
+        vbaService: new FakeVbaService(),
+        queryService: new FakeQueryService(),
+        diagnosticsService: new FakeDiagnosticsService(),
+      },
     });
 
     for (const toolName of MODERN_TOOL_NAMES) {
@@ -120,9 +122,11 @@ describe("MCP tool contract metadata", () => {
 
 function modernToolDescriptions() {
   const tools = createDysflowMcpTools({
-    vbaService: new FakeVbaService(),
-    queryService: new FakeQueryService(),
-    diagnosticsService: new FakeDiagnosticsService(),
+    services: {
+      vbaService: new FakeVbaService(),
+      queryService: new FakeQueryService(),
+      diagnosticsService: new FakeDiagnosticsService(),
+    },
   });
 
   return Object.fromEntries(

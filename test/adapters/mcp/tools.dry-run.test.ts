@@ -29,7 +29,9 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
   // - if isDryRun returns false → write guard is checked → writesDisabled() if no resolver
   // - if isDryRun returns true → execution proceeds (no write check)
 
-  const tools = createDysflowMcpTools(services, false); // writesEnabled=false → write guard active
+  const tools = createDysflowMcpTools({
+    services: services,
+  }); // writesEnabled=false → write guard active
 
   function getToolHandler(name: string) {
     const tool = tools.find((t) => t.name === name);

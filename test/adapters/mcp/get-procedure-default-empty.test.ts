@@ -14,7 +14,7 @@ describe("get_procedure — default empty body", () => {
   it("returns module/procedure/startLine/endLine/body='' when the procedure has no statements", async () => {
     const sourceFixture = ["Sub DoNothing()", "", "End Sub", ""].join("\r\n");
 
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "get_procedure");
     if (tool === undefined) throw new Error("get_procedure tool not found");
 

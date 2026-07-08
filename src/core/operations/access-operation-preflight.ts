@@ -269,75 +269,7 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
       if (process.commandLine === undefined) continue;
       if (!pathMatchesAccessPath(process.commandLine, request.accessPath)) continue;
 
-      // F1 (#620): gate headless detection on mainWindowHandle, not the `-embedding`
-      // substring (which could match a project path). Mirrors access-orphan-cleanup.
-      if (process.mainWindowHandle === undefined) {
-        result.errors.push({
-          operationId: "orphan",
-          message: `Refused to kill PID ${process.pid}: mainWindowHandle is undefined (Get-Process fallback — cannot prove headless).`,
-        });
-        continue;
-      }
-      if (process.mainWindowHandle !== 0) {
-        const handleHex = `0x${process.mainWindowHandle.toString(16).toUpperCase()}`;
-        result.errors.push({
-          operationId: "orphan",
-          message: `Refused to kill PID ${process.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
-        });
-        continue;
-      }
-
-      // F3a (#620): revalidate PID immediately before kill to close the TOCTOU race.
-      // The PID may have been recycled between scan and kill (killing an unrelated
-      // process) or the original process may have exited. Mirrors the
-      // `access-orphan-cleanup.ts:124-141` pattern. Suppress kill on gone; refuse
-      // with the `CLEANUP_RACE_PID_REUSED` diagnostic on mismatch.
-      let revalidated: OsProcessInfo | undefined;
-      try {
-        revalidated = await withTimeout(
-          this.options.processInspector.getProcess(process.pid),
-          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        );
-      } catch {
-        // Timeout on revalidation: cannot prove the process is still the scanned
-        // MSACCESS.EXE — suppress kill rather than risk killing a recycled PID.
-        result.errors.push({
-          operationId: "orphan",
-          message: `Preflight kill suppressed for PID ${process.pid}: revalidation timed out.`,
-        });
-        continue;
-      }
-      if (revalidated === undefined) {
-        result.errors.push({
-          operationId: "orphan",
-          message: `Preflight kill suppressed for PID ${process.pid}: process no longer exists.`,
-        });
-        continue;
-      }
-      if (
-        revalidated.name.toUpperCase() !== "MSACCESS.EXE" ||
-        !sameProcessStartTime(revalidated.startTime, process.startTime)
-      ) {
-        result.errors.push({
-          operationId: "orphan",
-          message: `CLEANUP_RACE_PID_REUSED: PID ${process.pid} is no longer the scanned MSACCESS.EXE (revalidation mismatch).`,
-        });
-        continue;
-      }
-
-      try {
-        await withTimeout(
-          this.options.processKiller.kill(process.pid),
-          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        );
-        result.orphanedKilled.push(process.pid);
-        handledPids.add(process.pid);
-      } catch (error) {
-        result.errors.push({
-          operationId: "orphan",
-          message: `Failed to kill unattributed headless process ${process.pid}: ${formatError(error)}`,
-        });
-      }
+      await this.killIfHeadlessAccess(process, "orphan", false, handledPids, result);
     }
   }
 
@@ -416,71 +348,121 @@ export class AccessOperationPreflightCleanupService implements AccessOperationPr
         pathMatchesAccessPath(process.commandLine, record.accessPath),
     );
     if (matchingProcess !== undefined) {
+      // Add the PID to handledPids BEFORE invoking the helper so a subsequent
+      // `scanAndCleanOrphans` call within the same cleanup pass does not retry
+      // this PID even if the helper refuses or suppresses the kill. This matches
+      // the historical retireUnownedRecord behavior (the early add was the only
+      // place where retireUnownedRecord differed from scanAndCleanOrphans).
       handledPids.add(matchingProcess.pid);
-      // F1 (#620): see mirror in scanAndCleanOrphans above.
-      if (matchingProcess.mainWindowHandle === undefined) {
-        result.errors.push({
-          operationId: record.operationId,
-          message: `Refused to kill PID ${matchingProcess.pid}: mainWindowHandle is undefined (Get-Process fallback — cannot prove headless).`,
-        });
-        return;
-      }
-      if (matchingProcess.mainWindowHandle !== 0) {
-        const handleHex = `0x${matchingProcess.mainWindowHandle.toString(16).toUpperCase()}`;
-        result.errors.push({
-          operationId: record.operationId,
-          message: `Refused to kill PID ${matchingProcess.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
-        });
-        return;
-      }
-      // F3a (#620): see mirror in scanAndCleanOrphans above — revalidate PID
-      // immediately before kill to close the TOCTOU race.
-      let revalidated: OsProcessInfo | undefined;
-      try {
-        revalidated = await withTimeout(
-          this.options.processInspector.getProcess(matchingProcess.pid),
-          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        );
-      } catch {
-        result.errors.push({
-          operationId: record.operationId,
-          message: `Preflight kill suppressed for PID ${matchingProcess.pid}: revalidation timed out.`,
-        });
-        return;
-      }
-      if (revalidated === undefined) {
-        result.errors.push({
-          operationId: record.operationId,
-          message: `Preflight kill suppressed for PID ${matchingProcess.pid}: process no longer exists.`,
-        });
-        return;
-      }
-      if (
-        revalidated.name.toUpperCase() !== "MSACCESS.EXE" ||
-        !sameProcessStartTime(revalidated.startTime, matchingProcess.startTime)
-      ) {
-        result.errors.push({
-          operationId: record.operationId,
-          message: `CLEANUP_RACE_PID_REUSED: PID ${matchingProcess.pid} is no longer the scanned MSACCESS.EXE (revalidation mismatch).`,
-        });
-        return;
-      }
-      try {
-        await withTimeout(
-          this.options.processKiller.kill(matchingProcess.pid),
-          this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        );
-        result.killed.push(matchingProcess.pid);
-      } catch (error) {
-        result.errors.push({
-          operationId: record.operationId,
-          message: `Failed to kill unowned headless process ${matchingProcess.pid}: ${formatError(error)}`,
-        });
-        return;
-      }
+      const killed = await this.killIfHeadlessAccess(
+        matchingProcess,
+        record.operationId,
+        true,
+        handledPids,
+        result,
+      );
+      if (!killed) return;
     }
 
     await this.markCleaned(record, result);
+  }
+
+  /**
+   * Headless-gate + revalidate-before-kill + kill sequence shared by
+   * `scanAndCleanOrphans` (issue #781 P2) and `retireUnownedRecord`. Encapsulates
+   * the F1 (#620) mainWindowHandle headless gate, the F3a (#620) TOCTOU PID
+   * revalidation, and the kill-with-allowlist failure message in one place so
+   * the two call sites cannot drift apart on a future safety fix.
+   *
+   * Returns `true` when the kill succeeded, `false` when the kill was refused
+   * or suppressed (a diagnostic has already been pushed onto `result.errors`
+   * in either case). The `owned` flag selects between the two kill-failure
+   * messages ("unattributed" for the orphan scan, "unowned" for retire) and
+   * the success list (`orphanedKilled` vs `killed`).
+   */
+  private async killIfHeadlessAccess(
+    process: OsProcessInfo,
+    errorOperationId: string,
+    owned: boolean,
+    handledPids: Set<number>,
+    result: AccessOperationPreflightCleanupResult,
+  ): Promise<boolean> {
+    // F1 (#620): gate headless detection on mainWindowHandle, not the `-embedding`
+    // substring (which could match a project path). Mirrors access-orphan-cleanup.
+    if (process.mainWindowHandle === undefined) {
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `Refused to kill PID ${process.pid}: mainWindowHandle is undefined (Get-Process fallback — cannot prove headless).`,
+      });
+      return false;
+    }
+    if (process.mainWindowHandle !== 0) {
+      const handleHex = `0x${process.mainWindowHandle.toString(16).toUpperCase()}`;
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `Refused to kill PID ${process.pid}: mainWindowHandle is ${handleHex}, not 0 (visible Access window — not headless).`,
+      });
+      return false;
+    }
+
+    // F3a (#620): revalidate PID immediately before kill to close the TOCTOU race.
+    // The PID may have been recycled between scan and kill (killing an unrelated
+    // process) or the original process may have exited. Mirrors the
+    // `access-orphan-cleanup.ts:124-141` pattern. Suppress kill on gone; refuse
+    // with the `CLEANUP_RACE_PID_REUSED` diagnostic on mismatch.
+    let revalidated: OsProcessInfo | undefined;
+    try {
+      revalidated = await withTimeout(
+        this.options.processInspector.getProcess(process.pid),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
+    } catch {
+      // Timeout on revalidation: cannot prove the process is still the scanned
+      // MSACCESS.EXE — suppress kill rather than risk killing a recycled PID.
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `Preflight kill suppressed for PID ${process.pid}: revalidation timed out.`,
+      });
+      return false;
+    }
+    if (revalidated === undefined) {
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `Preflight kill suppressed for PID ${process.pid}: process no longer exists.`,
+      });
+      return false;
+    }
+    if (
+      revalidated.name.toUpperCase() !== "MSACCESS.EXE" ||
+      !sameProcessStartTime(revalidated.startTime, process.startTime)
+    ) {
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `CLEANUP_RACE_PID_REUSED: PID ${process.pid} is no longer the scanned MSACCESS.EXE (revalidation mismatch).`,
+      });
+      return false;
+    }
+
+    try {
+      await withTimeout(
+        this.options.processKiller.kill(process.pid),
+        this.options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      );
+      if (owned) {
+        result.killed.push(process.pid);
+      } else {
+        result.orphanedKilled.push(process.pid);
+      }
+      handledPids.add(process.pid);
+      return true;
+    } catch (error) {
+      const killFailureLabel = owned ? "unowned" : "unattributed";
+      result.errors.push({
+        operationId: errorOperationId,
+        message: `Failed to kill ${killFailureLabel} headless process ${process.pid}: ${formatError(error)}`,
+      });
+      return false;
+    }
   }
 }
 

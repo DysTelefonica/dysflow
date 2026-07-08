@@ -27,9 +27,11 @@ const ISSUE_713_REQUIRED_TOOLS = [
 
 describe("advertised MCP tool surface", () => {
   const tools = createDysflowMcpTools({
-    vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
-    queryService: { execute: async () => successResult({ rows: [] }) },
-    diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    services: {
+      vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+      queryService: { execute: async () => successResult({ rows: [] }) },
+      diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    },
   });
   const hidden = buildHiddenToolRegistry(tools);
   const advertised = tools.filter((tool) => !hidden.has(tool.name)).map((tool) => tool.name);

@@ -31,7 +31,7 @@ describe("detect_dead_code — read-only contract (issue #705)", () => {
   });
 
   it("description advertises the read-only contract summary", () => {
-    const tools = createDysflowMcpTools(makeBaseServices());
+    const tools = createDysflowMcpTools({ services: makeBaseServices() });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
     expect(tool?.description ?? "").toContain(getMcpToolContract("detect_dead_code").summary);

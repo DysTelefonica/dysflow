@@ -60,7 +60,10 @@ function makeServices() {
 
 function relinkTool(writesEnabled = true) {
   const services = makeServices();
-  const tools = createDysflowMcpTools(services, writesEnabled);
+  const tools = createDysflowMcpTools({
+    services: services,
+    writes: writesEnabled,
+  });
   const tool = tools.find((t) => t.name === "relink_directory");
   if (!tool) throw new Error("relink_directory tool not found");
   return tool;
@@ -146,7 +149,10 @@ describe("relink_directory inline password rejection (#694)", () => {
 
   it("does NOT reject link_tables or relink_tables that may have different security models", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
     const linkTool = tools.find((t) => t.name === "link_tables");
     const relinkTool2 = tools.find((t) => t.name === "relink_tables");
 

@@ -28,7 +28,7 @@ describe("find_references — returns call sites of a symbol", () => {
       "End Sub",
     ];
 
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "find_references");
     expect(tool).toBeDefined();
 

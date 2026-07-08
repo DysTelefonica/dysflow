@@ -32,7 +32,7 @@ describe("list_procedures — substring filter narrows procedures to matching na
       "End Sub",
     ];
 
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "list_procedures");
     if (tool === undefined) throw new Error("list_procedures tool not found");
 

@@ -23,7 +23,7 @@ function makeBaseServices(): DysflowMcpServices {
 
 describe("detect_dead_code — input schema rejects bad input (#705)", () => {
   it("returns isError:true (MCP_INPUT_INVALID) when scope is not in the enum", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices());
+    const tools = createDysflowMcpTools({ services: makeBaseServices() });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
@@ -39,7 +39,7 @@ describe("detect_dead_code — input schema rejects bad input (#705)", () => {
   });
 
   it("returns isError:true when unknown extra fields are present (additionalProperties:false)", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices());
+    const tools = createDysflowMcpTools({ services: makeBaseServices() });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
@@ -62,7 +62,7 @@ describe("detect_dead_code — input schema rejects bad input (#705)", () => {
   // schema's `required: ["modules"]` gate would shadow the documented
   // fallback and make the handler unreachable.
   it("accepts input without inline modules and returns MODULE_NOT_FOUND when the fallback cannot resolve anything", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices());
+    const tools = createDysflowMcpTools({ services: makeBaseServices() });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 
@@ -79,7 +79,7 @@ describe("detect_dead_code — input schema rejects bad input (#705)", () => {
   });
 
   it("accepts input without inline modules but with destinationRoot mismatch — also MODULE_NOT_FOUND", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices());
+    const tools = createDysflowMcpTools({ services: makeBaseServices() });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 

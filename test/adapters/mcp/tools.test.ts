@@ -59,9 +59,11 @@ function collectArraySchemasMissingItems(schema: unknown, path = "schema"): stri
 describe("MCP tool registration over core services", () => {
   it("declares items for every array in every MCP input schema", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const missingItems = tools.flatMap((tool) =>
@@ -69,6 +71,41 @@ describe("MCP tool registration over core services", () => {
     );
 
     expect(missingItems).toEqual([]);
+  });
+
+  // #781 P3 — the legacy positional signature was bug-prone (9 positional
+  // parameters); the factory now takes a single options object. This test
+  // exercises each field independently so a future change that drops one of
+  // them is caught at the type level instead of at a far-away call site.
+  it("createDysflowMcpTools accepts the new options-object signature (#781 P3)", () => {
+    const allowedProcedures = ["Test_Alpha", "Test_Beta"] as const;
+    const env = { ...process.env, DYSFLOW_TEST: "1" } as Record<string, string | undefined>;
+    const accessContextResolver = async () =>
+      successResult({ accessPath: "C:/demo.accdb", projectRoot: process.cwd() });
+    const writeAccessResolver = async () => true;
+    const tools = createDysflowMcpTools({
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
+      writes: true,
+      writeAccessResolver,
+      env,
+      allowedProcedures,
+      accessContextResolver,
+      allowWrites: true,
+      projectId: "test-project",
+      lintOverrides: { "identifier-safety": { enabled: false, reason: "legacy Spanish" } },
+      accessDbPath: "C:/demo.accdb",
+    });
+    const toolNames = tools.map((tool) => tool.name);
+    // The factory still produces the full surface — the options-object
+    // refactor is signature-only, not behavioral.
+    expect(toolNames).toContain("query_execute");
+    expect(toolNames).toContain("doctor");
+    expect(toolNames).toContain("access_force_cleanup_orphaned");
+    expect(toolNames).toContain("lint_module");
   });
 
   it("registers protocol-safe MCP tools that invoke the matching core services", async () => {
@@ -84,9 +121,7 @@ describe("MCP tool registration over core services", () => {
     );
 
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: query,
-      diagnosticsService: diagnostics,
+      services: { vbaService: vba, queryService: query, diagnosticsService: diagnostics },
     });
     const toolNames = tools.map((tool) => tool.name);
 
@@ -164,9 +199,11 @@ describe("MCP tool registration over core services", () => {
 
   it("registers modern MCP tool names with underscores instead of dots", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const toolNames = tools.map((tool) => tool.name);
@@ -189,9 +226,11 @@ describe("MCP tool registration over core services", () => {
   // alias-tools.ts) is the only advertised VBA-execute name.
   it("#777 excludes dysflow_vba_execute from the tools surface (Opción A cont.)", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
     expect(tools.find((tool) => tool.name === "dysflow_vba_execute")).toBeUndefined();
     expect(tools.find((tool) => tool.name === "run_vba")).toBeDefined();
@@ -234,9 +273,11 @@ describe("MCP tool registration over core services", () => {
 
   it("describes projectId as canonical trace identity and contextId as optional run context", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
     // #777 (Opción A cont.) — exercise against the canonical `run_vba`
     // tool (legacy `dysflow_vba_execute` was REMOVED). The schema now uses
@@ -255,9 +296,7 @@ describe("MCP tool registration over core services", () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: query,
-      diagnosticsService: diagnostics,
+      services: { vbaService: vba, queryService: query, diagnosticsService: diagnostics },
     });
 
     await expect(
@@ -303,9 +342,11 @@ describe("MCP tool registration over core services", () => {
   it("forwards explicit database targets on modern query execution", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -333,9 +374,11 @@ describe("MCP tool registration over core services", () => {
 
   it("advertises dryRun/apply on modern query execution", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const properties = tools.find((tool) => tool.name === "query_execute")?.inputSchema?.properties;
@@ -347,9 +390,11 @@ describe("MCP tool registration over core services", () => {
   it("treats modern write query with omitted flags as dry-run plan and bypasses write gate", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -366,9 +411,11 @@ describe("MCP tool registration over core services", () => {
   it("treats modern write query with dryRun:true as plan and bypasses write gate", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -385,9 +432,11 @@ describe("MCP tool registration over core services", () => {
   it("blocks modern write query with apply:true when writes are disabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const result = await tools
@@ -402,9 +451,11 @@ describe("MCP tool registration over core services", () => {
   it("blocks modern write query with dryRun:false when writes are disabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const result = await tools
@@ -418,14 +469,14 @@ describe("MCP tool registration over core services", () => {
 
   it("commits modern write query with apply:true when writes are enabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(
       tools
@@ -441,9 +492,11 @@ describe("MCP tool registration over core services", () => {
   it("forwards explicit database targets on read-only query_sql", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -469,14 +522,14 @@ describe("MCP tool registration over core services", () => {
   it("rejects invalid MCP inputs before calling core services", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: vba,
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(
       tools.find((tool) => tool.name === "run_vba")?.handler({ moduleName: "Automation" }),
@@ -527,9 +580,11 @@ describe("MCP tool registration over core services", () => {
     // canonical path.
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: vba,
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -544,9 +599,11 @@ describe("MCP tool registration over core services", () => {
   it("rejects empty-string sql before reaching the runner (minLength guard)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -571,9 +628,11 @@ describe("MCP tool registration over core services", () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: vba,
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -636,14 +695,14 @@ describe("MCP tool registration over core services", () => {
 
   it("allows MCP write queries only when writes are explicitly enabled", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(
       tools
@@ -662,15 +721,15 @@ describe("MCP tool registration over core services", () => {
 
   it("allows write tool when project-scoped allowWrites resolver grants access", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      false,
-      async (input) => (input as { projectId?: string }).projectId === "lanzadera",
-    );
+      writeAccessResolver: async (input) =>
+        (input as { projectId?: string }).projectId === "lanzadera",
+    });
 
     await expect(
       tools
@@ -694,15 +753,14 @@ describe("MCP tool registration over core services", () => {
 
   it("keeps blocking write tool when allowWrites resolver denies the project", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      false,
-      async () => false,
-    );
+      writeAccessResolver: async () => false,
+    });
 
     const result = await tools
       .find((tool) => tool.name === "seed_fixture")
@@ -721,9 +779,11 @@ describe("MCP tool registration over core services", () => {
   it("handles run_vba argsJson as MCP input instead of raw JSON-RPC failures", async () => {
     const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: vba,
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
     const runVba = tools.find((tool) => tool.name === "run_vba");
 
@@ -766,9 +826,11 @@ describe("MCP tool registration over core services", () => {
 
   it("declares explicit JSON schemas for every MCP tool", () => {
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     for (const tool of tools) {
@@ -792,7 +854,7 @@ describe("MCP tool registration over core services", () => {
     }
 
     it("keeps verify/reconcile tools visible in the tools/list projection now that they are implemented", () => {
-      const tools = createDysflowMcpTools(makeServices());
+      const tools = createDysflowMcpTools({ services: makeServices() });
       for (const implemented of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const tool = tools.find((t) => t.name === implemented);
         expect(tool, `${implemented} must be present in tool registry`).toBeDefined();
@@ -804,7 +866,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("visible VBA sync tools report service unavailability instead of not-implemented when no service is configured", async () => {
-      const tools = createDysflowMcpTools(makeServices());
+      const tools = createDysflowMcpTools({ services: makeServices() });
       for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
         expect(result?.isError, `${toolName} should fail safely without the VBA sync service`).toBe(
@@ -817,9 +879,11 @@ describe("MCP tool registration over core services", () => {
 
     it("verify/reconcile tools dispatch to the VBA sync service instead of the not-implemented fallback", async () => {
       const tools = createDysflowMcpTools({
-        ...makeServices(),
-        vbaSyncToolService: {
-          execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+        services: {
+          ...makeServices(),
+          vbaSyncToolService: {
+            execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
+          },
         },
       });
 
@@ -846,7 +910,7 @@ describe("MCP tool registration over core services", () => {
     }
 
     it("every registered MCP tool has an entry in MCP_TOOL_SCHEMAS", () => {
-      const tools = createDysflowMcpTools(makeServices());
+      const tools = createDysflowMcpTools({ services: makeServices() });
       // Non-modern tools are those outside the MODERN_TOOL_NAMES namespace.
       // After Opción A (2026-07-07) the modern tools have canonical names
       // without the `dysflow_` prefix (e.g. `lint_module` instead of
@@ -884,9 +948,11 @@ describe("MCP tool registration over core services", () => {
 
       const query = new FakeQueryService(successResult({ rows: [] }));
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: query,
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       await expect(
@@ -959,15 +1025,15 @@ describe("MCP tool registration over core services", () => {
         ).toHaveProperty("timeoutMs");
       }
 
-      const tools = createDysflowMcpTools(
-        {
+      const tools = createDysflowMcpTools({
+        services: {
           ...makeServices(),
           vbaSyncToolService: {
             execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
           },
         },
-        true,
-      );
+        writes: true,
+      });
       // feat-759-no-compile (v1.19.0) — compile_vba was removed; use
       // verify_code (handled, also has a vbaSyncToolService route) as
       // the smoke-test fixture.
@@ -990,7 +1056,7 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("passing a property not in a tool-specific schema returns MCP_INPUT_INVALID", async () => {
-      const tools = createDysflowMcpTools(makeServices());
+      const tools = createDysflowMcpTools({ services: makeServices() });
       // list_tables should not accept rows — passing rows should produce a validation error
       const listTables = tools.find((t) => t.name === "list_tables");
       expect(listTables).toBeDefined();
@@ -1001,18 +1067,15 @@ describe("MCP tool registration over core services", () => {
     });
 
     it("accepts lowercase importMode aliases before dispatching import tools", async () => {
-      const tools = createDysflowMcpTools(
-        {
+      const tools = createDysflowMcpTools({
+        services: {
           ...makeServices(),
           vbaSyncToolService: {
             execute: async (toolName, input) => successResult({ toolName, input, ok: true }),
           },
         },
-        // writesEnabled: import always writes (no real dry-run), so it is
-        // write-gated regardless of the dryRun flag; this test exercises
-        // importMode aliasing, not the gate.
-        true,
-      );
+        writes: true,
+      });
       const importModules = tools.find((tool) => tool.name === "import_modules");
       expect(importModules).toBeDefined();
       if (importModules === undefined) throw new Error("import_modules should be registered");
@@ -1083,9 +1146,11 @@ describe("MCP tool registration over core services", () => {
       }),
     );
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: diagnostics,
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: diagnostics,
+      },
     });
 
     await expect(
@@ -1107,9 +1172,11 @@ describe("MCP tool registration over core services", () => {
       }),
     );
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     await expect(
@@ -1127,14 +1194,13 @@ describe("MCP tool registration over core services", () => {
   // Issue #184: dryRun:true must bypass the write guard for relink_tables
   it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      false,
-    );
+    });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:true — must NOT be blocked by write guard
@@ -1149,14 +1215,13 @@ describe("MCP tool registration over core services", () => {
 
   it("blocks relink_tables with dryRun:false when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      false,
-    );
+    });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     // dryRun:false — must be blocked by write guard when writes are disabled
@@ -1168,14 +1233,14 @@ describe("MCP tool registration over core services", () => {
 
   it("allows relink_tables with dryRun:false when writes are enabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
     const writeResult = await relinkTool?.handler({ dryRun: false });
@@ -1186,14 +1251,14 @@ describe("MCP tool registration over core services", () => {
 
   it("allows localize_backend_links with optional backendPath and dryRun", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     const localizeTool = tools.find((t) => t.name === "localize_backend_links");
     expect(localizeTool?.inputSchema?.properties).toHaveProperty("backendPath");
@@ -1227,7 +1292,7 @@ describe("MCP tool registration over core services", () => {
       const services = { ...makeServices(), queryService: query };
       // New signature: createDysflowMcpTools(services, writesEnabled)
       // writesEnabled=false must block seed_fixture (a write tool)
-      const tools = createDysflowMcpTools(services, false);
+      const tools = createDysflowMcpTools({ services, writes: false });
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
       const result = await seedFixture?.handler({
         tableName: "People",
@@ -1242,7 +1307,10 @@ describe("MCP tool registration over core services", () => {
     it("write tool succeeds when writesEnabled=true is passed as explicit second parameter", async () => {
       const query = new FakeQueryService(successResult({ rows: [] }));
       const services = { ...makeServices(), queryService: query };
-      const tools = createDysflowMcpTools(services, true);
+      const tools = createDysflowMcpTools({
+        services: services,
+        writes: true,
+      });
       const seedFixture = tools.find((tool) => tool.name === "seed_fixture");
       const result = await seedFixture?.handler({
         tableName: "People",
@@ -1279,9 +1347,11 @@ describe("MCP tool registration over core services", () => {
     it("dysflow_vba_execute forwards context.sendProgress to vbaService.execute as onProgress", async () => {
       const vba = new ProgressCapturingVbaService();
       const tools = createDysflowMcpTools({
-        vbaService: vba as unknown as DysflowMcpServices["vbaService"],
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: vba as unknown as DysflowMcpServices["vbaService"],
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       const sendProgress = () => {};
@@ -1296,14 +1366,14 @@ describe("MCP tool registration over core services", () => {
 
     it("query_execute forwards context.sendProgress to queryService.execute as onProgress", async () => {
       const query = new ProgressCapturingQueryService();
-      const tools = createDysflowMcpTools(
-        {
+      const tools = createDysflowMcpTools({
+        services: {
           vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
           queryService: query as unknown as DysflowMcpServices["queryService"],
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
-        true,
-      );
+        writes: true,
+      });
 
       const sendProgress = () => {};
       const context = { progressToken: "tok-2", sendProgress };
@@ -1318,9 +1388,11 @@ describe("MCP tool registration over core services", () => {
     it("MCP tool handler called with a context does not throw", async () => {
       const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
       const tools = createDysflowMcpTools({
-        vbaService: vba,
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: vba,
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       const context = { progressToken: "tok-mcp", sendProgress: () => {} };
@@ -1340,17 +1412,15 @@ describe("MCP tool registration over core services", () => {
       allowedProcedures: readonly string[],
       vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
     ) {
-      return createDysflowMcpTools(
-        {
+      return createDysflowMcpTools({
+        services: {
           vbaService: vba,
           queryService: new FakeQueryService(successResult({ rows: [] })),
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
-        false,
-        undefined,
-        {},
-        allowedProcedures,
-      );
+        env: {},
+        allowedProcedures: allowedProcedures,
+      });
     }
 
     it("blocks a procedure not in the allowlist", async () => {
@@ -1389,9 +1459,11 @@ describe("MCP tool registration over core services", () => {
 
     it("refuses by default when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
       const result = await tools
         .find((t) => t.name === "run_vba")
@@ -1415,9 +1487,11 @@ describe("MCP tool registration over core services", () => {
     it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
       const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
       const tools = createDysflowMcpTools({
-        vbaService: vba,
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: vba,
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
       const result = await tools
         .find((t) => t.name === "run_vba")
@@ -1443,9 +1517,11 @@ describe("MCP tool registration over core services", () => {
     it("delegates read-only query_sql through the same query execution path as query_execute", async () => {
       const query = new FakeQueryService(successResult({ rows: [{ ok: true }] }));
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: query,
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       await expect(
@@ -1473,9 +1549,11 @@ describe("MCP tool registration over core services", () => {
         ),
       );
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: query,
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       const result = await tools
@@ -1500,9 +1578,11 @@ describe("MCP tool registration over core services", () => {
         ),
       );
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: query,
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: query,
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
 
       const result = await tools
@@ -1519,14 +1599,14 @@ describe("MCP tool registration over core services", () => {
 
     it("allows write SQL via query_execute with mode write when writes enabled", async () => {
       const query = new FakeQueryService(successResult({ rows: [] }));
-      const tools = createDysflowMcpTools(
-        {
+      const tools = createDysflowMcpTools({
+        services: {
           vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
           queryService: query,
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
-        true,
-      );
+        writes: true,
+      });
 
       await expect(
         tools
@@ -1541,9 +1621,11 @@ describe("MCP tool registration over core services", () => {
   describe("context props unification — single source of truth (#200)", () => {
     it("schemas that previously used CONTEXT_PROPERTIES still include projectId and contextId", () => {
       const tools = createDysflowMcpTools({
-        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-        queryService: new FakeQueryService(successResult({ rows: [] })),
-        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        services: {
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
       });
       const toolsWithCtx = [
         "query_sql",
@@ -1572,14 +1654,14 @@ describe("MCP tool registration over core services", () => {
 describe("query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #6a)", () => {
   it("write mode projects allowTables and denyTables from input into the core query request", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     const result = await tools
       .find((tool) => tool.name === "query_execute")
@@ -1608,14 +1690,14 @@ describe("query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #
         createDysflowError("TABLE_DENIED", "Operation denied on table 'Secrets' by denyTables."),
       ),
     );
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     const result = await tools
       .find((tool) => tool.name === "query_execute")
@@ -1633,9 +1715,11 @@ describe("query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #
   it("read mode accepts allowTables/denyTables without failing (they are inert in read mode)", async () => {
     const query = new FakeQueryService(successResult({ rows: [{ id: 1, name: "Ada" }] }));
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+      },
     });
 
     const result = await tools
@@ -1662,14 +1746,14 @@ describe("query_execute — allowTables/denyTables pass-through (PR2 #621 F1 / #
 
   it("rejects a non-string element in allowTables before reaching the runner", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
         queryService: query,
         diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
       },
-      true,
-    );
+      writes: true,
+    });
 
     const result = await tools
       .find((tool) => tool.name === "query_execute")
@@ -1716,7 +1800,9 @@ describe("cleanup_access_operation — full-field pass-through (PR2 #621 F2 / #6
   for (const toolName of ["cleanup_access_operation", "cleanup_access_operation"] as const) {
     it(`${toolName} preserves strictContext through to the cleanup service request`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       expect(cleanupTool).toBeDefined();
@@ -1739,7 +1825,9 @@ describe("cleanup_access_operation — full-field pass-through (PR2 #621 F2 / #6
 
     it(`${toolName} preserves the full optional surface (projectId, backendPath, timeoutMs, expectedAccessPath) in the request`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       expect(cleanupTool).toBeDefined();
@@ -1842,17 +1930,19 @@ describe("AccessOperationRegistry explicit injection", () => {
   it("cleanup_access_operation rejects missing accessPath before reaching cleanup service", async () => {
     const cleanupRequests: unknown[] = [];
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-      cleanupService: {
-        cleanup: async (request) => {
-          cleanupRequests.push(request);
-          return successResult({
-            operationId: "op-test-mcp",
-            accessPid: null,
-            status: "cleaned" as const,
-          });
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        cleanupService: {
+          cleanup: async (request) => {
+            cleanupRequests.push(request);
+            return successResult({
+              operationId: "op-test-mcp",
+              accessPid: null,
+              status: "cleaned" as const,
+            });
+          },
         },
       },
     });
@@ -1891,7 +1981,9 @@ describe("AccessOperationRegistry explicit injection", () => {
   for (const toolName of ["cleanup_access_operation", "cleanup_access_operation"] as const) {
     it(`${toolName} with force:true is refused when writes are disabled and does not reach cleanup service`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       expect(cleanupTool).toBeDefined();
@@ -1908,11 +2000,10 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     it(`${toolName} with force:true is refused when the write resolver returns false`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(
-        makeCleanupServices(cleanupRequests),
-        false,
-        async () => false,
-      );
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+        writeAccessResolver: async () => false,
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       const result = await cleanupTool?.handler({
@@ -1928,7 +2019,10 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     it(`${toolName} with force:true proceeds to cleanup service when writes are enabled`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), true);
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+        writes: true,
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       const result = await cleanupTool?.handler({
@@ -1945,11 +2039,10 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     it(`${toolName} with force:true proceeds when the write resolver returns true`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(
-        makeCleanupServices(cleanupRequests),
-        false,
-        async () => true,
-      );
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+        writeAccessResolver: async () => true,
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       const result = await cleanupTool?.handler({
@@ -1964,7 +2057,9 @@ describe("AccessOperationRegistry explicit injection", () => {
 
     it(`${toolName} without force proceeds even when writes are disabled (safe recovery path)`, async () => {
       const cleanupRequests: unknown[] = [];
-      const tools = createDysflowMcpTools(makeCleanupServices(cleanupRequests), false);
+      const tools = createDysflowMcpTools({
+        services: makeCleanupServices(cleanupRequests),
+      });
 
       const cleanupTool = tools.find((t) => t.name === toolName);
       const result = await cleanupTool?.handler({
@@ -1995,10 +2090,12 @@ describe("AccessOperationRegistry explicit injection", () => {
     });
 
     const tools = createDysflowMcpTools({
-      vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
-      queryService: new FakeQueryService(successResult({ rows: [] })),
-      diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
-      operationRegistry: registry,
+      services: {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(successResult({ rows: [] })),
+        diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        operationRegistry: registry,
+      },
     });
 
     const listTool = tools.find((t) => t.name === "list_access_operations");

@@ -74,7 +74,9 @@ describe("VBA-modifying tools write-gating", () => {
   } as any;
 
   it("blocks import_modules and import_all when writesEnabled=false even if dryRun is omitted (import has no real dry-run)", async () => {
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
 
     // No dryRun field — the default. resolveIsDryRun() would return true, but
     // import always writes (no -DryRun in the PS manager), so the gate MUST
@@ -96,7 +98,9 @@ describe("VBA-modifying tools write-gating", () => {
   });
 
   it("blocks delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=false (compile_vba removed in v1.19.0)", async () => {
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
 
     // Test delete_module
     {
@@ -153,7 +157,10 @@ describe("VBA-modifying tools write-gating", () => {
   });
 
   it("allows delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=true (compile_vba removed in v1.19.0)", async () => {
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     // Test delete_module
     {

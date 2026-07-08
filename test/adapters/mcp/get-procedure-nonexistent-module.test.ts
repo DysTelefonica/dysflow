@@ -12,7 +12,7 @@ function makeBaseServices() {
 
 describe("get_procedure — typed error when module does not exist", () => {
   it("returns isError:true with MODULE_NOT_FOUND in the error text", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "get_procedure");
     if (tool === undefined) throw new Error("get_procedure tool not found");
 

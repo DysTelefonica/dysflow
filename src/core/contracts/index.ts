@@ -83,6 +83,16 @@ export type PowerShellExecutionResult = {
   timedOut: boolean;
   accessProcess?: AccessProcessOwnership;
   powershellWorkerPid?: number;
+  /**
+   * #781 P2 — non-empty when `child_process.spawn` itself failed (e.g. ENOENT
+   * because `pwsh` is not on PATH). Distinct from `timedOut: true` (the
+   * process was spawned and then killed by the timeout bound). When set,
+   * `exitCode` is `null` and `timedOut` is `false`. Callers that need a
+   * specific diagnostic for the "could not start" path MUST switch on
+   * `spawnError` rather than treating the result as a generic exit-code
+   * failure.
+   */
+  spawnError?: string;
 };
 
 export type PowerShellExecutorOptions = {

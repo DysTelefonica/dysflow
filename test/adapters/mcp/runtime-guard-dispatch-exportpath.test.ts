@@ -99,7 +99,10 @@ function makeHarness(): Harness {
   // writesEnabled=true because the runtime guard should fire (or NOT fire)
   // BEFORE the write-gate; this proves the isWithinRuntime check is the one
   // making the decision, not MCP_WRITES_DISABLED.
-  const tools = createDysflowMcpTools(services, true);
+  const tools = createDysflowMcpTools({
+    services: services,
+    writes: true,
+  });
 
   return { executeMappedTool, vbaSyncToolService, resolveExecutionTarget, tools };
 }

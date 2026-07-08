@@ -97,34 +97,35 @@ export async function startMcpStdioAdapter(
   const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
 
-  const tools = createDysflowMcpTools(
+  const tools = createDysflowMcpTools({
     services,
-    writesEnabled,
-    async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
-    process.env,
+    writes: writesEnabled,
+    writeAccessResolver: async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
+    env: process.env,
     // #674 — per-input allowedProcedures resolution. The MCP gate (see
     // canonical-handlers.ts:ensureProcedureAllowed) now sees the allowlist
     // of the project the input targets, not the startup one. Without this,
     // a caller could pass the gate with project A's allowlist and execute
     // against project B's binary.
-    async (input) => {
+    allowedProcedures: async (input) => {
       const configResult = await resolveConfigForInput(input);
       if (!configResult.ok) return undefined;
       return configResult.data.allowedProcedures;
     },
-    async (input) => resolveMcpAccessContextForInput(input, startupConfig),
-    undefined, // allowWrites
-    undefined, // projectId
+    accessContextResolver: async (input) => resolveMcpAccessContextForInput(input, startupConfig),
+    // allowWrites: leave undefined → defaults to writesEnabled at the
+    // capabilities snapshot layer.
+    projectId: undefined,
     // #731 — startup project's lint rule overrides (e.g. enabled:false
     // for identifier-safety on a legacy Spanish project). Surfaced into
     // lint_module so it honors opt-outs and triggers the legacy
     // auto-detection downgrade.
-    startupConfig?.lintRulesOverride ?? {},
+    lintOverrides: startupConfig?.lintRulesOverride ?? {},
     // PR-1 (issue #762, v1.20.0) — forward the resolved front-end `.accdb`
     // path so `get_capabilities` can surface the per-project
     // `humanCompilePending` flag from the process-local state cache.
-    startupConfig?.accessDbPath,
-  );
+    accessDbPath: startupConfig?.accessDbPath,
+  });
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
   await startWithSdkServer(tools);

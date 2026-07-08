@@ -12,7 +12,7 @@ function makeBaseServices() {
 
 describe("find_references — typed error when symbol does not exist (NOT empty array)", () => {
   it("returns isError:true with SYMBOL_NOT_FOUND rather than a silent empty references array", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "find_references");
     expect(tool).toBeDefined();
 

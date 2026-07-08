@@ -27,7 +27,7 @@ function makeBaseServices(): DysflowMcpServices {
 describe("detect_dead_code — handler never opens Access (#705)", () => {
   it("does not invoke vbaSyncToolService.execute and reports a non-empty findings list", async () => {
     const services = makeBaseServices();
-    const tools = createDysflowMcpTools(services);
+    const tools = createDysflowMcpTools({ services: services });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 

@@ -235,13 +235,17 @@ describe("dryRunDefault contract — global + per-tool alignment (#746)", () => 
 
 describe("get_capabilities tool — registration and read-only contract (#656)", () => {
   it("is registered as a modern tool by createDysflowMcpTools", () => {
-    const tools = createDysflowMcpTools(makeServices(), false);
+    const tools = createDysflowMcpTools({
+      services: makeServices(),
+    });
     const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool, "tool must be registered").toBeDefined();
   });
 
   it("uses NO_INPUT_SCHEMA (read-only, no required input)", () => {
-    const tools = createDysflowMcpTools(makeServices(), false);
+    const tools = createDysflowMcpTools({
+      services: makeServices(),
+    });
     const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool?.inputSchema).toEqual({
       type: "object",
@@ -251,7 +255,9 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
   });
 
   it("is NOT write-gated: handler returns ok when writes are disabled", async () => {
-    const tools = createDysflowMcpTools(makeServices(), false);
+    const tools = createDysflowMcpTools({
+      services: makeServices(),
+    });
     const tool = tools.find((t) => t.name === "get_capabilities");
     if (!tool) throw new Error("tool not registered");
 
@@ -263,7 +269,10 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
   });
 
   it("handler returns a parseable JSON payload with the documented snapshot", async () => {
-    const tools = createDysflowMcpTools(makeServices(), true);
+    const tools = createDysflowMcpTools({
+      services: makeServices(),
+      writes: true,
+    });
     const tool = tools.find((t) => t.name === "get_capabilities");
     if (!tool) throw new Error("tool not registered");
 
