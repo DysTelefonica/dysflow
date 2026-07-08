@@ -74,8 +74,10 @@ describe("createHttpServices", () => {
       JSON.stringify({
         accessPath: "app.accdb",
         destinationRoot: "src",
-        allowWrites: true,
-        allowedProcedures: ["Test_A"],
+        capabilities: {
+          allowWrites: true,
+          procedures: { allow: ["Test_A"] },
+        },
       }),
       "utf8",
     );

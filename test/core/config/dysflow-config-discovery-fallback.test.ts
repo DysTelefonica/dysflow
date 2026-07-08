@@ -84,7 +84,8 @@ describe("PR-3 / #658 — allowedProcedures discovery fallback in buildProjectCo
         root,
         {
           accessPath: "app.accdb",
-          allowedProcedures: ["OnlyThis"],
+          // biome-ignore lint/suspicious/noExplicitAny: partial fixture config
+          capabilities: { procedures: { allow: ["OnlyThis"] } } as any,
         },
         throwingDiscovery,
       );
@@ -108,7 +109,8 @@ describe("PR-3 / #658 — allowedProcedures discovery fallback in buildProjectCo
         root,
         {
           accessPath: "app.accdb",
-          allowedProcedures: [],
+          // biome-ignore lint/suspicious/noExplicitAny: partial fixture config
+          capabilities: { procedures: { allow: [] } } as any,
         },
         throwingDiscovery,
       );
@@ -255,7 +257,7 @@ describe("PR-3 / #658 — allowedProcedures discovery fallback in buildProjectCo
         root,
         {
           accessPath: "app.accdb",
-          allowWrites: true,
+          capabilities: { allowWrites: true },
         },
         () => ["Test_Combo"],
       );

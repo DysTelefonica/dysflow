@@ -1,24 +1,12 @@
 // PR #657 / #655 — `.dysflow/project.json` `capabilities` consolidated block.
 //
-// Test the four-case precedence table for the new `capabilities` config block
-// in `DysflowProjectConfig`. The `capabilities` block is the new home for the
-// write gate + procedure allowlist/denylist. The top-level `allowWrites` and
-// `allowedProcedures` fields are kept as DEPRECATED aliases (read-through
-// fallback) and emit a single WARNING when both are present.
-//
-// Precedence table (tested below):
-//
-//   | top-level fields | capabilities block | effective allowWrites | effective allowedProcedures | warnings |
-//   |------------------|--------------------|------------------------|------------------------------|----------|
-//   | none             | none               | false                  | undefined                    | none     |
-//   | present          | absent             | top-level              | top-level                    | none     |
-//   | absent           | present            | capabilities           | capabilities                 | none     |
-//   | present          | present            | capabilities           | capabilities                 | 1        |
-//
-// Reference: `src/core/config/dysflow-config.ts:33-49` (DysflowProjectConfig)
-// and `src/core/config/dysflow-config.ts:247-342` (buildProjectConfig).
-// Removal of the top-level aliases is reserved for v1.15.0 (see proposal §
-// "Backward Compatibility").
+// The `capabilities` block is the only home for the write gate and
+// procedure allowlist/denylist. The top-level `allowWrites` /
+// `allowedProcedures` aliases were marked deprecated and removed in v1.15.0;
+// we are on v1.22.0 and the read-through fallback is gone (T18).
+// Setting either top-level field now surfaces a typed
+// `CONFIG_TOP_LEVEL_FIELDS_REMOVED` error at config-load time so the
+// operator migrates the project.json to the `capabilities` block.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,38 +49,8 @@ function buildConfigWithCapabilities(
   }
 }
 
-describe("DysflowProjectConfig — capabilities consolidated block (#657, #655)", () => {
-  describe("case 1: top-level only (backward compatibility)", () => {
-    it("uses top-level allowWrites when capabilities block is absent", () => {
-      const result = buildConfigWithCapabilities({
-        accessPath: "app.accdb",
-        allowWrites: true,
-        allowedProcedures: ["Test_A"],
-      });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
-      expect(result.data.allowWrites).toBe(true);
-      expect(result.data.allowedProcedures).toEqual(["Test_A"]);
-      // No warning expected when only top-level fields are set.
-      expect(result.diagnostics).toEqual([]);
-    });
-
-    it("treats top-level allowWrites:false as the closed gate", () => {
-      const result = buildConfigWithCapabilities({
-        accessPath: "app.accdb",
-        allowWrites: false,
-      });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
-      expect(result.data.allowWrites).toBe(false);
-      expect(result.data.allowedProcedures).toBeUndefined();
-      expect(result.diagnostics).toEqual([]);
-    });
-  });
-
-  describe("case 2: capabilities block only (new canonical form)", () => {
+describe("DysflowProjectConfig — capabilities consolidated block (#657, #655, T18)", () => {
+  describe("case 1: capabilities block only (canonical form)", () => {
     it("uses capabilities.allowWrites when only capabilities block is present", () => {
       const result = buildConfigWithCapabilities({
         accessPath: "app.accdb",
@@ -141,51 +99,7 @@ describe("DysflowProjectConfig — capabilities consolidated block (#657, #655)"
     });
   });
 
-  describe("case 3: both top-level AND capabilities block (capabilities wins, single warning)", () => {
-    it("capabilities.allowWrites wins over top-level allowWrites and logs one warning", () => {
-      const result = buildConfigWithCapabilities({
-        accessPath: "app.accdb",
-        allowWrites: false, // deprecated
-        allowedProcedures: ["Legacy"], // deprecated
-        capabilities: {
-          allowWrites: true,
-          procedures: { allow: ["Test_A"] },
-        },
-      });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
-      expect(result.data.allowWrites).toBe(true); // capabilities wins
-      expect(result.data.allowedProcedures).toEqual(["Test_A"]); // capabilities wins
-
-      // Exactly one warning, level=warning, source=project-config.
-      const warnings = result.diagnostics.filter((d) => d.level === "warning");
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]?.source).toBe("project-config");
-      expect(warnings[0]?.message).toMatch(/capabilities/i);
-      expect(warnings[0]?.message).toMatch(/deprecat/i);
-    });
-
-    it("emits one combined warning even when both top-level allowWrites AND allowedProcedures are set", () => {
-      const result = buildConfigWithCapabilities({
-        accessPath: "app.accdb",
-        allowWrites: false,
-        allowedProcedures: ["Legacy_1"],
-        capabilities: {
-          allowWrites: true,
-          procedures: { allow: ["Test_A"] },
-        },
-      });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
-      const warnings = result.diagnostics.filter((d) => d.level === "warning");
-      // Single warning — not two — so the user is not pummeled.
-      expect(warnings).toHaveLength(1);
-    });
-  });
-
-  describe("case 4: neither (defaults unchanged)", () => {
+  describe("case 2: neither (defaults unchanged)", () => {
     it("defaults allowWrites to false and allowedProcedures to undefined when neither is set", () => {
       const result = buildConfigWithCapabilities({
         accessPath: "app.accdb",
@@ -232,6 +146,41 @@ describe("DysflowProjectConfig — capabilities consolidated block (#657, #655)"
       // deny is advisory only — runtime allowlist stays `allow`.
       expect(result.data.allowedProcedures).toEqual(["Test_A"]);
       expect(result.diagnostics).toEqual([]);
+    });
+  });
+
+  // T18 (legacy deprecation finally removed): the top-level `allowWrites`
+  // and `allowedProcedures` fields were marked deprecated and removed in
+  // v1.15.0. We are on v1.22.0 and the read-through alias path was still
+  // alive in `buildProjectConfig`. After this fix the top-level fields
+  // produce a typed `CONFIG_TOP_LEVEL_FIELDS_REMOVED` error so the operator
+  // migrates the project.json to the `capabilities` block.
+  describe("top-level allowWrites/allowedProcedures (REMOVED in v1.15.0, surfaced in v1.22.0)", () => {
+    it("rejects top-level allowWrites:true with CONFIG_TOP_LEVEL_FIELDS_REMOVED", () => {
+      const result = buildConfigWithCapabilities({
+        accessPath: "app.accdb",
+        allowWrites: true,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error(`expected failure, got success`);
+      expect(result.error.code).toBe("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
+      expect(result.error.message).toMatch(/allowWrites/i);
+      expect(result.error.message).toMatch(/deprecated.*removed|use.*capabilities/i);
+      expect(result.error.retryable).toBe(false);
+    });
+
+    it("rejects top-level allowedProcedures with CONFIG_TOP_LEVEL_FIELDS_REMOVED", () => {
+      const result = buildConfigWithCapabilities({
+        accessPath: "app.accdb",
+        allowedProcedures: ["Test_A"],
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error(`expected failure, got success`);
+      expect(result.error.code).toBe("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
+      expect(result.error.message).toMatch(/allowedProcedures/i);
+      expect(result.error.message).toMatch(/deprecated.*removed|use.*capabilities/i);
     });
   });
 });

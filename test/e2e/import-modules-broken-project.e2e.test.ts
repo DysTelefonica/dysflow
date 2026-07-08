@@ -93,7 +93,7 @@ function createBrokenProjectWorkspace(): { root: string; cleanup(): void } {
         accessPath: "NoConformidades.accdb",
         backendPath: "NoConformidades_Datos.accdb",
         destinationRoot: "src",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
         timeoutMs: 120_000,
       },
       null,

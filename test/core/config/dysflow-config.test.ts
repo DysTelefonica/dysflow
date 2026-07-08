@@ -205,7 +205,7 @@ describe("dysflow configuration", () => {
         id: "proyecto-demo",
         accessPath: "front.accdb",
         backendPath: "backend.accdb",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
         destinationRoot: "src",
         projectRoot: ".",
         timeoutMs: 12_000,
@@ -305,7 +305,7 @@ describe("dysflow configuration", () => {
         id: "any-access-project",
         accessPath: "front.accdb",
         backendPath: "backend.accdb",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
       });
       writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
       writeFileSync(join(workspace.root, "backend.accdb"), "", "utf8");
@@ -331,7 +331,7 @@ describe("dysflow configuration", () => {
       writeRepoProjectConfig(workspace.root, {
         id: "configured-project",
         accessPath: "front.accdb",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
       });
 
       const result = loadDysflowConfig({
@@ -356,7 +356,11 @@ describe("dysflow configuration", () => {
       await mkdir(join(workspace, ".dysflow"), { recursive: true });
       await writeFile(
         join(workspace, ".dysflow", "project.json"),
-        JSON.stringify({ id: "async-project", accessPath: "front.accdb", allowWrites: true }),
+        JSON.stringify({
+          id: "async-project",
+          accessPath: "front.accdb",
+          capabilities: { allowWrites: true },
+        }),
         "utf8",
       );
       await writeFile(join(workspace, "front.accdb"), "", "utf8");
@@ -444,7 +448,7 @@ describe("dysflow configuration", () => {
         accessPath: "Expedientes.accdb",
         backendPath: "Expedientes_datos.accdb",
         destinationRoot: "src",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
         timeoutMs: 90_000,
         passwordEnv: "DYSFLOW_ACCESS_PASSWORD",
         backendPasswordEnv: "DYSFLOW_BACKEND_PASSWORD",
@@ -610,7 +614,7 @@ describe("dysflow configuration", () => {
       writeRepoProjectConfig(workspace.root, {
         id: "parity-test-pr2",
         accessPath: "front.accdb",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
       });
       writeFileSync(join(workspace.root, "front.accdb"), "", "utf8");
 

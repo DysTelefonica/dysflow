@@ -1,6 +1,5 @@
 import { basename, dirname, resolve } from "node:path";
 import {
-  createDiagnostic,
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -346,6 +345,30 @@ function buildProjectConfig(
   const { resolvedPath, configSource, projectIdOverride, input, env } = opts;
   const configDir = dirname(resolvedPath);
   const projectRoot = resolveProjectRoot(raw, configDir, stringValue(input.projectRoot));
+
+  // T18 — the top-level `allowWrites` / `allowedProcedures` aliases were
+  // marked deprecated and slated for removal in v1.15.0. v1.22.0 is the
+  // first release after the deadline. Refuse the request with a typed
+  // error so the operator migrates the project.json to the `capabilities`
+  // block. Without this gate, the legacy read-through path stays alive
+  // and silently produces the wrong runtime gate (see resolveCapabilities
+  // below — top-level `allowWrites: false` historically closed the gate
+  // even when `capabilities.allowWrites: true` opened it).
+  const hasTopLevelLegacy =
+    typeof raw.allowWrites === "boolean" || Array.isArray(raw.allowedProcedures);
+  if (hasTopLevelLegacy) {
+    const offending = [
+      typeof raw.allowWrites === "boolean" ? "allowWrites" : undefined,
+      Array.isArray(raw.allowedProcedures) ? "allowedProcedures" : undefined,
+    ].filter((s): s is string => typeof s === "string");
+    return failureResult(
+      createDysflowError(
+        "CONFIG_TOP_LEVEL_FIELDS_REMOVED",
+        `.dysflow/project.json sets the deprecated top-level field(s) ${offending.join(", ")}. These fields were removed in v1.15.0; migrate to the top-level "capabilities" block (capabilities.allowWrites, capabilities.procedures.allow).`,
+      ),
+    );
+  }
+
   const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
   // Explicit request paths are caller intent and must win over repo config defaults.
   // This mirrors backendPath/destinationRoot and lets MCP callers override a stale
@@ -410,56 +433,45 @@ function buildProjectConfig(
     ),
   );
 
-  // Resolve the consolidated `capabilities` block (#657, #655). The top-level
-  // `allowWrites` and `allowedProcedures` fields are kept as DEPRECATED
-  // read-through aliases until v1.15.0. When BOTH the top-level fields and
-  // the `capabilities` block are present, `capabilities` wins and a single
-  // warning is surfaced so the user is not pummeled.
-  //
-  // The result is composed with `resolveAllowedProceduresFallback` (PR-3 / #658)
-  // (defined next to this function): when both `allowedProcedures` and the
-  // `capabilities.procedures.allow` block are absent, dysflow offers a
-  // discovered prefix list unless the caller passed `discoverFromSrcRoot: false`.
-  // Explicit values always win over discovery.
-  //-------------------------------------------------------------------
+  // Resolve the consolidated `capabilities` block (#657, #655). T18: the
+  // top-level `allowWrites` and `allowedProcedures` aliases were removed in
+  // v1.15.0; the rejection happens earlier in this function (see top-level
+  // guard above) so by the time we get here, the capabilities block is
+  // the only authoritative source.
   const {
     allowWrites,
     allowedProcedures: capabilitiesAllowedProcedures,
     lintRulesOverride,
-    deprecationWarning,
   } = resolveCapabilities(raw);
   const discoveryResult =
     capabilitiesAllowedProcedures === undefined
       ? (input.discoverFromSrcRoot ?? NO_DISCOVERY)(destinationRoot)
       : [];
 
-  return successResult(
-    {
-      configSource,
-      allowWrites,
-      allowedProcedures: resolveAllowedProceduresFallback(
-        capabilitiesAllowedProcedures,
-        discoveryResult,
-      ),
-      accessDbPath,
-      backendPath,
-      destinationRoot,
-      projectRoot,
-      projectId: projectIdOverride ?? stringValue(raw.id),
-      timeoutMs,
-      accessPassword,
-      backendPassword,
-      accessPasswordEnv,
-      backendPasswordEnv,
-      configPath: resolvedPath,
-      httpToken,
-      httpTokenEnv,
-      // #731 — per-rule lint overrides from `capabilities.lint.rules`.
-      // Undefined when the project config has no lint block.
-      ...(lintRulesOverride !== undefined ? { lintRulesOverride } : {}),
-    },
-    deprecationWarning === undefined ? {} : { diagnostics: [deprecationWarning] },
-  );
+  return successResult({
+    configSource,
+    allowWrites,
+    allowedProcedures: resolveAllowedProceduresFallback(
+      capabilitiesAllowedProcedures,
+      discoveryResult,
+    ),
+    accessDbPath,
+    backendPath,
+    destinationRoot,
+    projectRoot,
+    projectId: projectIdOverride ?? stringValue(raw.id),
+    timeoutMs,
+    accessPassword,
+    backendPassword,
+    accessPasswordEnv,
+    backendPasswordEnv,
+    configPath: resolvedPath,
+    httpToken,
+    httpTokenEnv,
+    // #731 — per-rule lint overrides from `capabilities.lint.rules`.
+    // Undefined when the project config has no lint block.
+    ...(lintRulesOverride !== undefined ? { lintRulesOverride } : {}),
+  });
 }
 
 function loadProjectConfigFromPath(
@@ -757,62 +769,20 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
   allowedProcedures: readonly string[] | undefined;
   /** #731 — per-rule lint overrides from `capabilities.lint.rules`. */
   lintRulesOverride: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined;
-  deprecationWarning?: ReturnType<typeof createDiagnostic>;
 } {
   const capabilities = raw.capabilities;
-  const hasCapabilitiesBlock = capabilities !== undefined && typeof capabilities === "object";
-  const hasTopLevelAllowWrites = typeof raw.allowWrites === "boolean";
-  const hasTopLevelAllowedProcedures = Array.isArray(raw.allowedProcedures);
+  // T18: the top-level `allowWrites` / `allowedProcedures` fields were
+  // removed in v1.15.0. The caller (`buildProjectConfig`) rejects them
+  // with `CONFIG_TOP_LEVEL_FIELDS_REMOVED` before we ever reach here, so
+  // we can assume they are absent. The previous read-through fallback
+  // path that silently produced the wrong runtime gate is gone.
+  const capabilitiesAllowWrites = capabilities?.allowWrites;
+  const capabilitiesAllow = capabilities?.procedures?.allow;
 
-  // #731 — a capabilities block with ONLY `lint.rules` is still recognized;
-  // the legacy `allowWrites`/`procedures` check stays as the dominant path.
-  const capabilitiesHasAny =
-    hasCapabilitiesBlock &&
-    (capabilities?.allowWrites !== undefined ||
-      capabilities?.procedures !== undefined ||
-      capabilities?.lint !== undefined);
-
-  if (capabilitiesHasAny) {
-    const capabilitiesAllowWrites = capabilities.allowWrites;
-    const capabilitiesAllow =
-      capabilities.procedures?.allow !== undefined
-        ? capabilities.procedures.allow
-        : hasTopLevelAllowedProcedures
-          ? raw.allowedProcedures
-          : undefined;
-
-    // #731 — sanitize the lint override block. Unknown rule ids are
-    // rejected at config-load time with a typed error so a typo in
-    // `.dysflow/project.json` does not silently disable a rule.
-    const lintRulesOverride = normalizeLintRulesOverride(capabilities?.lint?.rules);
-
-    // A conflict requires BOTH the capabilities block AND at least one of the
-    // deprecated top-level fields. If `capabilities.procedures.allow` was
-    // unset and we fell through to `allowedProcedures`, that is NOT a
-    // conflict — it is a partial migration path.
-    const topLevelConflict =
-      hasTopLevelAllowWrites ||
-      (hasTopLevelAllowedProcedures && capabilities.procedures?.allow !== undefined);
-
-    return {
-      allowWrites: capabilitiesAllowWrites === true,
-      allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
-      lintRulesOverride,
-      deprecationWarning: topLevelConflict
-        ? createDiagnostic(
-            "warning",
-            "project-config",
-            ".dysflow/project.json sets both the `capabilities` block and the deprecated top-level `allowWrites` / `allowedProcedures` fields. The `capabilities` block wins; the top-level aliases will be removed in v1.15.0.",
-          )
-        : undefined,
-    };
-  }
-
-  // No capabilities block — pure backward compatibility path.
   return {
-    allowWrites: hasTopLevelAllowWrites && raw.allowWrites === true,
-    allowedProcedures: hasTopLevelAllowedProcedures ? raw.allowedProcedures : undefined,
-    lintRulesOverride: undefined,
+    allowWrites: capabilitiesAllowWrites === true,
+    allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
+    lintRulesOverride: normalizeLintRulesOverride(capabilities?.lint?.rules),
   };
 }
 

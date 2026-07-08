@@ -31,7 +31,11 @@ const CONFIG_PATH = resolve(REPO, ".dysflow", "project.json");
 describe("loadDysflowConfig — ConfigFileSystemPort (sync)", () => {
   it("discovers and parses repo config through the injected port", () => {
     const fs = makeFakeFs({
-      [CONFIG_PATH]: JSON.stringify({ id: "proj", accessPath: "db.accdb", allowWrites: true }),
+      [CONFIG_PATH]: JSON.stringify({
+        id: "proj",
+        accessPath: "db.accdb",
+        capabilities: { allowWrites: true },
+      }),
     });
 
     const result = loadDysflowConfigWith({ cwd: REPO, env: {} }, fs);

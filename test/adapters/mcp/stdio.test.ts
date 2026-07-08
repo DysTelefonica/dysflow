@@ -72,7 +72,9 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
         id: "backend-ddl-project",
         accessPath: "front.accdb",
         backendPath: "backend.accdb",
-        allowWrites: true,
+        capabilities: {
+          allowWrites: true,
+        },
       }),
       "utf8",
     );
@@ -101,7 +103,7 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
         id: "readonly-ddl-project",
         accessPath: "front.accdb",
         backendPath: "backend.accdb",
-        allowWrites: false,
+        capabilities: { allowWrites: false },
       }),
       "utf8",
     );

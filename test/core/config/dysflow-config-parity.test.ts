@@ -265,7 +265,7 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
       const raw = {
         id: "core-test",
         accessPath: "app.accdb",
-        allowWrites: true,
+        capabilities: { allowWrites: true },
         timeoutMs: 10_000,
       };
 
