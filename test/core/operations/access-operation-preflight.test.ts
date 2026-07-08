@@ -1177,6 +1177,65 @@ describe("AccessOperationPreflightCleanupService", () => {
       // retireUnownedRecord only marks cleaned after a successful kill.
       await expect(registry.get("op-unowned")).resolves.toMatchObject({ status: "timed_out" });
     });
+
+    // #781 P2 — regression guard for the dedupe helper `killIfHeadlessAccess`.
+    // The retireUnownedRecord path goes through the same headless-gate +
+    // revalidate-before-kill sequence as scanAndCleanOrphans. The dedupe must
+    // preserve the CLEANUP_RACE_PID_REUSED diagnostic on the retire path too,
+    // otherwise the two pre-existing copies could diverge silently on a future
+    // safety fix and kill an unrelated recycled PID.
+    it("retireUnownedRecord refuses kill with CLEANUP_RACE_PID_REUSED when revalidation shows a different process name (#781 P2 dedupe)", async () => {
+      const registry = new InMemoryAccessOperationRegistry();
+      await registry.create({
+        ...baseRecord,
+        operationId: "op-unowned-reused",
+        accessPid: null,
+        processStartTime: null,
+      });
+      const killed: number[] = [];
+      const scanner = {
+        listProcesses: async (): Promise<OsProcessInfo[]> => [HEADLESS_PROCESS],
+      };
+      // The PID was recycled — scanner listed MSACCESS.EXE but by the time
+      // retireUnownedRecord revalidates, the same PID is owned by notepad.exe.
+      const recycledProcess: OsProcessInfo = {
+        pid: 5555,
+        name: "notepad.exe",
+        startTime: "2026-05-15T12:30:00.000Z",
+        commandLine: "notepad.exe",
+      };
+      const service = new AccessOperationPreflightCleanupService({
+        registry,
+        processInspector: { getProcess: async () => recycledProcess },
+        processKiller: {
+          kill: async (pid) => {
+            killed.push(pid);
+          },
+        },
+        processScanner: scanner,
+        clock: () => "2026-05-15T10:02:00.000Z",
+      });
+
+      const result = await service.cleanup({
+        accessPath: "C:/data/app.accdb",
+        projectRoot: "C:/repo/app",
+      });
+
+      expect(result.killed).toEqual([]);
+      expect(killed).toEqual([]);
+      // The CLEANUP_RACE_PID_REUSED diagnostic must surface from the
+      // retireUnownedRecord path too — that is the regression pin that the
+      // dedupe did not silently drop this guard.
+      expect(
+        result.errors.some(
+          (e) => /CLEANUP_RACE_PID_REUSED/.test(e.message) && /PID 5555/.test(e.message),
+        ),
+      ).toBe(true);
+      // And the record was not marked cleaned because the kill was refused.
+      await expect(registry.get("op-unowned-reused")).resolves.toMatchObject({
+        status: "timed_out",
+      });
+    });
   });
 
   describe("dead-PID reconciliation for running records", () => {
