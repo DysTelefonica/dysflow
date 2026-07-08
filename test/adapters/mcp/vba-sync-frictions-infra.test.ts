@@ -398,13 +398,18 @@ describe("vba_inline_execution tool behavior", () => {
       `modules/${generatedModuleName}.bas`,
     );
     expect(writtenFiles[0]?.content).toContain(`Attribute VB_Name = "${generatedModuleName}"`);
-    expect(writtenFiles[0]?.content).toContain("Public Sub ExecuteInline()");
+    // #786 — snippet wrapped in a Function that returns `result` (not a Sub, so
+    // an introspection snippet can return a value).
+    expect(writtenFiles[0]?.content).toContain("Public Function ExecuteInline() As Variant");
+    expect(writtenFiles[0]?.content).toContain("ExecuteInline = result");
     expect(writtenFiles[0]?.content).toContain("MsgBox 123");
 
     // Verify run_vba params
     const runParams = executedTools[2]?.params;
     expect(runParams?.moduleNames).toContain(generatedModuleName);
-    expect(runParams?.procedureName).toBe(`${generatedModuleName}.ExecuteInline`);
+    // #786 — bare procedure name; a module-qualified name is read by
+    // Application.Run as a (non-existent) project qualifier and fails.
+    expect(runParams?.procedureName).toBe("ExecuteInline");
 
     // Verify delete_module params
     const deleteParams = executedTools[3]?.params;

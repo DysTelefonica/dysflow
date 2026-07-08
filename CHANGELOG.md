@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.1.1] - 2026-07-08
+
+Patch release. Fixes `vba_inline_execution`, which failed on every call with
+`no encuentra el procedimiento '__dysflow_inline__.ExecuteInline'`.
+
+### Fixed
+
+- **mcp**: `vba_inline_execution` failed with "procedure not found" (`#786`). Root cause was the module-qualified procedure name passed to `Application.Run`: Access reads a dotted prefix as a **project** qualifier, so `__dysflow_inline__.ExecuteInline` resolved to a non-existent project. The inline path now runs the snippet by its **bare** procedure name. Verified end-to-end against real Access. This was NOT a missing-compile issue — save-only import is sufficient; no compile machinery was reintroduced (`feat-759-no-compile` is preserved, `compile_vba` stays removed).
+- **mcp**: inline snippets can now **return a value**. The snippet is wrapped in a `Function` that returns a bare `result` variable (previously a `Sub`, which silently discarded it), so read-only introspection like `result = "Attrs=" & fld.Attributes` surfaces via `returnValue`. Makes `vba_inline_execution` usable for reading runtime-only DAO metadata without opening Access.
+
 ## [v2.1.0] - 2026-07-08
 
 Minor release. Ships the foundation of the risk-based write execution policy so the routine Dysflow dev loop (`import_modules → test_vba → verify_code`) can opt into a developer mode that flips the dry-run default for routine tools, without weakening any existing gate.

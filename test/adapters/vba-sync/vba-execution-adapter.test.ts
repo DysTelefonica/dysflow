@@ -234,6 +234,39 @@ describe("VbaExecutionAdapter", () => {
     expect(callNames).toEqual(["delete_module", "import_modules", "run_vba", "delete_module"]);
   });
 
+  it("wraps the snippet in a Function that returns `result` (#786)", async () => {
+    // #786 — inline must be able to RETURN a value so it is usable for
+    // read-only introspection (e.g. `result = "Attrs=" & fld.Attributes`).
+    // The snippet is wrapped in a Function whose return is a bare `result`
+    // variable; a `Sub` wrapper would silently discard the value. Assert on
+    // the exact source written to the temp .bas — the byte contract the VBE
+    // imports.
+    const { adapter, fileSystem } = makeInlineAdapter();
+
+    await adapter.execute("vba_inline_execution", { code: 'result = "ok"' });
+
+    const written = fileSystem.writeFile.mock.calls[0]?.[1] as string;
+    expect(written).toContain("Public Function ExecuteInline() As Variant");
+    expect(written).toContain("ExecuteInline = result");
+    expect(written).not.toContain("Public Sub ExecuteInline");
+  });
+
+  it("runs the inline snippet by its BARE procedure name, not module-qualified (#786)", async () => {
+    // #786 — Application.Run treats a dotted prefix as a PROJECT qualifier, so
+    // passing "__dysflow_inline__.ExecuteInline" made Access look for a project
+    // named "__dysflow_inline__" and fail with "no encuentra el procedimiento".
+    // run_vba must receive the bare procedure name so the snippet resolves.
+    const { adapter, executeMappedTool } = makeInlineAdapter();
+
+    await adapter.execute("vba_inline_execution", { code: 'result = "ok"' });
+
+    const runCall = executeMappedTool.mock.calls.find((c) => c[0] === "run_vba");
+    expect(runCall, "expected a run_vba call").toBeDefined();
+    const runParams = runCall?.[1] as { procedureName?: string };
+    expect(runParams.procedureName).toBe("ExecuteInline");
+    expect(runParams.procedureName).not.toContain("__dysflow_inline__.");
+  });
+
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {
     const executeMappedTool = vi
       .fn()

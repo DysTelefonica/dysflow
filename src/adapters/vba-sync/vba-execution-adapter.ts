@@ -21,12 +21,20 @@ import {
 } from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
-// feat-759-no-compile (v1.19.0) — `EXECUTION_MAPPINGS.compile_vba` and
-// the inline-execution's explicit Compile step were removed. The
-// `compile_vba` MCP tool no longer exists; vba_inline_execution now
-// skips the explicit compile and lets `run_vba` surface any compile
-// error against the temp module as a regular run failure. See
-// openspec/specs/vba-inline-execution/spec.md.
+// feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool and the general
+// compile-and-save path were removed; user modules are compiled by the human
+// in Access. The `compile_vba` MCP tool no longer exists, and the inline path
+// deliberately does NOT compile — save-only import is enough for run_vba to
+// resolve the snippet (verified against real Access, #786).
+//
+// #786 — vba_inline_execution failed with "no encuentra el procedimiento
+// '__dysflow_inline__.ExecuteInline'". Root cause was NOT a missing compile: it
+// was the module-qualified procedure name passed to Application.Run, which
+// treats the dotted prefix as a PROJECT qualifier, so "__dysflow_inline__.X"
+// resolved to a non-existent project. The fix passes the bare procedure name
+// (see the run_vba call below) and wraps the snippet in a Function so a
+// `result = <expr>` assignment is returned to the caller.
+// See openspec/specs/vba-inline-execution/spec.md.
 const EXECUTION_MAPPINGS = {
   test_vba: mapping(
     "Run-Tests",
@@ -170,9 +178,10 @@ export class VbaExecutionAdapter {
       );
     }
 
-    // Guardrail (#533): the snippet is wrapped in Public Sub ExecuteInline()/End Sub,
-    // so a snippet that closes its own procedure block produces malformed VBA that
-    // Access refuses to import. Reject it and point the caller at run_vba.
+    // Guardrail (#533): the snippet is wrapped in Public Function ExecuteInline()/
+    // End Function, so a snippet that closes its own procedure block produces
+    // malformed VBA that Access refuses to import. Reject it and point the caller
+    // at run_vba.
     if (/\bEnd\s+(?:Sub|Function|Property)\b/i.test(rawCode)) {
       return failureResult(
         createDysflowError(
@@ -220,10 +229,17 @@ export class VbaExecutionAdapter {
     const folder = resolve(destinationRoot, "modules");
     const filePath = resolve(folder, `${moduleName}.bas`);
 
+    // The snippet runs inside a Function so it can return a value: a bare
+    // `result = <expr>` assignment in the snippet is surfaced to the caller as
+    // run_vba's `returnValue`. `result` is an implicit Variant (the wrapper
+    // module has no `Option Explicit`), Empty when the snippet never assigns it
+    // (→ null returnValue). This is what makes inline usable for read-only
+    // introspection (e.g. `result = "Attrs=" & fld.Attributes`) — see #786.
     const wrapper = `Attribute VB_Name = "${moduleName}"
-Public Sub ExecuteInline()
+Public Function ExecuteInline() As Variant
 ${rawCode}
-End Sub
+ExecuteInline = result
+End Function
 `;
 
     // 1. Delete pre-existing database module and file on disk
@@ -267,21 +283,20 @@ End Sub
       if (!importRes.ok) {
         inlineResult = importRes;
       } else {
-        // feat-759-no-compile (v1.19.0) — the inline path no longer makes
-        // an explicit `compile_vba` call. Save-only persistence (see
-        // openspec/specs/vba-manager-actions/spec.md "Save-only persistence")
-        // is the canonical mutation path; `run_vba` triggers Access to
-        // validate the procedure at call time, which surfaces any compile
-        // error against `__dysflow_inline__` as an explicit run failure.
-        // We no longer try to distinguish "compile error against inline"
-        // vs "compile error against another module" because the runtime
-        // does not compile — there is no compile error type to surface.
+        // #786 — run the freshly-imported snippet by its BARE procedure name.
+        // Save-only import (no compile) is sufficient for Application.Run to
+        // resolve it; run_vba surfaces any runtime error the snippet raises.
         inlineResult = await this.orchestrator.executeMappedTool(
           "run_vba",
           {
             ...inlineParams,
             moduleNames: [moduleName],
-            procedureName: `${moduleName}.ExecuteInline`,
+            // #786 — bare procedure name. Application.Run treats a dotted prefix
+            // as a PROJECT qualifier, not a module: "__dysflow_inline__.ExecuteInline"
+            // resolves to project "__dysflow_inline__" (which does not exist) and
+            // fails with "no encuentra el procedimiento". The procedure name is
+            // unique to the throwaway module, so the bare name resolves correctly.
+            procedureName: "ExecuteInline",
           },
           EXECUTION_MAPPINGS.run_vba,
         );

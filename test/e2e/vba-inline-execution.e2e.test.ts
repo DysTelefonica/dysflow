@@ -175,26 +175,75 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
     }
   });
 
-  it("runs temporary VBA snippet and cleans up files (no explicit compile in v1.19.0)", async () => {
-    // 1. Run inline execution with a simple VBA math print statement
+  // Parse the inner tool envelope out of the MCP text content. The transport
+  // `result.ok` only says the JSON-RPC call did not error — the inline tool
+  // reports its own success as an `ok` field inside the JSON payload. #786: the
+  // pre-fix bug returned transport-ok with an inner `ok:false` + "no encuentra
+  // el procedimiento", so a test that only checks `result.ok` misses it.
+  function parseInner(text: string): {
+    ok: boolean;
+    returnValue: unknown;
+    error: unknown;
+  } {
+    const parsed = JSON.parse(text) as {
+      ok?: boolean;
+      returnValue?: unknown;
+      error?: unknown;
+    };
+    return {
+      ok: parsed.ok === true,
+      returnValue: parsed.returnValue,
+      error: parsed.error,
+    };
+  }
+
+  it("runs a trivial snippet and returns its `result` value (#786)", async () => {
     const result = await callMcp(
       "vba_inline_execution",
-      {
-        projectId: "dysflow-inline-e2e",
-        code: "Debug.Print 2 + 2",
-      },
+      { projectId: "dysflow-inline-e2e", code: 'result = "ok"' },
       { timeoutMs: 120_000 },
     );
 
-    console.log("MCP Call Result:", JSON.stringify(result, null, 2));
     expect(result.ok).toBe(true);
+    const inner = parseInner(result.text);
+    expect(inner.error).toBeNull();
+    expect(inner.ok).toBe(true);
+    expect(inner.returnValue).toBe("ok");
 
-    // 2. Check that the modules/ folder inside src has no files matching _inline_
+    // Temp module is cleaned up from disk.
     const modulesDir = join(workspaceRoot, "src", "modules");
     if (existsSync(modulesDir)) {
       const files = readdirSync(modulesDir);
-      const inlineFiles = files.filter((f) => f.startsWith("_inline_"));
-      expect(inlineFiles.length).toBe(0);
+      expect(files.filter((f) => f.startsWith("__dysflow_inline__")).length).toBe(0);
     }
+  }, 150_000);
+
+  it("introspects DAO field Attributes via an inline snippet (#786)", async () => {
+    // The motivating use case: read runtime-only DAO metadata (Attributes)
+    // without opening Access. Reads the first field of the first non-system
+    // table so the test is fixture-agnostic.
+    const code = [
+      "Dim db As DAO.Database",
+      "Set db = CurrentDb()",
+      "Dim tbl As DAO.TableDef",
+      "For Each tbl In db.TableDefs",
+      'If Left(tbl.Name, 4) <> "MSys" Then',
+      'result = "Attrs=" & tbl.Fields(0).Attributes',
+      "Exit For",
+      "End If",
+      "Next tbl",
+    ].join("\n");
+
+    const result = await callMcp(
+      "vba_inline_execution",
+      { projectId: "dysflow-inline-e2e", code },
+      { timeoutMs: 120_000 },
+    );
+
+    expect(result.ok).toBe(true);
+    const inner = parseInner(result.text);
+    expect(inner.error).toBeNull();
+    expect(inner.ok).toBe(true);
+    expect(String(inner.returnValue)).toMatch(/^Attrs=\d+$/);
   }, 150_000);
 });

@@ -177,6 +177,10 @@ rows.push({
 await record("diagnostics", "doctor", { projectId, includeEnvironment: true });
 await record("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
 await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
+// #786 regression — inline execution must run a snippet and return its `result`.
+// (record() asserts the transport did not error; the deep inner-ok + returnValue
+// assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
+await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' });
 await record("operations", "list_access_operations", {});
 await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
