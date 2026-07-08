@@ -891,7 +891,19 @@ describe("MCP tool registration over core services", () => {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
         expect(result).toEqual({
           content: [
-            { type: "text", text: JSON.stringify({ toolName, input: { diff: true }, ok: true }) },
+            // Issue #785 (v2.1.1) — the dispatch seam injects the
+            // policy-driven effective dryRun default. These tools are
+            // read-only so the risk-driven default is `dryRun: true`.
+            // The wire shape between dispatcher and adapter changed in
+            // v2.1.1; routing + intent assertion is preserved.
+            {
+              type: "text",
+              text: JSON.stringify({
+                toolName,
+                input: { diff: true, dryRun: true },
+                ok: true,
+              }),
+            },
           ],
           isError: false,
           ok: true,
@@ -1043,9 +1055,12 @@ describe("MCP tool registration over core services", () => {
         content: [
           {
             type: "text",
+            // Issue #785 (v2.1.1) — `verify_code` is read-only; the
+            // risk-driven default is `dryRun: true`. The helper injects
+            // it because the caller omitted both dryRun and apply.
             text: JSON.stringify({
               toolName: "verify_code",
-              input: { timeoutMs: 120_000 },
+              input: { timeoutMs: 120_000, dryRun: true },
               ok: true,
             }),
           },

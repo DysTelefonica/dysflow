@@ -8,6 +8,7 @@ import type {
   DysflowMcpTool,
   McpWriteAccessResolver,
 } from "./result-translation.js";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 
 // ─── Re-exports — compatibility surface ───────────────────────────────────────
 
@@ -56,6 +57,10 @@ export function registerMcpTools(
   writeAccessResolver: McpWriteAccessResolver | undefined,
   env: Record<string, string | undefined>,
   allowedProcedures?: AllowedProcedures,
+  // Issue #785 (v2.1.1) — wire the v2.1.0 foundation. When the resolved
+  // policy is omitted, the dispatch defaults to `safe-by-default` so legacy
+  // call sites keep their existing behavior byte-for-byte.
+  writeExecutionPolicy?: WriteExecutionPolicy,
 ): DysflowMcpTool[] {
   const aliasTools = buildAliasTools(
     services,
@@ -69,7 +74,7 @@ export function registerMcpTools(
     (name): name is GeneratedDispatchToolName => !ALIAS_TOOL_NAMES.has(name),
   );
   const dispatchTools = dispatchToolNames.map((name) =>
-    createDispatchTool(name, services, writesEnabled, writeAccessResolver, env),
+    createDispatchTool(name, services, writesEnabled, writeAccessResolver, env, writeExecutionPolicy),
   );
 
   return registerMcpToolList([...currentTools, ...aliasTools, ...dispatchTools]);

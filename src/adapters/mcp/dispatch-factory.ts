@@ -4,6 +4,7 @@ import {
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
 import { isRecord } from "../../core/utils/index.js";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 
 import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -19,6 +20,7 @@ import {
 } from "./result-translation.js";
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
+import { resolveEffectiveDryRunInput } from "./write-execution-dispatch.js";
 
 // ─── F13 — deprecated-parameter strip ─────────────────────────────────────────
 
@@ -94,6 +96,13 @@ export function createDispatchTool(
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
   env: Record<string, string | undefined>,
+  // Issue #785 (v2.1.1) — resolved write-execution policy. Defaults to
+  // `safe-by-default` so legacy call sites (no `writeExecutionPolicy`
+  // option) keep byte-for-byte identical behavior. In `developer` mode the
+  // policy helper injects `dryRun: false` on `routine-dev-write` tools when
+  // the caller omitted both `dryRun` and `apply`; everywhere else
+  // (other modes, other risks) the helper returns the input verbatim.
+  writeExecutionPolicy: WriteExecutionPolicy = "safe-by-default",
 ): DysflowMcpTool {
   const definition = getToolDefinition(name);
   const schema = mcpSchemaFor(name);
@@ -130,9 +139,21 @@ export function createDispatchTool(
       // validation. See the `stripDeprecatedCompileParams` doc comment for
       // the rationale; tests pin the contract at
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
-      const normalizedInput = stripDeprecatedCompileParams(name, input);
+      let normalizedInput = stripDeprecatedCompileParams(name, input);
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) return invalidInput(validation);
+      // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
+      // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
+      // caller-supplied payload, untouched by the policy injection) and
+      // AFTER `validateInput` (so the helper only sees shape-valid input;
+      // an invalid payload is rejected with `MCP_INPUT_INVALID` before
+      // any policy application). `resolveEffectiveDryRunInput` returns
+      // the input verbatim when the caller expressed explicit intent
+      // (`dryRun` or `apply` key present) or when the tool is in the
+      // form mutation / catalog exempt family. Only
+      // `routine-dev-write` tools in `developer` mode without explicit
+      // flags receive `dryRun: false`.
+      normalizedInput = resolveEffectiveDryRunInput(name, writeExecutionPolicy, normalizedInput);
       // #694 — relink_directory rejects inline raw passwords before any write-gate
       // response, so callers always receive the security-specific remediation.
       // passwordEnv is resolved via the env callback and never appears in transcripts.
