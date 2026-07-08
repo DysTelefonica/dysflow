@@ -9,6 +9,7 @@ import {
 } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import {
   lintVbaModule,
   type VbaModuleLintRule,
@@ -481,6 +482,12 @@ export type CreateDysflowMcpToolsOptions = {
   // When omitted, the snapshot reports `humanCompilePending: false` (no
   // project in scope at startup).
   accessDbPath?: string;
+  // Issue #779 (v2.1.0) — risk-based write execution policy. Resolved from
+  // `.dysflow/project.json` `capabilities.writeExecutionPolicy` by the
+  // caller (stdio entry point). When omitted, the snapshot and the dispatch
+  // layer default to `"safe-by-default"` so legacy call sites keep their
+  // existing behavior.
+  writeExecutionPolicy?: WriteExecutionPolicy;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -495,6 +502,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     projectId,
     lintOverrides: lintRulesOverride = {},
     accessDbPath,
+    writeExecutionPolicy,
   } = options;
   const accessContextResolver: McpAccessContextResolver =
     accessContextResolverInput ??
@@ -580,6 +588,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       projectId,
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
+      writeExecutionPolicy,
     }),
     // issue #701 — read-only VBA procedure introspection
     {

@@ -1,8 +1,9 @@
 import type { AccessQueryAction } from "../../core/mapping/access-query-request-mapper.js";
+import type { ToolRisk } from "../../core/runtime/write-execution-policy.js";
 import type { AliasToolName } from "./alias-tools.js";
 import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
 
-// ─── Route table ──────────────────────────────────────────────────────────────
+// ─── Route table ─────────────────────────────────────────────────────────────
 
 /**
  * Closed union of dispatch route kinds.
@@ -25,52 +26,176 @@ import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
  * Re-introduction requires a deliberate type-widening PR (add the union
  * member, add a `case` to the dispatcher `switch`, and add an `MCP_TOOL_ROUTES`
  * entry). No consumer should smuggle it back via an `as McpToolRoute` cast.
+ *
+ * ## `risk` field (issue #779, v2.1.0)
+ *
+ * Additive metadata consumed by `resolveWriteExecutionPolicy()` to decide
+ * `effectiveDryRunDefault` per tool under the active policy mode. The risk
+ * field is orthogonal to `mutatesBinary` / `mutatesFilesystem`: a tool can
+ * be high-risk AND mutatesBinary:true (the destructive family) or
+ * low-risk AND mutatesBinary:true (the routine-dev-write family). The
+ * write-gate keeps using the existing mutates flags; risk only governs
+ * whether the *default* is `dryRun: true`.
+ *
+ * `process-control` risk lives behind the alias layer
+ * (`cleanup_access_operation`, `access_force_cleanup_orphaned`), NOT in
+ * `MCP_TOOL_ROUTES`.
  */
 export type McpToolRoute =
-  | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean }
-  | { kind: "query-read" }
-  | { kind: "query-maintenance"; queryMode: "read" | "write" };
+  | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean; risk: ToolRisk }
+  | { kind: "query-read"; risk: ToolRisk }
+  | { kind: "query-maintenance"; queryMode: "read" | "write"; risk: ToolRisk };
 
 export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolName>;
 
 export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = {
   // VBA sync — mutatesBinary:true tools always pass the write-gate (they mutate the .accdb).
-  export_modules: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
-  export_all: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
-  import_modules: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
-  import_all: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
-  list_objects: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  test_vba: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  export_modules: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: true,
+    risk: "destructive-write",
+  },
+  export_all: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: true,
+    risk: "destructive-write",
+  },
+  import_modules: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: false,
+    risk: "routine-dev-write",
+  },
+  import_all: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: false,
+    risk: "routine-dev-write",
+  },
+  list_objects: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false, risk: "read-only" },
+  test_vba: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "routine-dev-write",
+  },
   // verify_code is the single source/binary compare tool (read-only dry-run): it
   // does whole-project AND single-module comparison and only RECOMMENDS an
   // explicit import/export — it never mutates the .accdb. Keep mutatesBinary:false.
   // See src/core/services/vba-source-comparison.ts (compareSourceAgainstBinary).
-  verify_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  delete_module: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
-  generate_erd: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
-  fix_encoding: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
-  validate_form_spec: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  generate_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
-  catalog_add_control: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: true },
-  harvest_form_catalog: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  verify_code: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  delete_module: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: false,
+    risk: "destructive-write",
+  },
+  generate_erd: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  fix_encoding: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "protected-write",
+  },
+  validate_form_spec: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  generate_form: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  catalog_add_control: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  harvest_form_catalog: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   // inspect_form reads from the version-controlled source tree; no binary or filesystem mutation.
-  inspect_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  inspect_form: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   // compare_form reads two version-controlled source trees and runs a pure IR-level
   // diff; no binary, no filesystem mutation. The write-gate must never fire.
-  compare_form: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
+  compare_form: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   // lint_form_code is a static analyzer over the source tree. It opens no
   // .accdb, spawns no Access process, and writes nothing. Mutations are
   // explicitly false so the write-gate never fires for this tool.
-  lint_form_code: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  form_add_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
-  form_move_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
-  form_rename_control: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  lint_form_code: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  form_add_control: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  form_move_control: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  form_rename_control: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
   // slice 3 — serialize (read-only) + deserialize (write-gated with LoadFromText gate).
   // Deserialize reuses the slice-4 import_modules gate via vbaSyncToolService so the
   // binary is the single source of truth for the apply check (#616).
-  form_serialize: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  form_deserialize: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: true },
+  form_serialize: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  form_deserialize: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "destructive-write",
+  },
   // slice 5 (#618) — clone a form from a template, apply `{{Token}}` placeholders, write
   // the cloned form to a target path, route through the import_modules LoadFromText gate.
   // Default dry-run is the safe semantic; a real binary mutation requires apply:true.
@@ -78,28 +203,43 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    risk: "routine-dev-write",
   },
-  vba_orphan_audit: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false },
-  vba_inline_execution: { kind: "vba-sync", mutatesBinary: true, mutatesFilesystem: false },
+  vba_orphan_audit: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  vba_inline_execution: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: false,
+    risk: "arbitrary-write",
+  },
   // query maintenance (9)
-  list_links: { kind: "query-maintenance", queryMode: "read" },
-  export_queries: { kind: "query-maintenance", queryMode: "read" },
-  link_tables: { kind: "query-maintenance", queryMode: "write" },
-  relink_tables: { kind: "query-maintenance", queryMode: "write" },
-  localize_backend_links: { kind: "query-maintenance", queryMode: "write" },
-  unlink_table: { kind: "query-maintenance", queryMode: "write" },
-  import_queries: { kind: "query-maintenance", queryMode: "write" },
-  compact_repair: { kind: "query-maintenance", queryMode: "write" },
-  relink_directory: { kind: "query-maintenance", queryMode: "write" },
+  list_links: { kind: "query-maintenance", queryMode: "read", risk: "read-only" },
+  export_queries: { kind: "query-maintenance", queryMode: "read", risk: "read-only" },
+  link_tables: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },
+  relink_tables: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },
+  localize_backend_links: {
+    kind: "query-maintenance",
+    queryMode: "write",
+    risk: "routine-dev-write",
+  },
+  unlink_table: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },
+  import_queries: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },
+  compact_repair: { kind: "query-maintenance", queryMode: "write", risk: "protected-write" },
+  relink_directory: { kind: "query-maintenance", queryMode: "write", risk: "protected-write" },
   // query read (8)
-  list_tables: { kind: "query-read" },
-  list_linked_tables: { kind: "query-read" },
-  get_schema: { kind: "query-read" },
-  count_rows: { kind: "query-read" },
-  distinct_values: { kind: "query-read" },
-  compare_backends: { kind: "query-read" },
-  list_access_files: { kind: "query-read" },
-  get_relationships: { kind: "query-read" },
+  list_tables: { kind: "query-read", risk: "read-only" },
+  list_linked_tables: { kind: "query-read", risk: "read-only" },
+  get_schema: { kind: "query-read", risk: "read-only" },
+  count_rows: { kind: "query-read", risk: "read-only" },
+  distinct_values: { kind: "query-read", risk: "read-only" },
+  compare_backends: { kind: "query-read", risk: "read-only" },
+  list_access_files: { kind: "query-read", risk: "read-only" },
+  get_relationships: { kind: "query-read", risk: "read-only" },
 };
 
 /**
