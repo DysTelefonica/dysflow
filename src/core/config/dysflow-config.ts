@@ -5,6 +5,10 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
+import {
+  parseWriteExecutionPolicyValue,
+  type WriteExecutionPolicy,
+} from "../runtime/write-execution-policy.js";
 import { NO_DISCOVERY } from "../services/allowed-procedures-discovery.js";
 import { isAbsolutePath, REDACTED_SECRET, stringValue } from "../utils/index.js";
 
@@ -64,6 +68,24 @@ export type DysflowProjectCapabilities = {
   lint?: {
     rules?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
   };
+  /**
+   * Issue #779 (v2.1.0) — risk-based write execution policy. Defaults to
+   * `"safe-by-default"` (the historical contract: every write-class tool
+   * defaults to `dryRun: true`). Switching to `"developer"` is opt-in and
+   * flips `routine-dev-write` tools (import_modules, test_vba, link_tables,
+   * generate_form, ...) to execute-by-default. Destructive / arbitrary /
+   * process-control tools stay gated in either mode.
+   *
+   * Recognized values:
+   *  - `"safe-by-default"` — historical, every write-class tool default
+   *    dry-run, caller must pass `dryRun: false` or `apply: true` to commit.
+   *  - `"developer"` — opt-in routine-dev-loop mode (skip dry-run ceremony).
+   *
+   * Any other string is rejected at boot with
+   * `CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY` so a typo surfaces immediately
+   * rather than silently falling back to `safe-by-default`.
+   */
+  writeExecutionPolicy?: WriteExecutionPolicy;
 };
 
 /** #731 — one of the known lint rule ids. */
@@ -129,6 +151,21 @@ export type DysflowConfig = {
    * config has no `capabilities.lint` block.
    */
   lintRulesOverride?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
+  /**
+   * Issue #779 (v2.1.0) — resolved write-execution policy from
+   * `capabilities.writeExecutionPolicy`. `undefined` when the project
+   * config has no value or the field is absent (back-compat with every
+   * project.json before v2.1.0). Consumers that need a non-undefined value
+   * resolve to `safe-by-default` via `DEFAULT_WRITE_EXECUTION_POLICY`.
+   *
+   * The MCP layer reads this so it can:
+   *  - surface the active mode in `get_capabilities`,
+   *  - compute the per-tool `effectiveDryRunDefault` map,
+   *  - decide whether `export_modules` / `export_all` need
+   *    `confirmOverwriteSource: true` when the destination
+   *    overlaps the active source root.
+   */
+  writeExecutionPolicy?: WriteExecutionPolicy;
 };
 
 export type RedactedDysflowConfig = Omit<
@@ -286,6 +323,11 @@ export function redactDysflowConfig(config: DysflowConfig): RedactedDysflowConfi
     backendPasswordEnv: config.backendPasswordEnv,
     configPath: config.configPath,
     httpTokenEnv: config.httpTokenEnv,
+    // #779 — the write-execution policy carries no secrets; pass it
+    // through unchanged (including `undefined`) so consumer-side
+    // snapshots can surface the active mode without round-tripping
+    // through the un-redacted form.
+    writeExecutionPolicy: config.writeExecutionPolicy,
   };
 
   return {
@@ -322,6 +364,10 @@ function buildExplicitConfig(
     ),
     httpToken: resolvePassword(input.httpToken, env.DYSFLOW_HTTP_TOKEN),
     httpTokenEnv: undefined,
+    // #779 — `writeExecutionPolicy` left undefined. The MCP layer
+    // resolves it to `safe-by-default` via `DEFAULT_WRITE_EXECUTION_POLICY`
+    // (see write-execution-policy.ts) so this path stays in the
+    // historical contract without introducing a behavioral branch here.
   });
 }
 
@@ -438,11 +484,14 @@ function buildProjectConfig(
   // v1.15.0; the rejection happens earlier in this function (see top-level
   // guard above) so by the time we get here, the capabilities block is
   // the only authoritative source.
+  const capabilitiesResolution = resolveCapabilities(raw);
+  if (!capabilitiesResolution.ok) return capabilitiesResolution;
   const {
     allowWrites,
     allowedProcedures: capabilitiesAllowedProcedures,
     lintRulesOverride,
-  } = resolveCapabilities(raw);
+    writeExecutionPolicy,
+  } = capabilitiesResolution.data;
   const discoveryResult =
     capabilitiesAllowedProcedures === undefined
       ? (input.discoverFromSrcRoot ?? NO_DISCOVERY)(destinationRoot)
@@ -471,6 +520,9 @@ function buildProjectConfig(
     // #731 — per-rule lint overrides from `capabilities.lint.rules`.
     // Undefined when the project config has no lint block.
     ...(lintRulesOverride !== undefined ? { lintRulesOverride } : {}),
+    // #779 — risk-based write-execution policy. Defaults to
+    // `safe-by-default` when the field is absent.
+    writeExecutionPolicy,
   });
 }
 
@@ -764,12 +816,21 @@ function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
  * shape is preserved so a future PR can wire the denylist without breaking
  * `.dysflow/project.json` consumers.
  */
-function resolveCapabilities(raw: DysflowProjectConfig): {
+function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
   allowWrites: boolean;
   allowedProcedures: readonly string[] | undefined;
   /** #731 — per-rule lint overrides from `capabilities.lint.rules`. */
   lintRulesOverride: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined;
-} {
+  /**
+   * Issue #779 — risk-based write-execution policy. `undefined` when the
+   * `capabilities` block does not declare one (back-compat with every
+   * project.json before v2.1.0). Any declared value is validated against
+   * the closed union; unparseable values surface as
+   * `CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY` so a typo cannot silently flip
+   * the runtime mode.
+   */
+  writeExecutionPolicy: WriteExecutionPolicy | undefined;
+}> {
   const capabilities = raw.capabilities;
   // T18: the top-level `allowWrites` / `allowedProcedures` fields were
   // removed in v1.15.0. The caller (`buildProjectConfig`) rejects them
@@ -778,12 +839,42 @@ function resolveCapabilities(raw: DysflowProjectConfig): {
   // path that silently produced the wrong runtime gate is gone.
   const capabilitiesAllowWrites = capabilities?.allowWrites;
   const capabilitiesAllow = capabilities?.procedures?.allow;
+  const capabilitiesWriteExecutionPolicy = capabilities?.writeExecutionPolicy;
 
-  return {
+  // #779 — strict validation. The defense-in-depth wrapper
+  // (`parseWriteExecutionPolicyValue`) lets through only the closed union.
+  // Anything else surfaces as a typed error so the operator fixes
+  // `project.json` instead of the runtime silently flipping to
+  // `safe-by-default` (which would mask a typo that was supposed to opt
+  // into the developer loop).
+  let writeExecutionPolicy: WriteExecutionPolicy | undefined;
+  if (capabilitiesWriteExecutionPolicy !== undefined) {
+    if (typeof capabilitiesWriteExecutionPolicy !== "string") {
+      return failureResult(
+        createDysflowError(
+          "CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY",
+          `capabilities.writeExecutionPolicy must be a string. Received: ${JSON.stringify(capabilitiesWriteExecutionPolicy)}. Valid values: "safe-by-default", "developer".`,
+        ),
+      );
+    }
+    const parsed = parseWriteExecutionPolicyValue(capabilitiesWriteExecutionPolicy);
+    if (parsed === undefined) {
+      return failureResult(
+        createDysflowError(
+          "CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY",
+          `capabilities.writeExecutionPolicy='${capabilitiesWriteExecutionPolicy}' is not a recognized policy. Valid values: "safe-by-default", "developer".`,
+        ),
+      );
+    }
+    writeExecutionPolicy = parsed;
+  }
+
+  return successResult({
     allowWrites: capabilitiesAllowWrites === true,
     allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
     lintRulesOverride: normalizeLintRulesOverride(capabilities?.lint?.rules),
-  };
+    writeExecutionPolicy,
+  });
 }
 
 const KNOWN_LINT_RULE_IDS: readonly LintRuleId[] = [
