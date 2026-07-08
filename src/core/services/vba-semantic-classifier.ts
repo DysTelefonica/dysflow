@@ -442,26 +442,19 @@ function foldLineOutsideStringsAndComments(line: string): string {
  * glyph change inside a string is runtime-visible and must stay functional,
  * consistent with how casing is folded. All ASCII content outside strings is kept,
  * so any real change in executable code survives.
+ *
+ * Historical note (#781 cleanup): an earlier string-blind variant named
+ * `neutralizeLossyEncodingEverywhere` was REMOVED. It mapped EVERY non-ASCII
+ * char to the sentinel, including glyphs inside string literals, which
+ * silently masked functional changes such as `→` becoming `?` in a log
+ * message. The string-aware form above is the only neutralizer in src/.
+ * If a future change reintroduces the blind variant for any reason, the
+ * tests in `test/core/services/vba-semantic-classifier.test.ts` are the
+ * regression pin — they assert that string-literal contents survive
+ * unchanged.
  */
 export function neutralizeLossyEncoding(text: string): string {
   return text.split("\n").map(neutralizeLineOutsideStrings).join("\n");
-}
-
-/**
- * Neutralizes lossy export glyphs everywhere, including string literals.
- *
- * Use only as a late equality/actionability guard after normal structural,
- * casing, and functional checks. This catches Access export/codepage artifacts
- * such as `→` becoming `?` in log strings without masking ordinary ASCII text
- * changes.
- */
-export function neutralizeLossyEncodingEverywhere(text: string): string {
-  return Array.from(text)
-    .map((ch) => {
-      const code = ch.codePointAt(0) ?? 0;
-      return code > 0x7e || ch === "?" ? LOSSY_SENTINEL : ch;
-    })
-    .join("");
 }
 
 function neutralizeLineOutsideStrings(line: string): string {

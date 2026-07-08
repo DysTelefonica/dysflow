@@ -13,6 +13,7 @@ import {
   type ClassifyVbaPairInput,
   classifyVbaPair,
   FORM_NOISE_KEYS,
+  neutralizeLossyEncoding,
   type SemanticClassification,
   type VbaSemanticCategory,
 } from "../../../src/core/services/vba-semantic-classifier";
@@ -263,12 +264,17 @@ End`;
   // encodingOnly. That assertion violated the AGENTS.md contract ("A glyph
   // change inside a quoted string stays functional") and was the visible bug
   // fixed in this commit: lines 951-954 and 1029-1032 of the classifier used
-  // the blind neutralizeLossyEncodingEverywhere variant which maps every
-  // non-ASCII char (including those inside string literals) to a sentinel,
-  // hiding a real runtime-visible string difference as encoding-only noise.
-  // A log call's literal argument is no exception — the user-facing contract
-  // is the same as for MsgBox: a glyph the user sees at runtime must surface
-  // as functional.
+  // a blind string-neutralize variant which mapped every non-ASCII char
+  // (including those inside string literals) to a sentinel, hiding a real
+  // runtime-visible string difference as encoding-only noise. A log call's
+  // literal argument is no exception — the user-facing contract is the same
+  // as for MsgBox: a glyph the user sees at runtime must surface as
+  // functional.
+  //
+  // #781 cleanup: the blind variant was `neutralizeLossyEncodingEverywhere`
+  // and is REMOVED from src/. The string-aware `neutralizeLossyEncoding` is
+  // the only neutralizer now; this test pins its behavior so the blind
+  // variant cannot be re-introduced silently.
   it("flags a glyph swap inside a string literal as functional (actionable), not encodingOnly — universal contract, applies to log calls too (#T14)", () => {
     const sourceText = `Option Compare Database
 Option Explicit
@@ -1818,7 +1824,10 @@ describe("toggle normalization is name-scoped (#T15 inspector)", () => {
 // #T14 — encodingOnly MUST NOT hide a glyph change inside a runtime-visible
 // string literal (inspector finding, regression guard for the post-normalization
 // sites at vba-semantic-classifier.ts:951-954 and :1029-1032 which previously
-// used the blind neutralizeLossyEncodingEverywhere variant).
+// used the string-blind neutralizer). The blind variant was named
+// `neutralizeLossyEncodingEverywhere` and is REMOVED from src/ as part of the
+// #781 cleanup — `neutralizeLossyEncoding` (string-aware) is the only
+// neutralizer now. These tests pin the surviving variant's behavior.
 //
 // AGENTS.md contract: "A glyph change inside a quoted string stays functional."
 // This applies universally — MsgBox, Debug.Print, AddLog, anywhere. The user
@@ -1859,10 +1868,11 @@ describe("encodingOnly — runtime-visible string content (#T14 inspector)", () 
 
   it("flags a non-ASCII glyph change in a string assigned to a variable as functional (actionable)", () => {
     // Both sides have the same ASCII prefix ("caf") and differ only by the
-    // accented glyph inside the string literal ('é' vs 'è'). The blind
-    // neutralizeLossyEncodingEverywhere maps both glyphs to the same sentinel
-    // and equalizes the texts — that's the bug. The string-aware normalizer
-    // keeps the glyphs and the texts differ.
+    // accented glyph inside the string literal ('é' vs 'è'). The string-aware
+    // `neutralizeLossyEncoding` keeps the glyphs inside string literals and
+    // the texts differ. (Pre-#T14 the blind variant `neutralizeLossyEncodingEverywhere`
+    // mapped both glyphs to the same sentinel and equalized the texts — that
+    // was the bug; the variant was REMOVED in #781 cleanup.)
     const sourceText =
       'Option Explicit\nPublic Sub Order()\n    Dim msg As String\n    msg = "café"\n    MsgBox msg\nEnd Sub';
     const binaryText =
@@ -1872,5 +1882,56 @@ describe("encodingOnly — runtime-visible string content (#T14 inspector)", () 
 
     expect(result.classification).not.toBe("encodingOnly");
     expect(result.actionable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #781 cleanup — neutralizeLossyEncoding (string-aware) is the only
+// neutralizer in src/. The string-blind variant `neutralizeLossyEncodingEverywhere`
+// was REMOVED. These unit-level tests pin the surviving function so the
+// string-blind variant cannot be re-introduced silently.
+// ---------------------------------------------------------------------------
+
+describe("neutralizeLossyEncoding (string-aware, only neutralizer in src/)", () => {
+  it("maps a non-ASCII glyph OUTSIDE a string literal to the LOSSY sentinel", () => {
+    // Identifier with a non-ASCII char (Access export would mojibake this to
+    // '?' or to a different glyph on a Windows-1252 export). The neutralizer
+    // maps it to a single sentinel so equality checks collapse mojibake variants.
+    const text = "Public Sub Men\u00fa()\nEnd Sub";
+    const neutralized = neutralizeLossyEncoding(text);
+    // Identifier body is OUTSIDE any string literal -> sentinel collapsed.
+    expect(neutralized).not.toContain("\u00fa");
+  });
+
+  it("preserves the glyphs INSIDE a string literal verbatim (the #T14 contract)", () => {
+    // The user's user-facing string must NOT be neutralized — a glyph change
+    // inside a quoted literal is runtime-visible and must surface as a
+    // functional diff (not as encoding-only noise). The string-aware
+    // neutralizer leaves string-literal bodies alone.
+    const text = 'Public Sub Show()\n    MsgBox "Men\u00fa principal", vbInformation\nEnd Sub';
+    const neutralized = neutralizeLossyEncoding(text);
+    // The 'ú' inside the MsgBox string survives.
+    expect(neutralized).toContain("\u00fa");
+    expect(neutralized).toContain('"Men\u00fa principal"');
+  });
+
+  it("preserves the encoded-mojibake '?' inside a string literal verbatim", () => {
+    // The blind `neutralizeLossyEncodingEverywhere` variant mapped '?' anywhere
+    // to the sentinel — including inside quoted strings. That hid real
+    // differences (e.g. a Spanish log line where 'ú' was replaced with '?' by
+    // the export codepage). The string-aware neutralizer preserves the '?' so
+    // the diff stays actionable.
+    const text = 'Public Sub Show()\n    MsgBox "Men? principal", vbInformation\nEnd Sub';
+    const neutralized = neutralizeLossyEncoding(text);
+    expect(neutralized).toContain('"Men? principal"');
+  });
+
+  it("'?' OUTSIDE a string literal IS mapped to the sentinel", () => {
+    // The sentinel-folding behavior outside strings stays — the only thing the
+    // blind variant got right. The string-aware variant matches it for code
+    // outside string literals and diverges from it only inside strings.
+    const text = "Public Sub Men?()\nEnd Sub";
+    const neutralized = neutralizeLossyEncoding(text);
+    expect(neutralized).not.toContain("Men?");
   });
 });
