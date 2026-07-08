@@ -6,13 +6,20 @@ import {
 import { isRecord } from "../../core/utils/index.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 
-import { invalidInput, isWriteAllowed, mcpSchemaFor, writesDisabled } from "./dispatch-common.js";
+import {
+  exportSourceGuardRefused,
+  invalidInput,
+  isWriteAllowed,
+  mcpSchemaFor,
+  writesDisabled,
+} from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
 import { MCP_TOOL_ROUTES, queryActionFor } from "./dispatch-routes.js";
 import {
   type DysflowMcpServices,
   type DysflowMcpTool,
   extractAccessPathFromInput,
+  type McpAccessContextResolver,
   type McpWriteAccessResolver,
   resolveInScopeSecrets,
   translateCoreResultToMcpContent,
@@ -20,7 +27,10 @@ import {
 } from "./result-translation.js";
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
-import { resolveEffectiveDryRunInput } from "./write-execution-dispatch.js";
+import {
+  requiresExportSourceConfirmation,
+  resolveEffectiveDryRunInput,
+} from "./write-execution-dispatch.js";
 
 // ─── F13 — deprecated-parameter strip ─────────────────────────────────────────
 
@@ -103,6 +113,14 @@ export function createDispatchTool(
   // the caller omitted both `dryRun` and `apply`; everywhere else
   // (other modes, other risks) the helper returns the input verbatim.
   writeExecutionPolicy: WriteExecutionPolicy = "safe-by-default",
+  // Issue #785 (v2.1.1) — per-call MCP access-context resolver used by
+  // the export-source guard to read the project's active source root.
+  // Optional; when omitted the guard is best-effort (no refusal for
+  // would-be source-overlap cases that depend on the project root) but
+  // keeps every existing contract intact. Production wiring
+  // (`createDysflowMcpTools` in tools.ts) forwards the same resolver
+  // already wired for the canonical tool handlers.
+  accessContextResolver?: McpAccessContextResolver,
 ): DysflowMcpTool {
   const definition = getToolDefinition(name);
   const schema = mcpSchemaFor(name);
@@ -223,6 +241,63 @@ export function createDispatchTool(
       }
       switch (route.kind) {
         case "vba-sync":
+          // Issue #785 (v2.1.1) — export-source guard fires here, before
+          // forwarding to `vbaSyncToolService.execute`. The guard is
+          // policy-driven (developer mode only), execute-mode-only (plan
+          // calls bypass via the dispatch-seam `dryRun` injection), and
+          // bypassed by `confirmOverwriteSource: true`.
+          //
+          // Source-root resolution priority:
+          //   1. The MCP access-context resolver (when provided) — the
+          //      authoritative project-level source root from the loaded
+          //      project config.
+          //   2. Fallback: the caller's `params.destinationRoot` — what
+          //      THEY declared as their source/exec root. This is not
+          //      authoritative (the resolver is) but lets the guard fire
+          //      in tests and in single-project servers without the
+          //      resolver, AND catches the common mistake of
+          //      `exportPath: <caller-declared-root>`.
+          //
+          // Project-resolution failures must NOT escalate into a refusal:
+          // the export-source guard is best-effort; the write-gate and
+          // the adapter-level guards remain authoritative.
+          let sourceRootForGuard: string | undefined;
+          if (accessContextResolver !== undefined) {
+            try {
+              const contextResult = await accessContextResolver(normalizedInput);
+              if (contextResult.ok) {
+                sourceRootForGuard = contextResult.data.destinationRoot;
+              }
+            } catch {
+              // Fall through to the input-derived fallback.
+            }
+          }
+          if (sourceRootForGuard === undefined && isRecord(normalizedInput)) {
+            const fallbackDestinationRoot = normalizedInput.destinationRoot;
+            if (typeof fallbackDestinationRoot === "string") {
+              sourceRootForGuard = fallbackDestinationRoot;
+            }
+          }
+          if (sourceRootForGuard !== undefined) {
+            const destinationForGuard = isRecord(normalizedInput)
+              ? (typeof normalizedInput.exportPath === "string"
+                  ? normalizedInput.exportPath
+                  : typeof normalizedInput.destinationRoot === "string"
+                    ? normalizedInput.destinationRoot
+                    : undefined)
+              : undefined;
+            const refusal = requiresExportSourceConfirmation(name, writeExecutionPolicy, normalizedInput, {
+              destination: destinationForGuard,
+              sourceRoot: sourceRootForGuard,
+            });
+            if (refusal !== undefined) {
+              return exportSourceGuardRefused({
+                toolName: refusal.toolName,
+                destination: refusal.destination,
+                sourceRoot: refusal.sourceRoot,
+              });
+            }
+          }
           if (services.vbaSyncToolService !== undefined) {
             // PR-1 (issue #762, v1.20.0) — wrap the vba-sync result with the
             // human-compile reminder surface when the per-project pending flag

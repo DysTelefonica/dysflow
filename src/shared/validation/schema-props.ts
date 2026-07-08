@@ -107,6 +107,18 @@ export const SCHEMA_PROPS = {
     description:
       "Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default).",
   } as JsonSchemaProperty,
+  // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
+  // guard. When the caller passes confirmOverwriteSource: true AND the
+  // destination overlaps the project's active source root AND the policy
+  // is `developer` AND the call is in execute mode, the guard fires its
+  // refusal; this field bypasses the guard for callers who have
+  // reviewed the destination and accept the overwrite risk. Ignored in
+  // `safe-by-default` mode (the policy never reaches the guard).
+  confirmOverwriteSource: {
+    type: "boolean",
+    description:
+      "Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path; ignored otherwise.",
+  } as JsonSchemaProperty,
   allowTables: {
     type: "array",
     items: { type: "string" },

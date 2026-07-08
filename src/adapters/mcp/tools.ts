@@ -1042,5 +1042,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // capabilities snapshot; this just widens the seam so the dispatch
     // tools also consult the same resolved value.
     writeExecutionPolicy,
+    // Issue #785 (v2.1.1, capa 4) — forward the MCP access-context resolver
+    // (already constructed above) so the export-source guard can read the
+    // project's active source root before forwarding to vbaSyncToolService.
+    accessContextResolver,
   );
 }

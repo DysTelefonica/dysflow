@@ -6,6 +6,7 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
+  McpAccessContextResolver,
   McpWriteAccessResolver,
 } from "./result-translation.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
@@ -61,6 +62,12 @@ export function registerMcpTools(
   // policy is omitted, the dispatch defaults to `safe-by-default` so legacy
   // call sites keep their existing behavior byte-for-byte.
   writeExecutionPolicy?: WriteExecutionPolicy,
+  // Issue #785 (v2.1.1, capa 4) — forwarded to `createDispatchTool` so
+  // the export-source guard has access to the resolved project context
+  // (specifically the project's `destinationRoot`, which the guard
+  // compares the export destination against). When omitted, the guard
+  // is best-effort with no project-root comparison.
+  accessContextResolver?: McpAccessContextResolver,
 ): DysflowMcpTool[] {
   const aliasTools = buildAliasTools(
     services,
@@ -74,7 +81,15 @@ export function registerMcpTools(
     (name): name is GeneratedDispatchToolName => !ALIAS_TOOL_NAMES.has(name),
   );
   const dispatchTools = dispatchToolNames.map((name) =>
-    createDispatchTool(name, services, writesEnabled, writeAccessResolver, env, writeExecutionPolicy),
+    createDispatchTool(
+      name,
+      services,
+      writesEnabled,
+      writeAccessResolver,
+      env,
+      writeExecutionPolicy,
+      accessContextResolver,
+    ),
   );
 
   return registerMcpToolList([...currentTools, ...aliasTools, ...dispatchTools]);

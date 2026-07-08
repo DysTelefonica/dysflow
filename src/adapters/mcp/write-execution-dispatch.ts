@@ -103,6 +103,7 @@ export function resolveEffectiveDryRunInput(
  */
 export type ExportSourceConfirmationRefusal = {
   code: "EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION";
+  message: string;
   toolName: string;
   destination: string;
   sourceRoot: string;
@@ -160,15 +161,13 @@ export function requiresExportSourceConfirmation(
   // helper for non-vba-sync routes, so the check is defensive.
   if (toolName !== "export_modules" && toolName !== "export_all") return undefined;
 
-  // Execute mode = explicit caller intent (dryRun:false or apply:true).
-  // The destructive-write policy default is dryRun:true, so the absence
-  // of explicit intent means the caller is in plan mode and the guard
-  // never needs to fire (the export ships a plan-shaped result).
-  const isExecuteMode =
-    record.dryRun === false || record.apply === true;
-  if (!isExecuteMode) return undefined;
-
-  // Explicit confirmation bypasses the guard.
+  // Explicit confirmation bypasses the guard (the caller accepts the
+  // overwrite risk on top of the policy and write-gate permits).
+  // Issue #785 acceptance criteria — the guard fires regardless of
+  // dryRun/apply; the dispatch seam surfaces the refusal before any
+  // plan or commit begins. `safe-by-default` mode never reaches this
+  // branch (handled by `requiresConfirmOverwriteSource === false`
+  // above).
   if (record.confirmOverwriteSource === true) return undefined;
 
   const destination = typeof paths.destination === "string" ? paths.destination : undefined;
@@ -176,14 +175,16 @@ export function requiresExportSourceConfirmation(
   if (destination === undefined || sourceRoot === undefined) return undefined;
   if (!pathOverlapsSourceRoot(destination, sourceRoot)) return undefined;
 
+  const remediation =
+    `Refusing ${toolName}: destination ${destination} overlaps the project's active source root (${sourceRoot}). ` +
+    `Pass confirmOverwriteSource: true to confirm the overwrite, or point exportPath / destinationRoot outside the project's source tree.`;
   return {
     code: "EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION",
+    message: remediation,
     toolName,
     destination,
     sourceRoot,
-    remediation:
-      `Refusing ${toolName}: destination ${destination} overlaps the project's active source root (${sourceRoot}). ` +
-      `Pass confirmOverwriteSource: true to confirm the overwrite, or point exportPath / destinationRoot outside the project's source tree.`,
+    remediation,
   };
 }
 
