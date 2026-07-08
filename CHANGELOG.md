@@ -1,5 +1,19 @@
 # Changelog
 
+## [v2.0.1] - 2026-07-08
+
+Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos sobre v2.0.0; todos confirmados contra el source y corregidos.
+
+### Fixed
+
+- **orphan-cleanup** (#781 P2): dedupe headless-gate + revalidate-before-kill sequence. `scanAndCleanOrphans` y `retireUnownedRecord` ya no duplican la coreografía; se extrajo un helper privado `killIfHeadlessAccess` con los mismos diagnostic codes (`CLEANUP_RACE_PID_REUSED`).
+- **powershell** (#781 P2): `spawnPowerShellProcess` ahora distingue "pwsh no encontrado / spawn ENOENT" de un timeout-kill. El resultado lleva un campo `spawnError?: string` y los call-sites en `vba-sync-adapter` lo surfacing con un diagnostic code `POWERSHELL_SPAWN_FAILED`.
+- **mcp** (#781 P3): `createDysflowMcpTools` pasa de 9 parámetros posicionales a un options object. Renames: `writesEnabled` → `writes`, `lintRulesOverride` → `lintOverrides`. Comportamiento idéntico para call-sites que omiten campos opcionales.
+
+### Removed
+
+- **vba-semantic-classifier** (#781 cleanup): `neutralizeLossyEncodingEverywhere` borrado. Era código muerto desde T14 (sólo lo referenciaban tests que documentaban la conducta vieja del bug #1) y una función-trampa que un edit futuro podría re-cablear.
+
 ## [v2.0.0] - 2026-07-08
 
 ### BREAKING CHANGES
