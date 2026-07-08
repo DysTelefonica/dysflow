@@ -24,7 +24,9 @@ function makeBaseServices(): DysflowMcpServices {
 
 describe("detect_dead_code — read-only tools stay available when writes are disabled (#705)", () => {
   it("is registered AND the handler succeeds when the write gate is closed", async () => {
-    const tools = createDysflowMcpTools(makeBaseServices(), false);
+    const tools = createDysflowMcpTools({
+      services: makeBaseServices(),
+    });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool).toBeDefined();
 

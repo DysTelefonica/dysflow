@@ -5,7 +5,7 @@
 // failures would only surface in the 30-minute `node E2E_testing/mcp-e2e.mjs`
 // run. This test catches the same regressions in <100ms by parsing the
 // e2e source, extracting every record() call's `(area, tool)` pair,
-// and asserting each tool name exists in `createDysflowMcpTools()`.
+// and asserting each tool name exists in `createDysflowMcpTools({})`.
 //
 // Why the registry call matters: `createDysflowMcpTools` is the
 // production tool surface. If a tool is renamed, this test catches it
@@ -51,12 +51,14 @@ function extractRecordCalls(source: string): ParsedCall[] {
   return calls;
 }
 
-describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools (#fix-e2e-tool-existence)", () => {
+describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools({ services: #fix-e2e-tool-existence })", () => {
   const src = readFileSync(MCP_E2E_PATH, "utf8");
   const tools = createDysflowMcpTools({
-    vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
-    queryService: { execute: async () => successResult({ rows: [] }) },
-    diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    services: {
+      vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+      queryService: { execute: async () => successResult({ rows: [] }) },
+      diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    },
   });
   const advertised = new Set(
     tools.filter((t) => !buildHiddenToolRegistry(tools).has(t.name)).map((t) => t.name),

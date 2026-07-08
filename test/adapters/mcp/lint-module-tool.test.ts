@@ -13,15 +13,13 @@ function makeBaseServices() {
   };
 }
 
-function getTool(accessContextResolver?: Parameters<typeof createDysflowMcpTools>[5]) {
-  const tools = createDysflowMcpTools(
-    makeBaseServices() as DysflowMcpServices,
-    false,
-    undefined,
-    process.env,
-    undefined,
-    accessContextResolver,
-  );
+function getTool(
+  accessContextResolver?: Parameters<typeof createDysflowMcpTools>[0]["accessContextResolver"],
+) {
+  const tools = createDysflowMcpTools({
+    services: makeBaseServices() as DysflowMcpServices,
+    accessContextResolver: accessContextResolver,
+  });
   const tool = tools.find((t) => t.name === "lint_module");
   if (tool === undefined) throw new Error("lint_module tool not found");
   return tool;

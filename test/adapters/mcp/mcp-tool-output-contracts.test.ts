@@ -152,7 +152,9 @@ function sorted(values: readonly string[]) {
 
 describe("MCP tool output contract inventory", () => {
   it("classifies every registered MCP tool name into exactly one output contract group", () => {
-    const registeredToolNames = createDysflowMcpTools(makeServices()).map((tool) => tool.name);
+    const registeredToolNames = createDysflowMcpTools({ services: makeServices() }).map(
+      (tool) => tool.name,
+    );
     const expectedRegisteredNames = [...MODERN_TOOL_NAMES, ...DYSFLOW_MCP_TOOL_NAMES];
     const groupedToolNames = Object.values(OUTPUT_CONTRACT_GROUPS).flat();
 
@@ -195,7 +197,10 @@ describe("MCP tool output contract inventory", () => {
     const cleanupService = new FakeCleanupService();
     // force:true cleanup is gated behind the MCP write-gate (#509); enable writes so this
     // contract test exercises the translation path rather than the write-disabled refusal.
-    const tools = createDysflowMcpTools(makeServices(cleanupService), true);
+    const tools = createDysflowMcpTools({
+      services: makeServices(cleanupService),
+      writes: true,
+    });
     const cleanupInput = {
       operationId: "op-cleanup-contract",
       accessPath: "C:/data/app.accdb",

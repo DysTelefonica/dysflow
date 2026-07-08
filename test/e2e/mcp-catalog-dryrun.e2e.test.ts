@@ -59,7 +59,9 @@ async function createHarness(tools: ToolsInput): Promise<{
 describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
   it("catalog_add_control with no dryRun/apply defaults to dry-run plan (writes disabled)", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false); // writesEnabled=false
+    const tools = createDysflowMcpTools({
+      services: services,
+    }); // writesEnabled=false
 
     const { client, close } = await createHarness(tools);
     try {
@@ -95,7 +97,9 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
 
   it("catalog_add_control with dryRun:true runs plan path and skips write-gate", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
 
     const { client, close } = await createHarness(tools);
     try {
@@ -122,7 +126,10 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
 
   it("catalog_add_control with apply:true bypasses write-gate (writes enabled)", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, true); // writesEnabled=true
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    }); // writesEnabled=true
 
     const { client, close } = await createHarness(tools);
     try {
@@ -149,7 +156,9 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
 
   it("catalog_add_control with apply:true trips write-gate (writes disabled)", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false); // writesEnabled=false
+    const tools = createDysflowMcpTools({
+      services: services,
+    }); // writesEnabled=false
 
     const { client, close } = await createHarness(tools);
     try {

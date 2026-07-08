@@ -35,7 +35,11 @@ describe("Environment injection in MCP adapter (toMaintenanceRequest)", () => {
     const { services, captured } = makeServices();
     const injectedEnv: Record<string, string | undefined> = { MY_DB_PASS: "injected-password" };
 
-    const tools = createDysflowMcpTools(services, true, undefined, injectedEnv);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+      env: injectedEnv,
+    });
     const relinkDir = tools.find((t) => t.name === "relink_directory");
     expect(relinkDir).toBeDefined();
 
@@ -54,7 +58,11 @@ describe("Environment injection in MCP adapter (toMaintenanceRequest)", () => {
     const injectedEnv: Record<string, string | undefined> = {
       DIVERGENT_TEST_VAR: "injected-value",
     };
-    const tools = createDysflowMcpTools(services, true, undefined, injectedEnv);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+      env: injectedEnv,
+    });
     const relinkDir = tools.find((t) => t.name === "relink_directory");
 
     await relinkDir?.handler({ passwordEnv: "DIVERGENT_TEST_VAR" });
@@ -75,7 +83,10 @@ describe("Environment injection in MCP adapter (toMaintenanceRequest)", () => {
     const original = process.env.BC_TEST_VAR;
     process.env.BC_TEST_VAR = "process-env-bc-value";
 
-    const tools = createDysflowMcpTools(services, true); // no env parameter
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    }); // no env parameter
     const relinkDir = tools.find((t) => t.name === "relink_directory");
 
     await relinkDir?.handler({ passwordEnv: "BC_TEST_VAR" });

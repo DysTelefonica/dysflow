@@ -903,18 +903,16 @@ describe("E2E mock transport — multiple database targeting with overrides", ()
       },
     );
 
-    const tools = createDysflowMcpTools(
-      services,
-      false, // writesEnabled
-      async () => false, // writeAccessResolver
-      {}, // env
-      undefined, // allowedProcedures
-      async (input) => {
+    const tools = createDysflowMcpTools({
+      services: services,
+      writeAccessResolver: async () => false,
+      env: {},
+      accessContextResolver: async (input) => {
         const accessPath =
           isRecord(input) && typeof input.accessPath === "string" ? input.accessPath : dbPath1;
         return successResult({ accessPath, projectRoot: process.cwd() });
       },
-    );
+    });
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const serverDone = startWithSdkServer(tools, serverTransport);
@@ -1043,7 +1041,9 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
     };
 
     // Use createDysflowMcpTools so we exercise the full dispatch path (incl. alias tools).
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
     const tool = tools.find((t) => t.name === "catalog_add_control");
     expect(tool).toBeDefined();
 
@@ -1064,7 +1064,9 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
       vbaSyncToolService,
     };
 
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
     const tool = tools.find((t) => t.name === "generate_form");
     expect(tool).toBeDefined();
 
@@ -1080,7 +1082,9 @@ describe("DELTA-003 — write-gated dispatch tools reject empty input with MCP_I
       queryService: { execute: async () => successResult({ rows: [] }) },
       diagnosticsService: { run: async () => successResult({ checks: [] }) },
     };
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
     const tool = tools.find((t) => t.name === "list_access_operations");
     expect(tool).toBeDefined();
 

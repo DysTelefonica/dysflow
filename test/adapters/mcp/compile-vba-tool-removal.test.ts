@@ -39,9 +39,11 @@ import { successResult } from "../../../src/core/contracts/index.js";
  */
 function advertisedToolCount(): number {
   const tools = createDysflowMcpTools({
-    vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
-    queryService: { execute: async () => successResult({ rows: [] }) },
-    diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    services: {
+      vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+      queryService: { execute: async () => successResult({ rows: [] }) },
+      diagnosticsService: { run: async () => successResult({ checks: [] }) },
+    },
   });
   const hiddenRegistry = new Set(
     tools.filter((tool) => tool.hidden === true).map((tool) => tool.name as string),

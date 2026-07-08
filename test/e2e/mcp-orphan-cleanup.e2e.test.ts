@@ -52,9 +52,11 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
         run: async () => successResult({ checks: [] }),
       },
       // orphanCleanupService intentionally undefined
-    } as unknown as Parameters<typeof createDysflowMcpTools>[0];
+    } as unknown as Parameters<typeof createDysflowMcpTools>[0]["services"];
 
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
     const { client, close } = await createHarness(tools);
     try {
       const result = await client.callTool({
@@ -80,9 +82,11 @@ describe("DELTA-005 — listOrphans wrapper returns failureResult over the MCP p
       vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
       queryService: { execute: async () => successResult({ rows: [] }) },
       diagnosticsService: { run: async () => successResult({ checks: [] }) },
-    } as unknown as Parameters<typeof createDysflowMcpTools>[0];
+    } as unknown as Parameters<typeof createDysflowMcpTools>[0]["services"];
 
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
     const { client, close } = await createHarness(tools);
     try {
       let result: Awaited<ReturnType<typeof client.callTool>> | undefined;

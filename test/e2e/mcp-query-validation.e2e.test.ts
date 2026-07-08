@@ -53,7 +53,10 @@ async function createHarness(tools: Parameters<typeof startWithSdkServer>[0]): P
 describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
   it("query_sql with sql:'' returns MCP_INPUT_INVALID and does NOT touch queryService", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     const { client, close } = await createHarness(tools);
     try {
@@ -76,7 +79,10 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
 
   it("query_sql with sql:'   ' (whitespace) returns MCP_INPUT_INVALID", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     const { client, close } = await createHarness(tools);
     try {
@@ -95,7 +101,10 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
 
   it("query_sql with {} (no sql, no query) returns MCP_INPUT_INVALID", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     const { client, close } = await createHarness(tools);
     try {
@@ -120,7 +129,10 @@ describe("DELTA-010 — query_sql empty sql rejection (E2E)", () => {
       },
       diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
     };
-    const tools = createDysflowMcpTools(services, true);
+    const tools = createDysflowMcpTools({
+      services: services,
+      writes: true,
+    });
 
     const { client, close } = await createHarness(tools);
     try {

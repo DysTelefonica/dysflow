@@ -9,7 +9,7 @@ import { successResult } from "../../../src/core/contracts/index";
  * contract — exactly mirroring the `find_references` surface.
  *
  * `tools/list` returns the non-hidden set; the tool MUST appear in
- * `createDysflowMcpTools(...).filter(hidden)`.
+ * `createDysflowMcpTools({ services: ... }).filter(hidden)`.
  */
 
 function makeBaseServices() {
@@ -22,7 +22,7 @@ function makeBaseServices() {
 
 describe("detect_dead_code — modern MCP tool registration (issue #705)", () => {
   it("is registered as a non-hidden tool in the modern MCP tool surface", () => {
-    const tools = createDysflowMcpTools(makeBaseServices() as DysflowMcpServices);
+    const tools = createDysflowMcpTools({ services: makeBaseServices() as DysflowMcpServices });
     const tool = tools.find((t) => t.name === "detect_dead_code");
     expect(tool, "detect_dead_code must be defined").toBeDefined();
     // Matches the read-only shape of `find_references` (sibling #701).

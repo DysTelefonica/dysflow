@@ -69,7 +69,9 @@ type DysflowMcpToolsInput = Parameters<typeof startWithSdkServer>[0];
 describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch tools (E2E)", () => {
   it("catalog_add_control tools/call with arguments:{} returns MCP_INPUT_INVALID over the SDK protocol", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false); // writesEnabled=false
+    const tools = createDysflowMcpTools({
+      services: services,
+    }); // writesEnabled=false
 
     const { client, close } = await createHarness(tools);
     try {
@@ -88,7 +90,9 @@ describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch t
 
   it("generate_form tools/call with arguments:{} returns MCP_INPUT_INVALID", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
 
     const { client, close } = await createHarness(tools);
     try {
@@ -107,7 +111,9 @@ describe("DELTA-003 — empty input rejection for filesystem-mutating dispatch t
 
   it("NO_INPUT_SCHEMA tools (list_access_operations) accept arguments:{} without MCP_INPUT_INVALID", async () => {
     const services = makeServices();
-    const tools = createDysflowMcpTools(services, false);
+    const tools = createDysflowMcpTools({
+      services: services,
+    });
 
     const { client, close } = await createHarness(tools);
     try {

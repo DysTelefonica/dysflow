@@ -121,22 +121,24 @@ describe("MCP/core architecture boundary", () => {
   it("drives core behavior through injected service interfaces", async () => {
     const requests: unknown[] = [];
     const tools = createDysflowMcpTools({
-      vbaService: {
-        execute: async (request) => {
-          requests.push({ service: "vba", request });
-          return successResult({ returnValue: "ok" });
+      services: {
+        vbaService: {
+          execute: async (request) => {
+            requests.push({ service: "vba", request });
+            return successResult({ returnValue: "ok" });
+          },
         },
-      },
-      queryService: {
-        execute: async (request) => {
-          requests.push({ service: "query", request });
-          return successResult({ rows: [{ id: 1 }] });
+        queryService: {
+          execute: async (request) => {
+            requests.push({ service: "query", request });
+            return successResult({ rows: [{ id: 1 }] });
+          },
         },
-      },
-      diagnosticsService: {
-        run: async (request) => {
-          requests.push({ service: "diagnostics", request });
-          return successResult({ checks: [] });
+        diagnosticsService: {
+          run: async (request) => {
+            requests.push({ service: "diagnostics", request });
+            return successResult({ checks: [] });
+          },
         },
       },
     });
@@ -180,8 +182,8 @@ describe("MCP/core architecture boundary", () => {
     // before the call reaches the vbaSyncToolService stub. The mutates* audit
     // (#665) flipped export_all from mutatesFilesystem:false to
     // mutatesFilesystem:true, so the gate now fires by default.
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: { execute: async () => successResult({ returnValue: "unused" }) },
         queryService: { execute: async () => successResult({ rows: [] }) },
         diagnosticsService: { run: async () => successResult({ checks: [] }) },
@@ -196,8 +198,8 @@ describe("MCP/core architecture boundary", () => {
           },
         },
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(
       tools.find((tool) => tool.name === "export_all")?.handler({ projectRoot: "C:/project" }),

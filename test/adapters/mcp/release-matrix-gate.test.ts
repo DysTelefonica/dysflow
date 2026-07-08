@@ -33,7 +33,10 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     diagnosticsService: new FakeDiagnosticsService(),
   };
 
-  const tools = createDysflowMcpTools(services, true);
+  const tools = createDysflowMcpTools({
+    services: services,
+    writes: true,
+  });
 
   it("documents and validates exact tool counts", () => {
     const toolCount = DYSFLOW_MCP_TOOL_NAMES.length;

@@ -40,7 +40,10 @@ function makeServices() {
 
 function toolByName(name: string, writesEnabled = false) {
   const localServices = makeServices();
-  const tools = createDysflowMcpTools(localServices, writesEnabled);
+  const tools = createDysflowMcpTools({
+    services: localServices,
+    writes: writesEnabled,
+  });
   const tool = tools.find((candidate) => candidate.name === name);
   if (!tool) throw new Error(`Tool not registered: ${name}`);
   return { tool, vbaSyncToolService: localServices.vbaSyncToolService };
@@ -233,7 +236,9 @@ const binaryGateServices = {
 };
 
 describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () => {
-  const tools = createDysflowMcpTools(binaryGateServices, false); // writesEnabled=false → gate active
+  const tools = createDysflowMcpTools({
+    services: binaryGateServices,
+  }); // writesEnabled=false → gate active
 
   const binaryWriters = Object.entries(MCP_TOOL_ROUTES)
     .filter(([, route]) => route.kind === "vba-sync" && route.mutatesBinary)

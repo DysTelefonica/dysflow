@@ -64,9 +64,11 @@ describe("README MCP tool surface", () => {
 
 function advertisedTools() {
   return createDysflowMcpTools({
-    vbaService: new FakeVbaService(),
-    queryService: new FakeQueryService(),
-    diagnosticsService: new FakeDiagnosticsService(),
+    services: {
+      vbaService: new FakeVbaService(),
+      queryService: new FakeQueryService(),
+      diagnosticsService: new FakeDiagnosticsService(),
+    },
   });
 }
 

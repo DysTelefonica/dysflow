@@ -168,7 +168,10 @@ async function createHarness(): Promise<Harness> {
   // writesEnabled=true because the runtime guard should fire BEFORE the
   // write-gate; this proves the adapter's isWithinRuntime is the one
   // rejecting the call, not MCP_WRITES_DISABLED.
-  const tools = createDysflowMcpTools(services, true);
+  const tools = createDysflowMcpTools({
+    services: services,
+    writes: true,
+  });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const serverDone = startWithSdkServer(tools, serverTransport);
   const client = new Client({ name: "e2e-runtime-guard", version: "0.0.1" }, { capabilities: {} });

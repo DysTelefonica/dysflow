@@ -100,12 +100,14 @@ describe("Dysflow MCP tool parity inventory", () => {
     const vba = new FakeVbaService();
     const query = new FakeQueryService();
     const tools = createDysflowMcpTools({
-      vbaService: vba,
-      queryService: query,
-      diagnosticsService: new FakeDiagnosticsService(),
-      cleanupService: {
-        cleanup: async () =>
-          successResult({ operationId: "op-test", accessPid: 1234, status: "cleaned" as const }),
+      services: {
+        vbaService: vba,
+        queryService: query,
+        diagnosticsService: new FakeDiagnosticsService(),
+        cleanupService: {
+          cleanup: async () =>
+            successResult({ operationId: "op-test", accessPid: 1234, status: "cleaned" as const }),
+        },
       },
     });
     const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -134,14 +136,14 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #665 — export_modules is now correctly declared as a filesystem-write
     // tool. To test the SERVICE_UNAVAILABLE path (downstream of the gate),
     // enable writes so the gate does not intercept.
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(),
         queryService: new FakeQueryService(),
         diagnosticsService: new FakeDiagnosticsService(),
       },
-      true, // writesEnabled — bypass the write-gate to reach the service check
-    );
+      writes: true,
+    });
     const exportModules = tools.find((tool) => tool.name === "export_modules");
 
     await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({
@@ -159,8 +161,8 @@ describe("Dysflow MCP tool parity inventory", () => {
   it("dispatches VBA sync tools to the configured product service", async () => {
     const vbaSyncCalls: unknown[] = [];
     const queryCalls: unknown[] = [];
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(),
         queryService: {
           execute: async (request: unknown) => {
@@ -176,8 +178,8 @@ describe("Dysflow MCP tool parity inventory", () => {
           },
         },
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(
       tools
@@ -271,8 +273,8 @@ describe("Dysflow MCP tool parity inventory", () => {
 
   it("preserves explicit write targets instead of substituting the frontend", async () => {
     const queryCalls: unknown[] = [];
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(),
         queryService: {
           execute: async (request: unknown) => {
@@ -282,8 +284,8 @@ describe("Dysflow MCP tool parity inventory", () => {
         },
         diagnosticsService: new FakeDiagnosticsService(),
       },
-      true,
-    );
+      writes: true,
+    });
 
     await tools
       .find((tool) => tool.name === "exec_sql")
@@ -379,15 +381,14 @@ describe("Dysflow MCP tool parity inventory", () => {
     for (const [name, route] of maintenanceRoutes) {
       if (route.kind !== "query-maintenance") continue;
       const query = new FakeQueryService();
-      const tools = createDysflowMcpTools(
-        {
+      const tools = createDysflowMcpTools({
+        services: {
           vbaService: new FakeVbaService(),
           queryService: query,
           diagnosticsService: new FakeDiagnosticsService(),
         },
-        // writes enabled so write-mode maintenance tools are not gated before building the request
-        true,
-      );
+        writes: true,
+      });
       const tool = tools.find((entry) => entry.name === name);
       expect(tool, `${name} must be registered`).toBeDefined();
       await tool?.handler({});
@@ -401,8 +402,8 @@ describe("Dysflow MCP tool parity inventory", () => {
 
   it("dispatches maintenance query tools to the configured query service", async () => {
     const queryCalls: unknown[] = [];
-    const tools = createDysflowMcpTools(
-      {
+    const tools = createDysflowMcpTools({
+      services: {
         vbaService: new FakeVbaService(),
         queryService: {
           execute: async (request: unknown) => {
@@ -411,12 +412,10 @@ describe("Dysflow MCP tool parity inventory", () => {
           },
         },
         diagnosticsService: new FakeDiagnosticsService(),
-        vbaSyncToolService: {
-          execute: async () => successResult({ ok: true }),
-        },
+        vbaSyncToolService: { execute: async () => successResult({ ok: true }) },
       },
-      true,
-    );
+      writes: true,
+    });
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
       isError: false,
