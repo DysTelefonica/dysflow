@@ -73,6 +73,26 @@ function psCreateNativeDb(path: string): string {
 }
 
 /**
+ * Create a backend .accdb with a single native table of the given name (one
+ * ID field). Used by #T17 to set up a backend file that exists locally but
+ * does NOT contain the table the frontend's link expects.
+ */
+function psCreateNativeDbWithTable(path: string, tableName: string): string {
+  return `
+    $e = New-Object -ComObject DAO.DBEngine.120
+    try {
+      $db = $e.CreateDatabase('${path}', ';LANGID=0x0409;CP=1252;COUNTRY=0')
+      $td = $db.CreateTableDef('${tableName}')
+      $f  = $td.CreateField('ID', 4)
+      $td.Fields.Append($f)
+      $db.TableDefs.Append($td)
+      $db.Close()
+    } finally { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null }
+    'done'
+  `;
+}
+
+/**
  * Create a frontend .accdb whose "Products" table links to $backendPath.
  * DAO validates the source table exists in the backend at creation time.
  */
@@ -240,6 +260,47 @@ describe("relink-directory apply integration", { timeout: 60_000 }, () => {
     expect(result.exitCode).toBe(0);
     expect(psTableExists(frontend, "Products")).toBe(false);
   });
+
+  // 6.12b — #T17 inspector: relink-directory with --remove-unresolved must also
+  // handle the case where the backend FILE exists in the resolved root but the
+  // target table is missing from it (Variante 2). RefreshLink would fail at
+  // runtime with "object not found" and leave the link pointing to a broken
+  // path. The pre-check must classify this as tableMissing so the link is
+  // removable when --remove-unresolved is set.
+  it.skipIf(!canRun)(
+    "--remove-unresolved: backend file exists but target table is missing — link removed (Variante 2)",
+    async () => {
+      const extBackend = join(extRoot, "backend.accdb");
+      const localBackend = join(tmpRoot, "backend.accdb");
+      const frontend = join(tmpRoot, "frontend.accdb");
+
+      // extBackend has "Products".
+      runPs(psCreateNativeDb(extBackend));
+      // localBackend EXISTS in tmpRoot (same filename), but does NOT have
+      // "Products" — it has a different table entirely.
+      runPs(psCreateNativeDbWithTable(localBackend, "DifferentTable"));
+      // Frontend links to extBackend for "Products".
+      runPs(psCreateLinkedDb(frontend, extBackend));
+
+      const service = makeService(tmpRoot);
+      const result = await handleRelinkDirectoryCommand(
+        ["--root", tmpRoot, "--apply", "--remove-unresolved"],
+        {},
+        { service },
+      );
+
+      // exitCode is 1 (errors[] has the tableMissing entry) so the caller
+      // knows what happened. The link itself is removed, which is the
+      // actionable outcome --remove-unresolved was set to enforce.
+      expect(result.exitCode).toBe(1);
+      expect(psTableExists(frontend, "Products")).toBe(false);
+
+      // The error is classified as target-table-missing so the caller can
+      // distinguish it from a generic RefreshLink failure.
+      const stdout = result.stdout;
+      expect(stdout).toMatch(/target table missing/i);
+    },
+  );
 
   // 6.13 — chain A→B→C: after apply, A links directly to C (chainHops:2)
   it.skipIf(!canRun)(
