@@ -225,15 +225,57 @@ export class AccessOrphanCleanupService {
       }
     }
 
-    const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
-    if (!ownershipResult.ok) return failureResult(ownershipResult.error);
-    if (ownershipResult.owned) {
-      return failureResult(
-        createDysflowError(
-          "ORPHAN_CLEANUP_REGISTRY_OWNED",
-          `Refused to kill PID ${confirmPid}: it is currently owned by a running Dysflow Access operation.`,
-        ),
-      );
+    // MSACCESS path uses "currently owned" as the kill-prevention gate (with
+    // path-match proving identity). The pwsh worker path instead needs
+    // POSITIVE ownership proof — a running record alone is not enough
+    // because Windows may have recycled the PID to a different pwsh after
+    // our worker exited. See the dedicated pwsh branch below.
+
+    if (isMsAccess) {
+      const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
+      if (!ownershipResult.ok) return failureResult(ownershipResult.error);
+      if (ownershipResult.owned) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_REGISTRY_OWNED",
+            `Refused to kill PID ${confirmPid}: it is currently owned by a running Dysflow Access operation.`,
+          ),
+        );
+      }
+    }
+
+    if (isPowerShellWorker) {
+      // #T16 inspector fix: the previous logic only proved "the PID is
+      // NOT currently owned" (negative proof). It never proved "this PID
+      // WAS our worker and the live process matches what we recorded". A
+      // pwsh worker can exit cleanly, Windows reuses the PID for an innocent
+      // pwsh, and the next cleanupOrphan call would kill the innocent.
+      // Require positive ownership proof by locating the historical
+      // registry record for this PID + projectRoot, then compare the live
+      // process's identity against it.
+      const trackedRecord = await this.findMostRecentTrackedRecordForPid(confirmPid, projectRoot);
+      if (!trackedRecord.ok) return failureResult(trackedRecord.error);
+      if (trackedRecord.record === null) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PID_NOT_TRACKED",
+            `Refused to kill PID ${confirmPid}: it is not (and was never) tracked as a Dysflow Access operation or powershell worker for project ${projectRoot}. Cannot prove the live process is one of ours.`,
+          ),
+        );
+      }
+      if (
+        trackedRecord.record.processStartTime !== undefined &&
+        trackedRecord.record.processStartTime !== null &&
+        liveProcess.startTime !== undefined &&
+        trackedRecord.record.processStartTime !== liveProcess.startTime
+      ) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PID_RECYCLED",
+            `Refused to kill PID ${confirmPid}: the live process started at ${liveProcess.startTime ?? "unknown"} but the recorded worker for op ${trackedRecord.record.operationId} started at ${trackedRecord.record.processStartTime}. The PID was likely recycled by Windows after our worker exited.`,
+          ),
+        );
+      }
     }
 
     const syntheticId = `orphan-${confirmPid}-${Date.now()}`;
@@ -315,5 +357,48 @@ export class AccessOrphanCleanupService {
         normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
     );
     return { ok: true, owned };
+  }
+
+  // Positive ownership proof for #T16: locate the most recent record (any
+  // status, not just `running`) that ever tracked this PID for this project.
+  // Returns null when there is no historical record at all — the caller
+  // then refuses with ORPHAN_CLEANUP_PID_NOT_TRACKED because we have zero
+  // proof the live process is one of ours. Sorted by `updatedAt` descending
+  // so the freshest known attributes are what the live process is compared
+  // against — this is what catches Windows PID recycling.
+  private async findMostRecentTrackedRecordForPid(
+    pid: number,
+    projectRoot: string,
+  ): Promise<
+    | { ok: true; record: AccessOperationRecord | null }
+    | { ok: false; error: ReturnType<typeof createDysflowError> }
+  > {
+    let registryRecords: AccessOperationRecord[];
+    try {
+      registryRecords = await this.options.registry.listRecent({ limit: 1000 });
+    } catch (error) {
+      return {
+        ok: false,
+        error: createDysflowError(
+          "ORPHAN_CLEANUP_REGISTRY_READ_FAILED",
+          `Failed to query registry for tracked record of PID ${pid}: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      };
+    }
+
+    const normalizedProjectRoot = normalizePathForMatching(projectRoot);
+    const candidates = registryRecords.filter(
+      (record) =>
+        (record.accessPid === pid || record.powershellWorkerPid === pid) &&
+        normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
+    );
+    if (candidates.length === 0) return { ok: true, record: null };
+
+    const sorted = [...candidates].sort((a, b) => {
+      const aUpdated = Date.parse(a.updatedAt ?? "") || 0;
+      const bUpdated = Date.parse(b.updatedAt ?? "") || 0;
+      return bUpdated - aUpdated;
+    });
+    return { ok: true, record: sorted[0] ?? null };
   }
 }

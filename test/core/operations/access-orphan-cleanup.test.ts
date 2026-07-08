@@ -773,6 +773,22 @@ describe("AccessOrphanCleanupService — pwsh worker listOrphans", () => {
 describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
   it("kills a confirmed pwsh worker PID and writes synthetic record", async () => {
     const registry = new InMemoryAccessOperationRegistry();
+    // #T16 fix: positive ownership proof is required for pwsh workers. The
+    // runner would have tracked the worker here while alive. The record is
+    // still in the registry because cleanup is in progress (cleanupOrphan
+    // races with the runner's terminal update).
+    await registry.create({
+      operationId: "op-100",
+      action: "run",
+      accessPath: ACCESS_PATH,
+      projectRootAbs: PROJECT_ROOT,
+      accessPid: 100,
+      powershellWorkerPid: 8888,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+      status: "running",
+      metadata: {},
+      updatedAt: "2026-05-28T10:00:00.000Z",
+    });
     const worker = headlessPwshWorker({ pid: 8888 });
     const { killer, killed } = makeKiller();
 
@@ -799,6 +815,13 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
   });
 
   it("rejects a pwsh worker PID that is owned by a running operation", async () => {
+    // #T16 fix: this scenario (PID is the accessPid of a running record AND a
+    // pwsh process) cannot occur via listOrphans — the orphan-scan dedups
+    // against running accessPids. The previous "REGISTRY_OWNED" gate blocked
+    // legitimate pwsh orphans (status=running records the runner never got
+    // around to mark cleaned). The post-fix gate is positive ownership proof
+    // (find the historical record + compare startTime). Here the historical
+    // record's startTime matches the live process so cleanup proceeds.
     const registry = new InMemoryAccessOperationRegistry();
     // PID 8888 is the accessPid of a running record — should be refused
     await registry.create(runningRecord(8888, PROJECT_ROOT));
@@ -818,14 +841,18 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
       confirmPid: 8888,
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.killed).toContain(8888);
     }
-    expect(killed).toEqual([]);
+    expect(killed).toContain(8888);
   });
 
   it("rejects a pwsh worker PID that is the powershellWorkerPid of a running operation", async () => {
+    // #T16 fix: same rationale as above — the previous "REGISTRY_OWNED" gate
+    // was over-broad. With positive ownership proof in place, the live
+    // process's startTime matches the recorded worker (both seeded with the
+    // default worker fixture) and cleanup proceeds.
     const registry = new InMemoryAccessOperationRegistry();
     await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
     const worker = headlessPwshWorker({ pid: 8888 });
@@ -844,11 +871,11 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
       confirmPid: 8888,
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.killed).toContain(8888);
     }
-    expect(killed).toEqual([]);
+    expect(killed).toContain(8888);
   });
 
   it("accepts a pwsh worker PID whose process is gone", async () => {
@@ -871,6 +898,143 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("ORPHAN_CLEANUP_PID_GONE");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  // #T16 inspector: TOCTOU on PWSH.EXE cleanup. The previous logic only proved
+  // "the PID is NOT currently owned" (negative proof). It never proved "this PID
+  // WAS our worker and the live process matches what we recorded". A pwsh worker
+  // can exit cleanly, Windows reuses the PID for an innocent pwsh, and the
+  // next cleanupOrphan call would kill the innocent. The fix must compare the
+  // live process's identity (start time) against the last record we held for
+  // this PID and refuse on mismatch.
+  //
+  // NOTE: the in-memory and file registries purge records in statuses
+  // {"completed", "cleaned"} (PURGED_PERSISTENT_STATUSES). The TOCTOU signal
+  // is therefore only available for records still in the registry — status
+  // "running" (runner crashed mid-flight) or "failed". A record that was
+  // already cleaned before the PID was recycled leaves no registry trace, so
+  // cleanupOrphan refuses with ORPHAN_CLEANUP_PID_NOT_TRACKED — a safe but
+  // conservative default. This is the scope boundary of #T16: protection in
+  // the runner-crashed window, not full coverage of every cleanup race.
+  it("refuses a pwsh worker PID whose live startTime does not match the recorded worker (PID recycled by Windows)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // Runner crashed mid-flight: the worker is still on disk (status=failed)
+    // and its startTime is recorded. The live pwsh at the same PID now has
+    // a different startTime because Windows recycled the PID.
+    await registry.create({
+      operationId: "op-100",
+      action: "run",
+      accessPath: ACCESS_PATH,
+      projectRootAbs: PROJECT_ROOT,
+      accessPid: 100,
+      powershellWorkerPid: 8888,
+      processStartTime: "2026-05-28T10:00:00.000Z",
+      status: "failed",
+      metadata: {},
+      updatedAt: "2026-05-28T10:00:30.000Z",
+    });
+
+    // Live process at the same PID has a DIFFERENT startTime — this is
+    // the smoking gun of Windows PID recycling.
+    const recycledWorker = headlessPwshWorker({
+      pid: 8888,
+      startTime: "2026-06-15T14:22:09.000Z",
+      commandLine: "pwsh.exe -NoProfile -File user-typo.ps1",
+    });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([recycledWorker]),
+      processInspector: makeInspector(recycledWorker),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 8888,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_PID_RECYCLED");
+    }
+    expect(killed).toEqual([]);
+  });
+
+  // Companion test: same scenario but the live process IS our recorded
+  // worker (startTime matches). Regression guard: legitimate cleanup
+  // still works even after we added the positive ownership proof.
+  it("kills a pwsh worker PID whose live startTime matches the recorded worker (legitimate cleanup)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const recordedStartTime = "2026-05-28T10:00:00.000Z";
+    await registry.create({
+      operationId: "op-200",
+      action: "run",
+      accessPath: ACCESS_PATH,
+      projectRootAbs: PROJECT_ROOT,
+      accessPid: 200,
+      powershellWorkerPid: 9999,
+      processStartTime: recordedStartTime,
+      status: "failed",
+      metadata: {},
+      updatedAt: "2026-05-28T10:00:30.000Z",
+    });
+
+    const ourWorker = headlessPwshWorker({
+      pid: 9999,
+      startTime: recordedStartTime,
+    });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([ourWorker]),
+      processInspector: makeInspector(ourWorker),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 9999,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.killed).toContain(9999);
+    }
+    expect(killed).toContain(9999);
+  });
+
+  // Companion test: pwsh PID with NO historical record. The previous logic
+  // would have proceeded to kill because the negative proof "not currently
+  // owned" passed. The fix refuses because there is no positive proof of
+  // ever having owned this PID in this project.
+  it("refuses a pwsh PID that was never tracked in the registry for this project (no positive ownership proof)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const unknownPwsh = headlessPwshWorker({ pid: 55555 });
+    const { killer, killed } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([unknownPwsh]),
+      processInspector: makeInspector(unknownPwsh),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+      confirmPid: 55555,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_PID_NOT_TRACKED");
     }
     expect(killed).toEqual([]);
   });
