@@ -68,7 +68,12 @@ describe("vba-module-lint-service", () => {
     }
   });
 
-  it("flags dot-underscore, non-ASCII identifiers, and reserved-word identifiers", async () => {
+  // Issue #789 — when `strictNonAscii` is NOT requested (the default),
+  // non-ASCII identifiers (Spanish/Portuguese/French/German/Italian) are
+  // `warning`, NOT `error`. `._` dot-underscore and reserved words stay
+  // at `error` because those are real syntactic defects that block
+  // import-modules even when the human compile succeeds.
+  it("defaults non-ASCII identifiers to 'warning' while keeping ._ and reserved words at 'error' (#789)", async () => {
     const report = await lintVbaModule({
       module: "BadIdentifiers",
       rules: ["identifier-safety"],
@@ -82,21 +87,35 @@ describe("vba-module-lint-service", () => {
       ].join("\r\n"),
     });
 
+    // Line 3 — `Dim` is a reserved word → error.
     expect(report.flatDiagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ rule: "identifier-safety", line: 3, severity: "error" }),
-        expect.objectContaining({ rule: "identifier-safety", line: 4, severity: "error" }),
+      ]),
+    );
+    // Line 4 — `GuardarÑ` is non-ASCII → warning (default, no strict opt-in).
+    expect(report.flatDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ rule: "identifier-safety", line: 4, severity: "warning" }),
+      ]),
+    );
+    // Line 5 — `._Value` is the ._ dot-underscore form → error always.
+    expect(report.flatDiagnostics).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ rule: "identifier-safety", line: 5, severity: "error" }),
       ]),
     );
+
+    // Grouped-by-rule view mirrors the same severities.
     expect(report.diagnostics["identifier-safety"]).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ rule: "identifier-safety", line: 3, severity: "error" }),
-        expect.objectContaining({ rule: "identifier-safety", line: 4, severity: "error" }),
+        expect.objectContaining({ rule: "identifier-safety", line: 4, severity: "warning" }),
         expect.objectContaining({ rule: "identifier-safety", line: 5, severity: "error" }),
       ]),
     );
-    expect(report.summary.errors).toBe(3);
+
+    expect(report.summary).toMatchObject({ errors: 2, warnings: 1 });
   });
 
   it("flags module-level declarations after the first procedure without flagging local declarations", async () => {
@@ -249,14 +268,17 @@ describe("vba-module-lint-service", () => {
       ].join("\r\n"),
     });
 
-    // Boolean literal passed to String parameter → type mismatch → warning
+    // Boolean literal passed to String parameter → type mismatch → warning.
     expect(report.flatDiagnostics).toEqual([
       expect.objectContaining({
         rule: "arg-type-match",
         severity: "warning",
       }),
     ]);
-    expect(report.isClean).toBe(false);
+    // Issue #789 — arg-type-match is advisory. A warning does NOT block
+    // `isClean`; only error-severity findings do.
+    expect(report.summary).toMatchObject({ errors: 0, warnings: 1 });
+    expect(report.isClean).toBe(true);
   });
 
   // F22 (2026-07-06) — forbidden-name rule.
@@ -470,17 +492,64 @@ describe("vba-module-lint-service", () => {
         hasNonAsciiIdentifierInProject: () => true,
       });
 
+      // The non-ASCII finding is downgraded to warning under Path B.
       expect(report.flatDiagnostics).toEqual([
         expect.objectContaining({
           rule: "identifier-safety",
           severity: "warning",
         }),
       ]);
-      // The legacy downgrade must not mask dot-underscore / reserved-word errors.
-      expect(report.isClean).toBe(false);
+      // Issue #789 — warnings don't block clean; only errors do.
+      expect(report.summary).toMatchObject({ errors: 0, warnings: 1 });
+      expect(report.isClean).toBe(true);
     });
 
-    it("Path C: project-root marker `.dysflow-no-auto-allow` keeps 'error' severity even when the legacy signal fires", async () => {
+    it("Path B: legacy downgrade must NOT mask dot-underscore or reserved-word errors (#789 contract preservation)", async () => {
+      // Auto-detection downgrades non-ASCII to warning, but real syntactic
+      // defects (dot-underscore, reserved words) stay at error. This locks
+      // down the "must not mask real defects" half of the Path B contract.
+      const source = [
+        'Attribute VB_Name = "MixedLegacy"',
+        "Option Compare Database",
+        "Option Explicit",
+        "Public Sub AdaptarTamañoFormulario()",
+        "    Me._Value = 1",
+        "End Sub",
+        "Private Dim As Long",
+      ].join("\r\n");
+      const report = await lintVbaModule({
+        module: "MixedLegacy",
+        source,
+        rules: ["identifier-safety"],
+        hasNonAsciiIdentifierInProject: () => true,
+      });
+
+      // Real defects stay error.
+      expect(report.flatDiagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            rule: "identifier-safety",
+            line: 5,
+            severity: "error", // dot-underscore — not masked
+          }),
+          expect.objectContaining({
+            rule: "identifier-safety",
+            line: 7,
+            severity: "error", // reserved word — not masked
+          }),
+          expect.objectContaining({
+            rule: "identifier-safety",
+            line: 4,
+            severity: "warning", // non-ASCII — downgraded
+          }),
+        ]),
+      );
+      // Real defects keep isClean false.
+      expect(report.isClean).toBe(false);
+      expect(report.summary.errors).toBe(2);
+    });
+
+    it("Path C: project-root marker `.dysflow-no-auto-allow` keeps greenfield default — non-ASCII defaults to 'warning' under #789 (was 'error' pre-#789)", async () => {
       // Create a temporary project root with the marker file. The
       // adapter combines the marker check with the legacy-signal walk
       // and exposes the combined result through the
@@ -488,6 +557,12 @@ describe("vba-module-lint-service", () => {
       // the adapter contract: when the marker is present, the callback
       // returns `false` even though the project tree contains non-ASCII
       // identifiers — the operator opted out of auto-detection.
+      //
+      // Pre-#789 the marker was effectively a "force strict" hook. Under
+      // #789 the marker keeps the project out of Path B's auto-downgrade;
+      // the resulting Path C greenfield check respects the project-level
+      // `strictNonAscii` opt-in. The default is `false`, so non-ASCII
+      // identifiers emit `warning`, NOT `error`.
       const { existsSync, mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
       const { tmpdir } = await import("node:os");
       const { join } = await import("node:path");
@@ -507,16 +582,200 @@ describe("vba-module-lint-service", () => {
         hasNonAsciiIdentifierInProject: () => !existsSync(join(root, ".dysflow-no-auto-allow")),
       });
 
-      // Marker forces the strict path — non-ASCII identifiers stay at "error".
+      // Path C without the strict opt-in: non-ASCII → warning (inverted from "error").
       expect(report.flatDiagnostics).toEqual([
         expect.objectContaining({
           rule: "identifier-safety",
-          severity: "error",
+          severity: "warning",
         }),
       ]);
 
       // Cleanup the temp dir.
       rmSync(root, { recursive: true, force: true });
+    });
+  });
+
+  // Issue #789 — non-ASCII identifiers default to `warning`; an explicit
+  // `strictNonAscii: true` opt-in (project-level) restores the old
+  // `error` behavior. `._` and reserved-word findings stay at `error`
+  // regardless of the flag.
+  describe("identifier-safety non-ASCII default + strict opt-in (#789)", () => {
+    it("greenfield: non-ASCII identifier without strictNonAscii is 'warning' and does NOT block clean (#789)", async () => {
+      const source = [
+        'Attribute VB_Name = "SpanishModule"',
+        "Option Compare Database",
+        "Option Explicit",
+        "",
+        "Public Const ConstanteConTilde As String = \"Sí\"",
+        "Public Function AñoActual() As Integer",
+        "    AñoActual = 2026",
+        "End Function",
+      ].join("\r\n");
+      const report = await lintVbaModule({
+        module: "SpanishModule",
+        source,
+        rules: ["identifier-safety"],
+      });
+
+      // Non-ASCII findings downgrade to warning.
+      const nonAscii = report.flatDiagnostics.filter((d) =>
+        String(d.message).includes("non-ASCII characters"),
+      );
+      expect(nonAscii.length).toBeGreaterThan(0);
+      for (const d of nonAscii) {
+        expect(d.severity).toBe("warning");
+      }
+      // No real errors block the module — only warnings remain.
+      expect(report.isClean).toBe(true);
+      expect(report.summary.errors).toBe(0);
+      expect(report.summary.warnings).toBeGreaterThan(0);
+    });
+
+    it("greenfield + strictNonAscii=true: non-ASCII identifier is 'error' and blocks clean (#789)", async () => {
+      const source = [
+        'Attribute VB_Name = "SpanishModule"',
+        "Option Compare Database",
+        "Option Explicit",
+        "",
+        "Public Function AñoActual() As Integer",
+        "    AñoActual = 2026",
+        "End Function",
+      ].join("\r\n");
+      const report = await lintVbaModule({
+        module: "SpanishModule",
+        source,
+        rules: ["identifier-safety"],
+        strictNonAscii: true,
+      });
+
+      const nonAscii = report.flatDiagnostics.filter((d) =>
+        String(d.message).includes("non-ASCII characters"),
+      );
+      expect(nonAscii.length).toBeGreaterThan(0);
+      for (const d of nonAscii) {
+        expect(d.severity).toBe("error");
+      }
+      // The strict opt-in re-raises non-ASCII to error — `isClean` flips
+      // back to false so the import-modules pre-import gate fires.
+      expect(report.isClean).toBe(false);
+      expect(report.summary.errors).toBeGreaterThan(0);
+    });
+
+    it("Path A (enabled:false override) still emits LINT_SUPPRESSED and never yields per-identifier findings, even with strictNonAscii=true (#789)", async () => {
+      const source = [
+        'Attribute VB_Name = "LegacyForm"',
+        "Public Sub AdaptarTamañoFormulario()",
+        "    Me._Value = 1",
+        "End Sub",
+      ].join("\r\n");
+      const report = await lintVbaModule({
+        module: "LegacyForm",
+        source,
+        rules: ["identifier-safety"],
+        lintRulesOverride: {
+          "identifier-safety": { enabled: false, reason: "legacy Spanish-language identifiers" },
+        },
+        // Path A wins everything — strictNonAscii:true must NOT bypass the
+        // explicit operator opt-out.
+        strictNonAscii: true,
+      });
+
+      // Exactly one audit marker; no per-identifier findings leak through.
+      expect(report.flatDiagnostics).toHaveLength(1);
+      expect(report.flatDiagnostics[0]).toMatchObject({
+        rule: "identifier-safety",
+        code: "LINT_SUPPRESSED",
+        severity: "warning",
+      });
+      expect(report.isClean).toBe(true);
+    });
+
+    it("._ dot-underscore stays at 'error' regardless of the strictNonAscii opt-in (#789)", async () => {
+      const source = [
+        'Attribute VB_Name = "DotUnderscoreModule"',
+        "Public Sub Run()",
+        "    Me._Value = 1",
+        "End Sub",
+      ].join("\r\n");
+      // With strictNonAscii OFF — ._ still error.
+      const reportOff = await lintVbaModule({
+        module: "DotUnderscoreModule",
+        source,
+        rules: ["identifier-safety"],
+      });
+      const dotOff = reportOff.flatDiagnostics.find((d) =>
+        String(d.message).includes("dot-underscore"),
+      );
+      expect(dotOff?.severity).toBe("error");
+
+      // With strictNonAscii ON — ._ still error.
+      const reportOn = await lintVbaModule({
+        module: "DotUnderscoreModule",
+        source,
+        rules: ["identifier-safety"],
+        strictNonAscii: true,
+      });
+      const dotOn = reportOn.flatDiagnostics.find((d) =>
+        String(d.message).includes("dot-underscore"),
+      );
+      expect(dotOn?.severity).toBe("error");
+    });
+
+    it("reserved-word identifier stays at 'error' regardless of the strictNonAscii opt-in (#789)", async () => {
+      const source = [
+        'Attribute VB_Name = "ReservedWordModule"',
+        "Option Compare Database",
+        "Option Explicit",
+        "Private Dim As Long",
+      ].join("\r\n");
+      // With strictNonAscii OFF — reserved word still error.
+      const reportOff = await lintVbaModule({
+        module: "ReservedWordModule",
+        source,
+        rules: ["identifier-safety"],
+      });
+      const reservedOff = reportOff.flatDiagnostics.find((d) =>
+        String(d.message).includes("reserved word"),
+      );
+      expect(reservedOff?.severity).toBe("error");
+
+      // With strictNonAscii ON — reserved word still error.
+      const reportOn = await lintVbaModule({
+        module: "ReservedWordModule",
+        source,
+        rules: ["identifier-safety"],
+        strictNonAscii: true,
+      });
+      const reservedOn = reportOn.flatDiagnostics.find((d) =>
+        String(d.message).includes("reserved word"),
+      );
+      expect(reservedOn?.severity).toBe("error");
+    });
+
+    it("Path B (auto-detection) keeps non-ASCII at 'warning' even when strictNonAscii=true is requested (#789)", async () => {
+      // Auto-detection already proves the project ships non-ASCII in
+      // production. Even with the strict opt-in, Path B keeps the legacy
+      // warning downgrade — flagging the project's existing identifiers
+      // as errors would create churn for code that compiles and ships.
+      const source = [
+        'Attribute VB_Name = "LegacyForm"',
+        "Public Sub AdaptarTamañoFormulario()",
+        "End Sub",
+      ].join("\r\n");
+      const report = await lintVbaModule({
+        module: "LegacyForm",
+        source,
+        rules: ["identifier-safety"],
+        hasNonAsciiIdentifierInProject: () => true,
+        strictNonAscii: true,
+      });
+
+      expect(report.flatDiagnostics).toEqual([
+        expect.objectContaining({
+          rule: "identifier-safety",
+          severity: "warning",
+        }),
+      ]);
     });
   });
 });
