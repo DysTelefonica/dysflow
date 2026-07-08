@@ -951,11 +951,11 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     if (
       !srcText.includes("�") &&
       !binText.includes("�") &&
-      neutralizeLossyEncodingEverywhere(srcCase) === neutralizeLossyEncodingEverywhere(binCase)
+      neutralizeLossyEncoding(srcCase) === neutralizeLossyEncoding(binCase)
     ) {
       return nonActionable(
         "encodingOnly",
-        "texts differ only in lossy encoding artifacts, including comments or log strings",
+        "texts differ only in lossy encoding artifacts outside string literals and comments",
       );
     }
   }
@@ -1029,11 +1029,11 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   if (
     !srcText.includes("�") &&
     !binText.includes("�") &&
-    neutralizeLossyEncodingEverywhere(srcFull) === neutralizeLossyEncodingEverywhere(binFull)
+    neutralizeLossyEncoding(srcFull) === neutralizeLossyEncoding(binFull)
   ) {
     return nonActionable(
       "encodingOnly",
-      "texts differ only in lossy encoding artifacts, including comments or log strings",
+      "texts differ only in lossy encoding artifacts outside string literals and comments",
     );
   }
 

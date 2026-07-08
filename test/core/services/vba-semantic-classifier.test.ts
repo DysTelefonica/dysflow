@@ -258,7 +258,18 @@ End`;
     expect(result.classification).toBe("formSerializationOnly");
   });
 
-  it("treats lossy codepage glyph replacement inside log strings as encoding-only", () => {
+  // Test rewritten after #T14 (inspector finding, see commit body). The previous
+  // version asserted that a glyph swap inside a string literal collapsed to
+  // encodingOnly. That assertion violated the AGENTS.md contract ("A glyph
+  // change inside a quoted string stays functional") and was the visible bug
+  // fixed in this commit: lines 951-954 and 1029-1032 of the classifier used
+  // the blind neutralizeLossyEncodingEverywhere variant which maps every
+  // non-ASCII char (including those inside string literals) to a sentinel,
+  // hiding a real runtime-visible string difference as encoding-only noise.
+  // A log call's literal argument is no exception — the user-facing contract
+  // is the same as for MsgBox: a glyph the user sees at runtime must surface
+  // as functional.
+  it("flags a glyph swap inside a string literal as functional (actionable), not encodingOnly — universal contract, applies to log calls too (#T14)", () => {
     const sourceText = `Option Compare Database
 Option Explicit
 Public Sub Cleanup()
@@ -272,8 +283,10 @@ End Sub`;
 
     const result = classifyVbaPair({ sourceText, binaryText, fileType: "bas", mode: "semantic" });
 
-    expect(result.actionable).toBe(false);
-    expect(result.classification).toBe("encodingOnly");
+    expect(result.actionable).toBe(true);
+    expect(result.classification).not.toBe("encodingOnly");
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
   });
 });
 
@@ -1712,5 +1725,66 @@ describe("FORM_NOISE_KEYS shared module (#B.1, #624, PR 2)", () => {
   // reach the shared module's Set reference — never two divergent copies.
   it("vba-semantic-classifier re-export points to the same Set reference as the shared module", () => {
     expect(Object.is(FORM_NOISE_KEYS, SHARED_FORM_NOISE_KEYS)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #T14 — encodingOnly MUST NOT hide a glyph change inside a runtime-visible
+// string literal (inspector finding, regression guard for the post-normalization
+// sites at vba-semantic-classifier.ts:951-954 and :1029-1032 which previously
+// used the blind neutralizeLossyEncodingEverywhere variant).
+//
+// AGENTS.md contract: "A glyph change inside a quoted string stays functional."
+// This applies universally — MsgBox, Debug.Print, AddLog, anywhere. The user
+// sees the literal text at runtime; if the source has 'ú' and the binary has
+// 'ù' (or '?'), that's a runtime-visible difference and must surface as a
+// functional diff (actionable), not as encodingOnly (non-actionable).
+// ---------------------------------------------------------------------------
+
+describe("encodingOnly — runtime-visible string content (#T14 inspector)", () => {
+  it("flags a non-ASCII glyph change inside a MsgBox string as functional (actionable), not encodingOnly", () => {
+    const sourceText =
+      'Option Explicit\nPublic Sub Show()\n    MsgBox "Menú principal", vbInformation\nEnd Sub';
+    const binaryText =
+      'Option Explicit\nPublic Sub Show()\n    MsgBox "Menù principal", vbInformation\nEnd Sub';
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "bas", mode: "semantic" });
+
+    // The only difference is 'ú' vs 'ù' inside the MsgBox string literal.
+    // The user sees this dialog at runtime; the difference is observable.
+    // Per AGENTS.md the change is functional and must surface as actionable.
+    expect(result.classification).not.toBe("encodingOnly");
+    expect(result.actionable).toBe(true);
+    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
+    expect(functional).toContain(result.classification);
+  });
+
+  it("flags a non-ASCII glyph change inside a Debug.Print string as functional (actionable), not encodingOnly", () => {
+    const sourceText =
+      'Option Explicit\nPublic Sub Trace()\n    Debug.Print "Estado ► Activo"\nEnd Sub';
+    const binaryText =
+      'Option Explicit\nPublic Sub Trace()\n    Debug.Print "Estado ▷ Activo"\nEnd Sub';
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "bas", mode: "semantic" });
+
+    expect(result.classification).not.toBe("encodingOnly");
+    expect(result.actionable).toBe(true);
+  });
+
+  it("flags a non-ASCII glyph change in a string assigned to a variable as functional (actionable)", () => {
+    // Both sides have the same ASCII prefix ("caf") and differ only by the
+    // accented glyph inside the string literal ('é' vs 'è'). The blind
+    // neutralizeLossyEncodingEverywhere maps both glyphs to the same sentinel
+    // and equalizes the texts — that's the bug. The string-aware normalizer
+    // keeps the glyphs and the texts differ.
+    const sourceText =
+      'Option Explicit\nPublic Sub Order()\n    Dim msg As String\n    msg = "café"\n    MsgBox msg\nEnd Sub';
+    const binaryText =
+      'Option Explicit\nPublic Sub Order()\n    Dim msg As String\n    msg = "cafè"\n    MsgBox msg\nEnd Sub';
+
+    const result = classifyVbaPair({ sourceText, binaryText, fileType: "bas", mode: "semantic" });
+
+    expect(result.classification).not.toBe("encodingOnly");
+    expect(result.actionable).toBe(true);
   });
 });
