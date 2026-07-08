@@ -488,6 +488,13 @@ export type CreateDysflowMcpToolsOptions = {
   // layer default to `"safe-by-default"` so legacy call sites keep their
   // existing behavior.
   writeExecutionPolicy?: WriteExecutionPolicy;
+  // Issue #789 — opt-in to the historical strict (error) severity for the
+  // `identifier-safety` non-ASCII check. Resolved from
+  // `.dysflow/project.json` `capabilities.lint.identifierSafety.strictNonAscii`
+  // by the caller. Default `false` (warning for non-ASCII). When `true`,
+  // the MCP `lint_module` tool passes `strictNonAscii: true` to the linter
+  // service, restoring the legacy strict (error) severity.
+  lintIdentifierSafetyStrict?: boolean;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -503,6 +510,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     lintOverrides: lintRulesOverride = {},
     accessDbPath,
     writeExecutionPolicy,
+    lintIdentifierSafetyStrict = false,
   } = options;
   const accessContextResolver: McpAccessContextResolver =
     accessContextResolverInput ??
@@ -1010,6 +1018,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         const detection = projectRoot
           ? (): boolean => projectHasLegacyNonAsciiIdentifier(projectRoot)
           : undefined;
+        // Issue #789 — read the project-level `lintIdentifierSafetyStrict`
+        // opt-in from the resolved DysflowConfig. The startup wiring in
+        // `stdio.ts` plumbs it through `CreateDysflowMcpToolsOptions`
+        // and the closure captures it here. Default is `false` (warning
+        // for non-ASCII); projects that need the strict (error) check
+        // set `capabilities.lint.identifierSafety.strictNonAscii: true`
+        // in `.dysflow/project.json`.
         const report = await lintVbaModule({
           module,
           source: resolvedSource,
@@ -1017,6 +1032,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           projectRoot,
           lintRulesOverride,
           hasNonAsciiIdentifierInProject: detection,
+          strictNonAscii: lintIdentifierSafetyStrict,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(report) }],

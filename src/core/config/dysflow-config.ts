@@ -67,6 +67,17 @@ export type DysflowProjectCapabilities = {
    */
   lint?: {
     rules?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
+    /**
+     * Issue #789 — sub-flags that live INSIDE a single lint rule.
+     * Currently only `identifierSafety.strictNonAscii` is recognized;
+     * `true` restores the historical strict (error) severity for
+     * non-ASCII identifiers inside the `identifier-safety` rule.
+     * Default: warning for non-ASCII. `._` dot-underscore and
+     * reserved-word findings are unaffected by this flag.
+     */
+    identifierSafety?: {
+      strictNonAscii?: boolean;
+    };
   };
   /**
    * Issue #779 (v2.1.0) — risk-based write execution policy. Defaults to
@@ -151,6 +162,14 @@ export type DysflowConfig = {
    * config has no `capabilities.lint` block.
    */
   lintRulesOverride?: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>>;
+  /**
+   * Issue #789 — opt-in flag for the historical strict (error) severity
+   * of the `identifier-safety` non-ASCII check. Default `false` so
+   * non-ASCII identifiers in Spanish / Portuguese / French / German /
+   * Italian VBA emit `warning` instead of `error`. `._` dot-underscore
+   * and reserved-word findings are unaffected by this flag.
+   */
+  lintIdentifierSafetyStrict?: boolean;
   /**
    * Issue #779 (v2.1.0) — resolved write-execution policy from
    * `capabilities.writeExecutionPolicy`. `undefined` when the project
@@ -491,6 +510,7 @@ function buildProjectConfig(
     allowedProcedures: capabilitiesAllowedProcedures,
     lintRulesOverride,
     writeExecutionPolicy,
+    lintIdentifierSafetyStrict,
   } = capabilitiesResolution.data;
   const discoveryResult =
     capabilitiesAllowedProcedures === undefined
@@ -523,6 +543,10 @@ function buildProjectConfig(
     // #779 — risk-based write-execution policy. Defaults to
     // `safe-by-default` when the field is absent.
     writeExecutionPolicy,
+    // #789 — opt-in to the historical strict (error) severity for
+    // non-ASCII identifiers inside `identifier-safety`. Default `false`
+    // (warning) for cross-fleet back-compat.
+    lintIdentifierSafetyStrict,
   });
 }
 
@@ -823,13 +847,24 @@ function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
   lintRulesOverride: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined;
   /**
    * Issue #779 — risk-based write-execution policy. `undefined` when the
-   * `capabilities` block does not declare one (back-compat with every
+   * project config has no value or the field is absent (back-compat with every
    * project.json before v2.1.0). Any declared value is validated against
    * the closed union; unparseable values surface as
    * `CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY` so a typo cannot silently flip
    * the runtime mode.
    */
   writeExecutionPolicy: WriteExecutionPolicy | undefined;
+  /**
+   * Issue #789 — opt-in flag for the historical strict (error) severity
+   * of the `identifier-safety` non-ASCII check. Default `false` so
+   * Spanish / Portuguese / French / German / Italian VBA identifiers
+   * emit `warning` instead of `error`. Project-level opt-in lives under
+   * `capabilities.lint.identifierSafety.strictNonAscii: true` in
+   * `.dysflow/project.json`. The MCP `lint_module` tool threads this
+   * flag into the linter request. `._` dot-underscore and reserved-word
+   * findings are unaffected by this flag.
+   */
+  lintIdentifierSafetyStrict: boolean;
 }> {
   const capabilities = raw.capabilities;
   // T18: the top-level `allowWrites` / `allowedProcedures` fields were
@@ -874,6 +909,7 @@ function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
     allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
     lintRulesOverride: normalizeLintRulesOverride(capabilities?.lint?.rules),
     writeExecutionPolicy,
+    lintIdentifierSafetyStrict: capabilities?.lint?.identifierSafety?.strictNonAscii === true,
   });
 }
 

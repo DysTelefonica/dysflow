@@ -323,7 +323,8 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
       type: "array",
       description:
         "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name. " +
-        "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches — it performs no cross-module type inference and no variable-flow analysis. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.) on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, case-insensitively, and recommends a project convention (errMsg, fechaAlta, etc.).",
+        "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches — it performs no cross-module type inference and no variable-flow analysis. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.) on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, case-insensitively, and recommends a project convention (errMsg, fechaAlta, etc.). " +
+        "identifier-safety (issue #789) — non-ASCII VBA identifiers (Spanish, Portuguese, French, German, Italian, etc.) are valid VBA and emit `warning` by default; they do NOT block. The `._` dot-underscore and reserved-word findings stay at `error` always. To restore the historical strict (error) severity for non-ASCII, set `capabilities.lint.identifierSafety.strictNonAscii: true` in `.dysflow/project.json`.",
       items: {
         type: "string",
         enum: [

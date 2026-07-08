@@ -75,6 +75,20 @@ export interface VbaModuleLintRequest {
    * rule behaves as today (strict greenfield severity).
    */
   hasNonAsciiIdentifierInProject?: () => boolean | Promise<boolean>;
+  /**
+   * Issue #789 — opt-in to the historical strict (error) severity for
+   * non-ASCII identifiers inside `identifier-safety`. Defaults to `false`
+   * so Spanish / Portuguese / French / German / Italian VBA identifiers
+   * emit `warning` instead of `error` (VBA compiles them fine and the
+   * import round-trip works). Project-level opt-in lives under
+   * `capabilities.lint.identifierSafety.strictNonAscii`; the MCP layer
+   * threads that into this field.
+   *
+   * `._` dot-underscore and reserved-word findings are unaffected by
+   * this flag — they stay at `error` always because they are real
+   * syntactic defects that block even the human compile.
+   */
+  strictNonAscii?: boolean;
 }
 
 const LINT_SUPPRESSED_DIAGNOSTIC_CODE = "LINT_SUPPRESSED";
@@ -330,7 +344,9 @@ function resolveIdentifierSafety(
 ): VbaModuleLintReport | Promise<VbaModuleLintReport> {
   const override = request.lintRulesOverride?.["identifier-safety"];
 
-  // Path A — explicit operator opt-out wins everything.
+  // Path A — explicit operator opt-out wins everything, even if
+  // `strictNonAscii: true` is also passed (#789). The opt-out emits a
+  // single audit marker and yields no per-identifier findings.
   if (override?.enabled === false) {
     const suppressed: VbaModuleLintDiagnostic = {
       rule: "identifier-safety",
@@ -346,24 +362,39 @@ function resolveIdentifierSafety(
     return finishLintReport(request, rules, byRule, flatDiagnostics);
   }
 
-  const proceed = (legacy: boolean): VbaModuleLintReport => {
-    const found = lintIdentifierSafety(lines, legacy);
+  // Issue #789 — `strictNonAscii` only applies to the greenfield path
+  // (Path C). Path B's auto-detection already proves the project ships
+  // non-ASCII identifiers in production, so an opt-in to strict severity
+  // there would punish code that compiled and shipped. Keep Path B at
+  // the relaxed "warning" regardless of the project opt-in.
+  const proceed = (strictNonAscii: boolean): VbaModuleLintReport => {
+    const found = lintIdentifierSafety(lines, strictNonAscii);
     flatDiagnostics.push(...found);
     byRule["identifier-safety"]?.push(...found);
     return finishLintReport(request, rules, byRule, flatDiagnostics);
   };
+
   // Path B — auto-detect when the operator did NOT set an override AND we
   // were given a detection callback. The callback already accounts for the
   // `.dysflow-no-auto-allow` marker so this core layer stays free of
   // `node:fs` (#731 + architectural core-I/O-port-boundary test).
+  //
+  // #789 — Path B keeps the historical "always warning" downgrade
+  // because the auto-detection callback has ALREADY proven that the
+  // project ships non-ASCII identifiers in production. Promoting them
+  // to `error` would create churn for code that compiles and ships.
+  // When the callback returns `false` (e.g. `.dysflow-no-auto-allow`
+  // marker opted out of auto-detection), fall through to Path C and
+  // honor the `strictNonAscii` opt-in as a regular greenfield check.
   if (override === undefined && request.hasNonAsciiIdentifierInProject !== undefined) {
     return Promise.resolve(request.hasNonAsciiIdentifierInProject()).then((legacy) =>
-      proceed(legacy),
+      legacy ? proceed(false) : proceed(request.strictNonAscii === true),
     );
   }
 
-  // Path C — greenfield or no project context: strict error severity.
-  return proceed(false);
+  // Path C — greenfield or no project context. Respect the project
+  // opt-in via `request.strictNonAscii` (#789).
+  return proceed(request.strictNonAscii === true);
 }
 
 function finishLintReport(
@@ -397,9 +428,16 @@ function finishLintReport(
   }
 
   // #731 — `LINT_SUPPRESSED` is an audit marker, not a real finding; it
-  // surfaces in `diagnostics.<rule>` for traceability but does NOT make
-  // `isClean` false. Otherwise a deliberate opt-out would falsely fail the
-  // import-modules pre-import gate.
+  // surfaces in `diagnostics.<rule>` for traceability but does NOT count
+  // toward `isClean` or `summary`. Without this, a deliberate opt-out
+  // would falsely fail the import-modules pre-import gate.
+  //
+  // Issue #789 — `isClean` reflects "no real defects", i.e. no
+  // error-severity diagnostics. Warnings are advisory (non-ASCII,
+  // arg-type-match) and do NOT block `isClean`. This matches the
+  // acceptance contract from the issue:
+  //   `isClean: false` only when there are real defects;
+  //   non-ASCII alone does not block.
   const realDiagnostics = flatDiagnostics.filter((d) => d.code !== LINT_SUPPRESSED_DIAGNOSTIC_CODE);
   const errors = realDiagnostics.filter((d) => d.severity === "error").length;
   const warnings = realDiagnostics.filter((d) => d.severity === "warning").length;
@@ -407,7 +445,7 @@ function finishLintReport(
   return {
     module: request.module,
     rules,
-    isClean: realDiagnostics.length === 0,
+    isClean: errors === 0,
     diagnostics: byRule,
     flatDiagnostics,
     summary: { errors, warnings },
@@ -481,14 +519,27 @@ function lintOptionDeclarations(lines: readonly string[]): VbaModuleLintDiagnost
 
 function lintIdentifierSafety(
   lines: readonly string[],
-  legacy: boolean,
+  strictNonAscii: boolean,
 ): VbaModuleLintDiagnostic[] {
-  // #731 — `legacy === true` downgrades the non-ASCII severity from "error"
-  // to "warning" so pre-existing Spanish-language projects (which compile and
-  // ship in production with non-ASCII identifiers) do not block the import
-  // gate. The dot-underscore and reserved-word findings stay at "error" in
-  // both legacy and greenfield paths — those are real syntactic defects.
-  const nonAsciiSeverity: VbaModuleLintSeverity = legacy ? "warning" : "error";
+  // Issue #789 — invert the default for the non-ASCII check.
+  // VBA accepts Unicode identifiers natively: Spanish / Portuguese /
+  // French / German / Italian identifiers compile fine in Access and
+  // round-trip through `import_modules` / `verify_code`. The historical
+  // `error` severity was a false positive that broke ~50+ production
+  // identifiers across HPS, gestion_riesgos, no_conformidades, condor,
+  // cadete, etc. — see issue #789 for the cross-fleet tally.
+  //
+  // The new contract:
+  //   - `strictNonAscii === false` (default) → "warning" — non-ASCII is
+  //     audited but does not block `import_modules` or any other gate.
+  //   - `strictNonAscii === true`            → "error"   — restores the
+  //     old behavior for projects that opt-in via
+  //     `capabilities.lint.identifierSafety.strictNonAscii: true`.
+  //
+  // The dot-underscore (`._`) and reserved-word findings stay at "error"
+  // REGARDLESS of `strictNonAscii` — those are real syntactic defects
+  // that block even the human compile.
+  const nonAsciiSeverity: VbaModuleLintSeverity = strictNonAscii ? "error" : "warning";
   const diagnostics: VbaModuleLintDiagnostic[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const lineNumber = i + 1;

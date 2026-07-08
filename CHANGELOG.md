@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.1.4] - 2026-07-08
+
+Patch release. Inverts the default severity of the `identifier-safety` lint rule's non-ASCII check from `error` to `warning` and adds an explicit opt-in for the historical strict contract. Closes #789.
+
+### Fixed
+
+- **lint** (#789): `identifier-safety` no longer rejects valid VBA identifiers with non-ASCII characters as `error` by default. Spanish / Portuguese / French / German / Italian identifiers (e.g. `EnumSiNo.Sí`, `AñoActual()`) are first-class VBA citizens — VBA compiles them natively, `import_modules` with sha256 match works, and the human-compile in Access completes without errors. The check now emits `warning` by default; `isClean: true` reflects this when no other defect is present. The `._` dot-underscore and reserved-word findings stay at `error` always (real syntactic defects).
+- **lint** (#789): removed the false-positive alert fatigue in cross-fleet consumers (HPS, gestion_riesgos, no_conformidades, condor, cadete, ...) where Spanish-language identifiers were being flagged as errors despite compiling and shipping in production.
+
+### Added
+
+- **config** (#789): `capabilities.lint.identifierSafety.strictNonAscii: true` in `.dysflow/project.json` restores the historical strict (error) severity for non-ASCII identifiers. Default `false` (warning) for back-compat with the cross-fleet consumer base. `._` dot-underscore and reserved-word findings are unaffected by this flag.
+
+### Test discipline
+
+- ~13 new test atoms across 2 new test files (`test/core/services/vba-module-lint-service.test.ts` extensions and `test/core/config/dysflow-config-lint-identifier-safety.test.ts`).
+- Existing 2733-test baseline preserved with no regressions; v2.1.4 baseline = 2738 passed / 1 skipped / 1 todo.
+
 ## [v2.1.3] - 2026-07-08
 
 Patch release. Internal consolidation with no behavior change: collapses the duplicated `(mode × risk) → effectiveDryRunDefault` truth table to a single source of truth and removes dead-code / typing artifacts left by #785. Closes #790.
