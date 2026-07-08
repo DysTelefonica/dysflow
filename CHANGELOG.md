@@ -1,5 +1,18 @@
 # Changelog
 
+## [v2.0.0] - 2026-07-08
+
+### BREAKING CHANGES
+
+- **config**: Top-level `allowWrites` and `allowedProcedures` fields in `project.json` are now rejected with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`. Migrate to the `capabilities` block. (T18)
+
+### Fixed
+
+- **config**: Reject deprecated top-level config fields with clear migration guidance (T18)
+- **orphan-cleanup**: Require positive ownership proof for PWSH.EXE cleanup (T16)
+- **vba-semantic-classifier**: Scope toggle normalization to known toggle property names (T15)
+- **vba-semantic-classifier**: Use string-aware `neutralizeLossyEncoding` in post-normalization classification sites (T14)
+
 ## [v1.22.0] - 2026-07-07
 
 ### Changed (canonical MCP tool names — Opción A continuation, #777)
