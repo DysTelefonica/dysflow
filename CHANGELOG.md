@@ -1,5 +1,32 @@
 # Changelog
 
+## [v2.1.0] - 2026-07-08
+
+Minor release. Ships the foundation of the risk-based write execution policy so the routine Dysflow dev loop (`import_modules → test_vba → verify_code`) can opt into a developer mode that flips the dry-run default for routine tools, without weakening any existing gate.
+
+### Added
+
+- **runtime**: `writeExecutionPolicy` resolver (`safe-by-default` | `developer`) — pure function returning `{ effectiveDryRunDefault, requiresConfirmOverwriteSource }`.
+- **config**: `capabilities.writeExecutionPolicy` schema field. Omitting the field keeps the historical `safe-by-default` behavior; unknown values surface `CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY` so a typo cannot silently flip the mode.
+- **runtime**: `pathOverlapsSourceRoot(destination, sourceRoot, managedFolders?)` — Windows-aware overlap detector (case-insensitive, nested-path aware) used by the export-source guard.
+- **mcp**: additive `risk` field per dispatch route. Six risk categories: `read-only`, `routine-dev-write`, `protected-write`, `destructive-write`, `arbitrary-write`, `process-control`. The `mutatesBinary` / `mutatesFilesystem` route semantics are unchanged.
+- **mcp**: unified `MCP_TOOL_RISKS` registry covering every contract tool (generated routes + modern + alias). Single source of truth for `effectiveDryRunDefaultForTool(name, mode)`.
+- **mcp**: `get_capabilities` exposes `writeExecutionPolicy` + per-tool `effectiveDryRunDefault` map so consumers predict what the runtime will do before invoking a write-class tool.
+
+### Hard rules preserved
+
+- The write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `allowedProcedures`) is authoritative. The new policy does not bypass any existing gate.
+- `test_vba` / `run_vba` allowlist gate is preserved in both modes.
+- Top-level `allowWrites` / `allowedProcedures` aliases in `project.json` remain rejected (T18 invariant).
+
+### Documentation
+
+- README §3a (risk-based write execution policy) and §3b (export-source guard) explain the policy, the per-tool risk classification, and the export confirmation contract.
+
+### Follow-up
+
+- Dispatch-layer integration of `effectiveDryRunDefault` (developer mode flips the dry-run default at the adapter level) and the runtime enforcement of `confirmOverwriteSource` for `export_modules` / `export_all` is tracked in issue #783. The foundation in this release makes that integration a single layer above the existing dispatch path.
+
 ## [v2.0.1] - 2026-07-08
 
 Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos sobre v2.0.0; todos confirmados contra el source y corregidos.
