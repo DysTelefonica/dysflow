@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2.1.3] - 2026-07-08
+
+Patch release. Internal consolidation with no behavior change: collapses the duplicated `(mode × risk) → effectiveDryRunDefault` truth table to a single source of truth and removes dead-code / typing artifacts left by #785. Closes #790.
+
+### Changed
+
+- **mcp** (#790): `effectiveDryRunDefaultForTool` (consulted by the dispatch seam and the `get_capabilities` snapshot) now derives its answer from `DEFAULT_DRY_RUN_TABLE` in `core/runtime/write-execution-policy.ts` instead of re-implementing the `(mode × risk)` ladder inline. `resolveWriteExecutionPolicy` already reads the same table, so the helper and the resolver can no longer diverge. Advertised `effectiveDryRunDefault` values are byte-for-byte unchanged.
+
+### Fixed
+
+- **mcp** (#790): removed the inert `_registryCoversAllContracts` type pin in `mcp-tool-risks.ts` — it performed no real check; the `_everyContractCovered` IIFE is the genuine build-time guard that throws when a contract tool lacks a risk entry.
+- **vba-modules** (#790): `auditOrphans` no longer casts the `list_objects` result to `any`; it uses a narrow local `VbeObjectList` shape, dropping the `biome-ignore`.
+
+### Tests
+
+- **mcp** (#790): new anti-divergence guard in `mcp-tool-risks.test.ts` asserts `effectiveDryRunDefaultForTool` agrees with `DEFAULT_DRY_RUN_TABLE` for every registered tool under every policy, so a future hand-rolled re-derivation that drifts from the table fails immediately.
+
 ## [v2.1.2] - 2026-07-08
 
 Patch release. Wires the v2.1.0 risk-based write execution policy into the MCP dispatch path and enforces the export-source guard at runtime. Closes #785; delivers the runtime half of #783.

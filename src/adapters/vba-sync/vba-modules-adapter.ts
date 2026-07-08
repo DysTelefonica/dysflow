@@ -570,8 +570,17 @@ export class VbaModulesAdapter {
     const listResult = await this.orchestrator.executeMappedTool("list_objects", params, mapping);
     if (!listResult.ok) return listResult;
 
-    // biome-ignore lint/suspicious/noExplicitAny: VBE data structure
-    const vbeData = listResult.data as any;
+    // Narrow shape of the `list_objects` result: each category is a list of
+    // VBE component names. Fields are optional — an older runtime may omit a
+    // category entirely, so every access falls back to an empty list.
+    type VbeObjectList = {
+      modules?: readonly string[];
+      classes?: readonly string[];
+      forms?: readonly string[];
+      reports?: readonly string[];
+      documentModules?: readonly string[];
+    };
+    const vbeData = listResult.data as VbeObjectList | null;
     const vbeModules = vbeData?.modules || [];
     const vbeClasses = vbeData?.classes || [];
     const vbeForms = vbeData?.forms || [];

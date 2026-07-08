@@ -25,7 +25,10 @@ import {
   MCP_TOOL_RISKS,
   resolveRiskForTool,
 } from "../../../src/adapters/mcp/mcp-tool-risks.js";
-import { WRITE_EXECUTION_POLICIES } from "../../../src/core/runtime/write-execution-policy.js";
+import {
+  DEFAULT_DRY_RUN_TABLE,
+  WRITE_EXECUTION_POLICIES,
+} from "../../../src/core/runtime/write-execution-policy.js";
 
 describe("MCP_TOOL_RISKS — unified risk registry (#779)", () => {
   it("every contract tool has a risk entry", () => {
@@ -142,6 +145,25 @@ describe("effectiveDryRunDefaultForTool — truth table (#779)", () => {
       });
     }
   }
+
+  // #790 — anti-divergence guard. `effectiveDryRunDefaultForTool` (the helper
+  // the dispatch seam + capabilities snapshot consult) and `DEFAULT_DRY_RUN_TABLE`
+  // (the resolver's data table, consumed by `resolveWriteExecutionPolicy` for the
+  // confirm-source flag) are two encodings of the SAME (mode × risk) truth table.
+  // They must never diverge, or the advertised snapshot and the enforced default
+  // would disagree. This pin ties the helper to the single source of truth for
+  // EVERY registered tool under EVERY policy, so a hand-rolled re-derivation that
+  // drifts from the table fails here immediately.
+  it("helper agrees with DEFAULT_DRY_RUN_TABLE for every tool under every policy", () => {
+    for (const [name, risk] of Object.entries(MCP_TOOL_RISKS)) {
+      for (const mode of WRITE_EXECUTION_POLICIES) {
+        expect(
+          effectiveDryRunDefaultForTool(name as DysflowMcpToolName, mode),
+          `tool "${name}" (risk="${risk}") under "${mode}"`,
+        ).toBe(DEFAULT_DRY_RUN_TABLE[mode][risk]);
+      }
+    }
+  });
 
   it("read-only tools always return true (effective default is moot, but consistent)", () => {
     // read-only tools don't write, so dry-run semantics don't matter.

@@ -21,6 +21,7 @@
  */
 
 import type { ToolRisk, WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import { DEFAULT_DRY_RUN_TABLE } from "../../core/runtime/write-execution-policy.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
@@ -159,14 +160,12 @@ export function effectiveDryRunDefaultForTool(name: string, mode: WriteExecution
     // this branch is defensive.
     return true;
   }
-  if (mode === "safe-by-default") {
-    return true;
-  }
-  // mode === "developer"
-  if (risk === "routine-dev-write") {
-    return false;
-  }
-  return true;
+  // Derive from DEFAULT_DRY_RUN_TABLE — the single source of truth for the
+  // (mode × risk) → default. `resolveWriteExecutionPolicy` reads the same
+  // table for `requiresConfirmOverwriteSource`, so the helper (consulted by
+  // the dispatch seam + capabilities snapshot) and the resolver can never
+  // diverge. See test `mcp-tool-risks.test.ts` anti-divergence guard (#790).
+  return DEFAULT_DRY_RUN_TABLE[mode][risk];
 }
 
 /**
@@ -174,7 +173,6 @@ export function effectiveDryRunDefaultForTool(name: string, mode: WriteExecution
  * A mismatch is a build-time error so a future contract addition without a
  * risk entry doesn't slip through silently.
  */
-const _registryCoversAllContracts: keyof typeof MCP_TOOL_RISKS = "" as never;
 const _everyContractCovered = (() => {
   for (const name of Object.keys(MCP_TOOL_CONTRACTS)) {
     if (!(name in MCP_TOOL_RISKS)) {
@@ -183,5 +181,4 @@ const _everyContractCovered = (() => {
   }
   return true;
 })();
-void _registryCoversAllContracts;
 void _everyContractCovered;
