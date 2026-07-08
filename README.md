@@ -133,6 +133,75 @@ Refusal examples include:
 - `dryRun`-style safety is preserved across all write-capable tools.
 - Access cleanup is write-gated only for `force: true`; non-force cleanup remains allowed so terminal or failed Dysflow-owned operations can pass through the normal eligibility checks even when writes are disabled.
 
+#### 3a) Risk-based write execution policy (v2.1.0, issue #779)
+
+For routine local development, the blanket `dryRun: true` default on every write-class tool is friction in the wrong place: the `import_modules → test_vba → verify_code` loop should not require `dryRun:false` boilerplate. Operators can opt into a developer mode that flips the dry-run default for routine dev tools, while **keeping hard protection** on destructive, arbitrary, and process-control operations.
+
+Configure the policy in `.dysflow/project.json`:
+
+```json
+{
+  "capabilities": {
+    "writeExecutionPolicy": "developer"
+  }
+}
+```
+
+Supported modes:
+
+- `"safe-by-default"` (default) — every write-class tool defaults to `dryRun: true`. The historical contract; explicit `dryRun: false` or `apply: true` commits.
+- `"developer"` — routine dev tools (`import_modules`, `test_vba`, `link_tables`, `generate_form`, `catalog_add_control`, etc.) execute by default. Destructive / arbitrary / process-control operations still require explicit confirmation.
+
+Inspect the active policy and per-tool effective defaults via `get_capabilities`:
+
+```text
+writeExecutionPolicy: "developer"
+effectiveDryRunDefault: {
+  import_modules:   false,    // routine-dev-write — flipped to false in developer mode
+  test_vba:        false,    // routine-dev-write — allowedProcedures gate is still authoritative
+  export_modules:   true,     // destructive-write — always plan unless explicit
+  delete_module:    true,     // destructive-write — always plan unless explicit
+  query_execute:    true,     // arbitrary-write — always plan unless explicit
+  // ... etc.
+}
+```
+
+Risk classification (v2.1.0):
+
+- `read-only` — never writes (e.g. `verify_code`, `list_procedures`, `find_references`).
+- `routine-dev-write` — flips in developer mode (e.g. `import_modules`, `test_vba`, `link_tables`, `generate_form`).
+- `protected-write` — always requires explicit apply (e.g. `fix_encoding`, `compact_repair`, `relink_directory`).
+- `destructive-write` — always requires explicit apply; export tools also require `confirmOverwriteSource: true` when the destination overlaps the active source root (see §3b below).
+- `arbitrary-write` — always requires explicit apply (e.g. `exec_sql`, `run_script`, `query_execute`).
+- `process-control` — alias layer (`cleanup_access_operation`, `access_force_cleanup_orphaned`); per-call gating decides.
+
+The write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `allowedProcedures`) is **authoritative** — the new policy does NOT bypass any existing gate. In particular:
+
+- A project with `allowWrites: false` still blocks every write, regardless of policy.
+- A `test_vba` / `run_vba` call without the procedure in `allowedProcedures` is still rejected with `MCP_ALLOWLIST_NOT_CONFIGURED` or `MCP_PROCEDURE_NOT_ALLOWED`.
+
+#### 3b) Export-source guard (v2.1.0, issue #779)
+
+Exporting the binary source tree (`export_modules`, `export_all`) is destructive — if the destination overlaps the active source root, the export silently overwrites the developer's working tree. The export-source guard replaces the blanket `dryRun: true` posture with a context-specific confirmation:
+
+- If the export destination is **outside** the active source root / managed source tree, developer mode may execute directly (subject to the existing write-gate).
+- If the export destination **overlaps** the active source root or any managed subfolder (`modules/`, `classes/`, `forms/`, `reports/`), the operator must pass `confirmOverwriteSource: true` explicitly. Case-insensitive on Windows; nested paths count as overlap.
+
+Missing confirmation returns a structured, actionable error:
+
+```text
+EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION
+  resolved export destination: C:\repo\src\forms\Form_Main.form.txt
+  active source root:          C:\repo\src
+  reason:                       destination is inside the managed source tree;
+                                 export would silently overwrite the developer's
+                                 working copy.
+  remediation:                  pass `confirmOverwriteSource: true` or choose a
+                                 separate export path.
+```
+
+The check is implemented in `src/core/utils/path-overlap.ts` (`pathOverlapsSourceRoot`); see `test/core/utils/path-overlap.test.ts` for the truth table (exact match, nested managed folder, external path, Windows case-insensitive).
+
 ### 4) VBA procedure allowlist
 
 Set `allowedProcedures` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
