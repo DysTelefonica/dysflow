@@ -121,6 +121,12 @@ export async function startMcpStdioAdapter(
     // lint_module so it honors opt-outs and triggers the legacy
     // auto-detection downgrade.
     lintOverrides: startupConfig?.lintRulesOverride ?? {},
+    // Issue #789 — opt-in to the historical strict (error) severity for
+    // the `identifier-safety` non-ASCII check. Resolved from
+    // `capabilities.lint.identifierSafety.strictNonAscii` in
+    // `.dysflow/project.json`. Default `false`; when `true` the
+    // `lint_module` tool restores the legacy strict contract.
+    lintIdentifierSafetyStrict: startupConfig?.lintIdentifierSafetyStrict === true,
     // PR-1 (issue #762, v1.20.0) — forward the resolved front-end `.accdb`
     // path so `get_capabilities` can surface the per-project
     // `humanCompilePending` flag from the process-local state cache.
