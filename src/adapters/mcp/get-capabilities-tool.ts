@@ -6,7 +6,9 @@ import packageJson from "../../../package.json" with { type: "json" };
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
 import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
+import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
@@ -70,6 +72,27 @@ export type McpCapabilitySnapshot = {
   };
   allowedProcedures: readonly string[] | undefined;
   dryRunDefault: boolean;
+  /**
+   * v2.1.0 (#779) — active write-execution policy, resolved from
+   * `.dysflow/project.json` `capabilities.writeExecutionPolicy`. Defaults
+   * to `"safe-by-default"` when the field is absent or undefined.
+   *
+   * The per-tool `effectiveDryRunDefault` map (below) is computed against
+   * THIS policy — consumers can predict whether a write-class tool will
+   * plan or commit by default.
+   */
+  writeExecutionPolicy: WriteExecutionPolicy;
+  /**
+   * v2.1.0 (#779) — per-tool effective `dryRun` default under the active
+   * policy. Keys are the same set as `MCP_TOOL_CONTRACTS`. A consumer
+   * checks `effectiveDryRunDefault[toolName]` to decide whether the
+   * routine dev loop requires explicit `dryRun: false`.
+   *
+   * The truth table is locked in
+   * `src/adapters/mcp/mcp-tool-risks.ts: effectiveDryRunDefaultForTool` —
+   * do NOT hardcode the per-tool default elsewhere.
+   */
+  effectiveDryRunDefault: Readonly<Record<string, boolean>>;
   toolsVisible: number;
   writeClassToolsPermitted: readonly string[];
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
@@ -90,6 +113,14 @@ export type GetCapabilitiesAllInput = {
    * reports `humanCompilePending: false` (no project in scope).
    */
   accessDbPath?: string;
+  /**
+   * v2.1.0 (#779) — active write-execution policy. Resolved by the caller
+   * from `.dysflow/project.json` `capabilities.writeExecutionPolicy`
+   * (defaults to `"safe-by-default"` when the field is absent). When
+   * omitted from this input, the snapshot defaults to `"safe-by-default"`
+   * so legacy callers continue to work.
+   */
+  writeExecutionPolicy?: WriteExecutionPolicy;
 };
 
 // ─── Pure aggregate function ──────────────────────────────────────────────────
@@ -113,6 +144,17 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
       ? isHumanCompilePending(input.accessDbPath)
       : false;
 
+  // v2.1.0 (#779) — resolve the active policy (default safe-by-default
+  // when the caller didn't pass one) and compute the per-tool effective
+  // dry-run map. The resolver is the single source of truth; we do NOT
+  // duplicate the truth table here.
+  const writeExecutionPolicy: WriteExecutionPolicy =
+    input.writeExecutionPolicy ?? "safe-by-default";
+  const effectiveDryRunDefault: Record<string, boolean> = {};
+  for (const name of Object.keys(MCP_TOOL_RISKS)) {
+    effectiveDryRunDefault[name] = effectiveDryRunDefaultForTool(name, writeExecutionPolicy);
+  }
+
   return {
     adapterVersion,
     surface,
@@ -129,6 +171,8 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     },
     allowedProcedures: input.allowedProcedures,
     dryRunDefault: deriveGlobalDryRunDefault(),
+    writeExecutionPolicy,
+    effectiveDryRunDefault,
     toolsVisible: toolNames.length,
     writeClassToolsPermitted,
     humanCompilePending,
@@ -208,6 +252,13 @@ export function createGetCapabilitiesTool(opts: {
    * snapshot reports `humanCompilePending: false` (no project in scope).
    */
   accessDbPath?: string;
+  /**
+   * v2.1.0 (#779) — active write-execution policy. Resolved upstream by
+   * the project config; passed through to the snapshot so
+   * `effectiveDryRunDefault` reflects the same policy the dispatcher will
+   * consult.
+   */
+  writeExecutionPolicy?: WriteExecutionPolicy;
 }): DysflowMcpTool {
   const snapshot = getCapabilitiesAll({
     writesEnabled: opts.writesEnabled,
@@ -219,11 +270,12 @@ export function createGetCapabilitiesTool(opts: {
     projectId: opts.projectId,
     allowWrites: opts.allowWrites,
     accessDbPath: opts.accessDbPath,
+    writeExecutionPolicy: opts.writeExecutionPolicy,
   });
 
   return {
     name: "get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Write execution policy: ${snapshot.writeExecutionPolicy}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);
