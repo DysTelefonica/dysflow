@@ -199,6 +199,14 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // a single shared SCHEMA_PROPS entry so the description stays in one
       // place rather than being copy-pasted into four tool schemas.
       "verboseContract",
+      // issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
+      // guard. When `developer` mode is active and the destination
+      // overlaps the project's active source root, the dispatcher refuses
+      // with `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the
+      // caller passes this flag. Added as a single shared SCHEMA_PROPS
+      // entry so the description stays in one place rather than being
+      // copy-pasted into the two export_* schemas.
+      "confirmOverwriteSource",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

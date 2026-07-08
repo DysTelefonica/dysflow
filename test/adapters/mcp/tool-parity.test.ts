@@ -235,11 +235,19 @@ describe("Dysflow MCP tool parity inventory", () => {
     });
 
     expect(vbaSyncCalls).toEqual([
+      // Issue #785 (v2.1.1) — the dispatch seam injects the policy-driven
+      // effective dryRun default. `export_modules` is destructive-write so
+      // the safe-by-default policy default is `dryRun: true`. `verify_code`
+      // is read-only — its risk-driven default is also `true`. The
+      // routing+intent assertion is preserved (tool name + caller fields).
       {
         toolName: "export_modules",
-        input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb" },
+        input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb", dryRun: true },
       },
-      { toolName: "verify_code", input: { moduleNames: ["Form_Main"], diff: true } },
+      {
+        toolName: "verify_code",
+        input: { moduleNames: ["Form_Main"], diff: true, dryRun: true },
+      },
     ]);
     expect(queryCalls).toEqual([
       {

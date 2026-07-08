@@ -210,7 +210,15 @@ describe("MCP/core architecture boundary", () => {
     });
 
     expect(vbaSyncRequests).toEqual([
-      { toolName: "export_all", input: { projectRoot: "C:/project" } },
+      // Issue #785 (v2.1.1) — the dispatch seam injects the policy-driven
+      // effective dryRun default (`dryRun: true` in safe-by-default for any
+      // non-routine-dev-write tool — here `export_all` is destructive-write).
+      // The wire shape between dispatcher and adapter changed in v2.1.1; the
+      // routing assertion (tool name + caller-provided fields) is preserved.
+      {
+        toolName: "export_all",
+        input: { projectRoot: "C:/project", dryRun: true },
+      },
     ]);
   });
 });

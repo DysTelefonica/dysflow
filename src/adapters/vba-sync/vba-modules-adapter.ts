@@ -228,19 +228,35 @@ export class VbaModulesAdapter {
       return verifyResult;
     }
 
-    const dryRun = params.apply === true ? false : params.dryRun !== false;
+    // Issue #785 (v2.1.1) — the dispatch seam (capa 1) is the SINGLE source
+    // of truth for the policy-driven dryRun default. By the time the
+    // adapter is invoked through the MCP dispatch boundary, the helper has
+    // already injected `dryRun: false` for `routine-dev-write` tools in
+    // `developer` mode (or `dryRun: true` for every other combination) —
+    // caller intent is preserved. The adapter therefore only needs to
+    // honor EXPLICIT dryRun / apply intent. Removing the implicit
+    // "absence = plan" rule (`params.dryRun !== false`) enables the
+    // developer loop to actually execute routine imports without each
+    // caller having to thread `dryRun: false` through the pipeline.
+    //
+    // Pre-2.1.1 the line was `const dryRun = params.apply === true ? false :
+    // params.dryRun !== false;`. Post-2.1.1 the truth table collapses to:
+    //   - `dryRun === true`           → plan.
+    //   - `dryRun === false`          → execute.
+    //   - `apply === true`            → execute (commit signal; legacy contract).
+    //   - absent (caller omitted both) → execute.
+    // Direct adapter callers (no dispatch seam) MUST pass an explicit flag
+    // to plan; the seam is the policy authority.
+    const dryRun = params.dryRun === true;
     if (dryRun && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
     }
-    // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits
-    // `delete_module` to a plan-shaped result via `planDelete`. Unlike
-    // `import_*`/`import_all` above, this branch is EXPLICIT-only:
-    // `delete_module` without `dryRun` keeps the legacy execute path so
-    // production delete workflows don't accidentally dry-run when the flag
-    // is omitted. The `dryRun` variable above is reused as a guard so a
-    // future change that wants default-dry-run for delete_module can flip
-    // the predicate in one place.
-    if (dryRun && toolName === "delete_module" && params.dryRun === true) {
+    // `dryRun && toolName === "delete_module"` was previously guarded by an
+    // extra `params.dryRun === true` check because delete_module lacked the
+    // implicit absence-default. With the new contract, `dryRun` is `true`
+    // iff the caller explicitly passed `dryRun: true`, so the extra guard
+    // is redundant. The branch mirrors the import_* shape.
+    if (dryRun && toolName === "delete_module") {
       return this.planDelete(params);
     }
 

@@ -607,7 +607,22 @@ describe("VbaModulesAdapter", () => {
     });
   });
 
-  it("defaults to dryRun: true for import_modules and import_all when parameters are omitted", async () => {
+  it("import_modules / import_all with explicit dryRun:true plan; without flags the runner path is reached (capa 2 contract)", async () => {
+    // Issue #785 (v2.1.1, capa 2) — the adapter no longer hardcodes
+    // `params.dryRun !== false` (the implicit "absence = plan" rule).
+    // The dispatch seam is now the SINGLE source of truth for policy
+    // defaults. This test reframes the historical "default-dry-run" pin:
+    //
+    //   - With explicit `dryRun: true` → plan (preserved contract).
+    //   - Without flags                → runner path is reached
+    //                                    (the adapter delegate is now
+    //                                    driven by explicit intent only —
+    //                                    direct adapter callers MUST pass
+    //                                    an explicit flag).
+    //
+    // Direct adapter callers that want plan behavior therefore pass an
+    // explicit `dryRun: true`. The dispatch seam applies the same
+    // policy default at the MCP boundary (#785 capa 1).
     const root = await mkdtemp(join(tmpdir(), "dysflow-import-default-dryrun-"));
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
@@ -617,21 +632,22 @@ describe("VbaModulesAdapter", () => {
       destinationRoot: root,
     });
 
-    const resultModules = await service.execute("import_modules", {
+    const planModules = await service.execute("import_modules", {
       moduleNames: ["Entorno"],
+      dryRun: true,
     });
-    expect(resultModules.ok).toBe(true);
-    if (!resultModules.ok) throw new Error("expected success");
-    expect(resultModules.data).toMatchObject({
+    expect(planModules.ok).toBe(true);
+    if (!planModules.ok) throw new Error("expected plan success");
+    expect(planModules.data).toMatchObject({
       operation: "import_modules",
       dryRun: true,
       willModifyAccess: false,
     });
 
-    const resultAll = await service.execute("import_all", {});
-    expect(resultAll.ok).toBe(true);
-    if (!resultAll.ok) throw new Error("expected success");
-    expect(resultAll.data).toMatchObject({
+    const planAll = await service.execute("import_all", { dryRun: true });
+    expect(planAll.ok).toBe(true);
+    if (!planAll.ok) throw new Error("expected plan success");
+    expect(planAll.data).toMatchObject({
       operation: "import_all",
       dryRun: true,
       willModifyAccess: false,

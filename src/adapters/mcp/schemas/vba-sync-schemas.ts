@@ -57,6 +57,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
       verbose: SCHEMA_PROPS.verboseContract,
+      // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
+      // guard. When `developer` mode is active and the destination overlaps
+      // the project's active source root, the dispatcher refuses with
+      // `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the caller
+      // passes this flag. Ignored in `safe-by-default` mode.
+      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -73,6 +79,9 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       exportPath: SCHEMA_PROPS.exportPath,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
+      // Issue #785 (v2.1.1) — see export_modules for semantics; same
+      // opt-in acknowledgment field for full-mirror exports.
+      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

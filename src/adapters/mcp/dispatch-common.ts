@@ -45,6 +45,27 @@ export const MCP_ALLOWLIST_NOT_CONFIGURED = "MCP_ALLOWLIST_NOT_CONFIGURED" as co
 export type McpAllowlistNotConfiguredCode = typeof MCP_ALLOWLIST_NOT_CONFIGURED;
 
 /**
+ * Issue #785 (v2.1.1) — export-source guard refusal envelope.
+ *
+ * Refuses `export_modules` / `export_all` calls in `developer` mode when
+ * the resolved destination overlaps the project's active source root and
+ * the caller has not passed `confirmOverwriteSource: true`. The envelope
+ * shape mirrors `MCP_PROCEDURE_NOT_ALLOWED`: structured `error.code` for
+ * programmatic dispatch, structured `error.destination` / `sourceRoot`
+ * / `error.remediation` for diagnostic introspection, legacy
+ * `content[0].text` prefix for regex consumers.
+ *
+ * The guard is policy-driven: `safe-by-default` never reaches the
+ * enforcement branch (the dispatcher injects `dryRun: true`, which
+ * short-circuits the guard via the `isExecuteMode === false` check).
+ * Only `developer` mode opt-in projects can encounter the refusal.
+ */
+export const EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION =
+  "EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION" as const;
+export type ExportOverwritesSourceRequiresConfirmationCode =
+  typeof EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION;
+
+/**
  * Issue #659 — schema-rejection envelope. Retains the legacy `MCP_INPUT_INVALID`
  * code (kept for backward compat per `gate-error-codes/spec.md` scenario 5).
  * The structured `error` block carries `code` + `message` but deliberately
@@ -150,6 +171,51 @@ export function allowlistNotConfigured(procedureName: string): McpToolResult {
     error: {
       code: MCP_ALLOWLIST_NOT_CONFIGURED,
       message,
+      remediation,
+    },
+  };
+}
+
+/**
+ * Issue #785 (v2.1.1) — structured refusal envelope for the export-source
+ * guard. The dispatch layer (`dispatch-factory.ts`) calls this helper when
+ * `requiresExportSourceConfirmation` returns a refusal from the
+ * write-execution-dispatch helper. The envelope shape mirrors the
+ * `procedureNotAllowed` / `allowlistNotConfigured` helpers so consumers
+ * have a uniform structured-error contract across all gate refusals.
+ *
+ * Mirrors the `MCP_PROCEDURE_NOT_ALLOWED` /
+ * `MCP_ALLOWLIST_NOT_CONFIGURED` envelope pattern: structured `error.code`
+ * for programmatic dispatch, structured `error.destination` /
+ * `error.sourceRoot` for diagnostic introspection, legacy
+ * `content[0].text` regex prefix for legacy consumers.
+ */
+export function exportSourceGuardRefused(args: {
+  toolName: string;
+  destination: string;
+  sourceRoot: string;
+}): McpToolResult {
+  const { toolName, destination, sourceRoot } = args;
+  const remediation =
+    `Pass confirmOverwriteSource: true to confirm the overwrite, or point ` +
+    `exportPath / destinationRoot outside the project's source tree.`;
+  const message =
+    `Refusing ${toolName}: destination ${destination} overlaps the project's ` +
+    `active source root (${sourceRoot}). ${remediation}`;
+  return {
+    content: [
+      {
+        type: "text",
+        text: `${EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION}: ${message}`,
+      },
+    ],
+    isError: true,
+    ok: false,
+    error: {
+      code: EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
+      message,
+      destination,
+      sourceRoot,
       remediation,
     },
   };

@@ -1036,5 +1036,15 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     writeAccessResolver,
     env,
     allowedProcedures,
+    // Issue #785 (v2.1.1) — forward the resolved write-execution policy
+    // through to the dispatch factory. `writeExecutionPolicy` was already
+    // destructured at the top of this function (line 505) for the
+    // capabilities snapshot; this just widens the seam so the dispatch
+    // tools also consult the same resolved value.
+    writeExecutionPolicy,
+    // Issue #785 (v2.1.1, capa 4) — forward the MCP access-context resolver
+    // (already constructed above) so the export-source guard can read the
+    // project's active source root before forwarding to vbaSyncToolService.
+    accessContextResolver,
   );
 }

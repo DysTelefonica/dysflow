@@ -47,6 +47,23 @@ export type McpToolError = {
    * its contents without a second round-trip to `get_capabilities`.
    */
   allowedProcedures?: readonly string[];
+  /**
+   * Optional resolved export destination surfaced on
+   * `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` (#785 / #783 partial).
+   * When present, the consumer sees the path the export would have written
+   * to, computed from the caller's `exportPath` / `destinationRoot` and
+   * the project's access context.
+   */
+  destination?: string;
+  /**
+   * Optional resolved active source root surfaced on
+   * `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` (#785 / #783 partial).
+   * When present, equals the project's `destinationRoot` at the time of
+   * the call (via the MCP access context resolver, with a documented
+   * fallback to the caller's own `destinationRoot` only when the
+   * resolver is unavailable).
+   */
+  sourceRoot?: string;
 };
 
 export type McpToolResult = {
