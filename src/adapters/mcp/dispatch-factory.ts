@@ -3,8 +3,8 @@ import {
   buildQueryReadRequest,
   resolveIsDryRun,
 } from "../../core/mapping/access-query-request-mapper.js";
-import { isRecord } from "../../core/utils/index.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import { isRecord } from "../../core/utils/index.js";
 
 import {
   exportSourceGuardRefused,
@@ -240,7 +240,7 @@ export function createDispatchTool(
         return writesDisabled(name);
       }
       switch (route.kind) {
-        case "vba-sync":
+        case "vba-sync": {
           // Issue #785 (v2.1.1) — export-source guard fires here, before
           // forwarding to `vbaSyncToolService.execute`. The guard is
           // policy-driven (developer mode only), execute-mode-only (plan
@@ -280,16 +280,21 @@ export function createDispatchTool(
           }
           if (sourceRootForGuard !== undefined) {
             const destinationForGuard = isRecord(normalizedInput)
-              ? (typeof normalizedInput.exportPath === "string"
-                  ? normalizedInput.exportPath
-                  : typeof normalizedInput.destinationRoot === "string"
-                    ? normalizedInput.destinationRoot
-                    : undefined)
+              ? typeof normalizedInput.exportPath === "string"
+                ? normalizedInput.exportPath
+                : typeof normalizedInput.destinationRoot === "string"
+                  ? normalizedInput.destinationRoot
+                  : undefined
               : undefined;
-            const refusal = requiresExportSourceConfirmation(name, writeExecutionPolicy, normalizedInput, {
-              destination: destinationForGuard,
-              sourceRoot: sourceRootForGuard,
-            });
+            const refusal = requiresExportSourceConfirmation(
+              name,
+              writeExecutionPolicy,
+              normalizedInput,
+              {
+                destination: destinationForGuard,
+                sourceRoot: sourceRootForGuard,
+              },
+            );
             if (refusal !== undefined) {
               return exportSourceGuardRefused({
                 toolName: refusal.toolName,
@@ -325,6 +330,7 @@ export function createDispatchTool(
               },
             ],
           };
+        }
         case "query-maintenance": {
           // route.queryMode is the single source of truth (narrowed to "read" | "write"
           // by the query-maintenance branch). No second lookup, no "write" fallback.

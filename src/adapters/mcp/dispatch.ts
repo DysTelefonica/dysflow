@@ -1,3 +1,4 @@
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { ALIAS_TOOL_NAMES, buildAliasTools } from "./alias-tools.js";
 import type { AllowedProcedures } from "./allowed-procedures-resolver.js";
 import { createDispatchTool } from "./dispatch-factory.js";
@@ -9,7 +10,6 @@ import type {
   McpAccessContextResolver,
   McpWriteAccessResolver,
 } from "./result-translation.js";
-import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 
 // ─── Re-exports — compatibility surface ───────────────────────────────────────
 

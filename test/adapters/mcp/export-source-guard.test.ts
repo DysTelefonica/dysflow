@@ -17,12 +17,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
-import { requiresExportSourceConfirmation } from "../../../src/adapters/mcp/write-execution-dispatch";
 import {
   EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
   exportSourceGuardRefused,
 } from "../../../src/adapters/mcp/dispatch-common";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
+import { requiresExportSourceConfirmation } from "../../../src/adapters/mcp/write-execution-dispatch";
 import { successResult } from "../../../src/core/contracts/index";
 
 // ─── Helper truth table ──────────────────────────────────────────────────────
@@ -189,9 +189,7 @@ describe("exportSourceGuardRefused — envelope shape (#785, capa 4)", () => {
     });
     expect(result.isError).toBe(true);
     expect(result.ok).toBe(false);
-    expect(result.content[0]?.text).toContain(
-      EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
-    );
+    expect(result.content[0]?.text).toContain(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(result.error?.code).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(result.error?.destination).toBe("C:/Projets/dysflow");
     expect(result.error?.sourceRoot).toBe("C:/Projets/dysflow");
@@ -248,9 +246,7 @@ describe("dispatch-factory — export-source guard short-circuit (#785, capa 4)"
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain(
-      EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
-    );
+    expect(result.content[0]?.text).toContain(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(services.vbaSyncToolService.requests).toHaveLength(0);
   });
 
@@ -300,9 +296,7 @@ describe("dispatch-factory — export-source guard short-circuit (#785, capa 4)"
     });
 
     expect(result.isError).toBe(false);
-    expect(result.content[0]?.text).not.toContain(
-      EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
-    );
+    expect(result.content[0]?.text).not.toContain(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(services.vbaSyncToolService.requests.length).toBeGreaterThanOrEqual(1);
   });
 });

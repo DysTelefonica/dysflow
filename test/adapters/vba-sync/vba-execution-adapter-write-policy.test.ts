@@ -61,9 +61,7 @@ function makeAdapter(opts: {
   // allowlist — a fresh sentinel `"missing"` lets individual tests opt
   // into the refusal branch without the helper's fallback overriding them.
   const allowedProcedures: AllowedProcedures | undefined =
-    opts.allowedProcedures === "missing"
-      ? undefined
-      : (opts.allowedProcedures ?? ["Test_Alpha"]);
+    opts.allowedProcedures === "missing" ? undefined : (opts.allowedProcedures ?? ["Test_Alpha"]);
   const adapter = new VbaExecutionAdapter(orchestrator, undefined, allowedProcedures);
   return { adapter, executeMappedTool };
 }
@@ -107,7 +105,11 @@ describe("VbaExecutionAdapter — test_vba write-policy truth table (#785, capa 
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected plan success");
-    const data = result.data as { dryRun: boolean; willExecute: boolean; willModifyAccess: boolean };
+    const data = result.data as {
+      dryRun: boolean;
+      willExecute: boolean;
+      willModifyAccess: boolean;
+    };
     expect(data.dryRun).toBe(true);
     expect(data.willExecute).toBe(false);
     expect(data.willModifyAccess).toBe(false);

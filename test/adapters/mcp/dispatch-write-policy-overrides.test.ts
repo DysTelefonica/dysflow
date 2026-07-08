@@ -157,7 +157,12 @@ describe("explicit caller intent always wins (#785, capa 5)", () => {
     // through. We pin the forwarded payload via the dispatcher seam
     // (the dispatch helper preserves caller intent verbatim).
     const services = makeServices();
-    const { tool, vbaSyncToolService } = toolByName(services, "import_modules", true, "safe-by-default");
+    const { tool, vbaSyncToolService } = toolByName(
+      services,
+      "import_modules",
+      true,
+      "safe-by-default",
+    );
     await tool.handler({
       moduleNames: ["Foo"],
       dryRun: false,
@@ -192,7 +197,12 @@ describe("policy default truth table (#785, capa 5)", () => {
     // The adapter's `params.dryRun === true` short-circuit returns planImport
     // without invoking the underlying PowerShell action.
     const services = makeServices();
-    const { tool, vbaSyncToolService } = toolByName(services, "import_modules", true, "safe-by-default");
+    const { tool, vbaSyncToolService } = toolByName(
+      services,
+      "import_modules",
+      true,
+      "safe-by-default",
+    );
     await tool.handler({
       moduleNames: ["Foo"],
       projectRoot: "C:/project",
@@ -231,7 +241,12 @@ describe("form mutation / catalog family exempt (#785, capa 5)", () => {
     // pre-capa-1 default so a future PR reintroducing a missing-tool
     // branch surfaces here.
     const services = makeServices();
-    const { tool, vbaSyncToolService } = toolByName(services, "catalog_add_control", true, "developer");
+    const { tool, vbaSyncToolService } = toolByName(
+      services,
+      "catalog_add_control",
+      true,
+      "developer",
+    );
     await tool.handler({
       spec: { name: "X" },
       controlName: "x",

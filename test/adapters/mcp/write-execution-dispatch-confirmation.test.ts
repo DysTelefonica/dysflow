@@ -12,8 +12,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { requiresExportSourceConfirmation } from "../../../src/adapters/mcp/write-execution-dispatch";
 import { EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION } from "../../../src/adapters/mcp/dispatch-common";
+import { requiresExportSourceConfirmation } from "../../../src/adapters/mcp/write-execution-dispatch";
 
 const SRC = "C:/Projets/dysflow";
 const OUT = "C:/elsewhere/staging";

@@ -28,12 +28,12 @@
  * over that resolver.
  */
 
-import { resolveRiskForTool, effectiveDryRunDefaultForTool } from "./mcp-tool-risks.js";
-import { pathOverlapsSourceRoot } from "../../core/utils/path-overlap.js";
 import {
   resolveWriteExecutionPolicy,
   type WriteExecutionPolicy,
 } from "../../core/runtime/write-execution-policy.js";
+import { pathOverlapsSourceRoot } from "../../core/utils/path-overlap.js";
+import { effectiveDryRunDefaultForTool, resolveRiskForTool } from "./mcp-tool-risks.js";
 
 // ─── (1) Dry-run default injection ──────────────────────────────────────────
 

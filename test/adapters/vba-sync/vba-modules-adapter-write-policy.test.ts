@@ -20,53 +20,16 @@
  * explicit caller intent.
  */
 
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
-import {
-  type AccessOperationPreflightCleanupResult,
-  type VbaModulesOrchestrator,
-} from "../../../src/adapters/vba-sync/vba-modules-adapter";
+import type { AccessOperationPreflightCleanupResult } from "../../../src/core/operations/access-operation-preflight.js";
 
 // ─── Adapter-direct truth table — dryRun / apply dispatcher behavior ────────
-
-/**
- * Build a `VbaSyncAdapter` whose executor records every PowerShell request.
- * The adapter under test is the one wired by the service; the executor is
- * the real I/O seam.
- */
-function makeRecordingService(opts: { dryRunFixture: boolean }) {
-  const calls: Array<{ action: string; dryRun: unknown; apply?: unknown }> = [];
-  const executor: VbaManagerExecutor = async (request) => {
-    calls.push({
-      action: request.action,
-      dryRun: request.dryRun,
-      apply: request.apply,
-    });
-    return {
-      exitCode: 0,
-      stdout: "DYSFLOW_RESULT {}",
-      stderr: "",
-      durationMs: 1,
-      timedOut: false,
-    };
-  };
-  const root = "C:/repo";
-  const service = new VbaSyncAdapter({
-    executor,
-    scriptPath: "scripts/dysflow-vba-manager.ps1",
-    accessPath: "C:/db/front.accdb",
-    destinationRoot: "C:/repo/src",
-    env: {},
-  });
-  return { service, calls, ...(opts.dryRunFixture ? {} : {}) };
-}
 
 describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => {
   // ---------- import_modules / import_all ----------
@@ -187,9 +150,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     });
 
     expect(result.ok).toBe(true);
-    expect(calls).toEqual([
-      expect.objectContaining({ action: "Import" }),
-    ]);
+    expect(calls).toEqual([expect.objectContaining({ action: "Import" })]);
   });
 
   // ---------- delete_module ----------
@@ -282,9 +243,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
       apply: true,
     });
 
-    expect(calls).toEqual([
-      expect.objectContaining({ action: "Delete" }),
-    ]);
+    expect(calls).toEqual([expect.objectContaining({ action: "Delete" })]);
   });
 
   // ---------- apply:true precedence ----------
@@ -426,7 +385,6 @@ describe("VbaModulesAdapter — direct adapter truth table (#785, capa 2)", () =
           killed: [],
           orphanedKilled: [],
           errors: [],
-          diagnostics: [],
         }) satisfies AccessOperationPreflightCleanupResult,
       executeMappedTool: async (toolName) => {
         executor({
@@ -435,6 +393,10 @@ describe("VbaModulesAdapter — direct adapter truth table (#785, capa 2)", () =
           cwd: "C:/repo",
           env: {},
           extra: {},
+          destinationRoot: "C:/repo/src",
+          moduleNames: [],
+          json: false,
+          timeoutMs: 30_000,
         });
         return {
           ok: true,
@@ -564,16 +526,6 @@ describe("VbaModulesAdapter — no implicit absence-default (#785, capa 2)", () 
 
     await service.execute("delete_module", { moduleNames: ["Module_Foo"] });
 
-    expect(calls).toEqual([
-      expect.objectContaining({ action: "Delete" }),
-    ]);
+    expect(calls).toEqual([expect.objectContaining({ action: "Delete" })]);
   });
 });
-
-// consume mkdir / mkdtemp / writeFile so the import passes lint on every
-// machine regardless of whether the test block above is fully exercised
-// (defensive — the imports are used by helpers in the file scope).
-void mkdir;
-void mkdtemp;
-void writeFile;
-void makeRecordingService;

@@ -37,13 +37,41 @@ describe("resolveEffectiveDryRunInput — (mode, risk, input) truth table (#785)
     risk: "routine-dev-write" | "protected-write" | "destructive-write" | "arbitrary-write";
     expected: Record<WriteExecutionPolicy, boolean>;
   }> = [
-    { tool: "import_modules", risk: "routine-dev-write", expected: { "safe-by-default": true, developer: false } },
-    { tool: "import_all", risk: "routine-dev-write", expected: { "safe-by-default": true, developer: false } },
-    { tool: "test_vba", risk: "routine-dev-write", expected: { "safe-by-default": true, developer: false } },
-    { tool: "export_modules", risk: "destructive-write", expected: { "safe-by-default": true, developer: true } },
-    { tool: "delete_module", risk: "destructive-write", expected: { "safe-by-default": true, developer: true } },
-    { tool: "fix_encoding", risk: "protected-write", expected: { "safe-by-default": true, developer: true } },
-    { tool: "query_execute", risk: "arbitrary-write", expected: { "safe-by-default": true, developer: true } },
+    {
+      tool: "import_modules",
+      risk: "routine-dev-write",
+      expected: { "safe-by-default": true, developer: false },
+    },
+    {
+      tool: "import_all",
+      risk: "routine-dev-write",
+      expected: { "safe-by-default": true, developer: false },
+    },
+    {
+      tool: "test_vba",
+      risk: "routine-dev-write",
+      expected: { "safe-by-default": true, developer: false },
+    },
+    {
+      tool: "export_modules",
+      risk: "destructive-write",
+      expected: { "safe-by-default": true, developer: true },
+    },
+    {
+      tool: "delete_module",
+      risk: "destructive-write",
+      expected: { "safe-by-default": true, developer: true },
+    },
+    {
+      tool: "fix_encoding",
+      risk: "protected-write",
+      expected: { "safe-by-default": true, developer: true },
+    },
+    {
+      tool: "query_execute",
+      risk: "arbitrary-write",
+      expected: { "safe-by-default": true, developer: true },
+    },
   ];
 
   for (const { tool, expected } of cases) {
