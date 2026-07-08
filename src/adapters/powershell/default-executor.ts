@@ -13,6 +13,16 @@ export type PowerShellProcessResult = {
   durationMs: number;
   timedOut: boolean;
   powershellWorkerPid?: number;
+  /**
+   * #781 P2 — non-empty when `child_process.spawn` itself failed (e.g. ENOENT
+   * because `pwsh` is not on PATH). Distinct from `timedOut: true` (which
+   * means the process was spawned and then killed by the timeout bound). When
+   * `spawnError` is set, `exitCode` is `null` and `timedOut` is `false`.
+   * Callers that need a specific diagnostic for the "could not start" path
+   * MUST switch on `spawnError` rather than treating the result as a generic
+   * exit-code failure.
+   */
+  spawnError?: string;
 };
 
 export type PowerShellProcessOptions = {
@@ -135,7 +145,24 @@ export function spawnPowerShellProcess(
     });
     child.on("error", (error: Error) => {
       stderr += error.message;
-      finish(null);
+      // #781 P2 — distinguish "could not spawn" (e.g. ENOENT, EACCES) from a
+      // timeout-kill. Both currently resolve with `{ exitCode: null, timedOut:
+      // false }`, which is indistinguishable to callers. Set `spawnError` so
+      // consumers can branch on it and surface a specific diagnostic code
+      // (e.g. POWERSHELL_SPAWN_FAILED) instead of a generic exit-code failure.
+      const spawnError = error.message;
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        exitCode: null,
+        stdout,
+        stderr,
+        durationMs: Date.now() - startedAt,
+        timedOut: false,
+        powershellWorkerPid: child.pid,
+        spawnError,
+      });
     });
     child.on("close", finish);
   });

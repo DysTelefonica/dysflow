@@ -74,6 +74,14 @@ export type VbaManagerExecutionResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  /**
+   * #781 P2 — propagated from `spawnPowerShellProcess` when the underlying
+   * `child_process.spawn` itself failed (e.g. ENOENT, EACCES). Distinct from
+   * `timedOut: true`. When set, the executor layer in `executeMappedTool`
+   * surfaces a `POWERSHELL_SPAWN_FAILED` diagnostic instead of falling
+   * through to the generic exit-code failure path.
+   */
+  spawnError?: string;
 };
 
 type TrackedVbaManagerOperation = {
@@ -419,6 +427,29 @@ export class VbaSyncAdapter implements VbaSyncPort {
       status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
     });
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
+    // #781 P2 — surface a spawn failure (e.g. ENOENT for `pwsh` not on PATH,
+    // EACCES on Windows) with a specific diagnostic code instead of letting it
+    // fall through to the generic exit-code failure path. The result has
+    // `exitCode: null` and `timedOut: false` — a shape that historically was
+    // indistinguishable from a clean timeout-kill, which made spawn errors
+    // surface as opaque "exited with code unknown" messages.
+    if (result.spawnError !== undefined) {
+      return failureResult(
+        createDysflowError(
+          "POWERSHELL_SPAWN_FAILED",
+          `${toolName} could not start PowerShell worker: ${result.spawnError}`,
+          {
+            details: {
+              toolName,
+              durationMs: result.durationMs,
+              spawnError: result.spawnError,
+              stderrTail: result.stderr.slice(-2000),
+            },
+          },
+        ),
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+      );
+    }
     if (result.timedOut) {
       // The PowerShell process is killed on timeout, but the Access COM process it
       // spawned survives as an orphan. Reap it immediately via the path/lock

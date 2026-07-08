@@ -709,3 +709,89 @@ describe("createDefaultPowerShellExecutor — includes powershellWorkerPid", () 
     expect(result.powershellWorkerPid).toBe(42);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #781 P2 — spawn failure (ENOENT / EACCES) is distinguishable from timeout
+// ---------------------------------------------------------------------------
+
+describe("spawnPowerShellProcess — spawn failure distinct from timeout (#781 P2)", () => {
+  /**
+   * Recreate the exact `child_process.spawn` error contract: Node delivers the
+   * spawn failure on the child's `error` event with an Error whose `.code`
+   * field (e.g. "ENOENT") and `.message` describe what went wrong. No `close`
+   * event ever fires.
+   */
+  function installSpawnFailureChild(): { emitError: (err: Error) => void } {
+    let errorCb: ((err: Error) => void) | undefined;
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (event: string, cb: (err: Error) => void) => {
+        if (event === "error") errorCb = cb;
+      },
+      kill: vi.fn(),
+    }));
+    return {
+      emitError: (err: Error) => errorCb?.(err),
+    };
+  }
+
+  it("exposes spawnError on the result when child emits an ENOENT-style error event", async () => {
+    const child = installSpawnFailureChild();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "exit 0"],
+      timeoutMs: 5_000,
+    });
+
+    const enoent = Object.assign(new Error("spawn pwsh ENOENT"), { code: "ENOENT" });
+    child.emitError(enoent);
+
+    const result = await resultPromise;
+    expect(result.spawnError).toBe("spawn pwsh ENOENT");
+    // Spawn error is distinct from timeout — exitCode is null but timedOut is false
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBeNull();
+    expect(result.stderr).toContain("spawn pwsh ENOENT");
+  });
+
+  it("forwards spawnError through createDefaultPowerShellExecutor", async () => {
+    const child = installSpawnFailureChild();
+
+    const executor = createDefaultPowerShellExecutor();
+    const resultPromise = executor("powershell.exe", ["-Command", "exit 0"], {
+      timeoutMs: 5_000,
+      operationId: "op-spawn-fail",
+      accessPath: "C:/demo.accdb",
+      onAccessProcessCaptured: async () => undefined,
+    });
+
+    child.emitError(Object.assign(new Error("spawn powershell EACCES"), { code: "EACCES" }));
+
+    const result = await resultPromise;
+    expect(result.spawnError).toBe("spawn powershell EACCES");
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBeNull();
+  });
+
+  it("does NOT set spawnError on a clean exit", async () => {
+    mockSpawn.mockImplementation(() => ({
+      pid: 7,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: (event: string, cb: (code: number) => void) => {
+        if (event === "close") cb(0);
+      },
+      kill: vi.fn(),
+    }));
+
+    const result = await spawnPowerShellProcess({
+      args: ["-Command", "exit 0"],
+      timeoutMs: 5_000,
+    });
+    expect(result.spawnError).toBeUndefined();
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBe(0);
+  });
+});
