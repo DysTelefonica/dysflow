@@ -1531,6 +1531,53 @@ function Invoke-RelinkDirectory {
                     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch { Write-Debug "Diagnostics: $_" }
                   } else {
                     if ($currentConnect -ne $newConnect) {
+                      # #T17 inspector fix: pre-check that the target table
+                      # actually exists in the resolved backend file. Without
+                      # this, RefreshLink fails at runtime for the case where
+                      # the backend FILE exists in the resolved root but the
+                      # target table is missing from it (Variante 2). The
+                      # link is left in a broken state pointing at the
+                      # resolved backend. Classify as "unresolved" with
+                      # reason "target-table-missing" so --remove-unresolved
+                      # can pick it up, and so the error is distinguishable
+                      # from a generic RefreshLink failure.
+                      $targetDb = $null
+                      $targetTableMissing = $true
+                      try {
+                        try {
+                          $targetDb = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $targetPath -ReadOnly $true -Password $AccessPassword
+                        } catch {
+                          if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
+                            $targetDb = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $targetPath -ReadOnly $true -Password $BackendPassword
+                          } else {
+                            throw $_
+                          }
+                        }
+                        foreach ($existingTd in $targetDb.TableDefs) {
+                          if ($existingTd.Name -eq $plan.tdName) {
+                            $targetTableMissing = $false
+                            break
+                          }
+                        }
+                      } catch {
+                        Write-Debug "Pre-check failed for $targetPath : $($_.Exception.Message)"
+                      } finally {
+                        if ($null -ne $targetDb) {
+                          try { $targetDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+                          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($targetDb) } catch { Write-Debug "Diagnostics: $_" }
+                        }
+                      }
+
+                      if ($targetTableMissing) {
+                        [void]$fileResult.errors.Add("RefreshLink $($plan.tdName): target table missing in $targetPath")
+                        [void]$allErrors.Add("$($file.FullName)!$($plan.tdName): target table missing in $targetPath")
+                        $plan.linkEntry.classification = "unresolved"
+                        $plan.linkEntry.reason = "target-table-missing"
+                        [void]$unresolvedLinkNames.Add($plan.tdName)
+                        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
+                        continue
+                      }
+
                       $tdW.Connect = $newConnect
                       $tdW.RefreshLink()
                     }
