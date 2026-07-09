@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**70 visible MCP tools · Windows / Node 20+**
+**71 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,10 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 70 visible MCP tools covering VBA, SQL, schema, form operations, AI-assisted form UI workflows, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
+- A platform with 71 visible MCP tools covering VBA, SQL, schema, form
+  operations, AI-assisted form UI workflows, source-level VBA procedure
+  introspection, dead-code detection, VBA test manifest validation, pre-import
+  module linting, and project-config resolution.
 
 ### It is not
 
@@ -762,6 +765,8 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - Parameters: `moduleNames` (array, optional), `moduleName` (string, optional — single-module shorthand), `force` (boolean, optional — applies to the whole batch), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
+* **`list_vba_modules`** (issue #807 Feature 1): Enumerate every VBA project component with a binary-vs-source cross-reference. The runner walks `VBProject.VBComponents` once and releases every COM reference in `finally { FinalReleaseComObject }`; the TS side walks the source tree once to pair each binary row with its on-disk counterpart. The result is `{modules: [{name, type, fileType, sourcePath, binaryPath, sourceExists, binaryExists, contentMatch?}], summary: {total, inBinaryOnly, inSourceOnly, inBoth}}`. Read-only. Filters: `typeFilter` (one of `standard`, `class`, `form`, `report`, `document`), `namePattern` (single `*` wildcard at either end — `Test_*` matches any prefix, `*Issue*` matches any substring).
+  - Parameters: `typeFilter` (string, optional), `namePattern` (string, optional), `timeoutMs` (number, optional)
 * **`list_access_operations`**: Alias for listing tracked Access operations and their current registry status.
   - Parameters: none
 * **`cleanup_access_operation`**: Alias for safely reconciling or force-cleaning a tracked Access operation.

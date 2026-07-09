@@ -12,6 +12,8 @@ import {
   recordVerifyFail,
   recordVerifyOk,
 } from "../../core/runtime/human-compile-state.js";
+import { runBulkImportByDirectory } from "../../core/services/import-modules-bulk.js";
+import { runListVbaModules } from "../../core/services/list-vba-modules-service.js";
 import {
   buildDeletePlanResult,
   buildImportPlanResult,
@@ -44,6 +46,14 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   },
   rm: (path, options) => rm(path, options),
   tmpdir: () => tmpdir(),
+  // Issue #807 (Feature 2) — `exists` lets the bulk import walker probe
+  // the sourceDir before recursion. Adding it on the runtime port keeps
+  // the core walker free of direct filesystem imports (architectural
+  // boundary at `test/architecture/core-boundary`).
+  exists: async (path) =>
+    await stat(path)
+      .then(() => true)
+      .catch(() => false),
 };
 
 // COMPILE_MAPPING was removed in v1.19.0 (feat-759-no-compile). The runtime
@@ -188,6 +198,7 @@ export class VbaModulesAdapter {
       toolName === "import_modules" ||
       toolName === "import_all" ||
       toolName === "list_objects" ||
+      toolName === "list_vba_modules" ||
       toolName === "exists" ||
       toolName === "verify_code" ||
       toolName === "delete_module" ||
@@ -202,6 +213,47 @@ export class VbaModulesAdapter {
   ): Promise<OperationResult<unknown>> {
     if (toolName === "vba_orphan_audit") {
       return this.auditOrphans(params);
+    }
+    // Issue #807 (Feature 1) — list_vba_modules short-circuits to the dedicated
+    // service. It never touches the runner dispatch / mapping table; the
+    // runner is invoked by the service with a tailored request shape so the
+    // PowerShell side stays narrowly responsible for one step (binary-side
+    // enumeration + COM cleanup). The orchestrator's stricter types
+    // (VbaModulesExecutionTarget) are sound cast targets: the service only
+    // reads `accessPath` / `destinationRoot` / `timeoutMs`, the shape it
+    // declares is a structural subset.
+    if (toolName === "list_vba_modules") {
+      const ctx: Parameters<typeof runListVbaModules>[1] = {
+        scriptPath: this.orchestrator.scriptPath,
+        accessPassword: this.orchestrator.accessPassword,
+        resolveExecutionTarget: (p: Record<string, unknown>) =>
+          this.orchestrator.resolveExecutionTarget(p) as unknown as ReturnType<
+            Parameters<typeof runListVbaModules>[1]["resolveExecutionTarget"]
+          >,
+        validateStrictContext: (p: Record<string, unknown>, t: never) =>
+          // The orchestrator expects the wider `VbaModulesExecutionTarget`;
+          // service declares a strict-subset and never touches `projectRoot`.
+          // Cast at the seam only.
+          this.orchestrator.validateStrictContext(
+            p,
+            t as unknown as Parameters<typeof this.orchestrator.validateStrictContext>[1],
+          ) as unknown as ReturnType<
+            Parameters<typeof runListVbaModules>[1]["validateStrictContext"]
+          >,
+        runPreflightCleanup: (t: never) =>
+          this.orchestrator.runPreflightCleanup(
+            t as unknown as Parameters<typeof this.orchestrator.runPreflightCleanup>[0],
+          ) as unknown as ReturnType<
+            Parameters<typeof runListVbaModules>[1]["runPreflightCleanup"]
+          >,
+        runVbaManager: (req) =>
+          (
+            this.orchestrator.executor as unknown as (
+              r: typeof req,
+            ) => ReturnType<Parameters<typeof runListVbaModules>[1]["runVbaManager"]>
+          )(req),
+      };
+      return runListVbaModules(params, ctx, this.fileSystem);
     }
     if (toolName === "verify_code") {
       // PR-1 (issue #762, v1.20.0) — record the verify_code round-trip into
@@ -258,6 +310,21 @@ export class VbaModulesAdapter {
     // is redundant. The branch mirrors the import_* shape.
     if (dryRun && toolName === "delete_module") {
       return this.planDelete(params);
+    }
+
+    // Issue #807 (Feature 2) — import_modules bulk by directory. When
+    // `sourceDir` is provided AND `moduleNames` is empty/omitted, the
+    // adapter takes a dedicated path that walks the directory, chunks
+    // the resolved list, and dispatches each chunk as a sub-call. The
+    // chunked path NEVER crosses the runner boundary twice with
+    // overlapping modules. Backward-compat: when `moduleNames` is
+    // non-empty, the legacy single-call path is preserved exactly.
+    if (toolName === "import_modules") {
+      const moduleNames = stringArray(params.moduleNames);
+      const hasSourceDir = typeof params.sourceDir === "string" && params.sourceDir.length > 0;
+      if (moduleNames.length === 0 && hasSourceDir) {
+        return this.runBulkImportByDirectory(params);
+      }
     }
 
     // Issue #802 — `diff:true` is documented as strictly read-only but the
@@ -824,6 +891,63 @@ export class VbaModulesAdapter {
         warnings,
         errors,
       }),
+    );
+  }
+
+  // Issue #807 (Feature 2) — bulk import_modules by directory. Resolves
+  // the target, runs the bulk service which walks the directory, applies
+  // the include/pattern filters, chunks the result, and dispatches each
+  // chunk via `executeMappedTool("import_modules", …)` so the dispatch
+  // policy + write-gate + per-chunk PowerShell spawn stay centralized in
+  // the existing seam. Returns the merged `BulkImportResult`.
+  private async runBulkImportByDirectory(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.orchestrator.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    const sourceDir = stringValue(params.sourceDir) ?? target.data.destinationRoot;
+    const recursive = params.recursive !== false;
+    const filePatternValue = stringValue(params.filePattern);
+    const includeTests = params.includeTests !== false;
+    const includeForms = params.includeForms !== false;
+    const chunkSize =
+      typeof params.chunkSize === "number" && params.chunkSize > 0
+        ? Math.floor(params.chunkSize)
+        : 10;
+    const onChunkError: "continue" | "abort" =
+      params.onChunkError === "abort" ? "abort" : "continue";
+    const dryRun = params.dryRun === true;
+    const apply = params.apply === true;
+
+    const mapping = MODULE_MAPPINGS.import_modules;
+    if (mapping === undefined) {
+      return failureResult(createDysflowError("MAPPING_ERROR", "Missing import_modules mapping."));
+    }
+
+    return runBulkImportByDirectory(
+      {
+        sourceDir,
+        recursive,
+        filePattern: filePatternValue ?? null,
+        includeTests,
+        includeForms,
+        chunkSize,
+        onChunkError,
+        dryRun,
+        apply,
+        target: {
+          accessPath: target.data.accessPath,
+          destinationRoot: target.data.destinationRoot,
+          timeoutMs: target.data.timeoutMs,
+        },
+        mapping,
+        runImportModules: async (chunkParams) =>
+          this.orchestrator.executeMappedTool("import_modules", chunkParams, mapping),
+      },
+      this.fileSystem,
     );
   }
 

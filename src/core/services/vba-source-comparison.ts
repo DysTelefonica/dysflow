@@ -171,6 +171,8 @@ export interface ComparisonFileSystemPort {
   readFileBytes?(path: string): Promise<Uint8Array>;
   rm(path: string, options: { recursive: boolean; force: boolean }): Promise<void>;
   tmpdir(): string;
+  /** Optional. When present, lets callers check path existence without throwing. */
+  exists?(path: string): Promise<boolean>;
 }
 
 export async function compareSourceAgainstBinary(
@@ -182,6 +184,30 @@ export async function compareSourceAgainstBinary(
   if (!target.ok) return target;
   const strict = ctx.validateStrictContext(params, target.data);
   if (!strict.ok) return strict;
+
+  // Issue #807 (Feature 3) — internal chunking + parallel chunks. When
+  // the chunking contract is absent (legacy default), the call falls
+  // through to the single-flight path that has shipped since v2.3.x.
+  // When any of `chunkSize` / `parallelChunks` / `onChunkTimeout` are
+  // set, the chunked driver takes over and merges per-chunk results
+  // back into the same shape. The legacy invariants are preserved:
+  // missing modules stay in `missingInBinary` (issue #805 round-3),
+  // `ok: true` is the default, and a single chunk timeout never
+  // aborts the call unless `onChunkTimeout === "fail"`.
+  const chunked = resolveChunkOptions(params);
+  if (!chunked.disabled && target.data.destinationRoot !== undefined) {
+    const requestedModules = stringArray(params.moduleNames);
+    if (requestedModules.length > 0) {
+      const chunkRun = await runChunkedVerify({
+        params,
+        ctx,
+        fileSystem,
+        requestedModules,
+        options: chunked.options as ChunkedVerifyOptions,
+      });
+      return successResult(chunkRun);
+    }
+  }
 
   const password = ctx.accessPassword;
   const effectiveTimeoutMs =
@@ -403,6 +429,11 @@ export async function compareSourceAgainstBinary(
 }
 
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
+import {
+  type ChunkedVerifyOptions,
+  resolveChunkOptions,
+  runChunkedVerify,
+} from "./vba-source-comparison-chunking.js";
 
 /**
  * Always-present advisory on every verify_code result. verify_code is a

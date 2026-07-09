@@ -63,15 +63,17 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   bespoke tool AND an alias — the bespoke registration is REMOVED
     //   and the alias is the sole source. The other 8 are bespoke-to-bespoke
     //   renames. Visible count drops by 3 (one per alias-removed).
+    // #807 (Feature 1) — `list_vba_modules` added as a read-only vba-sync tool.
+    //   Net: dispatch 59 -> 60, visible 70 -> 71.
     //   Expected breakdown:
-    //     59 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     60 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 70 visible (was 64 before #795).
-    expect(toolCount).toBe(59);
+    //     = 71 visible (was 64 before #795).
+    expect(toolCount).toBe(60);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(70);
+    expect(visibleCount).toBe(71);
   });
 
   it("verifies split-mode coverage explicitly", () => {

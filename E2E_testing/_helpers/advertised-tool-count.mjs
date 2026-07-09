@@ -17,8 +17,9 @@
 /** @type {number} Number of MCP tools exposed by `tools/list` after the hidden-stub filter.
  * #777 (Opción A cont.) — drops by 3 (one per legacy alias removed:
  * `dysflow_vba_execute`, `dysflow_access_operations_list`, `dysflow_access_cleanup`).
- * #795 adds six AI form UI builder tools: analyze/map/plan/apply/copy/verify. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 70;
+ * #795 adds six AI form UI builder tools: analyze/map/plan/apply/copy/verify.
+ * #807 (Feature 1) adds `list_vba_modules` (read-only sibling of `list_objects`). */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 71;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

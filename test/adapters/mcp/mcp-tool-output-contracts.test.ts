@@ -46,6 +46,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     "import_modules",
     "import_all",
     "list_objects",
+    // #807 (Feature 1) — list_vba_modules. Read-only VBA sync tool that
+    // returns a structured binary<->source cross-reference. Routed through
+    // the dispatch service (not directly through the runner) but the
+    // dispatch surface contract is identical to the other vbaSync tools.
+    "list_vba_modules",
     "exists",
     "test_vba",
     // feat-759-no-compile (v1.19.0) — compile_vba was removed.

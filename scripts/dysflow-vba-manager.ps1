@@ -1,9 +1,9 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
 [CmdletBinding()]
 Param(
-    [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure", "Run-Tests")]
-    [string]$Action,
+[Parameter(Mandatory = $true, Position = 0)]
+[ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "List-VbaModules", "Exists", "Run-Procedure", "Run-Tests")]
+[string]$Action,
 
     [Parameter()]
     [string]$AccessPath,
@@ -75,7 +75,23 @@ Param(
     # counts, byte counts, sha256 hashes and a derived `truncated` bool, so an AI
     # caller can detect silent truncation without trusting `status:ok`.
     [Parameter()]
-    [switch]$VerboseContract
+    [switch]$VerboseContract,
+
+    # Issue #807 (Feature 1) - List-VbaModules filters. PowerShell-side `[switch]`
+    # for the boolean gates (so an absent `applyTypeFilter` is distinguishable
+    # from `applyTypeFilter:$false`). The string params are empty by default.
+    [Parameter()]
+    [ValidateSet("standard", "class", "form", "report", "document", "")]
+    [string]$TypeFilter = "",
+
+    [Parameter()]
+    [string]$NamePattern = "",
+
+    [Parameter()]
+    [switch]$ApplyTypeFilter,
+
+    [Parameter()]
+    [switch]$ApplyNamePattern
 )
 
 # issue #752 — wire the script-scope verbose flags consumed by Import-VbaModule
@@ -696,7 +712,7 @@ function Resolve-ModulesPath {
     Param(
         [Parameter(Mandatory = $true)][string]$DestinationRoot,
         [Parameter(Mandatory = $true)][string]$AccessPath,
-        [Parameter(Mandatory = $true)][ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "Exists", "Run-Procedure")][string]$Action
+        [Parameter(Mandatory = $true)][ValidateSet("Export", "Import", "Delete", "Fix-Encoding", "Generate-ERD", "List-Objects", "List-VbaModules", "Exists", "Run-Procedure")][string]$Action
     )
     if (-not (Test-Path -Path $DestinationRoot)) {
         if ($Action -eq "Export" -or $Action -eq "Fix-Encoding" -or $Action -eq "Delete") {
@@ -4184,6 +4200,117 @@ function Invoke-ListObjectsAction {
     }
 }
 
+# ========================================================================
+# Issue #807 (Feature 1) - Invoke-ListVbaModulesAction.
+#
+# Walks VBProject.VBComponents exactly ONCE and emits a structured payload
+# describing each component (name, type, fileType, binaryPath). Released every
+# component COM reference in `finally { FinalReleaseComObject }` so this
+# routine never leaks - the same COM-lifetime contract as Get-FrontendInventory.
+#
+# Filters:
+#   - typeFilter: standard|class|form|report|document (mapped to a VBComponent.Type)
+#   - namePattern: glob-style (single `*` wildcard on either end)
+#
+# Cross-reference against the on-disk source tree is computed by the TS-side
+# service (runListVbaModules). This script reports the binary side only.
+# ========================================================================
+function Invoke-ListVbaModulesAction {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$Session,
+        [string]$TypeFilter = "",
+        [string]$NamePattern = "",
+        [switch]$ApplyTypeFilter,
+        [switch]$ApplyNamePattern,
+        [switch]$Json
+    )
+
+    # Map user-facing typeFilter into the integer VBComponent.Type we filter on.
+    # `form` and `report` both map to 3 (acForm); the runner distinguishes them
+    # later via the form/report kind on the TS side, but for the binary walk
+    # we surface every type 3 component unconditionally.
+    $typeFilterCode = $null
+    if ($ApplyTypeFilter) {
+        switch ($TypeFilter) {
+            "standard" { $typeFilterCode = 1 }
+            "class"    { $typeFilterCode = 2 }
+            "form"     { $typeFilterCode = 3 }
+            "report"   { $typeFilterCode = 3 }
+            "document" { $typeFilterCode = 100 }
+            default {
+                throw ("TypeFilter invalido: {0}. Valores permitidos: standard|class|form|report|document." -f $TypeFilter)
+            }
+        }
+    }
+
+    # namePattern: lead/trail `*` only. After stripping the wildcards the
+    # remaining substring is the only filter (case-insensitive contains).
+    # Empty after trim means "match nothing".
+    $nameNeedle = ""
+    if ($ApplyNamePattern) {
+        $trimmed = ([string]$NamePattern) -replace '^\*+|\*+$', ''
+        $nameNeedle = $trimmed.ToLowerInvariant()
+    }
+
+    $components = $Session.VbProject.VBComponents
+    $rows = New-Object System.Collections.Generic.List[object]
+    try {
+        for ($i = 1; $i -le $components.Count; $i++) {
+            $component = $null
+            try {
+                $component = $components.Item($i)
+                $vbType = [int]$component.Type
+
+                if ($ApplyTypeFilter -and $vbType -ne $typeFilterCode) { continue }
+                $name = [string]$component.Name
+                if ($ApplyNamePattern) {
+                    # match no rows when $nameNeedle is empty
+                    if ($nameNeedle.Length -eq 0) { continue }
+                    if (-not $name.ToLowerInvariant().Contains($nameNeedle)) { continue }
+                }
+
+                $fileType = switch ($vbType) {
+                    1 { "bas" }
+                    2 { "cls" }
+                    3 { "form.txt" }
+                    100 { "report.txt" }
+                    default { "cls" }
+                }
+                $rows.Add([ordered]@{
+                    name = $name
+                    type = $vbType
+                    fileType = $fileType
+                })
+            } finally {
+                if ($component) {
+                    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+                }
+            }
+        }
+    } finally {
+        if ($components) {
+            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($components) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+        }
+    }
+
+    $appliedType = if ($ApplyTypeFilter) { [string]$TypeFilter } else { $null }
+    $appliedName = if ($ApplyNamePattern) { [string]$NamePattern } else { $null }
+    $payload = [ordered]@{
+        ok = $true
+        components = @($rows.ToArray())
+        appliedFilters = [ordered]@{
+            typeFilter = $appliedType
+            namePattern = $appliedName
+        }
+    }
+    if ($Json) {
+        Write-DysflowResult -Result $payload -Depth 6
+    } else {
+        Write-Status -Message ("Components: {0}" -f $rows.Count) -Color Cyan
+    }
+}
+
 function Invoke-ExistsAction {
     [CmdletBinding()]
     Param(
@@ -4729,6 +4856,12 @@ try {
     } elseif ($Action -eq "List-Objects") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
         Invoke-ListObjectsAction -Session $session -Json:$Json
+
+    } elseif ($Action -eq "List-VbaModules") {
+        # Issue #807 (Feature 1) - per-component binary enumeration. The TS
+        # service layers the source-side cross-reference on top of this.
+        $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        Invoke-ListVbaModulesAction -Session $session -TypeFilter $TypeFilter -NamePattern $NamePattern -ApplyTypeFilter:$ApplyTypeFilter -ApplyNamePattern:$ApplyNamePattern -Json:$Json
 
     } elseif ($Action -eq "Exists") {
         if ($normalizedModules.Count -ne 1) {
