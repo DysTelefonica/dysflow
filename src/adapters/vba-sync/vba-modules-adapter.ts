@@ -260,6 +260,23 @@ export class VbaModulesAdapter {
       return this.planDelete(params);
     }
 
+    // Issue #802 — `diff:true` is documented as strictly read-only but the
+    // adapter never honored it (the runner has no $Diff parameter and the
+    // export_all mapping only forwards `verbose`). Reject at the dispatch
+    // seam with a typed error pointing the caller at verify_code for a
+    // real read-only compare, instead of silently writing to the source
+    // tree (and leaving partial writes on timeout). The rejection happens
+    // BEFORE the mapping lookup / exportPath guard / target resolution so
+    // it is the cheapest possible gate and never touches the orchestrator.
+    if ((toolName === "export_all" || toolName === "export_modules") && params.diff === true) {
+      return failureResult(
+        createDysflowError(
+          "DIFF_MODE_REQUIRES_VERIFY_CODE",
+          `Refusing ${toolName}(diff:true): diff mode is documented as read-only but the adapter does not honor it (see issue #802). Use verify_code({ strict, moduleNames }) for a real read-only compare, or omit diff:true to perform the actual mirror export.`,
+        ),
+      );
+    }
+
     const mapping = MODULE_MAPPINGS[toolName];
     if (mapping === undefined) {
       return failureResult(
