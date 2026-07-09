@@ -3796,3 +3796,175 @@ Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
             -Because "Save-VbaProjectModules must NEVER call RunCommand(126); the compile-and-save-all attempt is gone"
     }
 }
+
+# ===========================================================================
+# Issue #804 — verify_code / export pre-validation must be TOTAL over the
+# input list. A module missing from the binary must NOT abort the call; it
+# is collected into the structured result (warnings[]) so the consumer can
+# route it to verify_code.missingInBinary.
+#
+# Behavioral contract:
+#   - Given: NormalizedModules = [Real, Ghost]
+#   - When:  Invoke-ExportAction runs
+#   - Then:  ok=$true is returned, Real is exported, Ghost surfaces in
+#           warnings[] with error="VBA_MODULE_NOT_FOUND" and module="Ghost",
+#           the call does NOT throw.
+#
+# This is a property-style contract: for any list of module names containing
+# at least one missing, the action returns a structured result and never
+# throws. The "abort on first missing" pre-validation was the Round-2 bug.
+# ===========================================================================
+
+Describe "Invoke-ExportAction — missing module pre-validation (#804, total over input)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ExportAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Invoke-ExportAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        # Swallow console output in tests
+        function script:Write-Status { param([string]$Message, $Color) }
+        function script:Get-AccessObjectNames { param($AccessApplication, $Kind) return @() }
+        function script:Resolve-AccessObjectInfo {
+            param($AccessApplication, [string]$ModuleName)
+            return [pscustomobject]@{ Exists = $false }
+        }
+        function script:Get-ComponentExtension { param($Component, $ModuleName) return ".bas" }
+    }
+
+    Context "mixed list — some modules exist, some are missing" {
+        BeforeEach {
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            $script:DysflowResults  = [System.Collections.Generic.List[object]]::new()
+
+            # Capture the structured payload the action emits
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:ExportedModules.Add($ModuleName)
+            }
+            function script:Write-DysflowResult {
+                param([Parameter(Mandatory = $true)] [object] $Result,
+                      [Parameter(Mandatory = $false)] [int] $Depth = 20)
+                $script:DysflowResults.Add($Result)
+            }
+
+            # Fake VBProject: Item("RealModule") returns a component; any other name throws.
+            $fakeComponents = [PSCustomObject]@{}
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                if ($nameOrIndex -eq "RealModule") {
+                    return [PSCustomObject]@{ Name = $nameOrIndex }
+                }
+                throw "Component not found: $nameOrIndex"
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "does NOT throw when a requested module is missing from the binary" {
+            $modules = @("RealModule", "GhostModule")
+            { Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules" } | Should -Not -Throw `
+                -Because "issue #804 — missing modules are a per-module result, not a call-level error"
+        }
+
+        It "exports every module that DOES exist" {
+            $modules = @("RealModule", "GhostModule")
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules"
+
+            $script:ExportedModules | Should -Contain "RealModule" `
+                -Because "the existing-module path must still work after the pre-validation change"
+            $script:ExportedModules | Should -Not -Contain "GhostModule" `
+                -Because "a missing module must never reach Export-VbaModule"
+        }
+
+        It "surfaces the missing module in the structured result's warnings[]" {
+            $modules = @("RealModule", "GhostModule")
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules"
+
+            $script:DysflowResults.Count | Should -Be 1
+            $payload = $script:DysflowResults[0]
+            $payload.exported | Should -Contain "RealModule"
+            $payload.exported | Should -Not -Contain "GhostModule"
+
+            $payload.warnings | Should -Not -BeNullOrEmpty `
+                -Because "the missing module must be reported in warnings[] for the consumer to route to missingInBinary"
+            $missingWarning = @($payload.warnings | Where-Object { $_.module -eq "GhostModule" })
+            $missingWarning.Count | Should -Be 1
+            $missingWarning[0].error | Should -Be "VBA_MODULE_NOT_FOUND" `
+                -Because "the warning must carry a stable error code so the TS adapter can classify it"
+        }
+    }
+
+    Context "all-missing list — every requested module is absent" {
+        BeforeEach {
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            $script:DysflowResults  = [System.Collections.Generic.List[object]]::new()
+
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:ExportedModules.Add($ModuleName)
+            }
+            function script:Write-DysflowResult {
+                param([Parameter(Mandatory = $true)] [object] $Result,
+                      [Parameter(Mandatory = $false)] [int] $Depth = 20)
+                $script:DysflowResults.Add($Result)
+            }
+
+            # Empty VBProject — every lookup throws
+            $fakeComponents = [PSCustomObject]@{}
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                throw "Component not found: $nameOrIndex"
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "is total — an all-missing list does not throw and emits every name in warnings[]" {
+            $modules = @("Ghost1", "Ghost2", "Ghost3")
+            { Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules $modules `
+                -ModulesPath "C:\fake\modules" } | Should -Not -Throw `
+                -Because "issue #804 — total contract applies even when the entire list is missing"
+
+            $script:ExportedModules.Count | Should -Be 0
+            $script:DysflowResults.Count | Should -Be 1
+            $payload = $script:DysflowResults[0]
+            $payload.exported | Should -BeNullOrEmpty `
+
+            $missingNames = @($payload.warnings | ForEach-Object { $_.module } | Sort-Object)
+            $missingNames | Should -Be @("Ghost1", "Ghost2", "Ghost3")
+            $payload.warnings | ForEach-Object {
+                $_.error | Should -Be "VBA_MODULE_NOT_FOUND"
+            }
+        }
+    }
+}
+

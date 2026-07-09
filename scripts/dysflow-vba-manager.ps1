@@ -3996,10 +3996,15 @@ function Invoke-ExportAction {
     $components = $vbProject.VBComponents
 
     $targets = @()
+    $warnings = @()
     if ($NormalizedModules.Count -gt 0) {
-        $targets = $NormalizedModules
-        # Validate every requested module exists in VBProject or Access Forms/Reports before exporting any
-        foreach ($requestedName in $targets) {
+        # Issue #804 — pre-validation is TOTAL over the input list. A missing
+        # module is a per-module result, not a call-level error: surface it
+        # in the structured warnings[] payload (with a stable error code) and
+        # continue exporting the modules that DO exist. This lets the
+        # verify_code consumer run with a comprehensive moduleNames list and
+        # get a full missingInBinary[] back instead of an opaque abort.
+        foreach ($requestedName in $NormalizedModules) {
             $found = $false
             try {
                 $null = $vbProject.VBComponents.Item($requestedName)
@@ -4018,8 +4023,15 @@ function Invoke-ExportAction {
                 }
             }
             if (-not $found) {
-                throw ("VBA_MODULE_NOT_FOUND: El modulo '{0}' no existe en el proyecto VBA." -f $requestedName)
+                Write-Status -Message ("WARN: Modulo '{0}' no existe en el proyecto VBA — se omite del export." -f $requestedName) -Color Yellow
+                $warnings += @{
+                    module  = $requestedName
+                    error   = "VBA_MODULE_NOT_FOUND"
+                    message = "El modulo '$requestedName' no existe en el proyecto VBA."
+                }
+                continue
             }
+            $targets += $requestedName
         }
     } else {
         # Collect all standard modules and class modules from VBProject (type 1 and 2)
@@ -4066,7 +4078,6 @@ function Invoke-ExportAction {
         }
     }
 
-    $warnings = @()
     $exported = @()
     $total = $targets.Count
     $idx = 0
