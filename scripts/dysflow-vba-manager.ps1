@@ -4023,7 +4023,7 @@ function Invoke-ExportAction {
                 }
             }
             if (-not $found) {
-                Write-Status -Message ("WARN: Modulo '{0}' no existe en el proyecto VBA — se omite del export." -f $requestedName) -Color Yellow
+                Write-Status -Message ("WARN: Modulo '{0}' no existe en el proyecto VBA - se omite del export." -f $requestedName) -Color Yellow
                 $warnings += @{
                     module  = $requestedName
                     error   = "VBA_MODULE_NOT_FOUND"
