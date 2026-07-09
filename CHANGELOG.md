@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.7] - 2026-07-09
+
+- feat(forms): unified AI-friendly outputMode (summary|file|full) across form tools (#794)
+
+
 ## [v2.1.6] - 2026-07-09
 
 - test(vba-sync): add comprehensive unit/behavior tests for vba-forms-lint-adapter (closes #652) - chore(release): prepare v2.1.5 - feat(lint): add logical-short-circuit, implicit-variant, missing-exit-handler, and invalid-static-class-call rules
