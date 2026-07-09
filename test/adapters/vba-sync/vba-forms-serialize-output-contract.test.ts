@@ -24,7 +24,11 @@ const FIXTURES_DIR = join(process.cwd(), "E2E_testing/src/forms");
 function fixtureFs(): FormFileSystemPort {
   return {
     async readFile(path: string): Promise<string> {
-      return readFileSync(path, "utf8");
+      // The managed-source resolver win32-normalizes paths (correct for the
+      // Windows-only production target). On the Linux CI unit-test job that
+      // yields backslash separators the POSIX fs cannot resolve, so normalize
+      // to forward slashes before this real read. Windows accepts both.
+      return readFileSync(path.replace(/\\/g, "/"), "utf8");
     },
     async mkdir(): Promise<string | undefined> {
       return undefined;
