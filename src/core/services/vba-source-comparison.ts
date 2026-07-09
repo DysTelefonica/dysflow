@@ -774,6 +774,44 @@ export async function compareVbaSourceTrees(
   // Resolve real version once so top-level dysflowVersion and runtimeDiagnostics agree
   const runtimeDiagnostics = buildRuntimeDiagnostics();
 
+  // Project the flat semanticSummary + array lengths into the nested
+  // SummaryStructured shape (round 5 / PR5). Pure O(1) projection — no
+  // second pass over the diffs. `different` is the count of semantic diffs
+  // (diffs.length), not including missingIn*; missingInSource / missingInBinary
+  // are surfaced as their own top-level counts so consumers do not have to
+  // recompute them.
+  const summaryStructured: SummaryStructured | undefined =
+    mode === "semantic"
+      ? {
+          matched: matched.length,
+          different: different.length,
+          missingInSource: missingInSource.length,
+          missingInBinary: missingInBinary.length,
+          actionable: {
+            sourceNewer: semanticSummary.sourceNewer ?? 0,
+            binaryNewer: semanticSummary.binaryNewer ?? 0,
+            bothChanged: semanticSummary.bothChanged ?? 0,
+            total:
+              (semanticSummary.sourceNewer ?? 0) +
+              (semanticSummary.binaryNewer ?? 0) +
+              (semanticSummary.bothChanged ?? 0),
+          },
+          nonActionable: {
+            caseOnly: semanticSummary.caseOnly ?? 0,
+            whitespaceOnly: semanticSummary.whitespaceOnly ?? 0,
+            attributeOnly: semanticSummary.attributeOnly ?? 0,
+            formSerializationOnly: semanticSummary.formSerializationOnly ?? 0,
+            encodingOnly: semanticSummary.encodingOnly ?? 0,
+            total:
+              (semanticSummary.caseOnly ?? 0) +
+              (semanticSummary.whitespaceOnly ?? 0) +
+              (semanticSummary.attributeOnly ?? 0) +
+              (semanticSummary.formSerializationOnly ?? 0) +
+              (semanticSummary.encodingOnly ?? 0),
+          },
+        }
+      : undefined;
+
   return {
     ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
     dryRun: true,
@@ -802,6 +840,7 @@ export async function compareVbaSourceTrees(
             missingInBinary.length,
             hasFunctionalDifferences,
           ),
+          summaryStructured,
         }
       : {}),
   };
