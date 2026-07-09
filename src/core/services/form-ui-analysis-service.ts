@@ -12,22 +12,22 @@ export function analyzeFormUi(ir: FormIR): FormUiAnalysisReport {
   const controls = collectControls(ir.root)
     .filter((control) => control.type !== "Form" && control.type !== "Report")
     .map<FormUiControlAnalysis>((control) => {
-    const events = Object.entries(control.properties)
-      .filter(([, value]) => value.includes(EVENT_PROCEDURE))
-      .map(([key]) => key);
-    const controlSource = unquote(control.properties.ControlSource);
-    const rowSource = unquote(control.properties.RowSource);
-    return {
-      name: control.name,
-      type: control.type,
-      role: roleFor(control.type),
-      caption: unquote(control.properties.Caption),
-      controlSource,
-      rowSource,
-      events,
-      bindings: [controlSource, rowSource].filter((value): value is string => Boolean(value)),
-    };
-  });
+      const events = Object.entries(control.properties)
+        .filter(([, value]) => value.includes(EVENT_PROCEDURE))
+        .map(([key]) => key);
+      const controlSource = unquote(control.properties.ControlSource);
+      const rowSource = unquote(control.properties.RowSource);
+      return {
+        name: control.name,
+        type: control.type,
+        role: roleFor(control.type),
+        caption: unquote(control.properties.Caption),
+        controlSource,
+        rowSource,
+        events,
+        bindings: [controlSource, rowSource].filter((value): value is string => Boolean(value)),
+      };
+    });
 
   return {
     formName: ir.name,
