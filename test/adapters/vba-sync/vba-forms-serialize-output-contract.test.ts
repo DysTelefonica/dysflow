@@ -9,8 +9,13 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { serializeForm } from "../../../src/adapters/vba-sync/vba-forms-serialization-tools";
+import { describe, expect, it, vi } from "vitest";
+import {
+  deserializeForm,
+  serializeForm,
+} from "../../../src/adapters/vba-sync/vba-forms-serialization-tools";
+import type { VbaFormsOrchestrator } from "../../../src/adapters/vba-sync/vba-forms-types";
+import { successResult } from "../../../src/core/contracts/index";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 const FIXTURES_DIR = join(process.cwd(), "E2E_testing/src/forms");
@@ -19,7 +24,11 @@ const FIXTURES_DIR = join(process.cwd(), "E2E_testing/src/forms");
 function fixtureFs(): FormFileSystemPort {
   return {
     async readFile(path: string): Promise<string> {
-      return readFileSync(path, "utf8");
+      // The managed-source resolver win32-normalizes paths (correct for the
+      // Windows-only production target). On the Linux CI unit-test job that
+      // yields backslash separators the POSIX fs cannot resolve, so normalize
+      // to forward slashes before this real read. Windows accepts both.
+      return readFileSync(path.replace(/\\/g, "/"), "utf8");
     },
     async mkdir(): Promise<string | undefined> {
       return undefined;
@@ -175,5 +184,205 @@ describe("serializeForm — output contract (issue #733)", () => {
     const data = result.data as Record<string, unknown>;
     const report = data.metadataReport as Record<string, unknown>;
     expect(report.opaqueCount).toBeGreaterThan(0);
+  });
+});
+
+describe("serializeForm — outputMode filtering (feat-forms-output-modes)", () => {
+  it("summary mode: omits serialized, includes metadata fields", async () => {
+    const result = await serializeForm(fixtureFs(), {
+      sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+      outputMode: "summary",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.serialized).toBeUndefined();
+    expect(data.name).toBe("frmBusy");
+    expect(data.kind).toBe("Form");
+    expect(typeof data.byteEqual).toBe("boolean");
+    expect(typeof data.byteDiff).toBe("number");
+    expect(data.metadataReport).toBeDefined();
+  });
+
+  it("file mode: includes serialized, omits metadata fields/reports", async () => {
+    const result = await serializeForm(fixtureFs(), {
+      sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+      outputMode: "file",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.serialized).toBe("string");
+    expect(data.name).toBe("frmBusy");
+    expect(data.kind).toBe("Form");
+    expect(data.byteEqual).toBeUndefined();
+    expect(data.byteDiff).toBeUndefined();
+    expect(data.metadataReport).toBeUndefined();
+  });
+
+  it("full mode: includes serialized, metadata fields and reports", async () => {
+    const result = await serializeForm(fixtureFs(), {
+      sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+      outputMode: "full",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.serialized).toBe("string");
+    expect(data.name).toBe("frmBusy");
+    expect(data.kind).toBe("Form");
+    expect(typeof data.byteEqual).toBe("boolean");
+    expect(typeof data.byteDiff).toBe("number");
+    expect(data.metadataReport).toBeDefined();
+  });
+
+  it("default: falls back to full when outputMode is omitted but includeSerialized is true", async () => {
+    const result = await serializeForm(fixtureFs(), {
+      sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+      includeSerialized: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.serialized).toBe("string");
+    expect(typeof data.byteEqual).toBe("boolean");
+    expect(data.metadataReport).toBeDefined();
+  });
+
+  it("default: falls back to summary when outputMode and includeSerialized are omitted", async () => {
+    const result = await serializeForm(fixtureFs(), {
+      sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.serialized).toBeUndefined();
+    expect(typeof data.byteEqual).toBe("boolean");
+    expect(data.metadataReport).toBeDefined();
+  });
+});
+
+describe("deserializeForm — dry-run outputMode filtering (feat-forms-output-modes)", () => {
+  const minimalIr = {
+    name: "frmBusy",
+    kind: "Form" as const,
+    preamble: [],
+    root: {
+      blockType: "Form",
+      entries: [],
+      children: [],
+    },
+    codeBehind: null,
+  };
+
+  function mockOrchestrator(): VbaFormsOrchestrator {
+    const cwd = process.cwd().replace(/\\/g, "/");
+    return {
+      executor: vi.fn(),
+      env: {},
+      cwd,
+      resolveExecutionTarget: vi.fn().mockResolvedValue(
+        successResult({
+          accessPath: `${cwd}/App.accdb`,
+          destinationRoot: cwd,
+          projectRoot: cwd,
+          timeoutMs: 30000,
+          configSource: "explicit-request",
+        }),
+      ),
+      validateStrictContext: vi.fn(() => successResult(undefined)),
+      executeMappedTool: vi.fn().mockResolvedValue(successResult({ imported: true })),
+    };
+  }
+
+  it("summary mode: omits preview, includes gate status", async () => {
+    const orchestrator = mockOrchestrator();
+    const result = await deserializeForm({
+      orchestrator,
+      fileSystem: fixtureFs(),
+      params: {
+        sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+        ir: minimalIr,
+        dryRun: true,
+        outputMode: "summary",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.preview).toBeUndefined();
+    expect(data.mode).toBe("dry-run");
+    expect(data.loadFromTextGate).toBe("skipped");
+    expect(data.sourcePath).toBeDefined();
+  });
+
+  it("file mode: includes preview, omits gate status details", async () => {
+    const orchestrator = mockOrchestrator();
+    const result = await deserializeForm({
+      orchestrator,
+      fileSystem: fixtureFs(),
+      params: {
+        sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+        ir: minimalIr,
+        dryRun: true,
+        outputMode: "file",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.preview).toBe("string");
+    expect(data.sourcePath).toBeDefined();
+    // Omit gate details
+    expect(data.mode).toBeUndefined();
+    expect(data.written).toBeUndefined();
+    expect(data.appliedChecksumBefore).toBeUndefined();
+    expect(data.appliedChecksumAfter).toBeUndefined();
+    expect(data.loadFromTextGate).toBeUndefined();
+  });
+
+  it("full mode: includes both preview and gate status details", async () => {
+    const orchestrator = mockOrchestrator();
+    const result = await deserializeForm({
+      orchestrator,
+      fileSystem: fixtureFs(),
+      params: {
+        sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+        ir: minimalIr,
+        dryRun: true,
+        outputMode: "full",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.preview).toBe("string");
+    expect(data.mode).toBe("dry-run");
+    expect(data.loadFromTextGate).toBe("skipped");
+    expect(data.sourcePath).toBeDefined();
+  });
+
+  it("default: falls back to full when outputMode is omitted", async () => {
+    const orchestrator = mockOrchestrator();
+    const result = await deserializeForm({
+      orchestrator,
+      fileSystem: fixtureFs(),
+      params: {
+        sourcePath: join(FIXTURES_DIR, "Form_frmBusy.form.txt"),
+        ir: minimalIr,
+        dryRun: true,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.preview).toBe("string");
+    expect(data.mode).toBe("dry-run");
+    expect(data.loadFromTextGate).toBe("skipped");
+    expect(data.sourcePath).toBeDefined();
   });
 });

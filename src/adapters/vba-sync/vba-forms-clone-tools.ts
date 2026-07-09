@@ -237,18 +237,39 @@ export async function cloneFormFromTemplate(args: {
   }
 
   if (!apply) {
-    return successResult({
-      mode: "dry-run",
-      sourcePath,
-      targetPath,
-      targetExisted,
-      importGate: "not-run",
-      appliedTokens: cloneResult.appliedTokens,
-      missingTokens: cloneResult.missingTokens,
-      warnings: cloneResult.warnings,
-      preservedKeys: cloneResult.preservedKeys,
-      targetSource: cloneResult.source,
-    });
+    const outputMode = stringValue(params.outputMode) ?? "full";
+    if (outputMode === "summary") {
+      return successResult({
+        mode: "dry-run",
+        sourcePath,
+        targetPath,
+        targetExisted,
+        importGate: "not-run",
+        appliedTokens: cloneResult.appliedTokens,
+        missingTokens: cloneResult.missingTokens,
+        warnings: cloneResult.warnings,
+        preservedKeys: cloneResult.preservedKeys,
+      });
+    } else if (outputMode === "file") {
+      return successResult({
+        sourcePath,
+        targetPath,
+        targetSource: cloneResult.source,
+      });
+    } else {
+      return successResult({
+        mode: "dry-run",
+        sourcePath,
+        targetPath,
+        targetExisted,
+        importGate: "not-run",
+        appliedTokens: cloneResult.appliedTokens,
+        missingTokens: cloneResult.missingTokens,
+        warnings: cloneResult.warnings,
+        preservedKeys: cloneResult.preservedKeys,
+        targetSource: cloneResult.source,
+      });
+    }
   }
 
   // 5) Apply: write the target, then route through import_modules.
@@ -296,19 +317,41 @@ export async function cloneFormFromTemplate(args: {
     );
   }
 
-  return successResult({
-    mode: "apply",
-    sourcePath,
-    targetPath,
-    targetExisted,
-    importGate: "passed",
-    appliedTokens: cloneResult.appliedTokens,
-    missingTokens: cloneResult.missingTokens,
-    warnings: cloneResult.warnings,
-    preservedKeys: cloneResult.preservedKeys,
-    targetSource: cloneResult.source,
-    importResult: importResult.data,
-  });
+  const outputMode = stringValue(params.outputMode) ?? "full";
+  if (outputMode === "summary") {
+    return successResult({
+      mode: "apply",
+      sourcePath,
+      targetPath,
+      targetExisted,
+      importGate: "passed",
+      appliedTokens: cloneResult.appliedTokens,
+      missingTokens: cloneResult.missingTokens,
+      warnings: cloneResult.warnings,
+      preservedKeys: cloneResult.preservedKeys,
+      importResult: importResult.data,
+    });
+  } else if (outputMode === "file") {
+    return successResult({
+      sourcePath,
+      targetPath,
+      targetSource: cloneResult.source,
+    });
+  } else {
+    return successResult({
+      mode: "apply",
+      sourcePath,
+      targetPath,
+      targetExisted,
+      importGate: "passed",
+      appliedTokens: cloneResult.appliedTokens,
+      missingTokens: cloneResult.missingTokens,
+      warnings: cloneResult.warnings,
+      preservedKeys: cloneResult.preservedKeys,
+      targetSource: cloneResult.source,
+      importResult: importResult.data,
+    });
+  }
 }
 
 /**

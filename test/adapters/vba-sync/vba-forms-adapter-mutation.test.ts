@@ -805,3 +805,184 @@ describe("VbaFormsAdapter — create_form_from_template (slice 5)", () => {
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 });
+
+describe("VbaFormsAdapter — mutation outputMode filtering", () => {
+  it("add_control dry-run summary mode: omits source, includes other details", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      controlType: "CommandButton",
+      properties: { Caption: '"Save"' },
+      dryRun: true,
+      outputMode: "summary",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.source).toBeUndefined();
+    expect(data.mode).toBe("dry-run");
+    expect(data.changedControlName).toBe("cmdSave");
+    expect(data.importGate).toBe("not-run");
+  });
+
+  it("add_control dry-run file mode: includes source, omits other details", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      controlType: "CommandButton",
+      properties: { Caption: '"Save"' },
+      dryRun: true,
+      outputMode: "file",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.source).toBe("string");
+    expect(data.sourcePath).toBeDefined();
+    // Omitted
+    expect(data.mode).toBeUndefined();
+    expect(data.changedControlName).toBeUndefined();
+    expect(data.preservedKeys).toBeUndefined();
+    expect(data.importGate).toBeUndefined();
+  });
+
+  it("add_control dry-run full mode: includes everything", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      controlType: "CommandButton",
+      properties: { Caption: '"Save"' },
+      dryRun: true,
+      outputMode: "full",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.source).toBe("string");
+    expect(data.mode).toBe("dry-run");
+    expect(data.changedControlName).toBe("cmdSave");
+  });
+
+  it("add_control dry-run default: falls back to full when outputMode is omitted", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      controlType: "CommandButton",
+      properties: { Caption: '"Save"' },
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.source).toBe("string");
+    expect(data.mode).toBe("dry-run");
+    expect(data.changedControlName).toBe("cmdSave");
+  });
+});
+
+describe("VbaFormsAdapter — clone outputMode filtering", () => {
+  it("clone dry-run summary mode: omits targetSource, includes details", async () => {
+    const orchestrator = makeOrchestrator();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return CLONE_SOURCE_FORM;
+      throw new Error("ENOENT");
+    });
+    const fs = mockFs({ readFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      dryRun: true,
+      outputMode: "summary",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.targetSource).toBeUndefined();
+    expect(data.mode).toBe("dry-run");
+    expect(data.appliedTokens).toBeDefined();
+  });
+
+  it("clone dry-run file mode: includes targetSource, sourcePath, targetPath; omits details", async () => {
+    const orchestrator = makeOrchestrator();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return CLONE_SOURCE_FORM;
+      throw new Error("ENOENT");
+    });
+    const fs = mockFs({ readFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      dryRun: true,
+      outputMode: "file",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.targetSource).toBe("string");
+    expect(data.sourcePath).toBeDefined();
+    expect(data.targetPath).toBeDefined();
+    // Omitted
+    expect(data.mode).toBeUndefined();
+    expect(data.importGate).toBeUndefined();
+    expect(data.appliedTokens).toBeUndefined();
+    expect(data.missingTokens).toBeUndefined();
+  });
+
+  it("clone apply file mode: includes targetSource, sourcePath, targetPath; omits details", async () => {
+    const orchestrator = makeOrchestrator();
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) return CLONE_SOURCE_FORM;
+      throw new Error("ENOENT");
+    });
+    const fs = mockFs({ readFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      apply: true,
+      outputMode: "file",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(typeof data.targetSource).toBe("string");
+    expect(data.sourcePath).toBeDefined();
+    expect(data.targetPath).toBeDefined();
+    // Omitted
+    expect(data.mode).toBeUndefined();
+    expect(data.importGate).toBeUndefined();
+    expect(data.importResult).toBeUndefined();
+    expect(data.appliedTokens).toBeUndefined();
+  });
+});

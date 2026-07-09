@@ -94,14 +94,30 @@ export async function mutateForm(args: {
 
     const apply = params.apply === true || params.dryRun === false;
     if (!apply) {
-      return successResult({
-        mode: "dry-run",
-        sourcePath: source.data.sourcePath,
-        source: mutation.source,
-        changedControlName: mutation.changedControlName,
-        preservedKeys: mutation.preservedKeys,
-        importGate: "not-run",
-      });
+      const outputMode = stringValue(params.outputMode) ?? "full";
+      if (outputMode === "summary") {
+        return successResult({
+          mode: "dry-run",
+          sourcePath: source.data.sourcePath,
+          changedControlName: mutation.changedControlName,
+          preservedKeys: mutation.preservedKeys,
+          importGate: "not-run",
+        });
+      } else if (outputMode === "file") {
+        return successResult({
+          sourcePath: source.data.sourcePath,
+          source: mutation.source,
+        });
+      } else {
+        return successResult({
+          mode: "dry-run",
+          sourcePath: source.data.sourcePath,
+          source: mutation.source,
+          changedControlName: mutation.changedControlName,
+          preservedKeys: mutation.preservedKeys,
+          importGate: "not-run",
+        });
+      }
     }
 
     try {

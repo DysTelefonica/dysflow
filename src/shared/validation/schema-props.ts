@@ -301,6 +301,15 @@ export const SCHEMA_PROPS = {
     description:
       "When true, an existing target .form.txt is replaced via the gated restore path so a failed load restores prior state. Default false.",
   } as JsonSchemaProperty,
+  outputMode: {
+    type: "string",
+    enum: ["summary", "file", "full"],
+    description: "Response output mode determining payload content: 'summary', 'file', or 'full'.",
+  } as JsonSchemaProperty,
+  includeSerialized: {
+    type: "boolean",
+    description: "Deprecated fallback for form_serialize to include the full serialized text.",
+  } as JsonSchemaProperty,
 };
 
 /** Shared context props used by most tools (single source of truth). */
