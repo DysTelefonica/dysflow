@@ -233,6 +233,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   // removed. The compile_vba tool itself is gone from VBA_SYNC_TOOL_NAMES,
   // MCP_TOOL_ROUTES, TOOL_PARITY_REGISTRY, and EXECUTION_MAPPINGS.
   // See openspec/specs/vba-manager-actions/spec.md "No compile_vba Action".
+  // Round 5 / PR5 (v2.4.0) — verify_code OUTPUT is now augmented with three
+  // additive fields (semantic mode only): `summaryStructured` (nested
+  // actionable/nonActionable counts), `bulkImportable` / `bulkExportable`
+  // (drop-in for import_modules / export_modules), and per-entry
+  // `classification` / `reason` on `nonActionableDifferent[*]`. The input
+  // schema below is unchanged (these are outputs, not inputs).
   verify_code: {
     type: "object",
     additionalProperties: false,
