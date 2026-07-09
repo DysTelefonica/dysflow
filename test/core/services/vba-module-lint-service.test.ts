@@ -793,14 +793,14 @@ describe("vba-module-lint-service", () => {
         rules: ["logical-short-circuit"],
         source: [
           "Public Sub Run()",
-          "    If Not myObj Is Nothing And myObj.Name = \"Test\" Then",
-          "        Debug.Print \"Hi\"",
+          '    If Not myObj Is Nothing And myObj.Name = "Test" Then',
+          '        Debug.Print "Hi"',
           "    End If",
           "    If myObj Is Nothing Or myObj.Value = 1 Then",
-          "        Debug.Print \"Hi\"",
+          '        Debug.Print "Hi"',
           "    End If",
           "    If IsNull(otherObj) And otherObj.Property Then",
-          "        Debug.Print \"Hi\"",
+          '        Debug.Print "Hi"',
           "    End If",
           "End Sub",
         ].join("\r\n"),
@@ -811,7 +811,7 @@ describe("vba-module-lint-service", () => {
       expect(report.flatDiagnostics[0]?.line).toBe(2);
       expect(report.flatDiagnostics[1]?.line).toBe(5);
       expect(report.flatDiagnostics[2]?.line).toBe(8);
-      expect(report.flatDiagnostics.every(d => d.rule === "logical-short-circuit")).toBe(true);
+      expect(report.flatDiagnostics.every((d) => d.rule === "logical-short-circuit")).toBe(true);
     });
 
     it("does not flag nested Ifs or multi-line statements that do not mix them incorrectly", async () => {
@@ -821,8 +821,8 @@ describe("vba-module-lint-service", () => {
         source: [
           "Public Sub Run()",
           "    If Not myObj Is Nothing Then",
-          "        If myObj.Name = \"Test\" Then",
-          "            Debug.Print \"Hi\"",
+          '        If myObj.Name = "Test" Then',
+          '            Debug.Print "Hi"',
           "        End If",
           "    End If",
           "End Sub",
@@ -855,7 +855,11 @@ describe("vba-module-lint-service", () => {
       expect(report.flatDiagnostics[0]?.line).toBe(2);
       expect(report.flatDiagnostics[1]?.line).toBe(3);
       expect(report.flatDiagnostics[2]?.line).toBe(4);
-      expect(report.flatDiagnostics.every(d => d.rule === "implicit-variant" && d.severity === "warning")).toBe(true);
+      expect(
+        report.flatDiagnostics.every(
+          (d) => d.rule === "implicit-variant" && d.severity === "warning",
+        ),
+      ).toBe(true);
     });
 
     it("does not flag single declarations or multiple fully typed declarations", async () => {
@@ -887,7 +891,7 @@ describe("vba-module-lint-service", () => {
           "    Dim x As Long",
           "    x = 1",
           "ErrHandler:",
-          "    MsgBox \"Error\"",
+          '    MsgBox "Error"',
           "End Sub",
         ].join("\r\n"),
       });
@@ -908,7 +912,7 @@ describe("vba-module-lint-service", () => {
           "    Dim x As Long",
           "    Exit Sub",
           "ErrHandler:",
-          "    MsgBox \"Error\"",
+          '    MsgBox "Error"',
           "End Sub",
           "Public Function RunOkFunc() As Boolean",
           "    On Error GoTo ErrHandler",
@@ -943,7 +947,9 @@ describe("vba-module-lint-service", () => {
       expect(report.flatDiagnostics).toHaveLength(2);
       expect(report.flatDiagnostics[0]?.line).toBe(2);
       expect(report.flatDiagnostics[1]?.line).toBe(4);
-      expect(report.flatDiagnostics.every(d => d.rule === "invalid-static-class-call")).toBe(true);
+      expect(report.flatDiagnostics.every((d) => d.rule === "invalid-static-class-call")).toBe(
+        true,
+      );
     });
 
     it("does not flag class module calls when the prefix is declared as local variable or parameter", async () => {

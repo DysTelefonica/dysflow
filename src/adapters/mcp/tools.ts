@@ -412,7 +412,7 @@ function getProjectClassModules(destinationRoot: string): string[] {
     const fs = require("node:fs") as typeof import("node:fs");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require("node:path") as typeof import("node:path");
-    
+
     const classNames: string[] = [];
     const dirs = ["classes", "forms", "reports"];
     for (const dirName of dirs) {
@@ -441,7 +441,6 @@ function getProjectClassModules(destinationRoot: string): string[] {
     return [];
   }
 }
-
 
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 
@@ -1063,9 +1062,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         // for non-ASCII); projects that need the strict (error) check
         // set `capabilities.lint.identifierSafety.strictNonAscii: true`
         // in `.dysflow/project.json`.
-        const classModules = destinationRoot
-          ? getProjectClassModules(destinationRoot)
-          : undefined;
+        const classModules = destinationRoot ? getProjectClassModules(destinationRoot) : undefined;
         const report = await lintVbaModule({
           module,
           source: resolvedSource,
