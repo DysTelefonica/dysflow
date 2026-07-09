@@ -406,6 +406,43 @@ function fileHasNonAsciiIdentifier(fs: typeof import("node:fs"), path: string): 
   return false;
 }
 
+function getProjectClassModules(destinationRoot: string): string[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("node:path") as typeof import("node:path");
+    
+    const classNames: string[] = [];
+    const dirs = ["classes", "forms", "reports"];
+    for (const dirName of dirs) {
+      const dirPath = path.join(destinationRoot, dirName);
+      if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+        const files = fs.readdirSync(dirPath);
+        for (const file of files) {
+          if (file.toLowerCase().endsWith(".cls")) {
+            const className = file.slice(0, -4);
+            const fullPath = path.join(dirPath, file);
+            try {
+              const content = fs.readFileSync(fullPath, "utf-8");
+              if (/Attribute\s+VB_PredeclaredId\s*=\s*True/i.test(content)) {
+                continue;
+              }
+            } catch {
+              // Ignore read errors
+            }
+            classNames.push(className);
+          }
+        }
+      }
+    }
+    return classNames;
+  } catch {
+    return [];
+  }
+}
+
+
 // ─── Modern tool names ─────────────────────────────────────────────────────────
 
 /**
@@ -1015,6 +1052,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         // marker file `.dysflow-no-auto-allow` opts out of the downgrade.
         const projectContext = await accessContextResolver(input);
         const projectRoot = projectContext.ok ? projectContext.data.projectRoot : undefined;
+        const destinationRoot = projectContext.ok ? projectContext.data.destinationRoot : undefined;
         const detection = projectRoot
           ? (): boolean => projectHasLegacyNonAsciiIdentifier(projectRoot)
           : undefined;
@@ -1025,6 +1063,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         // for non-ASCII); projects that need the strict (error) check
         // set `capabilities.lint.identifierSafety.strictNonAscii: true`
         // in `.dysflow/project.json`.
+        const classModules = destinationRoot
+          ? getProjectClassModules(destinationRoot)
+          : undefined;
         const report = await lintVbaModule({
           module,
           source: resolvedSource,
@@ -1033,6 +1074,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           lintRulesOverride,
           hasNonAsciiIdentifierInProject: detection,
           strictNonAscii: lintIdentifierSafetyStrict,
+          classModules,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(report) }],

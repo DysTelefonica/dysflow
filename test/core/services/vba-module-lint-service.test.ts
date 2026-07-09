@@ -58,6 +58,10 @@ describe("vba-module-lint-service", () => {
         "declaration-order",
         "arg-type-match",
         "forbidden-name",
+        "logical-short-circuit",
+        "implicit-variant",
+        "missing-exit-handler",
+        "invalid-static-class-call",
       ],
       isClean: true,
       flatDiagnostics: [],
@@ -207,6 +211,10 @@ describe("vba-module-lint-service", () => {
       "declaration-order",
       "arg-type-match",
       "forbidden-name",
+      "logical-short-circuit",
+      "implicit-variant",
+      "missing-exit-handler",
+      "invalid-static-class-call",
     ]);
     expect(report.isClean).toBe(false);
     expect(report.flatDiagnostics.length).toBeGreaterThan(0);
@@ -776,6 +784,184 @@ describe("vba-module-lint-service", () => {
           severity: "warning",
         }),
       ]);
+    });
+  });
+  describe("logical-short-circuit rule", () => {
+    it("flags standard short-circuit object existence checks with member access", async () => {
+      const report = await lintVbaModule({
+        module: "ShortCircuitBad",
+        rules: ["logical-short-circuit"],
+        source: [
+          "Public Sub Run()",
+          "    If Not myObj Is Nothing And myObj.Name = \"Test\" Then",
+          "        Debug.Print \"Hi\"",
+          "    End If",
+          "    If myObj Is Nothing Or myObj.Value = 1 Then",
+          "        Debug.Print \"Hi\"",
+          "    End If",
+          "    If IsNull(otherObj) And otherObj.Property Then",
+          "        Debug.Print \"Hi\"",
+          "    End If",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(false);
+      expect(report.flatDiagnostics).toHaveLength(3);
+      expect(report.flatDiagnostics[0]?.line).toBe(2);
+      expect(report.flatDiagnostics[1]?.line).toBe(5);
+      expect(report.flatDiagnostics[2]?.line).toBe(8);
+      expect(report.flatDiagnostics.every(d => d.rule === "logical-short-circuit")).toBe(true);
+    });
+
+    it("does not flag nested Ifs or multi-line statements that do not mix them incorrectly", async () => {
+      const report = await lintVbaModule({
+        module: "ShortCircuitGood",
+        rules: ["logical-short-circuit"],
+        source: [
+          "Public Sub Run()",
+          "    If Not myObj Is Nothing Then",
+          "        If myObj.Name = \"Test\" Then",
+          "            Debug.Print \"Hi\"",
+          "        End If",
+          "    End If",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.flatDiagnostics).toHaveLength(0);
+    });
+  });
+
+  describe("implicit-variant rule", () => {
+    it("flags multiple variable declarations on a single line where some lack As clause", async () => {
+      const report = await lintVbaModule({
+        module: "ImplicitVariantBad",
+        rules: ["implicit-variant"],
+        source: [
+          "Public Sub Run()",
+          "    Dim x, y As Long",
+          "    Public a, b, c As String",
+          "    Private foo, bar",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.summary.warnings).toBe(3);
+      expect(report.summary.errors).toBe(0);
+      expect(report.flatDiagnostics).toHaveLength(3);
+      expect(report.flatDiagnostics[0]?.line).toBe(2);
+      expect(report.flatDiagnostics[1]?.line).toBe(3);
+      expect(report.flatDiagnostics[2]?.line).toBe(4);
+      expect(report.flatDiagnostics.every(d => d.rule === "implicit-variant" && d.severity === "warning")).toBe(true);
+    });
+
+    it("does not flag single declarations or multiple fully typed declarations", async () => {
+      const report = await lintVbaModule({
+        module: "ImplicitVariantGood",
+        rules: ["implicit-variant"],
+        source: [
+          "Public Sub Run()",
+          "    Dim x As Long",
+          "    Dim a As String, b As String",
+          "    Dim arrayVar(1 To 5, 1 To 10) As Double",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.flatDiagnostics).toHaveLength(0);
+    });
+  });
+
+  describe("missing-exit-handler rule", () => {
+    it("flags procedures missing Exit Sub/Function/Property before the error label", async () => {
+      const report = await lintVbaModule({
+        module: "MissingExitBad",
+        rules: ["missing-exit-handler"],
+        source: [
+          "Public Sub Run()",
+          "    On Error GoTo ErrHandler",
+          "    Dim x As Long",
+          "    x = 1",
+          "ErrHandler:",
+          "    MsgBox \"Error\"",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(false);
+      expect(report.flatDiagnostics).toHaveLength(1);
+      expect(report.flatDiagnostics[0]?.line).toBe(4); // Line before the label
+      expect(report.flatDiagnostics[0]?.rule).toBe("missing-exit-handler");
+    });
+
+    it("does not flag procedures with proper exit paths or no On Error GoTo", async () => {
+      const report = await lintVbaModule({
+        module: "MissingExitGood",
+        rules: ["missing-exit-handler"],
+        source: [
+          "Public Sub RunOk()",
+          "    On Error GoTo ErrHandler",
+          "    Dim x As Long",
+          "    Exit Sub",
+          "ErrHandler:",
+          "    MsgBox \"Error\"",
+          "End Sub",
+          "Public Function RunOkFunc() As Boolean",
+          "    On Error GoTo ErrHandler",
+          "    Exit Function",
+          "ErrHandler:",
+          "    Resume Next",
+          "End Function",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.flatDiagnostics).toHaveLength(0);
+    });
+  });
+
+  describe("invalid-static-class-call rule", () => {
+    it("flags static calls to project class modules when not declared as variables", async () => {
+      const report = await lintVbaModule({
+        module: "StaticCallBad",
+        rules: ["invalid-static-class-call"],
+        classModules: ["Edicion", "ModuloRiesgo"],
+        source: [
+          "Public Sub Run()",
+          "    Edicion.versionar 1",
+          "    Dim x As Long",
+          "    x = ModuloRiesgo.Calcular()",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(false);
+      expect(report.flatDiagnostics).toHaveLength(2);
+      expect(report.flatDiagnostics[0]?.line).toBe(2);
+      expect(report.flatDiagnostics[1]?.line).toBe(4);
+      expect(report.flatDiagnostics.every(d => d.rule === "invalid-static-class-call")).toBe(true);
+    });
+
+    it("does not flag class module calls when the prefix is declared as local variable or parameter", async () => {
+      const report = await lintVbaModule({
+        module: "StaticCallGood",
+        rules: ["invalid-static-class-call"],
+        classModules: ["Edicion", "ModuloRiesgo"],
+        source: [
+          "Public Sub Run(ByVal Edicion As Object)",
+          "    Edicion.versionar 1",
+          "    Dim ModuloRiesgo As New ModuloRiesgo",
+          "    ModuloRiesgo.Calcular",
+          "End Sub",
+        ].join("\r\n"),
+      });
+
+      expect(report.isClean).toBe(true);
+      expect(report.flatDiagnostics).toHaveLength(0);
     });
   });
 });

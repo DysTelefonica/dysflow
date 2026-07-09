@@ -9,6 +9,10 @@ export const VBA_MODULE_LINT_RULES = [
   // and reserved words. The orchestrator self-applies this rule (and the
   // `forbidden-name` MCP `lint_module` rule surfaces it to consumers).
   "forbidden-name",
+  "logical-short-circuit",
+  "implicit-variant",
+  "missing-exit-handler",
+  "invalid-static-class-call",
 ] as const;
 
 export type VbaModuleLintRule = (typeof VBA_MODULE_LINT_RULES)[number];
@@ -89,6 +93,8 @@ export interface VbaModuleLintRequest {
    * syntactic defects that block even the human compile.
    */
   strictNonAscii?: boolean;
+  /** Known class module names in the project to check for static calls. */
+  classModules?: readonly string[];
 }
 
 const LINT_SUPPRESSED_DIAGNOSTIC_CODE = "LINT_SUPPRESSED";
@@ -425,6 +431,54 @@ function finishLintReport(
     const found = lintForbiddenName(request.source, lines);
     flatDiagnostics.push(...found);
     byRule["forbidden-name"]?.push(...found);
+  }
+
+  // Reconstruct logical lines for rules that benefit from statement-level context
+  const logicalLines: { text: string; lineStart: number }[] = [];
+  let currentLogicalLine = "";
+  let logicalLineStart = 1;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const rawLine = lines[i] ?? "";
+    const trimmed = rawLine.trim();
+    if (trimmed.endsWith("_")) {
+      currentLogicalLine += `${rawLine.slice(0, -1)} `;
+    } else {
+      currentLogicalLine += rawLine;
+      logicalLines.push({
+        text: currentLogicalLine,
+        lineStart: logicalLineStart,
+      });
+      currentLogicalLine = "";
+      logicalLineStart = i + 2;
+    }
+  }
+  if (currentLogicalLine.trim().length > 0) {
+    logicalLines.push({
+      text: currentLogicalLine,
+      lineStart: logicalLineStart,
+    });
+  }
+
+  if (rules.includes("logical-short-circuit")) {
+    const found = lintLogicalShortCircuit(logicalLines);
+    flatDiagnostics.push(...found);
+    byRule["logical-short-circuit"]?.push(...found);
+  }
+  if (rules.includes("implicit-variant")) {
+    const found = lintImplicitVariant(logicalLines);
+    flatDiagnostics.push(...found);
+    byRule["implicit-variant"]?.push(...found);
+  }
+  if (rules.includes("missing-exit-handler")) {
+    const found = lintMissingExitHandler(logicalLines);
+    flatDiagnostics.push(...found);
+    byRule["missing-exit-handler"]?.push(...found);
+  }
+  if (rules.includes("invalid-static-class-call")) {
+    const found = lintInvalidStaticClassCall(logicalLines, request.classModules ?? []);
+    flatDiagnostics.push(...found);
+    byRule["invalid-static-class-call"]?.push(...found);
   }
 
   // #731 — `LINT_SUPPRESSED` is an audit marker, not a real finding; it
@@ -1016,4 +1070,264 @@ function hasNonAscii(value: string): boolean {
     if (value.charCodeAt(i) > 127) return true;
   }
   return false;
+}
+
+function lintLogicalShortCircuit(
+  logicalLines: readonly { text: string; lineStart: number }[],
+): VbaModuleLintDiagnostic[] {
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+
+  const patterns = [
+    /\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s+Is\s+Nothing\b.*\b(And|Or)\b.*\b\1\./i,
+    /\bIs(?:Null|Empty)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*\).*\b(And|Or)\b.*\b\1\./i,
+    /\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\..*\b(And|Or)\b.*\b\1\s+Is\s+Nothing\b/i,
+    /\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\..*\b(And|Or)\b.*\bIs(?:Null|Empty)\s*\(\s*\1\s*\)/i,
+  ];
+
+  for (const { text, lineStart } of logicalLines) {
+    const code = stripStringsAndComments(text);
+    for (const pattern of patterns) {
+      const match = code.match(pattern);
+      if (match) {
+        const objName = match[1] ?? "object";
+        diagnostics.push({
+          rule: "logical-short-circuit",
+          line: lineStart,
+          severity: "error",
+          message: `Logical expression risks runtime error; VBA does not support short-circuit evaluation. Nested If blocks should be used instead of combining '${objName}' existence check and member access.`,
+        });
+        break;
+      }
+    }
+  }
+  return diagnostics;
+}
+
+function lintImplicitVariant(
+  logicalLines: readonly { text: string; lineStart: number }[],
+): VbaModuleLintDiagnostic[] {
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+  const VAR_DECLARATION_RE =
+    /^\s*(Dim|Private|Public|Friend|Global|Static)\b(?!.*\b(?:Sub|Function|Property|Const|Enum|Type|Event|Declare)\b)/i;
+
+  for (const { text, lineStart } of logicalLines) {
+    const code = stripStringsAndComments(text).trim();
+    const match = code.match(VAR_DECLARATION_RE);
+    if (!match) continue;
+
+    const keyword = match[1];
+    if (keyword === undefined) continue;
+
+    const declList = code.slice(code.indexOf(keyword) + keyword.length).trim();
+    const parts = splitTopLevelCommas(declList);
+    if (parts.length > 1) {
+      const hasMissingAs = parts.some((part) => !/\bAs\b/i.test(part));
+      if (hasMissingAs) {
+        diagnostics.push({
+          rule: "implicit-variant",
+          line: lineStart,
+          severity: "warning",
+          message: `Implicit Variant declaration hazard. In VBA, declaring multiple variables on a single line requires an explicit 'As' clause for each variable, otherwise they default to Variant (e.g., 'Dim x As Long, y As Long' instead of 'Dim x, y As Long').`,
+        });
+      }
+    }
+  }
+  return diagnostics;
+}
+
+function lintMissingExitHandler(
+  logicalLines: readonly { text: string; lineStart: number }[],
+): VbaModuleLintDiagnostic[] {
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+  let inProcedure = false;
+  let procedureLines: { text: string; line: number }[] = [];
+
+  for (let i = 0; i < logicalLines.length; i += 1) {
+    const entry = logicalLines[i];
+    if (!entry) continue;
+    const { text, lineStart } = entry;
+    const code = stripStringsAndComments(text).trim();
+    if (code.length === 0) continue;
+
+    if (PROCEDURE_DECLARATION_RE.test(code)) {
+      inProcedure = true;
+      procedureLines = [{ text: code, line: lineStart }];
+      continue;
+    }
+
+    if (inProcedure) {
+      procedureLines.push({ text: code, line: lineStart });
+      if (PROCEDURE_END_RE.test(code)) {
+        inProcedure = false;
+        diagnostics.push(...checkProcedureExitHandler(procedureLines));
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+function checkProcedureExitHandler(
+  procLines: { text: string; line: number }[],
+): VbaModuleLintDiagnostic[] {
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+  let errorLabel: string | undefined;
+
+  for (const { text } of procLines) {
+    const errorMatch = text.match(/\bOn\s+Error\s+GoTo\s+([A-Za-z_][A-Za-z0-9_]*)\b/i);
+    if (errorMatch?.[1] && errorMatch[1].toLowerCase() !== "0") {
+      errorLabel = errorMatch[1];
+      break;
+    }
+  }
+
+  if (!errorLabel) return [];
+
+  const labelLower = errorLabel.toLowerCase();
+  let labelIndex = -1;
+  for (let i = 0; i < procLines.length; i += 1) {
+    const lineText = procLines[i]?.text ?? "";
+    const labelMatch = lineText.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/);
+    if (labelMatch?.[1] && labelMatch[1].toLowerCase() === labelLower) {
+      labelIndex = i;
+      break;
+    }
+  }
+
+  if (labelIndex === -1) return [];
+
+  let precedingStatement: string | undefined;
+  let precedingLine = -1;
+  for (let i = labelIndex - 1; i >= 0; i -= 1) {
+    const pline = procLines[i];
+    if (pline && pline.text.length > 0) {
+      precedingStatement = pline.text;
+      precedingLine = pline.line;
+      break;
+    }
+  }
+
+  if (precedingStatement) {
+    const isSafeExit =
+      /^(?:Exit\s+(?:Sub|Function|Property)|Resume|GoTo\s+[A-Za-z_][A-Za-z0-9_]*)/i.test(
+        precedingStatement,
+      );
+    if (!isSafeExit) {
+      diagnostics.push({
+        rule: "missing-exit-handler",
+        line: precedingLine,
+        severity: "error",
+        message: `Missing 'Exit Sub' or 'Exit Function' before error handler label '${errorLabel}'. The normal execution flow will fall into the error handler block.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function lintInvalidStaticClassCall(
+  logicalLines: readonly { text: string; lineStart: number }[],
+  classModules: readonly string[],
+): VbaModuleLintDiagnostic[] {
+  if (classModules.length === 0) return [];
+  const diagnostics: VbaModuleLintDiagnostic[] = [];
+  const classSet = new Set(classModules.map((c) => c.toLowerCase()));
+
+  const moduleScope = new Set<string>();
+  let inProcedure = false;
+
+  for (const { text } of logicalLines) {
+    const code = stripStringsAndComments(text).trim();
+    if (code.length === 0) continue;
+
+    if (PROCEDURE_DECLARATION_RE.test(code)) {
+      const match = code.match(PROCEDURE_DECLARATION_RE);
+      if (match?.[2]) moduleScope.add(match[2].toLowerCase());
+      inProcedure = true;
+      continue;
+    }
+    if (inProcedure) {
+      if (PROCEDURE_END_RE.test(code)) inProcedure = false;
+      continue;
+    }
+
+    for (const name of extractDeclaredNames(text)) {
+      moduleScope.add(name.toLowerCase());
+    }
+  }
+
+  inProcedure = false;
+  const procedureScope = new Set<string>();
+
+  for (const { text, lineStart } of logicalLines) {
+    const code = stripStringsAndComments(text).trim();
+    if (code.length === 0) continue;
+
+    if (PROCEDURE_DECLARATION_RE.test(code)) {
+      inProcedure = true;
+      procedureScope.clear();
+      const paramNames = getParameterNames(code);
+      for (const name of paramNames) {
+        procedureScope.add(name.toLowerCase());
+      }
+      continue;
+    }
+
+    if (inProcedure) {
+      if (PROCEDURE_END_RE.test(code)) {
+        inProcedure = false;
+        procedureScope.clear();
+        continue;
+      }
+      const localNames = extractDeclaredNames(code);
+      for (const name of localNames) {
+        procedureScope.add(name.toLowerCase());
+      }
+    }
+
+    const dotCalls = code.matchAll(/(?<!\.)\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)/gi);
+    for (const match of dotCalls) {
+      const prefix = match[1];
+      if (prefix === undefined) continue;
+      const prefixLower = prefix.toLowerCase();
+
+      if (
+        classSet.has(prefixLower) &&
+        !moduleScope.has(prefixLower) &&
+        !procedureScope.has(prefixLower)
+      ) {
+        diagnostics.push({
+          rule: "invalid-static-class-call",
+          line: lineStart,
+          severity: "error",
+          message: `Invalid static call to class module '${prefix}'. VBA classes cannot be used statically; you must declare a variable of type '${prefix}', instantiate it with 'New', and call the method on the instance.`,
+        });
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+function extractDeclaredNames(line: string): string[] {
+  const code = stripStringsAndComments(line).trim();
+  const match = code.match(
+    /^\s*(?:Dim|Static|Const|Public|Private|Friend|Global)\s+(?!Sub\b|Function\b|Property\b|Type\b|Enum\b|Declare\b|Event\b)(.+)/i,
+  );
+  const declList = match?.[1];
+  if (!declList) return [];
+
+  const names: string[] = [];
+  for (const part of splitTopLevelCommas(declList)) {
+    const nameMatch = part.trim().match(/^([A-Za-z_][A-Za-z0-9_]*)/);
+    if (nameMatch?.[1]) {
+      names.push(nameMatch[1]);
+    }
+  }
+  return names;
+}
+
+function getParameterNames(line: string): string[] {
+  const params = parseParameters(line);
+  return params.map((p) => p.name);
 }

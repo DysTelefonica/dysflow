@@ -108,7 +108,11 @@ export type LintRuleId =
   // F22 (2026-07-06) — flag identifiers that shadow VBA / Access / DAO
   // globals. Wired into the same project-config override path so a
   // legacy project can opt out with `enabled: false`.
-  | "forbidden-name";
+  | "forbidden-name"
+  | "logical-short-circuit"
+  | "implicit-variant"
+  | "missing-exit-handler"
+  | "invalid-static-class-call";
 
 export type LintRuleOverride = {
   enabled: boolean;
@@ -919,6 +923,10 @@ const KNOWN_LINT_RULE_IDS: readonly LintRuleId[] = [
   "declaration-order",
   "arg-type-match",
   "forbidden-name",
+  "logical-short-circuit",
+  "implicit-variant",
+  "missing-exit-handler",
+  "invalid-static-class-call",
 ];
 
 /**
