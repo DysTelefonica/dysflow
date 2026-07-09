@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.2.0] - 2026-07-09
+
+Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })` are now rejected at the dispatch seam with the typed error `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). The previous behavior silently wrote to the source tree — the diff flag was documented as read-only but the adapter never honored it (the PowerShell runner has no `$Diff` parameter and the `MODULE_MAPPINGS.export_all.extra` mapping only forwards `verbose`), causing partial writes on `VBA_MANAGER_TIMEOUT`. Callers that want a real read-only compare should use `verify_code({ strict, moduleNames })`.
+
+### Fixed
+
+- **export_all / export_modules** (#802): `diff:true` no longer silently writes to the source tree. The flag is refused at the adapter level with `DIFF_MODE_REQUIRES_VERIFY_CODE` and the public docstring (`tool-parity-registry.ts:109`) now matches runtime behavior. Tests at `test/adapters/vba-sync/vba-modules-adapter-diff-flag.test.ts` pin the contract from the outside: typed refusal for `export_all(diff:true)` and `export_modules(diff:true)`, plus a regression guard that the normal export path is unchanged when `diff` is absent.
+
 ## [v2.1.7] - 2026-07-09
 
 - feat(forms): unified AI-friendly outputMode (summary|file|full) across form tools (#794)
