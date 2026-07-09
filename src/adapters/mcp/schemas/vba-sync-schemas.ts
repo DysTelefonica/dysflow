@@ -469,6 +469,93 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  analyze_form_ui: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  map_form_behavior: {
+    type: "object",
+    required: ["codegraphEvidence"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      codegraphEvidence: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["handler", "callPath"],
+          additionalProperties: false,
+          properties: {
+            handler: { type: "string" },
+            callPath: { type: "array", items: { type: "string" } },
+            tables: { type: "array", items: { type: "string" } },
+            effects: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  generate_form_design_plan: {
+    type: "object",
+    required: ["behaviorMap", "plan"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      behaviorMap: { type: "object" },
+      plan: { type: "object" },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  apply_form_design_plan: {
+    type: "object",
+    required: ["plan"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      targetPath: {
+        type: "string",
+        description: "Optional target .form.txt path for apply:true.",
+      },
+      plan: { type: "object" },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  copy_form_ui_pattern: {
+    type: "object",
+    required: ["behaviorMap", "referencePattern"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      behaviorMap: { type: "object" },
+      referencePattern: { type: "object" },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  verify_form_ui: {
+    type: "object",
+    required: ["sourceContract", "appliedContract"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourceContract: { type: "object" },
+      appliedContract: { type: "object" },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,

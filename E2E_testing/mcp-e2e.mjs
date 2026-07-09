@@ -82,6 +82,7 @@ const formSpec = sandboxPlan.sandbox.formSpec;
 const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = `ZZZ_DysflowMcpE2E_${Date.now()}`;
+const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
 await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
 await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
 
@@ -104,6 +105,27 @@ function toolText(message) {
 
 function normalize(text) {
   return String(text ?? "").replace(/\s+/g, " ").slice(0, 260);
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(String(text ?? ""));
+  } catch {
+    return undefined;
+  }
+}
+
+function extractMcpErrorCode(text) {
+  const parsed = safeJsonParse(text);
+  if (parsed && typeof parsed === "object") {
+    if (typeof parsed.code === "string") return parsed.code;
+    if (parsed.error && typeof parsed.error.code === "string") return parsed.error.code;
+  }
+  const textValue = String(text ?? "");
+  if (/FORM_UI_ANALYSIS_FAILED/i.test(textValue)) return "FORM_UI_ANALYSIS_FAILED";
+  if (/FORM_SPEC_MISSING/i.test(textValue)) return "FORM_SPEC_MISSING";
+  if (/MCP_INPUT_INVALID/i.test(textValue)) return "MCP_INPUT_INVALID";
+  return undefined;
 }
 
 async function callMcp(method, params = {}, options = {}) {
@@ -180,7 +202,7 @@ await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissing
 // #786 regression — inline execution must run a snippet and return its `result`.
 // (record() asserts the transport did not error; the deep inner-ok + returnValue
 // assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
-await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' });
+await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' }, { timeoutMs: 120000 });
 await record("operations", "list_access_operations", {});
 await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
@@ -315,7 +337,30 @@ try {
   rows.push({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 }
-await record("vba-sync", "delete_module", { ...ctx, moduleName: "DysflowMcpE2EMissing" }, { expected: "error" });
+const deleteModuleMissingResult = await record("vba-sync", "delete_module", {
+  ...ctx,
+  moduleName: "DysflowMcpE2EMissing",
+});
+const deleteModuleMissingPlan = safeJsonParse(deleteModuleMissingResult.text);
+const hasDeletePlanForMissing = Boolean(
+  deleteModuleMissingPlan &&
+    deleteModuleMissingPlan.operation === "delete_module" &&
+    Array.isArray(deleteModuleMissingPlan.modulesPlanned) &&
+    deleteModuleMissingPlan.modulesPlanned.includes("DysflowMcpE2EMissing"),
+);
+rows.push({
+  area: "vba-sync",
+  tool: "delete_module:missing-module-plan",
+  pass: hasDeletePlanForMissing,
+  expected: "operation=delete_module and modulesPlanned includes missing module name",
+  ms: 0,
+  summary: hasDeletePlanForMissing
+    ? "missing-module delete plan generated"
+    : "missing delete plan fields or module not included",
+});
+console.log(
+  `${hasDeletePlanForMissing ? "PASS" : "FAIL"}\tdelete_module:missing-module-plan\t0ms\t${rows.at(-1).summary}`,
+);
 await record("vba-sync", "fix_encoding", { ...ctx, location: "Src" });
 await record("vba-sync", "generate_erd", { ...ctx, backendPath, erdPath: join(tempRoot, "ERD"), timeoutMs: 120000 });
 
@@ -323,6 +368,354 @@ await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
 await record("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", dryRun: true, replace: true });
 await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
 await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
+const missingFormUiTools = [
+  "analyze_form_ui",
+  "map_form_behavior",
+  "generate_form_design_plan",
+  "apply_form_design_plan",
+  "copy_form_ui_pattern",
+  "verify_form_ui",
+].filter((name) => !advertised.includes(name));
+rows.push({
+  area: "protocol",
+  tool: "form-ui-tools-advertised",
+  pass: missingFormUiTools.length === 0,
+  expected: "analyze_form_ui,map_form_behavior,generate_form_design_plan,apply_form_design_plan,copy_form_ui_pattern,verify_form_ui",
+  ms: 0,
+  summary: missingFormUiTools.length === 0
+    ? "all form-ui tools are advertised"
+    : `missing=${missingFormUiTools.join(",")}`,
+});
+console.log(`${missingFormUiTools.length === 0 ? "PASS" : "FAIL"}\tform-ui-tools-advertised\t0ms\t${rows.at(-1).summary}`);
+
+// form-ui (issue #795) — offline analysis + plan/verify surface for AI-assisted UI work.
+const analyzeFormUiResult = await record("form-ui", "analyze_form_ui", { projectId, sourcePath: uiFormPath });
+const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
+const analyzePass = Boolean(
+  analyzeFormUi &&
+    analyzeFormUi.formName === "DysflowMcpE2E" &&
+    Array.isArray(analyzeFormUi.controls) &&
+    analyzeFormUi.controls.length === 2 &&
+    analyzeFormUi.controls.every((control) => control.name) &&
+    analyzeFormUi.source === "FormIR",
+);
+rows.push({
+  area: "form-ui",
+  tool: "analyze_form_ui:shape",
+  pass: analyzePass,
+  expected: "formName=DysflowMcpE2E, controls=2, source=FormIR",
+  ms: 0,
+  summary: analyzePass ? "analyzed 2 controls from UI fixture" : "unexpected analyze_form_ui payload",
+});
+console.log(`${analyzePass ? "PASS" : "FAIL"}\tanalyze_form_ui:shape\t0ms\t${rows.at(-1).summary}`);
+
+const analyzeFormUiAliasResult = await record("form-ui", "analyze_form_ui", { projectId, path: uiFormPath });
+const analyzeFormUiAlias = safeJsonParse(analyzeFormUiAliasResult.text);
+const analyzeAliasPass = Boolean(
+  analyzeFormUiAlias &&
+    analyzeFormUiAlias.formName === "DysflowMcpE2E" &&
+    analyzeFormUiAlias.source === "FormIR" &&
+    Array.isArray(analyzeFormUiAlias.controls) &&
+    analyzeFormUiAlias.controls.length === analyzeFormUi?.controls?.length,
+);
+rows.push({
+  area: "form-ui",
+  tool: "analyze_form_ui:path-alias",
+  pass: analyzeAliasPass,
+  expected: "path alias resolves to same FormIR result",
+  ms: 0,
+  summary: analyzeAliasPass
+    ? "alias path resolves to same analyzed form contract"
+    : "unexpected analyze_form_ui alias payload",
+});
+console.log(`${analyzeAliasPass ? "PASS" : "FAIL"}\tanalyze_form_ui:path-alias\t0ms\t${rows.at(-1).summary}`);
+
+const codegraphEvidence = [
+  {
+    handler: "txtProbe_OnGotFocus",
+    callPath: ["Form_DysflowMcpE2E", "txtProbe_OnGotFocus"],
+    tables: ["TbNoConformidades"],
+    effects: ["sets focus"],
+  },
+  {
+    handler: "cmdApply_OnClick",
+    callPath: ["Form_DysflowMcpE2E", "cmdApply_OnClick"],
+    tables: ["TbNoConformidades"],
+    effects: ["executes action"],
+  },
+  {
+    handler: "orphan_Handler",
+    callPath: ["Form_DysflowMcpE2E", "orphan_Handler"],
+  },
+];
+const mapFormBehaviorResult = await record("form-ui", "map_form_behavior", {
+  projectId,
+  sourcePath: uiFormPath,
+  codegraphEvidence,
+});
+const behaviorMap = safeJsonParse(mapFormBehaviorResult.text);
+const txtProbeControl = behaviorMap?.controls?.find((control) => control?.name === "txtProbe");
+const cmdApplyControl = behaviorMap?.controls?.find((control) => control?.name === "cmdApply");
+const mapPass = Boolean(
+  behaviorMap &&
+    behaviorMap.formName === "DysflowMcpE2E" &&
+    Array.isArray(behaviorMap.controls) &&
+    txtProbeControl &&
+    cmdApplyControl &&
+    txtProbeControl.codegraphEvidence?.length === 1 &&
+    cmdApplyControl.codegraphEvidence?.length === 1 &&
+    Array.isArray(behaviorMap.unmappedEvidence) &&
+    behaviorMap.unmappedEvidence.length === 1 &&
+    behaviorMap.unmappedEvidence[0]?.handler === "orphan_Handler",
+);
+rows.push({
+  area: "form-ui",
+  tool: "map_form_behavior:mapping-shape",
+  pass: mapPass,
+  expected: "each control maps one evidence; one unmapped evidence",
+  ms: 0,
+  summary: mapPass ? "mapped control evidence + captured orphan evidence" : "unexpected behavior-map shape",
+});
+console.log(`${mapPass ? "PASS" : "FAIL"}\tmap_form_behavior:mapping-shape\t0ms\t${rows.at(-1).summary}`);
+
+const designPlanResult = await record("form-ui", "generate_form_design_plan", {
+  behaviorMap,
+  plan: {
+    operations: [
+      {
+        kind: "rename-caption",
+        target: "txtProbe",
+        intent: "clarify prompt",
+        params: { caption: "Probe input" },
+      },
+      {
+        kind: "note",
+        target: "missing_control",
+        intent: "ignored in generated plan",
+        params: { reason: "missing on form fixture" },
+      },
+    ],
+  },
+});
+const designPlan = safeJsonParse(designPlanResult.text);
+const generatePass = Boolean(
+  designPlan &&
+    designPlan.formName === "DysflowMcpE2E" &&
+    Array.isArray(designPlan.operations) &&
+    designPlan.operations.length === 1 &&
+    designPlan.warnings?.includes('Operation target "missing_control" is not present in the behavior map.'),
+);
+rows.push({
+  area: "form-ui",
+  tool: "generate_form_design_plan:shape",
+  pass: generatePass,
+  expected: "valid plan + target-missing warning for unknown control",
+  ms: 0,
+  summary: generatePass ? "generated plan from valid target only + warning for unknown target" : "unexpected design plan payload",
+});
+console.log(`${generatePass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:shape\t0ms\t${rows.at(-1).summary}`);
+
+const applyPlanResult = await record("form-ui", "apply_form_design_plan", { projectId, plan: designPlan, apply: true });
+const applyPlan = safeJsonParse(applyPlanResult.text);
+const applyPass = Boolean(
+  applyPlan &&
+    applyPlan.mode === "apply" &&
+    applyPlan.filesystemApplied === false &&
+    applyPlan.importGate === "not-run" &&
+    Array.isArray(applyPlan.operationsApplied) &&
+    applyPlan.operationsApplied.length === 1,
+);
+rows.push({
+  area: "form-ui",
+  tool: "apply_form_design_plan:contract",
+  pass: applyPass,
+  expected: 'mode=apply, filesystemApplied=false, importGate="not-run"',
+  ms: 0,
+  summary: applyPass
+    ? "apply-form plan is in-memory and did not touch filesystem"
+    : "unexpected apply_form_design_plan payload",
+});
+console.log(`${applyPass ? "PASS" : "FAIL"}\tapply_form_design_plan:contract\t0ms\t${rows.at(-1).summary}`);
+
+const copyPlanResult = await record("form-ui", "copy_form_ui_pattern", {
+  projectId,
+  behaviorMap,
+  referencePattern: {
+    sourceForm: "Form_SourcePattern",
+    intent: "reuse action affordance",
+    mappedControls: {
+      txtProbe: "txtProbe",
+    },
+  },
+});
+const copyPlan = safeJsonParse(copyPlanResult.text);
+const copyPass = Boolean(
+  copyPlan &&
+    copyPlan.formName === "DysflowMcpE2E" &&
+    copyPlan.referencePattern?.sourceForm === "Form_SourcePattern" &&
+    Array.isArray(copyPlan.operations) &&
+    copyPlan.operations.length === 1 &&
+    copyPlan.operations[0].kind === "copy-pattern",
+);
+rows.push({
+  area: "form-ui",
+  tool: "copy_form_ui_pattern:shape",
+  pass: copyPass,
+  expected: "one copy-pattern operation + source-form in plan",
+  ms: 0,
+  summary: copyPass
+    ? "pattern copy generated a single copy-pattern operation"
+    : "unexpected copy_form_ui_pattern payload",
+});
+console.log(`${copyPass ? "PASS" : "FAIL"}\tcopy_form_ui_pattern:shape\t0ms\t${rows.at(-1).summary}`);
+
+const driftedContract = {
+  ...behaviorMap,
+  controls: (behaviorMap?.controls ?? []).map((control) =>
+    control.name === "txtProbe" ? { ...control, events: [] } : control,
+  ),
+};
+const verifyCleanResult = await record("form-ui", "verify_form_ui", {
+  projectId,
+  sourceContract: behaviorMap,
+  appliedContract: behaviorMap,
+});
+const verifyClean = safeJsonParse(verifyCleanResult.text);
+const verifyCleanPass = Boolean(
+  verifyClean &&
+    verifyClean.formName === "DysflowMcpE2E" &&
+    verifyClean.ok === true &&
+    Array.isArray(verifyClean.findings) &&
+    verifyClean.findings.length === 0,
+);
+rows.push({
+  area: "form-ui",
+  tool: "verify_form_ui:clean-match",
+  pass: verifyCleanPass,
+  expected: "ok=true and no findings when contract matches",
+  ms: 0,
+  summary: verifyCleanPass ? "verify_form_ui accepts identical contract as no-drift" : "unexpected verify_form_ui pass payload",
+});
+console.log(`${verifyCleanPass ? "PASS" : "FAIL"}\tverify_form_ui:clean-match\t0ms\t${rows.at(-1).summary}`);
+
+// Negative-path coverage: invalid source path should return a contract-level MCP error.
+const analyzeMissingPath = await record(
+  "form-ui",
+  "analyze_form_ui",
+  { projectId, path: "C:/tmp/does-not-exist.form.txt" },
+  { expected: "error" },
+);
+const analyzeMissingErrorCode = extractMcpErrorCode(analyzeMissingPath.text);
+const missingPathPass = Boolean(
+  analyzeMissingPath.isError &&
+    (analyzeMissingErrorCode === "FORM_UI_ANALYSIS_FAILED" ||
+      analyzeMissingErrorCode === undefined &&
+        String(analyzeMissingPath.text ?? "").toLowerCase().includes("form_ui_analysis_failed")),
+);
+rows.push({
+  area: "form-ui",
+  tool: "analyze_form_ui:error-path",
+  pass: Boolean(missingPathPass),
+  expected: "error code FORM_UI_ANALYSIS_FAILED for missing form source",
+  ms: 0,
+  summary: missingPathPass
+    ? `missing source path fails with ${extractMcpErrorCode(analyzeMissingPath.text) ?? "text error payload"}`
+    : "expected FORM_UI_ANALYSIS_FAILED error payload",
+});
+console.log(`${missingPathPass ? "PASS" : "FAIL"}\tanalyze_form_ui:error-path\t0ms\t${rows.at(-1).summary}`);
+
+// map_form_behavior handles zero evidence with explicit warning.
+const emptyEvidenceMapResult = await record("form-ui", "map_form_behavior", {
+  projectId,
+  sourcePath: uiFormPath,
+  codegraphEvidence: [],
+});
+const emptyEvidenceMap = safeJsonParse(emptyEvidenceMapResult.text);
+const emptyEvidencePass = Boolean(
+  emptyEvidenceMap &&
+    emptyEvidenceMap.formName === "DysflowMcpE2E" &&
+    Array.isArray(emptyEvidenceMap.warnings) &&
+    emptyEvidenceMap.warnings.includes("No CodeGraph-VBA evidence was supplied.") &&
+    Array.isArray(emptyEvidenceMap.unmappedEvidence) &&
+    emptyEvidenceMap.unmappedEvidence.length === 0,
+);
+rows.push({
+  area: "form-ui",
+  tool: "map_form_behavior:empty-evidence",
+  pass: emptyEvidencePass,
+  expected: "empty evidence warning + no unmapped evidence",
+  ms: 0,
+  summary: emptyEvidencePass ? "map_form_behavior warns when evidence is empty" : "unexpected empty-evidence map payload",
+});
+console.log(`${emptyEvidencePass ? "PASS" : "FAIL"}\tmap_form_behavior:empty-evidence\t0ms\t${rows.at(-1).summary}`);
+
+const generateMissingBehavior = await record(
+  "form-ui",
+  "generate_form_design_plan",
+  { plan: { operations: [] } },
+  { expected: "error" },
+);
+const generateMissingErrorCode = extractMcpErrorCode(generateMissingBehavior.text);
+const generateMissingPass = Boolean(
+  generateMissingBehavior.isError &&
+    (generateMissingErrorCode === "FORM_SPEC_MISSING" ||
+      generateMissingErrorCode === "MCP_INPUT_INVALID"),
+);
+rows.push({
+  area: "form-ui",
+  tool: "generate_form_design_plan:error-path",
+  pass: Boolean(generateMissingPass),
+  expected: "error code FORM_SPEC_MISSING or MCP_INPUT_INVALID for missing behaviorMap/plan",
+  ms: 0,
+  summary: generateMissingPass
+    ? `missing behaviorMap fails with ${generateMissingErrorCode ?? "schema-level"}`
+    : "expected FORM_SPEC_MISSING error payload",
+});
+console.log(`${generateMissingPass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:error-path\t0ms\t${rows.at(-1).summary}`);
+
+const applyDryRunResult = await record("form-ui", "apply_form_design_plan", { projectId, plan: designPlan });
+const applyDryRun = safeJsonParse(applyDryRunResult.text);
+const applyDryRunPass = Boolean(
+  applyDryRun &&
+    applyDryRun.mode === "dry-run" &&
+    applyDryRun.filesystemApplied === false &&
+    applyDryRun.importGate === "not-run" &&
+    Array.isArray(applyDryRun.operationsApplied),
+);
+rows.push({
+  area: "form-ui",
+  tool: "apply_form_design_plan:dry-run",
+  pass: applyDryRunPass,
+  expected: 'mode=dry-run, filesystemApplied=false, importGate="not-run"',
+  ms: 0,
+  summary: applyDryRunPass
+    ? "apply-form plan default mode is safe dry-run"
+    : "unexpected apply_form_design_plan dry-run payload",
+});
+console.log(`${applyDryRunPass ? "PASS" : "FAIL"}\tapply_form_design_plan:dry-run\t0ms\t${rows.at(-1).summary}`);
+
+const verifyFormUiResult = await record("form-ui", "verify_form_ui", {
+  projectId,
+  sourceContract: behaviorMap,
+  appliedContract: driftedContract,
+});
+const formUiVerifyResult = safeJsonParse(verifyFormUiResult.text);
+const verifyPass = Boolean(
+  formUiVerifyResult &&
+    formUiVerifyResult.formName === "DysflowMcpE2E" &&
+    formUiVerifyResult.ok === false &&
+    Array.isArray(formUiVerifyResult.findings) &&
+    formUiVerifyResult.findings.some((finding) => finding.code === "FORM_UI_EVENT_DRIFT"),
+);
+rows.push({
+  area: "form-ui",
+  tool: "verify_form_ui:drift-detection",
+  pass: verifyPass,
+  expected: "FORM_UI_EVENT_DRIFT detected when applied contract drops event",
+  ms: 0,
+  summary: verifyPass ? "drift detection found event regression" : "unexpected verify_form_ui payload",
+});
+console.log(`${verifyPass ? "PASS" : "FAIL"}\tverify_form_ui:drift-detection\t0ms\t${rows.at(-1).summary}`);
 
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });

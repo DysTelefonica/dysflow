@@ -267,3 +267,54 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
     }
     ```
 *   **Notes**: `scope: "module"` echoes the narrowing back on the report and `module: "ModB"` restricts the analysis to that module only. The risk of every surviving finding is elevated to `Med` for private procedures (a narrowed scan can hide references that live outside the chosen module). Access lifecycle and control-event names (`AutoExec`, `Form_Load`, `cmdSave_Click`, …) are filtered out via `EXCLUDED_NAME_PATTERNS` and never appear as findings.
+
+---
+
+### 8. AI Form UI Builder
+
+#### Analyze a Form UI (Read-only)
+*   **Tool**: `analyze_form_ui`
+*   **Arguments**:
+    ```json
+    {
+      "sourcePath": "forms/Form_Customer.form.txt"
+    }
+    ```
+
+#### Map Behavior with Caller-Supplied CodeGraph Evidence
+*   **Tool**: `map_form_behavior`
+*   **Arguments**:
+    ```json
+    {
+      "sourcePath": "forms/Form_Customer.form.txt",
+      "codegraphEvidence": [
+        {
+          "handler": "cmdSave_Click",
+          "callPath": ["cmdSave_Click", "SaveCustomer"],
+          "tables": ["Customers"]
+        }
+      ]
+    }
+    ```
+*   **Notes**: First iteration boundary: callers provide CodeGraph-VBA evidence payloads. Dysflow does not perform direct MCP-to-MCP invocation.
+
+#### Preview and Verify a Design Plan
+*   **Tool**: `apply_form_design_plan`
+*   **Arguments**:
+    ```json
+    {
+      "plan": {
+        "formName": "Customer",
+        "sourceContract": {
+          "formName": "Customer",
+          "controls": [],
+          "formEvents": [],
+          "unmappedEvidence": [],
+          "warnings": []
+        },
+        "operations": [],
+        "warnings": []
+      },
+      "dryRun": true
+    }
+    ```

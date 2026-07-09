@@ -205,6 +205,46 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: true,
     risk: "routine-dev-write",
   },
+  analyze_form_ui: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  map_form_behavior: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  generate_form_design_plan: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  // First-slice AI form UI builder plan tools are contract-only: they produce
+  // analysis/plans/application reports but do not mutate form source or binary.
+  // When concrete FormIR mutations are added, reclassify only that operation
+  // through the same guarded import path as form_add_control/form_move_control.
+  apply_form_design_plan: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  copy_form_ui_pattern: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  verify_form_ui: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,

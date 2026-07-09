@@ -64,14 +64,14 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   and the alias is the sole source. The other 8 are bespoke-to-bespoke
     //   renames. Visible count drops by 3 (one per alias-removed).
     //   Expected breakdown:
-    //     53 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     59 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 64 visible (was 67).
-    expect(toolCount).toBe(53);
+    //     = 70 visible (was 64 before #795).
+    expect(toolCount).toBe(59);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(64);
+    expect(visibleCount).toBe(70);
   });
 
   it("verifies split-mode coverage explicitly", () => {
