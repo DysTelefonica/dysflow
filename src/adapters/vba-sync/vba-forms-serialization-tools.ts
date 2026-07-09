@@ -100,23 +100,41 @@ export async function serializeForm(
   );
   const opaqueCount = countOpaqueEntries(ir);
 
-  const includeSerialized =
-    stringValue(params.includeSerialized) === "true" || params.includeSerialized === true;
+  let outputMode = stringValue(params.outputMode);
+  if (!outputMode) {
+    const includeSerialized =
+      stringValue(params.includeSerialized) === "true" || params.includeSerialized === true;
+    outputMode = includeSerialized ? "full" : "summary";
+  }
 
-  const report: Record<string, unknown> = {
-    preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
-    byteDiff,
-    opaqueCount,
-  };
-
-  return successResult({
+  const data: Record<string, unknown> = {
     name: ir.name,
     kind: ir.kind,
-    ...(includeSerialized ? { serialized } : {}),
-    byteEqual,
-    byteDiff,
-    metadataReport: report,
-  });
+  };
+
+  if (outputMode === "summary") {
+    data.byteEqual = byteEqual;
+    data.byteDiff = byteDiff;
+    data.metadataReport = {
+      preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
+      byteDiff,
+      opaqueCount,
+    };
+  } else if (outputMode === "file") {
+    data.serialized = serialized;
+  } else {
+    // "full"
+    data.serialized = serialized;
+    data.byteEqual = byteEqual;
+    data.byteDiff = byteDiff;
+    data.metadataReport = {
+      preservedKeys: PRESERVED_METADATA_KEYS_FOR_SERIALIZE,
+      byteDiff,
+      opaqueCount,
+    };
+  }
+
+  return successResult(data);
 }
 
 /**
@@ -176,15 +194,32 @@ export async function deserializeForm(args: {
   const apply = params.apply === true || params.dryRun === false;
 
   if (!apply) {
-    return successResult({
-      mode: "dry-run",
-      sourcePath: source.data.sourcePath,
-      written: false,
-      appliedChecksumBefore: undefined,
-      appliedChecksumAfter: undefined,
-      loadFromTextGate: "skipped",
-      preview: serializedText,
-    });
+    const outputMode = stringValue(params.outputMode) ?? "full";
+    if (outputMode === "summary") {
+      return successResult({
+        mode: "dry-run",
+        sourcePath: source.data.sourcePath,
+        written: false,
+        appliedChecksumBefore: undefined,
+        appliedChecksumAfter: undefined,
+        loadFromTextGate: "skipped",
+      });
+    } else if (outputMode === "file") {
+      return successResult({
+        sourcePath: source.data.sourcePath,
+        preview: serializedText,
+      });
+    } else {
+      return successResult({
+        mode: "dry-run",
+        sourcePath: source.data.sourcePath,
+        written: false,
+        appliedChecksumBefore: undefined,
+        appliedChecksumAfter: undefined,
+        loadFromTextGate: "skipped",
+        preview: serializedText,
+      });
+    }
   }
 
   try {

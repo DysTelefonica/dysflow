@@ -358,6 +358,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
     },
   },
   form_move_control: {
@@ -376,6 +377,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
     },
   },
   form_rename_control: {
@@ -393,6 +395,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
     },
   },
   form_serialize: {
@@ -413,6 +416,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+      includeSerialized: SCHEMA_PROPS.includeSerialized,
     },
   },
   form_deserialize: {
@@ -437,6 +442,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
     },
   },
   // slice 5 (issue #618) — `create_form_from_template`
@@ -460,6 +466,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
     },
   },
   vba_orphan_audit: {

@@ -207,6 +207,9 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // entry so the description stays in one place rather than being
       // copy-pasted into the two export_* schemas.
       "confirmOverwriteSource",
+      // feat-forms-output-modes
+      "outputMode",
+      "includeSerialized",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });
