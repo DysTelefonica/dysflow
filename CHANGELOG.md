@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.3.1] - 2026-07-09
+
+Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-vba-manager.ps1:4026` introduced a UTF-8 em-dash (U+2014) inside a string literal. The file has no UTF-8 BOM, so when the runtime spawns the script via PowerShell 5.1 (default on Windows), the file is read with the system locale codepage (Windows-1252) and the 3-byte em-dash is misinterpreted, shifting the string-literal boundary and producing cascading PowerShell parser errors. The runtime was effectively unusable for any PowerShell-based tool (`verify_code`, `exists`, `import_modules`, `lint_module`, `export_modules`). This release replaces the em-dash with an ASCII hyphen-minus, restoring the runtime.
+
+### Fixed
+
+- **runtime** (#806): PowerShell parser errors broke all VBA tools in v2.3.0. `Invoke-ExportAction`'s WARN message at line 4026 had a UTF-8 em-dash that was being misread by the runtime. The single-character fix (em-dash → hyphen) restores the runtime. Tests at `scripts/tests/dysflow-vba-manager.Tests.ps1` (block #804) still pass (4/4); the message text reads identically. pnpm test: 2820 passed, 0 regressions. CI: both jobs green.
+
 ## [v2.3.0] - 2026-07-09
 
 Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `export_all` (via `Invoke-ExportAction` in the PowerShell runner) no longer abort the entire call when one of the requested modules is missing from the binary. The pre-validation step is now **total over the input list** — a missing module is a per-module result, not a call-level error. It surfaces in the structured `warnings[]` payload with the stable error code `VBA_MODULE_NOT_FOUND` and the export continues with the modules that DO exist (#804). The TS compare phase (`vba-source-comparison.ts:666-668`) then naturally places the missing modules in `missingInBinary` because no file was written to the temp dir.
