@@ -1,5 +1,29 @@
 # Changelog
 
+## [v2.4.0] - 2026-07-09
+
+Minor release. Three additive features for the `expedientes` consumer's bulk-VBA workflows (issue #807). All three are backward compatible (defaults preserve the current behavior) and have no breaking surface changes.
+
+### Added
+
+- **list_vba_modules (new tool)**: enumerates the VBA project's components (standard modules, classes, forms, reports, document modules) with a binary↔source cross-reference. The runner walks `VBProject.VBComponents` ONCE and releases every component COM reference in `finally { FinalReleaseComObject }`. The TS service does the source-side walk (filesystem only) and assembles the `{modules[], summary}` payload. Read-only; the tool never mutates the binary or the source tree. Optional `typeFilter` (`standard` | `class` | `form` | `report` | `document`) and `namePattern` (glob) narrow the result. Summary: `{ total, inBinaryOnly, inSourceOnly, inBoth }`.
+- **import_modules bulk-by-directory**: new additive schema properties — `sourceDir`, `recursive`, `filePattern`, `includeTests`, `includeForms`, `chunkSize`, `onChunkError`. When `sourceDir` is provided AND `moduleNames` is empty/omitted, the adapter walks the directory, applies the filters, and chunks the resolved names by `chunkSize` (default 10). Each chunk goes through the existing `import_modules` path; the cross-referenced plan is built once TS-side. `dryRun` (default `true`) returns the plan without writing; `apply: true` commits chunk-by-chunk. `onChunkError: continue` (default) records per-chunk failures; `onChunkError: abort` stops after the first failed chunk. Backward compatibility: when `moduleNames` is provided, the new params are ignored.
+- **verify_code internal chunking + parallel chunks**: new additive schema properties — `chunkSize` (default 25), `parallelChunks` (default 2), `onChunkTimeout` (`retry` | `skip` | `fail`, default `retry`). When `moduleNames.length > chunkSize`, the driver splits the list into chunks and runs up to `parallelChunks` concurrently. The hard invariant from #805 is preserved: `ok: true` is the default; missing modules NEVER abort the call — they go to `missingInBinary`. The `onChunkTimeout` policy is applied per-chunk: `retry` re-runs once; `skip` records `chunkTimedOut`; `fail` aborts. The result merges all chunks' `matched` / `different` / `missingInSource` / `missingInBinary` and adds `chunkFailures[]` when any chunk fails. `parallelChunks` is bounded to 1..8 because Access COM does not reliably support concurrent invocations against the same .accdb.
+
+### Tests
+
+- **Vitest**: 2872 passed, 1 skipped, 1 todo (vs baseline 2820; +52 new tests).
+- **Pester**: 188 passed, 4 skipped (vs baseline 183; +5 new tests for `Invoke-ListVbaModulesAction`).
+- **E2E harness** (`E2E_testing/mcp-e2e-issue-807-features.mjs`): 6 assertions across 3 features, follows the existing pattern, skips cleanly when the `NoConformidades.accdb` fixture is absent. Marked blocking in CI via `DYSFLOW_REQUIRE_ACCESS_E2E=1`.
+
+### Hard invariants preserved
+
+- Em-dash fix from #806 (round 3): the runner has zero non-ASCII characters in any new line. ASCII-only.
+- Encoding-safe PowerShell: every new `Write-Status`, error message, and label is ASCII.
+- COM object lifetime: every `VBComponents.Item(index)` in `Invoke-ListVbaModulesAction` is wrapped in `try { ... } finally { [Marshal]::FinalReleaseComObject($c) | Out-Null } catch { Write-Debug "..." }`.
+- Write-gate: every new write-class tool is unchanged. The bulk-import path uses the existing write-gated `import_modules` route. No new bypasses.
+- Human compiles: no `compile: true`, no `compile_vba` resurrection.
+
 ## [v2.3.1] - 2026-07-09
 
 Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-vba-manager.ps1:4026` introduced a UTF-8 em-dash (U+2014) inside a string literal. The file has no UTF-8 BOM, so when the runtime spawns the script via PowerShell 5.1 (default on Windows), the file is read with the system locale codepage (Windows-1252) and the 3-byte em-dash is misinterpreted, shifting the string-literal boundary and producing cascading PowerShell parser errors. The runtime was effectively unusable for any PowerShell-based tool (`verify_code`, `exists`, `import_modules`, `lint_module`, `export_modules`). This release replaces the em-dash with an ASCII hyphen-minus, restoring the runtime.
