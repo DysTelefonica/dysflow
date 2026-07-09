@@ -39,6 +39,11 @@ export type VbaSourceComparisonEntry = {
   fileType: string;
   sourcePath?: string;
   binaryPath?: string;
+  // Additive semantic fields (populated in semantic mode for entries that land
+  // in `actionableDifferent` or `nonActionableDifferent`). Strict-mode and
+  // missing-* entries leave these undefined.
+  classification?: VbaSemanticCategory;
+  reason?: string;
 };
 
 export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
@@ -58,6 +63,36 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
 
 /** Per-category count map present in semantic mode results. */
 export type VbaSemanticSummary = Partial<Record<VbaSemanticCategory, number>>;
+
+/**
+ * Nested companion to the flat {@link VbaSemanticSummary} produced by
+ * `verify_code` in semantic mode. Round 5 (PR5) ships this as an ADDITIVE
+ * consumer-ready summary so callers do not have to re-parse the flat
+ * `summary` map to know "how many to import" / "how many caseOnly vs
+ * whitespaceOnly?". Every `total` is the sum of its named buckets and
+ * `different` is the count of semantic-mode diffs (i.e. `diffs.length`,
+ * not including `missingInSource` / `missingInBinary`).
+ */
+export type SummaryStructured = {
+  matched: number;
+  different: number;
+  missingInSource: number;
+  missingInBinary: number;
+  actionable: {
+    sourceNewer: number;
+    binaryNewer: number;
+    bothChanged: number;
+    total: number;
+  };
+  nonActionable: {
+    caseOnly: number;
+    whitespaceOnly: number;
+    attributeOnly: number;
+    formSerializationOnly: number;
+    encodingOnly: number;
+    total: number;
+  };
+};
 
 /** Warning produced when a module fails to export (e.g. form open in design view). */
 export type ExportWarning = {
@@ -87,6 +122,33 @@ export type VbaVerifyResult = {
   recommendation?: string;
   /** Machine key for the aggregated recommendation (semantic mode). */
   recommendedAction?: VbaRecommendation;
+  /**
+   * Nested companion to {@link summary} (semantic mode only). Same vocabulary
+   * as the flat summary but shaped for direct consumption: top-level counts
+   * plus `actionable.{sourceNewer,binaryNewer,bothChanged,total}` and
+   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,total}`.
+   * `total`s are sum-of-named-buckets; `different` is the count of semantic
+   * diffs (NOT including `missingIn*`). Strict mode leaves this undefined.
+   */
+  summaryStructured?: SummaryStructured;
+  /**
+   * Pre-computed list of module names that the source has and the binary is
+   * missing or behind on, sorted lexicographically and deduped. Drop-in for
+   * `import_modules({ moduleNames: bulkImportable })`. `bothChanged` modules
+   * are excluded — those still need human review. Semantic mode only.
+   */
+  bulkImportable?: readonly string[];
+  /** Length of {@link bulkImportable}. Equal to `bulkImportable.length`. */
+  bulkImportableCount?: number;
+  /**
+   * Pre-computed list of module names that the binary has and the source is
+   * missing or behind on, sorted lexicographically and deduped. Drop-in for
+   * `export_modules({ moduleNames: bulkExportable })`. `bothChanged` modules
+   * are excluded. Semantic mode only.
+   */
+  bulkExportable?: readonly string[];
+  /** Length of {@link bulkExportable}. Equal to `bulkExportable.length`. */
+  bulkExportableCount?: number;
   /**
    * Always-present caveat. verify_code compares on-disk source against the
    * on-disk binary only; it cannot observe the user's live Access/VBE in-memory
