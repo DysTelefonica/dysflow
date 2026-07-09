@@ -841,6 +841,11 @@ export async function compareVbaSourceTrees(
             hasFunctionalDifferences,
           ),
           summaryStructured,
+          ...deriveBulkLists(
+            actionableDifferent,
+            missingInBinary,
+            missingInSource,
+          ),
         }
       : {}),
   };
@@ -893,6 +898,56 @@ function aggregateRecommendation(
     };
   }
   return { recommendedAction: "no_action", recommendation: "No actionable differences." };
+}
+
+/**
+ * Derives the consumer-ready bulk-import / bulk-export lists (round 5 / PR5).
+ * Pure sibling of {@link aggregateRecommendation}; both consume the same
+ * accumulators produced by the main diff loop. The four arrays are
+ * computed once, here, so consumers can pass them straight to
+ * `import_modules({ moduleNames: bulkImportable })` or
+ * `export_modules({ moduleNames: bulkExportable })` without re-deriving.
+ *
+ * Semantics (matches the PR5 spec):
+ *   bulkImportable = sourceNewer moduleNames ∪ missingInBinary moduleNames
+ *   bulkExportable = binaryNewer moduleNames ∪ missingInSource moduleNames
+ *   bothChanged excluded from BOTH (those still need human review)
+ *
+ * Dedup is `Set`-based; output is sorted lexicographically for byte-stable
+ * determinism across runs. `bothChanged` is filtered out of BOTH lists
+ * by virtue of the per-entry classification check (its entry.classification
+ * is neither 'sourceNewer' nor 'binaryNewer').
+ */
+function deriveBulkLists(
+  actionableDifferent: readonly VbaSourceComparisonEntry[],
+  missingInBinary: readonly VbaSourceComparisonEntry[],
+  missingInSource: readonly VbaSourceComparisonEntry[],
+): {
+  bulkImportable: string[];
+  bulkImportableCount: number;
+  bulkExportable: string[];
+  bulkExportableCount: number;
+} {
+  const importSet = new Set<string>();
+  const exportSet = new Set<string>();
+  for (const e of actionableDifferent) {
+    if (e.classification === "sourceNewer") {
+      importSet.add(e.moduleName);
+    } else if (e.classification === "binaryNewer") {
+      exportSet.add(e.moduleName);
+    }
+    // bothChanged: silently skipped — same module appears in neither list
+  }
+  for (const e of missingInBinary) importSet.add(e.moduleName);
+  for (const e of missingInSource) exportSet.add(e.moduleName);
+  const bulkImportable = [...importSet].sort();
+  const bulkExportable = [...exportSet].sort();
+  return {
+    bulkImportable,
+    bulkImportableCount: bulkImportable.length,
+    bulkExportable,
+    bulkExportableCount: bulkExportable.length,
+  };
 }
 
 export async function collectVbaSourceFiles(
