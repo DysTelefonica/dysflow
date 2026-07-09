@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.2.1] - 2026-07-09
+
+- Merge branch 'feat/ai-form-ui-builder' - feat(forms): finalize AI-first form UI builder workflow
+
+
 ## [v2.2.0] - 2026-07-09
 
 Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })` are now rejected at the dispatch seam with the typed error `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). The previous behavior silently wrote to the source tree — the diff flag was documented as read-only but the adapter never honored it (the PowerShell runner has no `$Diff` parameter and the `MODULE_MAPPINGS.export_all.extra` mapping only forwards `verbose`), causing partial writes on `VBA_MANAGER_TIMEOUT`. Callers that want a real read-only compare should use `verify_code({ strict, moduleNames })`.
