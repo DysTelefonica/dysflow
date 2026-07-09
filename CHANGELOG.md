@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.1.5] - 2026-07-09
+
+- feat(lint): add logical-short-circuit, implicit-variant, missing-exit-handler, and invalid-static-class-call rules
+
+
 ## [v2.1.4] - 2026-07-08
 
 Patch release. Inverts the default severity of the `identifier-safety` lint rule's non-ASCII check from `error` to `warning` and adds an explicit opt-in for the historical strict contract. Closes #789.
