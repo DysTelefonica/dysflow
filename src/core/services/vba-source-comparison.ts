@@ -732,11 +732,19 @@ export async function compareVbaSourceTrees(
     const cat = classification.classification;
     semanticSummary[cat] = (semanticSummary[cat] ?? 0) + 1;
 
-    // Bucket into actionable / nonActionable
+    // Bucket into actionable / nonActionable. Attach the classifier's
+    // classification + reason to the entry so consumers can read the same
+    // vocabulary from `nonActionableDifferent[*]` that they already read
+    // from `diffs[*]` (round 5 / PR5 additive ergonomics).
+    const entryWithClassification: VbaSourceComparisonEntry = {
+      ...entry,
+      classification: classification.classification,
+      reason: classification.reason,
+    };
     if (classification.actionable) {
-      actionableDifferent.push(entry);
+      actionableDifferent.push(entryWithClassification);
     } else {
-      nonActionableDifferent.push(entry);
+      nonActionableDifferent.push(entryWithClassification);
     }
 
     if (includeDiffs) {
