@@ -64,6 +64,7 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
   [
     // vba-sync read-only
     "list_objects",
+    "list_vba_modules",
     "exists",
     "verify_code",
     "validate_form_spec",

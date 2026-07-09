@@ -32,6 +32,7 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "import_modules",
   "import_all",
   "list_objects",
+  "list_vba_modules",
   "exists",
   "test_vba",
   "verify_code",
@@ -120,6 +121,15 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Import the entire source tree into the Access binary (mutates the binary; write-gated). RESERVED for whole-project resync (initial setup, disaster recovery, post-fork reconciliation). NOT a fallback for import_modules — if you have an explicit list of modules, use import_modules with moduleNames; if you pass moduleNames: [] to import_modules, it is a no-op plan, it does NOT expand to this tool. Mutations persist via save-only (acCmdSaveAllModules = RunCommand 280); the runtime does NOT compile. Supports dryRun:true (plan mode). Set verbose:true to detect silent truncation/encoding-loss (issue #752) — same per-module verbose field as import_modules.",
   list_objects:
     "List the VBA project's modules, classes, forms and reports, optionally filtered by name. Read-only.",
+  // Issue #807 (Feature 1) — list_vba_modules. Walks VBProject.VBComponents once
+  // (COM-safe: every component is FinalReleaseComObject'd in `finally`), pairs
+  // each row with its on-disk counterpart, and reports
+  // {modules[], summary: {total, inBinaryOnly, inSourceOnly, inBoth}}. typeFilter
+  // narrows to standard|class|form|report|document; namePattern accepts a single
+  // '*' wildcard on either end (Test_* == starts-with Test_; *Issue* == substring).
+  // Read-only; never opens Access for the source-side cross-reference.
+  list_vba_modules:
+    "Enumerate the VBA project's components with a binary<->source cross-reference. Returns {modules:[{name, type, fileType, sourcePath, binaryPath, sourceExists, binaryExists, contentMatch?}], summary:{total, inBinaryOnly, inSourceOnly, inBoth}}. typeFilter narrows to standard|class|form|report|document. namePattern accepts a glob with a single '*' wildcard on either end (e.g. 'Test_*' or '*Issue*'). Read-only; the runner walks VBComponents once and releases every COM reference.",
   exists: "Check whether a named module/object exists in the VBA project. Read-only.",
   // VBA sync — execution & test
   run_vba:

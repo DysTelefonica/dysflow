@@ -6,6 +6,7 @@ export const VBA_SYNC_TOOL_NAMES = [
   "import_modules",
   "import_all",
   "list_objects",
+  "list_vba_modules",
   "exists",
   "run_vba",
   "test_vba",

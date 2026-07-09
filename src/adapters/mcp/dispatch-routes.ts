@@ -80,6 +80,17 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #807 (Feature 1) — list_vba_modules is the read-only sibling of
+  // list_objects: it walks VBProject.VBComponents to enumerate every component
+  // with its type and a binary-side path. The cross-reference against the
+  // source tree is filesystem-only and never opens Access; the call does
+  // not mutate either side.
+  list_vba_modules: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false, risk: "read-only" },
   test_vba: {
     kind: "vba-sync",

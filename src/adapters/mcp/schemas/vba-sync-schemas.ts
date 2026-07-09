@@ -99,6 +99,51 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // destination, truncated, mismatchReason} to each result entry so an AI
       // caller can detect silent truncation instead of trusting `status:ok`.
       verbose: SCHEMA_PROPS.verboseContract,
+      // Issue #807 (Feature 2) — bulk import by directory walk. When
+      // `sourceDir` is provided AND `moduleNames` is empty or omitted, the
+      // adapter walks the directory, applies `filePattern` / `includeTests`
+      // / `includeForms`, chunks the resolved names by `chunkSize`, and
+      // dispatches each chunk to the existing import_modules path. The
+      // chunked path NEVER crosses the runner boundary twice with overlapping
+      // modules; the cross-referenced plan is built once TS-side. Backward
+      // compatibility: when `moduleNames` is provided, the new params are
+      // ignored (defaults preserve the current behavior).
+      sourceDir: {
+        type: "string",
+        description:
+          "Issue #807 (Feature 2) — source directory root to bulk-import. Default: project's destinationRoot from .dysflow/project.json. When set AND moduleNames is empty/omitted, the adapter walks this directory. Mutually exclusive with explicit moduleNames — passing a non-empty moduleNames array forces the legacy single-call path.",
+      },
+      recursive: {
+        type: "boolean",
+        description:
+          "Issue #807 (Feature 2) — walk subdirectories of sourceDir. Default true. When false, only the top-level of sourceDir is scanned.",
+      },
+      filePattern: {
+        type: "string",
+        description:
+          "Issue #807 (Feature 2) — glob-style filename pattern (e.g. 'Test_*' to limit to test modules). Single `*` wildcard at either end. Default '*' (every managed extension).",
+      },
+      includeTests: {
+        type: "boolean",
+        description:
+          "Issue #807 (Feature 2) — include Test_*.bas files in the bulk walk. Default true. Set false when you want to ship a release without re-importing the test suite.",
+      },
+      includeForms: {
+        type: "boolean",
+        description:
+          "Issue #807 (Feature 2) — include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt files. Default true. Set false for code-only bulk imports.",
+      },
+      chunkSize: {
+        type: "number",
+        description:
+          "Issue #807 (Feature 2) — modules per chunk when sourceDir is set. Default 10. The bulk path NEVER forwards more than this many modules per sub-call to the runner, so a single chunk failure (e.g. a corrupt .bas) cannot abort the entire batch.",
+      },
+      onChunkError: {
+        type: "string",
+        enum: ["continue", "abort"],
+        description:
+          "Issue #807 (Feature 2) — behavior when a chunk fails. continue (default) records chunk-level errors in chunkFailures[] and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.",
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -123,6 +168,34 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       filter: SCHEMA_PROPS.filter,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  // Issue #807 (Feature 1) — `list_vba_modules` enumerates the VBA project's
+  // components (standard modules, classes, forms, reports, document modules)
+  // and cross-references each row against the project's on-disk source tree.
+  // The runner walks VBProject.VBComponents ONCE and releases every component
+  // COM reference in `finally { FinalReleaseComObject }`. The TS service does
+  // the source-side walk (filesystem only) and assembles the
+  // {modules[], summary} payload. Read-only; the tool never mutates the
+  // binary or the source tree.
+  list_vba_modules: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      typeFilter: {
+        type: "string",
+        enum: ["standard", "class", "form", "report", "document"],
+        description:
+          "Filter by VBComponent.Type. standard=1 (modules), class=2 (classes), form=3 (forms), report=3 (reports — same VBComponent type, distinguished by CurrentProject.AllReports), document=100 (ThisDocument-style document modules).",
+      },
+      namePattern: {
+        type: "string",
+        description:
+          "Glob-style name filter (e.g. 'Test_*' matches any name starting with Test_; '*Issue*' matches any name containing Issue). The single '*' wildcard is supported on either end; non-*` patterns match as substrings. Empty string matches nothing.",
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -170,6 +243,29 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       strict: SCHEMA_PROPS.strict,
       moduleNames: SCHEMA_PROPS.moduleNames,
       diff: SCHEMA_PROPS.diff,
+      // Issue #807 (Feature 3) — internal chunking and parallelism for
+      // whole-project verify_code over a non-trivial list. Defaults preserve
+      // the v2.3.x single-round-trip behavior: omit both chunkSize and
+      // parallelChunks for the legacy path. The chunked path NEVER aborts
+      // the call on a single chunk failure (issue #805 round-3 invariant)
+      // and reports per-chunk timeouts as `chunkTimedOut` modules in the
+      // final result.
+      chunkSize: {
+        type: "number",
+        description:
+          "Issue #807 (Feature 3) — modules per internal chunk. Default 25. When moduleNames.length <= chunkSize (or chunkSize is omitted), the call falls back to the legacy single round-trip; otherwise the list is sliced into chunks, each chunk is a fresh verify sub-call, and the merged result includes every chunk's matched / different / missing entries plus chunkFailures[].",
+      },
+      parallelChunks: {
+        type: "number",
+        description:
+          "Issue #807 (Feature 3) — concurrent chunks. Default 2 (bounded). Range 1..8 — higher values risk Access COM contention on a single .accdb. The chunked path uses this to drive Promise.all-of-chunks; the legacy path ignores it.",
+      },
+      onChunkTimeout: {
+        type: "string",
+        enum: ["retry", "skip", "fail"],
+        description:
+          "Issue #807 (Feature 3) — per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.",
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
