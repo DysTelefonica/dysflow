@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.3.0] - 2026-07-09
+
+Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `export_all` (via `Invoke-ExportAction` in the PowerShell runner) no longer abort the entire call when one of the requested modules is missing from the binary. The pre-validation step is now **total over the input list** — a missing module is a per-module result, not a call-level error. It surfaces in the structured `warnings[]` payload with the stable error code `VBA_MODULE_NOT_FOUND` and the export continues with the modules that DO exist (#804). The TS compare phase (`vba-source-comparison.ts:666-668`) then naturally places the missing modules in `missingInBinary` because no file was written to the temp dir.
+
+### Fixed
+
+- **verify_code / export_all / export_modules** (#804): pre-validation no longer throws on the first missing module. `Invoke-ExportAction` collects missing module names into `warnings[]` and continues. The `verify_code` response shape (`matched` / `different` / `missingInSource` / `missingInBinary` / `nonActionableDifferent` / `hasFunctionalDifferences` / `actionableOk` / `recommendedAction`) is unchanged — only the contract that `missingInBinary` is correctly populated for comprehensive input lists is now honored. Tests at `scripts/tests/dysflow-vba-manager.Tests.ps1` (new `Invoke-ExportAction — missing module pre-validation (#804, total over input)` block, 4 tests) pin the contract from the outside: a mixed list does not throw and the missing module surfaces in `warnings[].error="VBA_MODULE_NOT_FOUND"`; an all-missing list is total and emits every name in `warnings[]`.
+
 ## [v2.2.1] - 2026-07-09
 
 - Merge branch 'feat/ai-form-ui-builder' - feat(forms): finalize AI-first form UI builder workflow
