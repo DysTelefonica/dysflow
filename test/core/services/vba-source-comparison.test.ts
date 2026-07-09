@@ -1805,4 +1805,324 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       expect(diffBoth?.recommendation).toBe("manual_merge");
     });
   });
+
+  // ---- PR5 verify-code-ergonomics: additive fields on VbaVerifyResult ----
+
+  describe("verify-code-ergonomics (PR5) — additive summaryStructured, per-entry classification, bulkImportable/bulkExportable", () => {
+    // ---- REQ-1: summaryStructured ----
+
+    it("summaryStructured is emitted alongside flat summary with nested actionable/nonActionable counts matching flat summary buckets (happy path)", async () => {
+      const srcFiles: Record<string, string> = {};
+      const binFiles: Record<string, string> = {};
+
+      // 3 sourceNewer (extra functional line in source)
+      for (let i = 0; i < 3; i += 1) {
+        srcFiles[`src/SrcNew${i}.bas`] = `Sub S${i}()\n  Dim x As Long\n  x = ${i}\nEnd Sub`;
+        binFiles[`bin/SrcNew${i}.bas`] = `Sub S${i}()\n  Dim x As Long\nEnd Sub`;
+      }
+      // 2 binaryNewer (extra line in binary, no extra in source)
+      for (let i = 0; i < 2; i += 1) {
+        srcFiles[`src/BinNew${i}.bas`] = `Sub B${i}()\n  Dim y As Long\nEnd Sub`;
+        binFiles[`bin/BinNew${i}.bas`] = `Sub B${i}()\n  Dim y As Long\n  y = ${i}\nEnd Sub`;
+      }
+      // 2 bothChanged
+      for (let i = 0; i < 2; i += 1) {
+        srcFiles[`src/Both${i}.bas`] = `Sub C${i}()\n  Dim a As Long\nEnd Sub`;
+        binFiles[`bin/Both${i}.bas`] = `Sub C${i}()\n  Dim b As Long\nEnd Sub`;
+      }
+      // 4 formSerializationOnly (Checksum differs)
+      for (let i = 0; i < 4; i += 1) {
+        srcFiles[`src/F${i}.form.txt`] = `Begin Form\n   Caption = "F${i}"\n   Checksum = ${1000 + i}\nEnd`;
+        binFiles[`bin/F${i}.form.txt`] = `Begin Form\n   Caption = "F${i}"\n   Checksum = ${9000 + i}\nEnd`;
+      }
+
+      const fs = makeSemanticFs({ ...srcFiles, ...binFiles });
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      // Old fields remain
+      expect(result.summary).toBeDefined();
+      expect(result.summary?.sourceNewer).toBe(3);
+      expect(result.summary?.binaryNewer).toBe(2);
+      expect(result.summary?.bothChanged).toBe(2);
+      expect(result.summary?.formSerializationOnly).toBe(4);
+
+      // New additive field present
+      expect(result).toHaveProperty("summaryStructured");
+      const structured = (result as unknown as {
+        summaryStructured?: {
+          matched?: number;
+          different?: number;
+          missingInSource?: number;
+          missingInBinary?: number;
+          actionable?: {
+            sourceNewer?: number;
+            binaryNewer?: number;
+            bothChanged?: number;
+            total?: number;
+          };
+          nonActionable?: {
+            caseOnly?: number;
+            whitespaceOnly?: number;
+            attributeOnly?: number;
+            formSerializationOnly?: number;
+            encodingOnly?: number;
+            total?: number;
+          };
+        };
+      }).summaryStructured;
+
+      expect(structured).toBeDefined();
+      expect(structured?.actionable?.sourceNewer).toBe(3);
+      expect(structured?.actionable?.binaryNewer).toBe(2);
+      expect(structured?.actionable?.bothChanged).toBe(2);
+      expect(structured?.actionable?.total).toBe(7);
+      expect(structured?.nonActionable?.formSerializationOnly).toBe(4);
+      expect(structured?.nonActionable?.total).toBe(4);
+      // different = total differing modules
+      expect(structured?.different).toBe(11);
+    });
+
+    it("summaryStructured on identical trees is zeroed except matched (edge)", async () => {
+      const shared = "Sub Hello()\n  MsgBox \"Hi\"\nEnd Sub";
+      const fs = makeSemanticFs({
+        "src/Same1.bas": shared,
+        "bin/Same1.bas": shared,
+        "src/Same2.bas": shared,
+        "bin/Same2.bas": shared,
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const structured = (result as unknown as {
+        summaryStructured?: {
+          matched?: number;
+          different?: number;
+          actionable?: { total?: number };
+          nonActionable?: { total?: number };
+        };
+      }).summaryStructured;
+
+      expect(structured).toBeDefined();
+      expect(structured?.matched).toBe(2);
+      expect(structured?.different).toBe(0);
+      expect(structured?.actionable?.total).toBe(0);
+      expect(structured?.nonActionable?.total).toBe(0);
+      // Flat summary must still be present (backward compat)
+      expect(result.summary).toBeDefined();
+    });
+
+    // ---- REQ-2: per-entry classification on nonActionableDifferent ----
+
+    it("nonActionableDifferent entries carry classification + non-empty reason matching diffs[] vocabulary (happy)", async () => {
+      const srcForm =
+        'Begin Form\n   Caption = "Test"\n   NameMap = Begin\n      OldName = 1\n   End\nEnd';
+      const binForm =
+        'Begin Form\n   Caption = "Test"\n   NameMap = Begin\n      NewName = 1\n   End\nEnd';
+
+      const fs = makeSemanticFs({
+        "src/F1.form.txt": srcForm,
+        "bin/F1.form.txt": binForm,
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      expect(result.nonActionableDifferent).toHaveLength(1);
+      const entry = result.nonActionableDifferent?.[0] as unknown as {
+        classification?: string;
+        reason?: string;
+      };
+      // RED until implemented — these assertions fail when no classification is attached
+      expect(entry?.classification).toBe("formSerializationOnly");
+      expect(typeof entry?.reason).toBe("string");
+      expect((entry?.reason ?? "").length).toBeGreaterThan(0);
+    });
+
+    it("nonActionableDifferent classification on a case-only diff equals diffs[] entry (edge + cross-check invariant)", async () => {
+      const fs = makeSemanticFs({
+        "src/Cased.cls":
+          "Option Explicit\nPublic Sub Run()\n  Me.NCProyecto = 1\nEnd Sub",
+        "bin/Cased.cls":
+          "Option Explicit\nPublic Sub Run()\n  Me.ncProyecto = 1\nEnd Sub",
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
+
+      expect(result.nonActionableDifferent).toHaveLength(1);
+      const nonActionableEntry = result.nonActionableDifferent?.[0] as unknown as {
+        classification?: string;
+        reason?: string;
+      };
+      const diffEntry = result.diffs?.find((d) => d.moduleName === "Cased");
+
+      // Each nonActionableDifferent entry has classification + reason
+      expect(nonActionableEntry?.classification).toBe("caseOnly");
+      expect(typeof nonActionableEntry?.reason).toBe("string");
+      // Cross-check invariant: matches diffs[] entry exactly
+      expect(nonActionableEntry?.classification).toBe(diffEntry?.classification);
+      expect(nonActionableEntry?.reason).toBe(diffEntry?.reason);
+    });
+
+    // ---- REQ-3: bulkImportable / bulkExportable ----
+
+    it("bulkImportable = sourceNewer ∪ missingInBinary, sorted, deduped (happy)", async () => {
+      const srcFiles: Record<string, string> = {};
+      const binFiles: Record<string, string> = {};
+
+      // 2 sourceNewer (functional content ahead in source)
+      srcFiles["src/SrcNew1.bas"] = "Sub A1()\n  Dim x As Long\n  x = 1\nEnd Sub";
+      binFiles["bin/SrcNew1.bas"] = "Sub A1()\n  Dim x As Long\nEnd Sub";
+      srcFiles["src/SrcNew3.bas"] = "Sub A3()\n  Dim x As Long\n  x = 3\nEnd Sub";
+      binFiles["bin/SrcNew3.bas"] = "Sub A3()\n  Dim x As Long\nEnd Sub";
+
+      // 1 missingInBinary (exists only on source)
+      srcFiles["src/OnlySrc.bas"] = "Sub Only()\nEnd Sub";
+      // 1 missingInSource (exists only on binary — should NOT appear in bulkImportable)
+      binFiles["bin/OnlyBin.bas"] = "Sub OnlyB()\nEnd Sub";
+      // 1 binaryNewer (functional content ahead in binary)
+      srcFiles["src/BinNewer1.bas"] = "Sub B1()\n  Dim y As Long\nEnd Sub";
+      binFiles["bin/BinNewer1.bas"] = "Sub B1()\n  Dim y As Long\n  y = 99\nEnd Sub";
+
+      const fs = makeSemanticFs({ ...srcFiles, ...binFiles });
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const bulk = (result as unknown as {
+        bulkImportable?: string[];
+        bulkImportableCount?: number;
+        bulkExportable?: string[];
+        bulkExportableCount?: number;
+      });
+
+      expect(bulk.bulkImportable).toBeDefined();
+      // Sorted: BinNewer1 (no — that's binaryNewer), OnlySrc, S1, S3 → alphabetical would be
+      // "BinNewer1" (excluded), "OnlySrc", "SrcNew1", "SrcNew3"
+      expect(bulk.bulkImportable).toEqual(["OnlySrc", "SrcNew1", "SrcNew3"]);
+      expect(bulk.bulkImportableCount).toBe(3);
+
+      // bulkExportable = binaryNewer ∪ missingInSource
+      expect(bulk.bulkExportable).toBeDefined();
+      expect(bulk.bulkExportable).toEqual(["BinNewer1", "OnlyBin"]);
+      expect(bulk.bulkExportableCount).toBe(2);
+    });
+
+    it("bothChanged modules are excluded from BOTH bulk arrays (edge)", async () => {
+      const fs = makeSemanticFs({
+        // bothChanged — must NOT appear in bulkImportable nor bulkExportable
+        "src/BC1.bas": "Sub BC1()\n  Dim a As Long\nEnd Sub",
+        "bin/BC1.bas": "Sub BC1()\n  Dim b As Long\nEnd Sub",
+        // 1 sourceNewer — must appear in bulkImportable
+        "src/SN1.bas": "Sub SN1()\n  Dim z As Long\n  z = 1\nEnd Sub",
+        "bin/SN1.bas": "Sub SN1()\n  Dim z As Long\nEnd Sub",
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const bulk = (result as unknown as {
+        bulkImportable?: string[];
+        bulkExportable?: string[];
+      });
+
+      expect(bulk.bulkImportable).toContain("SN1");
+      expect(bulk.bulkImportable).not.toContain("BC1");
+      expect(bulk.bulkExportable).not.toContain("BC1");
+    });
+
+    it("only-bothChanged differences produce empty bulk arrays (edge)", async () => {
+      const fs = makeSemanticFs({
+        "src/BC1.bas": "Sub BC1()\n  Dim a As Long\nEnd Sub",
+        "bin/BC1.bas": "Sub BC1()\n  Dim b As Long\nEnd Sub",
+        "src/BC2.bas": "Sub BC2()\n  Dim c As Long\nEnd Sub",
+        "bin/BC2.bas": "Sub BC2()\n  Dim d As Long\nEnd Sub",
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const bulk = (result as unknown as {
+        bulkImportable?: string[];
+        bulkImportableCount?: number;
+        bulkExportable?: string[];
+        bulkExportableCount?: number;
+      });
+
+      expect(bulk.bulkImportable).toEqual([]);
+      expect(bulk.bulkImportableCount).toBe(0);
+      expect(bulk.bulkExportable).toEqual([]);
+      expect(bulk.bulkExportableCount).toBe(0);
+      // recommendedAction must remain manual_merge (semantic-mode contract)
+      expect(result.recommendedAction).toBe("manual_merge");
+    });
+
+    // ---- Cross-cutting invariants ----
+
+    it("summaryStructured totals agree with bucket sums (cross-cutting)", async () => {
+      // Build a deterministic mix that exercises every actionable + nonActionable bucket
+      const fs = makeSemanticFs({
+        // 1 sourceNewer
+        "src/SrcNewer.bas": "Sub X()\n  Dim a As Long\n  a = 1\nEnd Sub",
+        "bin/SrcNewer.bas": "Sub X()\n  Dim a As Long\nEnd Sub",
+        // 1 binaryNewer
+        "src/BinNewer.bas": "Sub Y()\n  Dim a As Long\nEnd Sub",
+        "bin/BinNewer.bas": "Sub Y()\n  Dim a As Long\n  a = 1\nEnd Sub",
+        // 1 bothChanged
+        "src/BothChg.bas": "Sub Z()\n  Dim a As Long\nEnd Sub",
+        "bin/BothChg.bas": "Sub Z()\n  Dim b As Long\nEnd Sub",
+        // 1 formSerializationOnly
+        "src/F.form.txt": 'Begin Form\n   Caption = "X"\n   Checksum = 1\nEnd',
+        "bin/F.form.txt": 'Begin Form\n   Caption = "X"\n   Checksum = 2\nEnd',
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const structured = (result as unknown as {
+        summaryStructured?: {
+          actionable?: { sourceNewer?: number; binaryNewer?: number; bothChanged?: number; total?: number };
+          nonActionable?: {
+            caseOnly?: number;
+            whitespaceOnly?: number;
+            attributeOnly?: number;
+            formSerializationOnly?: number;
+            encodingOnly?: number;
+            total?: number;
+          };
+        };
+      }).summaryStructured;
+
+      expect(structured).toBeDefined();
+      // Invariant 1: actionable.total === sourceNewer + binaryNewer + bothChanged
+      const a = structured?.actionable;
+      expect(a?.total).toBe((a?.sourceNewer ?? 0) + (a?.binaryNewer ?? 0) + (a?.bothChanged ?? 0));
+      // Invariant 2: nonActionable.total === sum of five buckets
+      const n = structured?.nonActionable;
+      expect(n?.total).toBe(
+        (n?.caseOnly ?? 0) +
+          (n?.whitespaceOnly ?? 0) +
+          (n?.attributeOnly ?? 0) +
+          (n?.formSerializationOnly ?? 0) +
+          (n?.encodingOnly ?? 0),
+      );
+    });
+
+    it("bulkImportable non-empty coexists with recommendedAction=manual_merge (cross-cutting)", async () => {
+      const fs = makeSemanticFs({
+        // bothChanged → recommendedAction=manual_merge
+        "src/BC.bas": "Sub BC()\n  Dim a As Long\nEnd Sub",
+        "bin/BC.bas": "Sub BC()\n  Dim b As Long\nEnd Sub",
+        // sourceNewer → bulkImportable non-empty
+        "src/SN.bas": "Sub SN()\n  Dim z As Long\n  z = 1\nEnd Sub",
+        "bin/SN.bas": "Sub SN()\n  Dim z As Long\nEnd Sub",
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      const bulk = (result as unknown as {
+        bulkImportable?: string[];
+      }).bulkImportable;
+
+      expect(result.recommendedAction).toBe("manual_merge");
+      expect(bulk).toBeDefined();
+      expect((bulk ?? []).length).toBeGreaterThan(0);
+      expect(bulk).toContain("SN");
+      // bulkImportable must NOT include the bothChanged module
+      expect(bulk).not.toContain("BC");
+    });
+  });
 });
