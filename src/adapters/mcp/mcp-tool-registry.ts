@@ -26,6 +26,12 @@ export const VBA_SYNC_TOOL_NAMES = [
   "form_serialize",
   "form_deserialize",
   "create_form_from_template",
+  "analyze_form_ui",
+  "map_form_behavior",
+  "generate_form_design_plan",
+  "apply_form_design_plan",
+  "copy_form_ui_pattern",
+  "verify_form_ui",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

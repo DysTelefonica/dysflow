@@ -216,6 +216,26 @@ Read-only: never mutates any file.
 The `path` parameter is accepted as an alias for `sourcePath`. The tool returns
 `FORM_SPEC_MISSING` if neither is provided, and `FORM_NOT_FOUND` if the file cannot be read.
 
+### AI form UI builder — analyze, plan, apply, verify
+
+Use `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
+`apply_form_design_plan`, `copy_form_ui_pattern`, and `verify_form_ui` when an AI-assisted form UI
+change must stay behavior-safe.
+
+Golden path:
+1. `analyze_form_ui({ sourcePath })` reads `.form.txt` through FormIR and returns semantic controls,
+   roles, bindings, and events.
+2. `map_form_behavior({ sourcePath, codegraphEvidence })` merges analysis with caller-supplied
+   CodeGraph-VBA evidence. First iteration boundary: callers supply evidence payloads; Dysflow does
+   not invoke another MCP server internally.
+3. `generate_form_design_plan({ behaviorMap, plan })` creates explicit operations tied to the
+   behavior map.
+4. `apply_form_design_plan({ plan, dryRun: true })` previews. Use `apply: true` only for intentional
+   guarded writes.
+5. `verify_form_ui({ sourceContract, appliedContract })` reports actionable drift.
+
+For reusable instructions, load `skills/access-form-ui-builder/SKILL.md`.
+
 ### validate_form_spec / generate_form — design and write a new form
 
 1. **`validate_form_spec`** — parse and lint a JSON form specification (`.form.json`).
@@ -260,4 +280,3 @@ Available custom agent skills in `codegraph-vba`:
 - **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
 - **`vba-handler-backtrace`**: Traces form control event handlers, dynamic calls, circular references, UDT parameters, and reconstructs multiline SQL statements.
 - **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.
-

@@ -51,6 +51,12 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "form_serialize",
   "form_deserialize",
   "create_form_from_template",
+  "analyze_form_ui",
+  "map_form_behavior",
+  "generate_form_design_plan",
+  "apply_form_design_plan",
+  "copy_form_ui_pattern",
+  "verify_form_ui",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -162,6 +168,18 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // original target on gate failure. Write-gated.
   create_form_from_template:
     "Clone a source .form.txt into a new target form by applying a {{Token}} token map (e.g. {{FormName}} -> Form_FormNuevaAuditoria). The adapter resolves sourceForm/targetForm bench-cache first, projectRoot second, and appends the .form.txt extension automatically. Default dry-run returns the post-replacement preview plus the applied/missing token summary without writing or importing; apply:true writes the target and routes through the import_modules LoadFromText gate, restoring the original target best-effort when the gate rejects. Token replacement walks scalar FormIR strings and non-preserved blob lines; PRESERVED_METADATA_KEYS (Checksum / PrtDevMode* / Format) are skipped so PrtDevMode round-trips unchanged. Use overwrite:true to replace an existing target. missingTokenPolicy:'warn-pass-through' (default) leaves missing tokens in place with a warning; strictMissingTokens:true (alias of missingTokenPolicy:'strict') fails with FORM_MUTATION_INVALID. Write-gated.",
+  analyze_form_ui:
+    "Analyze a version-controlled .form.txt through FormIR and return semantic controls, roles, form events, bindings, and warnings. Read-only and offline; screenshots are not a source of truth.",
+  map_form_behavior:
+    "Build a behavior map for a form by merging FormIR semantic analysis with caller-supplied CodeGraph-VBA evidence payloads. Read-only; first iteration does not invoke another MCP server internally.",
+  generate_form_design_plan:
+    "Generate an explicit AI form UI design plan from a behavior map and requested operations. Read-only; operations outside the mapped contract are rejected with warnings.",
+  apply_form_design_plan:
+    "Apply or preview an AI form UI design plan contract in-memory. Defaults to dry-run and records preserved controls; currently no filesystem/binary mutation is performed in this slice.",
+  copy_form_ui_pattern:
+    "Copy a reference form UI pattern as traceable design intent without erasing the target behavior map. Read-only contract preview.",
+  verify_form_ui:
+    "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

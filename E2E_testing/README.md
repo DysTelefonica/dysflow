@@ -64,6 +64,8 @@ writes). Areas currently covered:
 - **write** — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
 - **vba-sync** — `export_modules`, `export_all` (incl. prune-report), `import_modules`, `import_all`,
   `compile_vba`
+- **form-ui** — `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
+  `apply_form_design_plan`, `copy_form_ui_pattern`, `verify_form_ui`.
 
 Baseline (v1.14.0): 91 passed / 0 failed. Anything below that is a regression or a harness/contract
 drift — investigate before merging.
@@ -206,6 +208,7 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
 | `E2E_testing/NoConformidades.accdb` | Frontend fixture (copied to sandbox before writes). |
 | `E2E_testing/NoConformidades_Datos.accdb` | Backend fixture (same). |
 | `E2E_testing/src/` | Read-only source fixture tree (VBA modules the harness imports/exports). |
+| `E2E_testing/src/forms/Form_DysflowMcpE2E.form.txt` | Minimal form used by the form-ui E2E assertions (`analyze`/`map`/`plan`/`copy`/`verify`). |
 | `E2E_testing/tests/`, `E2E_testing/forms/` | Auxiliary fixture assets. |
 | `test-runtime/bin/dysflow.cmd` | Throwaway launcher. **What the harness spawns.** Built from `pnpm build` + sync step above. |
 | `test-runtime/bin/dist/` | Throwaway CLI dist. **What gets refreshed on every release-gate run.** |

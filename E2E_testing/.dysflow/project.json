@@ -3,9 +3,11 @@
   "accessPath": "NoConformidades.accdb",
   "backendPath": "NoConformidades_Datos.accdb",
   "destinationRoot": "src",
-  "allowWrites": true,
   "timeoutMs": 90000,
   "passwordEnv": "ACCESS_VBA_PASSWORD",
   "frontendPasswordEnv": "ACCESS_VBA_PASSWORD",
-  "backendPasswordEnv": "ACCESS_VBA_PASSWORD"
+  "backendPasswordEnv": "ACCESS_VBA_PASSWORD",
+  "capabilities": {
+    "allowWrites": true
+  }
 }

@@ -6,6 +6,7 @@ import {
 } from "../../core/contracts/index.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
 import { nodeFormFileSystem } from "../services/node-form-file-system.js";
+import { executeFormUiBuilderTool, type FormUiBuilderToolName } from "./vba-forms-ai-tools.js";
 import { cloneFormFromTemplate } from "./vba-forms-clone-tools.js";
 import { mutateForm } from "./vba-forms-mutation-tools.js";
 import { compareForm, inspectForm, lintFormCode } from "./vba-forms-read-tools.js";
@@ -60,7 +61,13 @@ export class VbaFormsAdapter {
       toolName === "form_rename_control" ||
       toolName === "form_serialize" ||
       toolName === "form_deserialize" ||
-      toolName === "create_form_from_template"
+      toolName === "create_form_from_template" ||
+      toolName === "analyze_form_ui" ||
+      toolName === "map_form_behavior" ||
+      toolName === "generate_form_design_plan" ||
+      toolName === "apply_form_design_plan" ||
+      toolName === "copy_form_ui_pattern" ||
+      toolName === "verify_form_ui"
     );
   }
 
@@ -100,6 +107,20 @@ export class VbaFormsAdapter {
         orchestrator: this.orchestrator,
         fileSystem: this.fileSystem,
         benchCacheRoot: this.benchCacheRoot,
+        params,
+      });
+    }
+    if (
+      toolName === "analyze_form_ui" ||
+      toolName === "map_form_behavior" ||
+      toolName === "generate_form_design_plan" ||
+      toolName === "apply_form_design_plan" ||
+      toolName === "copy_form_ui_pattern" ||
+      toolName === "verify_form_ui"
+    ) {
+      return executeFormUiBuilderTool({
+        fileSystem: this.fileSystem,
+        toolName: toolName as FormUiBuilderToolName,
         params,
       });
     }

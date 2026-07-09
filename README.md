@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**64 visible MCP tools · Windows / Node 20+**
+**70 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 64 visible MCP tools covering VBA, SQL, schema, form operations, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
+- A platform with 70 visible MCP tools covering VBA, SQL, schema, form operations, AI-assisted form UI workflows, source-level VBA procedure introspection, dead-code detection, VBA test manifest validation, pre-import module linting, and project-config resolution.
 
 ### It is not
 
@@ -878,6 +878,18 @@ The result adds a `summary` (count per category), `actionableDifferent` / `nonAc
   - Parameters: `sourcePath` (string, required), `ir` (object, required — the slice-1 FormIR), `formName` (string, optional), `dryRun`/`apply`
 * **`create_form_from_template`** *(slice 5, #618)*: Clone a source `.form.txt` into a new target form by applying a `{{Token}}` token map (e.g. `{{FormName}}` → `Form_FormNuevaAuditoria`). Resolves `sourceForm`/`targetForm` via bench-cache first, then `projectRoot`. Defaults to dry-run — returns the post-replacement preview plus the applied/missing token summary; `apply:true` writes the target and routes through the `import_modules` LoadFromText gate, restoring the original target on gate failure. Use `overwrite:true` to replace an existing target. `missingTokenPolicy` accepts `warn-pass-through` (default) or `strict`. Write-gated.
   - Parameters: `sourceForm` (string, required — form name without `.form.txt`), `targetForm` (string, required — target form name), `tokenMap` (object, required — `{ Token: replacement }`), `missingTokenPolicy` (string, optional — `warn-pass-through` | `strict`), `strictMissingTokens` (boolean, optional), `overwrite` (boolean, optional — default `false`), `dryRun`/`apply`
+* **`analyze_form_ui`**: Analyze a version-controlled `.form.txt` into an AI-oriented semantic UI report: controls, roles, captions, bindings, events, and warnings. Read-only; Access is not opened.
+  - Parameters: `sourcePath`/`path` (string, `.form.txt` source), `outputMode` (optional)
+* **`map_form_behavior`**: Merge `analyze_form_ui` output with caller-supplied CodeGraph-VBA evidence so agents can connect controls/events to handlers, call paths, and table effects. Read-only.
+  - Parameters: `sourcePath`/`path`, `codegraphEvidence` (array, required), `outputMode` (optional)
+* **`generate_form_design_plan`**: Generate a traceable form UI design plan from a behavior map and proposed operations/reference pattern. Read-only.
+  - Parameters: `behaviorMap` (object, required), `plan` (object, optional), `outputMode` (optional)
+* **`apply_form_design_plan`**: Apply or preview a design plan boundary result in-memory. Defaults to dry-run; this first slice does not write `.form.txt` or binaries.
+  - Parameters: `plan` (object, required), `targetPath`/`sourcePath` (string, optional alias for historical payload compatibility), `dryRun`, `apply`, `outputMode`
+* **`copy_form_ui_pattern`**: Convert a reference form UI pattern into explicit design-plan intent without erasing target behavior. Read-only preview.
+  - Parameters: `behaviorMap` (object, required), `referencePattern` (object, required), `outputMode` (optional)
+* **`verify_form_ui`**: Verify an applied form UI contract against the source behavior map and return actionable drift findings. Read-only.
+  - Parameters: `sourceContract` (object, required), `appliedContract` (object, required), `outputMode` (optional)
 
 ### MCP protocol and maintenance
 

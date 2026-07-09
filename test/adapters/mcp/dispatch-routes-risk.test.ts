@@ -72,6 +72,12 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     "compare_form",
     "lint_form_code",
     "form_serialize",
+    "apply_form_design_plan",
+    "copy_form_ui_pattern",
+    "analyze_form_ui",
+    "map_form_behavior",
+    "generate_form_design_plan",
+    "verify_form_ui",
     "vba_orphan_audit",
     // query-maintenance read-only
     "list_links",
