@@ -29,6 +29,62 @@ This document contains copy-pasteable, concrete JSON payloads for typical Dysflo
 *   **Notes**: `moduleNames` is a true focused export request: Dysflow asks Access to export only the requested modules, then compares only those modules against disk. It is not a whole-project export with a filtered compare. Omit `moduleNames` for a whole-project verify; an explicit empty `moduleNames: []` is rejected with `INVALID_INPUT` so a focused call cannot silently widen to the whole project. If preflight, export, or compare stalls, the failure is typed before the outer MCP timeout: export timeouts use `VBA_MANAGER_TIMEOUT`, preflight/compare timeouts use `VERIFY_CODE_PHASE_TIMEOUT`, and `error.details` identifies `phase`, `moduleName`/`moduleNames`, `operationTimeoutMs`, and `phaseTimeoutMs`. Export-phase errors additionally include `error.details.durationMs` (how long PowerShell ran before stalling). Cleanup after a timeout is bounded; if the post-timeout Access orphan cleanup itself exceeds its bound, the parent export error additionally sets `error.details.cleanupTimedOut: true` and `error.details.cleanupTimeoutMs`, and a warning diagnostic is returned instead of the request waiting indefinitely.
 *   **Verification note**: Unit coverage proves this at the PowerShell boundary by asserting that focused `verify_code` requests carry `moduleNamesProvided: true` and that `spawnVbaManager` emits `-ModuleNamesJson`. A real Access COM fixture such as `VBA_TOOLKIT_BENCH` is still the preferred final smoke when available, but it is not required for these fast unit examples.
 
+#### Round 5 / PR5 — `verify_code` returns `bulkImportable` for a drop-in `import_modules` call (v2.4.0+)
+
+Round 5 (PR5, v2.4.0) makes `verify_code` carry the consumer-ready lists
+for `import_modules` / `export_modules` directly in the response, so
+callers do not have to re-filter `actionableDifferent` themselves.
+
+*   **Step 1 — `verify_code` (semantic mode, no `strict:true`)**:
+    ```json
+    {
+      "projectId": "my-project"
+    }
+    ```
+    Response shape (excerpt — full payload also includes `summary`,
+    `actionableDifferent`, `missingInSource` / `missingInBinary`, etc.):
+    ```json
+    {
+      "ok": true,
+      "summary": {
+        "sourceNewer": 3,
+        "binaryNewer": 1,
+        "bothChanged": 0,
+        "formSerializationOnly": 12
+      },
+      "summaryStructured": {
+        "matched": 228,
+        "different": 16,
+        "missingInSource": 0,
+        "missingInBinary": 1,
+        "actionable":   { "sourceNewer": 3, "binaryNewer": 1, "bothChanged": 0, "total": 4 },
+        "nonActionable":{ "caseOnly": 0, "whitespaceOnly": 0, "attributeOnly": 0, "formSerializationOnly": 12, "encodingOnly": 0, "total": 12 }
+      },
+      "bulkImportable": ["Form_Customer", "Modulo_Logger", "Utils_Helpers"],
+      "bulkImportableCount": 3,
+      "bulkExportable": ["Form_OldLegacy"],
+      "bulkExportableCount": 1,
+      "recommendedAction": "import_to_binary"
+    }
+    ```
+
+*   **Step 2 — `import_modules` (write-gated, save-only persistence)**.
+    Pass `bulkImportable` straight in — it is pre-sorted lexicographically
+    and deduped. `bothChanged` modules are excluded; if any are present
+    they ride in `recommendedAction: "manual_merge"` and need human review.
+    ```json
+    {
+      "projectId": "my-project",
+      "moduleNames": ["Form_Customer", "Modulo_Logger", "Utils_Helpers"],
+      "importMode": "auto"
+    }
+    ```
+*   **Notes**:
+    *   `bulkImportable = sourceNewer moduleNames ∪ missingInBinary moduleNames`; `bulkExportable = binaryNewer moduleNames ∪ missingInSource moduleNames`.
+    *   `bothChanged` modules are EXCLUDED from both lists — they still need a manual merge, surfaced by `recommendedAction: "manual_merge"`.
+    *   Strict mode (`strict:true`) returns none of the four new fields; the schema-level input contract is unchanged.
+    *   Persist via save-only (`acCmdSaveAllModules` = RunCommand 280). The human compiles in Access (Debug > Compile) after the import.
+
 ---
 
 ### 2. Sizing and Sourcing Code (Write-gated)
