@@ -138,7 +138,8 @@ export async function tryResolveProject(
     };
   }
 
-  const destinationRoot = optionalString(parsed[DESTINATION_ROOT_FIELD]) ?? optionalString(parsed[SOURCE_ROOT_FIELD]);
+  const destinationRoot =
+    optionalString(parsed[DESTINATION_ROOT_FIELD]) ?? optionalString(parsed[SOURCE_ROOT_FIELD]);
 
   return {
     projectId: declaredId,
