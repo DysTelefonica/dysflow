@@ -81,8 +81,11 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   and only its `NotDefault`/`0`/`-1` representation varies. This collapse is value-token scoped — a
   non-toggle value (`Width =9070`, `SomeEnum =2`) stays exact and functional.
 - **Strict mode (`strict: true`) bypasses every noise bucket** and does byte/text-exact comparison.
-- Per-module `diff: true` entries expose `classification`, `reason`, `isActionable`,
-  `recommendedAction`, and unique-line counts — these are the consumer contract; keep them additive.
+- The AI-facing result contract is additive: keep `summaryStructured` counts,
+  `bulkImportable[]`, `bulkExportable[]`, and per-entry `classification`/`reason` on both
+  `actionableDifferent[]` and `nonActionableDifferent[]`. Agents plan sync from the bulk lists
+  (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`),
+  not by parsing raw `different[]`; reserve `manual_merge` / `bothChanged` for conflicts.
 
 ## Hard rules
 
