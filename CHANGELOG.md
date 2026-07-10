@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.5.1] - 2026-07-10
+
+- docs: align verify_code contract with v2.5.0
+
+
 ## [v2.5.0] - 2026-07-09
 
 Minor release. `verify_code` in semantic mode is now consumer-ready: three additive fields let fleet consumers act directly on the response without post-processing. Round 5 of the fleet prompt series (the `expedientes` consumer, prompt `C:/00repos/codigo/00_EXPEDIENTES_staging/docs/prompts/prompt-ia-mantenedora-dysflow-round-2026-07-09-r5.md`) drove the shape. Backward-compatible: every existing field, key, and order is byte-identical. Strict mode is unaffected. **Note**: originally targeted v2.4.0; round 4 (#808) shipped first as v2.4.0, so this lands as v2.5.0 MINOR per SemVer (additive features on top of v2.4.0).
