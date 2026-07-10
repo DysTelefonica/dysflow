@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.5.3] - 2026-07-10
+
+Patch release. Closes the two-PR chain for #811 (`form-ui-execution-wiring`) Phase 1+2: ships the canonical SDD artifacts under `openspec/changes/form-ui-execution-wiring/` and the pure FormIR mutation primitives (`setProperty`, `deleteControl`) that downstream wiring (#813) will compose. All changes are backward-compatible (additive or behavior-preserving).
+
+### Added
+
+- **#811 PR 1 (docs, #822)**: OpenSpec artifacts preserved at `openspec/changes/form-ui-execution-wiring/` — `proposal.md`, `design.md`, `tasks.md`, `specs/ai-form-ui-builder/spec.md`. Captures the form UI execution wiring contract for downstream wiring (#813) and migration-ready documentation per `access-vba-capability-docs`.
+- **#812 PR 2 (runtime, #823)**: pure FormIR mutation primitives in `src/core/services/form-ir-service.ts`.
+  - `setProperty(ir, input)` — guarded upsert of a single property on a named control. Refuses protected keys (`Name`, `Format`, metadata block, blob blocks), missing controls, and blob/scalar collisions. Coerces booleans/numbers to canonical Access tokens (`NotDefault` / `0` / `String(value)`).
+  - `deleteControl(ir, input)` — recursive fail-closed deletion that refuses when the target or any descendant is bound to a custom event procedure or has named child controls.
+  - Both primitives preserve the ordered-array `FormIR` shape, leave `codeBehind` untouched, and run `assertMetadataPreserved` on the success path so `Checksum` / `Format` / `PrtDevMode` loss fails closed with `FORM_METADATA_LOSS`.
+- **#811 PR 1 (docs, #822)**: input types `SetPropertyInput`, `DeleteControlInput` added to `src/core/models/form-ir.ts` for typed caller contracts.
+
+### Tests
+
+- **Vitest**: 2930 passed, 1 skipped, 1 todo (vs baseline 2920; +10 focused mutation cases — happy paths, refusals: missing control, protected key, blob collision, own/descendant event binding, named children; scalar coercion; `expectRefusalWithoutMutation` helper asserts both throw and no-mutation invariant).
+- **CI**: both Quality gates (2m59s) and Windows PowerShell/Access smoke (1m35s) green on PR #823 against `main`. Reviewer verdict: PASS_WITH_NITS, recommendation commit-as-is.
+
 ## [v2.5.2] - 2026-07-10
 
 Patch release. Closes the four-PR chain for #718 (`projectId Form Source Resolution`) and adds a cross-platform fix surfaced by PR 4 CI. All changes are backward-compatible (additive or behavior-preserving).
