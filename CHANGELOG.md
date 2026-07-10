@@ -1,5 +1,35 @@
 # Changelog
 
+## [v2.5.2] - 2026-07-10
+
+Patch release. Closes the four-PR chain for #718 (`projectId Form Source Resolution`) and adds a cross-platform fix surfaced by PR 4 CI. All changes are backward-compatible (additive or behavior-preserving).
+
+### Fixed
+
+- **resolve-project-tool (#718)**: previously the tool read `parsed[SOURCE_ROOT_FIELD]` and returned `sourceRoot: null` whenever the project's `.dysflow/project.json` used the canonical `destinationRoot` key (default after the dysflow-config migration). It now reads `destinationRoot` first and falls back to legacy `sourceRoot` for configs that still use the old key. Output field name stays `sourceRoot` so the MCP response shape is unchanged.
+- **vba-forms-clone-tools (#718, Group C)**: the projectRoot fallback (`resolveMutationPath(projectRoot, 'forms/{name}')`) now delegates to the pure resolver against `destinationRoot` instead. The bench-cache tier is untouched. Fixes a real split-project-layout miss where the source form lived under `destinationRoot/forms/` but the tool was looking under `projectRoot/forms/`.
+- **vba-forms-lint-adapter (cross-platform)**: the raw-path fallback branch (no `projectId`) used `node:path.resolve` which prepends the platform-specific drive root to Windows-style path strings (`C:\` on Windows, `/c/` on Linux). The fallback's intent is "use the path as-given", so it's now `node:path.join`. On Windows the result is byte-identical to `resolve` for absolute Windows-style inputs; on Linux the test fixture (and any cross-platform caller) now sees a consistent path. Latent defect from PR 3 of the chain, exposed by PR 4 CI on ubuntu-latest.
+
+### Added
+
+- **#718 chain (PR 1–4)**: unified form on-disk source resolution behind a single pure resolver (`src/core/config/form-source-resolver.ts`). `projectId + formName`, `destinationRoot`, `sourcePath`, and aliases now resolve consistently across all form tools (`lint_form_code`, `inspect_form`, `compare_form`, `form_serialize`, `clone_form_from_template`, `resolve_project`). This is the foundation plumbing for the broader #811 Phase 2 AI-first Access form UI epic — the user-facing form UI tools (`analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`, `apply_form_design_plan`, `verify_form_ui`, `copy_form_ui_pattern`, `inspect_form`, `validate_form_spec`, `generate_form`, `harvest_form_catalog`, `catalog_add_control`) are already shipped and now have consistent path resolution underneath.
+- **vba-sync-schemas**: `formName` / `name` (alias) on `inspect_form`; `formName` / `name` / `targetName` / `targetForm` (aliases) on `compare_form`. Closes the schema-vs-runtime gap from PR 3 — the runtime accepted these aliases since #810; the schema now declares them.
+- **E2E harness** (`E2E_testing/mcp-e2e.mjs`): real `projectId` resolution test against the tracked fixture `E2E_testing/.dysflow/project.json` (`id: noconformidades-e2e`, `destinationRoot: "src"`) using an existing form (`FormCPV`). Test 1 asserts successful resolution end-to-end; Test 2 asserts the typed miss-remediation never contains the literal `[PATH]` substring. Idempotent — reuses the tracked fixture, never collateral-deletes it.
+
+### Tests
+
+- **Vitest**: 2920 passed, 1 skipped, 1 todo (vs baseline 2820; +100 across the chain — 60 in resolver, 40 across Groups A/B/C/E2E).
+- **CI**: both Quality gates and Windows PowerShell/Access smoke green on PR 4 against `main`.
+
+### Hard invariants preserved
+
+- Conventional commits only, no AI co-author / attribution.
+- **Human compiles** — no `compile_vba`, no `compile: true`. The runtime never compiles.
+- **CodeGraph-first** — the resolver uses pure functions and explicit candidate ordering; no fs I/O during resolution.
+- **Strict TDD** — every change RED-then-GREEN in `pnpm test` before commit.
+- Backward compatibility: every public MCP tool response shape is unchanged. New fields are additive only.
+
+
 ## [v2.5.1] - 2026-07-10
 
 - docs: align verify_code contract with v2.5.0
