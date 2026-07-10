@@ -100,6 +100,11 @@ export async function cloneFormFromTemplate(args: {
   const targetResolution = await orchestrator.resolveExecutionTarget(params);
   if (!targetResolution.ok) return targetResolution;
   const targetData = targetResolution.data as FormsExecutionTarget;
+  const destinationRoot = normalizePathForDetails(targetData.destinationRoot);
+  const realProjectRoot =
+    targetData.projectRoot !== undefined
+      ? normalizePathForDetails(targetData.projectRoot)
+      : undefined;
   const projectRoot =
     targetData.projectRoot !== undefined
       ? normalizePathForDetails(targetData.projectRoot)
@@ -116,7 +121,11 @@ export async function cloneFormFromTemplate(args: {
     sourceRoot = "bench";
   } catch {
     // 2) projectRoot fallback for the source.
-    const projectSourcePath = resolveMutationPath(projectRoot, `forms/${sourceForm}.form.txt`);
+    const projectSourcePath = resolveMutationPath(
+      destinationRoot,
+      `forms/${sourceForm}.form.txt`,
+      realProjectRoot,
+    );
     try {
       sourceText = await fileSystem.readFile(projectSourcePath);
       sourcePath = normalizePathForDetails(projectSourcePath);
@@ -175,7 +184,9 @@ export async function cloneFormFromTemplate(args: {
   const targetPath =
     sourceRoot === "bench"
       ? normalizePathForDetails(resolveMutationPath(benchCacheRoot, `${targetForm}.form.txt`))
-      : normalizePathForDetails(resolveMutationPath(projectRoot, `forms/${targetForm}.form.txt`));
+      : normalizePathForDetails(
+          resolveMutationPath(destinationRoot, `forms/${targetForm}.form.txt`, realProjectRoot),
+        );
 
   // #675 — replace the dead `hasManagedFormExtension` suffix-only
   // validation with a real path-containment check on the target.

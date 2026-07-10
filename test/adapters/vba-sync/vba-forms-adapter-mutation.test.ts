@@ -534,6 +534,43 @@ describe("VbaFormsAdapter — create_form_from_template (slice 5)", () => {
     }
   });
 
+  it("realigns fallback to destinationRoot in split-project layout (Phase 4)", async () => {
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue(
+      successResult({
+        accessPath: "C:/repo/App.accdb",
+        destinationRoot: "C:/repo/src",
+        projectRoot: "C:/repo",
+        timeoutMs: 30000,
+        configSource: "explicit-request",
+      }),
+    );
+    const writeFile = vi.fn();
+    const splitProjectPath = "C:\\repo\\src\\forms\\Form_CloneSource.form.txt";
+    const readFile = vi.fn().mockImplementation(async (path: string) => {
+      if (path === CLONE_BENCH_SOURCE_PATH) {
+        throw new Error("ENOENT");
+      }
+      if (path === splitProjectPath) return Promise.resolve(CLONE_SOURCE_FORM);
+      throw new Error(`unexpected read: ${path}`);
+    });
+    const fs = mockFs({ readFile, writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs, { benchCacheRoot: CLONE_BENCH_ROOT });
+
+    const result = await adapter.execute("create_form_from_template", {
+      sourceForm: "Form_CloneSource",
+      targetForm: "Form_CloneTarget",
+      tokenMap: { FormName: "CloneTarget" },
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(readFile).toHaveBeenCalledWith(splitProjectPath);
+    if (result.ok) {
+      expect(result.data).toMatchObject({ sourcePath: splitProjectPath });
+    }
+  });
+
   it("apply: writes the token-replaced target and invokes import_modules as the LoadFromText gate", async () => {
     const orchestrator = makeOrchestrator();
     const writeFile = vi.fn();

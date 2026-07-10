@@ -138,6 +138,30 @@ describe("tryResolveProject() — pure helper (round-3 Item 1)", () => {
       sourceRoot: null,
     });
   });
+
+  it("reads destinationRoot from the config file and outputs it in sourceRoot (Phase 4)", async () => {
+    writeProjectConfig({
+      id: "my-app",
+      accessPath: "C:/data/app.accdb",
+      projectRoot: "C:/repos/my-app",
+      destinationRoot: "C:/repos/my-app/dest",
+    });
+
+    const result = await tryResolveProject({ projectId: "my-app" }, workdir);
+    expect(result.sourceRoot).toBe("C:/repos/my-app/dest");
+  });
+
+  it("falls back to sourceRoot if destinationRoot is absent in the config file (Phase 4)", async () => {
+    writeProjectConfig({
+      id: "my-app",
+      accessPath: "C:/data/app.accdb",
+      projectRoot: "C:/repos/my-app",
+      sourceRoot: "C:/repos/my-app/src",
+    });
+
+    const result = await tryResolveProject({ projectId: "my-app" }, workdir);
+    expect(result.sourceRoot).toBe("C:/repos/my-app/src");
+  });
 });
 
 describe("createResolveProjectTool() — tool factory", () => {

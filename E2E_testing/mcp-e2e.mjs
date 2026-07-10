@@ -851,6 +851,58 @@ await record("vba-manifest", "validate_manifest", {
   manifest: { tests: [{ procedure: "DysflowMcpE2E_DoWork", args: [] }] },
   modules: { DysflowMcpE2EInline: inlineSourceFixture },
 });
+
+// Phase 4 — real projectId resolution E2E against the existing
+// `E2E_testing/.dysflow/project.json` fixture (id: noconformidades-e2e,
+// destinationRoot: "src"). Reuses the tracked fixture so the test is
+// idempotent and never collateral-deletes tracked files. The success
+// path resolves an existing form (Form_FormCPV) whose `.form.txt` is
+// already on disk; the miss path asserts the typed remediation surfaces
+// without a `[PATH]`-scrubbed substring. The resolver prepends `Form_`
+// to a bare name, so `formName: "FormCPV"` resolves to
+// `forms/Form_FormCPV.form.txt`, and `inspect_form` returns the inner
+// `name` (the bare formName) in its payload.
+{
+  // Test 1: Successful resolution via projectId against the existing fixture.
+  // The MCP harness's `toolText` already unwraps the JSON-RPC envelope and
+  // returns the inner content text, so `inspectResult.text` IS the inspect_form
+  // payload (not a JSON-RPC wrapper). Parse it once.
+  const inspectResult = await record("project-resolution", "inspect_form", {
+    projectId: "noconformidades-e2e",
+    formName: "FormCPV",
+  });
+  const innerData = safeJsonParse(inspectResult.text);
+  const inspectPass = Boolean(innerData && innerData.name === "FormCPV");
+  rows.push({
+    area: "project-resolution",
+    tool: "inspect_form:resolved-projectId",
+    pass: inspectPass,
+    expected: "success",
+    ms: 0,
+    summary: inspectPass ? "successfully resolved and parsed form via projectId" : "unexpected inspect_form payload: " + inspectResult.text,
+  });
+  console.log(`${inspectPass ? "PASS" : "FAIL"}\tinspect_form:resolved-projectId\t0ms\t${rows.at(-1).summary}`);
+
+  // Test 2: Resolution failure miss-remediation lacks [PATH]. Tool errors
+  // surface as content with `isError: true`; the harness's `toolText` returns
+  // that content text here, so parse the inner payload the same way.
+  const badResult = await record("project-resolution", "inspect_form", {
+    projectId: "noconformidades-e2e",
+    formName: "NonexistentForm",
+  }, { expected: "error" });
+  const badData = safeJsonParse(badResult.text);
+  const remediationMsg = badData?.message ?? badData?.error?.message ?? badData?.result?.content?.[0]?.text ?? "";
+  const pathScrubbedPass = remediationMsg && !remediationMsg.includes("[PATH]");
+  rows.push({
+    area: "project-resolution",
+    tool: "inspect_form:miss-remediation-no-path-scrub",
+    pass: pathScrubbedPass,
+    expected: "error",
+    ms: 0,
+    summary: pathScrubbedPass ? "remediation is clean of [PATH] substring" : "remediation contains [PATH] substring: " + remediationMsg,
+  });
+  console.log(`${pathScrubbedPass ? "PASS" : "FAIL"}\tinspect_form:miss-remediation-no-path-scrub\t0ms\t${rows.at(-1).summary}`);
+}
 }
 
 // isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,
