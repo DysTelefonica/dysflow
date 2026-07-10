@@ -168,6 +168,84 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     expect(fs.readFile).not.toHaveBeenCalled();
   });
 
+  it("resolves without double-nesting for form_add_control with sourcePath starting with split source root segment", async () => {
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue(
+      successResult({
+        accessPath: "C:/repo/App.accdb",
+        destinationRoot: "C:/repo/src",
+        projectRoot: "C:/repo",
+        timeoutMs: 30000,
+        configSource: "explicit-request",
+      }),
+    );
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "src/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      controlType: "CommandButton",
+      properties: { Caption: '"Save"', Left: "300", Top: "400" },
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith(
+      "C:\\repo\\src\\forms\\Form_Customer.form.txt",
+      expect.any(String),
+      "utf8",
+    );
+  });
+
+  it("resolves without double-nesting for form_deserialize with sourcePath starting with split source root segment", async () => {
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue(
+      successResult({
+        accessPath: "C:/repo/App.accdb",
+        destinationRoot: "C:/repo/src",
+        projectRoot: "C:/repo",
+        timeoutMs: 30000,
+        configSource: "explicit-request",
+      }),
+    );
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const ir = {
+      name: "Form_Customer",
+      kind: "Form" as const,
+      preamble: [],
+      root: {
+        blockType: "Form",
+        entries: [],
+        children: [
+          {
+            blockType: "",
+            entries: [{ kind: "scalar" as const, key: "Name", value: '"txtName"' }],
+            children: [],
+          },
+        ],
+      },
+      codeBehind: null,
+    };
+
+    const result = await adapter.execute("form_deserialize", {
+      sourcePath: "src/forms/Form_Customer.form.txt",
+      ir,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledWith(
+      "C:\\repo\\src\\forms\\Form_Customer.form.txt",
+      expect.any(String),
+      "utf8",
+    );
+  });
+
   it("writes and imports the canonical resolved target even when sourcePath uses relative segments", async () => {
     const orchestrator = makeOrchestrator();
     const writeFile = vi.fn();

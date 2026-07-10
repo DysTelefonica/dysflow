@@ -39,10 +39,10 @@ Chain strategy: feature-branch-chain
 
 ## Phase 2: Group B Wiring — PR 2 (base: PR 1)
 
-- [ ] 2.1 RED: test — `form_add_control`/`form_deserialize` caller with `sourcePath: "src/forms/X.form.txt"` resolves without double-nesting (Case B regression).
-- [ ] 2.2 GREEN: modify `src/adapters/vba-sync/vba-forms-paths.ts` — replace blind `resolveMutationPath` concat with delegation to `resolveFormSourceCandidates`.
-- [ ] 2.3 GREEN: modify `src/adapters/vba-sync/vba-forms-managed-source.ts` — route Group B tools through the updated path helper.
-- [ ] 2.4 Verify: `pnpm test` green for Group B call sites; non-`src`-prefixed `sourcePath` callers unaffected.
+- [x] 2.1 RED: test — `form_add_control`/`form_deserialize` caller with `sourcePath: "src/forms/X.form.txt"` resolves without double-nesting (Case B regression).
+- [x] 2.2 GREEN: modify `src/adapters/vba-sync/vba-forms-paths.ts` — replace blind `resolveMutationPath` concat with delegation to `resolveFormSourceCandidates`.
+- [x] 2.3 GREEN: modify `src/adapters/vba-sync/vba-forms-managed-source.ts` — route Group B tools through the updated path helper.
+- [x] 2.4 Verify: `pnpm test` green for Group B call sites; non-`src`-prefixed `sourcePath` callers unaffected.
 
 ## Phase 3: Group A Retrofit — PR 3 (base: PR 2)
 

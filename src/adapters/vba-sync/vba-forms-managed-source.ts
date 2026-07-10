@@ -45,7 +45,9 @@ export async function resolveManagedMutationSource(args: {
     targetData.projectRoot !== undefined
       ? normalizePathForDetails(targetData.projectRoot)
       : undefined;
-  const sourcePath = normalizePathForDetails(resolveMutationPath(destinationRoot, rawSourcePath));
+  const sourcePath = normalizePathForDetails(
+    resolveMutationPath(destinationRoot, rawSourcePath, projectRoot),
+  );
   const runtimeEnv =
     orchestrator.env ??
     (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } })
