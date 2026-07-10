@@ -27,7 +27,15 @@ export type FormSourceInput = {
 
 export type FormSourceCandidate = {
   absolutePath: string;
-  /** Relative to `sourceRoot` — safe for path-free messaging. Absolute-strategy candidates keep the original string here (no root to relate to). */
+  /**
+   * Relative to `sourceRoot` — usually safe for path-free messaging.
+   * NOT a guarantee: an `identity`-strategy candidate built from a
+   * path-shaped `formName` (e.g. a caller passing an absolute path where a
+   * bare name was expected) embeds that raw value here too, and an
+   * `absolute`-strategy candidate always keeps the original absolute string.
+   * `buildResolutionDiagnostic` is the actual safety boundary — it redacts
+   * both cases before anything reaches a caller-facing free-text field.
+   */
   relativePath: string;
   strategy: "identity" | "idempotent-join" | "naive-join" | "absolute";
 };
@@ -112,7 +120,10 @@ function relativeToRoot(root: string, path: string): string | undefined {
  * basename (spec scenario: "basename collision in a non-split project is
  * not stripped").
  */
-function detectSplitSegment(sourceRoot: string, projectRoot: string | undefined): string | undefined {
+function detectSplitSegment(
+  sourceRoot: string,
+  projectRoot: string | undefined,
+): string | undefined {
   if (projectRoot === undefined) return undefined;
   if (isSamePath(sourceRoot, projectRoot)) return undefined;
 
@@ -227,20 +238,27 @@ export function buildResolutionDiagnostic(
 ): FormSourceDiagnostic {
   const sourceRootRelative = computeSourceRootRelative(input);
 
+  // Neither `formName` nor `sourcePath` is safe to surface in free text by
+  // default — a caller can pass a path-shaped value (Windows drive, UNC, or
+  // POSIX absolute) into EITHER field, and both must be guarded identically.
+  // An absolute-shaped `formName` is exactly the kind of raw filesystem path
+  // this diagnostic channel must stay free of (design.md, "[PATH]-safe
+  // diagnostic channel").
+  const formNameIsPathShaped = input.formName !== undefined && isAbsolutePath(input.formName);
+
   const attemptedRelative = candidates.map((candidate) =>
-    candidate.strategy === "absolute" ? "(absolute path omitted)" : candidate.relativePath,
+    candidate.strategy === "absolute" || formNameIsPathShaped
+      ? "(absolute path omitted)"
+      : candidate.relativePath,
   );
 
-  // Never surface a raw sourcePath in free text when it is absolute — an
-  // absolute sourcePath is exactly the kind of raw filesystem path this
-  // diagnostic channel must stay free of (design.md, "[PATH]-safe diagnostic
-  // channel"). formName is always safe (an identity string, not a path).
-  const target =
-    input.formName ??
-    (input.sourcePath !== undefined && !isAbsolutePath(input.sourcePath)
+  const safeFormName =
+    input.formName !== undefined && !formNameIsPathShaped ? input.formName : undefined;
+  const safeSourcePath =
+    input.sourcePath !== undefined && !isAbsolutePath(input.sourcePath)
       ? input.sourcePath
-      : undefined) ??
-    "(unspecified form)";
+      : undefined;
+  const target = safeFormName ?? safeSourcePath ?? "(unspecified form)";
   const remediation = [
     `No form/report source found for "${target}" under source root "${sourceRootRelative}".`,
     attemptedRelative.length > 0

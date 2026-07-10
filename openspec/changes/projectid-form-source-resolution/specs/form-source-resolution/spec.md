@@ -73,19 +73,30 @@ this change.
 ### Requirement: Typed resolution-failure diagnostic
 
 When resolution fails (no candidate path exists), the resolver MUST return a
-typed diagnostic containing: the `projectId` (if any), the resolved
-`projectRoot`, the ordered list of attempted source roots, the attempted
-final path, and a remediation message. The diagnostic MUST NOT contain a
-raw absolute filesystem path in any field the caller surfaces as free text
-to the user; path data MUST be exposed only through structured fields a
-downstream sanitizer does not scrub into `[PATH]`.
+typed diagnostic containing: the `projectId` (if any), the resolved source
+root expressed relative to the project root (`sourceRootRelative`), the
+ordered, relative-only list of every candidate path attempted
+(`attemptedRelative`), and a remediation message. The diagnostic MUST NOT
+contain a raw absolute filesystem path in any field the caller surfaces as
+free text to the user — including when a path-shaped value (Windows drive,
+UNC, or POSIX absolute) is supplied through `formName` instead of
+`sourcePath`, which MUST be guarded identically. Path data MUST be exposed
+only through structured fields a downstream sanitizer does not scrub into
+`[PATH]`.
 
 #### Scenario: resolution failure returns actionable diagnostic
 
 - GIVEN a `projectId` whose config resolves to a `projectRoot`, but the requested `formName` does not exist under any attempted source root
 - WHEN the resolver attempts resolution
-- THEN it returns a typed diagnostic with `projectId`, `projectRoot`, `attemptedSourceRoots`, `attemptedFinalPath`, and a remediation string
+- THEN it returns a typed diagnostic with `projectId`, `sourceRootRelative`, `attemptedRelative`, and a remediation string
 - AND the diagnostic's free-text remediation message contains no raw absolute path substring subject to `[PATH]` scrubbing
+
+#### Scenario: a path-shaped formName is redacted the same as an absolute sourcePath
+
+- GIVEN a caller supplies a `formName` that is itself a Windows-drive, UNC, or POSIX-absolute path (instead of a bare identity string)
+- WHEN the resolver builds a resolution-failure diagnostic for that input
+- THEN neither `attemptedRelative` nor the free-text `remediation` message contains the raw path-shaped `formName` value
+- AND the affected candidate's contribution to `attemptedRelative` is redacted the same way an absolute `sourcePath` candidate would be
 
 #### Scenario: caller surfaces remediation without a scrubbed path
 

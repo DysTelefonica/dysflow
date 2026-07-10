@@ -34,7 +34,9 @@ describe("resolveFormSourceCandidates", () => {
 
     const candidates = resolveFormSourceCandidates(input);
 
-    expect(candidates[0]?.absolutePath).toBe("C:/Projects/Acme/src/reports/Report_Summary.report.txt");
+    expect(candidates[0]?.absolutePath).toBe(
+      "C:/Projects/Acme/src/reports/Report_Summary.report.txt",
+    );
     expect(candidates[0]?.strategy).toBe("identity");
   });
 
@@ -119,6 +121,45 @@ describe("resolveFormSourceCandidates", () => {
       expect(candidates[0]?.strategy).toBe("idempotent-join");
       expect(candidates[0]?.absolutePath).toBe("C:/Projects/Acme/src/forms/Form_MyForm.form.txt");
     });
+
+    // Finding 3 (gatekeeper review) — none of the original Case B tests
+    // varied casing between sourceRoot and sourcePath. The collision
+    // detection is documented as case-insensitive on Windows; lock it in
+    // both directions.
+    it("strips the split segment case-insensitively when sourceRoot's segment casing differs from sourcePath's", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/SRC",
+        projectRoot: "C:/Projects/Acme",
+        sourcePath: "src/forms/Form_MyForm.form.txt",
+      });
+
+      expect(candidates[0]?.strategy).toBe("idempotent-join");
+      expect(candidates[0]?.absolutePath).toBe("C:/Projects/Acme/SRC/forms/Form_MyForm.form.txt");
+    });
+
+    it("strips the split segment case-insensitively when sourcePath's segment casing differs from sourceRoot's", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        sourcePath: "SRC/forms/Form_MyForm.form.txt",
+      });
+
+      expect(candidates[0]?.strategy).toBe("idempotent-join");
+      expect(candidates[0]?.absolutePath).toBe("C:/Projects/Acme/src/forms/Form_MyForm.form.txt");
+    });
+
+    // Finding 4 (nice-to-have) — trailing-slash roots must not produce
+    // double slashes or break collision detection.
+    it("handles trailing-slash sourceRoot/projectRoot without double slashes", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/src/",
+        projectRoot: "C:/Projects/Acme/",
+        sourcePath: "src/forms/Form_MyForm.form.txt",
+      });
+
+      expect(candidates[0]?.strategy).toBe("idempotent-join");
+      expect(candidates[0]?.absolutePath).toBe("C:/Projects/Acme/src/forms/Form_MyForm.form.txt");
+    });
   });
 
   // Task 1.3 — non-split basename-collision guard: a project directory whose
@@ -195,6 +236,49 @@ describe("resolveFormSourceCandidates", () => {
     expect(first).toEqual(second);
     expect(first.length).toBeGreaterThan(0);
   });
+
+  // Finding 4 (nice-to-have) — empty-string formName/sourcePath and
+  // formName-wins precedence when both are supplied.
+  it("treats an empty-string formName as absent and falls through to sourcePath", () => {
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: "C:/Projects/Acme/src",
+      projectRoot: "C:/Projects/Acme",
+      formName: "",
+      sourcePath: "forms/Form_MyForm.form.txt",
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual({
+      absolutePath: "C:/Projects/Acme/src/forms/Form_MyForm.form.txt",
+      relativePath: "forms/Form_MyForm.form.txt",
+      strategy: "identity",
+    });
+  });
+
+  it("returns no candidates when both formName and sourcePath are absent/empty", () => {
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: "C:/Projects/Acme/src",
+      formName: "",
+    });
+
+    expect(candidates).toEqual([]);
+  });
+
+  it("prefers formName over sourcePath when both are supplied (formName-wins precedence)", () => {
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: "C:/Projects/Acme/src",
+      projectRoot: "C:/Projects/Acme",
+      formName: "Winner",
+      sourcePath: "forms/Form_Loser.form.txt",
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual({
+      absolutePath: "C:/Projects/Acme/src/forms/Form_Winner.form.txt",
+      relativePath: "forms/Form_Winner.form.txt",
+      strategy: "identity",
+    });
+  });
 });
 
 describe("buildResolutionDiagnostic", () => {
@@ -245,5 +329,120 @@ describe("buildResolutionDiagnostic", () => {
 
     expect(diagnostic.sourceRootRelative).toBe(".");
     expect(diagnostic.projectId).toBeUndefined();
+  });
+
+  // Finding 1 (gatekeeper BLOCKER) — the sourcePath branch guarded
+  // isAbsolutePath, but the formName identity branch did not, leaking a
+  // path-shaped formName straight into attemptedRelative/remediation.
+  // formName must be redacted the SAME way an absolute sourcePath is.
+  describe("Finding 1 — path-shaped formName is redacted like an absolute sourcePath", () => {
+    it("redacts the exact reported reproduction (Windows-absolute formName)", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "C:\\Secret\\Leak",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual(["(absolute path omitted)"]);
+      const serialized = JSON.stringify(diagnostic);
+      expect(serialized).not.toContain("Secret");
+      expect(serialized).not.toContain("Leak");
+    });
+
+    it("redacts a Windows-drive-shaped formName (single segment)", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "C:\\WinMarker",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual(["(absolute path omitted)"]);
+      expect(JSON.stringify(diagnostic)).not.toContain("WinMarker");
+    });
+
+    it("redacts a UNC-shaped formName", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "\\\\UncMarker",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual(["(absolute path omitted)"]);
+      expect(JSON.stringify(diagnostic)).not.toContain("UncMarker");
+    });
+
+    it("redacts a POSIX-absolute-shaped formName", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "/PosixMarker",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual(["(absolute path omitted)"]);
+      expect(JSON.stringify(diagnostic)).not.toContain("PosixMarker");
+    });
+
+    it("still surfaces a normal, non-path-shaped formName in remediation", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "MyForm",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual(["forms/Form_MyForm.form.txt"]);
+      expect(diagnostic.remediation).toContain("MyForm");
+    });
+  });
+
+  // Finding 2 (CRITICAL gap) — attemptedRelative for a split-project
+  // sourcePath MISS must carry both the idempotent-join and naive-join
+  // candidates, in order; and the zero-candidate branch must be covered.
+  describe("Finding 2 — attemptedRelative ordering and empty-candidate branch", () => {
+    it("orders a split-project sourcePath miss as [idempotent-join, naive-join]", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        sourcePath: "src/forms/Form_Missing.form.txt",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+
+      expect(candidates.map((c) => c.strategy)).toEqual(["idempotent-join", "naive-join"]);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates, "acme-project");
+
+      expect(diagnostic.attemptedRelative).toEqual([
+        "forms/Form_Missing.form.txt",
+        "src/forms/Form_Missing.form.txt",
+      ]);
+    });
+
+    it("reports 'No candidate paths were attempted' when neither formName nor sourcePath is supplied", () => {
+      const input: FormSourceInput = {
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+      };
+      const candidates = resolveFormSourceCandidates(input);
+      expect(candidates).toEqual([]);
+
+      const diagnostic = buildResolutionDiagnostic(input, candidates);
+
+      expect(diagnostic.attemptedRelative).toEqual([]);
+      expect(diagnostic.remediation).toContain("No candidate paths were attempted.");
+    });
   });
 });
