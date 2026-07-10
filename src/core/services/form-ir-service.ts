@@ -8,6 +8,7 @@ import type {
   BlobEntry,
   CloneFromTemplateOptions,
   CloneFromTemplateResult,
+  DeleteControlInput,
   EmptyLineEntry,
   FormIR,
   FormMutationResult,
@@ -17,6 +18,7 @@ import type {
   PropertyEntry,
   RenameControlInput,
   ScalarEntry,
+  SetPropertyInput,
   TokenMap,
 } from "../models/form-ir.js";
 
@@ -44,6 +46,9 @@ export class FormMutationError extends Error {
       | "FORM_MUTATION_INVALID"
       | "FORM_METADATA_LOSS"
       | "FORM_CONTROL_HAS_EVENT_BINDING"
+      | "FORM_CONTROL_HAS_CHILDREN"
+      | "FORM_PROPERTY_PROTECTED"
+      | "FORM_PROPERTY_NOT_SCALAR"
       | "FORM_TOKEN_MAP_INVALID"
       | "FORM_TARGET_EXISTS",
     message: string,
@@ -491,9 +496,37 @@ function findControlNode(node: FormNode, name: string): FormNode | undefined {
   return undefined;
 }
 
+function findControlParent(
+  node: FormNode,
+  name: string,
+): { parent: FormNode; control: FormNode } | undefined {
+  for (const child of node.children) {
+    const nameEntry = findNameEntry(child);
+    if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === name) {
+      return { parent: node, control: child };
+    }
+    const found = findControlParent(child, name);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function hasEventProcedureBinding(node: FormNode): boolean {
   return node.entries.some(
     (entry) => entry.kind === "scalar" && entry.value.includes("[Event Procedure]"),
+  );
+}
+
+function hasEventProcedureBindingInTree(node: FormNode): boolean {
+  return (
+    hasEventProcedureBinding(node) ||
+    node.children.some((child) => hasEventProcedureBindingInTree(child))
+  );
+}
+
+function hasNamedChildControl(node: FormNode): boolean {
+  return node.children.some(
+    (child) => findNameEntry(child) !== undefined || hasNamedChildControl(child),
   );
 }
 
@@ -679,6 +712,61 @@ export function renameControl(ir: FormIR, input: RenameControlInput): FormMutati
   }
   upsertScalar(control, "Name", quoteName(newName));
   return mutationResult(ir, next, newName);
+}
+
+export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationResult {
+  const next = cloneIr(ir);
+  const control = findControlNode(next.root, input.controlName);
+  if (control === undefined) {
+    throw new FormMutationError(
+      "FORM_CONTROL_NOT_FOUND",
+      `Control "${input.controlName}" was not found.`,
+    );
+  }
+  if (input.property === "Name" || isPreservedMetadataKey(input.property)) {
+    throw new FormMutationError(
+      "FORM_PROPERTY_PROTECTED",
+      `Property "${input.property}" is protected. Use renameControl for control identity changes.`,
+    );
+  }
+  const existing = control.entries.find(
+    (entry) => entry.kind !== "empty" && entry.key === input.property,
+  );
+  if (existing?.kind === "blob") {
+    throw new FormMutationError(
+      "FORM_PROPERTY_NOT_SCALAR",
+      `Property "${input.property}" is an opaque blob and cannot be replaced with a scalar value.`,
+    );
+  }
+
+  upsertScalar(control, input.property, normalizeMutationValue(input.value));
+  return mutationResult(ir, next, input.controlName);
+}
+
+export function deleteControl(ir: FormIR, input: DeleteControlInput): FormMutationResult {
+  const next = cloneIr(ir);
+  const match = findControlParent(next.root, input.controlName);
+  if (match === undefined) {
+    throw new FormMutationError(
+      "FORM_CONTROL_NOT_FOUND",
+      `Control "${input.controlName}" was not found.`,
+    );
+  }
+  if (hasEventProcedureBindingInTree(match.control)) {
+    throw new FormMutationError(
+      "FORM_CONTROL_HAS_EVENT_BINDING",
+      `Control "${input.controlName}" or one of its descendants has [Event Procedure] bindings.`,
+    );
+  }
+  if (hasNamedChildControl(match.control)) {
+    throw new FormMutationError(
+      "FORM_CONTROL_HAS_CHILDREN",
+      `Control "${input.controlName}" has named child controls. Delete them first.`,
+    );
+  }
+
+  match.parent.children.splice(match.parent.children.indexOf(match.control), 1);
+  return mutationResult(ir, next, input.controlName);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   addControl,
+  deleteControl,
   moveControl,
   parseFormTxt,
   renameControl,
   serializeFormTxt,
+  setProperty,
 } from "../../../src/core/services/form-ir-service";
 
 const FORM_WITH_METADATA = `Version =21
@@ -26,6 +28,9 @@ Begin Form
         Begin Label
             Name ="lblName"
             Caption ="Name"
+            FormatConditions = Begin
+                Condition =1
+            End
         End
     End
 End
@@ -43,6 +48,38 @@ function metadataLines(source: string): string[] {
         line.includes("0x01020304") ||
         line.includes("Format ="),
     );
+}
+
+function nestedControlForm(withEventBinding: boolean): string {
+  const eventBinding = withEventBinding ? '                OnClick ="[Event Procedure]"\n' : "";
+  return `Version =21
+Begin Form
+    Begin
+        Begin OptionGroup
+            Name ="grpChoice"
+            Begin OptionButton
+                Name ="optFirst"
+${eventBinding}            End
+        End
+    End
+End
+CodeBehindForm
+Option Compare Database
+`;
+}
+
+function expectRefusalWithoutMutation(
+  source: string,
+  mutate: (ir: ReturnType<typeof parseFormTxt>) => unknown,
+  code: string,
+): void {
+  const ir = parseFormTxt(source, { name: "CustomerForm" });
+  const before = serializeFormTxt(ir);
+  const codeBehind = ir.codeBehind;
+
+  expect(() => mutate(ir)).toThrowError(expect.objectContaining({ code }));
+  expect(serializeFormTxt(ir)).toBe(before);
+  expect(ir.codeBehind).toBe(codeBehind);
 }
 
 describe("FormIR mutation primitives", () => {
@@ -176,6 +213,109 @@ End
 
     expect(() => renameControl(ir, { controlName: "txtName", newName: "lblName" })).toThrowError(
       expect.objectContaining({ code: "FORM_DUPLICATE_CONTROL" }),
+    );
+  });
+
+  it("sets an existing scalar property without changing source IR or code-behind", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const before = serializeFormTxt(ir);
+
+    const result = setProperty(ir, {
+      controlName: "lblName",
+      property: "Caption",
+      value: '"Customer name"',
+    });
+
+    expect(result.source).toContain('Name ="lblName"\n            Caption ="Customer name"');
+    expect(result.ir.codeBehind).toBe(ir.codeBehind);
+    expect(serializeFormTxt(ir)).toBe(before);
+    expect(result.changedControlName).toBe("lblName");
+  });
+
+  it("sets a new scalar property using the established mutation value normalization", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    const result = setProperty(ir, {
+      controlName: "lblName",
+      property: "Visible",
+      value: true,
+    });
+
+    expect(result.source).toContain("Visible = NotDefault");
+    expect(result.source).toContain('Caption ="Name"');
+  });
+
+  it("refuses protected properties without mutating the IR", () => {
+    expectRefusalWithoutMutation(
+      FORM_WITH_METADATA,
+      (ir) => setProperty(ir, { controlName: "txtName", property: "Format", value: '"!"' }),
+      "FORM_PROPERTY_PROTECTED",
+    );
+  });
+
+  it("refuses Name changes through set-property without mutating the IR", () => {
+    expectRefusalWithoutMutation(
+      FORM_WITH_METADATA,
+      (ir) => setProperty(ir, { controlName: "lblName", property: "Name", value: '"lblOther"' }),
+      "FORM_PROPERTY_PROTECTED",
+    );
+  });
+
+  it("refuses replacing a blob property with a scalar without mutating the IR", () => {
+    expectRefusalWithoutMutation(
+      FORM_WITH_METADATA,
+      (ir) =>
+        setProperty(ir, {
+          controlName: "lblName",
+          property: "FormatConditions",
+          value: "replacement",
+        }),
+      "FORM_PROPERTY_NOT_SCALAR",
+    );
+  });
+
+  it("deletes a leaf control without changing source IR or code-behind", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const before = serializeFormTxt(ir);
+
+    const result = deleteControl(ir, { controlName: "lblName" });
+
+    expect(result.source).not.toContain('Name ="lblName"');
+    expect(result.source).toContain('Name ="txtName"');
+    expect(result.ir.codeBehind).toBe(ir.codeBehind);
+    expect(serializeFormTxt(ir)).toBe(before);
+    expect(result.changedControlName).toBe("lblName");
+  });
+
+  it("refuses deleting a missing control without mutating the IR", () => {
+    expectRefusalWithoutMutation(
+      FORM_WITH_METADATA,
+      (ir) => deleteControl(ir, { controlName: "missing" }),
+      "FORM_CONTROL_NOT_FOUND",
+    );
+  });
+
+  it("refuses deletion when the target control has an event binding", () => {
+    expectRefusalWithoutMutation(
+      FORM_WITH_METADATA,
+      (ir) => deleteControl(ir, { controlName: "txtName" }),
+      "FORM_CONTROL_HAS_EVENT_BINDING",
+    );
+  });
+
+  it("recursively refuses deletion when a descendant has an event binding", () => {
+    expectRefusalWithoutMutation(
+      nestedControlForm(true),
+      (ir) => deleteControl(ir, { controlName: "grpChoice" }),
+      "FORM_CONTROL_HAS_EVENT_BINDING",
+    );
+  });
+
+  it("refuses deleting a control with named children", () => {
+    expectRefusalWithoutMutation(
+      nestedControlForm(false),
+      (ir) => deleteControl(ir, { controlName: "grpChoice" }),
+      "FORM_CONTROL_HAS_CHILDREN",
     );
   });
 });

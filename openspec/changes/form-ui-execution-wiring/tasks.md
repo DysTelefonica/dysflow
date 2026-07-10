@@ -41,9 +41,9 @@ PR 1 MUST preserve `proposal.md`, `design.md`, `specs/ai-form-ui-builder/spec.md
 
 ## Phase 2: PR 2 — Pure Primitives (#812)
 
-- [ ] 2.1 After PR 1 merges, create fresh branch `feat/812-form-ir-primitives` from merged `main`; include no #813 wiring.
-- [ ] 2.2 **RED:** Extend `test/core/services/form-ir-mutation.test.ts` for set/delete success, blob/protected/name refusals, recursive events, children, and unchanged IR/`codeBehind`.
-- [ ] 2.3 **GREEN/REFACTOR:** Update `src/core/models/form-ir.ts` and `src/core/services/form-ir-service.ts`; run focused tests and `pnpm test`.
+- [x] 2.1 After PR 1 merges, create fresh branch `feat/812-form-ir-primitives` from merged `main`; include no #813 wiring.
+- [x] 2.2 **RED:** Extend `test/core/services/form-ir-mutation.test.ts` for set/delete success, blob/protected/name refusals, recursive events, children, and unchanged IR/`codeBehind`.
+- [x] 2.3 **GREEN/REFACTOR:** Update `src/core/models/form-ir.ts` and `src/core/services/form-ir-service.ts`; run focused tests and `pnpm test`.
 
 ## Phase 3: PR 3 — Pure Planning (#813)
 
