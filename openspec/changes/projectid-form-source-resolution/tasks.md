@@ -46,13 +46,13 @@ Chain strategy: feature-branch-chain
 
 ## Phase 3: Group A Retrofit — PR 3 (base: PR 2)
 
-- [ ] 3.1 RED: test — `lint_form_code` additive `projectId` resolves `formName` vs `destinationRoot`; raw-path parity when `projectId` absent.
-- [ ] 3.2 GREEN: modify `src/adapters/vba-sync/vba-forms-lint-adapter.ts` (~336-344) — additive `projectId`/`formName`, delegate to resolver, preserve raw join byte-for-byte otherwise.
-- [ ] 3.3 RED: test — `inspect_form`/`compare_form` literal `sourcePath`/`targetPath` passthrough unchanged with no `projectId`/`formName`; new resolver path when supplied.
-- [ ] 3.4 GREEN: modify `src/adapters/vba-sync/vba-forms-read-tools.ts` (`inspect_form` :24,37; `compare_form` :87-88,111,121) — additive inputs, literal passthrough preserved, aliases `path`/`target` kept.
-- [ ] 3.5 RED: test — `form_serialize` literal `sourcePath` passthrough unchanged; new resolver path when `projectId`/`formName` supplied.
-- [ ] 3.6 GREEN: modify `src/adapters/vba-sync/vba-forms-serialization-tools.ts` (:47,59) — additive inputs, passthrough preserved.
-- [ ] 3.7 Verify: `pnpm test` green for all 4 Group A tools; zero raw-path/literal-path regressions.
+- [x] 3.1 RED: test — `lint_form_code` additive `projectId` resolves `formName` vs `destinationRoot`; raw-path parity when `projectId` absent.
+- [x] 3.2 GREEN: modify `src/adapters/vba-sync/vba-forms-lint-adapter.ts` (~336-344) — additive `projectId`/`formName`, delegate to resolver, preserve raw join byte-for-byte otherwise.
+- [x] 3.3 RED: test — `inspect_form`/`compare_form` literal `sourcePath`/`targetPath` passthrough unchanged with no `projectId`/`formName`; new resolver path when supplied.
+- [x] 3.4 GREEN: modify `src/adapters/vba-sync/vba-forms-read-tools.ts` (`inspect_form` :24,37; `compare_form` :87-88,111,121) — additive inputs, literal passthrough preserved, aliases `path`/`target` kept.
+- [x] 3.5 RED: test — `form_serialize` literal `sourcePath` passthrough unchanged; new resolver path when `projectId`/`formName` supplied.
+- [x] 3.6 GREEN: modify `src/adapters/vba-sync/vba-forms-serialization-tools.ts` (:47,59) — additive inputs, passthrough preserved.
+- [x] 3.7 Verify: `pnpm test` green for all 4 Group A tools; zero raw-path/literal-path regressions.
 
 ## Phase 4: Group C + resolve-project-tool + E2E — PR 4 (base: PR 3)
 

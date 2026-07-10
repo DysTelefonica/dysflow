@@ -17,7 +17,11 @@
  */
 
 import { readdir, readFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
+import {
+  buildResolutionDiagnostic,
+  resolveFormSourceCandidates,
+} from "../../core/config/form-source-resolver.js";
 import {
   createDysflowError,
   failureResult,
@@ -33,6 +37,7 @@ import {
 } from "../../core/services/form-lint-types.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 // ---------------------------------------------------------------------------
 // Input types (the public MCP tool schema mirrors these)
@@ -50,6 +55,8 @@ export type LintFormCodeInput = {
   rules?: LintRuleId[];
   /** Elevate warnings to errors. */
   strict?: boolean;
+  projectId?: string;
+  projectRoot?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -68,7 +75,10 @@ export class VbaFormsLintAdapter {
   /**
    * Resolve inputs, read files, run the engine, and return the lint envelope.
    */
-  async lintFormCode(input: LintFormCodeInput): Promise<OperationResult<unknown>> {
+  async lintFormCode(
+    input: LintFormCodeInput,
+    orchestrator?: VbaFormsOrchestrator,
+  ): Promise<OperationResult<unknown>> {
     const trimmedForm = stringValue(input.formName);
     const trimmedModuleNames = stringArray(input.moduleNames);
     if (trimmedForm !== undefined && trimmedModuleNames.length > 0) {
@@ -80,18 +90,43 @@ export class VbaFormsLintAdapter {
       );
     }
 
-    const sourceRoot = resolveRoot(input.destinationRoot, input.sourceRoot);
+    let destinationRoot = input.destinationRoot;
+    let projectRoot = input.projectRoot;
+
+    if (input.projectId !== undefined) {
+      if (orchestrator === undefined) {
+        return failureResult(
+          createDysflowError(
+            "MCP_INPUT_INVALID",
+            "orchestrator is required when projectId is specified.",
+          ),
+        );
+      }
+      const target = await orchestrator.resolveExecutionTarget({ projectId: input.projectId });
+      if (!target.ok) return target;
+      const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+      destinationRoot = targetData.destinationRoot;
+      projectRoot = targetData.projectRoot;
+    }
+
+    const sourceRoot = destinationRoot ?? input.sourceRoot;
     if (!sourceRoot) {
       return failureResult(
         createDysflowError(
           "MCP_INPUT_INVALID",
-          "destinationRoot or sourceRoot is required (path that contains forms/ and/or reports/).",
+          "destinationRoot, sourceRoot, or projectId is required (path that contains forms/ and/or reports/).",
         ),
       );
     }
 
     const rules = normalizeRules(input.rules);
-    const targets = await this.resolveTargets(sourceRoot, trimmedForm, trimmedModuleNames);
+    const targets = await this.resolveTargets(
+      sourceRoot,
+      trimmedForm,
+      trimmedModuleNames,
+      projectRoot,
+      input.projectId,
+    );
     if ("error" in targets) {
       return failureResult(targets.error);
     }
@@ -176,9 +211,11 @@ export class VbaFormsLintAdapter {
     sourceRoot: string,
     formName: string | undefined,
     moduleNames: string[],
+    projectRoot?: string,
+    projectId?: string,
   ): Promise<{ targets: Array<ResolvedForm> } | { error: ReturnType<typeof createDysflowError> }> {
     if (formName !== undefined) {
-      const resolved = await this.resolveSingle(sourceRoot, formName);
+      const resolved = await this.resolveSingle(sourceRoot, formName, projectRoot, projectId);
       if ("error" in resolved) return { error: resolved.error };
       return { targets: [resolved] };
     }
@@ -193,7 +230,7 @@ export class VbaFormsLintAdapter {
             ),
           };
         }
-        const resolved = await this.resolveSingle(sourceRoot, name);
+        const resolved = await this.resolveSingle(sourceRoot, name, projectRoot, projectId);
         if ("error" in resolved) return { error: resolved.error };
         targets.push(resolved);
       }
@@ -222,7 +259,7 @@ export class VbaFormsLintAdapter {
         const base = isForm
           ? entry.slice(0, -".form.txt".length)
           : entry.slice(0, -".report.txt".length);
-        const resolved = await this.resolveSingle(sourceRoot, base);
+        const resolved = await this.resolveSingle(sourceRoot, base, projectRoot, projectId);
         if ("error" in resolved) continue;
         if (!targets.some((t) => t.formName === resolved.formName)) {
           targets.push(resolved);
@@ -235,6 +272,8 @@ export class VbaFormsLintAdapter {
   private async resolveSingle(
     sourceRoot: string,
     rawName: string,
+    projectRoot?: string,
+    projectId?: string,
   ): Promise<ResolvedForm | { error: ReturnType<typeof createDysflowError> }> {
     const isReport = REPORT_PREFIX.test(rawName);
     const isForm = FORM_PREFIX.test(rawName);
@@ -250,35 +289,76 @@ export class VbaFormsLintAdapter {
     const formName = isForm || isReport ? rawName : `Form_${rawName}`;
     const folder = isReport ? "reports" : "forms";
     const txtSuffix = isReport ? ".report.txt" : ".form.txt";
-    const candidates = [
-      resolve(sourceRoot, folder, `${formName}${txtSuffix}`),
-      resolve(sourceRoot, folder, `${formName.replace(/^Form_/, "")}${txtSuffix}`),
-      resolve(sourceRoot, folder, `${formName.replace(/^Report_/, "")}${txtSuffix}`),
-    ];
+
     let formTxtPath: string | undefined;
-    for (const candidate of candidates) {
-      try {
-        await this.fileSystem.readFile(candidate);
-        formTxtPath = candidate;
-        break;
-      } catch {
-        // keep trying
+
+    if (projectId !== undefined) {
+      const bareName = rawName.replace(/^Form_/, "").replace(/^Report_/, "");
+
+      const formCandidates = resolveFormSourceCandidates({
+        sourceRoot,
+        projectRoot,
+        formName: bareName,
+        kind: isReport ? "report" : "form",
+      });
+
+      for (const candidate of formCandidates) {
+        try {
+          await this.fileSystem.readFile(candidate.absolutePath);
+          formTxtPath = candidate.absolutePath;
+          break;
+        } catch {
+          // keep trying
+        }
+      }
+
+      if (formTxtPath === undefined) {
+        const diagnostic = buildResolutionDiagnostic(
+          {
+            sourceRoot,
+            projectRoot,
+            formName: bareName,
+            kind: isReport ? "report" : "form",
+          },
+          formCandidates,
+          projectId,
+        );
+        return {
+          error: createDysflowError("FORM_NOT_FOUND", diagnostic.remediation),
+        };
+      }
+    } else {
+      const candidates = [
+        resolve(sourceRoot, folder, `${formName}${txtSuffix}`),
+        resolve(sourceRoot, folder, `${formName.replace(/^Form_/, "")}${txtSuffix}`),
+        resolve(sourceRoot, folder, `${formName.replace(/^Report_/, "")}${txtSuffix}`),
+      ];
+      for (const candidate of candidates) {
+        try {
+          await this.fileSystem.readFile(candidate);
+          formTxtPath = candidate;
+          break;
+        } catch {
+          // keep trying
+        }
+      }
+      if (formTxtPath === undefined) {
+        return {
+          error: createDysflowError(
+            "FORM_NOT_FOUND",
+            `No .form.txt / .report.txt found for '${formName}' under ${resolve(sourceRoot, folder)}.`,
+          ),
+        };
       }
     }
-    if (formTxtPath === undefined) {
-      return {
-        error: createDysflowError(
-          "FORM_NOT_FOUND",
-          `No .form.txt / .report.txt found for '${formName}' under ${resolve(sourceRoot, folder)}.`,
-        ),
-      };
-    }
+
     // Sibling .cls (code-behind) — optional.
     const clsBase = basename(formTxtPath, txtSuffix);
+    const clsDir = dirname(formTxtPath);
     const clsCandidates = [
-      resolve(sourceRoot, folder, `${clsBase}.cls`),
-      resolve(sourceRoot, folder, `${clsBase.replace(/^Form_/, "")}.cls`),
-      resolve(sourceRoot, folder, `${clsBase.replace(/^Report_/, "")}.cls`),
+      resolve(clsDir, `${clsBase}.cls`),
+      resolve(clsDir, `${clsBase.replace(/^Form_/, "")}.cls`),
+      resolve(clsDir, `${clsBase.replace(/^Report_/, "")}.cls`),
     ];
     let clsPath: string | undefined;
     for (const candidate of clsCandidates) {
@@ -332,16 +412,6 @@ const nodeLintFileSystem: FormFileSystemPort = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function resolveRoot(
-  destinationRoot: string | undefined,
-  sourceRoot: string | undefined,
-): string | undefined {
-  const candidates = [destinationRoot, sourceRoot]
-    .map((p) => stringValue(p))
-    .filter((p): p is string => p !== undefined);
-  return candidates[0];
-}
 
 function stringArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];

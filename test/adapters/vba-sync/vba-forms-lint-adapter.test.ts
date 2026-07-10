@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { VbaFormsLintAdapter } from "../../../src/adapters/vba-sync/vba-forms-lint-adapter";
+import type { VbaFormsOrchestrator } from "../../../src/adapters/vba-sync/vba-forms-types";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 type SuccessData = {
@@ -411,6 +412,72 @@ describe("VbaFormsLintAdapter", () => {
     });
 
     expect(result.ok).toBe(true);
+  });
+
+  describe("projectId-driven resolution (Phase 3)", () => {
+    it("resolves formName via shared resolver against destinationRoot when projectId is supplied", async () => {
+      const fs = mockFs({
+        readFile: vi.fn().mockImplementation(async (path: string) => {
+          if (path.replace(/\\/g, "/") === "C:/repo/src/forms/Form_frmMain.form.txt") {
+            return VALID_FORM_TXT;
+          }
+          throw new Error("ENOENT");
+        }),
+      });
+      const adapter = new VbaFormsLintAdapter(fs);
+      const orchestrator = {
+        executor: vi.fn(),
+        env: {},
+        cwd: "C:/repo",
+        resolveExecutionTarget: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            destinationRoot: "C:/repo/src",
+            projectRoot: "C:/repo",
+          },
+        }),
+        validateStrictContext: vi.fn(() => ({ ok: true, data: undefined })),
+        executeMappedTool: vi.fn(),
+      };
+
+      const result = await adapter.lintFormCode(
+        {
+          projectId: "test-project",
+          formName: "Form_frmMain",
+        },
+        orchestrator as unknown as VbaFormsOrchestrator,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(orchestrator.resolveExecutionTarget).toHaveBeenCalledWith({
+        projectId: "test-project",
+      });
+      expect(fs.readFile).toHaveBeenCalledWith(
+        expect.stringMatching(/C:[\\/]repo[\\/]src[\\/]forms[\\/]Form_frmMain\.form\.txt/),
+      );
+    });
+
+    it("falls back to raw-path parity join when projectId is absent", async () => {
+      const fs = mockFs({
+        readFile: vi.fn().mockImplementation(async (path: string) => {
+          if (path.replace(/\\/g, "/") === "C:/repo/forms/Form_frmMain.form.txt") {
+            return VALID_FORM_TXT;
+          }
+          throw new Error("ENOENT");
+        }),
+      });
+      const adapter = new VbaFormsLintAdapter(fs);
+
+      const result = await adapter.lintFormCode({
+        destinationRoot: "C:/repo",
+        formName: "Form_frmMain",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(fs.readFile).toHaveBeenCalledWith(
+        expect.stringMatching(/C:[\\/]repo[\\/]forms[\\/]Form_frmMain\.form\.txt/),
+      );
+    });
   });
 
   describe("nodeLintFileSystem production port", () => {
