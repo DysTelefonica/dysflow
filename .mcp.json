@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "dysflow": {
+      "type": "stdio",
+      "command": "C:/Users/adm1/AppData/Local/dysflow/bin/dysflow.cmd",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    },
+    "codegraph-vba": {
+      "type": "stdio",
+      "command": "C:/Users/adm1/AppData/Roaming/npm/codegraph-vba.cmd",
+      "args": [
+        "serve",
+        "--mcp"
+      ],
+      "env": {}
+    }
+  }
+}

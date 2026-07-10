@@ -1,4 +1,5 @@
 import { isAbsolute, resolve, win32 } from "node:path";
+import { resolveFormSourceCandidates } from "../../core/config/form-source-resolver.js";
 
 /**
  * Derive the canonical form/report name from a source path by stripping
@@ -23,7 +24,23 @@ function isWindowsPath(path: string): boolean {
   return win32.isAbsolute(path) || /^[A-Za-z]:[\\/]/.test(path);
 }
 
-export function resolveMutationPath(basePath: string, childPath: string): string {
+export function resolveMutationPath(
+  basePath: string,
+  childPath: string,
+  projectRoot?: string,
+): string {
+  const candidates = resolveFormSourceCandidates({
+    sourceRoot: basePath,
+    projectRoot,
+    sourcePath: childPath,
+  });
+
+  const firstCandidate = candidates[0];
+  if (firstCandidate !== undefined) {
+    const resolved = firstCandidate.absolutePath;
+    return isWindowsPath(basePath) ? win32.normalize(resolved) : resolve(resolved);
+  }
+
   if (win32.isAbsolute(childPath)) return win32.normalize(childPath);
   if (isAbsolute(childPath)) return resolve(childPath);
   if (isWindowsPath(basePath)) return win32.normalize(win32.resolve(basePath, childPath));

@@ -199,4 +199,59 @@ describe("VbaFormsAdapter — inspect_form", () => {
       expect(data.name).toBe("FormComercial");
     }
   });
+
+  it("resolves via shared resolver when projectId and formName are supplied", async () => {
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        if (path.replace(/\\/g, "/") === "C:/repo/src/forms/Form_frmMain.form.txt") {
+          return SIMPLE_FORM;
+        }
+        throw new Error("ENOENT");
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    orchestrator.resolveExecutionTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        destinationRoot: "C:/repo/src",
+        projectRoot: "C:/repo",
+      },
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("inspect_form", {
+      projectId: "test-project",
+      formName: "frmMain",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.resolveExecutionTarget).toHaveBeenCalledWith({
+      projectId: "test-project",
+      formName: "frmMain",
+    });
+    expect(fs.readFile).toHaveBeenCalledWith(
+      expect.stringMatching(/C:[\\/]repo[\\/]src[\\/]forms[\\/]Form_frmMain\.form\.txt/),
+    );
+  });
+
+  it("keeps literal sourcePath passthrough when projectId/formName are not supplied", async () => {
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "D:/somewhere/custom.form.txt") {
+          return SIMPLE_FORM;
+        }
+        throw new Error("ENOENT");
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("inspect_form", {
+      sourcePath: "D:/somewhere/custom.form.txt",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.resolveExecutionTarget).not.toHaveBeenCalled();
+    expect(fs.readFile).toHaveBeenCalledWith("D:/somewhere/custom.form.txt");
+  });
 });

@@ -386,3 +386,89 @@ describe("deserializeForm — dry-run outputMode filtering (feat-forms-output-mo
     expect(data.sourcePath).toBeDefined();
   });
 });
+
+describe("serializeForm — projectId resolution (Phase 3)", () => {
+  it("resolves sourcePath via shared resolver when projectId and formName are supplied", async () => {
+    const fs = {
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        if (path.replace(/\\/g, "/").endsWith("E2E_testing/src/forms/Form_frmBusy.form.txt")) {
+          return `Version =21
+Begin Form
+End
+`;
+        }
+        throw new Error("ENOENT");
+      }),
+      mkdir: vi.fn(),
+      readdir: vi.fn().mockResolvedValue([]),
+      readJson: vi.fn(),
+      writeFile: vi.fn(),
+    };
+    const orchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget: vi.fn().mockResolvedValue({
+        ok: true,
+        data: {
+          destinationRoot: "C:/repo/E2E_testing/src",
+          projectRoot: "C:/repo",
+        },
+      }),
+      validateStrictContext: vi.fn(() => ({ ok: true, data: undefined })),
+      executeMappedTool: vi.fn(),
+    };
+
+    const result = await serializeForm(
+      fs,
+      {
+        projectId: "test-project",
+        formName: "frmBusy",
+      },
+      orchestrator as unknown as VbaFormsOrchestrator,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.resolveExecutionTarget).toHaveBeenCalledWith({
+      projectId: "test-project",
+      formName: "frmBusy",
+    });
+  });
+
+  it("keeps literal sourcePath passthrough when projectId/formName are not supplied", async () => {
+    const fs = {
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "D:/somewhere/custom.form.txt") {
+          return `Version =21
+Begin Form
+End
+`;
+        }
+        throw new Error("ENOENT");
+      }),
+      mkdir: vi.fn(),
+      readdir: vi.fn().mockResolvedValue([]),
+      readJson: vi.fn(),
+      writeFile: vi.fn(),
+    };
+    const orchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget: vi.fn(),
+      validateStrictContext: vi.fn(),
+      executeMappedTool: vi.fn(),
+    };
+
+    const result = await serializeForm(
+      fs,
+      {
+        sourcePath: "D:/somewhere/custom.form.txt",
+      },
+      orchestrator as unknown as VbaFormsOrchestrator,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.resolveExecutionTarget).not.toHaveBeenCalled();
+  });
+});

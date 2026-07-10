@@ -1,4 +1,8 @@
 import {
+  buildResolutionDiagnostic,
+  resolveFormSourceCandidates,
+} from "../../core/config/form-source-resolver.js";
+import {
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -16,12 +20,59 @@ import type { FormFileSystemPort } from "../../core/services/vba-form-service.js
 import { stringValue } from "../../core/utils/index.js";
 import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
 import { deriveFormName } from "./vba-forms-paths.js";
+import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 export async function inspectForm(
   fileSystem: FormFileSystemPort,
   params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
 ): Promise<OperationResult<unknown>> {
-  const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  const projectId = stringValue(params.projectId);
+  const formName = stringValue(params.formName) ?? stringValue(params.name);
+
+  if (projectId && formName) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({ projectId, formName });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: targetData.destinationRoot,
+      projectRoot: targetData.projectRoot,
+      formName,
+    });
+    let resolvedPath: string | undefined;
+    for (const candidate of candidates) {
+      try {
+        await fileSystem.readFile(candidate.absolutePath);
+        resolvedPath = candidate.absolutePath;
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (resolvedPath === undefined) {
+      const diagnostic = buildResolutionDiagnostic(
+        {
+          sourceRoot: targetData.destinationRoot,
+          projectRoot: targetData.projectRoot,
+          formName,
+        },
+        candidates,
+        projectId,
+      );
+      return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+    }
+    sourcePath = resolvedPath;
+  }
+
   if (!sourcePath) {
     return failureResult(
       createDysflowError(
@@ -80,12 +131,93 @@ export async function inspectForm(
 export async function compareForm(
   fileSystem: FormFileSystemPort,
   params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
 ): Promise<OperationResult<unknown>> {
-  // Source/target path resolution. `path` is accepted as an alias for
-  // `sourcePath`, and `target` is accepted as an alias for `targetPath`,
-  // mirroring the slice-1 `inspect_form` parity.
-  const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
-  const targetPath = stringValue(params.targetPath) ?? stringValue(params.target);
+  let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  let targetPath = stringValue(params.targetPath) ?? stringValue(params.target);
+  const projectId = stringValue(params.projectId);
+  const formName = stringValue(params.formName) ?? stringValue(params.name);
+  const targetName = stringValue(params.targetName) ?? stringValue(params.targetForm);
+
+  if (projectId && (formName || targetName)) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({
+      projectId,
+      formName,
+      targetName,
+    });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+
+    if (formName) {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: targetData.destinationRoot,
+        projectRoot: targetData.projectRoot,
+        formName,
+      });
+      let resolvedPath: string | undefined;
+      for (const candidate of candidates) {
+        try {
+          await fileSystem.readFile(candidate.absolutePath);
+          resolvedPath = candidate.absolutePath;
+          break;
+        } catch {
+          // try next
+        }
+      }
+      if (resolvedPath === undefined) {
+        const diagnostic = buildResolutionDiagnostic(
+          {
+            sourceRoot: targetData.destinationRoot,
+            projectRoot: targetData.projectRoot,
+            formName,
+          },
+          candidates,
+          projectId,
+        );
+        return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+      }
+      sourcePath = resolvedPath;
+    }
+
+    if (targetName) {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: targetData.destinationRoot,
+        projectRoot: targetData.projectRoot,
+        formName: targetName,
+      });
+      let resolvedPath: string | undefined;
+      for (const candidate of candidates) {
+        try {
+          await fileSystem.readFile(candidate.absolutePath);
+          resolvedPath = candidate.absolutePath;
+          break;
+        } catch {
+          // try next
+        }
+      }
+      if (resolvedPath === undefined) {
+        const diagnostic = buildResolutionDiagnostic(
+          {
+            sourceRoot: targetData.destinationRoot,
+            projectRoot: targetData.projectRoot,
+            formName: targetName,
+          },
+          candidates,
+          projectId,
+        );
+        return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+      }
+      targetPath = resolvedPath;
+    }
+  }
 
   if (!sourcePath) {
     return failureResult(
@@ -170,18 +302,24 @@ export async function compareForm(
 export async function lintFormCode(
   fileSystem: FormFileSystemPort,
   params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
 ): Promise<OperationResult<unknown>> {
   const lintAdapter = new VbaFormsLintAdapter(fileSystem);
-  return lintAdapter.lintFormCode({
-    destinationRoot: stringValue(params.destinationRoot),
-    sourceRoot: stringValue(params.sourceRoot),
-    formName: stringValue(params.formName),
-    moduleNames: Array.isArray(params.moduleNames)
-      ? params.moduleNames.filter((m): m is string => typeof m === "string")
-      : undefined,
-    rules: Array.isArray(params.rules)
-      ? params.rules.filter((r): r is LintRuleId => typeof r === "string")
-      : undefined,
-    strict: params.strict === true,
-  });
+  return lintAdapter.lintFormCode(
+    {
+      destinationRoot: stringValue(params.destinationRoot),
+      sourceRoot: stringValue(params.sourceRoot),
+      formName: stringValue(params.formName),
+      moduleNames: Array.isArray(params.moduleNames)
+        ? params.moduleNames.filter((m): m is string => typeof m === "string")
+        : undefined,
+      rules: Array.isArray(params.rules)
+        ? params.rules.filter((r): r is LintRuleId => typeof r === "string")
+        : undefined,
+      strict: params.strict === true,
+      projectId: stringValue(params.projectId),
+      projectRoot: stringValue(params.projectRoot),
+    },
+    orchestrator,
+  );
 }

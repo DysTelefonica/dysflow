@@ -77,6 +77,7 @@ const ID_FIELD = "id";
 const ACCESS_PATH_FIELD = "accessPath";
 const PROJECT_ROOT_FIELD = "projectRoot";
 const SOURCE_ROOT_FIELD = "sourceRoot";
+const DESTINATION_ROOT_FIELD = "destinationRoot";
 
 /**
  * Read `.dysflow/project.json` from `cwd` and return a structured
@@ -137,13 +138,16 @@ export async function tryResolveProject(
     };
   }
 
+  const destinationRoot =
+    optionalString(parsed[DESTINATION_ROOT_FIELD]) ?? optionalString(parsed[SOURCE_ROOT_FIELD]);
+
   return {
     projectId: declaredId,
     outcome: "resolved",
     reason: input.projectId === undefined ? "single project config found" : "explicit id match",
     accessPath: optionalString(parsed[ACCESS_PATH_FIELD]),
     projectRoot: optionalString(parsed[PROJECT_ROOT_FIELD]),
-    sourceRoot: optionalString(parsed[SOURCE_ROOT_FIELD]),
+    sourceRoot: destinationRoot,
   };
 }
 

@@ -79,9 +79,10 @@ export class VbaFormsAdapter {
     if (toolName === "generate_form") return this.formService.generateForm(params);
     if (toolName === "catalog_add_control") return this.formService.catalogAddControl(params);
     if (toolName === "harvest_form_catalog") return this.formService.harvestFormCatalog(params);
-    if (toolName === "inspect_form") return inspectForm(this.fileSystem, params);
-    if (toolName === "compare_form") return compareForm(this.fileSystem, params);
-    if (toolName === "lint_form_code") return lintFormCode(this.fileSystem, params);
+    if (toolName === "inspect_form") return inspectForm(this.fileSystem, params, this.orchestrator);
+    if (toolName === "compare_form") return compareForm(this.fileSystem, params, this.orchestrator);
+    if (toolName === "lint_form_code")
+      return lintFormCode(this.fileSystem, params, this.orchestrator);
     if (
       toolName === "form_add_control" ||
       toolName === "form_move_control" ||
@@ -94,7 +95,8 @@ export class VbaFormsAdapter {
         params,
       });
     }
-    if (toolName === "form_serialize") return serializeForm(this.fileSystem, params);
+    if (toolName === "form_serialize")
+      return serializeForm(this.fileSystem, params, this.orchestrator);
     if (toolName === "form_deserialize") {
       return deserializeForm({
         orchestrator: this.orchestrator,

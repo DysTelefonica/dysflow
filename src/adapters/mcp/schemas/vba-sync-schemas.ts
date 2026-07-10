@@ -378,6 +378,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
+      formName: {
+        type: "string",
+        description: "Optional form/report name (e.g. 'Form_Customer').",
+      },
+      name: {
+        type: "string",
+        description: "Alias for formName.",
+      },
     },
   },
   compare_form: {
@@ -395,6 +403,22 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       target: {
         type: "string",
         description: "Alias for targetPath.",
+      },
+      formName: {
+        type: "string",
+        description: "Optional left form/report name.",
+      },
+      name: {
+        type: "string",
+        description: "Alias for formName.",
+      },
+      targetName: {
+        type: "string",
+        description: "Optional right form/report name.",
+      },
+      targetForm: {
+        type: "string",
+        description: "Alias for targetName.",
       },
     },
   },

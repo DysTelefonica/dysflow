@@ -1,4 +1,8 @@
 import {
+  buildResolutionDiagnostic,
+  resolveFormSourceCandidates,
+} from "../../core/config/form-source-resolver.js";
+import {
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -43,8 +47,54 @@ const PRESERVED_METADATA_KEYS_FOR_SERIALIZE = [
 export async function serializeForm(
   fileSystem: FormFileSystemPort,
   params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
 ): Promise<OperationResult<unknown>> {
-  const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  const projectId = stringValue(params.projectId);
+  const formName = stringValue(params.formName) ?? stringValue(params.name);
+
+  if (projectId && formName) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({ projectId, formName });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: targetData.destinationRoot,
+      projectRoot: targetData.projectRoot,
+      formName,
+    });
+    let resolvedPath: string | undefined;
+    for (const candidate of candidates) {
+      try {
+        await fileSystem.readFile(candidate.absolutePath);
+        resolvedPath = candidate.absolutePath;
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (resolvedPath === undefined) {
+      const diagnostic = buildResolutionDiagnostic(
+        {
+          sourceRoot: targetData.destinationRoot,
+          projectRoot: targetData.projectRoot,
+          formName,
+        },
+        candidates,
+        projectId,
+      );
+      return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+    }
+    sourcePath = resolvedPath;
+  }
+
   if (!sourcePath) {
     return failureResult(
       createDysflowError(
