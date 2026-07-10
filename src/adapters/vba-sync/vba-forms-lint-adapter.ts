@@ -17,7 +17,7 @@
  */
 
 import { readdir, readFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   buildResolutionDiagnostic,
   resolveFormSourceCandidates,
@@ -328,10 +328,16 @@ export class VbaFormsLintAdapter {
         };
       }
     } else {
+      // Raw-path parity branch: the caller supplied a path directly (no
+      // projectId). Use path.join (not path.resolve) so the input path is
+      // preserved verbatim across platforms — path.resolve would prepend
+      // the platform-specific drive root (C:\ on Windows, /c/ on Linux) to
+      // a Windows-style input string, producing a different absolute path
+      // on Linux and breaking the cross-platform parity test.
       const candidates = [
-        resolve(sourceRoot, folder, `${formName}${txtSuffix}`),
-        resolve(sourceRoot, folder, `${formName.replace(/^Form_/, "")}${txtSuffix}`),
-        resolve(sourceRoot, folder, `${formName.replace(/^Report_/, "")}${txtSuffix}`),
+        join(sourceRoot, folder, `${formName}${txtSuffix}`),
+        join(sourceRoot, folder, `${formName.replace(/^Form_/, "")}${txtSuffix}`),
+        join(sourceRoot, folder, `${formName.replace(/^Report_/, "")}${txtSuffix}`),
       ];
       for (const candidate of candidates) {
         try {
@@ -346,7 +352,7 @@ export class VbaFormsLintAdapter {
         return {
           error: createDysflowError(
             "FORM_NOT_FOUND",
-            `No .form.txt / .report.txt found for '${formName}' under ${resolve(sourceRoot, folder)}.`,
+            `No .form.txt / .report.txt found for '${formName}' under ${join(sourceRoot, folder)}.`,
           ),
         };
       }
