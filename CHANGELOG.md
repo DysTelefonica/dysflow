@@ -1,5 +1,19 @@
 # Changelog
 
+## [v2.5.0] - 2026-07-09
+
+Minor release. `verify_code` in semantic mode is now consumer-ready: three additive fields let fleet consumers act directly on the response without post-processing. Round 5 of the fleet prompt series (the `expedientes` consumer, prompt `C:/00repos/codigo/00_EXPEDIENTES_staging/docs/prompts/prompt-ia-mantenedora-dysflow-round-2026-07-09-r5.md`) drove the shape. Backward-compatible: every existing field, key, and order is byte-identical. Strict mode is unaffected. **Note**: originally targeted v2.4.0; round 4 (#808) shipped first as v2.4.0, so this lands as v2.5.0 MINOR per SemVer (additive features on top of v2.4.0).
+
+### Added
+
+- **verify_code** (round 5): `summaryStructured` — nested companion to the flat `summary` with top-level counts (`matched`, `different`, `missingInSource`, `missingInBinary`) and `actionable.{sourceNewer, binaryNewer, bothChanged, total}` + `nonActionable.{caseOnly, whitespaceOnly, attributeOnly, formSerializationOnly, encodingOnly, total}`. Every `total` is sum-of-named-buckets. `different` is the count of semantic diffs (not including `missingIn*`).
+- **verify_code** (round 5): per-entry `classification` and `reason` on every `nonActionableDifferent[*]` entry (and, for symmetry, on every `actionableDifferent[*]` entry). Same vocabulary already exposed on `diffs[*]`. Lets a consumer read the "why" without re-issuing `verify_code({ diff: true })`.
+- **verify_code** (round 5): `bulkImportable` / `bulkImportableCount` and `bulkExportable` / `bulkExportableCount`. `bulkImportable = sourceNewer moduleNames ∪ missingInBinary moduleNames`; `bulkExportable = binaryNewer moduleNames ∪ missingInSource moduleNames`; `bothChanged` modules are EXCLUDED from both (they still need human review). Each list is pre-sorted lexicographically and deduped — direct drop-in for `import_modules({ moduleNames: bulkImportable })` and `export_modules({ moduleNames: bulkExportable })`, no client-side filter needed. Coexists with `recommendedAction: "manual_merge"`: a manual-merge call may still emit a non-empty `bulkImportable` for the unambiguous `sourceNewer` slice.
+
+### Consumer
+
+- `expedientes` (round 5): same fleet prompt series that produced rounds 1–4. The 244-module scan loop now reads `bulkImportable` directly and passes it to `import_modules`; the per-category counts come from `summaryStructured.nonActionable` instead of being computed by re-issuing `verify_code({ diff: true })` and grouping the response.
+
 ## [v2.4.0] - 2026-07-09
 
 Minor release. Three additive features for the `expedientes` consumer's bulk-VBA workflows (issue #807). All three are backward compatible (defaults preserve the current behavior) and have no breaking surface changes.

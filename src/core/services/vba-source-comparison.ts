@@ -39,6 +39,11 @@ export type VbaSourceComparisonEntry = {
   fileType: string;
   sourcePath?: string;
   binaryPath?: string;
+  // Additive semantic fields (populated in semantic mode for entries that land
+  // in `actionableDifferent` or `nonActionableDifferent`). Strict-mode and
+  // missing-* entries leave these undefined.
+  classification?: VbaSemanticCategory;
+  reason?: string;
 };
 
 export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
@@ -58,6 +63,36 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
 
 /** Per-category count map present in semantic mode results. */
 export type VbaSemanticSummary = Partial<Record<VbaSemanticCategory, number>>;
+
+/**
+ * Nested companion to the flat {@link VbaSemanticSummary} produced by
+ * `verify_code` in semantic mode. Round 5 (PR5) ships this as an ADDITIVE
+ * consumer-ready summary so callers do not have to re-parse the flat
+ * `summary` map to know "how many to import" / "how many caseOnly vs
+ * whitespaceOnly?". Every `total` is the sum of its named buckets and
+ * `different` is the count of semantic-mode diffs (i.e. `diffs.length`,
+ * not including `missingInSource` / `missingInBinary`).
+ */
+export type SummaryStructured = {
+  matched: number;
+  different: number;
+  missingInSource: number;
+  missingInBinary: number;
+  actionable: {
+    sourceNewer: number;
+    binaryNewer: number;
+    bothChanged: number;
+    total: number;
+  };
+  nonActionable: {
+    caseOnly: number;
+    whitespaceOnly: number;
+    attributeOnly: number;
+    formSerializationOnly: number;
+    encodingOnly: number;
+    total: number;
+  };
+};
 
 /** Warning produced when a module fails to export (e.g. form open in design view). */
 export type ExportWarning = {
@@ -87,6 +122,33 @@ export type VbaVerifyResult = {
   recommendation?: string;
   /** Machine key for the aggregated recommendation (semantic mode). */
   recommendedAction?: VbaRecommendation;
+  /**
+   * Nested companion to {@link summary} (semantic mode only). Same vocabulary
+   * as the flat summary but shaped for direct consumption: top-level counts
+   * plus `actionable.{sourceNewer,binaryNewer,bothChanged,total}` and
+   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,total}`.
+   * `total`s are sum-of-named-buckets; `different` is the count of semantic
+   * diffs (NOT including `missingIn*`). Strict mode leaves this undefined.
+   */
+  summaryStructured?: SummaryStructured;
+  /**
+   * Pre-computed list of module names that the source has and the binary is
+   * missing or behind on, sorted lexicographically and deduped. Drop-in for
+   * `import_modules({ moduleNames: bulkImportable })`. `bothChanged` modules
+   * are excluded — those still need human review. Semantic mode only.
+   */
+  bulkImportable?: readonly string[];
+  /** Length of {@link bulkImportable}. Equal to `bulkImportable.length`. */
+  bulkImportableCount?: number;
+  /**
+   * Pre-computed list of module names that the binary has and the source is
+   * missing or behind on, sorted lexicographically and deduped. Drop-in for
+   * `export_modules({ moduleNames: bulkExportable })`. `bothChanged` modules
+   * are excluded. Semantic mode only.
+   */
+  bulkExportable?: readonly string[];
+  /** Length of {@link bulkExportable}. Equal to `bulkExportable.length`. */
+  bulkExportableCount?: number;
   /**
    * Always-present caveat. verify_code compares on-disk source against the
    * on-disk binary only; it cannot observe the user's live Access/VBE in-memory
@@ -670,11 +732,19 @@ export async function compareVbaSourceTrees(
     const cat = classification.classification;
     semanticSummary[cat] = (semanticSummary[cat] ?? 0) + 1;
 
-    // Bucket into actionable / nonActionable
+    // Bucket into actionable / nonActionable. Attach the classifier's
+    // classification + reason to the entry so consumers can read the same
+    // vocabulary from `nonActionableDifferent[*]` that they already read
+    // from `diffs[*]` (round 5 / PR5 additive ergonomics).
+    const entryWithClassification: VbaSourceComparisonEntry = {
+      ...entry,
+      classification: classification.classification,
+      reason: classification.reason,
+    };
     if (classification.actionable) {
-      actionableDifferent.push(entry);
+      actionableDifferent.push(entryWithClassification);
     } else {
-      nonActionableDifferent.push(entry);
+      nonActionableDifferent.push(entryWithClassification);
     }
 
     if (includeDiffs) {
@@ -704,6 +774,44 @@ export async function compareVbaSourceTrees(
   // Resolve real version once so top-level dysflowVersion and runtimeDiagnostics agree
   const runtimeDiagnostics = buildRuntimeDiagnostics();
 
+  // Project the flat semanticSummary + array lengths into the nested
+  // SummaryStructured shape (round 5 / PR5). Pure O(1) projection — no
+  // second pass over the diffs. `different` is the count of semantic diffs
+  // (diffs.length), not including missingIn*; missingInSource / missingInBinary
+  // are surfaced as their own top-level counts so consumers do not have to
+  // recompute them.
+  const summaryStructured: SummaryStructured | undefined =
+    mode === "semantic"
+      ? {
+          matched: matched.length,
+          different: different.length,
+          missingInSource: missingInSource.length,
+          missingInBinary: missingInBinary.length,
+          actionable: {
+            sourceNewer: semanticSummary.sourceNewer ?? 0,
+            binaryNewer: semanticSummary.binaryNewer ?? 0,
+            bothChanged: semanticSummary.bothChanged ?? 0,
+            total:
+              (semanticSummary.sourceNewer ?? 0) +
+              (semanticSummary.binaryNewer ?? 0) +
+              (semanticSummary.bothChanged ?? 0),
+          },
+          nonActionable: {
+            caseOnly: semanticSummary.caseOnly ?? 0,
+            whitespaceOnly: semanticSummary.whitespaceOnly ?? 0,
+            attributeOnly: semanticSummary.attributeOnly ?? 0,
+            formSerializationOnly: semanticSummary.formSerializationOnly ?? 0,
+            encodingOnly: semanticSummary.encodingOnly ?? 0,
+            total:
+              (semanticSummary.caseOnly ?? 0) +
+              (semanticSummary.whitespaceOnly ?? 0) +
+              (semanticSummary.attributeOnly ?? 0) +
+              (semanticSummary.formSerializationOnly ?? 0) +
+              (semanticSummary.encodingOnly ?? 0),
+          },
+        }
+      : undefined;
+
   return {
     ok: different.length === 0 && missingInSource.length === 0 && missingInBinary.length === 0,
     dryRun: true,
@@ -732,6 +840,8 @@ export async function compareVbaSourceTrees(
             missingInBinary.length,
             hasFunctionalDifferences,
           ),
+          summaryStructured,
+          ...deriveBulkLists(actionableDifferent, missingInBinary, missingInSource),
         }
       : {}),
   };
@@ -784,6 +894,56 @@ function aggregateRecommendation(
     };
   }
   return { recommendedAction: "no_action", recommendation: "No actionable differences." };
+}
+
+/**
+ * Derives the consumer-ready bulk-import / bulk-export lists (round 5 / PR5).
+ * Pure sibling of {@link aggregateRecommendation}; both consume the same
+ * accumulators produced by the main diff loop. The four arrays are
+ * computed once, here, so consumers can pass them straight to
+ * `import_modules({ moduleNames: bulkImportable })` or
+ * `export_modules({ moduleNames: bulkExportable })` without re-deriving.
+ *
+ * Semantics (matches the PR5 spec):
+ *   bulkImportable = sourceNewer moduleNames ∪ missingInBinary moduleNames
+ *   bulkExportable = binaryNewer moduleNames ∪ missingInSource moduleNames
+ *   bothChanged excluded from BOTH (those still need human review)
+ *
+ * Dedup is `Set`-based; output is sorted lexicographically for byte-stable
+ * determinism across runs. `bothChanged` is filtered out of BOTH lists
+ * by virtue of the per-entry classification check (its entry.classification
+ * is neither 'sourceNewer' nor 'binaryNewer').
+ */
+function deriveBulkLists(
+  actionableDifferent: readonly VbaSourceComparisonEntry[],
+  missingInBinary: readonly VbaSourceComparisonEntry[],
+  missingInSource: readonly VbaSourceComparisonEntry[],
+): {
+  bulkImportable: string[];
+  bulkImportableCount: number;
+  bulkExportable: string[];
+  bulkExportableCount: number;
+} {
+  const importSet = new Set<string>();
+  const exportSet = new Set<string>();
+  for (const e of actionableDifferent) {
+    if (e.classification === "sourceNewer") {
+      importSet.add(e.moduleName);
+    } else if (e.classification === "binaryNewer") {
+      exportSet.add(e.moduleName);
+    }
+    // bothChanged: silently skipped — same module appears in neither list
+  }
+  for (const e of missingInBinary) importSet.add(e.moduleName);
+  for (const e of missingInSource) exportSet.add(e.moduleName);
+  const bulkImportable = [...importSet].sort();
+  const bulkExportable = [...exportSet].sort();
+  return {
+    bulkImportable,
+    bulkImportableCount: bulkImportable.length,
+    bulkExportable,
+    bulkExportableCount: bulkExportable.length,
+  };
 }
 
 export async function collectVbaSourceFiles(
