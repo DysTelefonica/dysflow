@@ -43,6 +43,19 @@
 - Conventional commits, no AI attribution. Keep domain logic in `src/core`, I/O in adapters.
 - Re-index CodeGraph after code changes: `codegraph index C:\Proyectos\dysflow`.
 
+## Tooling / MCP (for sub-agents and any IA)
+- `.mcp.json` (committed) declares `codegraph-vba` + `dysflow` as project MCP servers so the worktree and
+  any IA get them (engram stays a global plugin — do NOT redeclare it here). **MCP server changes take
+  effect on the next Claude Code restart**; a mid-session add is not seen by already-running sub-agents.
+- The global SDD agents (`~/.claude/agents/sdd-{explore,design,apply,verify}.md`) were granted
+  `mcp__codegraph-vba__codegraph_explore` (and explore got the full engram read trio). Also restart-scoped.
+- A stale top-level `codegraph` MCP server (broken, ✘) still exists in `~/.claude.json`; harmless, can be
+  removed with `claude mcp remove codegraph -s user`.
+
+## Progress log
+- Phase 0 / #718: explore ✅ → proposal ✅ (`openspec/changes/projectid-form-source-resolution/proposal.md`).
+  Next: `sdd-design` (resolve the [PATH]-diagnostic channel constraint) + `sdd-spec` (parallel).
+
 ## Update this file
 Keep the checklists above current at the end of each work session, and note anything a fresh agent would
 otherwise re-derive.
