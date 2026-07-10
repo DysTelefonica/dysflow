@@ -79,6 +79,16 @@ export type RenameControlInput = {
   newName: string;
 };
 
+export type SetPropertyInput = {
+  controlName: string;
+  property: string;
+  value: string | number | boolean;
+};
+
+export type DeleteControlInput = {
+  controlName: string;
+};
+
 export type FormMutationResult = {
   ir: FormIR;
   source: string;
