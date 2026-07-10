@@ -841,11 +841,7 @@ export async function compareVbaSourceTrees(
             hasFunctionalDifferences,
           ),
           summaryStructured,
-          ...deriveBulkLists(
-            actionableDifferent,
-            missingInBinary,
-            missingInSource,
-          ),
+          ...deriveBulkLists(actionableDifferent, missingInBinary, missingInSource),
         }
       : {}),
   };

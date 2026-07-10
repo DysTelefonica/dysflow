@@ -1832,8 +1832,10 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       }
       // 4 formSerializationOnly (Checksum differs)
       for (let i = 0; i < 4; i += 1) {
-        srcFiles[`src/F${i}.form.txt`] = `Begin Form\n   Caption = "F${i}"\n   Checksum = ${1000 + i}\nEnd`;
-        binFiles[`bin/F${i}.form.txt`] = `Begin Form\n   Caption = "F${i}"\n   Checksum = ${9000 + i}\nEnd`;
+        srcFiles[`src/F${i}.form.txt`] =
+          `Begin Form\n   Caption = "F${i}"\n   Checksum = ${1000 + i}\nEnd`;
+        binFiles[`bin/F${i}.form.txt`] =
+          `Begin Form\n   Caption = "F${i}"\n   Checksum = ${9000 + i}\nEnd`;
       }
 
       const fs = makeSemanticFs({ ...srcFiles, ...binFiles });
@@ -1848,28 +1850,30 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       // New additive field present
       expect(result).toHaveProperty("summaryStructured");
-      const structured = (result as unknown as {
-        summaryStructured?: {
-          matched?: number;
-          different?: number;
-          missingInSource?: number;
-          missingInBinary?: number;
-          actionable?: {
-            sourceNewer?: number;
-            binaryNewer?: number;
-            bothChanged?: number;
-            total?: number;
+      const structured = (
+        result as unknown as {
+          summaryStructured?: {
+            matched?: number;
+            different?: number;
+            missingInSource?: number;
+            missingInBinary?: number;
+            actionable?: {
+              sourceNewer?: number;
+              binaryNewer?: number;
+              bothChanged?: number;
+              total?: number;
+            };
+            nonActionable?: {
+              caseOnly?: number;
+              whitespaceOnly?: number;
+              attributeOnly?: number;
+              formSerializationOnly?: number;
+              encodingOnly?: number;
+              total?: number;
+            };
           };
-          nonActionable?: {
-            caseOnly?: number;
-            whitespaceOnly?: number;
-            attributeOnly?: number;
-            formSerializationOnly?: number;
-            encodingOnly?: number;
-            total?: number;
-          };
-        };
-      }).summaryStructured;
+        }
+      ).summaryStructured;
 
       expect(structured).toBeDefined();
       expect(structured?.actionable?.sourceNewer).toBe(3);
@@ -1883,7 +1887,7 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
     });
 
     it("summaryStructured on identical trees is zeroed except matched (edge)", async () => {
-      const shared = "Sub Hello()\n  MsgBox \"Hi\"\nEnd Sub";
+      const shared = 'Sub Hello()\n  MsgBox "Hi"\nEnd Sub';
       const fs = makeSemanticFs({
         "src/Same1.bas": shared,
         "bin/Same1.bas": shared,
@@ -1893,14 +1897,16 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const structured = (result as unknown as {
-        summaryStructured?: {
-          matched?: number;
-          different?: number;
-          actionable?: { total?: number };
-          nonActionable?: { total?: number };
-        };
-      }).summaryStructured;
+      const structured = (
+        result as unknown as {
+          summaryStructured?: {
+            matched?: number;
+            different?: number;
+            actionable?: { total?: number };
+            nonActionable?: { total?: number };
+          };
+        }
+      ).summaryStructured;
 
       expect(structured).toBeDefined();
       expect(structured?.matched).toBe(2);
@@ -1939,10 +1945,8 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
     it("nonActionableDifferent classification on a case-only diff equals diffs[] entry (edge + cross-check invariant)", async () => {
       const fs = makeSemanticFs({
-        "src/Cased.cls":
-          "Option Explicit\nPublic Sub Run()\n  Me.NCProyecto = 1\nEnd Sub",
-        "bin/Cased.cls":
-          "Option Explicit\nPublic Sub Run()\n  Me.ncProyecto = 1\nEnd Sub",
+        "src/Cased.cls": "Option Explicit\nPublic Sub Run()\n  Me.NCProyecto = 1\nEnd Sub",
+        "bin/Cased.cls": "Option Explicit\nPublic Sub Run()\n  Me.ncProyecto = 1\nEnd Sub",
       });
 
       const result = await compareVbaSourceTrees("src", "bin", [], true, fs);
@@ -1985,12 +1989,12 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       const fs = makeSemanticFs({ ...srcFiles, ...binFiles });
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const bulk = (result as unknown as {
+      const bulk = result as unknown as {
         bulkImportable?: string[];
         bulkImportableCount?: number;
         bulkExportable?: string[];
         bulkExportableCount?: number;
-      });
+      };
 
       expect(bulk.bulkImportable).toBeDefined();
       // Sorted: BinNewer1 (no — that's binaryNewer), OnlySrc, S1, S3 → alphabetical would be
@@ -2016,10 +2020,10 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const bulk = (result as unknown as {
+      const bulk = result as unknown as {
         bulkImportable?: string[];
         bulkExportable?: string[];
-      });
+      };
 
       expect(bulk.bulkImportable).toContain("SN1");
       expect(bulk.bulkImportable).not.toContain("BC1");
@@ -2036,12 +2040,12 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const bulk = (result as unknown as {
+      const bulk = result as unknown as {
         bulkImportable?: string[];
         bulkImportableCount?: number;
         bulkExportable?: string[];
         bulkExportableCount?: number;
-      });
+      };
 
       expect(bulk.bulkImportable).toEqual([]);
       expect(bulk.bulkImportableCount).toBe(0);
@@ -2072,19 +2076,26 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const structured = (result as unknown as {
-        summaryStructured?: {
-          actionable?: { sourceNewer?: number; binaryNewer?: number; bothChanged?: number; total?: number };
-          nonActionable?: {
-            caseOnly?: number;
-            whitespaceOnly?: number;
-            attributeOnly?: number;
-            formSerializationOnly?: number;
-            encodingOnly?: number;
-            total?: number;
+      const structured = (
+        result as unknown as {
+          summaryStructured?: {
+            actionable?: {
+              sourceNewer?: number;
+              binaryNewer?: number;
+              bothChanged?: number;
+              total?: number;
+            };
+            nonActionable?: {
+              caseOnly?: number;
+              whitespaceOnly?: number;
+              attributeOnly?: number;
+              formSerializationOnly?: number;
+              encodingOnly?: number;
+              total?: number;
+            };
           };
-        };
-      }).summaryStructured;
+        }
+      ).summaryStructured;
 
       expect(structured).toBeDefined();
       // Invariant 1: actionable.total === sourceNewer + binaryNewer + bothChanged
@@ -2113,9 +2124,11 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
 
       const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
 
-      const bulk = (result as unknown as {
-        bulkImportable?: string[];
-      }).bulkImportable;
+      const bulk = (
+        result as unknown as {
+          bulkImportable?: string[];
+        }
+      ).bulkImportable;
 
       expect(result.recommendedAction).toBe("manual_merge");
       expect(bulk).toBeDefined();
