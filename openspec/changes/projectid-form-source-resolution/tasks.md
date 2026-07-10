@@ -27,15 +27,15 @@ Chain strategy: feature-branch-chain
 
 ## Phase 1: Core Resolver (Foundation) — PR 1
 
-- [ ] 1.1 RED: unit test — `projectId`+`formName` resolves correct absolute path + candidate list (spec: projectId-driven resolution).
-- [ ] 1.2 RED: unit test — Case B idempotent join, no double-`src` nesting, `path.normalize` pre-step (`./src`, `src//forms`, `\`).
-- [ ] 1.3 RED: unit test — non-split basename-collision guard: `destinationRoot === projectRoot` never strips leading segment.
-- [ ] 1.4 RED: unit test — raw `destinationRoot`/`sourceRoot` caller (no `projectId`/`formName`) matches pre-existing join, no diagnostic.
-- [ ] 1.5 RED: unit test — literal `sourcePath` passthrough scenario reserved for Group A tools (documents expected resolver non-involvement).
-- [ ] 1.6 RED: unit test — failure diagnostic shape (`projectId`, `attemptedRelative`, `sourceRootRelative`, `remediation`) contains no absolute path substring.
-- [ ] 1.7 RED: unit test — resolver purity: identical inputs (mock config, no fs) produce identical output, zero I/O calls.
-- [ ] 1.8 GREEN: implement `src/core/config/form-source-resolver.ts` — `resolveFormSourceCandidates`, `buildResolutionDiagnostic`, `FormSourceInput`/`FormSourceCandidate`/`FormSourceDiagnostic` types.
-- [ ] 1.9 REFACTOR: confirm all Phase 1 tests green under `pnpm test`; no leaked fs/network calls.
+- [x] 1.1 RED: unit test — `projectId`+`formName` resolves correct absolute path + candidate list (spec: projectId-driven resolution).
+- [x] 1.2 RED: unit test — Case B idempotent join, no double-`src` nesting, `path.normalize` pre-step (`./src`, `src//forms`, `\`).
+- [x] 1.3 RED: unit test — non-split basename-collision guard: `destinationRoot === projectRoot` never strips leading segment.
+- [x] 1.4 RED: unit test — raw `destinationRoot`/`sourceRoot` caller (no `projectId`/`formName`) matches pre-existing join, no diagnostic.
+- [x] 1.5 RED: unit test — literal `sourcePath` passthrough scenario reserved for Group A tools (documents expected resolver non-involvement).
+- [x] 1.6 RED: unit test — failure diagnostic shape (`projectId`, `attemptedRelative`, `sourceRootRelative`, `remediation`) contains no absolute path substring.
+- [x] 1.7 RED: unit test — resolver purity: identical inputs (mock config, no fs) produce identical output, zero I/O calls.
+- [x] 1.8 GREEN: implement `src/core/config/form-source-resolver.ts` — `resolveFormSourceCandidates`, `buildResolutionDiagnostic`, `FormSourceInput`/`FormSourceCandidate`/`FormSourceDiagnostic` types.
+- [x] 1.9 REFACTOR: confirm all Phase 1 tests green under `pnpm test`; no leaked fs/network calls.
 
 ## Phase 2: Group B Wiring — PR 2 (base: PR 1)
 
