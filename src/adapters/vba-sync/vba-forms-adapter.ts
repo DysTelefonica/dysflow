@@ -11,6 +11,7 @@ import { executeFormUiBuilderTool, type FormUiBuilderToolName } from "./vba-form
 import { cloneFormFromTemplate } from "./vba-forms-clone-tools.js";
 import { mutateForm } from "./vba-forms-mutation-tools.js";
 import {
+  analyzeFormLayoutTool,
   compareForm,
   inspectForm,
   lintFormCode,
@@ -98,7 +99,11 @@ export class VbaFormsAdapter {
       toolName === "apply_form_design_plan" ||
       toolName === "copy_form_ui_pattern" ||
       toolName === "verify_form_ui" ||
-      toolName === "render_form_preview"
+      toolName === "render_form_preview" ||
+      // Issue #815 — pure read-class geometry lint. Same shape as
+      // `render_form_preview`: parses a .form.txt and returns findings
+      // without opening Access.
+      toolName === "analyze_form_layout"
     );
   }
 
@@ -169,6 +174,11 @@ export class VbaFormsAdapter {
       // fileSystem port + orchestrator wiring so the tool count stays
       // focused on the visual rendering seam and not on path policy.
       return renderFormPreviewTool(this.fileSystem, params, this.orchestrator);
+    }
+    if (toolName === "analyze_form_layout") {
+      // Issue #815 — geometry-lint sibling of `render_form_preview`.
+      // Same path-resolution contract; same read-class seam.
+      return analyzeFormLayoutTool(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);

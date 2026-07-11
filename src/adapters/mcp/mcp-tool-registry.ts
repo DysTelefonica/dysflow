@@ -44,6 +44,11 @@ export const VBA_SYNC_TOOL_NAMES = [
   // opens Access or touches the filesystem). Registered here so the
   // route table can reference it.
   "render_form_preview",
+  // Phase 2 — Perception (#815). Geometry lint over a single .form.txt:
+  // overlap, alignment, off-section, tab-order vs visual order. Pure
+  // read-class; never opens Access. Registered here so the route
+  // table can reference it.
+  "analyze_form_layout",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

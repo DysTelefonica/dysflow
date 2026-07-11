@@ -724,6 +724,50 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #815 — `analyze_form_layout` is the geometry-lint sibling of
+  // `render_form_preview`. Pure read-class — it parses a single .form.txt
+  // through FormIR, builds a behavior map, and runs the pure
+  // `lintFormLayout` service against it. Never opens Access; never writes
+  // to disk. Severity for every finding is `warning` (informational;
+  // non-blocking) — the tool reports layout smells, it does not gate.
+  analyze_form_layout: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      alignmentThresholdTwips: {
+        type: "number",
+        minimum: 0,
+        maximum: 1000,
+        description:
+          "Maximum |topA − topB| (twips) for two controls to count as sharing a visual row. Defaults to 50. Smaller values tighten the alignment net.",
+      },
+      sectionBounds: {
+        type: "object",
+        additionalProperties: {
+          type: "object",
+          properties: {
+            left: { type: "number" },
+            top: { type: "number" },
+            width: { type: "number" },
+            height: { type: "number" },
+          },
+          required: ["width", "height"],
+        },
+        description:
+          "Optional section bounds by section name (e.g. { Detail: { width: 20000, height: 10000 }, FormHeader: { width: 5000, height: 1000 } }). When supplied together with `controlSection`, the off-section check runs.",
+      },
+      controlSection: {
+        type: "object",
+        additionalProperties: { type: "string" },
+        description:
+          "Optional control-name → section-name map (e.g. { txtHeader: 'FormHeader', txtDetail: 'Detail' }). Required alongside `sectionBounds` for the off-section check.",
+      },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
   // Issue #813 phase 6 — atomic exposure of the two net-new standalone
   // tools. Both share the same sourcePath/path + dryRun/apply + outputMode
   // surface as form_add_control / form_move_control / form_rename_control.

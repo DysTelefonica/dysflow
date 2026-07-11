@@ -299,6 +299,18 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #815 — `analyze_form_layout` is the geometry-lint sibling of
+  // `render_form_preview`. The lint runs purely over an in-memory
+  // `FormUiBehaviorMap` derived from the .form.txt (no Access, no COM, no
+  // filesystem mutation). Both mutates flags stay false and risk is
+  // read-only, mirroring `render_form_preview` exactly. Every emitted
+  // finding carries severity `warning` (informational; never gating).
+  analyze_form_layout: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,
