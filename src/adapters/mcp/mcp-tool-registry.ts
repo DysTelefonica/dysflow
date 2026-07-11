@@ -39,6 +39,14 @@ export const VBA_SYNC_TOOL_NAMES = [
   // type picks them up and the route table can reference them.
   "form_set_property",
   "form_delete_control",
+  // Phase 3 (#816) — batch geometry ergonomics. Two net-new write-class
+  // tools (form_align_controls + form_distribute_controls) sharing the
+  // same applyGuardedFormWrite seam as the Phase 6 form mutation family.
+  // Registered here BEFORE MCP_TOOL_ROUTES so the route table can
+  // reference them and the cascade tool count steps from 40 to 42 (vba
+  // sync slice) — and 75 to 77 advertised tools.
+  "form_align_controls",
+  "form_distribute_controls",
   // Phase 2 — Perception (#814). Geometric SVG/ASCII render of a
   // .form.txt. Read-only (the renderer is pure and offline; it never
   // opens Access or touches the filesystem). Registered here so the
@@ -46,8 +54,8 @@ export const VBA_SYNC_TOOL_NAMES = [
   "render_form_preview",
   // Phase 2 — Perception (#815). Geometry lint over a single .form.txt:
   // overlap, alignment, off-section, tab-order vs visual order. Pure
-  // read-class; never opens Access. Registered here so the route
-  // table can reference it.
+  // read-class; never opens Access. Registered here so the route table
+  // can reference it.
   "analyze_form_layout",
   "vba_orphan_audit",
   "vba_inline_execution",

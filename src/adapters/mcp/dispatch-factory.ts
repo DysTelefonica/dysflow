@@ -148,7 +148,15 @@ export function createDispatchTool(
     // vba_inline_execution, delete_module, fix_encoding).
     name === "apply_form_design_plan" ||
     name === "form_set_property" ||
-    name === "form_delete_control";
+    name === "form_delete_control" ||
+    // Issue #816 phase 3 — batch align/distribute. Same seam as
+    // form_set_property / form_delete_control. Without this entry a
+    // legitimate dryRun:true preview collapses to isDryRun===false (the
+    // hardcoded branch reserved for raw binary writers) and is refused
+    // by MCP_WRITES_DISABLED — a distinct regression from the write-gate
+    // bypass below, equally serious.
+    name === "form_align_controls" ||
+    name === "form_distribute_controls";
 
   const isWriteGated =
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
@@ -234,6 +242,8 @@ export function createDispatchTool(
               // (#813 phase 6) share the same seam: apply:true is a binary
               // mutation gated by MCP_WRITES_DISABLED; dryRun:true is a
               // preview that returns the plan without writing.
+              // form_align_controls + form_distribute_controls (#816 phase 3)
+              // join the same seam with the same apply/dryRun semantics.
               name === "catalog_add_control" ||
               name === "form_add_control" ||
               name === "form_move_control" ||
@@ -242,7 +252,9 @@ export function createDispatchTool(
               name === "create_form_from_template" ||
               name === "apply_form_design_plan" ||
               name === "form_set_property" ||
-              name === "form_delete_control"
+              name === "form_delete_control" ||
+              name === "form_align_controls" ||
+              name === "form_distribute_controls"
               ? resolveIsDryRun(normalizedInput)
               : name === "generate_form" && hasOwn(normalizedInput, "dryRun")
                 ? resolveIsDryRun(normalizedInput)

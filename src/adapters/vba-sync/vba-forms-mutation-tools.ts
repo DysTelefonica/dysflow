@@ -14,6 +14,7 @@ import {
   renameControl,
   setProperty,
 } from "../../core/services/form-ir-service.js";
+import { alignControls, distributeControls } from "../../core/services/form-ui-align-distribute.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
@@ -24,12 +25,21 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 // tools (form_set_property, form_delete_control) sharing this seam. They
 // route through the same single-write + single-guarded-import +
 // single-rollback block via `applyGuardedFormWrite`.
+//
+// Issue #816 phase 3 — extends the same seam with `form_align_controls`
+// and `form_distribute_controls`. These are batch geometry verbs
+// (composites over `moveControl`) and reuse the same single-write +
+// single-guarded-import + single-rollback path. No new write seam — the
+// route table, the three-list lockstep, and the tool count cascade
+// (+2: 75 → 77) all extend in lockstep.
 export type FormMutationToolName =
   | "form_add_control"
   | "form_move_control"
   | "form_rename_control"
   | "form_set_property"
-  | "form_delete_control";
+  | "form_delete_control"
+  | "form_align_controls"
+  | "form_distribute_controls";
 
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
@@ -107,10 +117,14 @@ export async function mutateForm(args: {
               ? deleteControl(ir, {
                   controlName: stringValue(params.controlName) ?? "",
                 })
-              : renameControl(ir, {
-                  controlName: stringValue(params.controlName) ?? "",
-                  newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
-                });
+              : toolName === "form_align_controls"
+                ? runAlignDistribute("align", ir, params)
+                : toolName === "form_distribute_controls"
+                  ? runAlignDistribute("distribute", ir, params)
+                  : renameControl(ir, {
+                      controlName: stringValue(params.controlName) ?? "",
+                      newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
+                    });
 
     const apply = params.apply === true || params.dryRun === false;
     if (!apply) {
@@ -170,6 +184,57 @@ export async function mutateForm(args: {
       createDysflowError("FORM_MUTATION_INVALID", err instanceof Error ? err.message : String(err)),
     );
   }
+}
+
+/**
+ * Dispatch a batch align/distribute primitive. Reads `controlNames` from
+ * the params, calls the corresponding pure service, and re-projects the
+ * returned `{ ir, source, advisories }` into the `FormMutationResult`
+ * shape that the shared mutation seam expects.
+ */
+function runAlignDistribute(
+  verb: "align" | "distribute",
+  ir: FormIR,
+  params: Record<string, unknown>,
+): ReturnType<typeof addControl> {
+  const controlNames = readControlNames(params.controlNames);
+  if (verb === "align") {
+    const edge = stringValue(params.edge) ?? "";
+    const result = alignControls(ir, controlNames, edge as never);
+    return {
+      ir: result.ir,
+      source: result.source,
+      changedControlName: controlNames.join(","),
+      preservedKeys: [],
+    };
+  }
+  const axis = stringValue(params.axis) ?? "";
+  const spacing = numberValue(params.spacing);
+  const result = distributeControls(ir, controlNames, axis as never, spacing);
+  return {
+    ir: result.ir,
+    source: result.source,
+    changedControlName: controlNames.join(","),
+    preservedKeys: [],
+  };
+}
+
+/**
+ * Read the `controlNames` parameter — accepts either a string[] or a
+ * comma-separated string. Returns `[]` for null/undefined so the service
+ * primitive can produce the typed `FORM_MUTATION_INVALID` error.
+ */
+function readControlNames(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+  return [];
 }
 
 function numberValue(value: unknown): number | undefined {

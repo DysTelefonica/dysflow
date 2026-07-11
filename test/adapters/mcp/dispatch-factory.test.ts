@@ -132,6 +132,8 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         // mutation tools that still write to the .accdb.
         // Issue #813 phase 6 — apply_form_design_plan + form_set_property +
         // form_delete_control join the binary-mutating family.
+        // Issue #816 phase 3 — form_align_controls + form_distribute_controls
+        // join the same family (same applyGuardedFormWrite seam).
         "delete_module",
         "fix_encoding",
         "import_all",
@@ -139,11 +141,13 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         "apply_form_design_plan",
         "create_form_from_template",
         "form_add_control",
+        "form_align_controls",
+        "form_delete_control",
+        "form_deserialize",
+        "form_distribute_controls",
         "form_move_control",
         "form_rename_control",
         "form_set_property",
-        "form_delete_control",
-        "form_deserialize",
         "vba_inline_execution",
       ].sort(),
     );

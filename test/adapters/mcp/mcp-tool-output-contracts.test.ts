@@ -91,6 +91,14 @@ const OUTPUT_CONTRACT_GROUPS = {
     // over a single .form.txt. Sibling of render_form_preview; same
     // read-only dispatch surface, same write-gate-never-fires invariant.
     "analyze_form_layout",
+    // Issue #816 (Phase 3 Ergonomic actions) — batch geometry verbs.
+    // form_align_controls + form_distribute_controls share the same
+    // applyGuardedFormWrite seam as the slice-4 form mutation family
+    // and apply_form_design_plan above; they are write-class tools
+    // (mutatesBinary + mutatesFilesystem), so the write-gate fires
+    // exactly as it does for form_set_property / form_delete_control.
+    "form_align_controls",
+    "form_distribute_controls",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

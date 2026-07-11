@@ -150,11 +150,11 @@ describe("tool registry — three-tool presence (#813 phase 6)", () => {
     );
   });
 
-  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814), then 40/64 (#815)", () => {
-    // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814, then 1 more at #815.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(40);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(64);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(64);
+  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814), then 40/64 (#815), then 42/66 (#816)", () => {
+    // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814, then 1 more at #815, then 2 more at #816.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(42);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(66);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(66);
   });
 });
 
@@ -374,10 +374,35 @@ const WRITE_GATE_INPUTS: Record<string, Record<string, unknown>> = {
     controlName: "cmdObsolete",
     apply: true,
   },
+  // Issue #816 phase 3 — form_align_controls + form_distribute_controls
+  // share the same applyGuardedFormWrite seam; both must trigger the
+  // write-gate on apply:true when writes are disabled.
+  form_align_controls: {
+    sourcePath: "C:/repo/forms/Form_X.form.txt",
+    controlNames: ["cmdSave", "cmdExit"],
+    edge: "left",
+    apply: true,
+  },
+  form_distribute_controls: {
+    sourcePath: "C:/repo/forms/Form_X.form.txt",
+    controlNames: ["cmdSave", "cmdExit"],
+    axis: "horizontal",
+    apply: true,
+  },
 };
 
-describe("MCP_WRITES_DISABLED — three-tool gate enforcement (#813 phase 6)", () => {
-  for (const name of ["apply_form_design_plan", "form_set_property", "form_delete_control"]) {
+describe("MCP_WRITES_DISABLED — five-tool gate enforcement (#813 phase 6 + #816 phase 3)", () => {
+  // #813 phase 6 — apply_form_design_plan + form_set_property + form_delete_control.
+  // #816 phase 3 — form_align_controls + form_distribute_controls join the same
+  // applyGuardedFormWrite seam; same write-gate / same dryRun-by-default
+  // semantics.
+  for (const name of [
+    "apply_form_design_plan",
+    "form_set_property",
+    "form_delete_control",
+    "form_align_controls",
+    "form_distribute_controls",
+  ]) {
     it(`${name} refuses with apply:true when writes are disabled (#813 acceptance #5)`, async () => {
       const services = makeServices();
       const { tool, vbaSyncToolService } = toolByName(services, name, false);
@@ -469,17 +494,19 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     );
   });
 
-  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75)", () => {
+  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77)", () => {
     // Issue #807 (Feature 1) added `list_vba_modules`: visible 70 -> 71.
     // Phase 6 adds 2 more (form_set_property + form_delete_control):
     // 71 -> 73.
     // #814 (Phase 2 Perception) adds render_form_preview: 73 -> 74.
     // #815 (Phase 2 Perception) adds analyze_form_layout: 74 -> 75.
+    // #816 (Phase 3 Ergonomic actions) adds form_align_controls +
+    // form_distribute_controls: 75 -> 77.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after #815").toBe(75);
+    expect(visible, "visible tool count after #816").toBe(77);
   });
 });
