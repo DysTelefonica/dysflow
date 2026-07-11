@@ -150,11 +150,11 @@ describe("tool registry — three-tool presence (#813 phase 6)", () => {
     );
   });
 
-  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade)", () => {
-    // VBA_SYNC_TOOL_NAMES gains 2; query is unchanged.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(38);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(62);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(62);
+  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814)", () => {
+    // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(39);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(63);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(63);
   });
 });
 
@@ -469,15 +469,16 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     );
   });
 
-  it("visible tool count step (cascade 71 -> 73)", () => {
+  it("visible tool count step (cascade 71 -> 73 -> 74)", () => {
     // Issue #807 (Feature 1) added `list_vba_modules`: visible 70 -> 71.
     // Phase 6 adds 2 more (form_set_property + form_delete_control):
     // 71 -> 73.
+    // #814 (Phase 2 Perception) adds render_form_preview: 73 -> 74.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after Phase 6").toBe(73);
+    expect(visible, "visible tool count after #814").toBe(74);
   });
 });

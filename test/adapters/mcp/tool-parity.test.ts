@@ -42,7 +42,7 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 62-tool inventory", () => {
+  it("declares the complete 63-tool inventory", () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
     // feat-759-no-compile (v1.19.0) — compile_vba was removed (was 54
@@ -52,10 +52,12 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #813 phase 6 added form_set_property + form_delete_control
     // (atomic exposure of the apply_form_design_plan family):
     // vba-sync 36 -> 38, query unchanged at 24, total 60 -> 62.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(38);
+    // #814 added render_form_preview (Phase 2 Perception, read-only):
+    // vba-sync 38 -> 39, query unchanged at 24, total 62 -> 63.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(39);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(62);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(62);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(63);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(63);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -70,6 +72,8 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("create_form_from_template");
     // #807 (Feature 1)
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("list_vba_modules");
+    // #814 (Phase 2 Perception)
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("render_form_preview");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
@@ -77,8 +81,9 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #807 (Feature 1) added list_vba_modules: parity-registry 59 -> 60.
     // #813 phase 6 added form_set_property + form_delete_control:
     // parity-registry 60 -> 62.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(62);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(62);
+    // #814 added render_form_preview: parity-registry 62 -> 63.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(63);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(63);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

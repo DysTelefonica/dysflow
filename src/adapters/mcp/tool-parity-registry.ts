@@ -61,6 +61,8 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   // Phase 6 (#813) — atomic exposure of the form mutation family.
   "form_set_property",
   "form_delete_control",
+  // Phase 2 — Perception (#814). Read-only geometric renderer.
+  "render_form_preview",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -204,6 +206,12 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Delete one named control from a version-controlled .form.txt through the FormIR deleteControl primitive. Fail-closed when the control (or any descendant) has an [Event Procedure] binding (FORM_CONTROL_HAS_EVENT_BINDING — handlers live in the sibling .cls) or when it has named child controls (FORM_CONTROL_HAS_CHILDREN — delete children first). This primitive protects ONLY property-sheet-declared event bindings visible to FormIR — it does not detect code-only references such as WithEvents in the .cls or Me!ControlName. Defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Destructive — Write-gated.",
   verify_form_ui:
     "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
+  // Issue #814 — pure, deterministic, read-only. The renderer is the
+  // single source of truth both #817 (diff_form_preview) and the agent
+  // composition layer rely on. The byte-stable contract is documented in
+  // the form-ui-render.ts module header.
+  render_form_preview:
+    "Compute a geometric layout from a .form.txt and emit a deterministic, inspectable artifact — SVG (primary, browser-friendly) and ASCII (terminal/agent fallback). Pure and offline: the renderer walks the FormIR tree, resolves each control's twip rectangle, and emits a labeled, role-colored layout. The output shape `{ svg, ascii, viewport, warnings }` is the single primitive #817 (`diff_form_preview`) composes pairs of frames from. Read-only — no Access, no COM, no filesystem mutation. The agent can pipe the SVG payload to a browser, render the ASCII grid inline in a terminal, or open the .form.txt in Access for ground truth.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

@@ -16,6 +16,10 @@ import {
   parseFormTxt,
 } from "../../core/services/form-ir-service.js";
 import type { LintRuleId } from "../../core/services/form-lint-types.js";
+import {
+  type RenderFormPreviewOptions,
+  renderFormPreview,
+} from "../../core/services/form-ui-render.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import { VbaFormsLintAdapter } from "./vba-forms-lint-adapter.js";
@@ -126,6 +130,165 @@ export async function inspectForm(
     controls,
     events,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Issue #814 — `render_form_preview` (Phase 2 — Perception)
+//
+// Pure read-class adapter: reads the .form.txt, parses to FormIR, and
+// delegates to the pure `renderFormPreview` in `core/services/form-ui-render`.
+// The renderer is the SINGLE source of truth for both #814 (this tool) and
+// #817 (`diff_form_preview`, sibling issue) — the output shape is locked so
+// the diff composer can rely on it.
+//
+// The adapter mirrors `inspect_form`'s path-resolution contract verbatim:
+//   - literal `sourcePath` / `path` (or `projectId`+`formName`) is supported,
+//   - missing sourcePath returns `FORM_SPEC_MISSING`,
+//   - missing file returns `FORM_NOT_FOUND`,
+//   - parse failure returns `FORM_PARSE_ERROR`.
+// ---------------------------------------------------------------------------
+
+export async function renderFormPreviewTool(
+  fileSystem: FormFileSystemPort,
+  params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
+): Promise<OperationResult<unknown>> {
+  let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  const projectId = stringValue(params.projectId);
+  const formName = stringValue(params.formName) ?? stringValue(params.name);
+
+  if (projectId && formName) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({ projectId, formName });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: targetData.destinationRoot,
+      projectRoot: targetData.projectRoot,
+      formName,
+    });
+    let resolvedPath: string | undefined;
+    for (const candidate of candidates) {
+      try {
+        await fileSystem.readFile(candidate.absolutePath);
+        resolvedPath = candidate.absolutePath;
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (resolvedPath === undefined) {
+      const diagnostic = buildResolutionDiagnostic(
+        {
+          sourceRoot: targetData.destinationRoot,
+          projectRoot: targetData.projectRoot,
+          formName,
+        },
+        candidates,
+        projectId,
+      );
+      return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+    }
+    sourcePath = resolvedPath;
+  }
+
+  if (!sourcePath) {
+    return failureResult(
+      createDysflowError(
+        "FORM_SPEC_MISSING",
+        "render_form_preview requires sourcePath (path to the .form.txt file).",
+      ),
+    );
+  }
+
+  // Read from disk — adapter owns the I/O, core is pure.
+  let text: string;
+  try {
+    text = await fileSystem.readFile(sourcePath);
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_NOT_FOUND",
+        `Cannot read form file at "${sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  // Derive the form name from the filename (mirror inspect_form derivation).
+  const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
+  const name = basename
+    .replace(/^Form_/, "")
+    .replace(/^Report_/, "")
+    .replace(/\.form\.txt$/i, "")
+    .replace(/\.report\.txt$/i, "");
+
+  // Parse to FormIR (pure).
+  let ir: FormIR;
+  try {
+    ir = parseFormTxt(text, { name });
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_PARSE_ERROR",
+        `Failed to parse "${sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  // Honor an optional viewportScale override (default 0.05). The renderer
+  // is pure; no I/O is required once the IR is in hand.
+  const options: RenderFormPreviewOptions = {};
+  const viewportScale = readNumber(params.viewportScale);
+  if (viewportScale !== undefined) options.viewportScale = viewportScale;
+  if (params.ascii !== undefined) {
+    const ascii = params.ascii;
+    if (typeof ascii === "object" && ascii !== null && !Array.isArray(ascii)) {
+      const a = ascii as Record<string, unknown>;
+      const cellWidth = readNumber(a.cellWidth);
+      const cellHeight = readNumber(a.cellHeight);
+      if (cellWidth !== undefined && cellHeight !== undefined) {
+        options.ascii = { cellWidth, cellHeight };
+      }
+    }
+  }
+
+  const preview = renderFormPreview(ir, options);
+
+  // `output` selects which frames to surface. The structured envelope
+  // (formName + viewport + warnings) is always returned so #817 can reuse
+  // it without re-rendering.
+  const outputMode = stringValue(params.output) ?? "svg";
+  const data: Record<string, unknown> = {
+    formName: ir.name,
+    viewport: preview.viewport,
+    warnings: preview.warnings,
+  };
+  if (outputMode === "svg") {
+    data.svg = preview.svg;
+  } else if (outputMode === "ascii") {
+    data.ascii = preview.ascii;
+  } else {
+    data.svg = preview.svg;
+    data.ascii = preview.ascii;
+  }
+
+  return successResult(data);
+}
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 export async function compareForm(

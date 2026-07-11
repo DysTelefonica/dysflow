@@ -39,6 +39,11 @@ export const VBA_SYNC_TOOL_NAMES = [
   // type picks them up and the route table can reference them.
   "form_set_property",
   "form_delete_control",
+  // Phase 2 — Perception (#814). Geometric SVG/ASCII render of a
+  // .form.txt. Read-only (the renderer is pure and offline; it never
+  // opens Access or touches the filesystem). Registered here so the
+  // route table can reference it.
+  "render_form_preview",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;
