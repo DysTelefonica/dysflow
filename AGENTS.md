@@ -229,8 +229,10 @@ Golden path:
 1. `analyze_form_ui({ sourcePath })` reads `.form.txt` through FormIR and returns semantic controls,
    roles, bindings, and events.
 2. `map_form_behavior({ sourcePath, codegraphEvidence })` merges analysis with caller-supplied
-   CodeGraph-VBA evidence. First iteration boundary: callers supply evidence payloads; Dysflow does
-   not invoke another MCP server internally.
+   CodeGraph-VBA evidence. **Issue #830 opt-in**: pass `autoFetchCodeGraph: true` instead to relax
+   the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba). The adapter invokes codegraph-vba
+   internally and merges the result with any caller-supplied evidence; on any failure it falls
+   back to `.form.txt`-declared events alone + a warning, never throws.
 3. `generate_form_design_plan({ behaviorMap, plan })` creates explicit operations tied to the
    behavior map.
 4. `apply_form_design_plan({ plan, dryRun: true })` previews. Use `apply: true` only for intentional

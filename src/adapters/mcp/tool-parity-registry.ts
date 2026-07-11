@@ -183,8 +183,15 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Clone a source .form.txt into a new target form by applying a {{Token}} token map (e.g. {{FormName}} -> Form_FormNuevaAuditoria). The adapter resolves sourceForm/targetForm bench-cache first, projectRoot second, and appends the .form.txt extension automatically. Default dry-run returns the post-replacement preview plus the applied/missing token summary without writing or importing; apply:true writes the target and routes through the import_modules LoadFromText gate, restoring the original target best-effort when the gate rejects. Token replacement walks scalar FormIR strings and non-preserved blob lines; PRESERVED_METADATA_KEYS (Checksum / PrtDevMode* / Format) are skipped so PrtDevMode round-trips unchanged. Use overwrite:true to replace an existing target. missingTokenPolicy:'warn-pass-through' (default) leaves missing tokens in place with a warning; strictMissingTokens:true (alias of missingTokenPolicy:'strict') fails with FORM_MUTATION_INVALID. Write-gated.",
   analyze_form_ui:
     "Analyze a version-controlled .form.txt through FormIR and return semantic controls, roles, form events, bindings, and warnings. Read-only and offline; screenshots are not a source of truth.",
+  // Issue #830 — `autoFetchCodeGraph` opt-in flag relaxes the no-MCP-to-MCP
+  // boundary for this tool only (dysflow → codegraph-vba, one-way). When
+  // the caller passes `autoFetchCodeGraph: true` AND `codegraphEvidence` is
+  // absent, the adapter invokes codegraph-vba internally and merges the
+  // result. Graceful fallback on any failure (no `.codegraph/` index,
+  // CLI missing, parse error): the `.form.txt`-declared events are still
+  // surfaced, and a warning is appended.
   map_form_behavior:
-    "Build a behavior map for a form by merging FormIR semantic analysis with caller-supplied CodeGraph-VBA evidence payloads. Read-only; first iteration does not invoke another MCP server internally.",
+    "Build a behavior map for a form by merging FormIR semantic analysis with caller-supplied CodeGraph-VBA evidence payloads. Read-only. Pass autoFetchCodeGraph:true to relax the no-MCP-to-MCP boundary and have dysflow invoke codegraph-vba internally (one-way: dysflow → codegraph-vba) and merge the result with any caller-supplied evidence. Graceful fallback: if the internal lookup fails (no .codegraph/ index, codegraph-vba CLI missing, parse error), the .form.txt-declared events are surfaced alone and a warning is appended; never throws. Default (autoFetchCodeGraph unset/false) preserves the original caller-supplied evidence contract exactly.",
   generate_form_design_plan:
     "Generate an explicit AI form UI design plan from a behavior map and requested operations. Read-only; operations outside the mapped contract are rejected with warnings.",
   apply_form_design_plan:

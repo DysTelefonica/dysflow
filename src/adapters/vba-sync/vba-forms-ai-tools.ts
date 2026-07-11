@@ -50,7 +50,7 @@ export async function executeFormUiBuilderTool(args: {
 }): Promise<OperationResult<unknown>> {
   const { fileSystem, orchestrator, toolName, params } = args;
   if (toolName === "analyze_form_ui") return analyzeFromFile(fileSystem, params);
-  if (toolName === "map_form_behavior") return mapFromFile(fileSystem, params);
+  if (toolName === "map_form_behavior") return mapFromFile(fileSystem, params, orchestrator);
   if (toolName === "generate_form_design_plan") return generatePlan(params);
   if (toolName === "apply_form_design_plan") return applyPlan({ orchestrator, fileSystem, params });
   if (toolName === "copy_form_ui_pattern") return copyPattern(params);
@@ -87,15 +87,81 @@ async function analyzeFromFile(
 async function mapFromFile(
   fileSystem: FormFileSystemPort,
   params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
 ): Promise<OperationResult<unknown>> {
   const analysis = await analyzeFromFile(fileSystem, params);
   if (!analysis.ok) return analysis;
-  return successResult(
-    buildFormUiBehaviorMap(
-      analysis.data as ReturnType<typeof analyzeFormUi>,
-      readEvidence(params.codegraphEvidence),
-    ),
-  );
+  const analysisData = analysis.data as ReturnType<typeof analyzeFormUi>;
+  const callerEvidence = readEvidence(params.codegraphEvidence);
+  const autoFetch = params.autoFetchCodeGraph === true;
+  const invoker = orchestrator?.codeGraphVbaInvoker;
+  if (!autoFetch || !invoker) {
+    return successResult(buildFormUiBehaviorMap(analysisData, callerEvidence));
+  }
+  // Issue #830 — opt-in autoFetchCodeGraph path. Best-effort + graceful
+  // fallback: any invoker failure (no index, CLI missing, parse error,
+  // unexpected throw) collapses to "use the .form.txt-declared events
+  // alone" + a warning. NEVER throw on the caller-facing path.
+  const fetched = await safeFetch(invoker, analysisData, orchestrator);
+  const merged = mergeEvidence(callerEvidence, fetched.evidence);
+  const map = buildFormUiBehaviorMap(analysisData, merged);
+  if (fetched.warning !== undefined) {
+    map.warnings = [...map.warnings, fetched.warning];
+  }
+  return successResult(map);
+}
+
+/**
+ * Wrap the invoker in a try/catch. The invoker contract is "never throw",
+ * but defense-in-depth: an unexpected throw still falls back gracefully
+ * instead of failing the whole `map_form_behavior` call. Returns
+ * `{ evidence: [], warning }` on any failure.
+ */
+async function safeFetch(
+  invoker: {
+    fetchBehaviorEvidence: (req: {
+      formName: string;
+      controlNames: string[];
+      projectPath: string;
+    }) => Promise<{ evidence?: CodeGraphBehaviorEvidence[]; warning?: string }>;
+  },
+  analysis: ReturnType<typeof analyzeFormUi>,
+  orchestrator: VbaFormsOrchestrator | undefined,
+): Promise<{ evidence: CodeGraphBehaviorEvidence[]; warning?: string }> {
+  try {
+    const result = await invoker.fetchBehaviorEvidence({
+      formName: analysis.formName,
+      controlNames: analysis.controls.map((control) => control.name),
+      projectPath: orchestrator?.cwd ?? "",
+    });
+    return {
+      evidence: Array.isArray(result?.evidence) ? result.evidence : [],
+      warning: typeof result?.warning === "string" ? result.warning : undefined,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      evidence: [],
+      warning: `CodeGraph-VBA invoker threw unexpectedly: ${message}. Falling back to .form.txt-declared events only.`,
+    };
+  }
+}
+
+/**
+ * Concatenate caller-supplied evidence with invoker-fetched evidence. The
+ * order matters for stable test snapshots: caller evidence first, then
+ * invoker evidence. Both share the same `CodeGraphBehaviorEvidence` shape,
+ * so the merge is a plain array concat. `buildFormUiBehaviorMap` will then
+ * bucket each entry onto its matching control by `${controlName}_` prefix
+ * (case-insensitive), with unmapped entries landing in `unmappedEvidence`.
+ */
+function mergeEvidence(
+  callerEvidence: CodeGraphBehaviorEvidence[],
+  fetchedEvidence: CodeGraphBehaviorEvidence[],
+): CodeGraphBehaviorEvidence[] {
+  if (fetchedEvidence.length === 0) return callerEvidence;
+  if (callerEvidence.length === 0) return [...fetchedEvidence];
+  return [...callerEvidence, ...fetchedEvidence];
 }
 
 function generatePlan(params: Record<string, unknown>): OperationResult<unknown> {
