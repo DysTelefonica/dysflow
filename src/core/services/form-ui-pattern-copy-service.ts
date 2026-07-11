@@ -12,7 +12,7 @@ export function copyFormUiPattern(
   return generateFormUiDesignPlan(targetMap, {
     referencePattern,
     operations: Object.values(referencePattern.mappedControls).map((target) => ({
-      kind: "copy-pattern",
+      kind: "note",
       target,
       intent: referencePattern.intent,
       params: { sourceForm: referencePattern.sourceForm },

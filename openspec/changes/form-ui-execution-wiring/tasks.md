@@ -47,7 +47,7 @@ PR 1 MUST preserve `proposal.md`, `design.md`, `specs/ai-form-ui-builder/spec.md
 
 ## Phase 3: PR 3 — Pure Planning (#813)
 
-- [ ] 3.1 **RED/GREEN:** Update builder, plan, pattern tests/services and `E2E_testing/mcp-e2e.mjs` for six kinds, notes, and unknown-kind failure; run `pnpm test`/`pnpm build`.
+- [x] 3.1 **RED/GREEN:** Update builder, plan, pattern tests/services and `E2E_testing/mcp-e2e.mjs` for six kinds, notes, and unknown-kind failure; run `pnpm test`/`pnpm build`.
 
 ## Phase 4: PR 4 — Internal Guarded Seam
 

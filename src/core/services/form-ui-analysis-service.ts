@@ -26,6 +26,7 @@ export function analyzeFormUi(ir: FormIR): FormUiAnalysisReport {
         rowSource,
         events,
         bindings: [controlSource, rowSource].filter((value): value is string => Boolean(value)),
+        properties: control.properties,
       };
     });
 

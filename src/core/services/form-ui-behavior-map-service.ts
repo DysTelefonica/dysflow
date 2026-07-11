@@ -22,6 +22,7 @@ export function buildFormUiBehaviorMap(
       events: control.events,
       bindings: control.bindings,
       codegraphEvidence: evidence,
+      properties: control.properties,
     };
   });
 

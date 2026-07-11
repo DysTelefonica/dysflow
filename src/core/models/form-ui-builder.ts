@@ -11,6 +11,7 @@ export type FormUiControlAnalysis = {
   rowSource?: string;
   events: string[];
   bindings: string[];
+  properties: Readonly<Record<string, string>>;
 };
 
 export type FormUiAnalysisReport = {
@@ -38,6 +39,7 @@ export type FormUiBehaviorMap = {
     events: string[];
     bindings: string[];
     codegraphEvidence: CodeGraphBehaviorEvidence[];
+    properties?: Readonly<Record<string, string>>;
   }>;
   formEvents: string[];
   unmappedEvidence: CodeGraphBehaviorEvidence[];
@@ -45,7 +47,13 @@ export type FormUiBehaviorMap = {
 };
 
 export type FormUiDesignOperation = {
-  kind: "move-control" | "rename-caption" | "group-controls" | "copy-pattern" | "note";
+  kind:
+    | "add-control"
+    | "move-control"
+    | "rename-control"
+    | "set-property"
+    | "delete-control"
+    | "note";
   target: string;
   intent: string;
   params: Record<string, unknown>;
@@ -72,6 +80,11 @@ export type FormUiPlanApplicationResult = {
   operationsApplied: FormUiDesignOperation[];
   preservedControls: string[];
   warnings: string[];
+  advisories: string[];
+  filesystemApplied: boolean;
+  importGate: "not-run" | "passed";
+  appliedContract: FormUiBehaviorMap;
+  importResult?: unknown;
 };
 
 export type FormUiVerificationFinding = {
