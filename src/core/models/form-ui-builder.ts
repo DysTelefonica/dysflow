@@ -94,9 +94,53 @@ export type FormUiVerificationFinding = {
   controlName?: string;
 };
 
+/**
+ * Optional inputs to `verifyFormUi` (issue #831). Each input enables ONE
+ * category of looks-right checks:
+ *   - `formCanvas` ⇒ off-canvas geometry check.
+ *   - `sectionBounds` + `controlSection` ⇒ off-section geometry check.
+ *   - `codeBehind` ⇒ event-handler cross-ref check.
+ *
+ * Absent inputs ⇒ the corresponding check is skipped silently (no
+ * warning). All inputs are optional to keep the contract simple for
+ * callers that only need basic survival verification.
+ */
+export type VerifyFormUiOptions = {
+  /** Form canvas bounds in twips. Controls outside this rect produce a
+   * `FORM_UI_OFF_CANVAS` warning. */
+  formCanvas?: { width: number; height: number };
+  /** Section bounds by section name (e.g. `Detail`, `FormHeader`). */
+  sectionBounds?: Readonly<
+    Record<string, { left?: number; top?: number; width: number; height: number }>
+  >;
+  /** Map of control name → owning section name. */
+  controlSection?: Readonly<Record<string, string>>;
+  /** Raw `.cls` code-behind text. When present, event-handler
+   * cross-ref checks run (informational `FORM_UI_EVENT_HANDLER_MISSING`
+   * warnings for `[Event Procedure]`-bound events whose handler is not
+   * found in the code-behind). */
+  codeBehind?: string;
+};
+
 export type FormUiVerificationReport = {
   ok: boolean;
   formName: string;
+  /**
+   * Combined `survivedFindings + looksRightFindings`. PRESERVED for
+   * backward compat with callers that pre-date issue #831; new callers
+   * SHOULD prefer the two split arrays for clearer reporting.
+   */
   findings: FormUiVerificationFinding[];
   checkedControls: string[];
+  /**
+   * Survival findings (control missing, event/binding drift). Severity
+   * is always `"error"`; any entry here forces `ok:false`. Add to #831.
+   */
+  survivedFindings: FormUiVerificationFinding[];
+  /**
+   * Looks-right findings (geometry / tab-order / property-validity /
+   * event-handler cross-ref). Severity is always `"warning"`; entries
+   * here are informational and never force `ok:false`. Add to #831.
+   */
+  looksRightFindings: FormUiVerificationFinding[];
 };
