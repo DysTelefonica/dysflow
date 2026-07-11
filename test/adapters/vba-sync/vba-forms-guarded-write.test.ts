@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { failureResult, successResult } from "../../../src/core/contracts/index";
 import { applyGuardedFormWrite } from "../../../src/adapters/vba-sync/vba-forms-guarded-write";
+import type {
+  ManagedFormSource,
+  VbaFormsOrchestrator,
+} from "../../../src/adapters/vba-sync/vba-forms-types";
+import { failureResult, successResult } from "../../../src/core/contracts/index";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
-import type { ManagedFormSource, VbaFormsOrchestrator } from "../../../src/adapters/vba-sync/vba-forms-types";
 
 const RESOLVED: ManagedFormSource = {
   sourcePath: "C:\\repo\\forms\\Form_Customer.form.txt",
@@ -16,9 +19,7 @@ const IMPORT_FAIL = failureResult({
   retryable: false,
 });
 
-function makeOrchestrator(
-  importResult = successResult({ imported: true }),
-): VbaFormsOrchestrator {
+function makeOrchestrator(importResult = successResult({ imported: true })): VbaFormsOrchestrator {
   return {
     executor: vi.fn(),
     env: {},

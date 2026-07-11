@@ -290,9 +290,7 @@ export async function cloneFormFromTemplate(args: {
   const cloneSource: ManagedFormSource = {
     sourcePath: targetPath,
     destinationRoot:
-      sourceRoot === "bench"
-        ? benchCacheRoot
-        : normalizePathForDetails(targetData.destinationRoot),
+      sourceRoot === "bench" ? benchCacheRoot : normalizePathForDetails(targetData.destinationRoot),
     moduleName: deriveFormName(targetPath),
   };
   const write = await applyGuardedFormWrite({
