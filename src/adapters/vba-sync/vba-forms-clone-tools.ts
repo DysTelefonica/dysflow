@@ -14,15 +14,18 @@ import type { FormFileSystemPort } from "../../core/services/vba-form-service.js
 import { stringValue } from "../../core/utils/index.js";
 import { isPathInside } from "../../core/utils/path-containment.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import {
   deriveFormName,
   hasManagedFormExtension,
   normalizePathForDetails,
   resolveMutationPath,
 } from "./vba-forms-paths.js";
-import { captureRollbackOutcome } from "./vba-forms-rollback.js";
-import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
-import type { FormsExecutionTarget, VbaFormsOrchestrator } from "./vba-forms-types.js";
+import type {
+  FormsExecutionTarget,
+  ManagedFormSource,
+  VbaFormsOrchestrator,
+} from "./vba-forms-types.js";
 
 // create_form_from_template — slice 5 (issue #618)
 //
@@ -284,49 +287,23 @@ export async function cloneFormFromTemplate(args: {
   }
 
   // 5) Apply: write the target, then route through import_modules.
-  try {
-    await fileSystem.writeFile(targetPath, cloneResult.source, "utf8");
-  } catch (err) {
-    return failureResult(
-      createDysflowError(
-        "FORM_WRITE_FAILED",
-        `Cannot write cloned form file at "${targetPath}". ${err instanceof Error ? err.message : String(err)}`,
-      ),
-    );
-  }
-
-  const importParams = {
-    ...params,
+  const cloneSource: ManagedFormSource = {
     sourcePath: targetPath,
     destinationRoot:
       sourceRoot === "bench" ? benchCacheRoot : normalizePathForDetails(targetData.destinationRoot),
-    moduleNames: [deriveFormName(targetPath)],
-    importMode: "Auto",
-    apply: true,
-    dryRun: false,
+    moduleName: deriveFormName(targetPath),
   };
-  const importResult = await orchestrator.executeMappedTool(
-    "import_modules",
-    importParams,
-    FORMS_MAPPINGS.import_modules_gate,
-  );
-  if (!importResult.ok) {
-    // Capture rollback outcome for consumer visibility (#692).
-    // When targetExisted was false the target was newly created — writing
-    // originalTargetText (empty string) back is the best-effort restore;
-    // the caller decides whether to delete or keep the failed artifact.
-    const rollbackOutcome = await captureRollbackOutcome(
-      () => fileSystem.writeFile(targetPath, originalTargetText, "utf8"),
-      targetExisted,
-    );
-    return failureResult(
-      createDysflowError(
-        "FORM_IMPORT_GATE_FAILED",
-        `import_modules apply gate failed for "${targetPath}": ${importResult.error.message}`,
-        { details: { cause: importResult.error, rollback: rollbackOutcome } },
-      ),
-    );
-  }
+  const write = await applyGuardedFormWrite({
+    orchestrator,
+    fileSystem,
+    source: cloneSource,
+    newSource: cloneResult.source,
+    originalSource: originalTargetText,
+    targetExisted,
+    forwardedParams: params,
+  });
+  if (!write.ok) return write;
+  const importResultData = write.data.importResult;
 
   const outputMode = stringValue(params.outputMode) ?? "full";
   if (outputMode === "summary") {
@@ -340,7 +317,7 @@ export async function cloneFormFromTemplate(args: {
       missingTokens: cloneResult.missingTokens,
       warnings: cloneResult.warnings,
       preservedKeys: cloneResult.preservedKeys,
-      importResult: importResult.data,
+      importResult: importResultData,
     });
   } else if (outputMode === "file") {
     return successResult({
@@ -360,7 +337,7 @@ export async function cloneFormFromTemplate(args: {
       warnings: cloneResult.warnings,
       preservedKeys: cloneResult.preservedKeys,
       targetSource: cloneResult.source,
-      importResult: importResult.data,
+      importResult: importResultData,
     });
   }
 }

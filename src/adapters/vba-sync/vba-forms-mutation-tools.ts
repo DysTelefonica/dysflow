@@ -14,9 +14,8 @@ import {
 } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
-import { captureRollbackOutcome } from "./vba-forms-rollback.js";
-import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 export type FormMutationToolName = "form_add_control" | "form_move_control" | "form_rename_control";
@@ -120,46 +119,19 @@ export async function mutateForm(args: {
       }
     }
 
-    try {
-      await fileSystem.writeFile(source.data.sourcePath, mutation.source, "utf8");
-    } catch (err) {
-      return failureResult(
-        createDysflowError(
-          "FORM_WRITE_FAILED",
-          `Cannot write mutated form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
-    }
-
-    const importParams = {
-      ...params,
-      sourcePath: source.data.sourcePath,
-      destinationRoot: source.data.destinationRoot,
-      moduleNames: [source.data.moduleName],
-      importMode: "Auto",
-      apply: true,
-      dryRun: false,
-    };
-    const importResult = await orchestrator.executeMappedTool(
-      "import_modules",
-      importParams,
-      FORMS_MAPPINGS.import_modules_gate,
-    );
-    if (!importResult.ok) {
-      // Capture rollback outcome for consumer visibility (#692).
-      // source always existed here (readFile succeeded above).
-      const rollbackOutcome = await captureRollbackOutcome(
-        () => fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
-        true, // targetExisted — source file always exists in mutateForm
-      );
-      return failureResult(
-        createDysflowError(
-          "FORM_IMPORT_GATE_FAILED",
-          `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
-          { details: { cause: importResult.error, rollback: rollbackOutcome } },
-        ),
-      );
-    }
+    // Apply: delegate the single-write + single-guarded-import + single-rollback
+    // block to the seam. mutateForm always operates on an existing source
+    // (readFile succeeded above), so targetExisted is always true.
+    const write = await applyGuardedFormWrite({
+      orchestrator,
+      fileSystem,
+      source: source.data,
+      newSource: mutation.source,
+      originalSource,
+      targetExisted: true,
+      forwardedParams: params,
+    });
+    if (!write.ok) return write;
 
     return successResult({
       mode: "apply",
@@ -167,7 +139,7 @@ export async function mutateForm(args: {
       changedControlName: mutation.changedControlName,
       preservedKeys: mutation.preservedKeys,
       importGate: "passed",
-      importResult: importResult.data,
+      importResult: write.data.importResult,
     });
   } catch (err) {
     if (err instanceof FormMutationError) {
