@@ -1,4 +1,4 @@
-import type { FormIR, FormMutationResult } from "../models/form-ir.js";
+import type { FormIR, FormMutationResult, FormNode, PropertyEntry } from "../models/form-ir.js";
 import type {
   FormUiBehaviorMap,
   FormUiDesignOperation,
@@ -9,6 +9,7 @@ import type {
 } from "../models/form-ui-builder.js";
 import {
   addControl,
+  collectControls,
   deleteControl,
   moveControl,
   renameControl,
@@ -73,63 +74,25 @@ export function applyFormUiDesignPlan(
   plan: FormUiDesignPlan,
   options: { apply?: boolean } = {},
 ): FormUiPlanApplicationResult {
+  // Issue #829 — derive `appliedContract` from the SAME mutated FormIR that
+  // apply writes through, not from a parallel implementation. Eliminates the
+  // dual-implementation drift risk that previously let the dry-run preview
+  // silently lie about what apply would actually write.
+  const initialIr = buildIrFromBehaviorMap(plan.sourceContract);
+  const { ir, advisories } = applyFormUiDesignOperations(initialIr, plan.operations);
+  const appliedContract = buildBehaviorMapFromIr(ir, plan.sourceContract, plan.operations);
+
   return {
     mode: options.apply === true ? "apply" : "dry-run",
     formName: plan.formName,
     operationsApplied: plan.operations,
     preservedControls: plan.sourceContract.controls.map((control) => control.name),
     warnings: plan.warnings,
-    advisories: plan.operations.filter(({ kind }) => kind === "note").map(({ intent }) => intent),
+    advisories,
     filesystemApplied: false,
     importGate: "not-run",
-    appliedContract: deriveAppliedContract(plan),
+    appliedContract,
   };
-}
-
-function deriveAppliedContract(plan: FormUiDesignPlan): FormUiBehaviorMap {
-  const controls = plan.sourceContract.controls.map((control) =>
-    control.properties ? { ...control, properties: { ...control.properties } } : { ...control },
-  );
-  for (const operation of plan.operations) {
-    const index = controls.findIndex(({ name }) => name === operation.target);
-    if (operation.kind === "note") continue;
-    if (operation.kind === "add-control") {
-      controls.push({
-        name: operation.target,
-        type: requiredString(operation.params.type),
-        role: "unknown",
-        events: [],
-        bindings: [],
-        codegraphEvidence: [],
-        properties: Object.fromEntries(
-          Object.entries((operation.params.properties ?? {}) as Record<string, unknown>).map(
-            ([key, value]) => [key, mutationValue(value)],
-          ),
-        ),
-      });
-    } else if (operation.kind === "delete-control") controls.splice(index, 1);
-    else if (operation.kind === "rename-control") {
-      const current = controls[index];
-      if (!current) continue;
-      controls[index] = { ...current, name: requiredString(operation.params.newName) };
-    } else {
-      const current = controls[index];
-      if (!current) continue;
-      const properties = { ...current.properties };
-      if (operation.kind === "move-control") {
-        if (operation.params.left !== undefined)
-          properties.Left = mutationValue(operation.params.left);
-        if (operation.params.top !== undefined)
-          properties.Top = mutationValue(operation.params.top);
-      } else if (operation.kind === "set-property")
-        properties[requiredString(operation.params.property)] = mutationValue(
-          operation.params.value,
-        );
-      else throw new FormUiPlanError((operation as { kind?: unknown }).kind);
-      controls[index] = { ...current, properties };
-    }
-  }
-  return { ...plan.sourceContract, controls };
 }
 
 export function applyFormUiDesignOperations(
@@ -149,6 +112,105 @@ export function applyFormUiDesignOperations(
   }
 
   return { ir, source: serializeFormTxt(ir), advisories };
+}
+
+// ---------------------------------------------------------------------------
+// Internal: FormIR <-> FormUiBehaviorMap bridge (issue #829)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal FormIR from a `FormUiBehaviorMap` so the same
+ * `addControl` / `moveControl` / `renameControl` / `setProperty` /
+ * `deleteControl` primitives that the adapter-level apply path uses can be
+ * folded over the source contract in-memory — no disk I/O. The result is the
+ * single source of truth from which the dry-run `appliedContract` is then
+ * re-derived (see `buildBehaviorMapFromIr`).
+ *
+ * The synthetic IR keeps just enough surface for the primitives to work:
+ * a `Begin Form` root, each source control as a direct child with a `Name`
+ * scalar and the contract's declared `properties` (excluding `Name`).
+ */
+function buildIrFromBehaviorMap(contract: FormUiBehaviorMap): FormIR {
+  const children: FormNode[] = contract.controls.map((control) => {
+    const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: `"${control.name}"` }];
+    for (const [key, value] of Object.entries(control.properties ?? {})) {
+      if (key === "Name") continue;
+      entries.push({ kind: "scalar", key, value: String(value) });
+    }
+    return { blockType: control.type, entries, children: [] };
+  });
+  return {
+    name: contract.formName,
+    kind: "Form",
+    preamble: [],
+    root: { blockType: "Form", entries: [], children },
+    codeBehind: null,
+  };
+}
+
+/**
+ * Read a `FormUiBehaviorMap` back out of the post-fold FormIR. Renamed
+ * controls inherit their role/events/bindings/codegraphEvidence from the
+ * source contract via the rename chain; newly added controls use the
+ * `unknown` role with empty bindings.
+ *
+ * The `Name` scalar that every control exposes in the IR is stripped from
+ * `properties` so it never shadows the contract's first-class `name` field.
+ */
+function buildBehaviorMapFromIr(
+  ir: FormIR,
+  source: FormUiBehaviorMap,
+  operations: readonly FormUiDesignOperation[],
+): FormUiBehaviorMap {
+  // Track rename chains so a control named `cmdCommit` can still inherit the
+  // role/events/codegraphEvidence of the original `cmdSave` entry.
+  const renamedFrom = new Map<string, string>();
+  for (const op of operations) {
+    if (op.kind !== "rename-control") continue;
+    const newName = requiredString(op.params.newName);
+    if (!newName) continue;
+    const original = renamedFrom.get(op.target) ?? op.target;
+    renamedFrom.set(newName, original);
+  }
+
+  const sourceByName = new Map(source.controls.map((control) => [control.name, control]));
+  const irControls = collectControls(ir.root);
+
+  return {
+    formName: source.formName,
+    formEvents: source.formEvents,
+    unmappedEvidence: source.unmappedEvidence,
+    warnings: source.warnings,
+    controls: irControls.map((control) => {
+      const lookupName = renamedFrom.get(control.name) ?? control.name;
+      const original = sourceByName.get(lookupName);
+      // FormIR exposes the control's Name as a scalar entry alongside the
+      // blockType-derived type; strip it from properties so it doesn't
+      // shadow the contract's first-class `name` field.
+      const { Name: _name, ...rest } = control.properties;
+      const properties = Object.keys(rest).length === 0 ? undefined : rest;
+      if (original !== undefined) {
+        return {
+          name: control.name,
+          type: control.type,
+          role: original.role,
+          events: original.events,
+          bindings: original.bindings,
+          codegraphEvidence: original.codegraphEvidence,
+          properties,
+        };
+      }
+      return {
+        name: control.name,
+        type: control.type,
+        role: "unknown",
+        events: [],
+        bindings: [],
+        codegraphEvidence: [],
+        properties,
+      };
+    }),
+  };
 }
 
 function dispatchOperation(ir: FormIR, operation: FormUiDesignOperation): FormMutationResult {
