@@ -63,6 +63,8 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "form_delete_control",
   // Phase 2 — Perception (#814). Read-only geometric renderer.
   "render_form_preview",
+  // Phase 2 — Perception (#815). Read-only geometry lint.
+  "analyze_form_layout",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -212,6 +214,17 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // the form-ui-render.ts module header.
   render_form_preview:
     "Compute a geometric layout from a .form.txt and emit a deterministic, inspectable artifact — SVG (primary, browser-friendly) and ASCII (terminal/agent fallback). Pure and offline: the renderer walks the FormIR tree, resolves each control's twip rectangle, and emits a labeled, role-colored layout. The output shape `{ svg, ascii, viewport, warnings }` is the single primitive #817 (`diff_form_preview`) composes pairs of frames from. Read-only — no Access, no COM, no filesystem mutation. The agent can pipe the SVG payload to a browser, render the ASCII grid inline in a terminal, or open the .form.txt in Access for ground truth.",
+  // Issue #815 — pure read-class geometry lint over a single .form.txt.
+  // Reuses the shared primitives in form-ui-geometry.ts (parseBoundingBox,
+  // boxesOverlap, isWithinSection, visualOrder, tabOrderMatchesVisual) —
+  // no duplicated bounding-box math. Findings carry severity `warning`
+  // (informational; never gating). The result envelope `{ findings,
+  // controls, sections }` is non-blocking and the agent decides what to
+  // act on. Default `alignmentThresholdTwips` is 50; pass a custom value
+  // to tighten or loosen the alignment net. Pass `sectionBounds` +
+  // `controlSection` to enable the off-section check. Pure and offline.
+  analyze_form_layout:
+    "Run a geometry lint over a single .form.txt and report overlap, alignment (visual rows), off-section, tab-order vs visual order, and missing-geometry smells. Pure read-class — parses the .form.txt through FormIR, builds a behavior map, and delegates to the pure `lintFormLayout` core service. No Access, no COM, no filesystem mutation. Returns `{ findings, controls, sections }` where every finding carries severity `warning` (informational; never gating). The default `alignmentThresholdTwips` is 50; pass a smaller value to tighten the alignment net. Supply `sectionBounds` + `controlSection` together to enable the off-section check. Source path resolved via the #718 project-aware resolver (sourcePath/path or projectId+formName).",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

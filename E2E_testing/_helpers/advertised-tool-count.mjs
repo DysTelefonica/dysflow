@@ -22,8 +22,10 @@
  * #813 phase 6 adds `form_set_property` + `form_delete_control` (atomic
  * exposure of the apply_form_design_plan family): 71 -> 73.
  * #814 (Phase 2 Perception) adds `render_form_preview` (pure read-class
- * geometric SVG/ASCII render): 73 -> 74. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 74;
+ * geometric SVG/ASCII render): 73 -> 74.
+ * #815 (Phase 2 Perception) adds `analyze_form_layout` (pure read-class
+ * geometry lint, sibling of render_form_preview): 74 -> 75. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 75;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

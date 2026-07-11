@@ -87,6 +87,10 @@ const OUTPUT_CONTRACT_GROUPS = {
     // its slice-4 siblings, but never mutates the binary / filesystem,
     // so the write-gate never fires (mirror of `analyze_form_ui`).
     "render_form_preview",
+    // Issue #815 (Phase 2 Perception) — pure read-class geometry lint
+    // over a single .form.txt. Sibling of render_form_preview; same
+    // read-only dispatch surface, same write-gate-never-fires invariant.
+    "analyze_form_layout",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

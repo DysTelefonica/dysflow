@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**74 visible MCP tools · Windows / Node 20+**
+**75 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 74 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 75 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -904,6 +904,8 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `sourceContract` (object, required), `appliedContract` (object, required), `outputMode` (optional)
 * **`render_form_preview`** (#814, Phase 2 — Perception): Compute a geometric layout from a `.form.txt` and emit a deterministic, byte-stable artifact — SVG (primary, browser-friendly) and an ASCII grid (terminal/agent fallback) — without opening Access. The output shape `{ svg, ascii, viewport, warnings }` is the single primitive the sibling `diff_form_preview` (#817) composes pairs of frames from. Honors role taxonomy (action/input/display/container) for color coding. Read-only and offline — pure renderer, no Access, no COM, no filesystem mutation.
   - Parameters: `sourcePath`/`path` (string, required), `output` (`"svg"` | `"ascii"` | `"both"`, default `"svg"`), `viewportScale` (number, default `0.05`), `outputMode` (optional)
+* **`analyze_form_layout`** (#815, Phase 2 — Perception): Run a geometry lint over a single `.form.txt` and report overlap, alignment (visual rows), off-section, tab-order vs visual order, and missing-geometry smells. Pure read-class — parses the `.form.txt` through FormIR, builds a behavior map, and delegates to the pure `lintFormLayout` core service. No Access, no COM, no filesystem mutation. Returns `{ findings, controls, sections }` where every finding carries severity `warning` (informational; never gating). The default `alignmentThresholdTwips` is 50; pass a smaller value to tighten the alignment net. Supply `sectionBounds` + `controlSection` together to enable the off-section check.
+  - Parameters: `sourcePath`/`path` (string, required), `alignmentThresholdTwips` (number, optional, default `50`), `sectionBounds` (object, optional), `controlSection` (object, optional), `outputMode` (optional)
 
 ### MCP protocol and maintenance
 
