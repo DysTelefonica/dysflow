@@ -77,6 +77,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     "apply_form_design_plan",
     "copy_form_ui_pattern",
     "verify_form_ui",
+    // Issue #813 phase 6 — atomic exposure of the form mutation family.
+    // form_set_property + form_delete_control share the same dispatch
+    // surface as the slice-4 tools above (applyGuardedFormWrite seam).
+    "form_set_property",
+    "form_delete_control",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

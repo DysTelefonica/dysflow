@@ -59,6 +59,10 @@ export class VbaFormsAdapter {
       toolName === "form_add_control" ||
       toolName === "form_move_control" ||
       toolName === "form_rename_control" ||
+      // Issue #813 phase 6 — atomic exposure of the two net-new standalone
+      // tools sharing the mutateForm seam.
+      toolName === "form_set_property" ||
+      toolName === "form_delete_control" ||
       toolName === "form_serialize" ||
       toolName === "form_deserialize" ||
       toolName === "create_form_from_template" ||
@@ -86,7 +90,12 @@ export class VbaFormsAdapter {
     if (
       toolName === "form_add_control" ||
       toolName === "form_move_control" ||
-      toolName === "form_rename_control"
+      toolName === "form_rename_control" ||
+      // Issue #813 phase 6 — atomic exposure. The 2 net-new tools share
+      // the same `mutateForm` single-write + single-guarded-import +
+      // single-rollback seam as the slice-4 family.
+      toolName === "form_set_property" ||
+      toolName === "form_delete_control"
     ) {
       return mutateForm({
         orchestrator: this.orchestrator,

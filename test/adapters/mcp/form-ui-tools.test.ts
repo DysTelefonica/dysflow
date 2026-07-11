@@ -62,8 +62,27 @@ describe("public AI form UI builder MCP tools", () => {
     expect(VBA_SYNC_TOOL_NAMES).toEqual(expect.arrayContaining([...FORM_UI_TOOL_NAMES]));
   });
 
-  it("routes form UI builder tools as read-only first-slice contract tools", () => {
-    for (const name of FORM_UI_TOOL_NAMES) {
+  it("routes apply_form_design_plan as a mutating tool (#813 phase 6)", () => {
+    // Issue #813 phase 6 — apply_form_design_plan is no longer a
+    // read-only contract tool. It mutates the .form.txt + .accdb
+    // through the applyGuardedFormWrite seam, so the route is
+    // mutatesBinary:true + mutatesFilesystem:true + risk:routine-dev-write.
+    const route = MCP_TOOL_ROUTES.apply_form_design_plan;
+    expect(route).toMatchObject({
+      kind: "vba-sync",
+      mutatesBinary: true,
+      mutatesFilesystem: true,
+    });
+  });
+
+  it("routes the other form UI builder tools as read-only first-slice contract tools", () => {
+    // Issue #813 phase 6 — apply_form_design_plan is no longer in this
+    // family (reclassified above). The other 5 contract tools stay
+    // read-only.
+    const READ_ONLY_FORM_UI_TOOLS = FORM_UI_TOOL_NAMES.filter(
+      (name) => name !== "apply_form_design_plan",
+    );
+    for (const name of READ_ONLY_FORM_UI_TOOLS) {
       expect(MCP_TOOL_ROUTES[name]).toMatchObject({
         kind: "vba-sync",
         mutatesBinary: false,
@@ -85,14 +104,20 @@ describe("public AI form UI builder MCP tools", () => {
     expect(VBA_SYNC_TOOL_SCHEMAS.generate_form_design_plan.properties).toEqual(
       expect.objectContaining({ behaviorMap: expect.any(Object), plan: expect.any(Object) }),
     );
+    // Issue #813 phase 6 — `targetPath` was removed (unvalidated alternate
+    // write destination). The schema still declares sourcePath-equivalent
+    // (via sourcePath or path alias), plan, dryRun, apply, outputMode.
     expect(VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan.properties).toEqual(
       expect.objectContaining({
-        targetPath: expect.any(Object),
         plan: expect.any(Object),
         dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
+    expect(
+      VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan.properties?.targetPath,
+      "targetPath must be removed in phase 6",
+    ).toBeUndefined();
     expect(VBA_SYNC_TOOL_SCHEMAS.copy_form_ui_pattern.properties).toEqual(
       expect.objectContaining({
         behaviorMap: expect.any(Object),
@@ -123,12 +148,16 @@ describe("public AI form UI builder MCP tools", () => {
     ]);
   });
 
-  it("allows apply/copy contract tools when writes are disabled because they do not mutate files or binaries", async () => {
+  it("blocks apply_form_design_plan with apply:true when writes are disabled (#813 acceptance #5)", async () => {
+    // Issue #813 phase 6 — apply_form_design_plan was reclassified to
+    // mutating (mutatesBinary:true + mutatesFilesystem:true). With writes
+    // disabled + apply:true, the write-gate MUST refuse BEFORE any
+    // adapter dispatch — that's issue #813 acceptance criterion #5.
     const { tool, vbaSyncToolService } = toolByName("apply_form_design_plan", false);
     const plan = {
-      formName: "Customer",
+      formName: "Form_Customer",
       sourceContract: {
-        formName: "Customer",
+        formName: "Form_Customer",
         controls: [],
         formEvents: [],
         unmappedEvidence: [],
@@ -137,9 +166,42 @@ describe("public AI form UI builder MCP tools", () => {
       operations: [],
       warnings: [],
     };
+    const apply = await tool.handler({
+      plan,
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      apply: true,
+    });
+    expect(apply.isError).toBe(true);
+    expect(apply.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    // CRITICAL — the gate must fire BEFORE any adapter dispatch.
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
 
-    const apply = await tool.handler({ plan, apply: true });
-    expect(apply.isError).toBe(false);
+  it("allows apply_form_design_plan with dryRun:true (preview path) regardless of writes-disabled", async () => {
+    // Issue #813 phase 6 — a legitimate dryRun:true preview call is NOT
+    // gated. It reaches the adapter and returns the planned payload
+    // without writing. The adapter-port path returns the in-memory
+    // preview (mock service returns ok:true here).
+    const { tool, vbaSyncToolService } = toolByName("apply_form_design_plan", false);
+    const plan = {
+      formName: "Form_Customer",
+      sourceContract: {
+        formName: "Form_Customer",
+        controls: [],
+        formEvents: [],
+        unmappedEvidence: [],
+        warnings: [],
+      },
+      operations: [],
+      warnings: [],
+    };
+    const dryRun = await tool.handler({
+      plan,
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      dryRun: true,
+    });
+    expect(dryRun.isError).toBe(false);
+    expect(dryRun.content[0]?.text ?? "").not.toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toHaveLength(1);
   });
 

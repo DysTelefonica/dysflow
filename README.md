@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**71 visible MCP tools · Windows / Node 20+**
+**73 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 71 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 73 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, and project-config resolution.
@@ -877,6 +877,10 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `sourcePath`, `controlName`, `left` (optional), `top` (optional), `dryRun`, `apply`
 * **`form_rename_control`**: Rename one existing control while preserving its type, properties, and opaque metadata. Controls with `[Event Procedure]` bindings are rejected rather than silently breaking Access event procedure names. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.
   - Parameters: `sourcePath`, `controlName`, `newName`, `dryRun`, `apply`
+* **`form_set_property`** (#813 phase 6): Set one named layout/property entry on a control in a version-controlled `.form.txt` through the FormIR `setProperty` primitive. Refuses to mutate protected/metadata keys (`Checksum`, `PrtDevMode*`, `Format`) and refuses to change a control's `Name` (identity changes belong to `form_rename_control`). When the existing entry for the target property is blob-kind (e.g. `PrtMip`, `PrtDevNamesW`, `FormatConditions`), the primitive refuses with `FORM_PROPERTY_NOT_SCALAR` rather than pushing a duplicate scalar entry. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate. Never touches code-behind (the sibling `.cls` owns code-behind). Write-gated.
+  - Parameters: `sourcePath`, `controlName`, `property`, `value` (string|number|boolean), `dryRun`, `apply`
+* **`form_delete_control`** (#813 phase 6): Delete one named control from a version-controlled `.form.txt` through the FormIR `deleteControl` primitive. Fail-closed when the control (or any descendant) has an `[Event Procedure]` binding (`FORM_CONTROL_HAS_EVENT_BINDING` — handlers live in the sibling `.cls`) or when it has named child controls (`FORM_CONTROL_HAS_CHILDREN` — delete children first). This primitive protects ONLY property-sheet-declared event bindings visible to FormIR — it does not detect code-only references such as `WithEvents` in the `.cls` or `Me!ControlName`. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate. Destructive — Write-gated.
+  - Parameters: `sourcePath`, `controlName`, `dryRun`, `apply`
 * **`form_serialize`** *(slice 3, #616)*: Read-only round-trip serializer. Parses a `.form.txt` at `sourcePath`, runs it through `parseFormTxt` → `serializeFormTxt`, and returns the serialized text with `byteEqual` + `metadataReport` (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Access is never opened. `apply` is ignored — this tool is intentionally read-only.
   - Parameters: `sourcePath` (string, required), `formName` (string, optional; derived from filename when omitted), `dryRun`/`apply` (ignored)
 * **`form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.
@@ -889,8 +893,8 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `sourcePath`/`path`, `codegraphEvidence` (array, required), `outputMode` (optional)
 * **`generate_form_design_plan`**: Generate a traceable form UI design plan from a behavior map and proposed operations/reference pattern. Read-only.
   - Parameters: `behaviorMap` (object, required), `plan` (object, optional), `outputMode` (optional)
-* **`apply_form_design_plan`**: Apply or preview a design plan boundary result in-memory. Defaults to dry-run; this first slice does not write `.form.txt` or binaries.
-  - Parameters: `plan` (object, required), `targetPath`/`sourcePath` (string, optional alias for historical payload compatibility), `dryRun`, `apply`, `outputMode`
+* **`apply_form_design_plan`** (#813 phase 6): Apply or preview an AI form UI design plan against a version-controlled `.form.txt` through the `applyGuardedFormWrite` seam (single accumulated write, single `import_modules` LoadFromText gate, single rollback on import failure). Defaults to dry-run and returns the would-be-written source plus advisories without writing; `apply:true` writes the source and requires the LoadFromText gate to pass. Source path resolved out-of-band via `sourcePath`/`path` (mirrors `form_add_control`). `plan.formName` is non-empty-checked and matched case-insensitively against the parsed form name; mismatch returns `FORM_UI_PLAN_FORM_MISMATCH` with no write. `note` operations are counted as advisories, never silently dropped; unknown kinds fail closed with `FORM_UI_UNSUPPORTED_OPERATION`. Write-gated.
+  - Parameters: `plan` (object, required), `sourcePath`/`path` (string, required for `apply:true`), `dryRun`, `apply`, `outputMode`
 * **`copy_form_ui_pattern`**: Convert a reference form UI pattern into explicit design-plan intent without erasing target behavior. Read-only preview.
   - Parameters: `behaviorMap` (object, required), `referencePattern` (object, required), `outputMode` (optional)
 * **`verify_form_ui`**: Verify an applied form UI contract against the source behavior map and return actionable drift findings. Read-only.

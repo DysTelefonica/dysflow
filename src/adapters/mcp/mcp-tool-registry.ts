@@ -33,6 +33,12 @@ export const VBA_SYNC_TOOL_NAMES = [
   "apply_form_design_plan",
   "copy_form_ui_pattern",
   "verify_form_ui",
+  // Phase 6 (#813) — atomic exposure of two net-new standalone tools
+  // sharing the apply_form_design_plan guarded-write seam. They are
+  // registered here BEFORE MCP_TOOL_ROUTES so the GeneratedDispatchToolName
+  // type picks them up and the route table can reference them.
+  "form_set_property",
+  "form_delete_control",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

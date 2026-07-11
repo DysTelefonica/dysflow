@@ -65,15 +65,18 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   renames. Visible count drops by 3 (one per alias-removed).
     // #807 (Feature 1) — `list_vba_modules` added as a read-only vba-sync tool.
     //   Net: dispatch 59 -> 60, visible 70 -> 71.
+    // #813 phase 6 — `form_set_property` + `form_delete_control` added
+    //   (atomic exposure of the apply_form_design_plan family).
+    //   Net: dispatch 60 -> 62, visible 71 -> 73. No modern tools added.
     //   Expected breakdown:
-    //     60 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     62 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 71 visible (was 64 before #795).
-    expect(toolCount).toBe(60);
+    //     = 73 visible (was 64 before #795).
+    expect(toolCount).toBe(62);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(71);
+    expect(visibleCount).toBe(73);
   });
 
   it("verifies split-mode coverage explicitly", () => {

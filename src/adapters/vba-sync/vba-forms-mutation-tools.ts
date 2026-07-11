@@ -7,10 +7,12 @@ import {
 import type { FormIR } from "../../core/models/form-ir.js";
 import {
   addControl,
+  deleteControl,
   FormMutationError,
   moveControl,
   parseFormTxt,
   renameControl,
+  setProperty,
 } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
@@ -18,7 +20,16 @@ import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
-export type FormMutationToolName = "form_add_control" | "form_move_control" | "form_rename_control";
+// Issue #813 phase 6 — atomic exposure of the two net-new standalone
+// tools (form_set_property, form_delete_control) sharing this seam. They
+// route through the same single-write + single-guarded-import +
+// single-rollback block via `applyGuardedFormWrite`.
+export type FormMutationToolName =
+  | "form_add_control"
+  | "form_move_control"
+  | "form_rename_control"
+  | "form_set_property"
+  | "form_delete_control";
 
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
@@ -86,10 +97,20 @@ export async function mutateForm(args: {
               left: numberValue(params.left),
               top: numberValue(params.top),
             })
-          : renameControl(ir, {
-              controlName: stringValue(params.controlName) ?? "",
-              newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
-            });
+          : toolName === "form_set_property"
+            ? setProperty(ir, {
+                controlName: stringValue(params.controlName) ?? "",
+                property: stringValue(params.property) ?? "",
+                value: readScalarValue(params.value),
+              })
+            : toolName === "form_delete_control"
+              ? deleteControl(ir, {
+                  controlName: stringValue(params.controlName) ?? "",
+                })
+              : renameControl(ir, {
+                  controlName: stringValue(params.controlName) ?? "",
+                  newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
+                });
 
     const apply = params.apply === true || params.dryRun === false;
     if (!apply) {
@@ -168,4 +189,19 @@ function readProperties(value: unknown): Record<string, string | number | boolea
     }
   }
   return out;
+}
+
+/**
+ * Read a scalar property value for `form_set_property`. The schema declares
+ * `value: { type: ["string", "number", "boolean"] }`, so anything else
+ * (object, array, null) is treated as an absent value — the primitive
+ * refuses with FORM_CONTROL_NOT_FOUND / FORM_PROPERTY_PROTECTED in that
+ * case rather than silently coercing. `undefined` falls through to empty
+ * string so the primitive can produce the typed error.
+ */
+function readScalarValue(value: unknown): string | number | boolean {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return value;
+  return "";
 }
