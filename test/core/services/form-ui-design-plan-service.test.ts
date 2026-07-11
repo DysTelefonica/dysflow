@@ -24,16 +24,23 @@ const map: FormUiBehaviorMap = {
     },
   ],
 };
+const sourceControl = map.controls[0] as FormUiBehaviorMap["controls"][number];
 
+const op = (kind: FormUiDesignPlan["operations"][number]["kind"], target: string, params = {}) => ({
+  kind,
+  target,
+  params,
+  intent: kind,
+});
 describe("form UI design plan service", () => {
   it("generates a plan whose operations reference mapped behavior", () => {
     const plan = generateFormUiDesignPlan(map, {
       operations: [
         {
-          kind: "rename-caption",
+          kind: "set-property",
           target: "cmdSave",
           intent: "Clarify save action",
-          params: { caption: "Save customer" },
+          params: { property: "Caption", value: "Save customer" },
         },
       ],
     });
@@ -60,14 +67,32 @@ describe("form UI design plan service", () => {
     );
   });
 
+  it("retains an advisory note when its target is absent", () => {
+    const plan = generateFormUiDesignPlan(map, {
+      operations: [op("note", "missingControl")],
+    });
+    const result = applyFormUiDesignPlan(plan, { apply: true });
+
+    expect(plan.operations).toHaveLength(1);
+    expect(plan.warnings).toEqual([]);
+    expect(result).toMatchObject({
+      operationsApplied: plan.operations,
+      advisories: ["note"],
+      filesystemApplied: false,
+      importGate: "not-run",
+    });
+    expect(result.appliedContract).toEqual(plan.sourceContract);
+    expect(verifyPlanAlignment(plan, result.appliedContract)).toEqual([]);
+  });
+
   it("applies plans as a dry-run by default and preserves mapped controls", () => {
     const plan: FormUiDesignPlan = generateFormUiDesignPlan(map, {
       operations: [
         {
-          kind: "rename-caption",
+          kind: "set-property",
           target: "cmdSave",
           intent: "Clarify save action",
-          params: { caption: "Save customer" },
+          params: { property: "Caption", value: "Save customer" },
         },
       ],
     });
@@ -82,20 +107,69 @@ describe("form UI design plan service", () => {
     expect(result.operationsApplied).toHaveLength(1);
   });
 
+  it("generates, applies, derives, and verifies all six operation kinds", () => {
+    const plan = generateFormUiDesignPlan(
+      {
+        ...map,
+        controls: [...map.controls, { ...sourceControl, name: "lblDelete", type: "Label" }],
+      },
+      {
+        operations: [
+          op("add-control", "txtName", { type: "TextBox", properties: { Left: 100 } }),
+          op("move-control", "cmdSave", { left: 30, top: 40 }),
+          op("set-property", "cmdSave", { property: "Caption", value: "Commit" }),
+          op("rename-control", "cmdSave", { newName: "cmdCommit" }),
+          op("delete-control", "lblDelete"),
+          op("note", "cmdSave"),
+        ],
+      },
+    );
+    const application = applyFormUiDesignPlan(plan, { apply: true });
+    // biome-ignore format: Keep the independent literal contract within the review budget.
+    const expected: FormUiBehaviorMap = { formName: "Customer", formEvents: [], unmappedEvidence: [], warnings: [], controls: [
+      { name: "cmdCommit", type: "CommandButton", role: "action", events: ["OnClick"], bindings: [], codegraphEvidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click", "SaveCustomer"] }], properties: { Left: "30", Top: "40", Caption: "Commit" } },
+      { name: "txtName", type: "TextBox", role: "unknown", events: [], bindings: [], codegraphEvidence: [], properties: { Left: "100" } },
+    ] };
+    expect([application.advisories, application.appliedContract]).toEqual([["note"], expected]);
+    expect(verifyPlanAlignment(plan, expected)).toEqual([]);
+  });
+
+  it.each([
+    ["rename", op("rename-control", "cmdSave", { newName: "cmdCommit" }), map],
+  ])("finds a wrong %s result", (_label, operation, wrong) => {
+    const plan = generateFormUiDesignPlan(wrong, { operations: [operation] });
+    expect(verifyPlanAlignment(plan, wrong)).toHaveLength(1);
+  });
+
+  it("fails closed for an operation kind deserialized outside the supported union", () => {
+    const unsupported = {
+      kind: "group-controls",
+      target: "cmdSave",
+      intent: "Legacy operation",
+      params: {},
+      preserves: [],
+    } as unknown as FormUiDesignPlan["operations"][number];
+
+    expect(() =>
+      applyFormUiDesignPlan({
+        ...generateFormUiDesignPlan(map, { operations: [] }),
+        operations: [unsupported],
+      }),
+    ).toThrowError(expect.objectContaining({ code: "FORM_UI_UNSUPPORTED_OPERATION" }));
+  });
+
   it("reports drift when an approved plan no longer aligns with the source contract", () => {
     const plan = generateFormUiDesignPlan(map, {
       operations: [
         {
-          kind: "rename-caption",
+          kind: "set-property",
           target: "cmdSave",
           intent: "Clarify save action",
-          params: { caption: "Save customer" },
+          params: { property: "Caption", value: "Save customer" },
         },
       ],
     });
-    const drifted: FormUiBehaviorMap = { ...map, controls: [] };
-
-    const findings = verifyPlanAlignment(plan, drifted);
+    const findings = verifyPlanAlignment(plan, { ...map, controls: [] });
 
     expect(findings).toEqual([
       expect.objectContaining({ code: "FORM_UI_PLAN_TARGET_MISSING", controlName: "cmdSave" }),

@@ -16,6 +16,7 @@ const analysis: FormUiAnalysisReport = {
       caption: "Save",
       events: ["OnClick"],
       bindings: [],
+      properties: { Caption: '"Save"' },
     },
   ],
 };

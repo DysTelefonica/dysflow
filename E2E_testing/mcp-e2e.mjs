@@ -513,6 +513,7 @@ const mapFormBehaviorResult = await record("form-ui", "map_form_behavior", {
   codegraphEvidence,
 });
 const behaviorMap = safeJsonParse(mapFormBehaviorResult.text);
+behaviorMap?.controls?.push({ name: "txtSet", type: "TextBox", properties: { Caption: "Before" } }, { name: "txtDelete", type: "Label", properties: { Caption: "Delete me" } });
 const txtProbeControl = behaviorMap?.controls?.find((control) => control?.name === "txtProbe");
 const cmdApplyControl = behaviorMap?.controls?.find((control) => control?.name === "cmdApply");
 const mapPass = Boolean(
@@ -541,17 +542,16 @@ const designPlanResult = await record("form-ui", "generate_form_design_plan", {
   behaviorMap,
   plan: {
     operations: [
-      {
-        kind: "rename-caption",
-        target: "txtProbe",
-        intent: "clarify prompt",
-        params: { caption: "Probe input" },
-      },
+      { kind: "add-control", target: "txtAdded", intent: "add probe", params: { type: "TextBox", properties: { Caption: "Added" } } },
+      { kind: "move-control", target: "cmdApply", intent: "move apply", params: { left: 100 } },
+      { kind: "rename-control", target: "txtProbe", intent: "rename probe", params: { newName: "txtInput" } },
+      { kind: "set-property", target: "txtSet", intent: "clarify prompt", params: { property: "Caption", value: "Probe input" } },
+      { kind: "delete-control", target: "txtDelete", intent: "remove label", params: {} },
       {
         kind: "note",
-        target: "missing_control",
-        intent: "ignored in generated plan",
-        params: { reason: "missing on form fixture" },
+        target: "txtProbe",
+        intent: "review probe spacing",
+        params: {},
       },
     ],
   },
@@ -561,28 +561,33 @@ const generatePass = Boolean(
   designPlan &&
     designPlan.formName === "DysflowMcpE2E" &&
     Array.isArray(designPlan.operations) &&
-    designPlan.operations.length === 1 &&
-    designPlan.warnings?.includes('Operation target "missing_control" is not present in the behavior map.'),
+    designPlan.operations.length === 6 &&
+    designPlan.operations.map(({ kind }) => kind).join(",") === "add-control,move-control,rename-control,set-property,delete-control,note",
 );
 rows.push({
   area: "form-ui",
   tool: "generate_form_design_plan:shape",
   pass: generatePass,
-  expected: "valid plan + target-missing warning for unknown control",
+  expected: "all six operation kinds retained",
   ms: 0,
-  summary: generatePass ? "generated plan from valid target only + warning for unknown target" : "unexpected design plan payload",
+  summary: generatePass ? "generated all six operation kinds" : "unexpected design plan payload",
 });
 console.log(`${generatePass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:shape\t0ms\t${rows.at(-1).summary}`);
 
 const applyPlanResult = await record("form-ui", "apply_form_design_plan", { projectId, plan: designPlan, apply: true });
 const applyPlan = safeJsonParse(applyPlanResult.text);
+const applied = (name) => applyPlan?.appliedContract?.controls?.find((control) => control.name === name);
 const applyPass = Boolean(
   applyPlan &&
     applyPlan.mode === "apply" &&
     applyPlan.filesystemApplied === false &&
     applyPlan.importGate === "not-run" &&
     Array.isArray(applyPlan.operationsApplied) &&
-    applyPlan.operationsApplied.length === 1,
+    applyPlan.operationsApplied.length === 6 &&
+    applyPlan.advisories?.[0] === "review probe spacing" &&
+    applied("txtAdded")?.type === "TextBox" && applied("txtAdded")?.properties?.Caption === "Added" &&
+    applied("cmdApply")?.properties?.Left === "100" && !applied("txtProbe") && applied("txtInput")?.type === "TextBox" &&
+    applied("txtSet")?.properties?.Caption === "Probe input" && !applied("txtDelete"),
 );
 rows.push({
   area: "form-ui",
@@ -614,16 +619,16 @@ const copyPass = Boolean(
     copyPlan.referencePattern?.sourceForm === "Form_SourcePattern" &&
     Array.isArray(copyPlan.operations) &&
     copyPlan.operations.length === 1 &&
-    copyPlan.operations[0].kind === "copy-pattern",
+    copyPlan.operations[0].kind === "note",
 );
 rows.push({
   area: "form-ui",
   tool: "copy_form_ui_pattern:shape",
   pass: copyPass,
-  expected: "one copy-pattern operation + source-form in plan",
+  expected: "one advisory note operation + source-form in plan",
   ms: 0,
   summary: copyPass
-    ? "pattern copy generated a single copy-pattern operation"
+    ? "pattern copy generated a single advisory note operation"
     : "unexpected copy_form_ui_pattern payload",
 });
 console.log(`${copyPass ? "PASS" : "FAIL"}\tcopy_form_ui_pattern:shape\t0ms\t${rows.at(-1).summary}`);
@@ -637,25 +642,28 @@ const driftedContract = {
 const verifyCleanResult = await record("form-ui", "verify_form_ui", {
   projectId,
   sourceContract: behaviorMap,
-  appliedContract: behaviorMap,
+  appliedContract: {
+    ...behaviorMap,
+    controls: behaviorMap.controls.filter(({ name }) => name !== "txtDelete" && name !== "txtProbe").map((control) => control.name === "cmdApply" ? { ...control, properties: { ...control.properties, Left: "100" } } : control.name === "txtSet" ? { ...control, properties: { ...control.properties, Caption: "Probe input" } } : control).concat({ ...txtProbeControl, name: "txtInput" }, { name: "txtAdded", type: "TextBox", properties: { Caption: "Added" } }),
+  },
 });
 const verifyClean = safeJsonParse(verifyCleanResult.text);
 const verifyCleanPass = Boolean(
   verifyClean &&
     verifyClean.formName === "DysflowMcpE2E" &&
-    verifyClean.ok === true &&
+    verifyClean.ok === false &&
     Array.isArray(verifyClean.findings) &&
-    verifyClean.findings.length === 0,
+    verifyClean.findings.some(({ code, controlName }) => code === "FORM_UI_CONTROL_MISSING" && controlName === "txtProbe"),
 );
 rows.push({
   area: "form-ui",
-  tool: "verify_form_ui:clean-match",
+  tool: "verify_form_ui:applied-drift",
   pass: verifyCleanPass,
-  expected: "ok=true and no findings when contract matches",
+  expected: "generic equality verifier reports planned rename/delete drift",
   ms: 0,
-  summary: verifyCleanPass ? "verify_form_ui accepts identical contract as no-drift" : "unexpected verify_form_ui pass payload",
+  summary: verifyCleanPass ? "generic verifier distinguishes applied output from its source" : "unexpected verify_form_ui drift payload",
 });
-console.log(`${verifyCleanPass ? "PASS" : "FAIL"}\tverify_form_ui:clean-match\t0ms\t${rows.at(-1).summary}`);
+console.log(`${verifyCleanPass ? "PASS" : "FAIL"}\tverify_form_ui:applied-drift\t0ms\t${rows.at(-1).summary}`);
 
 // Negative-path coverage: invalid source path should return a contract-level MCP error.
 const analyzeMissingPath = await record(

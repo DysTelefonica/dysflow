@@ -34,7 +34,7 @@ describe("copyFormUiPattern", () => {
     });
     expect(plan.operations).toEqual([
       expect.objectContaining({
-        kind: "copy-pattern",
+        kind: "note",
         target: "cmdSave",
         intent: "Use footer action grouping",
       }),
