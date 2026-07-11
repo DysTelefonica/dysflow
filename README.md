@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**77 visible MCP tools · Windows / Node 20+**
+**78 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,10 +51,11 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 77 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 78 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
+  before/after form layout diff (`diff_form_preview`),
   batch geometry ergonomics (`form_align_controls`, `form_distribute_controls`),
   and project-config resolution.
 
@@ -911,6 +912,8 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `sourcePath`/`path` (string, required), `output` (`"svg"` | `"ascii"` | `"both"`, default `"svg"`), `viewportScale` (number, default `0.05`), `outputMode` (optional)
 * **`analyze_form_layout`** (#815, Phase 2 — Perception): Run a geometry lint over a single `.form.txt` and report overlap, alignment (visual rows), off-section, tab-order vs visual order, and missing-geometry smells. Pure read-class — parses the `.form.txt` through FormIR, builds a behavior map, and delegates to the pure `lintFormLayout` core service. No Access, no COM, no filesystem mutation. Returns `{ findings, controls, sections }` where every finding carries severity `warning` (informational; never gating). The default `alignmentThresholdTwips` is 50; pass a smaller value to tighten the alignment net. Supply `sectionBounds` + `controlSection` together to enable the off-section check.
   - Parameters: `sourcePath`/`path` (string, required), `alignmentThresholdTwips` (number, optional, default `50`), `sectionBounds` (object, optional), `controlSection` (object, optional), `outputMode` (optional)
+* **`diff_form_preview`** (#817, Phase 2 — Perception cont.): Compose a before/after visual diff of two `.form.txt` files. Pure read-class — reads both files through the fileSystem port, parses both through FormIR, and delegates to the pure `diffFormPreview` core service. Returns `{ changes: { added, removed, moved, resized }, warnings, beforeForm, afterForm, svg?, ascii? }` where each `added`/`removed` entry carries a `box` BoundingBox and each `moved`/`resized` entry carries `before` + `after` BoundingBoxes. The SVG frame is the same `render_form_preview` artifact with `data-diff="added|removed|moved|resized|same"` on every control rect and a `<g data-section="removed">` group of dashed-stroke ghost rects for removed controls. The ASCII frame prepends a diff-marker legend (`+` added, `-` removed, `*` moved/resized) and annotates per-cell markers in the grid. `output` selects the payload (`"svg"` | `"ascii"` | `"both"`); the structured envelope is always returned. `epsilon` (twips) loosens the moved/resized classifier. Read-only and offline — no Access, no COM, no filesystem mutation.
+  - Parameters: `beforePath`/`before` (string, required unless `projectId`+`beforeName`), `afterPath`/`after` (string, required unless `projectId`+`afterName`), `output` (`"svg"` | `"ascii"` | `"both"`, default `"both"`), `viewportScale` (number, default `0.05`), `ascii` (object, default `{cellWidth:80, cellHeight:24}`), `epsilon` (number, default `0`), `outputMode` (optional)
 
 ### MCP protocol and maintenance
 

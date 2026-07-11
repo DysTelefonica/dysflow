@@ -19,6 +19,11 @@ import type { LintRuleId } from "../../core/services/form-lint-types.js";
 import { analyzeFormUi } from "../../core/services/form-ui-analysis-service.js";
 import { buildFormUiBehaviorMap } from "../../core/services/form-ui-behavior-map-service.js";
 import {
+  type DiffFormPreviewOptions,
+  diffFormPreview,
+  type FormPreviewDiffResult,
+} from "../../core/services/form-ui-diff.js";
+import {
   type LayoutFinding,
   type LintFormLayoutOptions,
   lintFormLayout,
@@ -688,4 +693,226 @@ export async function lintFormCode(
     },
     orchestrator,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Issue #817 — `diff_form_preview` (Phase 2 — Perception)
+//
+// Pure read-class adapter: reads TWO `.form.txt` files, parses both to
+// FormIR, and delegates to the pure `diffFormPreview` in
+// `core/services/form-ui-diff`. The diff composer is the SINGLE source of
+// truth for the before/after visual diff; the adapter owns I/O + the
+// MCP-facing envelope only.
+//
+// Path-resolution contract mirrors `compare_form`:
+//   - literal `beforePath` / `before` (or `projectId`+`formName`) is supported,
+//   - literal `afterPath` / `after` is supported,
+//   - missing before/after returns `FORM_SPEC_MISSING`,
+//   - missing file returns `FORM_NOT_FOUND`,
+//   - parse failure returns `FORM_PARSE_ERROR`.
+// ---------------------------------------------------------------------------
+
+export async function diffFormPreviewTool(
+  fileSystem: FormFileSystemPort,
+  params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
+): Promise<OperationResult<unknown>> {
+  let beforePath = stringValue(params.beforePath) ?? stringValue(params.before);
+  let afterPath = stringValue(params.afterPath) ?? stringValue(params.after);
+  const projectId = stringValue(params.projectId);
+  const beforeName = stringValue(params.beforeName) ?? stringValue(params.beforeForm);
+  const afterName = stringValue(params.afterName) ?? stringValue(params.afterForm);
+
+  if (projectId && (beforeName || afterName)) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({
+      projectId,
+      formName: beforeName,
+      targetName: afterName,
+    });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+
+    if (beforeName) {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: targetData.destinationRoot,
+        projectRoot: targetData.projectRoot,
+        formName: beforeName,
+      });
+      let resolvedPath: string | undefined;
+      for (const candidate of candidates) {
+        try {
+          await fileSystem.readFile(candidate.absolutePath);
+          resolvedPath = candidate.absolutePath;
+          break;
+        } catch {
+          // try next
+        }
+      }
+      if (resolvedPath === undefined) {
+        const diagnostic = buildResolutionDiagnostic(
+          {
+            sourceRoot: targetData.destinationRoot,
+            projectRoot: targetData.projectRoot,
+            formName: beforeName,
+          },
+          candidates,
+          projectId,
+        );
+        return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+      }
+      beforePath = resolvedPath;
+    }
+
+    if (afterName) {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: targetData.destinationRoot,
+        projectRoot: targetData.projectRoot,
+        formName: afterName,
+      });
+      let resolvedPath: string | undefined;
+      for (const candidate of candidates) {
+        try {
+          await fileSystem.readFile(candidate.absolutePath);
+          resolvedPath = candidate.absolutePath;
+          break;
+        } catch {
+          // try next
+        }
+      }
+      if (resolvedPath === undefined) {
+        const diagnostic = buildResolutionDiagnostic(
+          {
+            sourceRoot: targetData.destinationRoot,
+            projectRoot: targetData.projectRoot,
+            formName: afterName,
+          },
+          candidates,
+          projectId,
+        );
+        return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+      }
+      afterPath = resolvedPath;
+    }
+  }
+
+  if (!beforePath) {
+    return failureResult(
+      createDysflowError(
+        "FORM_SPEC_MISSING",
+        "diff_form_preview requires beforePath (path to the left .form.txt file).",
+      ),
+    );
+  }
+  if (!afterPath) {
+    return failureResult(
+      createDysflowError(
+        "FORM_SPEC_MISSING",
+        "diff_form_preview requires afterPath (path to the right .form.txt file).",
+      ),
+    );
+  }
+
+  // Read both files via the injectable port (no Access, no COM).
+  let beforeText: string;
+  let afterText: string;
+  try {
+    beforeText = await fileSystem.readFile(beforePath);
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_NOT_FOUND",
+        `Cannot read before form file at "${beforePath}". ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+  try {
+    afterText = await fileSystem.readFile(afterPath);
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_NOT_FOUND",
+        `Cannot read after form file at "${afterPath}". ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  const beforeName_ = deriveFormName(beforePath);
+  const afterName_ = deriveFormName(afterPath);
+
+  let beforeIr: FormIR;
+  let afterIr: FormIR;
+  try {
+    beforeIr = parseFormTxt(beforeText, { name: beforeName_ });
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_PARSE_ERROR",
+        `Failed to parse before "${beforePath}": ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+  try {
+    afterIr = parseFormTxt(afterText, { name: afterName_ });
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_PARSE_ERROR",
+        `Failed to parse after "${afterPath}": ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  // Honor an optional `viewportScale` / `ascii` override; mirror the
+  // `renderFormPreviewTool` shape so the two tools share caller-visible
+  // knobs.
+  const options: DiffFormPreviewOptions = {};
+  const renderOptions: RenderFormPreviewOptions = {};
+  const viewportScale = readNumber(params.viewportScale);
+  if (viewportScale !== undefined) renderOptions.viewportScale = viewportScale;
+  if (params.ascii !== undefined) {
+    const ascii = params.ascii;
+    if (typeof ascii === "object" && ascii !== null && !Array.isArray(ascii)) {
+      const a = ascii as Record<string, unknown>;
+      const cellWidth = readNumber(a.cellWidth);
+      const cellHeight = readNumber(a.cellHeight);
+      if (cellWidth !== undefined && cellHeight !== undefined) {
+        renderOptions.ascii = { cellWidth, cellHeight };
+      }
+    }
+  }
+  const epsilon = readNumber(params.epsilon);
+  if (epsilon !== undefined) options.epsilon = epsilon;
+  options.render = renderOptions;
+
+  // `output` selects which frame(s) to surface. The structured envelope
+  // (changes + warnings) is always returned.
+  const outputMode = stringValue(params.output) ?? "both";
+  options.output = outputMode === "svg" || outputMode === "ascii" ? outputMode : "both";
+
+  const diff: FormPreviewDiffResult = diffFormPreview(beforeIr, afterIr, options);
+
+  const data: Record<string, unknown> = {
+    beforeForm: beforeName_,
+    afterForm: afterName_,
+    changes: diff.changes,
+    warnings: diff.warnings,
+  };
+  if (outputMode === "svg") {
+    data.svg = diff.svg;
+  } else if (outputMode === "ascii") {
+    data.ascii = diff.ascii;
+  } else {
+    data.svg = diff.svg;
+    data.ascii = diff.ascii;
+  }
+
+  return successResult(data);
 }

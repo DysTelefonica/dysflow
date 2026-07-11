@@ -150,11 +150,11 @@ describe("tool registry — three-tool presence (#813 phase 6)", () => {
     );
   });
 
-  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814), then 40/64 (#815), then 42/66 (#816)", () => {
-    // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814, then 1 more at #815, then 2 more at #816.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(42);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(66);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(66);
+  it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814), then 40/64 (#815), then 42/66 (#816), then 43/67 (#817)", () => {
+    // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814, then 1 more at #815, then 2 more at #816, then 1 more at #817.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(43);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(67);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(67);
   });
 });
 
@@ -494,7 +494,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     );
   });
 
-  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77)", () => {
+  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77 -> 78)", () => {
     // Issue #807 (Feature 1) added `list_vba_modules`: visible 70 -> 71.
     // Phase 6 adds 2 more (form_set_property + form_delete_control):
     // 71 -> 73.
@@ -502,11 +502,12 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     // #815 (Phase 2 Perception) adds analyze_form_layout: 74 -> 75.
     // #816 (Phase 3 Ergonomic actions) adds form_align_controls +
     // form_distribute_controls: 75 -> 77.
+    // #817 (Phase 2 Perception cont.) adds diff_form_preview: 77 -> 78.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after #816").toBe(77);
+    expect(visible, "visible tool count after #817").toBe(78);
   });
 });

@@ -91,6 +91,10 @@ const OUTPUT_CONTRACT_GROUPS = {
     // over a single .form.txt. Sibling of render_form_preview; same
     // read-only dispatch surface, same write-gate-never-fires invariant.
     "analyze_form_layout",
+    // Issue #817 (Phase 2 Perception cont.) — before/after visual diff
+    // composer. Pure read-class; same dispatch surface as
+    // render_form_preview + analyze_form_layout.
+    "diff_form_preview",
     // Issue #816 (Phase 3 Ergonomic actions) — batch geometry verbs.
     // form_align_controls + form_distribute_controls share the same
     // applyGuardedFormWrite seam as the slice-4 form mutation family

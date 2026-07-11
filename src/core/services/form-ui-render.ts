@@ -128,6 +128,21 @@ export function renderFormPreview(
   };
 }
 
+/**
+ * Issue #817 — expose the renderer-extracted layout as a pure seam so the
+ * `diff_form_preview` composer can compare per-control geometry WITHOUT
+ * re-rendering. The returned array is sorted by `(top, left)` (mirrors
+ * `sortControlsByVisualOrder`); controls with `rect === null` sort to the
+ * end (warning-only entries). Hidden controls are still present (the
+ * caller decides what to do with `hidden: true`).
+ *
+ * Deterministic: same IR => same array (no random / time-dependent ordering).
+ */
+export function extractFormPreviewLayouts(ir: FormIR): FormPreviewControlLayout[] {
+  const layout = buildLayoutModel(ir);
+  return layout.controls;
+}
+
 // ---------------------------------------------------------------------------
 // Layout model
 // ---------------------------------------------------------------------------

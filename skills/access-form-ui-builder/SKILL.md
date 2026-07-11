@@ -31,6 +31,7 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 |---|---|
 | Need to understand an existing form | Run semantic analysis before planning. |
 | Need to *see* a form's layout without opening Access | Use `render_form_preview({ sourcePath })` — pure, offline SVG/ASCII render from FormIR twips (issue #814). The output shape is the single primitive the sibling `diff_form_preview` (#817) composes pairs of frames from. |
+| Need a visual before/after diff of two form layouts | Use `diff_form_preview({ beforePath, afterPath })` — composes two `render_form_preview` outputs into a structured `{added, removed, moved, resized}` change report with diff overlays on the SVG (`data-diff="..."` on each rect) and ASCII (legend + per-cell markers). Read-only; offline. Issue #817. |
 | Need behavior-sensitive changes | Require behavior map with CodeGraph-VBA evidence. Pass `autoFetchCodeGraph: true` to relax the no-MCP-to-MCP boundary and let dysflow query codegraph-vba internally (issue #830). Pass caller-supplied `codegraphEvidence` instead if you want the original explicit-boundary contract. |
 | Copying another form's pattern | Record the reference pattern separately; never overwrite target behavior. |
 | Applying a plan | Dry-run first to preview the resulting source. Confirm before passing `apply:true`. Apply writes through guarded `import_modules` and respects the write gate. |

@@ -25,9 +25,9 @@
 ## Phase roadmap (all under epic #811)
 - [ ] **Phase 0 — #718** projectId-first resolver (this change).  ← IN PROGRESS
 - [ ] Phase 1 — #812 `form_set_property` + `form_delete_control`; #813 wire `apply_form_design_plan`.
-- [ ] Phase 2 — #814 `render_form_preview`; #815 `analyze_form_layout`.
-- [ ] Phase 3 — #816 `form_align_controls` + `form_distribute_controls`.
-- [ ] Phase 4 — #817 `diff_form_preview`; #818 `verify_form_bindings`.
+- [x] Phase 2 — #814 `render_form_preview`; #815 `analyze_form_layout`.
+- [x] Phase 3 — #816 `form_align_controls` + `form_distribute_controls`.
+- [x] Phase 4 — #817 `diff_form_preview`.
 - [ ] Phase 5 — #819 align `access-form-ui-builder` skill + AGENTS.md.
 
 ## Testing strategy (per repo philosophy — test at ports, mock only I/O)
