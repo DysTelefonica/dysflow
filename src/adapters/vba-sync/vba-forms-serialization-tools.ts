@@ -16,10 +16,9 @@ import {
 } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
 import { deriveFormName } from "./vba-forms-paths.js";
-import { captureRollbackOutcome } from "./vba-forms-rollback.js";
-import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 // Slice 3 (#616) — opaque metadata keys reported by form_serialize
@@ -272,46 +271,17 @@ export async function deserializeForm(args: {
     }
   }
 
-  try {
-    await fileSystem.writeFile(source.data.sourcePath, serializedText, "utf8");
-  } catch (err) {
-    return failureResult(
-      createDysflowError(
-        "FORM_WRITE_FAILED",
-        `Cannot write form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
-      ),
-    );
-  }
-
-  const importParams = {
-    ...params,
-    sourcePath: source.data.sourcePath,
-    destinationRoot: source.data.destinationRoot,
-    moduleNames: [source.data.moduleName],
-    importMode: "Auto",
-    apply: true,
-    dryRun: false,
-  };
-  const importResult = await orchestrator.executeMappedTool(
-    "import_modules",
-    importParams,
-    FORMS_MAPPINGS.import_modules_gate,
-  );
-  if (!importResult.ok) {
-    // Capture rollback outcome for consumer visibility (#692).
-    // source always existed here (readFile succeeded above).
-    const rollbackOutcome = await captureRollbackOutcome(
-      () => fileSystem.writeFile(source.data.sourcePath, originalSource, "utf8"),
-      true, // targetExisted — source file always exists in deserializeForm
-    );
-    return failureResult(
-      createDysflowError(
-        "FORM_IMPORT_GATE_FAILED",
-        `import_modules apply gate failed for "${source.data.sourcePath}": ${importResult.error.message}`,
-        { details: { cause: importResult.error, rollback: rollbackOutcome } },
-      ),
-    );
-  }
+  const write = await applyGuardedFormWrite({
+    orchestrator,
+    fileSystem,
+    source: source.data,
+    newSource: serializedText,
+    originalSource,
+    // deserializeForm always operates on an existing source (readFile succeeded).
+    targetExisted: true,
+    forwardedParams: params,
+  });
+  if (!write.ok) return write;
 
   return successResult({
     mode: "apply",
@@ -320,7 +290,7 @@ export async function deserializeForm(args: {
     appliedChecksumBefore: undefined,
     appliedChecksumAfter: undefined,
     loadFromTextGate: "passed",
-    importResult: importResult.data,
+    importResult: write.data.importResult,
   });
 }
 
