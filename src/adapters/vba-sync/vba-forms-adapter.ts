@@ -90,6 +90,14 @@ export class VbaFormsAdapter {
       // tools sharing the mutateForm seam.
       toolName === "form_set_property" ||
       toolName === "form_delete_control" ||
+      // Issue #816 phase 3 — batch geometry ergonomics. Sibling of
+      // form_set_property / form_delete_control; same single-write +
+      // single-guarded-import + single-rollback seam. Both must join the
+      // three-list trio (route table + isDryRunCapableBinaryWrite +
+      // POLICY_EXEMPT_TOOLS) in lockstep — see dispatch-factory.ts +
+      // write-execution-dispatch.ts.
+      toolName === "form_align_controls" ||
+      toolName === "form_distribute_controls" ||
       toolName === "form_serialize" ||
       toolName === "form_deserialize" ||
       toolName === "create_form_from_template" ||
@@ -127,7 +135,12 @@ export class VbaFormsAdapter {
       // the same `mutateForm` single-write + single-guarded-import +
       // single-rollback seam as the slice-4 family.
       toolName === "form_set_property" ||
-      toolName === "form_delete_control"
+      toolName === "form_delete_control" ||
+      // Issue #816 phase 3 — batch align/distribute. Same seam as
+      // form_set_property / form_delete_control; same dryRun/apply
+      // semantics; same write-gate (see dispatch-factory.ts).
+      toolName === "form_align_controls" ||
+      toolName === "form_distribute_controls"
     ) {
       return mutateForm({
         orchestrator: this.orchestrator,

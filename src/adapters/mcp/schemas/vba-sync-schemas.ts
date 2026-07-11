@@ -822,6 +822,76 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #816 — Phase 3 (Ergonomic actions). Two batch geometry verbs
+  // sharing the applyGuardedFormWrite seam. Both accept `controlNames`
+  // as either a string[] or a comma-separated string (the adapter
+  // normalizes to string[]).
+  form_align_controls: {
+    type: "object",
+    required: ["sourcePath", "controlNames", "edge"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      controlNames: {
+        // Issue #816 — the schema declares `array` as the canonical form.
+        // The adapter also accepts a comma-separated string and normalizes
+        // it to a string[] in `runAlignDistribute` — callers passing
+        // either form succeed.
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        description:
+          "List of control names to align. Order is ignored; the median of the selection is used. The adapter also accepts a comma-separated string and normalizes it to an array.",
+      },
+      edge: {
+        type: "string",
+        enum: ["left", "right", "top", "bottom", "center-horizontal", "center-vertical"],
+        description:
+          "Which edge / center to align on. 'left'/'right'/'center-horizontal' move Left; 'top'/'bottom'/'center-vertical' move Top.",
+      },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  form_distribute_controls: {
+    type: "object",
+    required: ["sourcePath", "controlNames", "axis"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      controlNames: {
+        type: "array",
+        items: { type: "string", minLength: 1 },
+        description:
+          "List of control names to distribute. Order is ignored; controls are sorted by their axis position internally. The adapter also accepts a comma-separated string and normalizes it to an array.",
+      },
+      axis: {
+        type: "string",
+        enum: ["horizontal", "vertical"],
+        description:
+          "Which axis to distribute along. 'horizontal' moves Left; 'vertical' moves Top.",
+      },
+      spacing: {
+        type: "number",
+        minimum: 0,
+        description:
+          "Optional exact gap (twips) between consecutive control edges. When omitted, distributes across the bounding box of the selection.",
+      },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
   vba_orphan_audit: {
     type: "object",
     additionalProperties: false,

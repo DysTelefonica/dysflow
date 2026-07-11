@@ -42,7 +42,7 @@ class FakeDiagnosticsService {
 }
 
 describe("Dysflow MCP tool parity inventory", () => {
-  it("declares the complete 64-tool inventory", () => {
+  it("declares the complete 66-tool inventory", () => {
     // Slice 3 (#616) added form_serialize + form_deserialize.
     // Slice 5 (#618) added create_form_from_template.
     // feat-759-no-compile (v1.19.0) — compile_vba was removed (was 54
@@ -56,10 +56,13 @@ describe("Dysflow MCP tool parity inventory", () => {
     // vba-sync 38 -> 39, query unchanged at 24, total 62 -> 63.
     // #815 added analyze_form_layout (Phase 2 Perception, read-only):
     // vba-sync 39 -> 40, query unchanged at 24, total 63 -> 64.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(40);
+    // #816 phase 3 added form_align_controls + form_distribute_controls
+    // (batch geometry ergonomics; same applyGuardedFormWrite seam):
+    // vba-sync 40 -> 42, query unchanged at 24, total 64 -> 66.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(42);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(64);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(64);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(66);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(66);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -78,6 +81,9 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("render_form_preview");
     // #815 (Phase 2 Perception)
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("analyze_form_layout");
+    // #816 (Phase 3 Ergonomic actions)
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_align_controls");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_distribute_controls");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
@@ -87,8 +93,10 @@ describe("Dysflow MCP tool parity inventory", () => {
     // parity-registry 60 -> 62.
     // #814 added render_form_preview: parity-registry 62 -> 63.
     // #815 added analyze_form_layout: parity-registry 63 -> 64.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(64);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(64);
+    // #816 phase 3 added form_align_controls + form_distribute_controls:
+    // parity-registry 64 -> 66.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(66);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(66);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

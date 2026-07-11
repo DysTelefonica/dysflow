@@ -65,6 +65,13 @@ const POLICY_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   "apply_form_design_plan",
   "form_set_property",
   "form_delete_control",
+  // Issue #816 phase 3 — the form_align_controls + form_distribute_controls
+  // tools share the same plan-by-default contract as the rest of the form
+  // mutation family. Without this exemption a preview-intended call (no
+  // dryRun/apply key) would silently perform a REAL write in developer
+  // mode for the same reason as the apply_form_design_plan family above.
+  "form_align_controls",
+  "form_distribute_controls",
   "catalog_add_control",
   "generate_form",
 ]);

@@ -1,10 +1,10 @@
 ---
 name: access-form-ui-builder
-description: "Trigger: Access form UI builder, analyze form UI, behavior map, design plan, apply form design plan, form mutation primitives (form_set_property, form_delete_control), pattern copy, verify form UI, render form preview (geometric SVG/ASCII render from FormIR twips). Guide AI-safe form UI changes including real guarded apply writes."
+description: "Trigger: Access form UI builder, analyze form UI, behavior map, design plan, apply form design plan, form mutation primitives (form_set_property, form_delete_control, form_align_controls, form_distribute_controls), pattern copy, verify form UI, render form preview (geometric SVG/ASCII render from FormIR twips). Guide AI-safe form UI changes including real guarded apply writes."
 license: Apache-2.0
 metadata:
   author: "gentleman-programming"
-  version: "1.2"
+  version: "1.3"
   last_updated: "2026-07-11"
   requires_dysflow: ">=2.6.0"
 ---
@@ -20,9 +20,10 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 - Do not edit raw `.form.txt` directly in this slice unless routed through an existing mutation+import tool path.
 - Keep behavior changes explicit: a UI plan must preserve mapped controls, event handlers, and bindings unless an approved operation says otherwise.
 - **CodeGraph-VBA boundary (issue #830)**: `map_form_behavior` accepts caller-supplied `codegraphEvidence` (default contract) OR accepts `autoFetchCodeGraph: true` to relax the boundary one-way (dysflow → codegraph-vba). The internal invoker is opt-in per call; the default still requires caller-supplied evidence. When `autoFetchCodeGraph: true` and the invoker fails (no `.codegraph/` index, codegraph-vba CLI missing, parse error), the adapter falls back to the `.form.txt`-declared events alone and appends a warning — never throws.
-- **Write gate respected**: every write-class call (`apply_form_design_plan` with `apply:true`, `form_set_property`, `form_delete_control`) must pass the live `MCP_WRITES_DISABLED` + `allowWrites` gate. If writes are disabled, these calls refuse with the standard safety-stop error before any adapter dispatch — do not retry, do not "work around" the gate. Cross-reference `dysflow-usage` skill for the live write-flags matrix.
+- **Write gate respected**: every write-class call (`apply_form_design_plan` with `apply:true`, `form_set_property`, `form_delete_control`, `form_align_controls`, `form_distribute_controls`) must pass the live `MCP_WRITES_DISABLED` + `allowWrites` gate. If writes are disabled, these calls refuse with the standard safety-stop error before any adapter dispatch — do not retry, do not "work around" the gate. Cross-reference `dysflow-usage` skill for the live write-flags matrix.
 - **Preserve contract**: a plan that would drop a preserved event/binding from `FormUiBehaviorMap.controls[*].events` / `.bindings` / `.codegraphEvidence[*].handler` is rejected with `FORM_UI_PRESERVES_VIOLATION` (typed). Surface the offending control + operation in the result.
 - **Atomic apply**: the multi-op plan is folded onto a single in-memory `FormIR`, then committed through a single `applyGuardedFormWrite` seam call (one write + one `import_modules` + one rollback on failure). No partial writes.
+- **Identity-preserving geometry (#816)**: `form_align_controls` and `form_distribute_controls` move only the relevant axis property (`Left` for horizontal verbs; `Top` for vertical verbs); Name, type, Width, Height, other layout properties, event bindings, and code-behind are preserved verbatim. Use these instead of N brittle `form_move_control` calls when batching geometric edits.
 
 ## Decision Gates
 
@@ -35,6 +36,8 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 | Applying a plan | Dry-run first to preview the resulting source. Confirm before passing `apply:true`. Apply writes through guarded `import_modules` and respects the write gate. |
 | Single-property tweak on a form control | Use the standalone `form_set_property` tool (mutation primitive, not plan-based). It honors the same write gate and routes through the same seam. |
 | Removing a single form control | Use the standalone `form_delete_control` tool. Same write-gate and seam as above. |
+| Aligning N controls to a common edge | Use the standalone `form_align_controls` tool (issue #816, Phase 3 Ergonomic actions). Replaces N `form_move_control` calls with one batch geometry verb. Identity-preserving. |
+| Distributing N controls evenly along an axis | Use the standalone `form_distribute_controls` tool (issue #816, Phase 3 Ergonomic actions). Defaults to bounding-box distribution; pass `spacing` for exact gaps. Identity-preserving. |
 | Verifying output | Compare against the source contract and behavior map, then surface actionable drift. |
 
 ## Execution Steps
@@ -61,6 +64,15 @@ For single-control changes that don't need a full plan:
 - **`form_delete_control({ sourcePath, controlName, dryRun?, apply? })`** — remove one control. Same seam + write gate.
 
 Both refuse with the standard safety-stop error if `MCP_WRITES_DISABLED` is set. Both honor `dryRun` for preview without write. Prefer these for surgical changes; reach for `apply_form_design_plan` only when you need the multi-op coordination + preserve-contract validation.
+
+## Batch geometry verbs (issue #816, Phase 3 Ergonomic actions)
+
+When you would otherwise chain N `form_move_control` calls with hand-computed target coordinates, use the batch geometry verbs instead:
+
+- **`form_align_controls({ sourcePath, controlNames, edge, dryRun?, apply? })`** — align N named controls to a common edge (`left` | `right` | `top` | `bottom` | `center-horizontal` | `center-vertical`) using the MEDIAN of the selection. Preserves the spread of off-median outliers; not min/max. Identity-preserving: only the moved axis property changes; everything else (Name, type, Width, Height, other layout properties, event bindings, code-behind) is preserved verbatim.
+- **`form_distribute_controls({ sourcePath, controlNames, axis, spacing?, dryRun?, apply? })`** — distribute N named controls evenly along an axis (`horizontal` | `vertical`). Without `spacing`, distributes across the bounding box of the selection (first control stays at start, last at end). With `spacing` (twips), uses the exact gap between consecutive control edges. Identity-preserving. Refuses `<2` controls (`FORM_MUTATION_INVALID`).
+
+Both share the same `applyGuardedFormWrite` seam as `form_set_property` / `form_delete_control` / `apply_form_design_plan`: default dry-run, single atomic write, single `import_modules` gate, single rollback on failure, write-gated. The adapter accepts `controlNames` as either `string[]` or a comma-separated string.
 
 ## References
 

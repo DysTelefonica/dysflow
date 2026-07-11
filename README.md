@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**75 visible MCP tools · Windows / Node 20+**
+**77 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,10 +51,11 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 75 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 77 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
+  batch geometry ergonomics (`form_align_controls`, `form_distribute_controls`),
   and project-config resolution.
 
 ### It is not
@@ -882,6 +883,10 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `sourcePath`, `controlName`, `property`, `value` (string|number|boolean), `dryRun`, `apply`
 * **`form_delete_control`** (#813 phase 6): Delete one named control from a version-controlled `.form.txt` through the FormIR `deleteControl` primitive. Fail-closed when the control (or any descendant) has an `[Event Procedure]` binding (`FORM_CONTROL_HAS_EVENT_BINDING` — handlers live in the sibling `.cls`) or when it has named child controls (`FORM_CONTROL_HAS_CHILDREN` — delete children first). This primitive protects ONLY property-sheet-declared event bindings visible to FormIR — it does not detect code-only references such as `WithEvents` in the `.cls` or `Me!ControlName`. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate. Destructive — Write-gated.
   - Parameters: `sourcePath`, `controlName`, `dryRun`, `apply`
+* **`form_align_controls`** (#816, Phase 3 — Ergonomic actions): Align N named controls in a version-controlled `.form.txt` to a common edge using the MEDIAN of the selection (preserves the spread of off-median outliers; not min/max). Edges: `left` | `right` | `top` | `bottom` | `center-horizontal` | `center-vertical`. Identity-preserving: only the moved axis property (`Left` for horizontal verbs; `Top` for vertical verbs) changes; Name, type, Width, Height, other layout properties, event bindings, and code-behind are preserved verbatim. Refuses unknown control names (`FORM_CONTROL_NOT_FOUND`) and missing geometry (`FORM_MUTATION_INVALID`). Routes through the `applyGuardedFormWrite` seam. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate. Write-gated.
+  - Parameters: `sourcePath`/`path` (string, required), `controlNames` (string[] | comma-separated string, required), `edge` (enum, required), `dryRun`, `apply`, `outputMode`
+* **`form_distribute_controls`** (#816, Phase 3 — Ergonomic actions): Distribute N named controls in a version-controlled `.form.txt` evenly along an axis. Without `spacing`, distributes across the bounding box of the selection (first control stays at start, last at end, middle ones spaced evenly). With `spacing` (twips) provided, uses the exact gap between consecutive control edges. Identity-preserving: only the moved axis property changes; everything else is preserved. Refuses `<2` controls (`FORM_MUTATION_INVALID` — issue acceptance criterion), unknown control names (`FORM_CONTROL_NOT_FOUND`), and missing geometry (`FORM_MUTATION_INVALID`). Routes through the `applyGuardedFormWrite` seam. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate. Write-gated.
+  - Parameters: `sourcePath`/`path` (string, required), `controlNames` (string[] | comma-separated string, required), `axis` (`"horizontal"` | `"vertical"`, required), `spacing` (number, optional), `dryRun`, `apply`, `outputMode`
 * **`form_serialize`** *(slice 3, #616)*: Read-only round-trip serializer. Parses a `.form.txt` at `sourcePath`, runs it through `parseFormTxt` → `serializeFormTxt`, and returns the serialized text with `byteEqual` + `metadataReport` (preservedKeys, byteDiff, opaqueCount). Use it to verify that a form has round-trip-safe serialization before any mutation or clone attempt. Access is never opened. `apply` is ignored — this tool is intentionally read-only.
   - Parameters: `sourcePath` (string, required), `formName` (string, optional; derived from filename when omitted), `dryRun`/`apply` (ignored)
 * **`form_deserialize`** *(slice 3, #616)*: Write a `FormIR` to `sourcePath` after re-serializing it, then invoke the `import_modules` LoadFromText gate. Defaults to dry-run (no write, no import). `apply:true` writes the `.form.txt` and requires the LoadFromText gate to pass; if the gate fails the original source is restored best-effort. Write-gated.

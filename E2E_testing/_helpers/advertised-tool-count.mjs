@@ -24,8 +24,12 @@
  * #814 (Phase 2 Perception) adds `render_form_preview` (pure read-class
  * geometric SVG/ASCII render): 73 -> 74.
  * #815 (Phase 2 Perception) adds `analyze_form_layout` (pure read-class
- * geometry lint, sibling of render_form_preview): 74 -> 75. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 75;
+ * geometry lint, sibling of render_form_preview): 74 -> 75.
+ * #816 (Phase 3 Ergonomic actions) adds `form_align_controls` +
+ * `form_distribute_controls` (batch geometry verbs sharing the same
+ * applyGuardedFormWrite seam as the form_set_property /
+ * form_delete_control family): 75 -> 77. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 77;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

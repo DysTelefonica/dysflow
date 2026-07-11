@@ -61,6 +61,9 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   // Phase 6 (#813) — atomic exposure of the form mutation family.
   "form_set_property",
   "form_delete_control",
+  // Phase 3 (#816) — batch geometry ergonomics. Align + distribute verbs.
+  "form_align_controls",
+  "form_distribute_controls",
   // Phase 2 — Perception (#814). Read-only geometric renderer.
   "render_form_preview",
   // Phase 2 — Perception (#815). Read-only geometry lint.
@@ -206,6 +209,37 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Set one named layout/property entry on a control in a version-controlled .form.txt through the FormIR setProperty primitive. Refuses to mutate protected/metadata keys (Checksum, PrtDevMode*, Format) and refuses to change a control's Name (identity changes belong to form_rename_control). When the existing entry for the target property is blob-kind (e.g. PrtMip, PrtDevNamesW, FormatConditions), the primitive refuses with FORM_PROPERTY_NOT_SCALAR rather than pushing a duplicate scalar entry. Defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Never touches codeBehind (the sibling .cls owns code-behind). Write-gated.",
   form_delete_control:
     "Delete one named control from a version-controlled .form.txt through the FormIR deleteControl primitive. Fail-closed when the control (or any descendant) has an [Event Procedure] binding (FORM_CONTROL_HAS_EVENT_BINDING — handlers live in the sibling .cls) or when it has named child controls (FORM_CONTROL_HAS_CHILDREN — delete children first). This primitive protects ONLY property-sheet-declared event bindings visible to FormIR — it does not detect code-only references such as WithEvents in the .cls or Me!ControlName. Defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Destructive — Write-gated.",
+  // Issue #816 — Phase 3 (Ergonomic actions). Pure batch geometry verb
+  // over the FormIR. Aligns N named controls to a common edge
+  // (left/right/top/bottom/center-horizontal/center-vertical) using the
+  // MEDIAN of the selection (preserves the spread of off-median
+  // outliers; not min/max). Identity-preserving: only the moved axis
+  // property (`Left` for horizontal verbs; `Top` for vertical verbs)
+  // changes; Name, type, Width, Height, other layout properties, event
+  // bindings, and codeBehind are untouched. Refuses unknown control
+  // names (FORM_CONTROL_NOT_FOUND) and missing geometry
+  // (FORM_MUTATION_INVALID). Never touches codeBehind (the sibling .cls
+  // owns code-behind). Routes through the applyGuardedFormWrite seam —
+  // defaults to dry-run; apply:true writes the source and validates
+  // through the import_modules LoadFromText gate. Write-gated.
+  form_align_controls:
+    "Align N named controls in a version-controlled .form.txt to a common edge (left | right | top | bottom | center-horizontal | center-vertical) using the MEDIAN of the selection (preserves the spread of off-median outliers; not min/max). Only the moved axis property (`Left` for horizontal verbs; `Top` for vertical verbs) changes — Name, type, Width, Height, other layout properties, event bindings, and codeBehind are preserved verbatim. Refuses unknown control names (FORM_CONTROL_NOT_FOUND) and missing geometry (FORM_MUTATION_INVALID). Never touches codeBehind (the sibling .cls owns code-behind). Routes through the applyGuardedFormWrite seam — defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Write-gated.",
+  // Issue #816 — Phase 3 (Ergonomic actions). Pure batch geometry verb
+  // over the FormIR. Distributes N named controls evenly along an axis
+  // (horizontal → moves Left; vertical → moves Top). Without `spacing`,
+  // distributes across the bounding box of the selection (first control
+  // stays at start, last at end, middle ones spaced evenly). With
+  // `spacing` (twips) provided, uses the exact gap between consecutive
+  // control edges. Identity-preserving: only the moved axis property
+  // changes; everything else is untouched. Refuses <2 controls
+  // (FORM_MUTATION_INVALID — the issue acceptance criterion), unknown
+  // control names (FORM_CONTROL_NOT_FOUND), and missing geometry
+  // (FORM_MUTATION_INVALID). Never touches codeBehind. Routes through
+  // the applyGuardedFormWrite seam — defaults to dry-run; apply:true
+  // writes the source and validates through the import_modules
+  // LoadFromText gate. Write-gated.
+  form_distribute_controls:
+    "Distribute N named controls in a version-controlled .form.txt evenly along an axis (horizontal | vertical). Without `spacing`, distributes across the bounding box of the selection (first control stays at start, last at end, middle ones spaced evenly). With `spacing` (twips) provided, uses the exact gap between consecutive control edges. Only the moved axis property (`Left` for horizontal; `Top` for vertical) changes — Name, type, Width, Height, other layout properties, event bindings, and codeBehind are preserved verbatim. Refuses <2 controls (FORM_MUTATION_INVALID — issue acceptance criterion), unknown control names (FORM_CONTROL_NOT_FOUND), and missing geometry (FORM_MUTATION_INVALID). Never touches codeBehind. Routes through the applyGuardedFormWrite seam — defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Write-gated.",
   verify_form_ui:
     "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
   // Issue #814 — pure, deterministic, read-only. The renderer is the

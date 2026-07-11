@@ -281,6 +281,30 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: true,
     risk: "destructive-write",
   },
+  // Issue #816 — Phase 3 (Ergonomic actions). Two batch geometry tools
+  // (`form_align_controls` + `form_distribute_controls`) sharing the
+  // applyGuardedFormWrite seam. Both route through the same single-write
+  // + single-guarded-import + single-rollback block as `form_set_property`
+  // / `form_delete_control`. Risk tier rationale:
+  //   - Both are routine-dev-write (same family as `form_move_control` —
+  //     a routine position edit, not a destructive removal).
+  //   - They MUST join the three-list trio (route table +
+  //     isDryRunCapableBinaryWrite + POLICY_EXEMPT_TOOLS) in lockstep,
+  //     otherwise `MCP_WRITES_DISABLED` either bypasses the gate (route
+  //     stays read-only) or refuses a legitimate `dryRun: true` preview
+  //     (the second atomic-dryRun gating list is not extended).
+  form_align_controls: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  form_distribute_controls: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
   verify_form_ui: {
     kind: "vba-sync",
     mutatesBinary: false,
