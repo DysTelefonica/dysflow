@@ -90,6 +90,8 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     "render_form_preview",
     // Issue #815 — Phase 2 Perception. Read-only geometry lint, pure.
     "analyze_form_layout",
+    // Issue #817 — Phase 2 Perception cont. Read-only diff composer.
+    "diff_form_preview",
     "vba_orphan_audit",
     // query-maintenance read-only
     "list_links",

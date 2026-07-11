@@ -78,15 +78,19 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   `form_distribute_controls` added (batch geometry ergonomics;
     //   same applyGuardedFormWrite seam as the Phase 6 form mutation
     //   family). Net: dispatch 64 -> 66, visible 75 -> 77.
+    // #817 (Phase 2 Perception cont.) — `diff_form_preview` added
+    //   (before/after visual diff composer, pure read-class sibling of
+    //   render_form_preview + analyze_form_layout). Net: dispatch 66 -> 67,
+    //   visible 77 -> 78. No modern tools added.
     //   Expected breakdown:
-    //     66 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     67 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 77 visible (was 64 before #795).
-    expect(toolCount).toBe(66);
+    //     = 78 visible (was 64 before #795).
+    expect(toolCount).toBe(67);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(77);
+    expect(visibleCount).toBe(78);
   });
 
   it("verifies split-mode coverage explicitly", () => {

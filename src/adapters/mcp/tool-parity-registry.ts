@@ -68,6 +68,8 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "render_form_preview",
   // Phase 2 — Perception (#815). Read-only geometry lint.
   "analyze_form_layout",
+  // Issue #817 — before/after visual diff composer.
+  "diff_form_preview",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -259,6 +261,17 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // `controlSection` to enable the off-section check. Pure and offline.
   analyze_form_layout:
     "Run a geometry lint over a single .form.txt and report overlap, alignment (visual rows), off-section, tab-order vs visual order, and missing-geometry smells. Pure read-class — parses the .form.txt through FormIR, builds a behavior map, and delegates to the pure `lintFormLayout` core service. No Access, no COM, no filesystem mutation. Returns `{ findings, controls, sections }` where every finding carries severity `warning` (informational; never gating). The default `alignmentThresholdTwips` is 50; pass a smaller value to tighten the alignment net. Supply `sectionBounds` + `controlSection` together to enable the off-section check. Source path resolved via the #718 project-aware resolver (sourcePath/path or projectId+formName).",
+  // Issue #817 — before/after visual diff composer. Reads two
+  // .form.txt files (beforePath/afterPath or projectId+beforeName/afterName),
+  // parses both through FormIR, and emits a structured `{changes: {added,
+  // removed, moved, resized}, warnings}` report with diff overlays on the
+  // SVG (data-diff='added|removed|moved|resized|same' on each control rect)
+  // and ASCII (per-control legend + in-grid markers). `output` selects
+  // which frame(s) to surface; the structured envelope is always returned.
+  // `epsilon` (twips) loosens the moved/resized classifier. Read-only and
+  // offline — pure renderer, no Access, no COM, no filesystem mutation.
+  diff_form_preview:
+    "Compose a before/after visual diff of two .form.txt files. Reads both via the fileSystem port, parses both through FormIR, and delegates to the pure `diffFormPreview` core service. Returns `{ changes: { added, removed, moved, resized }, warnings, beforeForm, afterForm, svg?, ascii? }` where every entry of `added`/`removed` carries a `box` BoundingBox and every entry of `moved`/`resized` carries `before` + `after` BoundingBoxes. The SVG frame is the same `render_form_preview` artifact with `data-diff='added|removed|moved|resized|same'` on every control rect and a `<g data-section='removed'>` group of dashed-stroke ghost rects for removed controls. The ASCII frame carries a diff-marker legend (`+`, `-`, `*`) plus per-cell annotations. `output` selects the payload (`svg` | `ascii` | `both`); the structured envelope is always returned. `epsilon` (twips) loosens the moved/resized classifier. Read-only and offline — no Access, no COM, no filesystem mutation. Accepts `before`/`after` as aliases for `beforePath`/`afterPath` and `beforeName`/`afterName` for projectId-based resolution.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

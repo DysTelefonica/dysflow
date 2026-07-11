@@ -13,6 +13,7 @@ import { mutateForm } from "./vba-forms-mutation-tools.js";
 import {
   analyzeFormLayoutTool,
   compareForm,
+  diffFormPreviewTool,
   inspectForm,
   lintFormCode,
   renderFormPreviewTool,
@@ -111,7 +112,11 @@ export class VbaFormsAdapter {
       // Issue #815 — pure read-class geometry lint. Same shape as
       // `render_form_preview`: parses a .form.txt and returns findings
       // without opening Access.
-      toolName === "analyze_form_layout"
+      toolName === "analyze_form_layout" ||
+      // Issue #817 — `diff_form_preview` composes two `render_form_preview`
+      // outputs into a before/after visual diff. Pure read-class; same
+      // sibling-tool contract.
+      toolName === "diff_form_preview"
     );
   }
 
@@ -192,6 +197,13 @@ export class VbaFormsAdapter {
       // Issue #815 — geometry-lint sibling of `render_form_preview`.
       // Same path-resolution contract; same read-class seam.
       return analyzeFormLayoutTool(this.fileSystem, params, this.orchestrator);
+    }
+    if (toolName === "diff_form_preview") {
+      // Issue #817 — before/after visual diff composer. Reads two
+      // .form.txt files, parses both, delegates to the pure
+      // `diffFormPreview` core service. Mirrors `compare_form`'s
+      // before/after path-resolution contract.
+      return diffFormPreviewTool(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);

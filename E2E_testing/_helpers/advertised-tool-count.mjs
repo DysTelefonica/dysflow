@@ -28,8 +28,10 @@
  * #816 (Phase 3 Ergonomic actions) adds `form_align_controls` +
  * `form_distribute_controls` (batch geometry verbs sharing the same
  * applyGuardedFormWrite seam as the form_set_property /
- * form_delete_control family): 75 -> 77. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 77;
+ * form_delete_control family): 75 -> 77.
+ * #817 (Phase 2 Perception cont.) adds `diff_form_preview` (before/after
+ * visual diff composer, pure read-class sibling of render_form_preview): 77 -> 78. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 78;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

@@ -335,6 +335,19 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #817 — `diff_form_preview` is the before/after visual diff
+  // composer. It reads TWO .form.txt files, parses both through FormIR,
+  // and emits a structured `{added, removed, moved, resized}` change
+  // report with diff overlays on the SVG / ASCII frames. Pure read-class:
+  // never opens Access, never writes to disk. Both mutates flags stay
+  // false; risk is read-only — the write-gate must never fire for this
+  // tool.
+  diff_form_preview: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,

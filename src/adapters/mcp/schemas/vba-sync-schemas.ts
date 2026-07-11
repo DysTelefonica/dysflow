@@ -768,6 +768,86 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #817 — `diff_form_preview` composes two `render_form_preview`
+  // outputs into a before/after visual diff. Reads two .form.txt files,
+  // parses both, and emits a structured `{added, removed, moved, resized}`
+  // change report with diff overlays on the SVG / ASCII frames. Pure
+  // read-class — never opens Access, never writes to disk. `output`
+  // selects which frame(s) to surface; the structured envelope
+  // (changes + warnings + form names) is always returned.
+  diff_form_preview: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      beforePath: {
+        type: "string",
+        description:
+          "Path to the LEFT .form.txt file (the baseline). Required unless projectId+beforeName resolves it via the project resolver.",
+      },
+      before: {
+        type: "string",
+        description: "Alias for beforePath.",
+      },
+      afterPath: {
+        type: "string",
+        description:
+          "Path to the RIGHT .form.txt file (the modified). Required unless projectId+afterName resolves it via the project resolver.",
+      },
+      after: {
+        type: "string",
+        description: "Alias for afterPath.",
+      },
+      beforeName: {
+        type: "string",
+        description:
+          "Optional form name used together with projectId to resolve beforePath via the project resolver.",
+      },
+      beforeForm: {
+        type: "string",
+        description: "Alias for beforeName.",
+      },
+      afterName: {
+        type: "string",
+        description:
+          "Optional form name used together with projectId to resolve afterPath via the project resolver.",
+      },
+      afterForm: {
+        type: "string",
+        description: "Alias for afterName.",
+      },
+      output: {
+        type: "string",
+        enum: ["svg", "ascii", "both"],
+        description:
+          "Payload to return in `data`. `svg` is the primary browser-friendly format (with data-diff='added|removed|moved|resized|same' on each rect); `ascii` is the terminal/agent fallback (with a diff-marker legend); `both` surfaces both. The structured envelope (changes, warnings) is always returned alongside.",
+      },
+      viewportScale: {
+        type: "number",
+        minimum: 0.0001,
+        maximum: 10,
+        description:
+          "Optional twips -> pixels multiplier. Defaults to 0.05. Passed through to both renderings.",
+      },
+      ascii: {
+        type: "object",
+        properties: {
+          cellWidth: { type: "number", minimum: 3, maximum: 400 },
+          cellHeight: { type: "number", minimum: 3, maximum: 200 },
+        },
+        description:
+          "Optional ASCII grid dimensions. Defaults to 80x24. Passed through to both renderings.",
+      },
+      epsilon: {
+        type: "number",
+        minimum: 0,
+        maximum: 100,
+        description:
+          "Tolerance (twips) for the moved/resized classification. Defaults to 0. Any non-zero integer delta on the relevant axis is treated as a real change.",
+      },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
   // Issue #813 phase 6 — atomic exposure of the two net-new standalone
   // tools. Both share the same sourcePath/path + dryRun/apply + outputMode
   // surface as form_add_control / form_move_control / form_rename_control.

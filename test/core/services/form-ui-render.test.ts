@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FormIR } from "../../../src/core/models/form-ir";
-import { renderFormPreview } from "../../../src/core/services/form-ui-render";
+import {
+  extractFormPreviewLayouts,
+  renderFormPreview,
+} from "../../../src/core/services/form-ui-render";
 
 // ---------------------------------------------------------------------------
 // Fixture: a representative Access form. The intent is to exercise every
@@ -454,5 +457,54 @@ describe("renderFormPreview — #817 composition seam (issue #814 coordination)"
     expect(modified.svg).not.toBe(baseline.svg);
     // Both expose the same viewport shape (same form bounds).
     expect(Object.keys(modified.viewport).sort()).toEqual(Object.keys(baseline.viewport).sort());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #817 — `extractFormPreviewLayouts` is the seam the diff composer
+// relies on to compare per-control geometry without re-rendering. Pin the
+// shape here so #817's contract is locked.
+// ---------------------------------------------------------------------------
+
+describe("extractFormPreviewLayouts — #817 composition seam", () => {
+  it("returns one FormPreviewControlLayout per named control", () => {
+    const layouts = extractFormPreviewLayouts(IR);
+    const names = layouts.map((entry) => entry.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "cmdRefresh",
+        "lblName",
+        "txtCustomerName",
+        "txtNoGeometry",
+        "boxBorder",
+        "tabMain",
+        "pgFirst",
+        "txtInsideTab",
+      ]),
+    );
+  });
+
+  it("sorts layouts by (top, left) so callers can rely on visual order", () => {
+    const layouts = extractFormPreviewLayouts(IR);
+    const sorted = [...layouts].sort((a, b) => {
+      if (a.rect === null && b.rect === null) return 0;
+      if (a.rect === null) return 1;
+      if (b.rect === null) return -1;
+      return a.rect.top - b.rect.top || a.rect.left - b.rect.left;
+    });
+    expect(layouts.map((l) => l.name)).toEqual(sorted.map((l) => l.name));
+  });
+
+  it("matches the per-control names the renderer would draw (svg parity)", () => {
+    const layouts = extractFormPreviewLayouts(IR);
+    const { svg } = renderFormPreview(IR);
+    for (const layout of layouts) {
+      if (layout.hidden) continue;
+      // The renderer skips controls with `rect === null` (missing geometry)
+      // — they appear in `warnings` but not in the SVG. The parity check
+      // mirrors that semantic.
+      if (layout.rect === null) continue;
+      expect(svg).toContain(`data-control="${layout.name}"`);
+    }
   });
 });

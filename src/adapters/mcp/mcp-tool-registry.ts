@@ -57,6 +57,12 @@ export const VBA_SYNC_TOOL_NAMES = [
   // read-class; never opens Access. Registered here so the route table
   // can reference it.
   "analyze_form_layout",
+  // Issue #817 — before/after visual diff composer. Reads two
+  // .form.txt files and composes a structured `{added, removed, moved,
+  // resized}` change report with diff overlays on the SVG/ASCII frames.
+  // Pure read-class; never opens Access. Registered here so the route
+  // table can reference it. vba-sync 42 -> 43, total 66 -> 67.
+  "diff_form_preview",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;
