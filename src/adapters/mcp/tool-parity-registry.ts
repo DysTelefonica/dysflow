@@ -70,6 +70,8 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "analyze_form_layout",
   // Issue #817 — before/after visual diff composer.
   "diff_form_preview",
+  // Issue #818 — schema-binding validator.
+  "verify_form_bindings",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -272,6 +274,22 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // offline — pure renderer, no Access, no COM, no filesystem mutation.
   diff_form_preview:
     "Compose a before/after visual diff of two .form.txt files. Reads both via the fileSystem port, parses both through FormIR, and delegates to the pure `diffFormPreview` core service. Returns `{ changes: { added, removed, moved, resized }, warnings, beforeForm, afterForm, svg?, ascii? }` where every entry of `added`/`removed` carries a `box` BoundingBox and every entry of `moved`/`resized` carries `before` + `after` BoundingBoxes. The SVG frame is the same `render_form_preview` artifact with `data-diff='added|removed|moved|resized|same'` on every control rect and a `<g data-section='removed'>` group of dashed-stroke ghost rects for removed controls. The ASCII frame carries a diff-marker legend (`+`, `-`, `*`) plus per-cell annotations. `output` selects the payload (`svg` | `ascii` | `both`); the structured envelope is always returned. `epsilon` (twips) loosens the moved/resized classifier. Read-only and offline — no Access, no COM, no filesystem mutation. Accepts `before`/`after` as aliases for `beforePath`/`afterPath` and `beforeName`/`afterName` for projectId-based resolution.",
+  // Issue #818 — Phase 2 Perception. Pure read-class binding validator.
+  // Validates a form's ControlSource + RowSource against a caller-supplied
+  // schema aggregate (typically pre-aggregated upstream from dysflow
+  // `get_schema` MCP calls; the adapter itself never fetches the schema).
+  // Returns `{ formName, controls, findings[] }` where each finding
+  // carries a typed `code` (`FORM_BINDING_MISSING_TABLE`,
+  // `FORM_BINDING_MISSING_COLUMN`, `FORM_BINDING_EMPTY`,
+  // `FORM_BINDING_SQL_UNPARSEABLE`, `FORM_BINDING_TYPE_MISMATCH`),
+  // `severity:"warning"` (informational; never gating), `controlName`,
+  // and structured `data`. Accepts the schema aggregate
+  // `Record<tableName, ColumnSchema[]>` AND a single-table `get_schema`
+  // payload `{schema:[...], tableName:"..."}` — the adapter wraps the
+  // latter into the former. Read-only and offline — no Access, no COM,
+  // no filesystem mutation, no schema fetch.
+  verify_form_bindings:
+    'Validate a .form.txt\'s ControlSource + RowSource bindings against a caller-supplied schema aggregate. Reads the .form.txt through the fileSystem port, parses to FormIR, and delegates to the pure `validateBindings` core service. Returns `{ formName, controls, findings[] }` where every finding carries `code` (typed: `FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN` / `FORM_BINDING_EMPTY` / `FORM_BINDING_SQL_UNPARSEABLE` / `FORM_BINDING_TYPE_MISMATCH`), `severity:"warning"` (informational; never gating), `controlName`, and structured `data` (table, column, binding). The `schema` parameter accepts either a multi-table `Record<tableName, ColumnSchema[]>` aggregate (fan out one `get_schema` per table upstream) or a single-table `get_schema` payload `{schema:[{name,type,nullable}], tableName:"..."}` — the adapter normalizes both. The adapter itself never fetches the schema; the caller owns the upstream `get_schema` calls. Pure read-class — no Access, no COM, no filesystem mutation. Path resolution mirrors the other Phase 2 tools (sourcePath/path or projectId+formName).',
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

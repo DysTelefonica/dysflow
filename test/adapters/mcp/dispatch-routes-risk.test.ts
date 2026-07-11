@@ -92,6 +92,9 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     "analyze_form_layout",
     // Issue #817 — Phase 2 Perception cont. Read-only diff composer.
     "diff_form_preview",
+    // Issue #818 — Phase 2 Perception cont. Read-only schema-binding
+    // validator (ControlSource + RowSource against caller-supplied schema).
+    "verify_form_bindings",
     "vba_orphan_audit",
     // query-maintenance read-only
     "list_links",

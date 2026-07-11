@@ -81,7 +81,7 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     expect(VbaModulesAdapter.handles("compile_vba")).toBe(false);
   });
 
-  it("advertised MCP tool count is 78 after #795/#814/#815/#816/#817 form UI tools", () => {
+  it("advertised MCP tool count is 79 after #795/#814/#815/#816/#817/#818 form UI tools", () => {
     // #759 removed `compile_vba` (v1.19.0): 68 -> 67.
     // #777 Opción A (58405eb2) renamed 7 dysflow_* tools whose canonical
     //   forms already existed in alias-tools.ts: count unchanged at 67.
@@ -97,9 +97,11 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // #816 adds form_align_controls + form_distribute_controls
     // (Phase 3 Ergonomic actions, batch geometry): 75 -> 77.
     // #817 adds diff_form_preview (Phase 2 Perception cont., read-only): 77 -> 78.
+    // #818 adds verify_form_bindings (Phase 2 Perception cont., read-only
+    // schema-binding validator): 78 -> 79.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(78);
+    expect(advertisedToolCount()).toBe(79);
   });
 });

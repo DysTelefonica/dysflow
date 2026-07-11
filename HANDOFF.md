@@ -28,7 +28,8 @@
 - [x] Phase 2 — #814 `render_form_preview`; #815 `analyze_form_layout`.
 - [x] Phase 3 — #816 `form_align_controls` + `form_distribute_controls`.
 - [x] Phase 4 — #817 `diff_form_preview`.
-- [ ] Phase 5 — #819 align `access-form-ui-builder` skill + AGENTS.md.
+- [x] Phase 5 — #818 `verify_form_bindings` (schema-binding validator).
+- [ ] Phase 6 — #819 align `access-form-ui-builder` skill + AGENTS.md.
 
 ## Testing strategy (per repo philosophy — test at ports, mock only I/O)
 - **Unit at ports (`pnpm test`), no Access:** #718, #812, #814, #815, #816, #817.

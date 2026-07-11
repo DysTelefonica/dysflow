@@ -61,10 +61,13 @@ describe("Dysflow MCP tool parity inventory", () => {
     // vba-sync 40 -> 42, query unchanged at 24, total 64 -> 66.
     // #817 added diff_form_preview (Phase 2 Perception cont., read-only):
     // vba-sync 42 -> 43, query unchanged at 24, total 66 -> 67.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(43);
+    // #818 added verify_form_bindings (Phase 2 Perception cont.,
+    // read-only schema-binding validator): vba-sync 43 -> 44,
+    // query unchanged at 24, total 67 -> 68.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(44);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(67);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(67);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(68);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(68);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -88,6 +91,8 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_distribute_controls");
     // #817 (Phase 2 Perception cont.)
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("diff_form_preview");
+    // #818 (Phase 2 Perception cont.)
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("verify_form_bindings");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
@@ -100,8 +105,9 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #816 phase 3 added form_align_controls + form_distribute_controls:
     // parity-registry 64 -> 66.
     // #817 added diff_form_preview: parity-registry 66 -> 67.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(67);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(67);
+    // #818 added verify_form_bindings: parity-registry 67 -> 68.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(68);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(68);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
