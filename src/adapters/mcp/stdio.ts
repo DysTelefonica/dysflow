@@ -24,6 +24,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
+import { createDefaultCodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
@@ -351,6 +352,13 @@ export function createConfiguredServices(
         const resolved = await resolveConfigForInput(input, options);
         return resolved.ok ? resolved.data.allowedProcedures : undefined;
       },
+      // Issue #830 — internal CodeGraph-VBA invoker (one-way: dysflow →
+      // codegraph-vba). The default factory shells out to the
+      // `codegraph-vba` CLI on demand when `map_form_behavior` is invoked
+      // with `autoFetchCodeGraph:true`. Graceful fallback on any failure
+      // (no `.codegraph/` index, CLI missing, parse error) is built into
+      // the factory — never throws.
+      codeGraphVbaInvoker: createDefaultCodeGraphVbaInvoker(),
     }),
   };
 }

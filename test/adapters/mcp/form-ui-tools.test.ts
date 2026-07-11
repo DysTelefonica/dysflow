@@ -220,4 +220,21 @@ describe("public AI form UI builder MCP tools", () => {
     expect(invalid.isError).toBe(true);
     expect(invalid.content[0]?.text).toContain("codegraphEvidence[0].handler is required");
   });
+
+  it("accepts map_form_behavior without codegraphEvidence when autoFetchCodeGraph is opted in (#830)", async () => {
+    // Issue #830 — backward-compat invariant: the schema must NOT require
+    // `codegraphEvidence` anymore (it became optional in #830). The adapter
+    // layer still tolerates empty caller-supplied evidence; the legacy "no
+    // evidence supplied" warning surfaces in that case.
+    const map = toolByName("map_form_behavior", false);
+    const result = await map.tool.handler({
+      path: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+    });
+    // The schema does not reject this; the adapter (with no invoker wired in
+    // the test harness) gracefully returns a map with empty evidence + a
+    // warning. The "shape" assertion below pins both: schema accepts, and
+    // the adapter's fallback path doesn't throw.
+    expect(result.isError).toBe(false);
+  });
 });

@@ -26,6 +26,7 @@ import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
 import { findPackageRootNear } from "../../core/utils/package-info.js";
+import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
@@ -126,6 +127,15 @@ export type VbaSyncAdapterOptions = {
    * ignoring mid-session config edits until a server restart).
    */
   allowedProcedures?: AllowedProcedures;
+  /**
+   * Issue #830 — optional internal CodeGraph-VBA invoker. One-way only
+   * (dysflow → codegraph-vba). When supplied, the `map_form_behavior`
+   * tool's `autoFetchCodeGraph:true` opt-in path consults it. When
+   * absent, that path falls back to the legacy `.form.txt`-only behavior
+   * (no throw). The composition root in stdio.ts can opt in via this
+   * option; tests inject fakes.
+   */
+  codeGraphVbaInvoker?: CodeGraphVbaInvoker;
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
@@ -277,19 +287,28 @@ export class VbaSyncAdapter implements VbaSyncPort {
       undefined, // fileSystem: use the adapter's default (Node fs/promises)
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
     );
-    this.formsAdapter = new VbaFormsAdapter({
-      executor: this.executor,
-      env: this.env,
-      cwd: this.cwd,
-      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
-      validateStrictContext: (params, target) =>
-        this.validateStrictContext(
-          params,
-          target as { accessPath?: string; destinationRoot: string; projectRoot?: string },
-        ),
-      executeMappedTool: (toolName, params, mapping) =>
-        this.executeMappedTool(toolName, params, mapping),
-    });
+    this.formsAdapter = new VbaFormsAdapter(
+      {
+        executor: this.executor,
+        env: this.env,
+        cwd: this.cwd,
+        resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
+        validateStrictContext: (params, target) =>
+          this.validateStrictContext(
+            params,
+            target as { accessPath?: string; destinationRoot: string; projectRoot?: string },
+          ),
+        executeMappedTool: (toolName, params, mapping) =>
+          this.executeMappedTool(toolName, params, mapping),
+        // Issue #830 — one-way: dysflow → codegraph-vba. Threaded through
+        // from the composition root (stdio.ts) when an invoker is wired.
+        codeGraphVbaInvoker: options.codeGraphVbaInvoker,
+      },
+      undefined, // fileSystem — VbaFormsAdapter defaults to Node fs.
+      options.codeGraphVbaInvoker !== undefined
+        ? { codeGraphVbaInvoker: options.codeGraphVbaInvoker }
+        : undefined,
+    );
     this.modulesAdapter = new VbaModulesAdapter({
       scriptPath: this.scriptPath,
       accessPassword: this.accessPassword,

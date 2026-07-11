@@ -607,7 +607,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   },
   map_form_behavior: {
     type: "object",
-    required: ["codegraphEvidence"],
+    // Issue #830 — `codegraphEvidence` is now OPTIONAL. Backward compat: when
+    // absent AND `autoFetchCodeGraph` is unset/false, the behavior map falls
+    // back to `.form.txt`-declared events alone (the pre-#830 contract). The
+    // `codegraphEvidence` + `autoFetchCodeGraph` combo is the new happy path:
+    // caller evidence is merged with whatever the internal invoker returns.
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
@@ -627,6 +631,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
           },
         },
       },
+      // Issue #830 — opt-in flag. When true, the adapter layer invokes the
+      // codegraph-vba MCP server internally (one-way: dysflow → codegraph-vba)
+      // and merges the result with `codegraphEvidence` if also supplied.
+      // Defaults to false to preserve backward compat. On any invoker
+      // failure (no `.codegraph/`, CLI missing, parse error) the adapter
+      // falls back to whatever the caller supplied (or the `.form.txt`-only
+      // behavior) — never throws.
+      autoFetchCodeGraph: { type: "boolean" },
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },

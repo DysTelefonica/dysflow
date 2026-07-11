@@ -1,4 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
+import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
 
@@ -59,4 +60,14 @@ export interface VbaFormsOrchestrator {
     params: Record<string, unknown>,
     mapping: DirectMapping,
   ): Promise<OperationResult<unknown>>;
+  /**
+   * Issue #830 — internal CodeGraph-VBA invoker, ONE-WAY only (dysflow →
+   * codegraph-vba). Optional so the orchestrator can be constructed without
+   * a codegraph-vba runtime — when absent, `map_form_behavior`'s
+   * `autoFetchCodeGraph:true` falls back to the legacy `.form.txt`-only
+   * behavior. The adapter contract is "best-effort + opt-in flag": the
+   * invoker MUST NOT throw, and any failure is reported through the
+   * `warning` channel on its result envelope.
+   */
+  codeGraphVbaInvoker?: CodeGraphVbaInvoker;
 }

@@ -353,7 +353,18 @@ callers do not have to re-filter `actionableDifferent` themselves.
       ]
     }
     ```
-*   **Notes**: First iteration boundary: callers provide CodeGraph-VBA evidence payloads. Dysflow does not perform direct MCP-to-MCP invocation.
+*   **Notes**: First iteration boundary: callers provide CodeGraph-VBA evidence payloads. Dysflow does not perform direct MCP-to-MCP invocation. The `codegraphEvidence` array is now optional — you can also call `map_form_behavior` with just `sourcePath` to get the `.form.txt`-only behavior (a "No CodeGraph-VBA evidence was supplied" warning is appended). For the issue #830 opt-in path that invokes codegraph-vba internally, see the next example.
+
+#### Map Behavior with Internal CodeGraph-VBA Fetch (issue #830 opt-in)
+*   **Tool**: `map_form_behavior`
+*   **Arguments**:
+    ```json
+    {
+      "sourcePath": "forms/Form_Customer.form.txt",
+      "autoFetchCodeGraph": true
+    }
+    ```
+*   **Notes**: Pass `autoFetchCodeGraph: true` to relax the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba). The adapter invokes codegraph-vba internally to fetch call-path evidence for the form's mapped controls and merges the result with any caller-supplied `codegraphEvidence`. On any invoker failure (no `.codegraph/` index, codegraph-vba CLI missing, parse error), the adapter falls back to the `.form.txt`-declared events alone and appends a warning — never throws. Boundary direction: dysflow → codegraph-vba only. The reverse direction (codegraph-vba calling dysflow) is NOT supported.
 
 #### Preview and Verify a Design Plan
 *   **Tool**: `apply_form_design_plan`

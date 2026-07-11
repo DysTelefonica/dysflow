@@ -5,6 +5,7 @@ import {
   type OperationResult,
 } from "../../core/contracts/index.js";
 import { type FormFileSystemPort, VbaFormService } from "../../core/services/vba-form-service.js";
+import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeFormFileSystem } from "../services/node-form-file-system.js";
 import { executeFormUiBuilderTool, type FormUiBuilderToolName } from "./vba-forms-ai-tools.js";
 import { cloneFormFromTemplate } from "./vba-forms-clone-tools.js";
@@ -16,10 +17,22 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
 export type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 
+export type VbaFormsAdapterOptions = {
+  benchCacheRoot?: string;
+  /**
+   * Issue #830 — optional CodeGraph-VBA invoker. When supplied, the
+   * `map_form_behavior` tool consults it for the `autoFetchCodeGraph:true`
+   * opt-in path. When absent, that path falls back to the legacy
+   * `.form.txt`-only behavior (graceful, no throw).
+   */
+  codeGraphVbaInvoker?: CodeGraphVbaInvoker;
+};
+
 export class VbaFormsAdapter {
   private readonly formService: VbaFormService;
   private readonly fileSystem: FormFileSystemPort;
   private readonly benchCacheRoot: string;
+  private readonly orchestrator: VbaFormsOrchestrator;
 
   /**
    * @param orchestrator - Provides VBA manager execution context.
@@ -30,12 +43,20 @@ export class VbaFormsAdapter {
    *   `create_form_from_template` tool resolves `source_form` here
    *   first, then falls back to the resolved `projectRoot` (slice 5 OQ2).
    *   Defaults to `<cwd>/bench-cache/ardelperal-VBA_TOOLKIT_BENCH/src/forms`.
+   * @param options.codeGraphVbaInvoker - Issue #830 — internal codegraph-vba
+   *   invoker. One-way: dysflow → codegraph-vba. When supplied, the
+   *   `map_form_behavior` tool's `autoFetchCodeGraph:true` opt-in path
+   *   consults it. See {@link VbaFormsOrchestrator.codeGraphVbaInvoker}.
    */
   constructor(
-    private readonly orchestrator: VbaFormsOrchestrator,
+    orchestrator: VbaFormsOrchestrator,
     fileSystem?: FormFileSystemPort,
-    options?: { benchCacheRoot?: string },
+    options?: VbaFormsAdapterOptions,
   ) {
+    this.orchestrator =
+      options?.codeGraphVbaInvoker !== undefined
+        ? { ...orchestrator, codeGraphVbaInvoker: options.codeGraphVbaInvoker }
+        : orchestrator;
     this.fileSystem = fileSystem ?? nodeFormFileSystem;
     this.benchCacheRoot =
       options?.benchCacheRoot ??

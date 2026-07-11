@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { CodeGraphVbaInvoker } from "../../../src/adapters/codegraph-vba/index";
 import {
   VbaFormsAdapter,
   type VbaFormsOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-forms-adapter";
 import { successResult } from "../../../src/core/contracts/index";
+import type { CodeGraphBehaviorEvidence } from "../../../src/core/models/form-ui-builder";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 const SIMPLE_FORM = `Version =21
@@ -210,4 +212,186 @@ it("ignores malformed CodeGraph evidence instead of throwing", async () => {
       ],
     });
   }
+});
+
+// Issue #830 — autoFetchCodeGraph opt-in invoker. Three RED-pin behaviors:
+//   (a) autoFetchCodeGraph:true + invoker returning data → behavior map enriched.
+//   (b) autoFetchCodeGraph:true + invoker failing/returning empty → graceful
+//       fallback: caller-supplied evidence (or no evidence) is preserved, no throw.
+//   (c) autoFetchCodeGraph:false (default) preserves the current evidence-supplied
+//       contract exactly — the orchestrator's invoker is never consulted.
+describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
+  function mockInvoker(impl: Partial<CodeGraphVbaInvoker>): CodeGraphVbaInvoker & {
+    fetchBehaviorEvidence: ReturnType<typeof vi.fn>;
+  } {
+    return {
+      fetchBehaviorEvidence: vi.fn(impl.fetchBehaviorEvidence ?? (async () => ({ evidence: [] }))),
+    };
+  }
+
+  it("autoFetchCodeGraph:true + invoker returning data enriches the behavior map", async () => {
+    const orchestrator = makeOrchestrator();
+    const invoker = mockInvoker({
+      fetchBehaviorEvidence: async () => ({
+        evidence: [
+          {
+            handler: "cmdSave_Click",
+            callPath: ["cmdSave_Click", "SaveCustomer"],
+            tables: ["Customers"],
+          } satisfies CodeGraphBehaviorEvidence,
+        ],
+      }),
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
+
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        controls: [
+          expect.objectContaining({
+            name: "cmdSave",
+            codegraphEvidence: [
+              expect.objectContaining({
+                handler: "cmdSave_Click",
+                callPath: ["cmdSave_Click", "SaveCustomer"],
+              }),
+            ],
+          }),
+        ],
+      });
+    }
+    expect(invoker.fetchBehaviorEvidence).toHaveBeenCalledTimes(1);
+    // The request must be scoped to the project root + form name + control names.
+    const request = invoker.fetchBehaviorEvidence.mock.calls[0]?.[0] as {
+      formName: string;
+      controlNames: string[];
+      projectPath: string;
+    };
+    expect(request).toEqual({
+      formName: "Customer",
+      controlNames: ["cmdSave"],
+      projectPath: "C:/repo",
+    });
+  });
+
+  it("autoFetchCodeGraph:true + invoker failing falls back gracefully without throwing", async () => {
+    const orchestrator = makeOrchestrator();
+    const invoker = mockInvoker({
+      fetchBehaviorEvidence: async () => {
+        throw new Error("codegraph-vba unavailable");
+      },
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
+
+    // No caller-supplied evidence either — the .form.txt-only behavior must still
+    // produce a valid map (just with the legacy "no evidence" warning). No throw.
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The .form.txt-declared OnClick event still surfaces on the control …
+      expect(result.data).toMatchObject({
+        controls: [
+          expect.objectContaining({
+            name: "cmdSave",
+            events: ["OnClick"],
+            codegraphEvidence: [],
+          }),
+        ],
+      });
+      // … and the legacy "no evidence supplied" warning is preserved (graceful
+      // fallback to the pre-#830 contract).
+      expect(result.data).toMatchObject({
+        warnings: expect.arrayContaining([expect.stringContaining("CodeGraph-VBA evidence")]),
+      });
+    }
+    // RED-pin: the invoker was consulted (and threw) — graceful fallback is what
+    // saved us, not "the flag was ignored entirely".
+    expect(invoker.fetchBehaviorEvidence).toHaveBeenCalledTimes(1);
+  });
+
+  it("autoFetchCodeGraph:true + invoker returning empty falls back gracefully and merges with caller evidence", async () => {
+    const orchestrator = makeOrchestrator();
+    const invoker = mockInvoker({
+      fetchBehaviorEvidence: async () => ({ evidence: [], warning: "no index" }),
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
+
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+      codegraphEvidence: [
+        { handler: "cmdSave_Click", callPath: ["cmdSave_Click", "CallerSupplied"] },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        controls: [
+          expect.objectContaining({
+            name: "cmdSave",
+            codegraphEvidence: [expect.objectContaining({ handler: "cmdSave_Click" })],
+          }),
+        ],
+      });
+    }
+    // RED-pin: invoker WAS consulted (returned empty), and the caller-supplied
+    // evidence was preserved alongside.
+    expect(invoker.fetchBehaviorEvidence).toHaveBeenCalledTimes(1);
+  });
+
+  it("autoFetchCodeGraph:false (default) does NOT consult the invoker", async () => {
+    const orchestrator = makeOrchestrator();
+    const invoker = mockInvoker({
+      fetchBehaviorEvidence: async () => ({
+        evidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }],
+      }),
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
+
+    // Backward compat — no autoFetchCodeGraph flag, caller supplied nothing either.
+    // The legacy "no evidence supplied" warning must appear and the invoker is NEVER called.
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        controls: [expect.objectContaining({ name: "cmdSave", codegraphEvidence: [] })],
+        warnings: expect.arrayContaining([expect.stringContaining("CodeGraph-VBA evidence")]),
+      });
+    }
+    expect(invoker.fetchBehaviorEvidence).not.toHaveBeenCalled();
+  });
+
+  it("autoFetchCodeGraph:true without an orchestrator-bound invoker falls back gracefully", async () => {
+    // The orchestrator doesn't expose an invoker — the adapter must not throw,
+    // and the legacy "no evidence supplied" warning must surface.
+    const orchestrator = makeOrchestrator();
+    delete (orchestrator as { codeGraphVbaInvoker?: unknown }).codeGraphVbaInvoker;
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs());
+
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        controls: [expect.objectContaining({ name: "cmdSave", codegraphEvidence: [] })],
+        warnings: expect.arrayContaining([expect.stringContaining("CodeGraph-VBA evidence")]),
+      });
+    }
+  });
 });
