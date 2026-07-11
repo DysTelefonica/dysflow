@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.6.0] - 2026-07-11
+
+- Merge pull request #827 from DysTelefonica/feat/813-phase6-atomic-exposure - feat(813): atomic MCP exposure for apply_form_design_plan family - Merge pull request #826 from DysTelefonica/feat/813-phase5-execution-internals - feat(813): execution internals for apply_form_design_plan (PR 5)
+
+
 ## [v2.5.4] - 2026-07-11
 
 - Merge pull request #825 from DysTelefonica/feat/813-phase4-guarded-seam - style(vba-sync): apply biome lint to Phase 4.1 seam files - docs(sdd): mark Phase 4.1 task 4.1 complete in tasks.md - refactor(vba-sync): extract applyGuardedFormWrite seam (PR 4 / #813) - Merge pull request #824 from DysTelefonica/feat/813-apply-form-design-plan - feat(813): pure six-kind form UI planning + vocabulary reconciliation
