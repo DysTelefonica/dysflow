@@ -1,10 +1,10 @@
 ---
 name: access-form-ui-builder
-description: "Trigger: Access form UI builder, analyze form UI, behavior map, design plan, apply form design plan, form mutation primitives (form_set_property, form_delete_control), pattern copy, verify form UI. Guide AI-safe form UI changes including real guarded apply writes."
+description: "Trigger: Access form UI builder, analyze form UI, behavior map, design plan, apply form design plan, form mutation primitives (form_set_property, form_delete_control), pattern copy, verify form UI, render form preview (geometric SVG/ASCII render from FormIR twips). Guide AI-safe form UI changes including real guarded apply writes."
 license: Apache-2.0
 metadata:
   author: "gentleman-programming"
-  version: "1.1"
+  version: "1.2"
   last_updated: "2026-07-11"
   requires_dysflow: ">=2.6.0"
 ---
@@ -29,6 +29,7 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 | Situation | Gate |
 |---|---|
 | Need to understand an existing form | Run semantic analysis before planning. |
+| Need to *see* a form's layout without opening Access | Use `render_form_preview({ sourcePath })` — pure, offline SVG/ASCII render from FormIR twips (issue #814). The output shape is the single primitive the sibling `diff_form_preview` (#817) composes pairs of frames from. |
 | Need behavior-sensitive changes | Require behavior map with CodeGraph-VBA evidence. Pass `autoFetchCodeGraph: true` to relax the no-MCP-to-MCP boundary and let dysflow query codegraph-vba internally (issue #830). Pass caller-supplied `codegraphEvidence` instead if you want the original explicit-boundary contract. |
 | Copying another form's pattern | Record the reference pattern separately; never overwrite target behavior. |
 | Applying a plan | Dry-run first to preview the resulting source. Confirm before passing `apply:true`. Apply writes through guarded `import_modules` and respects the write gate. |

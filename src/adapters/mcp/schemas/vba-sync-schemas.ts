@@ -694,6 +694,36 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #814 — `render_form_preview` produces a deterministic, byte-stable
+  // layout artifact (SVG primary, ASCII fallback for terminals) from a
+  // .form.txt's FormIR tree. Pure read-only — no Access, no COM, no
+  // filesystem mutation. `output` selects which payload to surface in the
+  // response; the structured envelope always carries the viewport and any
+  // non-fatal warnings so #817 (`diff_form_preview`) can compose a pair
+  // of frames without re-rendering. Defaults to `"svg"`.
+  render_form_preview: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      output: {
+        type: "string",
+        enum: ["svg", "ascii", "both"],
+        description:
+          "Payload to return in `data`. `svg` is the primary browser-friendly format; `ascii` is the terminal/agent fallback; `both` surfaces both. The structured envelope (viewport, warnings) is always returned alongside.",
+      },
+      viewportScale: {
+        type: "number",
+        minimum: 0.0001,
+        maximum: 10,
+        description:
+          'Optional twips -> pixels multiplier. Defaults to 0.05 (~21" form => ~1500px wide viewport). Pass 1.0 for twip-equivalent pixel rendering.',
+      },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
   // Issue #813 phase 6 — atomic exposure of the two net-new standalone
   // tools. Both share the same sourcePath/path + dryRun/apply + outputMode
   // surface as form_add_control / form_move_control / form_rename_control.

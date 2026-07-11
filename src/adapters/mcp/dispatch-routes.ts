@@ -287,6 +287,18 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #814 — `render_form_preview` is a pure read-class tool: it walks
+  // the FormIR tree and emits an SVG / ASCII layout artifact. It never
+  // opens Access, never writes to disk, and never mutates the binary — so
+  // both mutates flags stay false and the write-gate never fires. The route
+  // mirrors `analyze_form_ui` / `map_form_behavior` / `verify_form_ui`
+  // exactly: read-only, risk:read-only, no write seam.
+  render_form_preview: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,

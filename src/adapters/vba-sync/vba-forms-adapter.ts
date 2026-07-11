@@ -10,7 +10,12 @@ import { nodeFormFileSystem } from "../services/node-form-file-system.js";
 import { executeFormUiBuilderTool, type FormUiBuilderToolName } from "./vba-forms-ai-tools.js";
 import { cloneFormFromTemplate } from "./vba-forms-clone-tools.js";
 import { mutateForm } from "./vba-forms-mutation-tools.js";
-import { compareForm, inspectForm, lintFormCode } from "./vba-forms-read-tools.js";
+import {
+  compareForm,
+  inspectForm,
+  lintFormCode,
+  renderFormPreviewTool,
+} from "./vba-forms-read-tools.js";
 import { deserializeForm, serializeForm } from "./vba-forms-serialization-tools.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
@@ -92,7 +97,8 @@ export class VbaFormsAdapter {
       toolName === "generate_form_design_plan" ||
       toolName === "apply_form_design_plan" ||
       toolName === "copy_form_ui_pattern" ||
-      toolName === "verify_form_ui"
+      toolName === "verify_form_ui" ||
+      toolName === "render_form_preview"
     );
   }
 
@@ -156,6 +162,13 @@ export class VbaFormsAdapter {
         toolName: toolName as FormUiBuilderToolName,
         params,
       });
+    }
+    if (toolName === "render_form_preview") {
+      // Issue #814 — pure read-class adapter (Phase 2 — Perception).
+      // Mirrors `inspect_form`'s path-resolution contract; uses the same
+      // fileSystem port + orchestrator wiring so the tool count stays
+      // focused on the visual rendering seam and not on path policy.
+      return renderFormPreviewTool(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);

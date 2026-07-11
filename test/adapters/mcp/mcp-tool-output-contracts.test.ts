@@ -82,6 +82,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // surface as the slice-4 tools above (applyGuardedFormWrite seam).
     "form_set_property",
     "form_delete_control",
+    // Issue #814 (Phase 2 Perception) — pure read-class geometric
+    // SVG/ASCII renderer. Routed through the same dispatch surface as
+    // its slice-4 siblings, but never mutates the binary / filesystem,
+    // so the write-gate never fires (mirror of `analyze_form_ui`).
+    "render_form_preview",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

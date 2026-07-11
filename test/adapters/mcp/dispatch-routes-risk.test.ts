@@ -86,6 +86,8 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     "map_form_behavior",
     "generate_form_design_plan",
     "verify_form_ui",
+    // Issue #814 — Phase 2 Perception. Read-only, offline, pure.
+    "render_form_preview",
     "vba_orphan_audit",
     // query-maintenance read-only
     "list_links",

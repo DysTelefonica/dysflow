@@ -20,8 +20,10 @@
  * #795 adds six AI form UI builder tools: analyze/map/plan/apply/copy/verify.
  * #807 (Feature 1) adds `list_vba_modules` (read-only sibling of `list_objects`).
  * #813 phase 6 adds `form_set_property` + `form_delete_control` (atomic
- * exposure of the apply_form_design_plan family): 71 -> 73. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 73;
+ * exposure of the apply_form_design_plan family): 71 -> 73.
+ * #814 (Phase 2 Perception) adds `render_form_preview` (pure read-class
+ * geometric SVG/ASCII render): 73 -> 74. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 74;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;
