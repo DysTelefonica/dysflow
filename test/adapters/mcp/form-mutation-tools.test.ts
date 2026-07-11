@@ -45,10 +45,16 @@ function toolByName(name: string, writesEnabled = false) {
 }
 
 describe("public form mutation MCP tools", () => {
+  // Issue #813 phase 6 — apply_form_design_plan + form_set_property +
+  // form_delete_control join the family. apply_form_design_plan is the
+  // plan-form dispatch and lives in vba-forms-ai-tools; the 2 net-new
+  // standalone tools share the mutateForm seam.
   const names = [
     "form_add_control",
     "form_move_control",
     "form_rename_control",
+    "form_set_property",
+    "form_delete_control",
     "create_form_from_template",
   ] as const;
 
@@ -88,6 +94,25 @@ describe("public form mutation MCP tools", () => {
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         newName: expect.any(Object),
+        dryRun: expect.any(Object),
+        apply: expect.any(Object),
+      }),
+    );
+    // Issue #813 phase 6 — the 2 net-new standalone tools mirror the
+    // slice-4 mutation family: sourcePath + controlName + dryRun/apply.
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_property.properties).toEqual(
+      expect.objectContaining({
+        sourcePath: expect.any(Object),
+        controlName: expect.any(Object),
+        property: expect.any(Object),
+        dryRun: expect.any(Object),
+        apply: expect.any(Object),
+      }),
+    );
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_delete_control.properties).toEqual(
+      expect.objectContaining({
+        sourcePath: expect.any(Object),
+        controlName: expect.any(Object),
         dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),

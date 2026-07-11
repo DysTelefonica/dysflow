@@ -234,21 +234,52 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
-  // First-slice AI form UI builder plan tools are contract-only: they produce
-  // analysis/plans/application reports but do not mutate form source or binary.
-  // When concrete FormIR mutations are added, reclassify only that operation
-  // through the same guarded import path as form_add_control/form_move_control.
+  // Issue #813 phase 6 — `apply_form_design_plan` is now an atomic
+  // exposure of the Phase 5.1 execution internals (multi-op plan fold,
+  // single write, single import_modules gate, single rollback).
+  // Risk is routine-dev-write (mirrors form_add_control / form_move_control
+  // / form_rename_control — a routine property/control edit gated through
+  // the same applyGuardedFormWrite seam). Both mutates flags must be true
+  // so MCP_WRITES_DISABLED refuses with apply:true (issue #813 acceptance
+  // criterion #5) and the dispatch-factory's atomic-dryRun gating list
+  // routes the input through resolveIsDryRun (not the hardcoded false
+  // branch reserved for raw binary writers).
   apply_form_design_plan: {
     kind: "vba-sync",
-    mutatesBinary: false,
-    mutatesFilesystem: false,
-    risk: "read-only",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
   },
   copy_form_ui_pattern: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
     risk: "read-only",
+  },
+  // Issue #813 phase 6 — net-new standalone tools sharing the same
+  // applyGuardedFormWrite seam as `apply_form_design_plan`. Both must
+  // join the three-list trio (route table + isDryRunCapableBinaryWrite +
+  // POLICY_EXEMPT_TOOLS) in lockstep or the write-gate either bypasses
+  // (route.mutatesBinary stays false) or refuses legitimate dry-run
+  // previews (the second isDryRun-gating list is not extended).
+  //
+  // Risk tier rationale (design.md):
+  //   - form_set_property: routine-dev-write — a routine property edit
+  //     mirroring `form_move_control` (same risk family, same seam).
+  //   - form_delete_control: destructive-write — irreversible content
+  //     removal mirroring `form_deserialize` (which is also
+  //     destructive-write in this table).
+  form_set_property: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  form_delete_control: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "destructive-write",
   },
   verify_form_ui: {
     kind: "vba-sync",

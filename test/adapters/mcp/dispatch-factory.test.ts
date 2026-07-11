@@ -130,14 +130,19 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         // feat-759-no-compile (v1.19.0) — compile_vba was removed; it is
         // no longer a binary-writer. The remaining set is the union of
         // mutation tools that still write to the .accdb.
+        // Issue #813 phase 6 — apply_form_design_plan + form_set_property +
+        // form_delete_control join the binary-mutating family.
         "delete_module",
         "fix_encoding",
         "import_all",
         "import_modules",
+        "apply_form_design_plan",
         "create_form_from_template",
         "form_add_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_property",
+        "form_delete_control",
         "form_deserialize",
         "vba_inline_execution",
       ].sort(),

@@ -18,8 +18,10 @@
  * #777 (Opción A cont.) — drops by 3 (one per legacy alias removed:
  * `dysflow_vba_execute`, `dysflow_access_operations_list`, `dysflow_access_cleanup`).
  * #795 adds six AI form UI builder tools: analyze/map/plan/apply/copy/verify.
- * #807 (Feature 1) adds `list_vba_modules` (read-only sibling of `list_objects`). */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 71;
+ * #807 (Feature 1) adds `list_vba_modules` (read-only sibling of `list_objects`).
+ * #813 phase 6 adds `form_set_property` + `form_delete_control` (atomic
+ * exposure of the apply_form_design_plan family): 71 -> 73. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 73;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

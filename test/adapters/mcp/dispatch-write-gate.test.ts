@@ -67,6 +67,9 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
         "form_add_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_property",
+        "form_delete_control",
+        "apply_form_design_plan",
         "form_deserialize",
         "export_all",
         "export_modules",
@@ -264,6 +267,36 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       newName: "cmdSave",
       apply: true,
     },
+    // Issue #813 phase 6 — apply_form_design_plan + form_set_property +
+    // form_delete_control join the binary-mutating family.
+    apply_form_design_plan: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      plan: {
+        formName: "Form_Customer",
+        sourceContract: {
+          formName: "Form_Customer",
+          controls: [],
+          formEvents: [],
+          unmappedEvidence: [],
+          warnings: [],
+        },
+        operations: [],
+        warnings: [],
+      },
+      apply: true,
+    },
+    form_set_property: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmd",
+      property: "Caption",
+      value: "Save",
+      apply: true,
+    },
+    form_delete_control: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmdObsolete",
+      apply: true,
+    },
     form_deserialize: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       ir: {
@@ -295,14 +328,19 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       [
         // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
         // remaining binary writers mutate the .accdb.
+        // Issue #813 phase 6 — apply_form_design_plan + form_set_property +
+        // form_delete_control join the binary-mutating family.
         "delete_module",
         "fix_encoding",
         "import_all",
         "import_modules",
+        "apply_form_design_plan",
         "create_form_from_template",
         "form_add_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_property",
+        "form_delete_control",
         "form_deserialize",
         "vba_inline_execution",
       ].sort(),

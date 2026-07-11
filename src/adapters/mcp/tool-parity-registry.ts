@@ -58,6 +58,9 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "apply_form_design_plan",
   "copy_form_ui_pattern",
   "verify_form_ui",
+  // Phase 6 (#813) — atomic exposure of the form mutation family.
+  "form_set_property",
+  "form_delete_control",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -185,9 +188,13 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   generate_form_design_plan:
     "Generate an explicit AI form UI design plan from a behavior map and requested operations. Read-only; operations outside the mapped contract are rejected with warnings.",
   apply_form_design_plan:
-    "Apply or preview an AI form UI design plan contract in-memory. Defaults to dry-run and records preserved controls; currently no filesystem/binary mutation is performed in this slice.",
+    "Apply or preview an AI form UI design plan against a version-controlled .form.txt through the applyGuardedFormWrite seam (single accumulated write, single import_modules LoadFromText gate, single rollback on import failure). Defaults to dry-run and returns the would-be-written source plus advisories without writing; apply:true writes the source and requires the LoadFromText gate to pass. Source path resolved out-of-band via sourcePath/path (mirrors form_add_control). plan.formName is non-empty-checked and matched case-insensitively against the parsed form name; mismatch returns FORM_UI_PLAN_FORM_MISMATCH with no write. note operations are counted as advisories, never silently dropped; unknown kinds fail closed with FORM_UI_UNSUPPORTED_OPERATION. Write-gated.",
   copy_form_ui_pattern:
     "Copy a reference form UI pattern as traceable design intent without erasing the target behavior map. Read-only contract preview.",
+  form_set_property:
+    "Set one named layout/property entry on a control in a version-controlled .form.txt through the FormIR setProperty primitive. Refuses to mutate protected/metadata keys (Checksum, PrtDevMode*, Format) and refuses to change a control's Name (identity changes belong to form_rename_control). When the existing entry for the target property is blob-kind (e.g. PrtMip, PrtDevNamesW, FormatConditions), the primitive refuses with FORM_PROPERTY_NOT_SCALAR rather than pushing a duplicate scalar entry. Defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Never touches codeBehind (the sibling .cls owns code-behind). Write-gated.",
+  form_delete_control:
+    "Delete one named control from a version-controlled .form.txt through the FormIR deleteControl primitive. Fail-closed when the control (or any descendant) has an [Event Procedure] binding (FORM_CONTROL_HAS_EVENT_BINDING — handlers live in the sibling .cls) or when it has named child controls (FORM_CONTROL_HAS_CHILDREN — delete children first). This primitive protects ONLY property-sheet-declared event bindings visible to FormIR — it does not detect code-only references such as WithEvents in the .cls or Me!ControlName. Defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Destructive — Write-gated.",
   verify_form_ui:
     "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
   vba_orphan_audit:

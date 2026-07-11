@@ -55,6 +55,16 @@ const POLICY_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   "form_rename_control",
   "form_deserialize",
   "create_form_from_template",
+  // Issue #813 phase 6 — the apply_form_design_plan family shares the
+  // "form mutation family uses plan-by-default" contract. Without this
+  // exemption, a preview-intended `apply_form_design_plan({ plan })` call
+  // (no dryRun/apply key) would silently perform a REAL write in
+  // developer mode because the policy helper injects dryRun:false for
+  // any routine-dev-write tool NOT in this exempt set when the caller
+  // passes neither dryRun nor apply.
+  "apply_form_design_plan",
+  "form_set_property",
+  "form_delete_control",
   "catalog_add_control",
   "generate_form",
 ]);

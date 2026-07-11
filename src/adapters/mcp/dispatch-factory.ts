@@ -139,7 +139,16 @@ export function createDispatchTool(
     name === "form_move_control" ||
     name === "form_rename_control" ||
     name === "form_deserialize" ||
-    name === "create_form_from_template";
+    name === "create_form_from_template" ||
+    // Issue #813 phase 6 — the apply_form_design_plan family (plan-form +
+    // 2 net-new standalone tools) shares the applyGuardedFormWrite seam.
+    // The dispatch must consult resolveIsDryRun on these names so a
+    // legitimate dryRun:true preview is NOT collapsed to isDryRun===false
+    // by the hardcoded branch reserved for raw binary writers (import_*,
+    // vba_inline_execution, delete_module, fix_encoding).
+    name === "apply_form_design_plan" ||
+    name === "form_set_property" ||
+    name === "form_delete_control";
 
   const isWriteGated =
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
@@ -221,12 +230,19 @@ export function createDispatchTool(
               // create_form_from_template (slice 5, #618) extends that
               // family: default dry-run at the service level; apply:true is a
               // binary mutation gated by MCP_WRITES_DISABLED.
+              // apply_form_design_plan + form_set_property + form_delete_control
+              // (#813 phase 6) share the same seam: apply:true is a binary
+              // mutation gated by MCP_WRITES_DISABLED; dryRun:true is a
+              // preview that returns the plan without writing.
               name === "catalog_add_control" ||
               name === "form_add_control" ||
               name === "form_move_control" ||
               name === "form_rename_control" ||
               name === "form_deserialize" ||
-              name === "create_form_from_template"
+              name === "create_form_from_template" ||
+              name === "apply_form_design_plan" ||
+              name === "form_set_property" ||
+              name === "form_delete_control"
               ? resolveIsDryRun(normalizedInput)
               : name === "generate_form" && hasOwn(normalizedInput, "dryRun")
                 ? resolveIsDryRun(normalizedInput)

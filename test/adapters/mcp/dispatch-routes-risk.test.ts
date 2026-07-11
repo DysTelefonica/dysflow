@@ -37,6 +37,10 @@ const EXPECTED_ROUTE_RISK: Readonly<Partial<Record<GeneratedDispatchToolName, To
   export_all: "destructive-write",
   delete_module: "destructive-write",
   form_deserialize: "destructive-write",
+  // Issue #813 phase 6 — atomic exposure of form_delete_control joins
+  // the destructive family (irreversible content removal, mirroring
+  // form_deserialize).
+  form_delete_control: "destructive-write",
   // VBA sync — protected family (1)
   fix_encoding: "protected-write",
   // VBA sync — arbitrary family (1)
@@ -50,6 +54,10 @@ const EXPECTED_ROUTE_RISK: Readonly<Partial<Record<GeneratedDispatchToolName, To
   form_add_control: "routine-dev-write",
   form_move_control: "routine-dev-write",
   form_rename_control: "routine-dev-write",
+  // Issue #813 phase 6 — apply_form_design_plan + form_set_property
+  // are routine-dev-write (mirrors the slice-4 form mutation family).
+  apply_form_design_plan: "routine-dev-write",
+  form_set_property: "routine-dev-write",
   catalog_add_control: "routine-dev-write",
   generate_erd: "routine-dev-write",
   // VBA sync — read-only (everything else, see auto-assert below)
@@ -73,7 +81,6 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     "compare_form",
     "lint_form_code",
     "form_serialize",
-    "apply_form_design_plan",
     "copy_form_ui_pattern",
     "analyze_form_ui",
     "map_form_behavior",
@@ -190,7 +197,10 @@ describe("MCP_TOOL_ROUTES — risk classification (#779)", () => {
     }
   });
 
-  it("destructive family = exports + delete + form_deserialize", () => {
+  it("destructive family = exports + delete + form_deserialize + form_delete_control", () => {
+    // Issue #813 phase 6 — form_delete_control joins the destructive
+    // family (irreversible content removal). Same pattern as
+    // form_deserialize.
     const destructive = (
       Object.entries(MCP_TOOL_ROUTES) as Array<
         [GeneratedDispatchToolName, (typeof MCP_TOOL_ROUTES)[GeneratedDispatchToolName]]
@@ -203,6 +213,7 @@ describe("MCP_TOOL_ROUTES — risk classification (#779)", () => {
       "delete_module",
       "export_all",
       "export_modules",
+      "form_delete_control",
       "form_deserialize",
     ]);
   });

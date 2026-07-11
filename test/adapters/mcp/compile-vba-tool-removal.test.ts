@@ -91,9 +91,10 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     //   entirely (the canonical alias is the sole source). The other 8 are
     //   bespoke-to-bespoke renames: count unchanged. Net: 67 -> 64.
     // #807 (Feature 1) adds `list_vba_modules`: net 70 -> 71.
+    // #813 phase 6 adds form_set_property + form_delete_control: 71 -> 73.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(71);
+    expect(advertisedToolCount()).toBe(73);
   });
 });

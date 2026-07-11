@@ -59,8 +59,8 @@ PR 1 MUST preserve `proposal.md`, `design.md`, `specs/ai-form-ui-builder/spec.md
 
 ## Phase 6: PR 6 — Atomic Exposure and Policy
 
-- [ ] 6.1 **RED:** Lock three-tool routes, parity, risks, capabilities, preview/apply defaults, and `MCP_WRITES_DISABLED` in MCP policy suites.
-- [ ] 6.2 **GREEN:** In ONE commit wire standalone dispatch plus schemas, registry, parity, routes, both factory lists, adapter entry points, and `POLICY_EXEMPT_TOOLS`; remove `targetPath`; run `pnpm test`, `pnpm build`, CI, and reindex.
+- [x] 6.1 **RED:** Lock three-tool routes, parity, risks, capabilities, preview/apply defaults, and `MCP_WRITES_DISABLED` in MCP policy suites.
+- [x] 6.2 **GREEN:** In ONE commit wire standalone dispatch plus schemas, registry, parity, routes, both factory lists, adapter entry points, and `POLICY_EXEMPT_TOOLS`; remove `targetPath`; run `pnpm test`, `pnpm build`, CI, and reindex.
 
 ## Phase 7: Merge, Release, Recovery, Closure
 

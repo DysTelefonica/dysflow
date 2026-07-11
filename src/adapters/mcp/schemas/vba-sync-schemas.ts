@@ -650,10 +650,10 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       sourcePath: SCHEMA_PROPS.sourcePath,
-      targetPath: {
-        type: "string",
-        description: "Optional target .form.txt path for apply:true.",
-      },
+      // Issue #813 phase 6 — `targetPath` removed. It was an unvalidated
+      // alternate write destination that would bypass every containment
+      // + formName check `sourcePath` already gets. sourcePath (or `path`)
+      // is the single source-path surface; resolved by the #718 resolver.
       plan: { type: "object" },
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
@@ -679,6 +679,60 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       sourceContract: { type: "object" },
       appliedContract: { type: "object" },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  // Issue #813 phase 6 — atomic exposure of the two net-new standalone
+  // tools. Both share the same sourcePath/path + dryRun/apply + outputMode
+  // surface as form_add_control / form_move_control / form_rename_control.
+  form_set_property: {
+    type: "object",
+    required: ["sourcePath", "controlName", "property"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      controlName: SCHEMA_PROPS.controlName,
+      property: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width'). Refused for protected/metadata keys (Checksum, PrtDevMode*, Format) and for 'Name' (use form_rename_control).",
+      },
+      value: {
+        // Issue #813 phase 6 — `value` accepts string|number|boolean. The
+        // base JsonSchemaPrimitiveType is a single primitive, so the cast
+        // to JsonSchemaProperty widens the schema to a union. The dysflow
+        // validator honors the schema as a constraint surface; non-scalar
+        // values (object/array/null) are passed through to the primitive
+        // which rejects them with the appropriate typed error.
+        type: "string",
+        description:
+          "New scalar value for the property. Accepts string/number/boolean (JSON-shape). Blob-kind entries (PrtMip, PrtDevNamesW, FormatConditions, etc.) are refused at the service level, not at the schema.",
+      } as unknown as { type: "string" | "number" | "boolean"; description: string },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  form_delete_control: {
+    type: "object",
+    required: ["sourcePath", "controlName"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      controlName: SCHEMA_PROPS.controlName,
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
