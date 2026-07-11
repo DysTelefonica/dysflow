@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.5.4] - 2026-07-11
+
+- Merge pull request #825 from DysTelefonica/feat/813-phase4-guarded-seam - style(vba-sync): apply biome lint to Phase 4.1 seam files - docs(sdd): mark Phase 4.1 task 4.1 complete in tasks.md - refactor(vba-sync): extract applyGuardedFormWrite seam (PR 4 / #813) - Merge pull request #824 from DysTelefonica/feat/813-apply-form-design-plan - feat(813): pure six-kind form UI planning + vocabulary reconciliation
+
+
 ## [v2.5.3] - 2026-07-10
 
 Patch release. Closes the two-PR chain for #811 (`form-ui-execution-wiring`) Phase 1+2: ships the canonical SDD artifacts under `openspec/changes/form-ui-execution-wiring/` and the pure FormIR mutation primitives (`setProperty`, `deleteControl`) that downstream wiring (#813) will compose. All changes are backward-compatible (additive or behavior-preserving).
