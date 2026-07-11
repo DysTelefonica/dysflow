@@ -55,7 +55,7 @@ PR 1 MUST preserve `proposal.md`, `design.md`, `specs/ai-form-ui-builder/spec.md
 
 ## Phase 5: PR 5 — Unregistered Execution
 
-- [ ] 5.1 **RED/GREEN:** Build directly tested, unreachable execution internals for path/identity guards, dry-run, one-write/import/rollback atomicity, failure, and advisories; do not wire registered routes/tools.
+- [x] 5.1 **RED/GREEN:** Build directly tested, unreachable execution internals for path/identity guards, dry-run, one-write/import/rollback atomicity, failure, and advisories; do not wire registered routes/tools.
 
 ## Phase 6: PR 6 — Atomic Exposure and Policy
 

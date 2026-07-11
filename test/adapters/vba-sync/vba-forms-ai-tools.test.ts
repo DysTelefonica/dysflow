@@ -3,6 +3,7 @@ import {
   VbaFormsAdapter,
   type VbaFormsOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-forms-adapter";
+import { successResult } from "../../../src/core/contracts/index";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 const SIMPLE_FORM = `Version =21
@@ -23,9 +24,17 @@ function makeOrchestrator(): VbaFormsOrchestrator {
     executor: vi.fn(),
     env: {},
     cwd: "C:/repo",
-    resolveExecutionTarget: vi.fn(),
-    validateStrictContext: vi.fn(),
-    executeMappedTool: vi.fn(),
+    resolveExecutionTarget: vi.fn().mockResolvedValue(
+      successResult({
+        accessPath: "C:/repo/App.accdb",
+        destinationRoot: "C:/repo",
+        projectRoot: "C:/repo",
+        timeoutMs: 30000,
+        configSource: "explicit-request",
+      }),
+    ),
+    validateStrictContext: vi.fn(() => successResult(undefined)),
+    executeMappedTool: vi.fn().mockResolvedValue(successResult({ imported: true })),
   };
 }
 
@@ -97,8 +106,8 @@ describe("VbaFormsAdapter AI form UI tools", () => {
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("applies design plans in memory without writing form source files", async () => {
-    const writeFile = vi.fn();
+  it("applies a note-only plan: dryRun writes nothing; apply writes once + imports once (Phase 5.1)", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
     const adapter = new VbaFormsAdapter(makeOrchestrator(), mockFs({ writeFile }));
     const sourceContract = {
       formName: "Customer",
@@ -131,12 +140,21 @@ describe("VbaFormsAdapter AI form UI tools", () => {
       warnings: [],
     };
 
-    const dryRun = await adapter.execute("apply_form_design_plan", { plan });
+    // DryRun: no write, no import. sourcePath is required so the adapter can
+    // read+parse the source and return the would-be-written preview without
+    // touching the file system.
+    const dryRun = await adapter.execute("apply_form_design_plan", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      plan,
+    });
     expect(dryRun.ok).toBe(true);
     expect(writeFile).not.toHaveBeenCalled();
 
+    // Apply: a single write + a single import through the guarded seam.
+    // Note ops are non-mutating; the IR is unchanged after the fold, but the
+    // seam is invoked exactly once so the plan-application contract holds.
     const applied = await adapter.execute("apply_form_design_plan", {
-      targetPath: "C:/repo/forms/Form_Customer.form.txt",
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       plan,
       apply: true,
     });
@@ -144,11 +162,12 @@ describe("VbaFormsAdapter AI form UI tools", () => {
     if (applied.ok) {
       expect(applied.data).toMatchObject({
         mode: "apply",
-        filesystemApplied: false,
-        importGate: "not-run",
+        filesystemApplied: true,
+        importGate: "passed",
       });
+      expect((applied.data as { advisories: string[] }).advisories).toEqual(["Keep save visible"]);
     }
-    expect(writeFile).not.toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledTimes(1);
   });
 
   it("ignores malformed CodeGraph evidence instead of throwing", async () => {

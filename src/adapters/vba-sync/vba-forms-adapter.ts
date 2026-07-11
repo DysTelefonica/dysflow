@@ -122,6 +122,7 @@ export class VbaFormsAdapter {
     ) {
       return executeFormUiBuilderTool({
         fileSystem: this.fileSystem,
+        orchestrator: this.orchestrator,
         toolName: toolName as FormUiBuilderToolName,
         params,
       });
