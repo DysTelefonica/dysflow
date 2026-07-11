@@ -51,7 +51,7 @@ PR 1 MUST preserve `proposal.md`, `design.md`, `specs/ai-form-ui-builder/spec.md
 
 ## Phase 4: PR 4 — Internal Guarded Seam
 
-- [ ] 4.1 Baseline regression; create `src/adapters/vba-sync/vba-forms-guarded-write.ts` and refactor existing mutation code without registering or exposing new writes; run `pnpm test`.
+- [x] 4.1 Baseline regression; create `src/adapters/vba-sync/vba-forms-guarded-write.ts` and refactor existing mutation code without registering or exposing new writes; run `pnpm test`.
 
 ## Phase 5: PR 5 — Unregistered Execution
 
