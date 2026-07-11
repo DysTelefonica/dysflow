@@ -348,6 +348,21 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #818 — `verify_form_bindings` validates a form's ControlSource +
+  // RowSource bindings against a caller-supplied schema aggregate
+  // (typically pre-aggregated from dysflow `get_schema` MCP calls). It
+  // reads ONE .form.txt, parses to FormIR, and delegates to the pure
+  // `validateBindings` core service. Pure read-class — never opens
+  // Access, never writes to disk, never fetches the schema itself.
+  // Both mutates flags stay false; risk is read-only — the write-gate
+  // must never fire for this tool. Mirrors `analyze_form_layout`'s
+  // read-only contract exactly.
+  verify_form_bindings: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,

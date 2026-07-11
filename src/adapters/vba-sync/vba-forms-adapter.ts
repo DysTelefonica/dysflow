@@ -17,6 +17,7 @@ import {
   inspectForm,
   lintFormCode,
   renderFormPreviewTool,
+  verifyFormBindingsTool,
 } from "./vba-forms-read-tools.js";
 import { deserializeForm, serializeForm } from "./vba-forms-serialization-tools.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
@@ -116,7 +117,13 @@ export class VbaFormsAdapter {
       // Issue #817 — `diff_form_preview` composes two `render_form_preview`
       // outputs into a before/after visual diff. Pure read-class; same
       // sibling-tool contract.
-      toolName === "diff_form_preview"
+      toolName === "diff_form_preview" ||
+      // Issue #818 — `verify_form_bindings` validates a form's ControlSource
+      // + RowSource against a caller-supplied schema aggregate (typically
+      // pre-aggregated from `get_schema` MCP calls). Pure read-class; never
+      // opens Access; the schema is passed in as a parameter, never
+      // fetched. Mirrors `analyze_form_layout`'s read-only contract.
+      toolName === "verify_form_bindings"
     );
   }
 
@@ -204,6 +211,14 @@ export class VbaFormsAdapter {
       // `diffFormPreview` core service. Mirrors `compare_form`'s
       // before/after path-resolution contract.
       return diffFormPreviewTool(this.fileSystem, params, this.orchestrator);
+    }
+    if (toolName === "verify_form_bindings") {
+      // Issue #818 — ControlSource / RowSource schema validator. Reads
+      // one .form.txt, parses to FormIR, and delegates to the pure
+      // `validateBindings` core service. Schema is passed in by the caller
+      // (typically aggregated upstream from `get_schema` MCP calls); the
+      // adapter never fetches the schema itself.
+      return verifyFormBindingsTool(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);

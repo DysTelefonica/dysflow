@@ -63,6 +63,13 @@ export const VBA_SYNC_TOOL_NAMES = [
   // Pure read-class; never opens Access. Registered here so the route
   // table can reference it. vba-sync 42 -> 43, total 66 -> 67.
   "diff_form_preview",
+  // Issue #818 — ControlSource / RowSource schema validator. Reads a
+  // .form.txt and validates every binding against a caller-supplied
+  // `Record<tableName, ColumnSchema[]>` aggregate (typically pre-aggregated
+  // from dysflow `get_schema` MCP calls). Pure read-class; never opens
+  // Access; the schema is passed in as a parameter. vba-sync 43 -> 44,
+  // total 67 -> 68.
+  "verify_form_bindings",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

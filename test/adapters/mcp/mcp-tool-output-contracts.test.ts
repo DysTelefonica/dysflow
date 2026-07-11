@@ -95,6 +95,12 @@ const OUTPUT_CONTRACT_GROUPS = {
     // composer. Pure read-class; same dispatch surface as
     // render_form_preview + analyze_form_layout.
     "diff_form_preview",
+    // Issue #818 (Phase 2 Perception cont.) — ControlSource / RowSource
+    // schema-binding validator. Pure read-class; same dispatch surface as
+    // the other Phase 2 perception tools (render_form_preview +
+    // analyze_form_layout + diff_form_preview). Schema is passed in by
+    // the caller (the adapter never fetches it).
+    "verify_form_bindings",
     // Issue #816 (Phase 3 Ergonomic actions) — batch geometry verbs.
     // form_align_controls + form_distribute_controls share the same
     // applyGuardedFormWrite seam as the slice-4 form mutation family

@@ -19,6 +19,11 @@ import type { LintRuleId } from "../../core/services/form-lint-types.js";
 import { analyzeFormUi } from "../../core/services/form-ui-analysis-service.js";
 import { buildFormUiBehaviorMap } from "../../core/services/form-ui-behavior-map-service.js";
 import {
+  type BindingFinding,
+  type FormBindingSchema,
+  validateBindings,
+} from "../../core/services/form-ui-binding-validator.js";
+import {
   type DiffFormPreviewOptions,
   diffFormPreview,
   type FormPreviewDiffResult,
@@ -915,4 +920,243 @@ export async function diffFormPreviewTool(
   }
 
   return successResult(data);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #818 — `verify_form_bindings` (Phase 2 — Perception)
+//
+// Pure read-class adapter: reads the .form.txt, parses to FormIR, and
+// delegates to the pure `validateBindings` core service in
+// `core/services/form-ui-binding-validator.ts`. The validator is the
+// SINGLE source of truth for binding-shape analysis; the adapter owns the
+// I/O + the MCP-facing envelope only.
+//
+// Schema input contract: `schema` is a `Record<tableName, ColumnSchema[]>`
+// the caller pre-aggregates from the dysflow `get_schema` MCP tool (one
+// `get_schema({ tableName })` per table they care about, then flatten the
+// `{schema: [...]}` payloads into this map). The adapter does NOT call
+// `get_schema` itself — that would couple the read-class tool to the
+// query runner, which the design explicitly forbids (#718's pure-I/O
+// split). The caller fans out the schema in one MCP round-trip upstream
+// and passes the aggregate in.
+//
+// Path-resolution contract mirrors `analyze_form_layout` exactly:
+//   - literal `sourcePath` / `path` (or `projectId`+`formName`) is supported,
+//   - missing sourcePath returns `FORM_SPEC_MISSING`,
+//   - missing file returns `FORM_NOT_FOUND`,
+//   - parse failure returns `FORM_PARSE_ERROR`,
+//   - missing/invalid schema returns `FORM_BINDING_SCHEMA_INVALID`.
+// ---------------------------------------------------------------------------
+
+export async function verifyFormBindingsTool(
+  fileSystem: FormFileSystemPort,
+  params: Record<string, unknown>,
+  orchestrator?: VbaFormsOrchestrator,
+): Promise<OperationResult<unknown>> {
+  let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  const projectId = stringValue(params.projectId);
+  const formName = stringValue(params.formName) ?? stringValue(params.name);
+
+  if (projectId && formName) {
+    if (orchestrator === undefined) {
+      return failureResult(
+        createDysflowError(
+          "MCP_INPUT_INVALID",
+          "orchestrator is required when projectId is specified.",
+        ),
+      );
+    }
+    const target = await orchestrator.resolveExecutionTarget({ projectId, formName });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+    const candidates = resolveFormSourceCandidates({
+      sourceRoot: targetData.destinationRoot,
+      projectRoot: targetData.projectRoot,
+      formName,
+    });
+    let resolvedPath: string | undefined;
+    for (const candidate of candidates) {
+      try {
+        await fileSystem.readFile(candidate.absolutePath);
+        resolvedPath = candidate.absolutePath;
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (resolvedPath === undefined) {
+      const diagnostic = buildResolutionDiagnostic(
+        {
+          sourceRoot: targetData.destinationRoot,
+          projectRoot: targetData.projectRoot,
+          formName,
+        },
+        candidates,
+        projectId,
+      );
+      return failureResult(createDysflowError("FORM_NOT_FOUND", diagnostic.remediation));
+    }
+    sourcePath = resolvedPath;
+  }
+
+  if (!sourcePath) {
+    return failureResult(
+      createDysflowError(
+        "FORM_SPEC_MISSING",
+        "verify_form_bindings requires sourcePath (path to the .form.txt file).",
+      ),
+    );
+  }
+
+  // The schema aggregate is REQUIRED — this tool's job is to compare a
+  // form's bindings against a known schema. Without a schema the validator
+  // has nothing to validate against and every check would degenerate.
+  const schema = readSchema(params.schema);
+  if (!schema.ok) {
+    return failureResult(createDysflowError("FORM_BINDING_SCHEMA_INVALID", schema.error));
+  }
+
+  // Read from disk — adapter owns the I/O.
+  let text: string;
+  try {
+    text = await fileSystem.readFile(sourcePath);
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_NOT_FOUND",
+        `Cannot read form file at "${sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  // Derive the form name from the filename (mirror analyze_form_layout).
+  const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
+  const name = basename
+    .replace(/^Form_/, "")
+    .replace(/^Report_/, "")
+    .replace(/\.form\.txt$/i, "")
+    .replace(/\.report\.txt$/i, "");
+
+  // Parse to FormIR (pure).
+  let ir: FormIR;
+  try {
+    ir = parseFormTxt(text, { name });
+  } catch (err) {
+    return failureResult(
+      createDysflowError(
+        "FORM_PARSE_ERROR",
+        `Failed to parse "${sourcePath}": ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  // Pure validation — schema is the only input from the caller that
+  // influences the output. The validator never mutates the IR.
+  const findings: BindingFinding[] = validateBindings(ir, schema.value);
+
+  return successResult({
+    formName: ir.name,
+    controls: countControls(ir),
+    findings,
+  });
+}
+
+/**
+ * Normalize the caller's `schema` input into a `FormBindingSchema`.
+ *
+ * Two input shapes are accepted (issue #818 contract):
+ *   1. The full aggregate: `{ Customers: [{name, type, nullable}, ...], Orders: [...] }`.
+ *      An empty aggregate `{}` is valid — it just means every binding
+ *      reference is reported as missing-table.
+ *   2. The dysflow `get_schema` payload shape: `{ schema: [...] }` for a
+ *      single-table probe — the caller supplies a `tableName` field so we
+ *      can wrap it into the aggregate as `{ [tableName]: schema }`.
+ *
+ * Both shapes must round-trip through this helper without throwing; bad
+ * input returns `{ ok: false, error }` so the adapter can surface a
+ * typed `FORM_BINDING_SCHEMA_INVALID` to the caller.
+ *
+ * Shape detection: the dysflow payload uses a reserved `schema` key (and
+ * an optional `tableName` key). The aggregate shape uses arbitrary table
+ * names as keys. We dispatch on the presence of the `schema` key FIRST so
+ * a `{schema: [...]}` payload is never mistaken for an aggregate whose
+ * table is literally named "schema".
+ */
+function readSchema(
+  raw: unknown,
+): { ok: true; value: FormBindingSchema } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) {
+    return {
+      ok: false,
+      error:
+        "verify_form_bindings requires a `schema` parameter (a Record<tableName, ColumnSchema[]> aggregate, or a `get_schema` payload {schema:[...]} with `tableName`).",
+    };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      ok: false,
+      error:
+        "`schema` must be an object: either a Record<tableName, ColumnSchema[]> or a single-table get_schema payload {schema:[...]}.",
+    };
+  }
+  const obj = raw as Record<string, unknown>;
+
+  // Shape 2 (d优先 — dispatch first so the reserved `schema` key never
+  // collides with a table literally named "schema"). The dysflow payload
+  // is `{ schema: [...], tableName?: "..." }`.
+  if ("schema" in obj && Array.isArray(obj.schema)) {
+    const tableName = stringValue(obj.tableName);
+    if (tableName === undefined || tableName === "") {
+      return {
+        ok: false,
+        error:
+          "Single-table `get_schema` payload detected (`{schema:[...]}`) but `tableName` is missing. Pass `tableName` so the validator can wrap the columns under the correct key.",
+      };
+    }
+    return {
+      ok: true,
+      value: {
+        [tableName]: obj.schema as FormBindingSchema[string],
+      },
+    };
+  }
+
+  // Shape 1 (aggregate): each value must be either an array of columns or
+  // `undefined` (defensive — a table with no columns registered). The
+  // empty-aggregate case `{}` falls through to here and returns `{}` —
+  // every binding reference will then resolve to missing-table, which is
+  // the correct diagnostic for a fully-unknown schema.
+  const values = Object.values(obj);
+  if (values.every((v) => Array.isArray(v) || v === undefined)) {
+    const aggregate: FormBindingSchema = {};
+    for (const [tableName, columns] of Object.entries(obj)) {
+      aggregate[tableName] = Array.isArray(columns)
+        ? (columns as FormBindingSchema[string])
+        : undefined;
+    }
+    return { ok: true, value: aggregate };
+  }
+
+  return {
+    ok: false,
+    error:
+      '`schema` must be either a Record<tableName, ColumnSchema[]> (aggregate) or a `get_schema` payload `{schema:[...], tableName:"..."}`.',
+  };
+}
+
+/**
+ * Walk a FormIR tree and count the named controls. Mirrors the slice
+ * pattern in `analyzeFormLayoutTool` — used only to surface a quick
+ * "controls" count in the response envelope so the agent can sanity-check
+ * the validator ran over the whole tree.
+ */
+function countControls(ir: FormIR): number {
+  let count = 0;
+  const visit = (node: FormNode): void => {
+    const hasName = node.entries.some((entry) => entry.kind === "scalar" && entry.key === "Name");
+    if (hasName) count++;
+    for (const child of node.children) visit(child);
+  };
+  visit(ir.root);
+  return count;
 }

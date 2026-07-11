@@ -82,15 +82,19 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   (before/after visual diff composer, pure read-class sibling of
     //   render_form_preview + analyze_form_layout). Net: dispatch 66 -> 67,
     //   visible 77 -> 78. No modern tools added.
+    // #818 (Phase 2 Perception cont.) — `verify_form_bindings` added
+    //   (ControlSource + RowSource schema-binding validator, pure read-class
+    //   sibling of analyze_form_layout + diff_form_preview). Net:
+    //   dispatch 67 -> 68, visible 78 -> 79. No modern tools added.
     //   Expected breakdown:
-    //     67 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     68 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 78 visible (was 64 before #795).
-    expect(toolCount).toBe(67);
+    //     = 79 visible (was 64 before #795).
+    expect(toolCount).toBe(68);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(78);
+    expect(visibleCount).toBe(79);
   });
 
   it("verifies split-mode coverage explicitly", () => {

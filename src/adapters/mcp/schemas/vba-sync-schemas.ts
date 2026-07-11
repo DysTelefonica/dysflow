@@ -4,6 +4,7 @@ import {
   ACCESS_OVERRIDE,
   CTX_PROPS,
   type JsonObjectSchema,
+  type JsonSchemaProperty,
   SCHEMA_PROPS,
   STRICT_CTX,
 } from "../../../shared/validation/index.js";
@@ -844,6 +845,41 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         maximum: 100,
         description:
           "Tolerance (twips) for the moved/resized classification. Defaults to 0. Any non-zero integer delta on the relevant axis is treated as a real change.",
+      },
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  // Issue #818 — `verify_form_bindings` validates a form's ControlSource
+  // + RowSource bindings against a caller-supplied schema aggregate. Pure
+  // read-class — the adapter never opens Access, never writes to disk,
+  // and never fetches the schema itself; the caller fans out one
+  // `get_schema({ tableName })` MCP call per table they care about and
+  // passes the aggregate in via `schema`. Every finding carries severity
+  // `"warning"` (informational; never gating).
+  verify_form_bindings: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      // The schema aggregate. Two shapes are accepted (the adapter
+      // normalizes both):
+      //   1. The full aggregate: `{ Customers: [{name, type, nullable}, ...], Orders: [...] }`.
+      //   2. A single dysflow `get_schema` payload: `{ schema: [...], tableName: "..." }`
+      //      — the adapter wraps it as `{ [tableName]: schema }`.
+      schema: {
+        type: "object",
+        description:
+          'Schema aggregate to validate bindings against. Either a `Record<tableName, ColumnSchema[]>` (multiple tables, fan out one `get_schema` per table upstream) or a single-table `get_schema` payload `{schema:[{name,type,nullable}], tableName:"..."}`. The adapter accepts both shapes; the latter requires `tableName` so the columns land under the correct key.',
+      } as JsonSchemaProperty,
+      formName: {
+        type: "string",
+        description: "Optional form/report name (e.g. 'Form_Customer').",
+      },
+      name: {
+        type: "string",
+        description: "Alias for formName.",
       },
       outputMode: SCHEMA_PROPS.outputMode,
     },
