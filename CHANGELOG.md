@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.7.0] - 2026-07-12
+
+- Merge pull request #839 from DysTelefonica/feat/818-verify-form-bindings - feat(forms): verify_form_bindings ÔÇö validate ControlSource/RowSource against schema (#818) - Merge pull request #838 from DysTelefonica/feat/817-diff-form-preview - feat(forms): diff_form_preview - before/after visual diff (#817) - Merge pull request #837 from DysTelefonica/feat/816-align-distribute-controls - feat(forms): form_align_controls + form_distribute_controls ÔÇö batch geometry ergonomics - Merge pull request #836 from DysTelefonica/feat/815-analyze-form-layout - feat(forms): analyze_form_layout - geometry lint (overlap, alignment, tab-order) - Merge pull request #835 from DysTelefonica/feat/814-render-form-preview - feat(forms): render_form_preview ÔÇö geometric SVG/ASCII render from FormIR twips (#814) - Merge pull request #834 from DysTelefonica/feat/831-extend-verify-form-ui - feat(verify): extend verify_form_ui with geometry/tab-order/property checks (#831) - Merge pull request #833 from DysTelefonica/feat/830-internal-codegraph-invoker - feat(forms): internal codegraph-vba invoker for map_form_behavior (#830) - Merge pull request #832 from DysTelefonica/refactor/829-derived-applied-contract - refactor(forms): derive appliedContract from mutated FormIR - Merge pull request #828 from DysTelefonica/docs/819-skill-alignment - docs(skills): align access-form-ui-builder with v2.6.0 + Phase 6 apply semantics
+
+
 ## [v2.6.0] - 2026-07-11
 
 - Merge pull request #827 from DysTelefonica/feat/813-phase6-atomic-exposure - feat(813): atomic MCP exposure for apply_form_design_plan family - Merge pull request #826 from DysTelefonica/feat/813-phase5-execution-internals - feat(813): execution internals for apply_form_design_plan (PR 5)
