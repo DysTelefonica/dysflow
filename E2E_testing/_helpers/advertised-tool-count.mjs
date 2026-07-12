@@ -32,10 +32,16 @@
  * #817 (Phase 2 Perception cont.) adds `diff_form_preview` (before/after
  * visual diff composer, pure read-class sibling of render_form_preview): 77 -> 78.
  * #818 (Phase 2 Perception cont.) adds `verify_form_bindings` (pure
- * read-class schema-binding validator — ControlSource + RowSource against a
+ * read-class schema-binding validator - ControlSource + RowSource against a
  * caller-supplied schema aggregate, no Access, no COM, no filesystem
- * mutation): 78 -> 79. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 79;
+ * mutation): 78 -> 79.
+ * #809 adds `sync_binary` (composes verify_code + import_modules +
+ * export_modules into a single round-trip; mutatesBinary + mutatesFilesystem
+ * both true so the dispatch write-gate fires for any direction;
+ * dryRun-capable so a legitimate dryRun:true preview is not collapsed to
+ * isDryRun===false; POLICY_EXEMPT_TOOLS keeps developer-mode from injecting
+ * dryRun:false on plan-intended calls): 79 -> 80. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 80;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

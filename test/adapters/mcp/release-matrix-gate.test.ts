@@ -86,15 +86,19 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   (ControlSource + RowSource schema-binding validator, pure read-class
     //   sibling of analyze_form_layout + diff_form_preview). Net:
     //   dispatch 67 -> 68, visible 78 -> 79. No modern tools added.
+    // #809 (sync_binary workflow tool) — `sync_binary` added (composes
+    //   verify_code + import_modules + export_modules; mutatesBinary +
+    //   mutatesFilesystem both true). Net: dispatch 68 -> 69,
+    //   visible 79 -> 80. No modern tools added.
     //   Expected breakdown:
-    //     68 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     69 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 79 visible (was 64 before #795).
-    expect(toolCount).toBe(68);
+    //     = 80 visible (was 64 before #795).
+    expect(toolCount).toBe(69);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(79);
+    expect(visibleCount).toBe(80);
   });
 
   it("verifies split-mode coverage explicitly", () => {

@@ -72,6 +72,13 @@ const POLICY_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   // mode for the same reason as the apply_form_design_plan family above.
   "form_align_controls",
   "form_distribute_controls",
+  // Issue #809 — sync_binary keeps the same plan-by-default contract as
+  // the form mutation family. Without this exemption a preview-intended
+  // sync_binary({ direction }) call (no dryRun/apply key) would silently
+  // perform a REAL import/export in developer mode because the policy
+  // helper injects dryRun:false for any routine-dev-write tool NOT in this
+  // exempt set when the caller passes neither dryRun nor apply.
+  "sync_binary",
   "catalog_add_control",
   "generate_form",
 ]);

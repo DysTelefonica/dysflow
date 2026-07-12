@@ -72,6 +72,9 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   "diff_form_preview",
   // Issue #818 — schema-binding validator.
   "verify_form_bindings",
+  // Issue #809 — sync_binary workflow tool. Composes verify_code +
+  // import_modules + export_modules into a single round-trip.
+  "sync_binary",
   "vba_orphan_audit",
   "vba_inline_execution",
   // query slice tools — routed to queryService
@@ -290,6 +293,30 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // no filesystem mutation, no schema fetch.
   verify_form_bindings:
     'Validate a .form.txt\'s ControlSource + RowSource bindings against a caller-supplied schema aggregate. Reads the .form.txt through the fileSystem port, parses to FormIR, and delegates to the pure `validateBindings` core service. Returns `{ formName, controls, findings[] }` where every finding carries `code` (typed: `FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN` / `FORM_BINDING_EMPTY` / `FORM_BINDING_SQL_UNPARSEABLE` / `FORM_BINDING_TYPE_MISMATCH`), `severity:"warning"` (informational; never gating), `controlName`, and structured `data` (table, column, binding). The `schema` parameter accepts either a multi-table `Record<tableName, ColumnSchema[]>` aggregate (fan out one `get_schema` per table upstream) or a single-table `get_schema` payload `{schema:[{name,type,nullable}], tableName:"..."}` — the adapter normalizes both. The adapter itself never fetches the schema; the caller owns the upstream `get_schema` calls. Pure read-class — no Access, no COM, no filesystem mutation. Path resolution mirrors the other Phase 2 tools (sourcePath/path or projectId+formName).',
+  // Issue #809 — sync_binary is a workflow that composes three existing
+  // primitives (verify_code + import_modules + export_modules) into a single
+  // round-trip: verify -> plan -> execute -> re-verify -> recommend. Default
+  // semantics: dryRun:true (default) populates plan.toImport / plan.toExport
+  // and skips execute; apply:true performs the chunked import / export and
+  // re-runs verify_code. Direction: 'src-to-binary' (import), 'binary-to-src'
+  // (export), or 'both' (default). Scope defaults to actionable-only;
+  // scope.includeBothChanged:true surfaces bothChanged in plan.skipped with
+  // reason:'bothChanged_acknowledged'. batchSize (default 10) slices toImport
+  // / toExport before each inner import_modules / export_modules sub-call so
+  // a single chunk failure never aborts the whole sync; onChunkError:'abort'
+  // short-circuits on the first failed chunk. Both `mutatesBinary:true` and
+  // `mutatesFilesystem:true` so the dispatch write-gate fires for any
+  // direction; `apply:true` requires writes-enabled (MCP_WRITES_DISABLED
+  // envelope on the standard write-gate path). The runtime does NOT compile
+  // — the human compiles in Access (Debug > Compile) before re-running
+  // tests, exactly like the three primitives it composes. Returns the
+  // full SyncBinaryResult envelope: { ok, dryRun, preSync, plan: { toImport,
+  // toExport, skipped, totalActionable }, execution: { startedAt, finishedAt,
+  // durationMs, importResult, exportResult, chunksExecuted } | null,
+  // postSync: <verify_summary> | null, recommendation: 'no_action' |
+  // 'import_to_binary' | 'export_to_source' | 'manual_merge' }.
+  sync_binary:
+    "Compose three existing primitives (verify_code + import_modules + export_modules) into a single round-trip: verify -> plan -> execute -> re-verify -> recommend. Default dryRun:true populates plan.toImport / plan.toExport and skips execute; apply:true performs the chunked import / export and re-runs verify_code. direction:'src-to-binary' (import) / 'binary-to-src' (export) / 'both' (default). scope.actionableOnly:true (default) excludes nonActionable noise; scope.includeBothChanged:true surfaces bothChanged in plan.skipped with reason:'bothChanged_acknowledged'. batchSize (default 10) slices toImport / toExport before each inner import_modules / export_modules sub-call so a single chunk failure never aborts the whole sync; onChunkError:'abort' short-circuits on the first failed chunk. moduleNames / directoryPath narrow the verify scope (mirrors import_modules #807 semantics). Both mutatesBinary:true AND mutatesFilesystem:true so the dispatch write-gate fires for any direction; apply:true requires writes-enabled (MCP_WRITES_DISABLED on the standard write-gate path). The runtime does NOT compile — the human compiles in Access (Debug > Compile) before re-running tests, exactly like the three primitives it composes. Returns the full SyncBinaryResult envelope: { ok, dryRun, preSync, plan:{ toImport, toExport, skipped, totalActionable }, execution:{ startedAt, finishedAt, durationMs, importResult, exportResult, chunksExecuted } | null, postSync:<verify_summary> | null, recommendation:'no_action'|'import_to_binary'|'export_to_source'|'manual_merge' }. returnFullDiff:true opts in to the full verify_code `diffs` array on preSync / postSync.",
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:

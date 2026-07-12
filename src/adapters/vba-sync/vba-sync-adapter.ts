@@ -30,6 +30,14 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
+import {
+  runSyncBinary,
+  type SyncBinaryAdapterLike,
+  type SyncBinaryExecution,
+  type SyncBinaryPlan,
+  type SyncBinarySuccessResult,
+  type SyncVerifySummary,
+} from "./sync-binary.js";
 import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
 import { VbaModulesAdapter } from "./vba-modules-adapter.js";
@@ -325,6 +333,16 @@ export class VbaSyncAdapter implements VbaSyncPort {
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
     const params = isRecord(input) ? input : {};
 
+    // Issue #809 - `sync_binary` is the workflow that composes verify_code +
+    // import_modules + export_modules. It is handled at the orchestrator
+    // level (NOT inside any single sub-adapter) so it can fan out to the
+    // three primitives through the existing sub-adapter seam. This keeps
+    // the compose layer pure and testable (sync-binary.ts has zero I/O
+    // imports); only the adapter bridge here touches Access / PowerShell.
+    if (toolName === "sync_binary") {
+      return this.executeSyncBinary(params);
+    }
+
     if (VbaOperationsAdapter.handles(toolName)) {
       return this.operationsAdapter.execute(toolName, params);
     }
@@ -339,6 +357,98 @@ export class VbaSyncAdapter implements VbaSyncPort {
     }
 
     return failureResult(createDysflowError("TOOL_NOT_IMPLEMENTED", TOOL_NOT_IMPLEMENTED_MESSAGE));
+  }
+
+  /**
+   * Issue #809 - `sync_binary` orchestrator bridge.
+   *
+   * Composes the three existing primitives through `runSyncBinary` (the
+   * pure compose layer in `./sync-binary.ts`). Each primitive is invoked
+   * through `this.modulesAdapter.execute(...)` so the same write-gate /
+   * preflight cleanup / registry tracking the direct tools get applies
+   * to every sub-call. The adapter does NOT thread `compile:true` to any
+   * inner call (the runtime does not compile; the human compiles in
+   * Access, see feat-759-no-compile).
+   *
+   * Errors:
+   *   - Pre-verify failure -> propagate the DysflowError envelope.
+   *   - Chunk failure (apply:true, onChunkError:'abort') -> propagate.
+   *   - Post-verify failure -> propagate.
+   *   - Chunk failure (apply:true, onChunkError:'continue') -> the chunk
+   *     error is recorded on `execution.importResult` / `execution.exportResult`
+   *     and the next chunk proceeds; the final post-verify surfaces the
+   *     real state.
+   *
+   * The orchestrator NEVER short-circuits to a TOOL_NOT_IMPLEMENTED: the
+   * whole point of sync_binary is to compose primitives that already
+   * exist; the bridge just routes the calls.
+   */
+  private async executeSyncBinary(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const startTime = Date.now();
+    const adapter = this.buildSyncBinaryAdapter();
+    const result = await runSyncBinary({
+      adapter,
+      input: {
+        direction: readDirection(params.direction),
+        scope: readScope(params.scope),
+        moduleNames: readStringArray(params.moduleNames),
+        directoryPath: stringValue(params.directoryPath),
+        recursive: params.recursive === undefined ? undefined : params.recursive === true,
+        includeTests: params.includeTests === undefined ? undefined : params.includeTests === true,
+        includeForms: params.includeForms === undefined ? undefined : params.includeForms === true,
+        strict: params.strict === undefined ? undefined : params.strict === true,
+        dryRun: params.dryRun === true,
+        apply: params.apply === true,
+        batchSize: typeof params.batchSize === "number" ? params.batchSize : undefined,
+        onChunkError:
+          params.onChunkError === "continue" || params.onChunkError === "abort"
+            ? params.onChunkError
+            : undefined,
+        returnFullDiff: params.returnFullDiff === true,
+        // Forward everything except the sync-binary-specific keys so the
+        // inner verify_code / import_modules / export_modules calls
+        // resolve the project the same way the dispatch layer did
+        // (projectId / contextId / accessPath / strictContext / etc.).
+        forward: stripSyncBinaryOwnParams(params),
+      },
+    });
+    const durationMs = Date.now() - startTime;
+    // The failure branch carries `error`; the success branch carries
+    // the full envelope (with `ok: boolean` reflecting post-sync state).
+    if ("error" in result) {
+      return failureResult(result.error, { durationMs });
+    }
+    return successResult(toSyncBinaryResponse(result), { durationMs });
+  }
+
+  /**
+   * Build the `SyncBinaryAdapterLike` seam that `runSyncBinary` consumes.
+   * Every method forwards to `this.modulesAdapter.execute(...)` so the
+   * existing write-gate / preflight / registry tracking applies uniformly.
+   */
+  private buildSyncBinaryAdapter(): SyncBinaryAdapterLike {
+    return {
+      runVerify: (verifyParams) => this.runSyncBinaryVerify(verifyParams),
+      runImportModules: (importParams) =>
+        this.modulesAdapter.execute("import_modules", importParams),
+      runExportModules: (exportParams) =>
+        this.modulesAdapter.execute("export_modules", exportParams),
+    };
+  }
+
+  private async runSyncBinaryVerify(
+    params: Record<string, unknown>,
+  ): Promise<
+    | { ok: true; summary: SyncVerifySummary }
+    | { ok: false; error: import("../../core/contracts/index.js").DysflowError }
+  > {
+    const verifyResult = await this.modulesAdapter.execute("verify_code", params);
+    if (!verifyResult.ok) {
+      return { ok: false, error: verifyResult.error };
+    }
+    return { ok: true, summary: projectVerifyToSyncSummary(verifyResult.data) };
   }
 
   private async executeMappedTool(
@@ -733,6 +843,149 @@ function validateVbaManagerExtra(
     }
   }
   return successResult(undefined);
+}
+
+// ─── sync_binary helpers (#809) ────────────────────────────────────────────
+
+/**
+ * sync_binary-specific parameter keys. Stripped from the payload the
+ * orchestrator forwards to inner verify_code / import_modules /
+ * export_modules calls so those primitives never see sync-binary-shaped
+ * noise. Context keys (projectId / contextId / accessPath / ...),
+ * strictContext, expectedAccessPath, and timeoutMs are kept - the inner
+ * primitives resolve the project the same way the dispatch layer did.
+ */
+const SYNC_BINARY_OWN_PARAMS = new Set([
+  "direction",
+  "scope",
+  "directoryPath",
+  "recursive",
+  "includeTests",
+  "includeForms",
+  "dryRun",
+  "apply",
+  "batchSize",
+  "onChunkError",
+  "parallelChunks",
+  "returnFullDiff",
+]);
+
+function readDirection(value: unknown): "src-to-binary" | "binary-to-src" | "both" | undefined {
+  if (value === "src-to-binary" || value === "binary-to-src" || value === "both") return value;
+  return undefined;
+}
+
+function readScope(
+  value: unknown,
+): { actionableOnly?: boolean; includeBothChanged?: boolean } | undefined {
+  if (!isRecord(value)) return undefined;
+  const scope: { actionableOnly?: boolean; includeBothChanged?: boolean } = {};
+  if (typeof value.actionableOnly === "boolean") scope.actionableOnly = value.actionableOnly;
+  if (typeof value.includeBothChanged === "boolean") {
+    scope.includeBothChanged = value.includeBothChanged;
+  }
+  return scope;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: string[] = [];
+  for (const entry of value) {
+    if (typeof entry === "string" && entry.length > 0) out.push(entry);
+  }
+  return out;
+}
+
+function stripSyncBinaryOwnParams(params: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (SYNC_BINARY_OWN_PARAMS.has(key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Project a `VbaVerifyResult` (full verify_code payload) onto the
+ * `SyncVerifySummary` the compose layer consumes. Pure projection - no
+ * I/O. Reads only the additive semantic fields, defaults to safe zeros
+ * when the runtime ran in strict mode (which omits the summary).
+ *
+ * `bothChangedEntries` is derived from `actionableDifferent` filtered by
+ * `classification === 'bothChanged'`. Strict mode has no
+ * `actionableDifferent`; bothChangedEntries defaults to [].
+ */
+function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
+  const result = (value ?? {}) as {
+    ok?: boolean;
+    missingInBinary?: ReadonlyArray<{ moduleName: string }>;
+    missingInSource?: ReadonlyArray<{ moduleName: string }>;
+    actionableDifferent?: ReadonlyArray<{
+      moduleName: string;
+      classification?: string;
+    }>;
+    nonActionableDifferent?: ReadonlyArray<unknown>;
+    hasFunctionalDifferences?: boolean;
+    recommendedAction?: string;
+    recommendation?: string;
+    summaryStructured?: {
+      actionable?: { total: number; sourceNewer: number; binaryNewer: number; bothChanged: number };
+      nonActionable?: { total: number };
+    };
+  };
+  const missingInBinary = (result.missingInBinary ?? []).map((entry) => ({
+    moduleName: entry.moduleName,
+  }));
+  const missingInSource = (result.missingInSource ?? []).map((entry) => ({
+    moduleName: entry.moduleName,
+  }));
+  const actionable = result.summaryStructured?.actionable ?? {
+    total: 0,
+    sourceNewer: 0,
+    binaryNewer: 0,
+    bothChanged: 0,
+  };
+  const nonActionable = result.summaryStructured?.nonActionable ?? { total: 0 };
+  const bothChangedEntries = (result.actionableDifferent ?? [])
+    .filter((entry) => entry.classification === "bothChanged")
+    .map((entry) => ({ moduleName: entry.moduleName }));
+  return {
+    ok: result.ok === true,
+    missingInBinary,
+    missingInSource,
+    actionable,
+    nonActionable,
+    hasFunctionalDifferences: result.hasFunctionalDifferences === true,
+    recommendedAction: result.recommendedAction ?? "no_action",
+    recommendation: result.recommendation ?? "",
+    bothChangedEntries,
+  };
+}
+
+/**
+ * Wrap the pure `SyncBinarySuccessResult` in a response-friendly envelope.
+ * The MCP-side translation (`translateCoreResultToMcpContent`) reads
+ * `result.data` verbatim; we shape it so a consumer reading
+ * `sync_binary` output sees the same flat shape the issue spec lists.
+ */
+function toSyncBinaryResponse(result: SyncBinarySuccessResult): {
+  ok: true;
+  dryRun: boolean;
+  preSync: SyncVerifySummary;
+  plan: SyncBinaryPlan;
+  execution: SyncBinaryExecution | null;
+  postSync: SyncVerifySummary | null;
+  recommendation: string;
+} {
+  return {
+    ok: true,
+    dryRun: result.dryRun,
+    preSync: result.preSync,
+    plan: result.plan,
+    execution: result.execution,
+    postSync: result.postSync,
+    recommendation: result.recommendation,
+  };
 }
 
 export function resolveDefaultVbaManagerScriptPath(

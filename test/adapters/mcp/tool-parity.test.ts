@@ -64,10 +64,13 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #818 added verify_form_bindings (Phase 2 Perception cont.,
     // read-only schema-binding validator): vba-sync 43 -> 44,
     // query unchanged at 24, total 67 -> 68.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(44);
+    // #809 added sync_binary (workflow tool composing verify_code +
+    // import_modules + export_modules; mutatesBinary + mutatesFilesystem
+    // both true): vba-sync 44 -> 45, query unchanged at 24, total 68 -> 69.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(45);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(68);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(68);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(69);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(69);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -93,6 +96,8 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("diff_form_preview");
     // #818 (Phase 2 Perception cont.)
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("verify_form_bindings");
+    // #809 (workflow tool)
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("sync_binary");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
@@ -102,12 +107,13 @@ describe("Dysflow MCP tool parity inventory", () => {
     // parity-registry 60 -> 62.
     // #814 added render_form_preview: parity-registry 62 -> 63.
     // #815 added analyze_form_layout: parity-registry 63 -> 64.
-    // #816 phase 3 added form_align_controls + form_distribute_controls:
+    // #816 added form_align_controls + form_distribute_controls:
     // parity-registry 64 -> 66.
     // #817 added diff_form_preview: parity-registry 66 -> 67.
     // #818 added verify_form_bindings: parity-registry 67 -> 68.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(68);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(68);
+    // #809 added sync_binary: parity-registry 68 -> 69.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(69);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(69);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");
