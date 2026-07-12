@@ -363,6 +363,27 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: false,
     risk: "read-only",
   },
+  // Issue #809 — `sync_binary` workflow tool. Composes verify_code +
+  // import_modules + export_modules into a single round-trip. Write-class
+  // because `apply:true` can mutate EITHER side of the sync boundary:
+  //   - `direction: 'src-to-binary'` -> import_modules -> mutatesBinary
+  //   - `direction: 'binary-to-src'` -> export_modules -> mutatesFilesystem
+  //   - `direction: 'both'` -> either or both
+  // Both mutates flags stay true so the dispatch write-gate fires for any
+  // direction. Risk is routine-dev-write (same family as apply_form_design_plan
+  // / form_set_property / import_modules); POLICY_EXEMPT_TOOLS keeps the
+  // developer-mode policy helper from injecting dryRun:false on plan-intended
+  // calls. Both mutates flags must be true so the dispatch consults
+  // resolveIsDryRun (not the hardcoded false branch reserved for raw binary
+  // writers) — the second atomic-dryRun gating list in dispatch-factory.ts
+  // mirrors this. Accepts dryRun:true (preview path) AND apply:true
+  // (commit signal) with the same semantic the form mutation family uses.
+  sync_binary: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,

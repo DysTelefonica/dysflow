@@ -70,6 +70,14 @@ export const VBA_SYNC_TOOL_NAMES = [
   // Access; the schema is passed in as a parameter. vba-sync 43 -> 44,
   // total 67 -> 68.
   "verify_form_bindings",
+  // Issue #809 — sync_binary workflow tool. Composes the three
+  // existing primitives (verify_code + import_modules + export_modules)
+  // into a single round-trip: verify -> plan -> execute -> re-verify
+  // -> recommend. The tool is write-class (mutatesBinary + mutatesFilesystem
+  // both true because apply:true can write either side) and dryRun-capable
+  // (the dispatch consults resolveIsDryRun instead of collapsing to false).
+  // vba-sync 44 -> 45, total 68 -> 69. Advertised 79 -> 80.
+  "sync_binary",
   "vba_orphan_audit",
   "vba_inline_execution",
 ] as const;

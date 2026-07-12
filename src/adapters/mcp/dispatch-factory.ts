@@ -156,7 +156,15 @@ export function createDispatchTool(
     // by MCP_WRITES_DISABLED — a distinct regression from the write-gate
     // bypass below, equally serious.
     name === "form_align_controls" ||
-    name === "form_distribute_controls";
+    name === "form_distribute_controls" ||
+    // Issue #809 — sync_binary is the workflow tool that composes
+    // verify_code + import_modules + export_modules. Its plan-only
+    // (dryRun:true) path is the safe-by-default behavior; its
+    // apply:true path performs the chunked execute. Without this entry
+    // a legitimate dryRun:true preview collapses to isDryRun===false
+    // and is refused by MCP_WRITES_DISABLED — the same regression the
+    // form mutation family had before it joined this list.
+    name === "sync_binary";
 
   const isWriteGated =
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
@@ -244,6 +252,8 @@ export function createDispatchTool(
               // preview that returns the plan without writing.
               // form_align_controls + form_distribute_controls (#816 phase 3)
               // join the same seam with the same apply/dryRun semantics.
+              // sync_binary (#809) joins the same seam: dryRun:true is the
+              // plan-only path; apply:true performs the chunked execute.
               name === "catalog_add_control" ||
               name === "form_add_control" ||
               name === "form_move_control" ||
@@ -254,7 +264,8 @@ export function createDispatchTool(
               name === "form_set_property" ||
               name === "form_delete_control" ||
               name === "form_align_controls" ||
-              name === "form_distribute_controls"
+              name === "form_distribute_controls" ||
+              name === "sync_binary"
               ? resolveIsDryRun(normalizedInput)
               : name === "generate_form" && hasOwn(normalizedInput, "dryRun")
                 ? resolveIsDryRun(normalizedInput)

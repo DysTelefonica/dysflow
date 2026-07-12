@@ -134,6 +134,9 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         // form_delete_control join the binary-mutating family.
         // Issue #816 phase 3 — form_align_controls + form_distribute_controls
         // join the same family (same applyGuardedFormWrite seam).
+        // Issue #809 — sync_binary joins the binary-mutating family
+        // (apply:true with direction:'src-to-binary' -> import_modules writes
+        // the .accdb).
         "delete_module",
         "fix_encoding",
         "import_all",
@@ -148,6 +151,7 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         "form_move_control",
         "form_rename_control",
         "form_set_property",
+        "sync_binary",
         "vba_inline_execution",
       ].sort(),
     );

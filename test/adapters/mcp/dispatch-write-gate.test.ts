@@ -60,6 +60,9 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     // (write .bas files / write ERD HTML / rewrite module encoding). The
     // declarations are now corrected so read-only MCP sessions cannot run
     // them under the write-gate.
+    // #809 — sync_binary joins the filesystem-mutating family because
+    // apply:true with direction:'binary-to-src' -> export_modules writes
+    // the source tree.
     expect([...filesystemWriters].sort()).toEqual(
       [
         "catalog_add_control",
@@ -78,6 +81,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
         "fix_encoding",
         "generate_form",
         "generate_erd",
+        "sync_binary",
       ].sort(),
     );
   });
@@ -334,6 +338,13 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       apply: true,
     },
     vba_inline_execution: { code: "Sub T()\r\nEnd Sub" },
+    // Issue #809 — sync_binary is dryRun-capable (apply:true forces isDryRun=false)
+    // so the gate must fire on apply:true even when writes are disabled.
+    sync_binary: {
+      projectId: "test-809",
+      direction: "src-to-binary",
+      apply: true,
+    },
   };
 
   it("flags exactly the binary-mutating VBA tools", () => {
@@ -348,6 +359,9 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         // form_delete_control join the binary-mutating family.
         // Issue #816 phase 3 — form_align_controls + form_distribute_controls
         // join the same family (same applyGuardedFormWrite seam).
+        // Issue #809 — sync_binary joins the binary-mutating family
+        // (apply:true with direction:'src-to-binary' -> import_modules writes
+        // the .accdb).
         "delete_module",
         "fix_encoding",
         "import_all",
@@ -362,6 +376,7 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "form_move_control",
         "form_rename_control",
         "form_set_property",
+        "sync_binary",
         "vba_inline_execution",
       ].sort(),
     );

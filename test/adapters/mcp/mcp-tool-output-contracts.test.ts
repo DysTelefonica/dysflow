@@ -109,6 +109,15 @@ const OUTPUT_CONTRACT_GROUPS = {
     // exactly as it does for form_set_property / form_delete_control.
     "form_align_controls",
     "form_distribute_controls",
+    // Issue #809 — sync_binary is the workflow tool that composes
+    // verify_code + import_modules + export_modules. It is registered
+    // as a vba-sync dispatch tool (mutatesBinary + mutatesFilesystem
+    // both true so the write-gate fires for any direction); the
+    // dispatch surface contract is identical to the other vbaSync
+    // tools here. Routed through VbaSyncAdapter.execute() (NOT through
+    // the runner) but it composes the three primitives whose contract
+    // is the runner DYSFLOW_RESULT surface.
+    "sync_binary",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],

@@ -271,7 +271,144 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         type: "string",
         enum: ["retry", "skip", "fail"],
         description:
-          "Issue #807 (Feature 3) — per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.",
+          "Issue #807 (Feature 3) - per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.",
+      },
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+    },
+  },
+  // Issue #809 - `sync_binary` workflow tool. Composes three existing
+  // primitives (verify_code + import_modules + export_modules) into a
+  // single round-trip: verify -> plan -> execute (chunked) -> re-verify
+  // -> recommend. Default semantics: `dryRun: true` populates the plan
+  // and skips execute; `apply: true` performs the import / export
+  // dispatch and re-runs verify_code; no flags follows the safe-by-default
+  // plan behavior (see POLICY_EXEMPT_TOOLS in write-execution-dispatch.ts).
+  // The schema is ADDITIVE - every parameter except direction / scope /
+  // dryRun / apply / batchSize / onChunkError / parallelChunks /
+  // returnFullDiff / directoryPath / recursive / includeTests / includeForms
+  // is forwarded from the SCHEMA_PROPS / CTX_PROPS / STRICT_CTX surface
+  // already shared with the three primitives.
+  sync_binary: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      // Project resolution + strict-context parity with verify_code /
+      // import_modules / export_modules. The `accessPath` override wins
+      // over the project resolver exactly like the three primitives do.
+      projectId: SCHEMA_PROPS.projectId,
+      contextId: SCHEMA_PROPS.contextId,
+      accessPath: SCHEMA_PROPS.accessPath,
+      backendPath: SCHEMA_PROPS.backendPath,
+      strictContext: SCHEMA_PROPS.strictContext,
+      expectedAccessPath: SCHEMA_PROPS.expectedAccessPath,
+      expectedProjectRoot: SCHEMA_PROPS.expectedProjectRoot,
+      expectedDestinationRoot: SCHEMA_PROPS.expectedDestinationRoot,
+      // Scope (mirrors verify_code + the form mutation family). An empty
+      // moduleNames list + no directoryPath resolves to a whole-project
+      // verify; moduleNames / directoryPath narrow the scope to a subset
+      // (Issue #807 directory-walk semantics for the resolve-side
+      // moduleNames fan-out - the inner verify_code call passes the
+      // resolved names verbatim).
+      moduleNames: SCHEMA_PROPS.moduleNames,
+      directoryPath: {
+        type: "string",
+        description:
+          "Issue #809 - when provided AND moduleNames is empty/omitted, sync_binary narrows the pre-verify + post-verify scope to a single directory. Mirrors import_modules.sourceDir (#807). Mutually exclusive with explicit moduleNames.",
+      },
+      recursive: {
+        type: "boolean",
+        description:
+          "Issue #809 - when true (default), sync_binary walks subdirectories of directoryPath. Mirrors import_modules.recursive (#807).",
+      },
+      includeTests: {
+        type: "boolean",
+        description:
+          "Issue #809 - include Test_*.bas files when resolving the scope from directoryPath. Default true.",
+      },
+      includeForms: {
+        type: "boolean",
+        description:
+          "Issue #809 - include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt when resolving the scope from directoryPath. Default true.",
+      },
+      strict: SCHEMA_PROPS.strict,
+      // Direction - the sync_binary-specific knob. src-to-binary maps to
+      // import_modules (binary behind). binary-to-src maps to export_modules
+      // (binary ahead). both (default) is the union.
+      direction: {
+        type: "string",
+        enum: ["src-to-binary", "binary-to-src", "both"],
+        description:
+          "Issue #809 - sync direction. src-to-binary maps to import_modules on the listed names. binary-to-src maps to export_modules on the listed names. both (default) is the union and emits a single recommendation.",
+      },
+      // Scope - the sync_binary-specific knob. actionableOnly:true
+      // (default) excludes nonActionable diffs from the plan (the same
+      // way verify_code already classifies them - they are non-functional
+      // noise). includeBothChanged:true (default false) opts in to
+      // including them in `skipped[]` with reason:'bothChanged_acknowledged'
+      // so a caller that wants the visibility can surface them without
+      // dispatching an unsafe auto-merge.
+      scope: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          actionableOnly: {
+            type: "boolean",
+            description:
+              "Issue #809 - when true (default), nonActionable diffs are excluded from the plan and recommendation. When false, the caller opts in to seeing the full verify_code surface.",
+          },
+          includeBothChanged: {
+            type: "boolean",
+            description:
+              "Issue #809 - when true, bothChanged modules are surfaced in plan.skipped with reason:'bothChanged_acknowledged'. Default false (the recommendation already escalates to manual_merge in that case).",
+          },
+        },
+      },
+      // Plan / execute gating - apply:true is the commit signal, dryRun:true
+      // is the preview escape hatch. Absent both -> safe-by-default plan
+      // (POLICY_EXEMPT_TOOLS keeps developer mode from injecting dryRun:false
+      // on plan-intended calls).
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      // Chunking - modules per inner dispatch chunk during apply:true.
+      // The default is conservative (10) so a single Access COM failure
+      // cannot abort a large sync; raise it for projects with verified
+      // long lists of safe modules.
+      batchSize: {
+        type: "number",
+        minimum: 1,
+        maximum: 200,
+        description:
+          "Issue #809 - modules per chunk during execute. Default 10. toImport and toExport are both sliced into chunks of at most batchSize modules; each chunk is one import_modules / export_modules sub-call. A single chunk failure never crosses the runner boundary twice with overlapping modules.",
+      },
+      onChunkError: {
+        type: "string",
+        enum: ["continue", "abort"],
+        description:
+          "Issue #809 - chunk failure behavior. continue (default) records chunk-level errors and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.",
+      },
+      // Reserved for the parallel-chunk fan-out follow-up. The current
+      // implementation processes chunks sequentially because the inner
+      // import_modules / export_modules calls share a single Access COM
+      // session per project; the field is accepted today so a future
+      // PR can flip the driver without a schema bump.
+      parallelChunks: {
+        type: "number",
+        minimum: 1,
+        maximum: 8,
+        description:
+          "Issue #809 - reserved for future parallel chunk fan-out. Default 1 (sequential). Range 1..8; values >1 are accepted but currently run sequentially - the inner primitives share a single Access COM session per project.",
+      },
+      // Return shape opt-in - when true, the response includes the full
+      // verify_code diffs on preSync / postSync (same shape as verify_code
+      // without sync_binary). Default false to keep the workflow payload
+      // compact; callers that need diffs ask for verify_code directly.
+      returnFullDiff: {
+        type: "boolean",
+        description:
+          "Issue #809 - when true, preSync and postSync include the full verify_code `diffs` array. Default false (only the actionable / missing counts are surfaced, matching the sync_binary workflow payload contract).",
       },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },

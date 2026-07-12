@@ -99,9 +99,13 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // #817 adds diff_form_preview (Phase 2 Perception cont., read-only): 77 -> 78.
     // #818 adds verify_form_bindings (Phase 2 Perception cont., read-only
     // schema-binding validator): 78 -> 79.
+    // #809 adds sync_binary (workflow tool composing verify_code +
+    // import_modules + export_modules; mutatesBinary + mutatesFilesystem
+    // both true so the dispatch write-gate fires for any direction):
+    // 79 -> 80.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(79);
+    expect(advertisedToolCount()).toBe(80);
   });
 });
