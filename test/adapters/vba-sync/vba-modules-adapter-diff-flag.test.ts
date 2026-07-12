@@ -1,29 +1,33 @@
 /**
- * Issue #802 — `export_all({ diff: true })` / `export_modules({ diff: true })` contract.
+ * Issue #802 -> superseded by #757 (C1).
  *
- * Background: the public docstring for `export_all` (src/adapters/mcp/tool-parity-registry.ts:109)
- * advertises `diff:true` as a strictly read-only mode ("Pass diff:true to NOT write — it only
- * reports per-file drift"). In reality the adapter silently ignored the flag: the
- * `MODULE_MAPPINGS.export_all` `extra` function only forwards `verbose`, the PowerShell runner
- * has no `$Diff` parameter, and `VbaModulesAdapter.execute` never inspects `params.diff`. On
- * timeout the partial writes remained on disk — silent corruption of consumer source trees.
+ * Original #802 contract: `export_all(diff:true)` / `export_modules(diff:true)` was
+ * refused outright with a typed `DIFF_MODE_REQUIRES_VERIFY_CODE` error pointing
+ * callers at `verify_code({ strict, moduleNames })`. That refusal was the right
+ * behavior at the time: the adapter silently ignored `diff:true` and wrote to
+ * disk on a timeout.
  *
- * Fix (Option A): refuse `diff:true` at the dispatch seam with a typed error
- * `DIFF_MODE_REQUIRES_VERIFY_CODE` that points the caller at `verify_code({ strict,
- * moduleNames })` for a real read-only compare. This converts the doc-vs-runtime gap from
- * silent corruption into a typed refusal.
+ * #757 (C1) supersedes the refusal with a unification: `apply:true` is the new
+ * commit signal and `diff:true` becomes a DEPRECATED no-write alias. The
+ * rejection is removed. The call still does NOT write (the runner receives
+ * `readOnly:true`) — but the adapter now propagates `metadata.deprecated` so
+ * an AI consumer can migrate to `apply` without a manual source-tree audit.
  *
- * These tests pin the contract from the OUTSIDE of `VbaModulesAdapter.execute`:
- *   1. `diff:true` on `export_all` returns the typed refusal and the orchestrator's
- *      `executeMappedTool` is NEVER invoked.
- *   2. `diff:true` on `export_modules` returns the same typed refusal.
- *   3. The guard does NOT block the normal export path — `export_all` without `diff`
- *      still reaches the runner (regression guard for the guard).
+ * These tests pin the NEW contract from the OUTSIDE of `VbaModulesAdapter.execute`:
+ *   1. `diff:true` on `export_all` is honored (no refusal), routes as
+ *      `readOnly:true`, and emits `metadata.deprecated`.
+ *   2. `diff:true` on `export_modules` honors the same shape.
+ *   3. The legacy guard does NOT block the normal export path — `export_all`
+ *      without `diff` still reaches the runner.
+ *   4. The `DIFF_MODE_REQUIRES_VERIFY_CODE` error code is REMOVED from the
+ *      surface (legacy consumers can no longer receive it; #757 supersedes
+ *      #802's documented contract).
  *
  * The stubbing pattern reuses the orchestrator shape from
  * `test/adapters/vba-sync/vba-modules-adapter-write-policy.test.ts:359-417`. The
- * orchestrator's `executeMappedTool` is a spy — when the contract holds (diff:true rejected
- * before any side-effecting call), the spy is never called.
+ * orchestrator's `executeMappedTool` is a spy — when the contract holds,
+ * the runner IS invoked with `readOnly:true` (the deprecation alias routes
+ * through the runner instead of refusing) so the spy is called exactly once.
  */
 
 import { describe, expect, it } from "vitest";
@@ -106,9 +110,9 @@ function buildAdapterWithSpy(): {
   return { adapter, executeCalls, resolveCalls };
 }
 
-describe("VbaModulesAdapter — diff:true read-only contract (#802)", () => {
-  it("export_all(diff:true) is refused with DIFF_MODE_REQUIRES_VERIFY_CODE and does NOT invoke the runner", async () => {
-    const { adapter, executeCalls, resolveCalls } = buildAdapterWithSpy();
+describe("VbaModulesAdapter — diff:true deprecation contract (#802 -> #757 C1)", () => {
+  it("export_all(diff:true) is HONORED (not refused) and routes as readOnly:true (#757 supersedes #802)", async () => {
+    const { adapter, executeCalls } = buildAdapterWithSpy();
 
     const result = await adapter.execute("export_all", {
       diff: true,
@@ -116,21 +120,28 @@ describe("VbaModulesAdapter — diff:true read-only contract (#802)", () => {
       projectId: "test",
     });
 
-    // The contract: typed refusal, NOT a successful export.
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected diff:true to be refused, got ok=true");
-    expect(result.error.code).toBe("DIFF_MODE_REQUIRES_VERIFY_CODE");
-    // Error message must be actionable: name the alternative, cite the issue.
-    expect(result.error.message).toMatch(/verify_code/i);
-    expect(result.error.message).toMatch(/#802/);
-
-    // The contract: rejection happens BEFORE any side-effecting call.
-    expect(executeCalls).toHaveLength(0);
-    expect(resolveCalls).toBe(0);
+    // New contract: diff:true is the deprecated no-write alias. The call
+    // succeeds, surfaces `metadata.deprecated`, and routes through the
+    // runner with readOnly:true (so the consumer can audit what WOULD
+    // have been exported).
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
+    // The runner IS called — once.
+    expect(executeCalls).toHaveLength(1);
+    expect(executeCalls[0]?.toolName).toBe("export_all");
+    // And the call MUST be no-write — readOnly:true is the alias
+    // semantic that #802 originally promised.
+    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    // Migration hint: the deprecated flag note.
+    const metadata = result.metadata as
+      | { deprecated?: { flag?: string; use?: string } }
+      | undefined;
+    expect(metadata?.deprecated?.flag).toBe("diff");
+    expect(metadata?.deprecated?.use).toBe("apply");
   });
 
-  it("export_modules(diff:true) is refused with DIFF_MODE_REQUIRES_VERIFY_CODE", async () => {
-    const { adapter, executeCalls, resolveCalls } = buildAdapterWithSpy();
+  it("export_modules(diff:true) honors the deprecated alias surface", async () => {
+    const { adapter, executeCalls } = buildAdapterWithSpy();
 
     const result = await adapter.execute("export_modules", {
       diff: true,
@@ -139,18 +150,33 @@ describe("VbaModulesAdapter — diff:true read-only contract (#802)", () => {
       projectId: "test",
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected diff:true to be refused, got ok=true");
-    expect(result.error.code).toBe("DIFF_MODE_REQUIRES_VERIFY_CODE");
-    expect(result.error.message).toMatch(/verify_code/i);
-    expect(result.error.message).toMatch(/#802/);
-
-    expect(executeCalls).toHaveLength(0);
-    expect(resolveCalls).toBe(0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`expected success, got ${result.error.code}`);
+    expect(executeCalls).toHaveLength(1);
+    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    const metadata = result.metadata as { deprecated?: { flag?: string } } | undefined;
+    expect(metadata?.deprecated?.flag).toBe("diff");
   });
 
-  it("export_all without diff is unchanged — runner is still invoked (regression guard for the guard)", async () => {
-    // The diff guard must NOT block the normal export path. Without `diff:true`,
+  it("export_all(diff:true) NEVER returns the legacy DIFF_MODE_REQUIRES_VERIFY_CODE error code", async () => {
+    const { adapter } = buildAdapterWithSpy();
+    const result = await adapter.execute("export_all", {
+      diff: true,
+      destinationRoot: "/tmp/x",
+      projectId: "test",
+    });
+
+    // Regression guard: #757 removed the #802 refusal. A consumer that
+    // greps for `DIFF_MODE_REQUIRES_VERIFY_CODE` must not see it on the
+    // new path. (The code may still exist as documentation — but the
+    // adapter never returns it.)
+    if (!result.ok) {
+      expect(result.error.code).not.toBe("DIFF_MODE_REQUIRES_VERIFY_CODE");
+    }
+  });
+
+  it("export_all without diff is unchanged — runner is still invoked (regression guard for the alias path)", async () => {
+    // The diff alias must NOT block the normal export path. Without `diff:true`,
     // `export_all` reaches the orchestrator's executeMappedTool exactly once.
     const { adapter, executeCalls } = buildAdapterWithSpy();
 

@@ -34,6 +34,12 @@ export type DysflowError = {
  *
  * Adapters should translate this shape to their transport protocol without
  * throwing for expected operation failures.
+ *
+ * `metadata` (#757) — optional structured bag for non-diagnostic machine-readable
+ * signals (deprecation notices, schema-version hints, etc.). Distinct from
+ * `diagnostics` so an AI consumer can branch on `metadata.deprecated.flag`
+ * without text-grepping the diagnostics stream. When present it MAY also be
+ * mirrored in `diagnostics` as a level:"warning" entry for human-readability.
  */
 export type OperationResult<T> =
   | {
@@ -42,6 +48,7 @@ export type OperationResult<T> =
       diagnostics: Diagnostic[];
       durationMs: number;
       operation?: AccessOperationMetadata;
+      metadata?: OperationMetadata;
     }
   | {
       ok: false;
@@ -49,7 +56,33 @@ export type OperationResult<T> =
       diagnostics: Diagnostic[];
       durationMs: number;
       operation?: AccessOperationMetadata;
+      metadata?: OperationMetadata;
     };
+
+/**
+ * Structured machine-readable metadata returned alongside an operation result.
+ *
+ * Today this carries a single `deprecated` slot (issue #757, C1 — surfacing
+ * `diff:true → apply:true` migration hints on `export_all` / `export_modules`).
+ * Future versions may add additional fields; consumers should treat unknown
+ * keys as forward-compatible and use `metadata.deprecated` as the stable
+ * branch key for migrations.
+ */
+export type OperationMetadata = {
+  /**
+   * Migration hint for a deprecated flag the caller just exercised. The
+   * adapter preserves the legacy behavior for at least one minor version
+   * and emits this field whenever the legacy path is hit.
+   */
+  deprecated?: {
+    /** The flag the caller passed (e.g. `"diff"`, `"compile"`). */
+    flag: string;
+    /** The runtime version that introduced the deprecation, `vX.Y.Z`. */
+    since: string;
+    /** The replacement flag the caller should switch to (e.g. `"apply"`). */
+    use: string;
+  };
+};
 
 /**
  * Seam that allows the MCP adapter to dispatch VBA sync tool calls
@@ -336,6 +369,7 @@ export function successResult<T>(
     diagnostics?: Diagnostic[];
     durationMs?: number;
     operation?: AccessOperationMetadata;
+    metadata?: OperationMetadata;
   } = {},
 ): OperationResult<T> {
   return {
@@ -344,6 +378,7 @@ export function successResult<T>(
     diagnostics: options.diagnostics ?? [],
     durationMs: options.durationMs ?? 0,
     ...(options.operation ? { operation: options.operation } : {}),
+    ...(options.metadata ? { metadata: options.metadata } : {}),
   };
 }
 
@@ -357,6 +392,7 @@ export function failureResult(
     diagnostics?: Diagnostic[];
     durationMs?: number;
     operation?: AccessOperationMetadata;
+    metadata?: OperationMetadata;
   } = {},
 ): OperationResult<never> {
   return {

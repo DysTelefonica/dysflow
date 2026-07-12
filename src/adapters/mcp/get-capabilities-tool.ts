@@ -5,6 +5,7 @@
 import packageJson from "../../../package.json" with { type: "json" };
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
 import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
@@ -97,6 +98,26 @@ export type McpCapabilitySnapshot = {
   writeClassToolsPermitted: readonly string[];
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
   humanCompilePending: boolean;
+  /**
+   * v2.9.0 (#757 C2) — per-tool commit-flag metadata. An AI consumer
+   * can branch on `tools[toolName].commitFlag` instead of reading
+   * schema docs. The shape is the contract:
+   *
+   *   { commitFlag: "apply" | "dryRun" | "diff",
+   *     noWriteAlias: "dryRun" | "diff" | null,
+   *     defaultBehavior: "writes" | "plan" | "noop" }
+   *
+   * Keys are the same set as `MCP_TOOL_CONTRACTS`. Unknown tools fall
+   * back to `{ commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" }`
+   * via `commitFlagMetadataForOrNoop`.
+   *
+   * Single source of truth: `src/core/runtime/commit-flag-registry.ts`.
+   * Adding a tool means an entry there AND a passing test in
+   * `test/adapters/mcp/get-capabilities-commit-flags.test.ts`.
+   */
+  tools: Readonly<
+    Record<string, import("../../core/runtime/commit-flag-registry.js").CommitFlagMetadata>
+  >;
 };
 
 export type GetCapabilitiesAllInput = {
@@ -155,6 +176,14 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     effectiveDryRunDefault[name] = effectiveDryRunDefaultForTool(name, writeExecutionPolicy);
   }
 
+  // v2.9.0 (#757 C2) — per-tool commit-flag metadata for the snapshot.
+  // Sourced from `COMMIT_FLAG_REGISTRY` (the single source of truth) and
+  // frozen so consumers can pass the snapshot around safely.
+  const tools: Record<string, ReturnType<typeof commitFlagMetadataForOrNoop>> = {};
+  for (const name of toolNames) {
+    tools[name] = commitFlagMetadataForOrNoop(name);
+  }
+
   return {
     adapterVersion,
     surface,
@@ -176,6 +205,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     toolsVisible: toolNames.length,
     writeClassToolsPermitted,
     humanCompilePending,
+    tools: Object.freeze(tools),
   };
 }
 
@@ -275,7 +305,7 @@ export function createGetCapabilitiesTool(opts: {
 
   return {
     name: "get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Write execution policy: ${snapshot.writeExecutionPolicy}. ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);

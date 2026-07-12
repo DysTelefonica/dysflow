@@ -54,6 +54,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       filter: SCHEMA_PROPS.filter,
       destinationRoot: SCHEMA_PROPS.destinationRoot,
       exportPath: SCHEMA_PROPS.exportPath,
+      // Issue #757 (C1) — `apply:true` joins the export_modules family
+      // too. The historical `diff:true` alias is honored as a
+      // deprecated no-write mapping by VbaModulesAdapter; the schema
+      // accepts both flags.
+      apply: SCHEMA_PROPS.apply,
       // issue #752 — opt-in verbose flag. Adds a top-level `verbose: [...]`
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
@@ -76,6 +81,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       filter: SCHEMA_PROPS.filter,
       diff: SCHEMA_PROPS.diff,
+      // Issue #757 (C1) — `apply:true` is the new commit signal. The
+      // historical `diff:true` is preserved as a deprecated no-write
+      // alias (see vba-modules-adapter.ts). The schema accepts both
+      // flags; the adapter picks the right one.
+      apply: SCHEMA_PROPS.apply,
       prune: SCHEMA_PROPS.prune,
       exportPath: SCHEMA_PROPS.exportPath,
       // issue #752 — opt-in verbose flag.

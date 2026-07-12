@@ -184,7 +184,26 @@ export function createDispatchTool(
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
       let normalizedInput = stripDeprecatedCompileParams(name, input);
       const validation = validateInput(normalizedInput, schema);
-      if (validation !== undefined) return invalidInput(validation);
+      if (validation !== undefined) {
+        // #757 (C4) — when the validation message is the legacy
+        // `"<flag> is not allowed."` shape, enrich the rejection
+        // envelope with the rejected flag and the tool's actual
+        // commit flag. The legacy text body is preserved so regex
+        // consumers keep working; the structured `error` block is
+        // additive.
+        const flagMatch =
+          /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
+            validation,
+          );
+        const rejectedFlag = flagMatch?.[1] ?? flagMatch?.[2];
+        if (rejectedFlag !== undefined) {
+          return invalidInput(validation, undefined, {
+            rejectedFlag,
+            toolName: name,
+          });
+        }
+        return invalidInput(validation);
+      }
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
       // caller-supplied payload, untouched by the policy injection) and
