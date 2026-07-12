@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.9.0] - 2026-07-12
+
+- Merge pull request #843 from DysTelefonica/feat/783-wire-write-execution-policy - feat(mcp): wire write-execution-policy through dispatch + add export-source guard (#783) - Merge pull request #842 from DysTelefonica/feat/757-unify-commit-flags - feat(mcp): unify write-side commit flags + enrich error envelopes (#757)
+
+
 ## [v2.8.0] - 2026-07-12
 
 - Merge pull request #841 from DysTelefonica/feat/809-sync-binary-workflow - feat(vba-sync): sync_binary workflow tool - verify -> plan -> import/export -> re-verify (#809) - fix(forms): keep apply mode label out of the pure plan core (#840)
