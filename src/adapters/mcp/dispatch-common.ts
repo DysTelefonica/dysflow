@@ -1,5 +1,6 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
+import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
 import { validateInput } from "../../shared/validation/validator.js";
 import {
   type McpToolResult,
@@ -93,12 +94,71 @@ export function writesDisabled(toolName?: string): McpToolResult {
   };
 }
 
-export function invalidInput(message: string, remediation?: string): McpToolResult {
+/**
+ * Surface a `MCP_INPUT_INVALID` envelope. The plain text body mirrors
+ * the legacy prefix (`MCP_INPUT_INVALID: <message>`). When the
+ * rejection is for a flag the caller passed that the tool doesn't
+ * accept (#757 C4), the structured `error` block enumerates the
+ * rejected flag and the tool's actual commit flag so the consumer can
+ * act without consulting schema docs.
+ */
+export function invalidInput(
+  message: string,
+  remediation?: string,
+  enrichment?: {
+    /** Flag the caller passed that was rejected. Pinpoint for the consumer. */
+    rejectedFlag?: string;
+    /** Tool name — used to look up the tool's commit-flag metadata. */
+    toolName?: string;
+  },
+): McpToolResult {
   const error: McpToolResult["error"] = {
     code: MCP_INPUT_INVALID_CODE,
     message,
   };
-  if (remediation !== undefined) {
+  if (enrichment?.rejectedFlag !== undefined) {
+    error.rejectedFlag = enrichment.rejectedFlag;
+    // Auto-derive the tool's actual commit flag from the registry so
+    // the structured envelope is always honest about what the tool
+    // accepts. `none` means the registry has no entry for the tool
+    // (and thus the caller is misrouted).
+    if (enrichment.toolName !== undefined) {
+      const commitFlag = commitFlagFor(enrichment.toolName);
+      const noWriteAlias = noWriteAliasFor(enrichment.toolName);
+      error.toolCommitFlag = commitFlag;
+      // Always enrich the remediation with tool-aware guidance so
+      // consumers that hit the schema rejection know what to do.
+      // Three flavors:
+      //   1. Caller passed the tool's commit flag (e.g. apply:true on
+      //      verify_code) → the tool's noop nature is the issue; the
+      //      remediation explicitly notes this tool has no write side.
+      //   2. Caller passed something the schema rejects but the
+      //      tool's noWriteAlias exists → the remediation mentions it.
+      //   3. The registry has no record (anonymous tool) → fall back
+      //      to the message verbatim.
+      const guidance =
+        remediation ?? `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`;
+      if (noWriteAlias === null) {
+        // No-write default: the tool never writes (or never accepts a
+        // no-write knob). If the rejected flag IS the commit flag,
+        // the caller is mis-using the API entirely.
+        if (enrichment.rejectedFlag === commitFlag) {
+          error.remediation = `${guidance} ${enrichment.toolName} is a ${commitFlag === "apply" ? "read-only / no-write" : "no-write"} tool — passing ${commitFlag}:true cannot make it write. Run a write-class tool (export_*, import_*, delete_module, etc.) instead.`;
+        } else {
+          error.remediation = guidance;
+        }
+      } else if (enrichment.rejectedFlag === commitFlag) {
+        // Same as above for write-class tools.
+        error.remediation = `${guidance} Pass ${commitFlag}:true to commit, ${noWriteAlias}:true to plan, or omit both to use the tool's default.`;
+      } else {
+        // Caller passed something the tool doesn't accept. Suggest
+        // the tool's actual flags.
+        error.remediation = `${guidance} ${enrichment.toolName} accepts "${commitFlag}" (commit) and "${noWriteAlias}" (plan) — not "${enrichment.rejectedFlag}".`;
+      }
+    } else if (remediation !== undefined) {
+      error.remediation = remediation;
+    }
+  } else if (remediation !== undefined) {
     error.remediation = remediation;
   }
   return {

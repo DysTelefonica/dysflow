@@ -1,9 +1,12 @@
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, parse, resolve } from "node:path";
+import packageJson from "../../../package.json" with { type: "json" };
 import {
   createDysflowError,
+  type Diagnostic,
   failureResult,
+  type OperationMetadata,
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
@@ -327,21 +330,51 @@ export class VbaModulesAdapter {
       }
     }
 
-    // Issue #802 — `diff:true` is documented as strictly read-only but the
-    // adapter never honored it (the runner has no $Diff parameter and the
-    // export_all mapping only forwards `verbose`). Reject at the dispatch
-    // seam with a typed error pointing the caller at verify_code for a
-    // real read-only compare, instead of silently writing to the source
-    // tree (and leaving partial writes on timeout). The rejection happens
-    // BEFORE the mapping lookup / exportPath guard / target resolution so
-    // it is the cheapest possible gate and never touches the orchestrator.
-    if ((toolName === "export_all" || toolName === "export_modules") && params.diff === true) {
-      return failureResult(
-        createDysflowError(
-          "DIFF_MODE_REQUIRES_VERIFY_CODE",
-          `Refusing ${toolName}(diff:true): diff mode is documented as read-only but the adapter does not honor it (see issue #802). Use verify_code({ strict, moduleNames }) for a real read-only compare, or omit diff:true to perform the actual mirror export.`,
-        ),
-      );
+    // Issue #757 (C1) — `diff:true` is the legacy no-write alias for the
+    // export_ family. Pre-#757 the adapter refused it outright via
+    // `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). Post-#757 the rejection is
+    // REMOVED — `diff:true` is honored as a no-write mapping (the runner
+    // receives `readOnly:true`) and the response carries
+    // `metadata.deprecated = { flag: "diff", since: "<runtime>", use: "apply" }`
+    // so an AI consumer can migrate without a manual source-tree audit.
+    //
+    // `apply:true` overrides `diff:true` (apply wins). When the caller
+    // omits both the default-write behavior is preserved for `export_*`
+    // (legacy orchestrator briefs that never passed `apply` keep
+    // writing). The flag routing happens BEFORE the mapping lookup /
+    // exportPath guard / target resolution so this branch never touches
+    // the orchestrator.
+    //
+    // The resolved `effectiveExportReadOnly` and `deprecationNotice` are
+    // carried into the orchestrator call below.
+    let effectiveExportReadOnly: boolean | undefined;
+    let deprecationNotice: { metadata: OperationMetadata; diagnostic: Diagnostic } | undefined;
+    const isExportWithDeprecationAlias =
+      (toolName === "export_all" || toolName === "export_modules") && params.diff === true;
+    if (isExportWithDeprecationAlias) {
+      const runtimeVersion = readRuntimeVersionSafe();
+      deprecationNotice = {
+        metadata: {
+          deprecated: {
+            flag: "diff",
+            since: runtimeVersion,
+            use: "apply",
+          },
+        },
+        diagnostic: {
+          level: "warning",
+          source: "export-deprecation",
+          message: `${toolName}(diff:true) is deprecated since ${runtimeVersion}; pass apply:true to commit or apply:false / omitted for the historical no-write semantics (see #757 C1).`,
+        },
+      };
+      if (params.apply !== true) {
+        // No apply:true override — route as the legacy no-write mapping
+        // (readOnly:true). apply:true wins otherwise (see below).
+        effectiveExportReadOnly = true;
+      }
+      // When apply:true IS also present, we keep the deprecation notice
+      // for the consumer's migration log but DO NOT inject readOnly —
+      // apply:true is the explicit commit signal.
     }
 
     const mapping = MODULE_MAPPINGS[toolName];
@@ -434,7 +467,7 @@ export class VbaModulesAdapter {
 
     const importResult = await this.orchestrator.executeMappedTool(
       toolName,
-      effectiveParams,
+      effectiveExportReadOnly === true ? { ...effectiveParams, readOnly: true } : effectiveParams,
       mapping,
     );
     if (!importResult.ok) return importResult;
@@ -466,6 +499,28 @@ export class VbaModulesAdapter {
             },
           }
         : importResult;
+
+    // Issue #757 (C1) — propagate the export_* deprecation notice onto
+    // the outbound envelope. Two surfaces, both stable:
+    //   - `metadata.deprecated` for AI consumers (programmatic branch).
+    //   - `diagnostics[*]` (level:"warning") for log-grep + legacy
+    //     readers.
+    if (deprecationNotice !== undefined) {
+      if (resultWithPrune.ok) {
+        return {
+          ...resultWithPrune,
+          diagnostics: [...resultWithPrune.diagnostics, deprecationNotice.diagnostic],
+          metadata: mergeOperationMetadata(resultWithPrune.metadata, deprecationNotice.metadata),
+        };
+      }
+      // Failure envelope: surface the notice too so a consumer that
+      // bailed on the no-write run still sees the migration hint.
+      return {
+        ...resultWithPrune,
+        diagnostics: [...resultWithPrune.diagnostics, deprecationNotice.diagnostic],
+        metadata: mergeOperationMetadata(resultWithPrune.metadata, deprecationNotice.metadata),
+      };
+    }
 
     return resultWithPrune;
   }
@@ -1059,6 +1114,46 @@ function addDocumentAliases(names: Set<string>, moduleName: string, prefix: "For
   } else {
     names.add(`${prefix}${moduleName}`);
   }
+}
+
+/**
+ * Read the running `dysflow` package version without throwing on a
+ * malformed `package.json`. Returns `"v0.0.0"` when the version is
+ * unavailable — callers that embed it in the deprecation note want
+ * a stable, machine-readable `vX.Y.Z` shape, never an exception.
+ *
+ * Issue #757 (C1) — the version is the `since` claim on
+ * `metadata.deprecated`. Consumers grep on it to know when the alias
+ * was introduced; the contract is `vX.Y.Z`.
+ */
+function readRuntimeVersionSafe(): string {
+  try {
+    const pkg = packageJson as { version?: unknown };
+    const version = typeof pkg.version === "string" ? pkg.version : "";
+    return version.length > 0 ? `v${version}` : "v0.0.0";
+  } catch {
+    return "v0.0.0";
+  }
+}
+
+/**
+ * Merge two `OperationMetadata` blobs. Today both sides only carry
+ * `deprecated`, but later additions (e.g. `experimental`, `featureFlag`)
+ * should land here too — each top-level key is independently merged so
+ * the surfaces compose without overwriting. When both sides carry the
+ * same key, the right-hand side wins (later call site has more
+ * context).
+ */
+function mergeOperationMetadata(
+  base: OperationMetadata | undefined,
+  overlay: OperationMetadata,
+): OperationMetadata {
+  if (base === undefined) return overlay;
+  return {
+    ...base,
+    ...overlay,
+    deprecated: overlay.deprecated ?? base.deprecated,
+  };
 }
 
 function listObjectModuleNames(data: unknown): string[] {

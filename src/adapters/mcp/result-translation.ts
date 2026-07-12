@@ -64,6 +64,22 @@ export type McpToolError = {
    * resolver is unavailable).
    */
   sourceRoot?: string;
+  /**
+   * v2.9.0 (#757 C4) — when the schema-rejection (`MCP_INPUT_INVALID`)
+   * is for a flag the tool does not accept, this is the literal flag
+   * name the caller passed. Pairs with `toolCommitFlag` to surface the
+   * correct replacement without forcing the consumer to consult schema
+   * docs.
+   */
+  rejectedFlag?: string;
+  /**
+   * v2.9.0 (#757 C4) — the commit flag this tool actually accepts
+   * (today: `"apply"`, `"dryRun"`, or `"diff"`). Together with
+   * `rejectedFlag`, a consumer can write:
+   *   `if (error.rejectedFlag === "apply" && error.toolCommitFlag === "dryRun") ...`
+   * without parsing the legacy text body.
+   */
+  toolCommitFlag?: "apply" | "dryRun" | "diff" | "none";
 };
 
 export type McpToolResult = {

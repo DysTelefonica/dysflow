@@ -240,6 +240,95 @@ export function deriveExpectedLockFile(accessPath: string | undefined): string |
   return undefined;
 }
 
+// ─── #757 (C3): actionable timeout envelope helpers ───────────────────────────
+//
+// Pre-C3 the timeout envelope carried `reapedProcessPids` (PIDs dysflow
+// successfully cleaned) and `cleanupWarnings` (raw messages). The
+// consumer had to *parse* the warnings to figure out which MSACCESS.EXE
+// PIDs were still on the box. C3 ADDS a structured `lingeringProcesses`
+// array so an AI consumer can branch on `pid` directly, plus a
+// `lingeringLockFiles` array (superset of `expectedLockFile`) so the
+// consumer gets one stable shape for the cleanup work it needs to do.
+
+/**
+ * Shape of a single `lingeringProcesses[]` entry (#757 C3). The exact
+ * keys are pinned by `test/adapters/vba-sync/vba-sync-adapter-timeout-envelope.test.ts`.
+ */
+export interface LingeringProcess {
+  /** The PID dysflow COULD NOT reap on this timeout. */
+  pid: number;
+  /** Process kind. Today always `"MSACCESS.EXE"` — a future release may
+   * add other COM-spawned executables (e.g. `WinWord.exe` for Access
+   * mail-merge exports). */
+  kind: "MSACCESS.EXE" | string;
+  /** Best-effort age (seconds) of the lingering process when the timeout
+   * fired. The cleanup service does not always know the process start
+   * time; `0` is the safe default. */
+  ageSeconds: number;
+  /** Best-effort "is the process headless?" hint derived from the
+   * window handle. `false` is the conservative default — a process with
+   * a visible window is by definition NOT headless and the orphan
+   * cleanup refused to kill it (#574). */
+  headless: boolean;
+}
+
+/** Errors that name a PID we couldn't reap. Keep in lockstep with the
+ * PowerShell / preflight error messages so consumers can grep both. */
+const REFUSED_KILL_PID_REGEX = /(?:Refused|refused)\s+to\s+kill\s+PID\s+(\d+)/;
+
+/** Errors that signal the PID survived because its window was visible. */
+const VISIBLE_WINDOW_REGEX = /mainWindowHandle\s+is\s+(?:non-zero|0x[A-F0-9]+),?\s+not\s+0/i;
+
+/**
+ * Derive the `lingeringProcesses[]` array from a preflight cleanup
+ * result. Pure — does not call `process.list` or otherwise re-audit the
+ * OS. Inputs are the cleanup's `killed[]`, `orphanedKilled[]`, and
+ * `errors[]`; outputs are the PIDs that survived.
+ *
+ * The function is conservative: PIDs in `killed[]` / `orphanedKilled[]`
+ * ARE NOT lingering (dysflow reaped them). PIDs whose cleanup error
+ * matches `REFUSED_KILL_PID_REGEX` ARE lingering (the cleanup actively
+ * refused to kill them).
+ */
+export function deriveLingeringProcesses(
+  cleanupResult: AccessOperationPreflightCleanupResult,
+): LingeringProcess[] {
+  const lingering: LingeringProcess[] = [];
+  // Reaping succeeded for these — they are NOT lingering.
+  const reaped = new Set<number>([...cleanupResult.killed, ...cleanupResult.orphanedKilled]);
+  for (const error of cleanupResult.errors) {
+    const match = REFUSED_KILL_PID_REGEX.exec(error.message);
+    if (match === null) continue;
+    const pid = Number.parseInt(match[1] ?? "", 10);
+    if (!Number.isFinite(pid) || reaped.has(pid)) continue;
+    lingering.push({
+      pid,
+      kind: "MSACCESS.EXE",
+      ageSeconds: 0,
+      headless: !VISIBLE_WINDOW_REGEX.test(error.message),
+    });
+  }
+  return lingering;
+}
+
+/**
+ * Derive the `lingeringLockFiles[]` array — every file the consumer
+ * might need to clean up if a future operation aborts on the same
+ * binary. Today the only deterministic source is `expectedLockFile`; a
+ * future release may add the `.ldb` backup or `~`-shadow file.
+ */
+export function deriveLingeringLockFiles(accessPath: string | undefined): string[] {
+  const expected = deriveExpectedLockFile(accessPath);
+  return expected === undefined ? [] : [expected];
+}
+
+/** Canonical remediation (#757 C3). Consumers grep `access_force_cleanup_orphaned`. */
+export const VBA_MANAGER_TIMEOUT_REMEDIATION =
+  "Call dysflow_access_force_cleanup_orphaned with projectId and accessPath. " +
+  "No confirmPid on first call (read-only list). Then retry. " +
+  "If orphans persist, repeat with an explicit confirmPid. " +
+  "Consider raising timeoutMs for large projects.";
+
 export class VbaSyncAdapter implements VbaSyncPort {
   public readonly executor: VbaManagerExecutor;
   public readonly scriptPath: string;
@@ -608,18 +697,21 @@ export class VbaSyncAdapter implements VbaSyncPort {
       const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(cleanupResult);
       const reapedProcessPids = [...cleanupResult.killed, ...cleanupResult.orphanedKilled];
       const expectedLockFile = deriveExpectedLockFile(accessPath);
-      const remediation =
-        `dysflow already attempted to reap the orphaned Access process on this timeout. ` +
-        `If an MSACCESS.EXE still holds ${accessPath ?? "the target binary"}, list orphans with ` +
-        `access_force_cleanup_orphaned (no confirmPid = read-only list), then retry. ` +
-        `Consider raising timeoutMs for large projects.`;
+      // #757 (C3) — actionable timeout envelope. The new structured
+      // surfaces (`lingeringProcesses`, `lingeringLockFiles`) sit ALONGSIDE
+      // the F3 fields (`reapedProcessPids`, `cleanupWarnings`,
+      // `expectedLockFile`) so consumers that already parse the F3
+      // envelope keep working unchanged. New consumers branch on the
+      // structured fields directly.
+      const lingeringProcesses = deriveLingeringProcesses(cleanupResult);
+      const lingeringLockFiles = deriveLingeringLockFiles(accessPath);
       return failureResult(
         createDysflowError(
           "VBA_MANAGER_TIMEOUT",
           `${toolName} timed out after ${result.durationMs}ms`,
           {
             retryable: true,
-            remediation,
+            remediation: VBA_MANAGER_TIMEOUT_REMEDIATION,
             details: {
               phase: deriveTimeoutPhase(toolName),
               wasApply: TIMEOUT_WRITE_TOOLS.has(toolName) && params.dryRun !== true,
@@ -634,6 +726,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
                 (error) => `${error.operationId}: ${error.message}`,
               ),
               ...(expectedLockFile !== undefined ? { expectedLockFile } : {}),
+              // #757 (C3) — structured survivors + lock surface for consumers
+              // that prefer the typed view over parsing `cleanupWarnings`.
+              lingeringProcesses,
+              lingeringLockFiles,
             },
           },
         ),
