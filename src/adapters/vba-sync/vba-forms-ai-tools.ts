@@ -278,7 +278,7 @@ async function applyPlan(args: {
     // Dry-run: return the would-be-written source + advisory list. No write,
     // no import. Preserves the contract-only envelope (`mode`, `formName`,
     // `operationsApplied`, `preservedControls`, `warnings`).
-    const dryRunResult = applyFormUiDesignPlan(plan, { apply: false });
+    const dryRunResult = applyFormUiDesignPlan(plan);
     return successResult({
       ...dryRunResult,
       advisories: folded.advisories,
@@ -300,9 +300,13 @@ async function applyPlan(args: {
   });
   if (!write.ok) return write;
 
-  const applyResult = applyFormUiDesignPlan(plan, { apply: true });
+  // The adapter owns the "apply" semantics: it performed the guarded write +
+  // import gate above, so it sets `mode: "apply"` / `filesystemApplied: true`
+  // over the core's pure `dry-run` preview.
+  const applyResult = applyFormUiDesignPlan(plan);
   return successResult({
     ...applyResult,
+    mode: "apply",
     advisories: folded.advisories,
     filesystemApplied: true,
     importGate: "passed",

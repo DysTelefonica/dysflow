@@ -150,11 +150,12 @@ describe("form UI design plan service", () => {
     const plan = generateFormUiDesignPlan(map, {
       operations: [op("note", "missingControl")],
     });
-    const result = applyFormUiDesignPlan(plan, { apply: true });
+    const result = applyFormUiDesignPlan(plan);
 
     expect(plan.operations).toHaveLength(1);
     expect(plan.warnings).toEqual([]);
     expect(result).toMatchObject({
+      mode: "dry-run",
       operationsApplied: plan.operations,
       advisories: ["note"],
       filesystemApplied: false,
@@ -176,7 +177,7 @@ describe("form UI design plan service", () => {
       ],
     });
 
-    const result = applyFormUiDesignPlan(plan, { apply: false });
+    const result = applyFormUiDesignPlan(plan);
 
     expect(result).toMatchObject({
       mode: "dry-run",
@@ -203,7 +204,11 @@ describe("form UI design plan service", () => {
         ],
       },
     );
-    const application = applyFormUiDesignPlan(plan, { apply: true });
+    const application = applyFormUiDesignPlan(plan);
+    // The core is pure: even for a plan that will be applied, it reports a
+    // dry-run preview and never claims a filesystem write (the adapter owns
+    // `mode: "apply"` / `filesystemApplied: true`).
+    expect(application).toMatchObject({ mode: "dry-run", filesystemApplied: false });
     // biome-ignore format: Keep the independent literal contract within the review budget.
     const expected: FormUiBehaviorMap = { formName: "Customer", formEvents: [], unmappedEvidence: [], warnings: [], controls: [
       { name: "cmdCommit", type: "CommandButton", role: "action", events: ["OnClick"], bindings: [], codegraphEvidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click", "SaveCustomer"] }], properties: { Left: "30", Top: "40", Caption: "Commit" } },
