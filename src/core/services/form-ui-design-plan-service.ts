@@ -70,10 +70,16 @@ export function generateFormUiDesignPlan(
   };
 }
 
-export function applyFormUiDesignPlan(
-  plan: FormUiDesignPlan,
-  options: { apply?: boolean } = {},
-): FormUiPlanApplicationResult {
+export function applyFormUiDesignPlan(plan: FormUiDesignPlan): FormUiPlanApplicationResult {
+  // This core function is PURE: it folds the plan onto an in-memory FormIR and
+  // returns the resulting contract preview. It never touches the filesystem,
+  // so it always reports `mode: "dry-run"`, `filesystemApplied: false`, and
+  // `importGate: "not-run"`. The ACTUAL guarded write + import gate — and the
+  // `mode: "apply"` / `filesystemApplied: true` result — are owned by the
+  // adapter (`applyGuardedFormWrite` in `vba-forms-ai-tools`). Keeping the
+  // "apply" label out of the core removes the previous footgun where a direct
+  // core caller could get `mode: "apply"` alongside `filesystemApplied: false`.
+  //
   // Issue #829 — derive `appliedContract` from the SAME mutated FormIR that
   // apply writes through, not from a parallel implementation. Eliminates the
   // dual-implementation drift risk that previously let the dry-run preview
@@ -83,7 +89,7 @@ export function applyFormUiDesignPlan(
   const appliedContract = buildBehaviorMapFromIr(ir, plan.sourceContract, plan.operations);
 
   return {
-    mode: options.apply === true ? "apply" : "dry-run",
+    mode: "dry-run",
     formName: plan.formName,
     operationsApplied: plan.operations,
     preservedControls: plan.sourceContract.controls.map((control) => control.name),
