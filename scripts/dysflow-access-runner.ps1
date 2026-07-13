@@ -682,39 +682,27 @@ function Update-LinkTables {
   $dbEngine = New-DaoDbEngine
   $backendDb = Open-DatabaseWithBackendPassword -DbEngine $dbEngine -DatabasePath $backendPath
   try {
-    $targetNames = @(Resolve-LinkTargetNames -Database $Database -Payload $Payload)
-    if ($targetNames.Count -eq 0) {
-      $targetNames = @(Get-TableNames -Database $backendDb)
-    }
-
-    $updated = New-Object System.Collections.ArrayList
-    foreach ($tableName in $targetNames) {
-      $linked = $null
-      try { $linked = $Database.TableDefs.Item([string]$tableName) } catch { Write-Debug "Diagnostics: $_" }
-      if ($dryRun) {
-        [void]$updated.Add([ordered]@{
-          name = [string]$tableName
-          backendPath = $backendPath
-          wouldCreateOrRefresh = ($null -eq $linked)
-        })
-        continue
+    if ($RefreshOnly) {
+      # relink_tables / localize_backend_links — refresh EXISTING links only.
+      # Pre-#851 behavior, unchanged: never creates a missing TableDef.
+      $targetNames = @(Resolve-LinkTargetNames -Database $Database -Payload $Payload)
+      if ($targetNames.Count -eq 0) {
+        $targetNames = @(Get-TableNames -Database $backendDb)
       }
-      if ($null -eq $linked) {
-        if ($RefreshOnly) {
-          throw "Linked table not found: $tableName"
+      $updated = New-Object System.Collections.ArrayList
+      foreach ($tableName in $targetNames) {
+        $linked = $null
+        try { $linked = $Database.TableDefs.Item([string]$tableName) } catch { Write-Debug "Diagnostics: $_" }
+        if ($dryRun) {
+          [void]$updated.Add([ordered]@{
+            name = [string]$tableName
+            backendPath = $backendPath
+            wouldCreateOrRefresh = ($null -eq $linked)
+          })
+          continue
         }
-        $linked = $Database.CreateTableDef([string]$tableName)
-        if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-          $linked.Connect = ";DATABASE=$backendPath"
-        } else {
-          $linked.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"
-        }
-        $linked.SourceTableName = [string]$tableName
-        $Database.TableDefs.Append($linked)
-      } else {
-        if ([string]::IsNullOrWhiteSpace([string]$linked.Connect) -and $RefreshOnly) {
-          throw "Table $tableName is not linked."
-        }
+        if ($null -eq $linked) { throw "Linked table not found: $tableName" }
+        if ([string]::IsNullOrWhiteSpace([string]$linked.Connect)) { throw "Table $tableName is not linked." }
         if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
           $linked.Connect = ";DATABASE=$backendPath"
         } else {
@@ -724,17 +712,108 @@ function Update-LinkTables {
           $linked.SourceTableName = [string]$tableName
         }
         try { $linked.RefreshLink() } catch { Write-Debug "Diagnostics: $_" }
+        [void]$updated.Add([ordered]@{ name = [string]$tableName; backendPath = $backendPath })
+        try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($linked) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
       }
-      [void]$updated.Add([ordered]@{
-        name = [string]$tableName
-        backendPath = $backendPath
-      })
-      try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($linked) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+      return [ordered]@{ backendPath = $backendPath; linkedTables = $updated }
+    }
+
+    # link_tables — issue #851 mode-aware create/relink.
+    #   - relink-only (default): refresh existing links; NEVER create a missing one.
+    #   - create-or-relink: also create a linked TableDef for each requested backend
+    #     table missing from the frontend.
+    # Batch semantics are PARTIAL-SUCCESS: each table is independent, per-table
+    # failures are reported (action='error' with a typed code) and do not abort the
+    # other tables; a failed create leaves no orphan (Append is the atomic step and
+    # is only reached after the TableDef is fully configured).
+    $linkMode = if ([string]$Payload.linkMode -eq 'create-or-relink') { 'create-or-relink' } else { 'relink-only' }
+    $createMissing = ($linkMode -eq 'create-or-relink')
+
+    $requested = @()
+    if ($Payload.tableNames) { $requested = @($Payload.tableNames | ForEach-Object { [string]$_ }) }
+    elseif ($Payload.tableName) { $requested = @([string]$Payload.tableName) }
+
+    $backendTableSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($bt in @(Get-TableNames -Database $backendDb)) { [void]$backendTableSet.Add([string]$bt) }
+
+    if ($requested.Count -eq 0) {
+      $existingLinks = @(Get-LinkNames -Database $Database)
+      if ($createMissing) {
+        $names = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($n in $existingLinks) { if (-not $names.Contains([string]$n)) { [void]$names.Add([string]$n) } }
+        foreach ($n in $backendTableSet) { if (-not $names.Contains([string]$n)) { [void]$names.Add([string]$n) } }
+        $requested = @($names)
+      } else {
+        $requested = @($existingLinks)
+      }
+    }
+
+    $actions = New-Object System.Collections.ArrayList
+    $linkedTables = New-Object System.Collections.ArrayList
+
+    foreach ($tableName in $requested) {
+      $name = [string]$tableName
+      $existing = $null
+      try { $existing = $Database.TableDefs.Item($name) } catch { Write-Debug "Diagnostics: $_" }
+
+      $isLink = ($null -ne $existing) -and (-not [string]::IsNullOrWhiteSpace([string]$existing.Connect))
+      $isLocal = ($null -ne $existing) -and ([string]::IsNullOrWhiteSpace([string]$existing.Connect))
+
+      if ($isLink) {
+        if (-not $dryRun) {
+          if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+            $existing.Connect = ";DATABASE=$backendPath"
+          } else {
+            $existing.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$existing.SourceTableName)) { $existing.SourceTableName = $name }
+          try { $existing.RefreshLink() } catch { Write-Debug "Diagnostics: $_" }
+        }
+        [void]$actions.Add([ordered]@{ tableName = $name; action = 'relink'; sourceTableName = $name; backendPath = $backendPath; applied = (-not $dryRun) })
+        [void]$linkedTables.Add([ordered]@{ name = $name; backendPath = $backendPath })
+      }
+      elseif ($isLocal) {
+        [void]$actions.Add([ordered]@{ tableName = $name; action = 'skip-local'; backendPath = $backendPath; applied = $false; error = 'LOCAL_TABLE_EXISTS: a local (non-linked) table with this name already exists; refusing to overwrite.' })
+      }
+      elseif (-not $createMissing) {
+        [void]$actions.Add([ordered]@{ tableName = $name; action = 'skip'; backendPath = $backendPath; applied = $false; error = 'NOT_LINKED: no frontend link exists. Pass mode:"create-or-relink" to create it.' })
+      }
+      elseif (-not $backendTableSet.Contains($name)) {
+        [void]$actions.Add([ordered]@{ tableName = $name; action = 'error'; backendPath = $backendPath; applied = $false; error = "BACKEND_TABLE_NOT_FOUND: '$name' does not exist in backend '$backendPath'." })
+      }
+      else {
+        if ($dryRun) {
+          [void]$actions.Add([ordered]@{ tableName = $name; action = 'create-link'; sourceTableName = $name; backendPath = $backendPath; wouldWrite = $true; applied = $false })
+          [void]$linkedTables.Add([ordered]@{ name = $name; backendPath = $backendPath })
+        } else {
+          $tdf = $null
+          try {
+            $tdf = $Database.CreateTableDef($name)
+            if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+              $tdf.Connect = ";DATABASE=$backendPath"
+            } else {
+              $tdf.Connect = ";DATABASE=$backendPath;PWD=$BackendPassword"
+            }
+            $tdf.SourceTableName = $name
+            $Database.TableDefs.Append($tdf)
+            [void]$actions.Add([ordered]@{ tableName = $name; action = 'create-link'; sourceTableName = $name; backendPath = $backendPath; applied = $true })
+            [void]$linkedTables.Add([ordered]@{ name = $name; backendPath = $backendPath })
+          } catch {
+            [void]$actions.Add([ordered]@{ tableName = $name; action = 'error'; backendPath = $backendPath; applied = $false; phase = 'append'; error = ("CREATE_LINK_FAILED: could not create linked table '$name': " + $_.Exception.Message) })
+          } finally {
+            if ($tdf) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdf) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+          }
+        }
+      }
+      if ($existing) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($existing) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 
     return [ordered]@{
+      mode = $linkMode
+      dryRun = $dryRun
       backendPath = $backendPath
-      linkedTables = $updated
+      actions = $actions
+      linkedTables = $linkedTables
     }
   } finally {
     try { $backendDb.Close() } catch { Write-Debug "Diagnostics: $_" }
@@ -2085,13 +2164,9 @@ try {
     }
 
     if ($action -eq 'link_tables') {
-      $dryRun = $true; if ($null -ne $payload.dryRun) { $dryRun = [bool]$payload.dryRun }
-      if ($dryRun) {
-        $backendPath = [string]$payload.backendPath
-        Write-DysflowProgress -Percent 90 -Message "Finalizing"
-        Write-DysflowResult -Result ([ordered]@{ dryRun = $true; backendPath = $backendPath; linkedTables = @() }) -Depth 20
-        $script:exitCode = 0; return
-      }
+      # Issue #851 — dry-run now flows through Update-LinkTables, which returns a
+      # per-table create/relink/skip plan. (Previously dry-run was hardcoded to
+      # return an empty linkedTables array, so it never planned anything.)
       $result = Update-LinkTables -Database $db -Payload $payload
       Write-DysflowProgress -Percent 90 -Message "Finalizing"
       Write-DysflowResult -Result $result -Depth 20
