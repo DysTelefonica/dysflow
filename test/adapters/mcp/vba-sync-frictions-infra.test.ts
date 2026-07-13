@@ -4,6 +4,11 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-regis
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index.js";
 import { sanitizeMcpErrorMessage } from "../../../src/core/utils/sanitize-error.js";
 import { validateInput } from "../../../src/shared/validation/validator.js";
 
@@ -25,6 +30,67 @@ describe("MCP tool schema registration for vba-sync-frictions", () => {
     expect(schema).toBeDefined();
     expect(schema.type).toBe("object");
     expect(schema.properties.code).toBeDefined();
+    expect(schema.properties.code?.description).toContain('result = "OK"');
+  });
+});
+
+describe("vba_inline_execution public MCP contract (#850)", () => {
+  const baseServices = {
+    vbaService: {},
+    queryService: {},
+    diagnosticsService: {},
+  } as any;
+
+  it("exposes returnValue in the JSON object carried by MCP text content", async () => {
+    const tools = createDysflowMcpTools({
+      services: {
+        ...baseServices,
+        vbaSyncToolService: {
+          execute: async () => successResult({ ok: true, returnValue: "OK", error: null }),
+        },
+      },
+      writes: true,
+    });
+    const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
+    if (!tool) throw new Error("vba_inline_execution should be registered");
+
+    const response = await tool.handler({ code: 'result = "OK"' });
+
+    expect(response).toMatchObject({ ok: true, isError: false });
+    expect(JSON.parse(response.content[0]?.text ?? "null")).toMatchObject({ returnValue: "OK" });
+    expect(response).not.toHaveProperty("returnValue");
+  });
+
+  it("exposes typed line and remediation for rejected inline syntax", async () => {
+    const tools = createDysflowMcpTools({
+      services: {
+        ...baseServices,
+        vbaSyncToolService: {
+          execute: async () =>
+            failureResult(
+              createDysflowError("INVALID_INPUT", "Inline VBA line 3 is invalid.", {
+                details: { line: 3 },
+                remediation: 'Assign the return value explicitly: result = "OK"',
+              }),
+            ),
+        },
+      },
+      writes: true,
+    });
+    const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
+    if (!tool) throw new Error("vba_inline_execution should be registered");
+
+    const response = await tool.handler({ code: '"OK"' });
+
+    expect(response).toMatchObject({
+      ok: false,
+      isError: true,
+      error: {
+        code: "INVALID_INPUT",
+        details: { line: 3 },
+        remediation: 'Assign the return value explicitly: result = "OK"',
+      },
+    });
   });
 });
 

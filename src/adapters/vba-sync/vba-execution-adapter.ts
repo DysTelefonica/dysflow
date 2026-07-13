@@ -1,6 +1,7 @@
 import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  createDiagnostic,
   createDysflowError,
   failureResult,
   type OperationResult,
@@ -72,6 +73,53 @@ const EXECUTION_MAPPINGS = {
 /** Defense-in-depth limits for vba_inline_execution (issue #533). */
 const MAX_INLINE_CODE_CHARS = 1024;
 const INLINE_TIMEOUT_CEILING_MS = 30_000;
+
+function trailingBareStringLiteral(code: string): { line: number; value: string } | undefined {
+  const lines = code.split(/\r?\n/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? "";
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("'")) continue;
+    const match = /^"((?:""|[^"])*)"\s*(?:'.*)?$/.exec(trimmed);
+    if (match === null) return undefined;
+    return { line: index + 1, value: (match[1] ?? "").replace(/""/g, '"') };
+  }
+  return undefined;
+}
+
+function unterminatedStringLiteralLine(code: string): number | undefined {
+  const lines = code.split(/\r?\n/);
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? "";
+    let inString = false;
+    let statementStart = true;
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (!inString) {
+        if (/\s/.test(char ?? "")) continue;
+        if (statementStart && /^Rem(?:\s|$)/i.test(line.slice(index))) break;
+        if (char === "'") break;
+        if (char === ":") {
+          statementStart = true;
+          continue;
+        }
+        statementStart = false;
+      }
+      if (char !== '"') continue;
+      if (inString && line[index + 1] === '"') {
+        index += 1;
+        continue;
+      }
+      inString = !inString;
+    }
+    if (inString) return lineIndex + 1;
+  }
+  return undefined;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * F23 — extract the access path from a tool input. Mirrors the helper in
@@ -191,6 +239,35 @@ export class VbaExecutionAdapter {
       );
     }
 
+    const bareLiteral = trailingBareStringLiteral(rawCode);
+    if (bareLiteral !== undefined) {
+      const example = `result = "${bareLiteral.value.replace(/"/g, '""')}"`;
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Inline VBA line ${bareLiteral.line} is a bare string literal, which is not a valid VBA statement.`,
+          {
+            details: { line: bareLiteral.line },
+            remediation: `Assign the return value explicitly: ${example}`,
+          },
+        ),
+      );
+    }
+
+    const unterminatedStringLine = unterminatedStringLiteralLine(rawCode);
+    if (unterminatedStringLine !== undefined) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          `Inline VBA line ${unterminatedStringLine} contains an unterminated string literal.`,
+          {
+            details: { line: unterminatedStringLine },
+            remediation: `Close the string literal on line ${unterminatedStringLine} before retrying.`,
+          },
+        ),
+      );
+    }
+
     if (typeof this.orchestrator.resolveExecutionTarget !== "function") {
       return failureResult(
         createDysflowError(
@@ -243,6 +320,7 @@ End Function
 `;
 
     // 1. Delete pre-existing database module and file on disk
+    const cleanupDiagnostics = [];
     try {
       await this.orchestrator.executeMappedTool(
         "delete_module",
@@ -311,22 +389,56 @@ End Function
     } finally {
       // 6. Clean up
       try {
-        await this.orchestrator.executeMappedTool(
+        const deleteResult = await this.orchestrator.executeMappedTool(
           "delete_module",
           { ...inlineParams, moduleName, force: true },
           EXECUTION_MAPPINGS.delete_module,
         );
-      } catch {
-        // Suppress deletion tool failure during cleanup
+        if (!deleteResult.ok) {
+          cleanupDiagnostics.push(
+            createDiagnostic(
+              "warning",
+              "vba_inline_execution.cleanup",
+              `Temporary module cleanup failed (${deleteResult.error.code}): ${deleteResult.error.message}`,
+            ),
+          );
+        }
+      } catch (error) {
+        cleanupDiagnostics.push(
+          createDiagnostic(
+            "warning",
+            "vba_inline_execution.cleanup",
+            `Temporary module cleanup threw: ${errorText(error)}`,
+          ),
+        );
       }
       try {
         await this.fileSystem.rm(filePath, { force: true });
-      } catch {
-        // Suppress file removal failure
+      } catch (error) {
+        cleanupDiagnostics.push(
+          createDiagnostic(
+            "warning",
+            "vba_inline_execution.cleanup",
+            `Temporary file cleanup failed: ${errorText(error)}`,
+          ),
+        );
       }
     }
 
-    return inlineResult;
+    if (cleanupDiagnostics.length === 0) return inlineResult;
+    if (!inlineResult.ok) {
+      return {
+        ...inlineResult,
+        diagnostics: [...inlineResult.diagnostics, ...cleanupDiagnostics],
+      };
+    }
+    return failureResult(
+      createDysflowError(
+        "INLINE_CLEANUP_FAILED",
+        "Inline VBA executed, but Dysflow could not completely remove its temporary artifacts.",
+      ),
+      { diagnostics: [...inlineResult.diagnostics, ...cleanupDiagnostics] },
+    );
   }
 
   private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {

@@ -320,7 +320,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   vba_orphan_audit:
     "Audit the project for orphaned/temporary modules (e.g. leftover _inline_* modules) so they can be cleaned up. Read-only.",
   vba_inline_execution:
-    "Execute an arbitrary VBA snippet inline (no module needed) and return its result, headless. Powerful and unsandboxed: the snippet must be a single procedure body (no End Sub), is capped at 1024 chars, and runs under a 30s timeout ceiling. Write-gated. For repeatable logic add a module and use run_vba.",
+    'Execute an arbitrary VBA procedure-body snippet inline (no module needed), headless. Return values are explicit: assign `result = "OK"`; the adapter result contains `data.returnValue`, and MCP carries `{ "returnValue": "OK" }` in `content[0].text` as JSON. A trailing bare literal is invalid VBA and is rejected before import. Powerful and unsandboxed: no End Sub, 1024-char cap, 30s timeout ceiling. Write-gated. For repeatable logic add a module and use run_vba.',
   // Query — read
   query_sql:
     "Run a read-only SQL SELECT against the database and return rows. Pass the statement as sql (or query). Read-only.",

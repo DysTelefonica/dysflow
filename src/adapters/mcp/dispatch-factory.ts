@@ -374,6 +374,28 @@ export function createDispatchTool(
             // adapter) only see the cleaned payload.
             const coreResult = await services.vbaSyncToolService.execute(name, normalizedInput);
             const mcpResult = translateCoreResultToMcpContent(coreResult);
+            // #850 — inline syntax validation returns caller-relative details and
+            // remediation from the adapter. Preserve those fields at the public
+            // MCP boundary instead of forcing consumers to parse the text body.
+            // Scope this enrichment to vba_inline_execution so the generic
+            // translator's established envelope remains backward compatible.
+            if (
+              name === "vba_inline_execution" &&
+              !coreResult.ok &&
+              coreResult.error.code === "INVALID_INPUT"
+            ) {
+              const prefix = `${coreResult.error.code}: `;
+              const text = mcpResult.content[0]?.text ?? prefix;
+              const line = coreResult.error.details?.line;
+              mcpResult.error = {
+                code: coreResult.error.code,
+                message: text.startsWith(prefix) ? text.slice(prefix.length) : text,
+                ...(typeof line === "number" ? { details: { line } } : {}),
+                ...(coreResult.error.remediation
+                  ? { remediation: coreResult.error.remediation }
+                  : {}),
+              };
+            }
             const accessPath = extractAccessPathFromInput(normalizedInput);
             if (accessPath === undefined) return mcpResult;
             return withHumanCompileReminder(mcpResult, { toolName: name, accessPath });

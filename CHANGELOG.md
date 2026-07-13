@@ -3,6 +3,7 @@
 ## [v2.9.3] - 2026-07-13
 
 - Merge pull request #848 from DysTelefonica/fix/847-query-maintenance-developer-mode-dryrun - fix(dispatch): forward normalizedInput in query-maintenance branch (#847)
+- **vba_inline_execution (#850):** Document the explicit `result = "OK"` return contract (`data.returnValue`), reject trailing bare string literals before any import with caller-relative remediation, and surface temporary-module/file cleanup failures without hiding the primary execution error.
 
 
 ## [v2.9.2] - 2026-07-13
