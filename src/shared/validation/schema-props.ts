@@ -266,7 +266,8 @@ export const SCHEMA_PROPS = {
   } as JsonSchemaProperty,
   code: {
     type: "string",
-    description: "VBA code snippet to execute inline.",
+    description:
+      'VBA procedure-body snippet to execute inline. To return a value, assign it explicitly, for example: result = "OK". The adapter result uses data.returnValue; MCP carries returnValue in the JSON object encoded by content[0].text.',
   } as JsonSchemaProperty,
   // form-template cloning (slice 5, issue #618)
   sourceForm: {

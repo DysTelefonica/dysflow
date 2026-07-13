@@ -6,7 +6,11 @@ import {
   VbaExecutionAdapter,
   type VbaSyncOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-execution-adapter";
-import { successResult } from "../../../src/core/contracts/index";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 
 /**
  * PR1b (#621 F1) — allowlist forwarded to `new VbaExecutionAdapter(...)` so
@@ -120,6 +124,70 @@ describe("VbaExecutionAdapter", () => {
     if (result.ok) throw new Error("expected rejection");
     expect(result.error.code).toBe("INVALID_INPUT");
     expect(fileSystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects a trailing bare string literal before any write with caller-relative remediation (#850)", async () => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'Dim value As String\nvalue = "valid"\n"OK" \' return it',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error).toMatchObject({
+      code: "INVALID_INPUT",
+      details: { line: 3 },
+      remediation: 'Assign the return value explicitly: result = "OK"',
+    });
+    expect(fileSystem.writeFile).not.toHaveBeenCalled();
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("renders embedded quotes with VBA escaping in bare-literal remediation (#850)", async () => {
+    const { adapter } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", { code: '"a""b"' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error.remediation).toBe('Assign the return value explicitly: result = "a""b"');
+  });
+
+  it("rejects an unterminated string with a caller-relative line before any write (#850)", async () => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'Dim value As String\nvalue = "unterminated',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected rejection");
+    expect(result.error).toMatchObject({
+      code: "INVALID_INPUT",
+      details: { line: 2 },
+      remediation: "Close the string literal on line 2 before retrying.",
+    });
+    expect(fileSystem.writeFile).not.toHaveBeenCalled();
+    expect(executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("accepts quotes inside a VBA Rem comment without reporting an unterminated string (#850)", async () => {
+    const { adapter } = makeInlineAdapter();
+    const result = await adapter.execute("vba_inline_execution", {
+      code: '  Rem explain the "legacy value',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("does not mistake strings or comments in valid statements for trailing bare literals (#850)", async () => {
+    const { adapter, executeMappedTool } = makeInlineAdapter();
+    for (const code of [
+      'result = "OK"',
+      'Debug.Print "OK"',
+      'result = "a""b" \' quoted content',
+      '\' "OK" is only a comment\nresult = 1',
+    ]) {
+      const result = await adapter.execute("vba_inline_execution", { code });
+      expect(result.ok, code).toBe(true);
+    }
+    expect(executeMappedTool).toHaveBeenCalled();
   });
 
   it("rejects inline code containing blocklisted unsafe keywords case-insensitively while allowing concatenated words", async () => {
@@ -265,6 +333,105 @@ describe("VbaExecutionAdapter", () => {
     const runParams = runCall?.[1] as { procedureName?: string };
     expect(runParams.procedureName).toBe("ExecuteInline");
     expect(runParams.procedureName).not.toContain("__dysflow_inline__.");
+  });
+
+  it("returns run_vba's public returnValue payload for explicit result assignment (#850)", async () => {
+    const { adapter, executeMappedTool } = makeInlineAdapter();
+    executeMappedTool.mockImplementation((toolName) =>
+      Promise.resolve(
+        toolName === "run_vba"
+          ? successResult({ result: "OK", returnValue: "OK" })
+          : successResult({ ok: true }),
+      ),
+    );
+    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+    expect(result).toMatchObject({ ok: true, data: { returnValue: "OK" } });
+  });
+
+  it("inspects cleanup OperationResult failures, preserves the primary error, and attempts both cleanups (#850)", async () => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+    let deleteCalls = 0;
+    executeMappedTool.mockImplementation((toolName) => {
+      if (toolName === "run_vba") {
+        return Promise.resolve(failureResult(createDysflowError("VBA_SYNTAX_ERROR", "bad syntax")));
+      }
+      if (toolName === "delete_module" && ++deleteCalls === 2) {
+        return Promise.resolve(
+          failureResult(createDysflowError("DELETE_FAILED", "module remained")),
+        );
+      }
+      return Promise.resolve(successResult({ ok: true }));
+    });
+    fileSystem.rm
+      .mockRejectedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("file remained"));
+
+    const result = await adapter.execute("vba_inline_execution", { code: "result = missingName" });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected primary failure");
+    expect(result.error.code).toBe("VBA_SYNTAX_ERROR");
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warning",
+          message: expect.stringContaining("DELETE_FAILED"),
+        }),
+        expect.objectContaining({
+          level: "warning",
+          message: expect.stringContaining("file remained"),
+        }),
+      ]),
+    );
+    expect(executeMappedTool.mock.calls.filter((call) => call[0] === "delete_module")).toHaveLength(
+      2,
+    );
+    expect(fileSystem.rm).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails a successful execution when the temporary module cannot be removed (#850)", async () => {
+    const { adapter, executeMappedTool } = makeInlineAdapter();
+    let deleteCalls = 0;
+    executeMappedTool.mockImplementation((toolName) => {
+      if (toolName === "run_vba") return Promise.resolve(successResult({ returnValue: "OK" }));
+      if (toolName === "delete_module" && ++deleteCalls === 2) {
+        return Promise.resolve(
+          failureResult(createDysflowError("DELETE_FAILED", "module remained")),
+        );
+      }
+      return Promise.resolve(successResult({ ok: true }));
+    });
+
+    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected cleanup failure");
+    expect(result.error.code).toBe("INLINE_CLEANUP_FAILED");
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining("DELETE_FAILED") }),
+      ]),
+    );
+  });
+
+  it.each([
+    ["import failure", "import_modules", "IMPORT_FAILED"],
+    ["execution timeout", "run_vba", "VBA_MANAGER_TIMEOUT"],
+  ])("cleans both temporary artifacts after %s (#850)", async (_case, failingTool, code) => {
+    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
+    executeMappedTool.mockImplementation((toolName) => {
+      if (toolName === failingTool) {
+        return Promise.resolve(failureResult(createDysflowError(code, `${failingTool} failed`)));
+      }
+      return Promise.resolve(successResult({ ok: true }));
+    });
+
+    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected phase failure");
+    expect(result.error.code).toBe(code);
+    expect(executeMappedTool.mock.calls.at(-1)?.[0]).toBe("delete_module");
+    expect(fileSystem.rm).toHaveBeenCalledTimes(2);
   });
 
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {

@@ -34,6 +34,8 @@ export type McpTextContent = {
 export type McpToolError = {
   code: string;
   message: string;
+  /** Caller-safe structured context for typed adapter failures. */
+  details?: Record<string, unknown>;
   /**
    * Optional remediation hint surfaced on gate-rejection envelopes (#659).
    * When present, the hint names the next action a consumer should take

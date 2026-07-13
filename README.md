@@ -781,7 +781,7 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - Parameters: `procedureName` (string, required), `argsJson` (string, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
   - Parameters: none (uses the active project context)
-* **`vba_inline_execution`**: Run a throwaway VBA snippet in one call — writes a temporary module, imports it, executes its public entry point, captures the result, and guarantees cleanup of both the binary component and the temp file. Write-gated.
+* **`vba_inline_execution`**: Run a throwaway VBA procedure-body snippet in one call — writes a temporary module, imports it, executes its public entry point, and cleans up both the binary component and temp file. Return values are explicit: write `result = "OK"`; the adapter result contains `data.returnValue`, while MCP carries `{ "returnValue": "OK" }` in `content[0].text` as JSON. A final bare literal such as `"OK"` is not an implicit return (it is invalid VBA) and is rejected before any import. Write-gated.
   - Parameters: `code` (string, required), `timeoutMs` (number, optional)
 
 #### Semantic diff classification
