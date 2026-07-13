@@ -100,40 +100,48 @@ describe("dysflow configuration", () => {
   });
 
   it("resolves Access path, timeout, and redacts password from explicit input", () => {
-    const result = loadDysflowConfig({
-      accessDbPath: "C:/data/app.accdb",
-      accessPassword: "super-secret",
-      timeoutMs: 45_000,
-      env: {},
-    });
-
-    expect(result).toEqual({
-      ok: true,
-      data: {
-        configSource: "explicit-request",
-        allowWrites: false,
+    const workspace = createTempWorkspace();
+    try {
+      const result = loadDysflowConfig({
+        cwd: workspace.root,
         accessDbPath: "C:/data/app.accdb",
-        backendPath: undefined,
-        timeoutMs: 45_000,
         accessPassword: "super-secret",
-        backendPassword: undefined,
-        projectId: undefined,
-        projectRoot: expect.any(String),
-        destinationRoot: expect.any(String),
-      },
-      diagnostics: [],
-      durationMs: 0,
-    });
+        timeoutMs: 45_000,
+        env: {},
+      });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected config success");
-    expect(redactDysflowConfig(result.data)).toMatchObject({
-      accessDbPath: "C:/data/app.accdb",
-      allowWrites: false,
-      timeoutMs: 45_000,
-      accessPassword: "[REDACTED]",
-      configSource: "explicit-request",
-    });
+      expect(result).toEqual({
+        ok: true,
+        data: {
+          configSource: "explicit-request",
+          allowWrites: false,
+          accessDbPath: "C:/data/app.accdb",
+          backendPath: undefined,
+          timeoutMs: 45_000,
+          accessPassword: "super-secret",
+          backendPassword: undefined,
+          projectId: undefined,
+          projectRoot: expect.any(String),
+          destinationRoot: expect.any(String),
+          httpToken: undefined,
+          httpTokenEnv: undefined,
+        },
+        diagnostics: [],
+        durationMs: 0,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected config success");
+      expect(redactDysflowConfig(result.data)).toMatchObject({
+        accessDbPath: "C:/data/app.accdb",
+        allowWrites: false,
+        timeoutMs: 45_000,
+        accessPassword: "[REDACTED]",
+        configSource: "explicit-request",
+      });
+    } finally {
+      workspace.cleanup();
+    }
   });
 
   it("does not resolve functional config from environment variables", () => {
@@ -381,28 +389,40 @@ describe("dysflow configuration", () => {
   });
 
   it("uses explicit projectId as canonical trace identity ahead of contextId", () => {
-    const result = loadDysflowConfig({
-      accessDbPath: "C:/data/app.accdb",
-      projectId: "engram-canonical-project",
-      contextId: "run-context-only",
-      env: {},
-    });
+    const workspace = createTempWorkspace();
+    try {
+      const result = loadDysflowConfig({
+        cwd: workspace.root,
+        accessDbPath: "C:/data/app.accdb",
+        projectId: "engram-canonical-project",
+        contextId: "run-context-only",
+        env: {},
+      });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected config success");
-    expect(result.data.projectId).toBe("engram-canonical-project");
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected config success");
+      expect(result.data.projectId).toBe("engram-canonical-project");
+    } finally {
+      workspace.cleanup();
+    }
   });
 
   it("falls back to contextId only when no projectId exists", () => {
-    const result = loadDysflowConfig({
-      accessDbPath: "C:/data/app.accdb",
-      contextId: "context-fallback-project",
-      env: {},
-    });
+    const workspace = createTempWorkspace();
+    try {
+      const result = loadDysflowConfig({
+        cwd: workspace.root,
+        accessDbPath: "C:/data/app.accdb",
+        contextId: "context-fallback-project",
+        env: {},
+      });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected config success");
-    expect(result.data.projectId).toBe("context-fallback-project");
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected config success");
+      expect(result.data.projectId).toBe("context-fallback-project");
+    } finally {
+      workspace.cleanup();
+    }
   });
 
   it("does not let env path variables override repo config", () => {
