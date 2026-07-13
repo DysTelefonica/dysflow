@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.9.1] - 2026-07-13
+
+- Merge pull request #845 from DysTelefonica/fix/stale-laccdb-should-not-block-import - docs(open-spec): add #844 SDD artifacts (proposal, design, tasks, explore, verify, pr-body) - fix(import): stale .laccdb no longer blocks import when no live process holds the binary (#844)
+
+
 ## [v2.9.0] - 2026-07-12
 
 - Merge pull request #843 from DysTelefonica/feat/783-wire-write-execution-policy - feat(mcp): wire write-execution-policy through dispatch + add export-source guard (#783) - Merge pull request #842 from DysTelefonica/feat/757-unify-commit-flags - feat(mcp): unify write-side commit flags + enrich error envelopes (#757)
