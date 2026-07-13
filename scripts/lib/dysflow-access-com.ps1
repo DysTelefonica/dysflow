@@ -394,29 +394,68 @@ public class RotManager {
     if (-not $closedViaRot) {
         $lockPath = Get-AccessLockFilePath -AccessPath $resolved
         if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {
-            Write-Warning ("Close-TargetAccessDbIfOpen: active lock detected: {0}" -f $lockPath)
+            # Issue #844: probe live-handle ownership via FileShare.None.
+            # A successful exclusive open proves no live handle holds the .laccdb
+            # (any Access process, SMB lease, or AV scanner would have caused
+            # a sharing-violation exception). In that case the lock is stale
+            # (a prior session crashed without releasing it) — clean it up
+            # silently and emit a machine-readable advisory via Write-Status.
+            # A sharing-violation (IOException / UnauthorizedAccessException)
+            # proves a live handle exists; fall through to the existing
+            # blocking behavior and emit LIVE_PROCESS_HOLDS_LACCDB alongside
+            # the existing warning so consumers can attribute the lock to a
+            # specific PID without parsing the warning text.
+            $handle = $null
+            try {
+                $handle = [System.IO.File]::Open(
+                    $lockPath,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::Read,
+                    [System.IO.FileShare]::None
+                )
+                # Probe succeeded: no live handle holds the .laccdb — it is stale.
+                $handle.Dispose()
+                $handle = $null
+                Remove-Item -LiteralPath $lockPath -Force -ErrorAction Stop
+                Write-Status ("LACCDB_STALE_DETECTED: removed stale lock {0}" -f $lockPath)
+                return $true
+            } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                # Sharing violation: a live handle holds the .laccdb. Dispose
+                # the probe handle (if it was opened before the exception) and
+                # fall through to the existing blocking + diagnostic behavior.
+                if ($handle) { $handle.Dispose(); $handle = $null }
+                Write-Warning ("Close-TargetAccessDbIfOpen: active lock detected: {0}" -f $lockPath)
 
-            # Search MSACCESS.EXE by CommandLine for diagnostic purposes only.  A path match
-            # does NOT prove ownership — another session/agent may be using the same database.
-            # In that case we report and block; we never kill any unattributed process.
-            # Get-CimInstance can deadlock if there are zombie processes stuck on network I/O
-            # (e.g. unreachable UNC share); use the bounded helper that wraps the call in a Job.
-            $cimProcs = @(Get-MsAccessProcessesBounded)
+                # Search MSACCESS.EXE by CommandLine for diagnostic purposes only.  A path match
+                # does NOT prove ownership — another session/agent may be using the same database.
+                # In that case we report and block; we never kill any unattributed process.
+                # Get-CimInstance can deadlock if there are zombie processes stuck on network I/O
+                # (e.g. unreachable UNC share); use the bounded helper that wraps the call in a Job.
+                $cimProcs = @(Get-MsAccessProcessesBounded)
 
-            if ($cimProcs.Count -gt 0) {
-                $matchingPids = [System.Collections.Generic.List[int]]::new()
-                foreach ($cim in $cimProcs) {
-                    if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
-                        $matchingPids.Add([int]$cim.ProcessId)
+                if ($cimProcs.Count -gt 0) {
+                    $matchingPids = [System.Collections.Generic.List[int]]::new()
+                    foreach ($cim in $cimProcs) {
+                        if ($cim.CommandLine -and $cim.CommandLine -match [regex]::Escape($resolved)) {
+                            $matchingPids.Add([int]$cim.ProcessId)
+                        }
                     }
-                }
-                if ($matchingPids.Count -gt 0) {
-                    Write-Warning ("Close-TargetAccessDbIfOpen: unattributed MSACCESS blocking '{0}' (PIDs: {1}); no process will be closed without an owned OperationId/PID." -f $resolved, ($matchingPids -join ', '))
+                    if ($matchingPids.Count -gt 0) {
+                        Write-Warning ("Close-TargetAccessDbIfOpen: unattributed MSACCESS blocking '{0}' (PIDs: {1}); no process will be closed without an owned OperationId/PID." -f $resolved, ($matchingPids -join ', '))
+                        # Issue #844: machine-readable advisory carrying the attributed PID(s)
+                        # so consumers do not have to parse the warning text. One advisory per PID.
+                        # Use $livePid (NOT $pid) because $PID is a read-only built-in.
+                        foreach ($livePid in $matchingPids) {
+                            Write-Status ("LIVE_PROCESS_HOLDS_LACCDB: pid={0}" -f $livePid)
+                        }
+                    } else {
+                        Write-Debug ("Close-TargetAccessDbIfOpen: no MSACCESS contains '{0}' in CommandLine. Active PIDs: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', '))
+                    }
                 } else {
-                    Write-Debug ("Close-TargetAccessDbIfOpen: no MSACCESS contains '{0}' in CommandLine. Active PIDs: {1}" -f $resolved, (($cimProcs | ForEach-Object { $_.ProcessId }) -join ', '))
+                    Write-Warning "Close-TargetAccessDbIfOpen: could not enumerate MSACCESS by CommandLine; no unattributed process will be closed."
                 }
-            } else {
-                Write-Warning "Close-TargetAccessDbIfOpen: could not enumerate MSACCESS by CommandLine; no unattributed process will be closed."
+            } finally {
+                if ($handle) { $handle.Dispose() }
             }
         }
     }

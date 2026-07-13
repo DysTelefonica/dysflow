@@ -7,6 +7,13 @@ Behavioral contract for the ten `Invoke-*` action handlers extracted from
 the dispatcher thin-router and all callers (MCP, CLI) MUST see identical observable behavior
 before and after every slice.
 
+## Differential change for #844 (stale-laccdb-no-block-import)
+
+Two new diagnostic codes emitted by `Close-TargetAccessDbIfOpen` in `scripts/lib/dysflow-access-com.ps1`:
+
+- `LACCDB_STALE_DETECTED` (severity: info): the `.laccdb` was present but no live OS handle held it; the lock was silently removed and the operation proceeded.
+- `LIVE_PROCESS_HOLDS_LACCDB` (severity: warning, carries `pid`): a live process holds the `.laccdb`; the existing blocking behavior remains — only attribution is now machine-readable.
+
 ## Global Invariants
 
 | Invariant | Requirement |
