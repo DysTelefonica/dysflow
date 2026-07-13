@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.9.2] - 2026-07-13
+
+- Merge pull request #846 from DysTelefonica/fix/dysflow-config-snapshot-drift - fix(test): isolate 3 dysflow-config tests from repo's project.json
+
+
 ## [v2.9.1] - 2026-07-13
 
 - Merge pull request #845 from DysTelefonica/fix/stale-laccdb-should-not-block-import - docs(open-spec): add #844 SDD artifacts (proposal, design, tasks, explore, verify, pr-body) - fix(import): stale .laccdb no longer blocks import when no live process holds the binary (#844)
