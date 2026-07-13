@@ -513,7 +513,35 @@ const mapFormBehaviorResult = await record("form-ui", "map_form_behavior", {
   codegraphEvidence,
 });
 const behaviorMap = safeJsonParse(mapFormBehaviorResult.text);
-behaviorMap?.controls?.push({ name: "txtSet", type: "TextBox", properties: { Caption: "Before" } }, { name: "txtDelete", type: "Label", properties: { Caption: "Delete me" } });
+behaviorMap?.controls?.push(
+  {
+    name: "txtSet",
+    type: "TextBox",
+    role: "input",
+    properties: { Caption: "Before" },
+    events: [],
+    bindings: [],
+    codegraphEvidence: [],
+  },
+  {
+    name: "txtDelete",
+    type: "Label",
+    role: "display",
+    properties: { Caption: "Delete me" },
+    events: [],
+    bindings: [],
+    codegraphEvidence: [],
+  },
+  {
+    name: "txtRename",
+    type: "TextBox",
+    role: "input",
+    properties: { Caption: "Rename me" },
+    events: [],
+    bindings: [],
+    codegraphEvidence: [],
+  },
+);
 const txtProbeControl = behaviorMap?.controls?.find((control) => control?.name === "txtProbe");
 const cmdApplyControl = behaviorMap?.controls?.find((control) => control?.name === "cmdApply");
 const mapPass = Boolean(
@@ -544,7 +572,7 @@ const designPlanResult = await record("form-ui", "generate_form_design_plan", {
     operations: [
       { kind: "add-control", target: "txtAdded", intent: "add probe", params: { type: "TextBox", properties: { Caption: "Added" } } },
       { kind: "move-control", target: "cmdApply", intent: "move apply", params: { left: 100 } },
-      { kind: "rename-control", target: "txtProbe", intent: "rename probe", params: { newName: "txtInput" } },
+      { kind: "rename-control", target: "txtRename", intent: "rename synthetic input", params: { newName: "txtInput" } },
       { kind: "set-property", target: "txtSet", intent: "clarify prompt", params: { property: "Caption", value: "Probe input" } },
       { kind: "delete-control", target: "txtDelete", intent: "remove label", params: {} },
       {
@@ -586,7 +614,7 @@ const applyPass = Boolean(
     applyPlan.operationsApplied.length === 6 &&
     applyPlan.advisories?.[0] === "review probe spacing" &&
     applied("txtAdded")?.type === "TextBox" && applied("txtAdded")?.properties?.Caption === "Added" &&
-    applied("cmdApply")?.properties?.Left === "100" && !applied("txtProbe") && applied("txtInput")?.type === "TextBox" &&
+    applied("cmdApply")?.properties?.Left === "100" && !applied("txtRename") && applied("txtInput")?.type === "TextBox" &&
     applied("txtSet")?.properties?.Caption === "Probe input" && !applied("txtDelete"),
 );
 rows.push({
@@ -644,7 +672,7 @@ const verifyCleanResult = await record("form-ui", "verify_form_ui", {
   sourceContract: behaviorMap,
   appliedContract: {
     ...behaviorMap,
-    controls: behaviorMap.controls.filter(({ name }) => name !== "txtDelete" && name !== "txtProbe").map((control) => control.name === "cmdApply" ? { ...control, properties: { ...control.properties, Left: "100" } } : control.name === "txtSet" ? { ...control, properties: { ...control.properties, Caption: "Probe input" } } : control).concat({ ...txtProbeControl, name: "txtInput" }, { name: "txtAdded", type: "TextBox", properties: { Caption: "Added" } }),
+    controls: behaviorMap.controls.filter(({ name }) => name !== "txtDelete" && name !== "txtRename").map((control) => control.name === "cmdApply" ? { ...control, properties: { ...control.properties, Left: "100" } } : control.name === "txtSet" ? { ...control, properties: { ...control.properties, Caption: "Probe input" } } : control).concat({ ...behaviorMap.controls.find(({ name }) => name === "txtRename"), name: "txtInput" }, { name: "txtAdded", type: "TextBox", role: "input", properties: { Caption: "Added" }, events: [], bindings: [], codegraphEvidence: [] }),
   },
 });
 const verifyClean = safeJsonParse(verifyCleanResult.text);
