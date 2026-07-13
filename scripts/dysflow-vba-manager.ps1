@@ -2458,6 +2458,52 @@ function Remove-AccessObjectOrComponent {
                 throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $remediation)
             }
         } else {
+            # issue #852 (Bug A) — VBComponents.Remove() on a form/report
+            # DOCUMENT MODULE (vbext_ct_Document = 100, canonically named
+            # `Form_<X>` / `Report_<X>`) raises HRESULT 0x80070057 (E_INVALIDARG,
+            # "el valor no está … del intervalo esperado"): document modules are
+            # owned by their Access object and cannot be removed from the VBE.
+            # This surfaces for forms whose BINARY name does not follow the
+            # `Form_<X>` convention (e.g. `frmSplash`, document module
+            # `Form_frmSplash`) because Resolve-AccessObjectInfo cannot match the
+            # Access object and the code falls through to this component branch.
+            # The only valid deletion is DoCmd.DeleteObject on the owning object.
+            $invalidArgError = $false
+            $walkException = $_.Exception
+            while ($walkException) {
+                try { if ([int]$walkException.HResult -eq -2147024809) { $invalidArgError = $true; break } } catch { Write-Debug "Diagnostics: $_" }
+                $walkException = $walkException.InnerException
+            }
+            if (-not $invalidArgError) {
+                $invalidArgError = ($errStr -like "*80070057*" -or $errStr -like "*E_INVALIDARG*")
+            }
+            $componentIsDocumentModule = ($componentName -match '^(Form_|Report_)')
+            if (-not $componentIsDocumentModule -and $component) {
+                try { if ([int]$component.Type -eq 100) { $componentIsDocumentModule = $true } } catch { Write-Debug "Diagnostics: $_" }
+            }
+
+            if ($invalidArgError -and $componentIsDocumentModule) {
+                $ownerObjectType = if ($componentName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
+                $ownerName = $componentName -replace '^(Form_|Report_)', ''
+                try {
+                    $AccessApplication.DoCmd.DeleteObject($ownerObjectType, $ownerName)
+                } catch {
+                    throw ("VBA_DELETE_INVALID_TARGET: '{0}' es un document module que no se puede quitar con VBComponents.Remove() y el objeto Access '{1}' tampoco pudo eliminarse: {2}" -f $componentName, $ownerName, $_.Exception.Message)
+                }
+                # Persist via save-only (acCmdSaveAllModules = 280); the human compiles.
+                try { $AccessApplication.RunCommand(280) } catch { Write-Debug "Diagnostics: $_" }
+                $checkCompName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+                if ($checkCompName) {
+                    throw "Active lock detected: the VBA component '$ModuleName' remains in the project after deletion attempt."
+                }
+                return [pscustomobject]@{
+                    module  = $ModuleName
+                    status  = "ok"
+                    deleted = $componentName
+                    kind    = "DocumentModule-DeleteObject"
+                }
+            }
+
             throw ("No se pudo eliminar componente '{0}': {1}" -f $componentName, $_.Exception.Message)
         }
     } finally {
