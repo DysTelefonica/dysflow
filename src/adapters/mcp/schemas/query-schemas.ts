@@ -230,12 +230,26 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   link_tables: {
     type: "object",
     description:
-      "Links tables from backendPath into the frontend Access database. Note: when backendPassword is set, Access stores the credential inside the linked table Connect string in the .accdb file.",
+      'Links tables from backendPath into the frontend Access database. By default (relink-only) it refreshes/re-points TableDefs that already exist in the frontend and never creates a missing link. Pass mode:"create-or-relink" to also CREATE a linked TableDef for each requested backend table that has no frontend link (issue #851); use tableNames to scope which tables. dryRun:true plans per-table create/relink/no-op actions without writing. Note: when backendPassword is set, Access stores the credential inside the linked table Connect string in the .accdb file.',
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
       accessPath: SCHEMA_PROPS.accessPath,
       backendPath: SCHEMA_PROPS.backendPath,
+      // Issue #851 — opt-in create capability. Omitted / "relink-only" keeps the
+      // backward-compatible default (never creates a missing link).
+      mode: {
+        type: "string",
+        enum: ["relink-only", "create-or-relink"],
+        description:
+          "relink-only (default): refresh/re-point existing links only. create-or-relink: also create a linked TableDef for each requested backend table missing from the frontend.",
+      } as JsonSchemaProperty,
+      tableNames: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Scope the link/relink/create operation to these backend table names. Omit to target all existing frontend links (relink-only) or all backend tables (create-or-relink).",
+      } as JsonSchemaProperty,
       dryRun: SCHEMA_PROPS.dryRun,
     },
   },

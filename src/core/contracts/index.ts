@@ -293,6 +293,16 @@ export type AccessQueryRequest = {
   denyTables?: readonly string[];
   maps?: readonly { from: string; to: string }[];
   denyPrefixes?: readonly string[];
+  /**
+   * Issue #851 — opt-in `link_tables` create capability. `"create-or-relink"`
+   * creates a linked TableDef for each requested backend table missing from the
+   * frontend (and relinks existing ones); when omitted, `link_tables` keeps its
+   * default relink-only semantics and never creates a missing link. Named
+   * `linkMode` to avoid colliding with the read/write dispatch `mode` above.
+   */
+  linkMode?: "relink-only" | "create-or-relink";
+  /** Issue #851 — scope link/relink/create to specific backend tables. */
+  tableNames?: readonly string[];
   strictLocal?: boolean;
   removeUnresolved?: boolean;
   noBackup?: boolean;
