@@ -4280,3 +4280,227 @@ Describe "Invoke-ExportAction — missing module pre-validation (#804, total ove
     }
 }
 
+# ===========================================================================
+# Issue #849 — `Import-DocumentCodeBehind` must normalize the .cls via
+# `Ensure-VbNameAttributeAtTop` before AddFromFile. Without the normalization,
+# Access silently renames the class module to `Form_TempSccObjN` on re-import,
+# breaking the `.cls` <-> form-instance linkage and leaving `Me.X` undefined at
+# compile time.
+#
+# Behavioral contract (Pester unit test — no live Access COM):
+#   - Given: a synthetic .cls file on disk whose content does NOT carry the
+#     canonical `Attribute VB_Name = "Form_X"` header.
+#   - When:  `Import-DocumentCodeBehind` runs.
+#   - Then:  the function must call `Ensure-VbNameAttributeAtTop` on the file
+#           content BEFORE `CodeModule.AddFromFile` and pass the normalized
+#           text (with the canonical VB_Name) to AddFromFile.
+#   - And:   when the .cls already carries the canonical VB_Name, the
+#           function must still route through the normalization helper (which
+#           is idempotent) so the AddFromFile content is byte-identical to
+#           the source.
+#
+# The test mocks COM via PSCustomObject + ScriptMethod — same pattern used by
+# the existing `Save-VbaProjectModules — slice-1 call shape` and
+# `Remove-AccessObjectOrComponent` Pester suites. No real Access instance is
+# required, so this stays green in CI even without Access installed.
+# ===========================================================================
+
+Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Import-DocumentCodeBehind' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Import-DocumentCodeBehind not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:EnsureVbNameCalls = [System.Collections.Generic.List[object]]::new()
+        $script:AddFromFileCalls = [System.Collections.Generic.List[object]]::new()
+        $script:EnsureVbNameOverride = $null  # when set, return this string instead of running the real helper
+
+        # Mock Ensure-VbNameAttributeAtTop: capture args + (optionally) return a controlled text.
+        # When $script:EnsureVbNameOverride is null, run the REAL function (idempotent pass-through).
+        function script:Ensure-VbNameAttributeAtTop {
+            param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
+                  [Parameter(Mandatory = $true)][string]$ModuleName)
+            $script:EnsureVbNameCalls.Add([pscustomobject]@{
+                Text = $Text
+                ModuleName = $ModuleName
+            })
+            if ($null -ne $script:EnsureVbNameOverride) {
+                return [string]$script:EnsureVbNameOverride
+            }
+            # Delegate to the real function by re-extracting and invoking.
+            $realFn = $script:RealEnsureFnAst
+            if ($realFn) {
+                $localText = $Text
+                $localName = $ModuleName
+                return (& $script:RealEnsureFnAst $localText $localName)
+            }
+            return $Text
+        }
+        # Cache the real Ensure-VbNameAttributeAtTop function so the mock can delegate
+        # for pass-through assertions.
+        $ensureAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        ).FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Ensure-VbNameAttributeAtTop' },
+            $true
+        ) | Select-Object -First 1
+        if ($ensureAst) {
+            # Invoke the real function in the script scope; $script:RealEnsureFnAst holds
+            # the ScriptBlock. Used only when $script:EnsureVbNameOverride is $null.
+            $sb = [scriptblock]::Create("param([string]`$Text,[string]`$ModuleName) " + $ensureAst.Extent.Text)
+            $script:RealEnsureFnAst = $sb
+        }
+
+        # Mock Convert-Utf8CodeImportToAnsiTempFile: copy the source verbatim to the
+        # requested temp path. Encoding round-trip is not under test here.
+        function script:Convert-Utf8CodeImportToAnsiTempFile {
+            param([Parameter(Mandatory = $true)][string]$InputPath,
+                  [Parameter(Mandatory = $true)][string]$TempPath)
+            [System.IO.File]::Copy($InputPath, $TempPath, $true)
+        }
+
+        # Mock Resolve-ExistingComponentName: the form always resolves to Form_<name>.
+        function script:Resolve-ExistingComponentName {
+            param($VbProject, [string]$ModuleName)
+            if ($ModuleName -match '^Form_') { return $ModuleName }
+            return "Form_$ModuleName"
+        }
+
+        # Build a fake VBComponents collection whose .Item($name) returns a fake
+        # component whose CodeModule captures DeleteLines + AddFromFile calls.
+        $script:FakeCodeModule = [PSCustomObject]@{}
+        $script:FakeCodeModule | Add-Member -MemberType ScriptMethod -Name "DeleteLines" -Value {
+            param([int]$StartLine, [int]$Count)
+            # no-op; we only observe AddFromFile
+        }
+        $script:FakeCodeModule | Add-Member -MemberType ScriptProperty -Name "CountOfLines" -Value { 0 }
+        $script:FakeCodeModule | Add-Member -MemberType ScriptMethod -Name "AddFromFile" -Value {
+            param([string]$Path)
+            $content = if (Test-Path -LiteralPath $Path) {
+                [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::GetEncoding(1252))
+            } else { "" }
+            $script:AddFromFileCalls.Add([pscustomobject]@{
+                Path = $Path
+                Content = $content
+            })
+        }
+
+        $script:FakeComponent = [PSCustomObject]@{ CodeModule = $script:FakeCodeModule }
+        $script:FakeVbProject = [PSCustomObject]@{}
+        $script:FakeVbProject | Add-Member -MemberType ScriptProperty -Name "VBComponents" -Value {
+            $collection = [PSCustomObject]@{}
+            $collection | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex) $script:FakeComponent
+            }
+            $collection
+        }
+    }
+
+    It "calls Ensure-VbNameAttributeAtTop on the .cls before AddFromFile when the source is missing Attribute VB_Name (issue #849 RED)" {
+        # Arrange: .cls file with NO Attribute VB_Name. Access would silently
+        # rename it to Form_TempSccObjN without the guard.
+        $clsText = @(
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Foo()'
+            'End Sub'
+        ) -join "`r`n"
+        $tmpSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("idc_src_{0}.cls" -f [guid]::NewGuid().ToString("N"))
+        try {
+            [System.IO.File]::WriteAllText($tmpSrc, $clsText, [System.Text.Encoding]::UTF8)
+
+            # Make Ensure-VbNameAttributeAtTop return the canonical VB_Name-prefixed text.
+            $script:EnsureVbNameOverride = @(
+                'Attribute VB_Name = "Form_Normalized"'
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub Foo()'
+                'End Sub'
+            ) -join "`r`n"
+
+            # Act
+            Import-DocumentCodeBehind -VbProject $script:FakeVbProject -ModuleName "Form_Normalized" -SourcePath $tmpSrc
+
+            # Assert: Ensure-VbNameAttributeAtTop was called once with the .cls content and the module name.
+            $script:EnsureVbNameCalls.Count | Should -Be 1 `
+                -Because "issue #849: Import-DocumentCodeBehind MUST normalize the .cls via Ensure-VbNameAttributeAtTop before AddFromFile, otherwise Access renames the class to Form_TempSccObjN"
+            $script:EnsureVbNameCalls[0].ModuleName | Should -Be "Form_Normalized" `
+                -Because "the canonical module name comes from the ModuleName parameter (form identity)"
+            $script:EnsureVbNameCalls[0].Text | Should -Match 'Option Compare Database' `
+                -Because "Ensure-VbNameAttributeAtTop must receive the source .cls text, not a header-only fragment"
+
+            # Assert: AddFromFile was called with the normalized content (carries VB_Name header).
+            $script:AddFromFileCalls.Count | Should -Be 1 `
+                -Because "exactly one AddFromFile call per Import-DocumentCodeBehind invocation"
+            $script:AddFromFileCalls[0].Content | Should -Match 'Attribute VB_Name = "Form_Normalized"' `
+                -Because "AddFromFile must receive the normalized text, not the raw source, so Access keeps the Form_<name> identity"
+
+            # Assert: call ordering — Ensure-VbNameAttributeAtTop must precede AddFromFile.
+            # We assert ordering via the temp file path that was passed to AddFromFile:
+            # the function must read the file AFTER Ensure-VbNameAttributeAtTop rewrote it.
+            # (Functional consequence: file content on disk already carries VB_Name when
+            # AddFromFile reads it.)
+            $path = $script:AddFromFileCalls[0].Path
+            Test-Path -LiteralPath $path | Should -Be $false `
+                -Because "Import-DocumentCodeBehind cleans up its temp file in the finally block; what matters is that AddFromFile saw the normalized content (already asserted above)"
+
+            # Re-run and capture the temp file mid-call by overriding the cleanup is impractical,
+            # so the contract we exercise here is: AddFromFile saw content with the canonical
+            # VB_Name header. That is the observable behavior the fix delivers.
+        } finally {
+            if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It "passes through a .cls that already carries the canonical Attribute VB_Name without changing content (issue #849 GREEN pass-through)" {
+        # Arrange: .cls file with the correct Attribute VB_Name already at the top.
+        $clsText = @(
+            'Attribute VB_Name = "Form_AlreadyCanonical"'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Bar()'
+            'End Sub'
+        ) -join "`r`n"
+        $tmpSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("idc_canon_{0}.cls" -f [guid]::NewGuid().ToString("N"))
+        try {
+            [System.IO.File]::WriteAllText($tmpSrc, $clsText, [System.Text.Encoding]::UTF8)
+
+            # Override Ensure-VbNameAttributeAtTop to return the input verbatim
+            # (modeling the idempotent pass-through behavior the real helper
+            # exhibits when the canonical VB_Name is already present). The
+            # semantic correctness of that pass-through is pinned by the
+            # dedicated `Ensure-VbNameAttributeAtTop` Context above; here we
+            # only need to verify Import-DocumentCodeBehind routes through the
+            # guard and then hands the (unchanged) content to AddFromFile.
+            $script:EnsureVbNameOverride = $clsText
+
+            # Act
+            Import-DocumentCodeBehind -VbProject $script:FakeVbProject -ModuleName "Form_AlreadyCanonical" -SourcePath $tmpSrc
+
+            # Assert: AddFromFile was called with content byte-identical to the source.
+            $script:AddFromFileCalls.Count | Should -Be 1
+            $script:AddFromFileCalls[0].Content | Should -Be $clsText `
+                -Because "Ensure-VbNameAttributeAtTop is idempotent on canonical text; AddFromFile must see the original .cls verbatim"
+
+            # The helper was invoked as part of the guard (so the same normalization
+            # step is exercised for every import — the guard is not conditional on a
+            # missing header; that keeps the surface auditable).
+            $script:EnsureVbNameCalls.Count | Should -Be 1
+            $script:EnsureVbNameCalls[0].ModuleName | Should -Be "Form_AlreadyCanonical"
+        } finally {
+            if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
+        }
+    }
+}
+
