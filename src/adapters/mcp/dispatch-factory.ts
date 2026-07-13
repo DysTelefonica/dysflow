@@ -395,7 +395,14 @@ export function createDispatchTool(
           const maintenanceRequest = buildMaintenanceRequest(
             queryActionFor(name),
             route.queryMode,
-            input,
+            // #847 — forward `normalizedInput` (post-strip, post-#785 policy
+            // injection), NOT the raw `input`. The write-gate and `isDryRun`
+            // above are computed from `normalizedInput`; building the request
+            // from `input` dropped the policy-injected `dryRun: false`, so a
+            // developer-mode routine-dev-write (link_tables, relink_tables,
+            // unlink_table, localize_backend_links) passed the gate as a real
+            // write yet silently planned. Mirrors the `vba-sync` branch (F13).
+            normalizedInput,
             (key) => env[key],
           );
           // Only backendPassword is passed as an in-scope secret here, by design —
