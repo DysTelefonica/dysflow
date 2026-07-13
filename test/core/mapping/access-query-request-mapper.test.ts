@@ -228,6 +228,37 @@ describe("access-query-request-mapper", () => {
       expect(write.mode).toBe("write");
     });
 
+    // Issue #851 — link_tables gains an opt-in create capability. The tool-level
+    // `mode: "create-or-relink"` param is forwarded as `linkMode` (NOT the
+    // read/write dispatch `mode`), and `tableNames[]` scopes the operation.
+    it("forwards link_tables mode->linkMode and tableNames (#851 create-or-relink)", () => {
+      const request = buildMaintenanceRequest(
+        "link_tables",
+        "write",
+        {
+          mode: "create-or-relink",
+          tableNames: ["TbResponsablesPorRol", "TbOtra"],
+          backendPath: "C:/backend.accdb",
+        },
+        () => undefined,
+      );
+      expect(request.linkMode).toBe("create-or-relink");
+      expect(request.tableNames).toEqual(["TbResponsablesPorRol", "TbOtra"]);
+      // The read/write dispatch mode is unaffected by the tool-level link mode.
+      expect(request.mode).toBe("write");
+    });
+
+    it("omits linkMode/tableNames when not supplied (relink-only default) (#851)", () => {
+      const request = buildMaintenanceRequest(
+        "link_tables",
+        "write",
+        { backendPath: "C:/backend.accdb" },
+        () => undefined,
+      );
+      expect(request.linkMode).toBeUndefined();
+      expect(request.tableNames).toBeUndefined();
+    });
+
     it("filters maps to well-formed {from,to} string pairs", () => {
       const request = buildMaintenanceRequest(
         "relink_tables",

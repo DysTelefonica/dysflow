@@ -1494,3 +1494,235 @@ Describe "Get-NullPidCloseNotice — reassuring, non-alarming wording" {
         $notice | Should -Not -Match '(?i)fallback only'
     }
 }
+
+Describe "Update-LinkTables — issue #851 create-or-relink" {
+    BeforeAll {
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:RunnerPath).Path, [ref]$null, [ref]$null
+        )
+        $fnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Update-LinkTables' }, $true
+        ) | Select-Object -First 1
+        if (-not $fnAst) { throw "Update-LinkTables not found in $($script:RunnerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+
+        function script:New-FakeFrontendDb {
+            $tableDefs = [pscustomobject]@{}
+            $tableDefs | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($Name)
+                $key = [string]$Name
+                if ($script:FrontendDefs.ContainsKey($key)) {
+                    $t = [pscustomobject]@{ Name = $key; Connect = [string]$script:FrontendDefs[$key]; SourceTableName = $key }
+                    $t | Add-Member -MemberType ScriptMethod -Name "RefreshLink" -Value {} -Force
+                    return $t
+                }
+                throw "TableDef not found: $key"
+            }
+            $tableDefs | Add-Member -MemberType ScriptMethod -Name "Append" -Value {
+                param($tdf)
+                [void]$script:AppendedTables.Add($tdf)
+            }
+            $db = [pscustomobject]@{ TableDefs = $tableDefs }
+            $db | Add-Member -MemberType ScriptMethod -Name "CreateTableDef" -Value {
+                param($Name)
+                $tdf = [pscustomobject]@{ Name = [string]$Name; Connect = ""; SourceTableName = "" }
+                [void]$script:CreatedTableDefs.Add($tdf)
+                return $tdf
+            }
+            return $db
+        }
+    }
+
+    BeforeEach {
+        $script:AppendedTables = [System.Collections.ArrayList]::new()
+        $script:CreatedTableDefs = [System.Collections.ArrayList]::new()
+        $script:FrontendDefs = @{}
+        $script:BackendTables = @()
+        $script:FrontendLinks = @()
+        $script:BackendPassword = ""
+
+        $tmp = New-TemporaryFile
+        $script:BackendPath = $tmp.FullName
+
+        function script:New-DaoDbEngine { return [pscustomobject]@{ __engine = $true } }
+        function script:Open-DatabaseWithBackendPassword { param($DbEngine, $DatabasePath, $ReadOnly) return [pscustomobject]@{ __backend = $true } }
+        function script:Get-TableNames { param($Database) return @($script:BackendTables) }
+        function script:Get-LinkNames { param($Database) return @($script:FrontendLinks) }
+    }
+
+    AfterEach {
+        if ($script:BackendPath -and (Test-Path -LiteralPath $script:BackendPath)) {
+            Remove-Item -LiteralPath $script:BackendPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "create-or-relink dry-run plans create-link for a backend-only table without writing" {
+        $script:BackendTables = @("NewLinkedTable")
+        $result = Update-LinkTables -Database (New-FakeFrontendDb) -Payload ([PSCustomObject]@{
+            action = "link_tables"; backendPath = $script:BackendPath; dryRun = $true
+            linkMode = "create-or-relink"; tableNames = @("NewLinkedTable")
+        })
+        $action = @($result.actions | Where-Object { $_.tableName -eq "NewLinkedTable" })[0]
+        $action.action | Should -Be "create-link"
+        $script:AppendedTables.Count | Should -Be 0
+        $script:CreatedTableDefs.Count | Should -Be 0
+    }
+
+    It "relink-only (default mode) does NOT plan a create for a backend-only table" {
+        $script:BackendTables = @("NewLinkedTable")
+        $result = Update-LinkTables -Database (New-FakeFrontendDb) -Payload ([PSCustomObject]@{
+            action = "link_tables"; backendPath = $script:BackendPath; dryRun = $true
+            tableNames = @("NewLinkedTable")
+        })
+        $action = @($result.actions | Where-Object { $_.tableName -eq "NewLinkedTable" })[0]
+        $action.action | Should -Be "skip"
+        $script:CreatedTableDefs.Count | Should -Be 0
+        $script:AppendedTables.Count | Should -Be 0
+    }
+
+    It "apply create-or-relink creates the missing TableDef with correct Connect and SourceTableName" {
+        $script:BackendTables = @("NewLinkedTable")
+        $result = Update-LinkTables -Database (New-FakeFrontendDb) -Payload ([PSCustomObject]@{
+            action = "link_tables"; backendPath = $script:BackendPath; dryRun = $false
+            linkMode = "create-or-relink"; tableNames = @("NewLinkedTable")
+        })
+        $action = @($result.actions | Where-Object { $_.tableName -eq "NewLinkedTable" })[0]
+        $action.action | Should -Be "create-link"
+        $script:CreatedTableDefs.Count | Should -Be 1
+        @($script:AppendedTables | ForEach-Object { $_.Name }) | Should -Contain "NewLinkedTable"
+        $created = $script:AppendedTables[0]
+        $created.SourceTableName | Should -Be "NewLinkedTable"
+        $created.Connect | Should -Match ([regex]::Escape($script:BackendPath))
+    }
+
+    It "is idempotent: an already-linked table plans relink (no duplicate create)" {
+        $script:FrontendDefs = @{ "ExistingT" = ";DATABASE=C:\old\backend.accdb" }
+        $script:BackendTables = @("ExistingT")
+        $result = Update-LinkTables -Database (New-FakeFrontendDb) -Payload ([PSCustomObject]@{
+            action = "link_tables"; backendPath = $script:BackendPath; dryRun = $false
+            linkMode = "create-or-relink"; tableNames = @("ExistingT")
+        })
+        $action = @($result.actions | Where-Object { $_.tableName -eq "ExistingT" })[0]
+        $action.action | Should -Be "relink"
+        $script:CreatedTableDefs.Count | Should -Be 0
+        $script:AppendedTables.Count | Should -Be 0
+    }
+
+    It "returns a typed BACKEND_TABLE_NOT_FOUND action for a requested table absent from the backend" {
+        $script:BackendTables = @("SomethingElse")
+        $result = Update-LinkTables -Database (New-FakeFrontendDb) -Payload ([PSCustomObject]@{
+            action = "link_tables"; backendPath = $script:BackendPath; dryRun = $false
+            linkMode = "create-or-relink"; tableNames = @("GhostTable")
+        })
+        $action = @($result.actions | Where-Object { $_.tableName -eq "GhostTable" })[0]
+        $action.action | Should -Be "error"
+        $action.error | Should -Match "BACKEND_TABLE_NOT_FOUND"
+        $script:CreatedTableDefs.Count | Should -Be 0
+    }
+}
+
+Describe "Update-LinkTables — live Access create-or-relink (#851, requires DAO)" {
+    BeforeAll {
+        $script:DaoOk = $false
+        try {
+            $probe = New-Object -ComObject DAO.DBEngine.120
+            [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($probe) | Out-Null
+            $script:DaoOk = $true
+        } catch { $script:DaoOk = $false }
+
+        # Load ALL runner functions via AST (no main-body execution).
+        $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:RunnerPath).Path, [ref]$null, [ref]$null)
+        foreach ($fn in $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+            Invoke-Expression $fn.Extent.Text
+        }
+        $script:BackendPassword = ""
+    }
+
+    It "creates a real linked TableDef for a backend-only table, reads it, and is idempotent" {
+        if (-not $script:DaoOk) { Set-ItResult -Skipped -Because "DAO.DBEngine COM is not available (no Access runtime)"; return }
+
+        $dir = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow851live_" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $dir | Out-Null
+        $backend = Join-Path $dir 'backend.accdb'
+        $frontend = Join-Path $dir 'frontend.accdb'
+        $table = 'TbResponsablesPorRol'
+        try {
+            $e = New-DaoDbEngine
+            $bdb = $e.CreateDatabase($backend, ';LANGID=0x0409;CP=1252;COUNTRY=0')
+            $td = $bdb.CreateTableDef($table)
+            $td.Fields.Append($td.CreateField('ID', 4))
+            $td.Fields.Append($td.CreateField('Rol', 10, 100))
+            $bdb.TableDefs.Append($td)
+            $bdb.Execute("INSERT INTO $table (ID, Rol) VALUES (1, 'Owner')")
+            $bdb.Close()
+            $ftmp = $e.CreateDatabase($frontend, ';LANGID=0x0409;CP=1252;COUNTRY=0'); $ftmp.Close()
+            [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null
+
+            $e2 = New-DaoDbEngine
+            $fdb = Open-DatabaseWithPassword -DbEngine $e2 -DatabasePath $frontend -Exclusive $true
+
+            # dry-run plans a create-link and writes nothing
+            $plan = Update-LinkTables -Database $fdb -Payload ([pscustomobject]@{ action='link_tables'; backendPath=$backend; dryRun=$true; linkMode='create-or-relink'; tableNames=@($table) })
+            (@($plan.actions | Where-Object { $_.tableName -eq $table })[0]).action | Should -Be 'create-link'
+            { $fdb.TableDefs.Item($table) } | Should -Throw
+
+            # apply creates the real linked TableDef
+            $applied = Update-LinkTables -Database $fdb -Payload ([pscustomobject]@{ action='link_tables'; backendPath=$backend; dryRun=$false; linkMode='create-or-relink'; tableNames=@($table) })
+            (@($applied.actions | Where-Object { $_.tableName -eq $table })[0]).action | Should -Be 'create-link'
+
+            $linkedTd = $fdb.TableDefs.Item($table)
+            ([string]$linkedTd.Connect) | Should -Match ([regex]::Escape($backend))
+            ([string]$linkedTd.SourceTableName) | Should -Be $table
+
+            # the linked table actually reads the backend row
+            $rs = $fdb.OpenRecordset("SELECT Rol FROM $table WHERE ID = 1")
+            ([string]$rs.Fields.Item('Rol').Value) | Should -Be 'Owner'
+            $rs.Close()
+
+            # idempotent: second apply relinks, no duplicate
+            $again = Update-LinkTables -Database $fdb -Payload ([pscustomobject]@{ action='link_tables'; backendPath=$backend; dryRun=$false; linkMode='create-or-relink'; tableNames=@($table) })
+            (@($again.actions | Where-Object { $_.tableName -eq $table })[0]).action | Should -Be 'relink'
+            (@($fdb.TableDefs | Where-Object { [string]$_.Name -eq $table }).Count) | Should -Be 1
+
+            $fdb.Close()
+            [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($fdb) | Out-Null
+        } finally {
+            Start-Sleep -Milliseconds 200
+            Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "relink-only default does NOT create a missing link against real Access" {
+        if (-not $script:DaoOk) { Set-ItResult -Skipped -Because "DAO.DBEngine COM is not available (no Access runtime)"; return }
+
+        $dir = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow851live2_" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $dir | Out-Null
+        $backend = Join-Path $dir 'backend.accdb'
+        $frontend = Join-Path $dir 'frontend.accdb'
+        $table = 'TbBackendOnly'
+        try {
+            $e = New-DaoDbEngine
+            $bdb = $e.CreateDatabase($backend, ';LANGID=0x0409;CP=1252;COUNTRY=0')
+            $td = $bdb.CreateTableDef($table)
+            $td.Fields.Append($td.CreateField('ID', 4))
+            $bdb.TableDefs.Append($td)
+            $bdb.Close()
+            $ftmp = $e.CreateDatabase($frontend, ';LANGID=0x0409;CP=1252;COUNTRY=0'); $ftmp.Close()
+            [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($e) | Out-Null
+
+            $e2 = New-DaoDbEngine
+            $fdb = Open-DatabaseWithPassword -DbEngine $e2 -DatabasePath $frontend -Exclusive $true
+            $res = Update-LinkTables -Database $fdb -Payload ([pscustomobject]@{ action='link_tables'; backendPath=$backend; dryRun=$false; tableNames=@($table) })
+            (@($res.actions | Where-Object { $_.tableName -eq $table })[0]).action | Should -Be 'skip'
+            { $fdb.TableDefs.Item($table) } | Should -Throw
+            $fdb.Close()
+            [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($fdb) | Out-Null
+        } finally {
+            Start-Sleep -Milliseconds 200
+            Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

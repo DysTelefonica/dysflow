@@ -301,6 +301,11 @@ export function buildMaintenanceRequest(
         )
       : undefined,
     denyPrefixes: stringArrayValue(params.denyPrefixes),
+    // Issue #851 — forward the opt-in link_tables create capability. The
+    // tool-level `mode` param maps to `linkMode` (distinct from the read/write
+    // dispatch `mode`); `tableNames[]` scopes the operation.
+    linkMode: params.mode === "create-or-relink" ? "create-or-relink" : undefined,
+    tableNames: stringArrayValue(params.tableNames),
     strictLocal: params.strictLocal === true ? true : undefined,
     removeUnresolved: params.removeUnresolved === true ? true : undefined,
     noBackup: params.backup === false ? true : undefined,
