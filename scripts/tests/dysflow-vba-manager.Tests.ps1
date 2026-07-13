@@ -2621,6 +2621,83 @@ Describe "Remove-AccessObjectOrComponent — behavioral" {
         $script:DeleteObjectType | Should -Be 2 # acForm = 2
         $script:DeleteObjectName | Should -Be "MyForm"
     }
+
+    # ---------------------------------------------------------------------
+    # Issue #852 (Bug A) — a form/report document module (VBComponent Type
+    # 100, canonically named `Form_<X>` / `Report_<X>`) cannot be removed via
+    # VBComponents.Remove(): Access raises HRESULT 0x80070057 (E_INVALIDARG,
+    # "el valor no está … del intervalo esperado"). This bites forms whose
+    # binary name does NOT follow the `Form_<X>` convention (e.g. `frmSplash`,
+    # whose document module is `Form_frmSplash`) when Resolve-AccessObjectInfo
+    # cannot match the Access object and the code falls through to the
+    # component-removal branch. The deletion must route to DoCmd.DeleteObject
+    # on the owning object instead of Remove(), and any residual invalid-target
+    # HRESULT must surface as a typed code, never the raw localized string.
+    # ---------------------------------------------------------------------
+    Context "Issue #852 — document-module deletion routes to DoCmd.DeleteObject" {
+        It "deletes a form whose document module is Form_frmSplash via DoCmd.DeleteObject (status ok)" {
+            function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
+            $script:DocModuleDeleted = $false
+            function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName)
+                if ($script:DocModuleDeleted) { return $null }
+                return "Form_frmSplash"
+            }
+
+            $script:DeleteObjectCalled = $false
+            $script:DeleteObjectType = $null
+            $script:DeleteObjectName = $null
+            $fakeAccessApp = [PSCustomObject]@{ DoCmd = [PSCustomObject]@{} }
+            $fakeAccessApp.DoCmd | Add-Member -MemberType ScriptMethod -Name "DeleteObject" -Value {
+                param($type, $name)
+                $script:DeleteObjectCalled = $true
+                $script:DeleteObjectType = $type
+                $script:DeleteObjectName = $name
+                $script:DocModuleDeleted = $true
+            }
+
+            # Document module: Type 100. Remove() must NEVER be reached; if it is,
+            # it throws E_INVALIDARG exactly like real Access, keeping the test honest.
+            $fakeComponent = [PSCustomObject]@{ Name = "Form_frmSplash"; Type = 100 }
+            $fakeComponents = [PSCustomObject]@{}
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value { param($name) return $fakeComponent }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Remove" -Value {
+                param($c)
+                throw (New-Object System.Runtime.InteropServices.COMException("El valor no esta comprendido dentro del intervalo esperado", [int]0x80070057))
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+            $res = Remove-AccessObjectOrComponent -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleName "frmSplash" -Force:$false
+            $res.status | Should -Be "ok"
+            $script:DeleteObjectCalled | Should -Be $true
+            $script:DeleteObjectType | Should -Be 2 # acForm = 2 — owning form object
+            $script:DeleteObjectName | Should -Be "frmSplash" # bare name, prefix stripped
+        }
+
+        It "surfaces a typed error code (not the raw HRESULT string) when the owning object also cannot be deleted" {
+            function script:Resolve-AccessObjectInfo { param($AccessApplication, $ModuleName) return [pscustomobject]@{ Exists = $false } }
+            function script:Resolve-ExistingComponentName { param($VbProject, $ModuleName) return "Form_frmSplash" }
+
+            $fakeAccessApp = [PSCustomObject]@{ DoCmd = [PSCustomObject]@{} }
+            $fakeAccessApp.DoCmd | Add-Member -MemberType ScriptMethod -Name "DeleteObject" -Value {
+                param($type, $name)
+                throw (New-Object System.Runtime.InteropServices.COMException("El valor no esta comprendido dentro del intervalo esperado", [int]0x80070057))
+            }
+
+            $fakeComponent = [PSCustomObject]@{ Name = "Form_frmSplash"; Type = 100 }
+            $fakeComponents = [PSCustomObject]@{}
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value { param($name) return $fakeComponent }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Remove" -Value {
+                param($c)
+                throw (New-Object System.Runtime.InteropServices.COMException("El valor no esta comprendido dentro del intervalo esperado", [int]0x80070057))
+            }
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+
+            $action = {
+                Remove-AccessObjectOrComponent -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleName "frmSplash" -Force:$false
+            }
+            $action | Should -Throw "*VBA_DELETE_INVALID_TARGET*"
+        }
+    }
 }
 
 # ===========================================================================

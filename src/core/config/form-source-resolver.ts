@@ -135,9 +135,17 @@ function detectSplitSegment(
 }
 
 function buildIdentityRelativePath(formName: string, kind: "form" | "report"): string {
+  // Issue #852 (Bug B) — idempotent on the canonical prefix. Callers such as
+  // inspect_form / render_form_preview pass `formName` verbatim (e.g.
+  // `Form_FormRiesgoBiblioteca`), whereas the lint adapter strips it first.
+  // Stripping any leading `Form_`/`Report_` here before re-prepending the
+  // kind-correct prefix guarantees a single prefix in every case, so a
+  // caller-prefixed name never resolves to a non-existent triple-prefixed
+  // path (`forms/Form_Form_<name>.form.txt`).
+  const bareName = formName.replace(/^(?:Form_|Report_)/, "");
   return kind === "report"
-    ? `reports/Report_${formName}.report.txt`
-    : `forms/Form_${formName}.form.txt`;
+    ? `reports/Report_${bareName}.report.txt`
+    : `forms/Form_${bareName}.form.txt`;
 }
 
 /**

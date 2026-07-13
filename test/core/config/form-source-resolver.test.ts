@@ -445,4 +445,49 @@ describe("buildResolutionDiagnostic", () => {
       expect(diagnostic.remediation).toContain("No candidate paths were attempted.");
     });
   });
+
+  // Issue #852 (Bug B) — identity resolution MUST be idempotent on the
+  // `Form_`/`Report_` prefix. Callers such as inspect_form / render_form_preview
+  // pass `formName` verbatim (e.g. `Form_FormRiesgoBiblioteca`), unlike the lint
+  // adapter which strips the prefix first. Without idempotency the resolver
+  // prepends a SECOND prefix and probes a non-existent triple-prefixed path
+  // (`forms/Form_Form_FormRiesgoBiblioteca.form.txt`).
+  describe("Issue #852 — idempotent Form_/Report_ prefix in identity resolution", () => {
+    it("does not double the Form_ prefix when formName already starts with Form_", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "Form_FormRiesgoBiblioteca",
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]?.relativePath).toBe("forms/Form_FormRiesgoBiblioteca.form.txt");
+      expect(candidates[0]?.relativePath).not.toContain("Form_Form_");
+      expect(candidates[0]?.absolutePath).toBe(
+        "C:/Projects/Acme/src/forms/Form_FormRiesgoBiblioteca.form.txt",
+      );
+    });
+
+    it("does not double the Report_ prefix when formName already starts with Report_", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "Report_MonthlySummary",
+        kind: "report",
+      });
+
+      expect(candidates[0]?.relativePath).toBe("reports/Report_MonthlySummary.report.txt");
+      expect(candidates[0]?.relativePath).not.toContain("Report_Report_");
+    });
+
+    it("still prepends the prefix for a bare formName (regression)", () => {
+      const candidates = resolveFormSourceCandidates({
+        sourceRoot: "C:/Projects/Acme/src",
+        projectRoot: "C:/Projects/Acme",
+        formName: "MyForm",
+      });
+
+      expect(candidates[0]?.relativePath).toBe("forms/Form_MyForm.form.txt");
+    });
+  });
 });
