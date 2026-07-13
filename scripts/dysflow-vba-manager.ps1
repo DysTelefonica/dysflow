@@ -2960,6 +2960,14 @@ function Import-DocumentCodeBehind {
     # truth verify_code compares against — wins over the `.form.txt`'s embedded
     # (and possibly stale) copy. Reuses the same DeleteLines + AddFromFile path
     # that importMode=Code uses for document code-behind.
+    #
+    # issue #849 — VB_Name normalization guard. AddFromFile silently applies the
+    # source's `Attribute VB_Name` (if present) and otherwise lets VBE invent
+    # a temporary name (`Form_TempSccObj1`, `Form_TempSccObj2`, ...). A
+    # mismatched or missing VB_Name breaks the `.cls` <-> form-instance link:
+    # the form's code module survives with the canonical `Form_<name>` name in
+    # the VBE, but `Me.X` then resolves against a stale instance. Ensure-VbNameAttributeAtTop
+    # is idempotent on already-canonical text, so we always run it as a guard.
     $componentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
     if (-not $componentName) {
         throw ("No se encontro el document module '{0}' tras LoadFromText; no se pudo sincronizar el code-behind desde '{1}'." -f $ModuleName, $SourcePath)
@@ -2971,6 +2979,15 @@ function Import-DocumentCodeBehind {
     $codeModule = $null
     try {
         Convert-Utf8CodeImportToAnsiTempFile -InputPath $SourcePath -TempPath $tmpAnsi
+        # issue #849 — normalize the temp file so it carries
+        # `Attribute VB_Name = "<ModuleName>"` before AddFromFile sees it. The
+        # helper is text-only and idempotent; doing it here keeps the surface
+        # auditable and avoids regressing the contract in any future caller
+        # that bypasses the export-time normalization.
+        $ansiEncoding = [System.Text.Encoding]::GetEncoding(1252)
+        $normalizedText = [System.IO.File]::ReadAllText($tmpAnsi, $ansiEncoding)
+        $normalizedText = Ensure-VbNameAttributeAtTop -Text $normalizedText -ModuleName $ModuleName
+        [System.IO.File]::WriteAllText($tmpAnsi, $normalizedText, $ansiEncoding)
         $component = $VbProject.VBComponents.Item($componentName)
         $codeModule = $component.CodeModule
         $count = $codeModule.CountOfLines
@@ -3097,6 +3114,15 @@ function Import-VbaModule {
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
+                # issue #849 — ReimportedDocument signals that this import replaced
+                # an existing form/report in the binary (LoadFromText was a
+                # replacement, not a creation). Invoke-ImportAction aggregates
+                # these into ModifiedDocumentNames so the dispatcher can call
+                # Save-VbaProjectModules even when CreatedComponentNames is
+                # empty (the previous gate). Without this signal, dirty COM
+                # state from the LoadFromText + Import-DocumentCodeBehind pair
+                # never persisted.
+                ReimportedDocument   = $documentExistsInAccess
                 # R2 consumer-request fields. Keep CreatedNewComponent /
                 # RequiresExplicitSave intact for backward compatibility with
                 # existing tests; phase is null on the happy path (no failure).
@@ -4615,6 +4641,12 @@ function Invoke-ImportAction {
     $total = $targets.Count
     $useRetryImport = ($targets.Count -gt 1)
     $createdComponentNames = New-Object System.Collections.Generic.List[string]
+    # issue #849 — track form/report re-imports separately so the dispatcher can
+    # trigger Save-VbaProjectModules for them too (the previous gate was
+    # CreatedComponentNames.Count -gt 0, which is empty for re-imports and
+    # skipped RunCommand(280), leaving LoadFromText + Import-DocumentCodeBehind
+    # mutations in dirty COM state).
+    $modifiedDocumentNames = New-Object System.Collections.Generic.List[string]
     $pendingTargets = @($targets)
     $pass = 0
     # R2: per-module structured result. Keys are module names, values are
@@ -4656,6 +4688,12 @@ function Invoke-ImportAction {
                     if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
                         $createdComponentNames.Add([string]$afterExists) | Out-Null
                     }
+                } elseif ($importResult -and $importResult.PSObject.Properties['ReimportedDocument'] -and [bool]$importResult.ReimportedDocument) {
+                    # issue #849 — form/report re-import path. The form already
+                    # existed in the binary, so CreatedComponentNames stays
+                    # empty; the dispatcher needs a separate signal to know
+                    # Save-VbaProjectModules must run.
+                    $modifiedDocumentNames.Add([string]$name) | Out-Null
                 }
                 $moduleStopwatch.Stop()
                 $progressThisPass = $true
@@ -4813,6 +4851,10 @@ function Invoke-ImportAction {
         }) -Depth 6
         return [pscustomobject]@{
             CreatedComponentNames = @()
+            # issue #849 — surface the modified-document list even on the
+            # error envelope so the dispatcher's save-all gate stays accurate
+            # when a partial error path produced re-imports before the failure.
+            ModifiedDocumentNames = @($modifiedDocumentNames)
             Total = [int]$total
             HasErrors = $true
             ErrorMessage = $errorMessage
@@ -4823,6 +4865,9 @@ function Invoke-ImportAction {
 
     return [pscustomobject]@{
         CreatedComponentNames = @($createdComponentNames)
+        # issue #849 — ModifiedDocumentNames surfaces form/report re-imports so
+        # the dispatcher can trigger Save-VbaProjectModules for them.
+        ModifiedDocumentNames = @($modifiedDocumentNames)
         Total = [int]$total
         HasErrors = $false
     }
@@ -4890,8 +4935,16 @@ try {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
         $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -ModuleNamesExplicit:$moduleNamesExplicit -Json:$Json
         if ($importResult.HasErrors) { exit 1 }
-        if ($importResult.CreatedComponentNames.Count -gt 0) {
-            Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($importResult.CreatedComponentNames)
+        # issue #849 — gate Save-VbaProjectModules on EITHER newly created
+        # components OR re-imported form/report documents. The previous
+        # CreatedComponentNames-only gate skipped save-all for form re-imports
+        # and left LoadFromText + Import-DocumentCodeBehind in dirty COM state.
+        $hasCreated = (@($importResult.CreatedComponentNames).Count -gt 0)
+        $hasReimportedDocuments = ($importResult.PSObject.Properties['ModifiedDocumentNames'] -and @($importResult.ModifiedDocumentNames).Count -gt 0)
+        if ($hasCreated -or $hasReimportedDocuments) {
+            $saveNames = @($importResult.CreatedComponentNames)
+            if ($hasReimportedDocuments) { $saveNames += @($importResult.ModifiedDocumentNames) }
+            Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($saveNames | Select-Object -Unique)
         }
         Write-Status -Message ("OK Import completado ({0})" -f $importResult.Total) -Color Green
 

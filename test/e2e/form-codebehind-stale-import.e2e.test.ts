@@ -349,6 +349,19 @@ describe.skipIf(!canRunE2e)(
       // this artifact cannot verify the fix. The Pester suite
       // (scripts/tests/dysflow-vba-manager.Tests.ps1, `Normalize-VbaImportText`
       // context) is the primary pinning seam for VB_Name reaching `AddFromFile`.
+      //
+      // Issue #849 — class identity (Form_<name> vs Form_TempSccObjN) and the
+      // save-all gate (RunCommand 280) for form re-imports are pinned by the
+      // Pester unit tests:
+      //   - `Import-DocumentCodeBehind — VB_Name normalization guard`
+      //   - `Invoke-ImportAction — ModifiedDocumentNames surface for re-imported forms`
+      // The test runtime currently shipped with this PR does not expose
+      // `list_vba_modules` (#807, Feature 1) which would let the E2E observe
+      // VBComponent identity directly. Once the E2E runtime is rebuilt with
+      // that tool, add a `typeFilter:"form", namePattern:"Form_frmBusy"`
+      // assertion here to verify the class identity at runtime (the textual
+      // re-export above proves the .cls content wins Phase 2; the class-name
+      // assertion would prove Access kept the canonical VB_Name).
     }, 180_000);
 
     // feat-759-no-compile (v1.19.0) — the

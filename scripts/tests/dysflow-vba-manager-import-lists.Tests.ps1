@@ -339,7 +339,6 @@ Describe "Open-AccessDatabase — ACCESS_DATABASE_LOCKED detection (R5)" {
         # PowerShell -> Node boundary today.
         $script:LastDbError.Exception.Message | Should -Match "0x800A09D5|already in use|cannot be opened or locked"
     }
-
     It "leaves non-lock COM errors untouched (does NOT mis-tag as ACCESS_DATABASE_LOCKED)" {
         $comEx = [System.Runtime.InteropServices.COMException]::new(
             "Some unrelated automation failure",
@@ -356,7 +355,246 @@ Describe "Open-AccessDatabase — ACCESS_DATABASE_LOCKED detection (R5)" {
         } catch {
             $script:LastDbError = $_
         }
+
         $script:LastDbError | Should -Not -BeNullOrEmpty
         $script:LastDbError.Exception.Message | Should -Not -Match "ACCESS_DATABASE_LOCKED"
+    }
+}
+
+# ===========================================================================
+# Issue #849 — Re-imported forms (where the form already existed in the
+# binary) used to skip the post-import save-all dispatch because the existing
+# logic gated `Save-VbaProjectModules` on `CreatedComponentNames.Count > 0`.
+# For re-imports that list is empty, so the dirty COM state from the
+# `LoadFromText` + `Import-DocumentCodeBehind` pair never persisted. The
+# fix extends the contract:
+#
+#   - `Import-VbaModule` form/report branch returns `ReimportedDocument = $true`
+#     when the document was already present in Access (LoadFromText replace path).
+#   - `Invoke-ImportAction` aggregates those into `ModifiedDocumentNames`.
+#   - The dispatcher gates `Save-VbaProjectModules` on
+#     `(CreatedComponentNames.Count -gt 0) -or (ModifiedDocumentNames.Count -gt 0)`.
+#
+# These tests pin the contract at the Invoke-ImportAction boundary (where the
+# existing tests already mock `Import-VbaModule`). The dispatcher gate is
+# verified structurally via AST at the bottom of this Describe.
+# ===========================================================================
+
+Describe "Invoke-ImportAction — ModifiedDocumentNames surface for re-imported forms (issue #849)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $script:SourceAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path,
+            [ref]$null,
+            [ref]$null
+        )
+        $invokeImportAst = $script:SourceAst.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Invoke-ImportAction' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $invokeImportAst) { throw "Invoke-ImportAction not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $invokeImportAst.Extent.Text
+    }
+
+    BeforeEach {
+        $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+        $script:DysflowResults = [System.Collections.Generic.List[object]]::new()
+        $script:ImportCalls = [System.Collections.Generic.List[object]]::new()
+        $script:ImportResult = $null
+        $script:FailOn = @{}
+        $script:BeforeExists = "Mod"   # form already exists in the binary by default
+        $script:MockGetChildItems = @()
+
+        function script:Write-Status { param([string]$Message, $Color) $script:StatusMessages.Add($Message) }
+        function script:Write-DysflowResult {
+            param([Parameter(Mandatory = $true)] [object] $Result,
+                  [Parameter(Mandatory = $false)] [int] $Depth = 20)
+            $script:DysflowResults.Add($Result)
+        }
+        function script:Resolve-ExistingComponentName {
+            param($VbProject, [string]$ModuleName)
+            return $script:BeforeExists
+        }
+        function script:Get-ChildItem {
+            param($Path, [switch]$File, [switch]$Recurse, $Include, $ErrorAction)
+            return @($script:MockGetChildItems)
+        }
+        function script:Test-IsAccessDatabaseLockedError {
+            param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
+            return $false
+        }
+        function script:Get-AccessDatabaseLockedOwner {
+            param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
+            return [ordered]@{ code = "ACCESS_DATABASE_LOCKED"; message = $Message; machine = $null; user = $null }
+        }
+        function script:Import-VbaModule {
+            param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication, [string]$ImportMode)
+            $script:ImportCalls.Add([pscustomobject]@{
+                VbProject = $VbProject
+                ModuleName = $ModuleName
+                ModulesPath = $ModulesPath
+                ImportMode = $ImportMode
+            })
+            if ($script:FailOn.ContainsKey($ModuleName) -and $script:FailOn[$ModuleName].Count -gt 0) {
+                $msg = $script:FailOn[$ModuleName][0]
+                $script:FailOn[$ModuleName] = @($script:FailOn[$ModuleName] | Select-Object -Skip 1)
+                throw $msg
+            }
+            return $script:ImportResult
+        }
+
+        $script:FakeVbProject = [pscustomobject]@{ Id = "fake-vbproject" }
+        $script:FakeSession = [pscustomobject]@{
+            VbProject = $script:FakeVbProject
+            AccessApplication = [pscustomobject]@{ Id = "fake-app" }
+        }
+    }
+
+    Context "R-849 — surface for Save-VbaProjectModules dispatch on form re-import" {
+
+        It "populates ModifiedDocumentNames when Import-VbaModule signals ReimportedDocument=$true for an existing form (#849 RED)" {
+            # Existing form: BeforeExists returns the canonical name; the form was
+            # already in the binary. The mock Import-VbaModule returns
+            # ReimportedDocument = $true to model the form branch's contract.
+            $script:BeforeExists = "Form_frmBusy"
+            $script:ImportResult = [pscustomobject]@{
+                CreatedNewComponent  = $false
+                RequiresExplicitSave = $false
+                ReimportedDocument   = $true
+            }
+
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Form_frmBusy") -ModulesPath "C:\fake" -ImportMode "Auto"
+
+            # The new contract: Invoke-ImportAction surfaces a ModifiedDocumentNames list
+            # populated with the re-imported form name.
+            ($result.PSObject.Properties.Name -contains 'ModifiedDocumentNames') | Should -Be $true `
+                -Because "issue #849: Invoke-ImportAction must surface ModifiedDocumentNames so the dispatcher can gate Save-VbaProjectModules on it"
+            @($result.ModifiedDocumentNames).Count | Should -Be 1 `
+                -Because "exactly one form was re-imported; the list must contain it"
+            $result.ModifiedDocumentNames | Should -Contain "Form_frmBusy" `
+                -Because "the modified-document list must carry the re-imported form name so Save-VbaProjectModules persists the dirty state"
+        }
+
+        It "leaves ModifiedDocumentNames empty when the module was created brand-new (#849 regression: created-only path unchanged)" {
+            # Brand-new module: BeforeExists = $null (did not exist), AfterExists
+            # resolves, CreatedNewComponent = $true, RequiresExplicitSave = $true.
+            # ReimportedDocument is $false/absent for the created path.
+            $script:BeforeExists = $null
+            $script:ResolveCallCount = 0
+            function script:Resolve-ExistingComponentName {
+                param($VbProject, [string]$ModuleName)
+                $script:ResolveCallCount += 1
+                # Production code calls Resolve-ExistingComponentName twice:
+                #   1) before Import-VbaModule → returns null (didn't exist)
+                #   2) after  Import-VbaModule → returns the new name (was created)
+                if ($script:ResolveCallCount -eq 1) { return $null }
+                return "BrandNewMod"
+            }
+            $script:ImportResult = [pscustomobject]@{
+                CreatedNewComponent  = $true
+                RequiresExplicitSave = $true
+                ReimportedDocument   = $false
+            }
+
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("BrandNewMod") -ModulesPath "C:\fake" -ImportMode "Auto"
+
+            @($result.ModifiedDocumentNames).Count | Should -Be 0 `
+                -Because "a brand-new module is NOT a re-imported document; ModifiedDocumentNames must stay empty so the dispatcher does not double-save via this list"
+            $result.CreatedComponentNames | Should -Contain "BrandNewMod" `
+                -Because "CreatedComponentNames is the existing contract for the create path and must continue to be the trigger for Save-VbaProjectModules in that case"
+        }
+
+        It "populates ModifiedDocumentNames (NOT CreatedComponentNames) for a form re-import — Save-VbaProjectModules must trigger anyway (#849 end-to-end contract)" {
+            # Existing form re-import path. CreatedComponentNames must stay empty
+            # (the form was NOT created — it was already there). ModifiedDocumentNames
+            # must carry the form name so the dispatcher knows to call
+            # Save-VbaProjectModules even with CreatedComponentNames.Count = 0.
+            $script:BeforeExists = "Form_frmBusy"
+            $script:ImportResult = [pscustomobject]@{
+                CreatedNewComponent  = $false
+                RequiresExplicitSave = $false
+                ReimportedDocument   = $true
+            }
+
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Form_frmBusy") -ModulesPath "C:\fake" -ImportMode "Auto"
+
+            @($result.CreatedComponentNames).Count | Should -Be 0 `
+                -Because "the form was NOT newly created; the existing CreatedComponentNames contract must stay empty for the re-import path"
+            @($result.ModifiedDocumentNames).Count | Should -BeGreaterOrEqual 1 `
+                -Because "issue #849: the re-import path must populate ModifiedDocumentNames so the dispatcher's save-all gate fires"
+            $result.ModifiedDocumentNames | Should -Contain "Form_frmBusy"
+
+            # Composite predicate the dispatcher uses (mirrors the production gate):
+            $shouldSave = (@($result.CreatedComponentNames).Count -gt 0) -or (@($result.ModifiedDocumentNames).Count -gt 0)
+            $shouldSave | Should -Be $true `
+                -Because "the dispatcher gate (CreatedComponentNames.Count -gt 0) -or (ModifiedDocumentNames.Count -gt 0) must be TRUE for form re-imports, so RunCommand(280) runs and the dirty state persists"
+        }
+
+        It "skips ModifiedDocumentNames when Import-VbaModule does NOT signal ReimportedDocument (plain module re-import, no form/report)" {
+            # A plain .bas/.cls re-import (NOT a form): Import-VbaModule should not
+            # set ReimportedDocument; the gate must stay closed for this case so we
+            # avoid an unnecessary Save-VbaProjectModules call on every .bas
+            # round-trip (the existing per-component save path handles it).
+            $script:BeforeExists = "ModFoo"
+            $script:ImportResult = [pscustomobject]@{
+                CreatedNewComponent  = $false
+                RequiresExplicitSave = $false
+                # No ReimportedDocument key at all (or $false)
+            }
+
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("ModFoo") -ModulesPath "C:\fake" -ImportMode "Auto"
+
+            @($result.ModifiedDocumentNames).Count | Should -Be 0 `
+                -Because "plain module re-imports are not documents; ModifiedDocumentNames must stay empty to avoid an unnecessary Save-VbaProjectModules call on every .bas round-trip"
+            $shouldSave = (@($result.CreatedComponentNames).Count -gt 0) -or (@($result.ModifiedDocumentNames).Count -gt 0)
+            $shouldSave | Should -Be $false
+        }
+    }
+
+    Context "R-849 — dispatcher gate structural contract" {
+
+        It "the top-level dispatcher (script Param block) gates Save-VbaProjectModules on ModifiedDocumentNames.Count too (#849 AST structural check)" {
+            # Walk the script body (the script is a top-level entry point with
+            # Param(), not a named function). Confirm the save-all gate condition
+            # references BOTH CreatedComponentNames and ModifiedDocumentNames. This
+            # is a structural contract: a future refactor that drops the
+            # ModifiedDocumentNames half must be flagged, because the runtime would
+            # silently regress to skipping save-all for form re-imports.
+            $src = $script:SourceAst.Extent.Text
+            $src | Should -Match 'ModifiedDocumentNames' `
+                -Because "issue #849: the dispatcher must read ModifiedDocumentNames from Invoke-ImportAction's result"
+            $src | Should -Match 'CreatedComponentNames' `
+                -Because "the dispatcher must continue to read CreatedComponentNames so newly created components are still saved"
+            $src | Should -Match 'Save-VbaProjectModules' `
+                -Because "the dispatcher must invoke Save-VbaProjectModules after a successful import"
+            # The gate must include the modified-documents term. A naive refactor
+            # that ONLY checks CreatedComponentNames would silently skip the save
+            # for form re-imports. Assert the gate expression references BOTH lists.
+            # Match the `Count -gt 0` shape on each list (whether or not the
+            # producer wraps the property with `@(...)` or a `.PSObject` guard).
+            $hasGateOnBoth = ($src -match 'ModifiedDocumentNames[\)\.]*\.Count\s*-gt\s*0') -and
+                             ($src -match 'CreatedComponentNames[\)\.]*\.Count\s*-gt\s*0')
+            $hasGateOnBoth | Should -Be $true `
+                -Because "the dispatcher save-all gate must be '(CreatedComponentNames.Count -gt 0) -or (ModifiedDocumentNames.Count -gt 0)'; dropping either side is a #849 regression"
+        }
+
+        It "Invoke-ImportAction returns ModifiedDocumentNames on the success envelope and the error envelope (#849 contract surface)" {
+            # Success envelope (decompose S7 contract): the action returns a pscustomobject
+            # with CreatedComponentNames / Total / HasErrors. After the fix it must ALSO
+            # carry ModifiedDocumentNames so the dispatcher can read it.
+            $script:BeforeExists = "Form_X"
+            $script:ImportResult = [pscustomobject]@{
+                CreatedNewComponent  = $false
+                RequiresExplicitSave = $false
+                ReimportedDocument   = $true
+            }
+
+            $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Form_X") -ModulesPath "C:\fake" -ImportMode "Auto"
+
+            ($result.PSObject.Properties.Name -contains 'ModifiedDocumentNames') | Should -Be $true `
+                -Because "ModifiedDocumentNames must be a first-class field of the success envelope, not an optional add-on"
+            $result.HasErrors | Should -Be $false
+        }
     }
 }
