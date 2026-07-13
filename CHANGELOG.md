@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.9.3] - 2026-07-13
+
+- Merge pull request #848 from DysTelefonica/fix/847-query-maintenance-developer-mode-dryrun - fix(dispatch): forward normalizedInput in query-maintenance branch (#847)
+
+
 ## [v2.9.2] - 2026-07-13
 
 - Merge pull request #846 from DysTelefonica/fix/dysflow-config-snapshot-drift - fix(test): isolate 3 dysflow-config tests from repo's project.json
