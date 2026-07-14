@@ -115,6 +115,49 @@ const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_Dysf
 if (!resumeRoot) {
   await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
   await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
+  // Self-contained .form.txt fixture for the form-UI battery. Previously this
+  // file was left behind by a prior E2E run and gitignored, which made the
+  // suite order-dependent and fragile to a clean checkout. The fixture has
+  // five controls that match the harness assertions: txtProbe (the
+  // codegraph-evidence target), cmdApply (the action control renamed
+  // ComandButton), and the rename/set/delete targets used by
+  // generate_form_design_plan + apply_form_design_plan + verify_form_ui.
+  // The control names align with the harness calls below (`txtProbe`,
+  // `cmdApply`, `txtRename`, `txtSet`, `txtDelete`) so a fresh sandbox
+  // produces the same control set on every run.
+  const uiFormFixture = [
+    "Version =21",
+    "Begin Form",
+    "    Name = \"Form_DysflowMcpE2E\"",
+    "    Caption = \"Dysflow MCP E2E\"",
+    "    OnOpen = [Event Procedure]",
+    "    Begin TextBox",
+    "        Name = \"txtProbe\"",
+    "        ControlSource = \"[ID]\"",
+    "        OnGotFocus = [Event Procedure]",
+    "        OnClick = [Event Procedure]",
+    "    End",
+    "    Begin CommandButton",
+    "        Name = \"cmdApply\"",
+    "        OnClick = [Event Procedure]",
+    "    End",
+    "    Begin TextBox",
+    "        Name = \"txtRename\"",
+    "        Caption = \"Rename me\"",
+    "    End",
+    "    Begin TextBox",
+    "        Name = \"txtSet\"",
+    "        Caption = \"Prompt\"",
+    "    End",
+    "    Begin TextBox",
+    "        Name = \"txtDelete\"",
+    "        Caption = \"Label\"",
+    "    End",
+    "End",
+    "",
+  ].join("\r\n");
+  await mkdir(dirname(uiFormPath), { recursive: true });
+  await writeFile(uiFormPath, uiFormFixture, "utf8");
 }
 
 const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: tempRoot };
@@ -560,7 +603,7 @@ const analyzePass = Boolean(
   analyzeFormUi &&
     analyzeFormUi.formName === "DysflowMcpE2E" &&
     Array.isArray(analyzeFormUi.controls) &&
-    analyzeFormUi.controls.length === 2 &&
+    analyzeFormUi.controls.length === 5 &&
     analyzeFormUi.controls.every((control) => control.name) &&
     analyzeFormUi.source === "FormIR",
 );
@@ -568,9 +611,9 @@ addFailFastResult({
   area: "form-ui",
   tool: "analyze_form_ui:shape",
   pass: analyzePass,
-  expected: "formName=DysflowMcpE2E, controls=2, source=FormIR",
+  expected: "formName=DysflowMcpE2E, controls=5, source=FormIR",
   ms: 0,
-  summary: analyzePass ? "analyzed 2 controls from UI fixture" : "unexpected analyze_form_ui payload",
+  summary: analyzePass ? "analyzed 5 controls from UI fixture" : "unexpected analyze_form_ui payload",
 });
 console.log(`${analyzePass ? "PASS" : "FAIL"}\tanalyze_form_ui:shape\t0ms\t${rows.at(-1).summary}`);
 
