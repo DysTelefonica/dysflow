@@ -26,6 +26,7 @@ import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { createDefaultCodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
+import { diagnoseProjectConfig } from "../config/project-config-diagnostic.js";
 import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
@@ -114,6 +115,12 @@ export async function startMcpStdioAdapter(
       return configResult.data.allowedProcedures;
     },
     accessContextResolver: async (input) => resolveMcpAccessContextForInput(input, startupConfig),
+    projectConfigResolver: (input) =>
+      diagnoseProjectConfig(
+        process.cwd(),
+        typeof input === "object" && input !== null ? (input as Record<string, string>) : {},
+      ),
+    cwd: process.cwd(),
     // allowWrites: leave undefined → defaults to writesEnabled at the
     // capabilities snapshot layer.
     projectId: undefined,
@@ -259,25 +266,18 @@ export async function startWithSdkServer(
 
 export async function resolveMcpWriteAccessForInput(
   input: unknown,
-  startupConfig?: DysflowConfig,
+  _startupConfig?: DysflowConfig,
   options: { cwd?: string; env?: Record<string, string | undefined> } = {},
 ): Promise<boolean> {
-  if (startupConfig !== undefined && inputTargetsConfig(input, startupConfig)) {
-    return startupConfig.allowWrites;
-  }
   const configResult = await resolveConfigForInput(input, options, { preferProjectConfig: true });
   return configResult.ok ? configResult.data.allowWrites : false;
 }
 
 export async function resolveMcpAccessContextForInput(
   input: unknown,
-  startupConfig?: DysflowConfig,
+  _startupConfig?: DysflowConfig,
   options: { cwd?: string; env?: Record<string, string | undefined> } = {},
 ) {
-  if (startupConfig !== undefined && inputTargetsConfig(input, startupConfig)) {
-    return successAccessContext(startupConfig, options.cwd);
-  }
-
   const configResult = await resolveConfigForInput(input, options);
   if (!configResult.ok) return configResult;
   return successAccessContext(configResult.data, options.cwd);

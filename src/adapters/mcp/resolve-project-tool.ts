@@ -19,6 +19,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import {
+  diagnoseProjectConfig,
+  type ProjectConfigDiagnostic,
+} from "../config/project-config-diagnostic.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -199,7 +203,10 @@ export function createResolveProjectTool(opts: { cwd: string }): DysflowMcpTool 
       const projectId = typeof params.projectId === "string" ? params.projectId : undefined;
 
       const result = await tryResolveProject({ projectId }, opts.cwd);
-      const opResult: OperationResult<ResolvedProjectResult> = successResult(result);
+      const projectConfig = diagnoseProjectConfig(opts.cwd, { projectId });
+      const opResult: OperationResult<
+        ResolvedProjectResult & { projectConfig: ProjectConfigDiagnostic }
+      > = successResult({ ...result, projectConfig });
       return translateCoreResultToMcpContent(opResult);
     },
   };

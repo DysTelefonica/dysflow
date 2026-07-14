@@ -1,14 +1,26 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { handleSetupCommand } from "../../../src/cli/commands/setup.js";
+import { handleSetupCommand, writeRelativeProjectConfig } from "../../../src/cli/commands/setup.js";
+import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 
 function makeWorkspace(options?: { withProjectJson?: boolean; withAccessDb?: boolean }): {
   root: string;
   cleanup(): void;
 } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-setup-unit-"));
+  writeFileSync(join(root, ".git"), "gitdir: fixture", "utf8");
+  mkdirSync(join(root, "src"));
   if (options?.withProjectJson !== false) {
     mkdirSync(join(root, ".dysflow"), { recursive: true });
   }
@@ -133,6 +145,139 @@ describe("handleSetupCommand — config resolution errors", () => {
 // Successful config display
 // ---------------------------------------------------------------------------
 describe("handleSetupCommand — successful display", () => {
+  it("does not report success when the written config is not runtime-valid", async () => {
+    const workspace = makeWorkspace({ withProjectJson: false });
+    const external = mkdtempSync(join(tmpdir(), "dysflow-setup-external-"));
+    try {
+      const accessFile = join(external, "outside.accdb");
+      writeFileSync(accessFile, "", "utf8");
+      const result = await handleSetupCommand(["--apply", "--access-path", accessFile], {
+        cwd: workspace.root,
+        env: {},
+      });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Project config is not write-ready");
+    } finally {
+      workspace.cleanup();
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+  it("preserves an existing config when the replacement candidate is invalid", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const configPath = join(workspace.root, ".dysflow", "project.json");
+    const original = readFileSync(configPath, "utf8");
+    const external = mkdtempSync(join(tmpdir(), "dysflow-setup-invalid-"));
+    try {
+      const target = join(external, "outside.accdb");
+      writeFileSync(target, "");
+      const result = await handleSetupCommand(["--apply", "--access-path", target], {
+        cwd: workspace.root,
+        env: {},
+      });
+      expect(result.exitCode).toBe(1);
+      expect(readFileSync(configPath, "utf8")).toBe(original);
+    } finally {
+      workspace.cleanup();
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+  it("rejects a .dysflow junction that redirects project.json outside the worktree", async () => {
+    const workspace = makeWorkspace({ withProjectJson: false });
+    const external = mkdtempSync(join(tmpdir(), "dysflow-setup-junction-"));
+    try {
+      symlinkSync(external, join(workspace.root, ".dysflow"), "junction");
+      const target = join(workspace.root, "front.accdb");
+      writeFileSync(target, "");
+      const result = await handleSetupCommand(["--apply", "--access-path", target], {
+        cwd: workspace.root,
+        env: {},
+      });
+      expect(result.exitCode).toBe(1);
+      expect(existsSync(join(external, "project.json"))).toBe(false);
+    } finally {
+      workspace.cleanup();
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+  it("prevents a directory swap while the exclusive temporary handle is open", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const external = mkdtempSync(join(tmpdir(), "dysflow-setup-swap-"));
+    const owned = join(workspace.root, ".dysflow-owned");
+    const original = readFileSync(join(workspace.root, ".dysflow", "project.json"), "utf8");
+    const config: DysflowConfig = {
+      configSource: "explicit-request",
+      allowWrites: true,
+      accessDbPath: join(workspace.root, "front.accdb"),
+      projectRoot: workspace.root,
+      timeoutMs: 30_000,
+    };
+    try {
+      await expect(
+        writeRelativeProjectConfig(config, workspace.root, () => {
+          renameSync(join(workspace.root, ".dysflow"), owned);
+          symlinkSync(external, join(workspace.root, ".dysflow"), "junction");
+        }),
+      ).rejects.toThrow();
+      const originalConfigPath = existsSync(owned)
+        ? join(owned, "project.json")
+        : join(workspace.root, ".dysflow", "project.json");
+      expect(readFileSync(originalConfigPath, "utf8")).toBe(original);
+      expect(existsSync(join(external, "project.json"))).toBe(false);
+    } finally {
+      workspace.cleanup();
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+  it("leaves the destination untouched when publication fails before rename", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const configPath = join(workspace.root, ".dysflow", "project.json");
+    const original = readFileSync(configPath, "utf8");
+    const config: DysflowConfig = {
+      configSource: "explicit-request",
+      allowWrites: true,
+      accessDbPath: join(workspace.root, "front.accdb"),
+      projectRoot: workspace.root,
+      timeoutMs: 30_000,
+    };
+    try {
+      await expect(
+        writeRelativeProjectConfig(config, workspace.root, () => {
+          throw new Error("pre-rename failure");
+        }),
+      ).rejects.toThrow("pre-rename failure");
+      expect(readFileSync(configPath, "utf8")).toBe(original);
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it.each([
+    true,
+    false,
+  ])("recovers the destination after a post-rename failure (previous config: %s)", async (withPrevious) => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const configPath = join(workspace.root, ".dysflow", "project.json");
+    const previous = readFileSync(configPath, "utf8");
+    if (!withPrevious) rmSync(configPath);
+    const config: DysflowConfig = {
+      configSource: "explicit-request",
+      allowWrites: true,
+      accessDbPath: join(workspace.root, "front.accdb"),
+      projectRoot: workspace.root,
+      timeoutMs: 30_000,
+    };
+    try {
+      await expect(
+        writeRelativeProjectConfig(config, workspace.root, undefined, () => {
+          throw new Error("post-rename failure");
+        }),
+      ).rejects.toThrow("post-rename failure");
+      expect(existsSync(configPath)).toBe(withPrevious);
+      if (withPrevious) expect(readFileSync(configPath, "utf8")).toBe(previous);
+    } finally {
+      workspace.cleanup();
+    }
+  });
   it("prints redacted config without --write-project", async () => {
     const workspace = makeWorkspace({ withAccessDb: true });
     try {
@@ -211,22 +356,58 @@ describe("handleSetupCommand — successful display", () => {
 // --set-project-id — creates project.json when it doesn't exist
 // ---------------------------------------------------------------------------
 describe("handleSetupCommand — --set-project-id with missing file", () => {
-  it("creates .dysflow/project.json when it does not exist yet", async () => {
+  it("requires --apply and never creates an identity-only config", async () => {
     const workspace = makeWorkspace({ withProjectJson: false });
     try {
       mkdirSync(join(workspace.root, ".dysflow"), { recursive: true });
 
-      const result = await handleSetupCommand(["--set-project-id", "my-new-project"], {
-        cwd: workspace.root,
-        env: {},
-      });
-
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(
-        "Updated project id in .dysflow/project.json: my-new-project",
+      const result = await handleSetupCommand(
+        ["--set-project-id", "my-new-project", "--cwd", workspace.root],
+        {
+          cwd: workspace.root,
+          env: {},
+        },
       );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("--apply");
+      expect(existsSync(join(workspace.root, ".dysflow", "project.json"))).toBe(false);
     } finally {
       workspace.cleanup();
+    }
+  });
+
+  it("updates a valid worktree config atomically when explicitly applied", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    try {
+      const result = await handleSetupCommand(
+        ["--set-project-id", "renamed", "--apply", "--cwd", workspace.root],
+        { cwd: tmpdir(), env: {} },
+      );
+      expect(result.exitCode).toBe(0);
+      expect(
+        JSON.parse(readFileSync(join(workspace.root, ".dysflow", "project.json"), "utf8")).id,
+      ).toBe("renamed");
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it("rejects --set-project-id when --cwd is not an owning worktree", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dysflow-setup-outside-"));
+    try {
+      mkdirSync(join(root, ".dysflow"));
+      writeFileSync(join(root, ".dysflow", "project.json"), JSON.stringify({ id: "old" }));
+      const result = await handleSetupCommand(
+        ["--set-project-id", "renamed", "--apply", "--cwd", root],
+        { env: {} },
+      );
+      expect(result.exitCode).toBe(1);
+      expect(JSON.parse(readFileSync(join(root, ".dysflow", "project.json"), "utf8")).id).toBe(
+        "old",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });
