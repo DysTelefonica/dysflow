@@ -32,6 +32,7 @@ describe("dysflow CLI help", () => {
         "  tui     Open the Dysflow terminal UI",
         "  serve   Start local HTTP API",
         "  access  Batch Access database operations (e.g. relink-directory)",
+        "  lint    Run static VBA source checks (e.g. lint callees)",
       ].join("\n"),
       stderr: "",
     });
