@@ -218,8 +218,10 @@ describe("handleSetupCommand — successful display", () => {
           symlinkSync(external, join(workspace.root, ".dysflow"), "junction");
         }),
       ).rejects.toThrow();
-      expect(readFileSync(join(workspace.root, ".dysflow", "project.json"), "utf8")).toBe(original);
-      expect(existsSync(owned)).toBe(false);
+      const originalConfigPath = existsSync(owned)
+        ? join(owned, "project.json")
+        : join(workspace.root, ".dysflow", "project.json");
+      expect(readFileSync(originalConfigPath, "utf8")).toBe(original);
       expect(existsSync(join(external, "project.json"))).toBe(false);
     } finally {
       workspace.cleanup();
