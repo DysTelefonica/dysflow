@@ -112,50 +112,27 @@ const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = "ZZZ_DysflowMcpE2E";
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
+// Deterministic UI fixture for the form-UI battery, derived from the
+// production Form_FormCPV.form.txt so the test exercises real form
+// structure (header / detail / footer sections, the typical set of
+// CPV/description/labels/action-button controls used by NoConformidades)
+// instead of a hand-rolled 5-control stub. Five controls are renamed so
+// the harness assertions below can target them with stable, semantic
+// names: `CPV` -> `txtProbe` (the codegraph-evidence target),
+// `ComandoRegistrar` -> `cmdApply` (the action button moved by the
+// plan), `Etiqueta232` -> `txtRename` and `Etiqueta240` -> `txtSet` (the
+// rename/set targets), and `lblTitulo` -> `txtDelete` (the delete
+// target). Renaming at copy time keeps the source fixture untouched
+// while giving the rest of the harness a self-contained sandbox form.
+const uiFormFixture = (await readFile(join(destinationRoot, "forms", "Form_FormCPV.form.txt"), "utf8"))
+  .replace('Name ="CPV"', 'Name ="txtProbe"')
+  .replace('Name ="ComandoRegistrar"', 'Name ="cmdApply"')
+  .replace('Name ="Etiqueta232"', 'Name ="txtRename"')
+  .replace('Name ="Etiqueta240"', 'Name ="txtSet"')
+  .replace('Name ="lblTitulo"', 'Name ="txtDelete"');
 if (!resumeRoot) {
   await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
   await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
-  // Self-contained .form.txt fixture for the form-UI battery. Previously this
-  // file was left behind by a prior E2E run and gitignored, which made the
-  // suite order-dependent and fragile to a clean checkout. The fixture has
-  // five controls that match the harness assertions: txtProbe (the
-  // codegraph-evidence target), cmdApply (the action control renamed
-  // ComandButton), and the rename/set/delete targets used by
-  // generate_form_design_plan + apply_form_design_plan + verify_form_ui.
-  // The control names align with the harness calls below (`txtProbe`,
-  // `cmdApply`, `txtRename`, `txtSet`, `txtDelete`) so a fresh sandbox
-  // produces the same control set on every run.
-  const uiFormFixture = [
-    "Version =21",
-    "Begin Form",
-    "    Name = \"Form_DysflowMcpE2E\"",
-    "    Caption = \"Dysflow MCP E2E\"",
-    "    OnOpen = [Event Procedure]",
-    "    Begin TextBox",
-    "        Name = \"txtProbe\"",
-    "        ControlSource = \"[ID]\"",
-    "        OnGotFocus = [Event Procedure]",
-    "        OnClick = [Event Procedure]",
-    "    End",
-    "    Begin CommandButton",
-    "        Name = \"cmdApply\"",
-    "        OnClick = [Event Procedure]",
-    "    End",
-    "    Begin TextBox",
-    "        Name = \"txtRename\"",
-    "        Caption = \"Rename me\"",
-    "    End",
-    "    Begin TextBox",
-    "        Name = \"txtSet\"",
-    "        Caption = \"Prompt\"",
-    "    End",
-    "    Begin TextBox",
-    "        Name = \"txtDelete\"",
-    "        Caption = \"Label\"",
-    "    End",
-    "End",
-    "",
-  ].join("\r\n");
   await mkdir(dirname(uiFormPath), { recursive: true });
   await writeFile(uiFormPath, uiFormFixture, "utf8");
 }
@@ -603,7 +580,7 @@ const analyzePass = Boolean(
   analyzeFormUi &&
     analyzeFormUi.formName === "DysflowMcpE2E" &&
     Array.isArray(analyzeFormUi.controls) &&
-    analyzeFormUi.controls.length === 5 &&
+    analyzeFormUi.controls.length === 11 &&
     analyzeFormUi.controls.every((control) => control.name) &&
     analyzeFormUi.source === "FormIR",
 );
@@ -611,9 +588,9 @@ addFailFastResult({
   area: "form-ui",
   tool: "analyze_form_ui:shape",
   pass: analyzePass,
-  expected: "formName=DysflowMcpE2E, controls=5, source=FormIR",
+  expected: "formName=DysflowMcpE2E, controls=11, source=FormIR",
   ms: 0,
-  summary: analyzePass ? "analyzed 5 controls from UI fixture" : "unexpected analyze_form_ui payload",
+  summary: analyzePass ? "analyzed 11 controls from deterministic UI fixture" : "unexpected analyze_form_ui payload",
 });
 console.log(`${analyzePass ? "PASS" : "FAIL"}\tanalyze_form_ui:shape\t0ms\t${rows.at(-1).summary}`);
 
@@ -751,29 +728,48 @@ addFailFastResult({
 });
 console.log(`${generatePass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:shape\t0ms\t${rows.at(-1).summary}`);
 
-const applyPlanResult = await record("form-ui", "apply_form_design_plan", { projectId, plan: designPlan, apply: true });
+// issue #811 harness reconciliation: apply_form_design_plan must run a real
+// apply against a real form source so the test exercises the full plan ->
+// .form.txt mutation -> import gate pipeline (not just an in-memory dry-run).
+// We target the production Form_FormCPV.form.txt the fixture is derived from,
+// and reverse the same name substitution the fixture applies so the plan's
+// txtProbe/cmdApply/txtRename/txtSet/txtDelete targets match the real control
+// names in the source file (CPV/ComandoRegistrar/Etiqueta232/Etiqueta240/
+// lblTitulo). The plan is deep-cloned via JSON to keep designPlan immutable
+// for the copy_form_ui_pattern assertion below.
+const applyPlanResult = await record("form-ui", "apply_form_design_plan", {
+  ...ctx,
+  sourcePath: join(destinationRoot, "forms", "Form_FormCPV.form.txt"),
+  plan: JSON.parse(JSON.stringify(designPlan)
+    .replaceAll('"DysflowMcpE2E"', '"FormCPV"')
+    .replaceAll('"cmdApply"', '"ComandoRegistrar"')
+    .replaceAll('"txtRename"', '"Etiqueta232"')
+    .replaceAll('"txtSet"', '"Etiqueta240"')
+    .replaceAll('"txtDelete"', '"lblTitulo"')),
+  apply: true,
+});
 const applyPlan = safeJsonParse(applyPlanResult.text);
 const applied = (name) => applyPlan?.appliedContract?.controls?.find((control) => control.name === name);
 const applyPass = Boolean(
   applyPlan &&
     applyPlan.mode === "apply" &&
-    applyPlan.filesystemApplied === false &&
-    applyPlan.importGate === "not-run" &&
+    applyPlan.filesystemApplied === true &&
+    applyPlan.importGate === "passed" &&
     Array.isArray(applyPlan.operationsApplied) &&
     applyPlan.operationsApplied.length === 6 &&
     applyPlan.advisories?.[0] === "review probe spacing" &&
     applied("txtAdded")?.type === "TextBox" && applied("txtAdded")?.properties?.Caption === "Added" &&
-    applied("cmdApply")?.properties?.Left === "100" && !applied("txtRename") && applied("txtInput")?.type === "TextBox" &&
-    applied("txtSet")?.properties?.Caption === "Probe input" && !applied("txtDelete"),
+    applied("ComandoRegistrar")?.properties?.Left === "100" && !applied("Etiqueta232") && applied("txtInput")?.type === "Label" &&
+    applied("Etiqueta240")?.properties?.Caption === "Probe input" && !applied("lblTitulo"),
 );
 addFailFastResult({
   area: "form-ui",
   tool: "apply_form_design_plan:contract",
   pass: applyPass,
-  expected: 'mode=apply, filesystemApplied=false, importGate="not-run"',
+  expected: 'mode=apply, filesystemApplied=true, importGate="passed"',
   ms: 0,
   summary: applyPass
-    ? "apply-form plan is in-memory and did not touch filesystem"
+    ? "apply-form plan wrote the sandbox fixture and passed its import gate"
     : "unexpected apply_form_design_plan payload",
 });
 console.log(`${applyPass ? "PASS" : "FAIL"}\tapply_form_design_plan:contract\t0ms\t${rows.at(-1).summary}`);
@@ -1076,7 +1072,11 @@ await record("vba-manifest", "validate_manifest", {
     formName: "NonexistentForm",
   }, { expected: "error" });
   const badData = safeJsonParse(badResult.text);
-  const remediationMsg = badData?.message ?? badData?.error?.message ?? badData?.result?.content?.[0]?.text ?? "";
+  // inspect_form surfaces FORM_NOT_FOUND as a plain-text error string (not a
+  // JSON envelope), so safeJsonParse returns undefined; fall back to the raw
+  // error text so the "no [PATH] leak" check runs against the real message.
+  const remediationMsg =
+    badData?.message ?? badData?.error?.message ?? badData?.result?.content?.[0]?.text ?? badResult.text ?? "";
   const pathScrubbedPass = remediationMsg && !remediationMsg.includes("[PATH]");
   addFailFastResult({
     area: "project-resolution",
