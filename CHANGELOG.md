@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.10.0] - 2026-07-14
+
+- Merge pull request #860 from DysTelefonica/feat/858-resumable-e2e - fix(e2e): harden resumable sandbox recovery (#858) - fix(e2e): preserve resumable suite quality gates (#858) - feat(e2e): resume MCP battery from safe checkpoints (#858) - Merge pull request #859 from DysTelefonica/fix/857-complete-form-controls - fix(e2e): complete synthetic form behavior controls (#857) - Merge pull request #856 from DysTelefonica/fix/850-inline-execution-contract - fix(vba): clarify inline result and cleanup contract (#850) - Merge pull request #855 from DysTelefonica/fix/851-link-tables-create-missing - feat(link_tables): create missing linked TableDefs in the runner (#851) - feat(link_tables): add opt-in create-or-relink API surface (#851) - fix(vba-sync): preserve form .cls linkage on form re-import (#849) (#854) - Merge pull request #853 from DysTelefonica/fix/852-non-canonical-form-name-resolver - fix(delete_module): delete non-canonical form document modules via DoCmd.DeleteObject (#852) - fix(forms): make Form_/Report_ source-path resolution idempotent (#852)
+
+
 ## [v2.9.3] - 2026-07-13
 
 - Merge pull request #848 from DysTelefonica/fix/847-query-maintenance-developer-mode-dryrun - fix(dispatch): forward normalizedInput in query-maintenance branch (#847)
