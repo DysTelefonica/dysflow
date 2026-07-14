@@ -86,17 +86,14 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     // regexes that match the actual code, not loose `indexOf` over the whole
     // file (which would catch comments too).
     const toolsListCallRegex = /record\(\s*"protocol"\s*,\s*"tools\/list"\s*\)/;
-    const advertisedRowPushRegex =
-      /rows\.push\(\{\s*area:\s*"protocol"\s*,\s*tool:\s*"advertised-tool-count"/;
+    const advertisedResultRegex =
+      /addFailFastResult\(\{\s*area:\s*"protocol"\s*,\s*tool:\s*"advertised-tool-count"/;
 
     const toolsListMatch = src.match(toolsListCallRegex);
-    const advertisedMatch = src.match(advertisedRowPushRegex);
+    const advertisedMatch = src.match(advertisedResultRegex);
     expect(toolsListMatch, 'no `record("protocol", "tools/list")` call found').not.toBeNull();
-    expect(
-      advertisedMatch,
-      'no `rows.push({ area: "protocol", tool: "advertised-tool-count" })` row found',
-    ).not.toBeNull();
-    // The actual record() invocation index must precede the rows.push index.
+    expect(advertisedMatch, "no advertised-tool-count result emission found").not.toBeNull();
+    // The actual record() invocation index must precede the result emission index.
     const toolsListIdx = toolsListMatch?.index ?? 0;
     const advertisedIdx = advertisedMatch?.index ?? 0;
     expect(
@@ -167,14 +164,15 @@ describe("mcp-e2e.mjs — orphan-detection invariants", () => {
     // battery". Removing it lets the orphan-count invariant regress
     // silently. Must contain `lingering-access-check`.
     expect(src).toContain("lingering-access-check");
-    // Must be pushed AFTER all other rows. Locate the last `rows.push` for
-    // lingering-access-check and assert it comes after every `record()`
-    // call. Cheaper check: the literal `"lingering-access-check"` must
-    // appear AFTER `record("zombies"` (the section before it).
-    const lingeringIdx = src.lastIndexOf("lingering-access-check");
-    const zombiesIdx = src.lastIndexOf('"zombies"');
-    expect(zombiesIdx).toBeGreaterThan(-1);
-    expect(lingeringIdx).toBeGreaterThan(zombiesIdx);
+    // The final audit must be emitted through the unchecked reporting port:
+    // it records the failure before the controller persists and throws it.
+    const finalOperation = src.match(/tool:\s*"inspect_form:miss-remediation-no-path-scrub"/);
+    const audit = src.match(
+      /appendUnchecked\(\{\s*area:\s*"zombies"\s*,\s*tool:\s*"lingering-access-check"/,
+    );
+    expect(finalOperation, "final battery operation not found").not.toBeNull();
+    expect(audit, "final lingering-access-check audit not found").not.toBeNull();
+    expect(audit?.index).toBeGreaterThan(finalOperation?.index ?? Number.MAX_SAFE_INTEGER);
   });
 });
 

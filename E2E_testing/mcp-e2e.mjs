@@ -1,10 +1,20 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
+import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
+import {
+  assertSafeResumeRoot,
+  createResultRows,
+  createPhaseSnapshots,
+  createResumeController,
+  hashRunIdentity,
+  parseResumeArgs,
+  readCheckpoint,
+  validateCheckpoint,
+} from "./_helpers/mcp-e2e-resume.mjs";
 import {
   isPidOrDescendantAlive,
   record as recordImpl,
@@ -18,9 +28,26 @@ import {
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const projectId = "noconformidades-e2e";
+if (process.argv.includes("--release")) process.env.DYSFLOW_E2E_RELEASE_GATE = "1";
+let resumeRoot;
+try {
+  resumeRoot = parseResumeArgs(process.argv.slice(2));
+  if (resumeRoot) {
+    assertSafeResumeRoot(resumeRoot, { repoRoot, scriptDir });
+    resumeRoot = await assertSafeExistingSandboxRoot(resumeRoot, {
+      repoRoot,
+      scriptDir,
+      sandboxParent: process.env.DYSFLOW_E2E_SANDBOX_ROOT,
+    });
+  }
+} catch (error) {
+  console.error(`[mcp-e2e] ${(error && error.message) || error}`);
+  process.exit(1);
+}
 const sandboxPlan = buildMcpE2eSandboxPlan({
   scriptDir,
   sandboxRoot: process.env.DYSFLOW_E2E_SANDBOX_ROOT,
+  existingRoot: resumeRoot,
 });
 const tempRoot = sandboxPlan.sandbox.root;
 const accessPath = sandboxPlan.sandbox.accessPath;
@@ -50,7 +77,7 @@ console.log(`[mcp-e2e] Using dysflow runtime: ${cliCommand} (source: ${resolvedC
 // instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
 // production install. `resolveDefaultRunnerScriptPath` returns
 // `${DYSFLOW_HOME}/app/scripts/dysflow-access-runner.ps1` when the env var is
-// set, and falls back to a relative path otherwise — and the E2E's cwd is
+// set, and falls back to a relative path otherwise â€” and the E2E's cwd is
 // `E2E_testing/`, not the repo root, so the relative fallback would not find
 // the script. Set the env var explicitly to the repo-local test-runtime.
 process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
@@ -68,35 +95,78 @@ for (const [label, fixturePath] of [["accessPath", sandboxPlan.source.accessPath
   }
 }
 
-await rm(tempRoot, { recursive: true, force: true });
-await mkdir(tempRoot, { recursive: true });
-await cp(sandboxPlan.source.accessPath, accessPath);
-await cp(sandboxPlan.source.backendPath, backendPath);
-await cp(sandboxPlan.source.destinationRoot, destinationRoot, { recursive: true });
-await mkdir(sandboxPlan.sandbox.exportsRoot, { recursive: true });
-await mkdir(sandboxPlan.sandbox.pruneExportPath, { recursive: true });
-await mkdir(sandboxPlan.sandbox.erdPath, { recursive: true });
+if (!resumeRoot) {
+  await rm(tempRoot, { recursive: true, force: true });
+  await mkdir(tempRoot, { recursive: true });
+  await cp(sandboxPlan.source.accessPath, accessPath);
+  await cp(sandboxPlan.source.backendPath, backendPath);
+  await cp(sandboxPlan.source.destinationRoot, destinationRoot, { recursive: true });
+  await mkdir(sandboxPlan.sandbox.exportsRoot, { recursive: true });
+  await mkdir(sandboxPlan.sandbox.pruneExportPath, { recursive: true });
+  await mkdir(sandboxPlan.sandbox.erdPath, { recursive: true });
+}
 
 const sqlScript = sandboxPlan.sandbox.sqlScript;
 const formSpec = sandboxPlan.sandbox.formSpec;
 const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
-const probeTable = `ZZZ_DysflowMcpE2E_${Date.now()}`;
+const probeTable = "ZZZ_DysflowMcpE2E";
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
-await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
-await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
+if (!resumeRoot) {
+  await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
+  await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
+}
 
 const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: tempRoot };
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
-const rows = [];
+const { rows, addFailFastResult, appendUnchecked } = createResultRows();
 const existingModuleName = "Funciones Generales";
 
 // Stop-on-fail scope: the E2E only watches MSACCESS.EXE processes it
 // spawned itself. PIDs from other Dysflow consumers (e.g. gestion_riesgos
 // running concurrently on the same host) are out of scope. The driver
 // records the `childPid` returned by every `callMcp` and the zombie
-// checks verify only those PIDs — never a global MSACCESS.EXE scan.
+// checks verify only those PIDs â€” never a global MSACCESS.EXE scan.
 const suiteOwnPids = new Set();
+const runIdentity = await hashRunIdentity([
+  cliCommand,
+  join(dirname(cliCommand), "dist"),
+  fileURLToPath(import.meta.url),
+  join(scriptDir, "_helpers", "mcp-e2e-resume.mjs"),
+  join(scriptDir, "_helpers", "mcp-e2e-sandbox.mjs"),
+  join(scriptDir, "_helpers", "mcp-e2e-record.mjs"),
+  join(scriptDir, "_helpers", "mcp-harness.mjs"),
+  sandboxPlan.source.accessPath,
+  sandboxPlan.source.backendPath,
+  sandboxPlan.source.destinationRoot,
+]);
+const mutatingAreas = new Set([
+  "maintenance", "links", "write", "vba-sync", "forms", "form-ui", "query/import_queries",
+]);
+const phaseSnapshots = createPhaseSnapshots(tempRoot, [
+  accessPath,
+  backendPath,
+  destinationRoot,
+  sandboxPlan.sandbox.exportsRoot,
+  sandboxPlan.sandbox.erdPath,
+]);
+let resumedCheckpoint;
+if (resumeRoot) {
+  resumedCheckpoint = await readCheckpoint(tempRoot);
+  await validateCheckpoint(resumedCheckpoint, {
+    identity: runIdentity,
+    sandboxRoot: tempRoot,
+    isOwnedPidAlive: (pid) => isOwnPidAlive(pid),
+  });
+}
+const resumeController = createResumeController({
+  root: tempRoot,
+  identity: runIdentity,
+  resumedCheckpoint,
+  mutatingAreas,
+  snapshotSandbox: (area) => phaseSnapshots.snapshot(area),
+  restoreSandbox: (area) => phaseSnapshots.restore(area),
+});
 let advertised = [];
 
 function toolText(message) {
@@ -140,28 +210,55 @@ async function callMcp(method, params = {}, options = {}) {
       DYSFLOW_BACKEND_PASSWORD: password,
     },
   });
-  return await runMcpHarness({
-    child,
-    requestId: 2,
-    method,
-    params,
-    timeoutMs: options.timeoutMs ?? timeoutMs,
-    closeWatchdogMs: options.closeWatchdogMs ?? closeWatchdogMs,
-  });
+  const childPid = child.pid;
+  if (childPid) {
+    suiteOwnPids.add(childPid);
+    await resumeController.registerOwnedPid(childPid);
+  }
+  try {
+    return await runMcpHarness({
+      child,
+      requestId: 2,
+      method,
+      params,
+      timeoutMs: options.timeoutMs ?? timeoutMs,
+      closeWatchdogMs: options.closeWatchdogMs ?? closeWatchdogMs,
+    });
+  } finally {
+    if (childPid && !isOwnPidAlive(childPid)) {
+      suiteOwnPids.delete(childPid);
+      await resumeController.clearOwnedPid(childPid);
+    }
+  }
 }
 
 // Context handed to the extracted `record()` helper. The helper is the
 // single source of truth for REFUSE-START / STOP-ON-FAIL / per-tool
 // zombie check; vitest imports the same helper with fakes to pin the
 // contract (test/quality-gates/mcp-e2e-stop-on-fail.test.ts).
-const recordCtx = { callMcp, suiteOwnPids, rows, waitForNoOwnPids, isOwnPidAlive, normalize };
+const recordCtx = {
+  callMcp,
+  suiteOwnPids,
+  rows: { push: appendUnchecked, at: (...args) => rows.at(...args) },
+  waitForNoOwnPids,
+  isOwnPidAlive,
+  normalize,
+};
 
 async function record(area, tool, args = {}, options = {}) {
-  // Thin wrapper that hands the suite's dependencies to the extracted
-  // helper. All preflight / stop-on-fail / zombie-check logic now lives
-  // in `_helpers/mcp-e2e-record.mjs` so vitest can exercise the real
-  // driver against injected fakes (see test/quality-gates/mcp-e2e-stop-on-fail.test.ts).
-  return recordImpl(recordCtx, { area, tool, args, options });
+  const step = await resumeController.before(area, tool);
+  if (step.cached) {
+    console.log(`RESUME-SKIP\t${step.id}\tcheckpoint PASS`);
+    return step.cached;
+  }
+  try {
+    const result = await recordImpl(recordCtx, { area, tool, args, options });
+    await resumeController.pass(step.id, area, result);
+    return result;
+  } catch (error) {
+    await resumeController.fail(step.id, area, suiteOwnPids);
+    throw error;
+  }
 }
 
 let abortedDueToFailure = false;
@@ -169,11 +266,20 @@ try {
   await runBattery();
 } catch (err) {
   abortedDueToFailure = true;
+  const failedRow = rows.at(-1);
+  if (failedRow && !failedRow.pass) {
+    await resumeController.fail(
+      `assert/${failedRow.area}/${failedRow.tool}`,
+      failedRow.area,
+      suiteOwnPids,
+      { invalidateLast: true },
+    );
+  }
   console.error(`[mcp-e2e] Battery aborted: ${(err && err.message) || err}`);
 }
 
 async function runBattery() {
-// #586 — `tools/list` MUST be called via `record()` so the suite-owned
+// #586 â€” `tools/list` MUST be called via `record()` so the suite-owned
 // child PID is tracked; do NOT call it via a separate `callMcp`. The
 // returned row also feeds the advertised-tool-count preflight check
 // below. `list.response.result.tools` is the MCP server's `tools/list`
@@ -181,11 +287,11 @@ async function runBattery() {
 const list = await record("protocol", "tools/list");
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
-// test/adapters/mcp/advertised-tool-count.test.ts — both import the same constant
+// test/adapters/mcp/advertised-tool-count.test.ts â€” both import the same constant
 // from _helpers/advertised-tool-count.mjs, so a future add/remove flips one place.
-rows.push({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
+addFailFastResult({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
 const missingIssue713Tools = ISSUE_713_REQUIRED_TOOLS.filter((name) => !advertised.includes(name));
-rows.push({
+addFailFastResult({
   area: "protocol",
   tool: "issue-713-required-tools-advertised",
   pass: missingIssue713Tools.length === 0,
@@ -199,7 +305,7 @@ rows.push({
 await record("diagnostics", "doctor", { projectId, includeEnvironment: true });
 await record("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
 await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
-// #786 regression — inline execution must run a snippet and return its `result`.
+// #786 regression â€” inline execution must run a snippet and return its `result`.
 // (record() asserts the transport did not error; the deep inner-ok + returnValue
 // assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
 await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' }, { timeoutMs: 120000 });
@@ -207,13 +313,13 @@ await record("operations", "list_access_operations", {});
 await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
-// Same harness shape as every other tool — record() runs the call through the suite-owned
+// Same harness shape as every other tool â€” record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
 await record("capabilities", "get_capabilities", { projectId });
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
-  // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
+  // Drift here means the unit test pin and the live MCP server disagree â€” flag it loudly.
   const crossStart = Date.now();
   const cross = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
   const crossMs = Date.now() - crossStart;
@@ -232,7 +338,7 @@ await record("capabilities", "get_capabilities", { projectId });
         : `drift: snapshot.toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length}`,
     };
   })();
-  rows.push({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
+  addFailFastResult({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
   console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tget_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
 }
 
@@ -253,14 +359,14 @@ await record("query", "import_queries", { projectId, accessPath, queryDefinition
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, dryRun: true, backupFirst: false });
 // compact_repair APPLY on a COPY of the password-protected frontend (non-destructive).
 // dry-run never calls DAO CompactDatabase, so this is the only E2E that actually compacts a
-// protected database — it guards the source-password (5th DAO arg) fix.
+// protected database â€” it guards the source-password (5th DAO arg) fix.
 const compactApplyTarget = join(tempRoot, "compact-apply-target.accdb");
 await cp(accessPath, compactApplyTarget);
 await record("maintenance", "compact_repair", { projectId, accessPath: compactApplyTarget, apply: true, backupFirst: true });
 await record("links", "link_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "relink_tables", { projectId, accessPath, backendPath, dryRun: false });
 await record("links", "localize_backend_links", { projectId, accessPath, backendPath, dryRun: false });
-// The non-existent table is the negative case — unlink_table now fails
+// The non-existent table is the negative case â€” unlink_table now fails
 // with CONFIG_MISSING_TARGET_PATH when the table cannot be resolved
 // against the configured frontend/backend (the prior "empty result" no-op
 // was masking a target-resolution miss). Expected: structured error.
@@ -282,24 +388,24 @@ await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, dif
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
 // prune does a full project export plus an orphan scan, so it is heavier than a plain
-// export_all — give the operation (and the harness) ample time on large fixtures.
+// export_all â€” give the operation (and the harness) ample time on large fixtures.
 const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, timeoutMs: 120000 }, { timeoutMs: 120000 });
 try {
   const pruneData = JSON.parse(pruneResult.text ?? "{}");
   const ok = pruneData.prune !== undefined && typeof pruneData.prune.applied === "boolean";
-  rows.push({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
+  addFailFastResult({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
   console.log(`${ok ? "PASS" : "FAIL"}\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  rows.push({ area: "vba-sync", tool: "export_all:prune-report", pass: false, expected: "parseable JSON with prune report", ms: 0, summary: String(err) });
+  addFailFastResult({ area: "vba-sync", tool: "export_all:prune-report", pass: false, expected: "parseable JSON with prune report", ms: 0, summary: String(err) });
   console.log(`FAIL\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
 }
 // Guard: prune + filter must be rejected (a filtered prune would delete everything else).
 await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, filter: existingModuleName }, { expected: "error" });
-// feat-759-no-compile (v1.19.0) — `compile` parameter on import_tools
+// feat-759-no-compile (v1.19.0) â€” `compile` parameter on import_tools
 // is gone. Callers passing it are rejected by Zod additionalProperties:false.
 await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true });
 await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true });
-// feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool was removed.
+// feat-759-no-compile (v1.19.0) â€” the `compile_vba` MCP tool was removed.
 // The mojibake-state pin test was retired; compile is no longer a
 // runtime concern (the human compiles in Access). The fixture binary's
 // mojibake is still real but no longer surfaces as a structured
@@ -308,7 +414,7 @@ await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expecte
 // verify_code exports every requested module to a temp dir and compares line
 // by line against the binary's VBA source. On the 131-component fixture
 // (`E2E_testing/NoConformidades.accdb`) the round-trip plus 131 module
-// exports runs well over the 30s default — 180s leaves headroom for the
+// exports runs well over the 30s default â€” 180s leaves headroom for the
 // Access COM open / export / close cycle per module.
 const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: false, timeoutMs: 180000 }, { timeoutMs: 180000 });
 // Semantic path assertion: verify_code now runs in semantic mode by default.
@@ -316,14 +422,14 @@ const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNam
 try {
   const verifyData = JSON.parse(verifyResult.text ?? "{}");
   const hasSemanticFields = "summary" in verifyData && "hasFunctionalDifferences" in verifyData && "actionableOk" in verifyData;
-  rows.push({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: hasSemanticFields, expected: "summary+hasFunctionalDifferences+actionableOk present", ms: 0, summary: hasSemanticFields ? "semantic fields present" : `missing fields in: ${Object.keys(verifyData).join(",")}` });
+  addFailFastResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: hasSemanticFields, expected: "summary+hasFunctionalDifferences+actionableOk present", ms: 0, summary: hasSemanticFields ? "semantic fields present" : `missing fields in: ${Object.keys(verifyData).join(",")}` });
   console.log(`${hasSemanticFields ? "PASS" : "FAIL"}\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  rows.push({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: false, expected: "parseable JSON with semantic fields", ms: 0, summary: String(err) });
+  addFailFastResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: false, expected: "parseable JSON with semantic fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 }
 // verify_code single-module: the unified tool covers the old compare_module via a moduleNames filter.
-// Same 180s budget as the full pass above (line 241) — even a single-module
+// Same 180s budget as the full pass above (line 241) â€” even a single-module
 // call walks the module + runs semantic diff + serializes the per-module
 // diff payload, which on a 600-line module clears the 30s default.
 const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true, timeoutMs: 180000 }, { timeoutMs: 180000 });
@@ -331,14 +437,14 @@ const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, mod
 try {
   const smData = JSON.parse(singleModuleResult.text ?? "{}");
   const hasModuleFields = smData.operation === "verify_code" && "ok" in smData && "recommendedAction" in smData;
-  rows.push({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
+  addFailFastResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
   console.log(`${hasModuleFields ? "PASS" : "FAIL"}\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  rows.push({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
+  addFailFastResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 }
 
-// Round 5 / PR5 (v2.4.0) — verify_code returns bulkImportable as a drop-in
+// Round 5 / PR5 (v2.4.0) â€” verify_code returns bulkImportable as a drop-in
 // for import_modules. This is the real consumer flow: the fleet consumer
 // (expedientes round 5) reads verify_code.summaryStructured + bulkImportable
 // + bulkExportable, and passes bulkImportable straight to import_modules
@@ -347,7 +453,7 @@ try {
 //
 // DEFERRED in this environment: the frontend .accdb fixture is not present
 // in the working tree (only .bak-* snapshots of the backend). The block is
-// wired and ready to run as soon as the fixture is restored — see the
+// wired and ready to run as soon as the fixture is restored â€” see the
 // fixture copy loop at the top of this file (the "Missing E2E fixture"
 // guard at line ~63). Marked pass:true so the absence does NOT fail the
 // suite; the mem_save observation records the deferral.
@@ -387,7 +493,7 @@ let bulkImportableFlowSummary = "DEFERRED: frontend .accdb fixture not present i
     }
   }
 }
-rows.push({
+addFailFastResult({
   area: "vba-sync",
   tool: "verify_code:bulkImportable:import_modules",
   pass: bulkImportableFlowPass,
@@ -407,7 +513,7 @@ const hasDeletePlanForMissing = Boolean(
     Array.isArray(deleteModuleMissingPlan.modulesPlanned) &&
     deleteModuleMissingPlan.modulesPlanned.includes("DysflowMcpE2EMissing"),
 );
-rows.push({
+addFailFastResult({
   area: "vba-sync",
   tool: "delete_module:missing-module-plan",
   pass: hasDeletePlanForMissing,
@@ -435,7 +541,7 @@ const missingFormUiTools = [
   "copy_form_ui_pattern",
   "verify_form_ui",
 ].filter((name) => !advertised.includes(name));
-rows.push({
+addFailFastResult({
   area: "protocol",
   tool: "form-ui-tools-advertised",
   pass: missingFormUiTools.length === 0,
@@ -447,7 +553,7 @@ rows.push({
 });
 console.log(`${missingFormUiTools.length === 0 ? "PASS" : "FAIL"}\tform-ui-tools-advertised\t0ms\t${rows.at(-1).summary}`);
 
-// form-ui (issue #795) — offline analysis + plan/verify surface for AI-assisted UI work.
+// form-ui (issue #795) â€” offline analysis + plan/verify surface for AI-assisted UI work.
 const analyzeFormUiResult = await record("form-ui", "analyze_form_ui", { projectId, sourcePath: uiFormPath });
 const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
 const analyzePass = Boolean(
@@ -458,7 +564,7 @@ const analyzePass = Boolean(
     analyzeFormUi.controls.every((control) => control.name) &&
     analyzeFormUi.source === "FormIR",
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "analyze_form_ui:shape",
   pass: analyzePass,
@@ -477,7 +583,7 @@ const analyzeAliasPass = Boolean(
     Array.isArray(analyzeFormUiAlias.controls) &&
     analyzeFormUiAlias.controls.length === analyzeFormUi?.controls?.length,
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "analyze_form_ui:path-alias",
   pass: analyzeAliasPass,
@@ -556,7 +662,7 @@ const mapPass = Boolean(
     behaviorMap.unmappedEvidence.length === 1 &&
     behaviorMap.unmappedEvidence[0]?.handler === "orphan_Handler",
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "map_form_behavior:mapping-shape",
   pass: mapPass,
@@ -592,7 +698,7 @@ const generatePass = Boolean(
     designPlan.operations.length === 6 &&
     designPlan.operations.map(({ kind }) => kind).join(",") === "add-control,move-control,rename-control,set-property,delete-control,note",
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "generate_form_design_plan:shape",
   pass: generatePass,
@@ -617,7 +723,7 @@ const applyPass = Boolean(
     applied("cmdApply")?.properties?.Left === "100" && !applied("txtRename") && applied("txtInput")?.type === "TextBox" &&
     applied("txtSet")?.properties?.Caption === "Probe input" && !applied("txtDelete"),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "apply_form_design_plan:contract",
   pass: applyPass,
@@ -649,7 +755,7 @@ const copyPass = Boolean(
     copyPlan.operations.length === 1 &&
     copyPlan.operations[0].kind === "note",
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "copy_form_ui_pattern:shape",
   pass: copyPass,
@@ -683,7 +789,7 @@ const verifyCleanPass = Boolean(
     Array.isArray(verifyClean.findings) &&
     verifyClean.findings.some(({ code, controlName }) => code === "FORM_UI_CONTROL_MISSING" && controlName === "txtProbe"),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "verify_form_ui:applied-drift",
   pass: verifyCleanPass,
@@ -707,7 +813,7 @@ const missingPathPass = Boolean(
       analyzeMissingErrorCode === undefined &&
         String(analyzeMissingPath.text ?? "").toLowerCase().includes("form_ui_analysis_failed")),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "analyze_form_ui:error-path",
   pass: Boolean(missingPathPass),
@@ -734,7 +840,7 @@ const emptyEvidencePass = Boolean(
     Array.isArray(emptyEvidenceMap.unmappedEvidence) &&
     emptyEvidenceMap.unmappedEvidence.length === 0,
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "map_form_behavior:empty-evidence",
   pass: emptyEvidencePass,
@@ -756,7 +862,7 @@ const generateMissingPass = Boolean(
     (generateMissingErrorCode === "FORM_SPEC_MISSING" ||
       generateMissingErrorCode === "MCP_INPUT_INVALID"),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "generate_form_design_plan:error-path",
   pass: Boolean(generateMissingPass),
@@ -777,7 +883,7 @@ const applyDryRunPass = Boolean(
     applyDryRun.importGate === "not-run" &&
     Array.isArray(applyDryRun.operationsApplied),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "apply_form_design_plan:dry-run",
   pass: applyDryRunPass,
@@ -802,7 +908,7 @@ const verifyPass = Boolean(
     Array.isArray(formUiVerifyResult.findings) &&
     formUiVerifyResult.findings.some((finding) => finding.code === "FORM_UI_EVENT_DRIFT"),
 );
-rows.push({
+addFailFastResult({
   area: "form-ui",
   tool: "verify_form_ui:drift-detection",
   pass: verifyPass,
@@ -816,10 +922,10 @@ await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedur
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
 
-// issue #701 — read-only VBA procedure introspection tools. These tests
+// issue #701 â€” read-only VBA procedure introspection tools. These tests
 // exercise both new visible MCP tools (`list_procedures` and
 // `get_procedure`) through a live `tools/call` JSON-RPC round-trip.
-// Inline `source` is used to keep these rows hermetic — the inline path does
+// Inline `source` is used to keep these rows hermetic â€” the inline path does
 // NOT touch Access or the project filesystem, so the success path does not
 // depend on the fixture's actual modules being present. A second pair of
 // rows covers the project's on-disk source tree (via `existingModuleName`)
@@ -870,7 +976,7 @@ await record("vba-introspection", "list_procedures", {
 // sandbox's `destinationRoot`. Use the existing fixture module the suite
 // already exercises (`existingModuleName`) to prove the disk path is
 // wired correctly end-to-end. Pass the E2E_testing/ source tree (the
-// configured project's source root, NOT the sandbox's copy) — the security
+// configured project's source root, NOT the sandbox's copy) â€” the security
 // check inside `resolveVbaSourceFile` rejects any caller-supplied
 // `destinationRoot` that does not match the configured root, so a
 // sandbox-root `destinationRoot` would falsely fail with MODULE_NOT_FOUND.
@@ -888,7 +994,7 @@ await record("vba-manifest", "validate_manifest", {
   modules: { DysflowMcpE2EInline: inlineSourceFixture },
 });
 
-// Phase 4 — real projectId resolution E2E against the existing
+// Phase 4 â€” real projectId resolution E2E against the existing
 // `E2E_testing/.dysflow/project.json` fixture (id: noconformidades-e2e,
 // destinationRoot: "src"). Reuses the tracked fixture so the test is
 // idempotent and never collateral-deletes tracked files. The success
@@ -909,7 +1015,7 @@ await record("vba-manifest", "validate_manifest", {
   });
   const innerData = safeJsonParse(inspectResult.text);
   const inspectPass = Boolean(innerData && innerData.name === "FormCPV");
-  rows.push({
+  addFailFastResult({
     area: "project-resolution",
     tool: "inspect_form:resolved-projectId",
     pass: inspectPass,
@@ -929,7 +1035,7 @@ await record("vba-manifest", "validate_manifest", {
   const badData = safeJsonParse(badResult.text);
   const remediationMsg = badData?.message ?? badData?.error?.message ?? badData?.result?.content?.[0]?.text ?? "";
   const pathScrubbedPass = remediationMsg && !remediationMsg.includes("[PATH]");
-  rows.push({
+  addFailFastResult({
     area: "project-resolution",
     tool: "inspect_form:miss-remediation-no-path-scrub",
     pass: pathScrubbedPass,
@@ -945,7 +1051,7 @@ await record("vba-manifest", "validate_manifest", {
 // and if the parent is gone, walks its descendant tree via wmic to detect
 // grandchildren (e.g. an MSACCESS.EXE spawned by a PowerShell that the
 // harness itself spawned). The OS rejects the signal (ESRCH) when the
-// process is gone. We never scan global MSACCESS.EXE — only the PIDs this
+// process is gone. We never scan global MSACCESS.EXE â€” only the PIDs this
 // E2E itself spawned. The descendant walk is delegated to the helper so
 // vitest tests and the E2E suite share the same implementation.
 function isOwnPidAlive(pid) {
@@ -955,7 +1061,7 @@ function isOwnPidAlive(pid) {
 async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
   const start = Date.now();
   // Check all known suite-owned PIDs (a single tool may leave more than
-  // one — e.g. a child PowerShell that itself spawned MSACCESS.EXE).
+  // one â€” e.g. a child PowerShell that itself spawned MSACCESS.EXE).
   const watched = Array.from(suiteOwnPids);
   while (true) {
     const survivors = watched.filter((p) => isOwnPidAlive(p));
@@ -973,22 +1079,23 @@ async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
 // battery. If it grows by more than 1, the e2e leaked a process that
 // escaped the suiteOwnPids watch list (e.g. a PS script that spawned
 // MSACCESS.EXE outside the harness child process). Cheap global check
-// — no extra run, no extra tools, just `(Get-Process -Name MSACCESS
+// â€” no extra run, no extra tools, just `(Get-Process -Name MSACCESS
 // -ErrorAction SilentlyContinue).Count` at start and end.
 const PRUDENT_ZOMBIE_DELAY_MS = 1000;
 const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
 const LINGERING_OWN_PID_POLL_MS = 100;
 let hasLingeringAccess = false;
 let finalZombieMs = 0;
+let finalZombie;
 let globalMsAccessLeak = 0;
 const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCESS_COUNT ?? ""}`) || (() => {
   try { return Number(`${spawnSync("powershell.exe", ["-NoProfile", "-Command", "(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count"], { encoding: "utf8" }).stdout?.trim()}`) || 0; } catch { return 0; }
 })();
 
-if (!abortedDueToFailure) {
+{
   console.error(`prudentDelayMs=${PRUDENT_ZOMBIE_DELAY_MS} (waiting before final lingering-access check on suite-owned PIDs)`);
   await new Promise((r) => setTimeout(r, PRUDENT_ZOMBIE_DELAY_MS));
-  const finalZombie = await waitForNoOwnPids(LINGERING_OWN_PID_TIMEOUT_MS, LINGERING_OWN_PID_POLL_MS);
+  finalZombie = await waitForNoOwnPids(LINGERING_OWN_PID_TIMEOUT_MS, LINGERING_OWN_PID_POLL_MS);
   hasLingeringAccess = finalZombie.found;
   finalZombieMs = finalZombie.elapsed;
 
@@ -996,7 +1103,7 @@ if (!abortedDueToFailure) {
   // The suite intentionally leaves the global count out of scope for
   // in-suite checks (other consumers may legitimately run MSACCESS.EXE).
   // For the battery's own leak detection, we only flag a DELTA from start
-  // to end-of-battery — not the absolute count. A delta of 0 is the
+  // to end-of-battery â€” not the absolute count. A delta of 0 is the
   // happy path; a delta > 0 means WE leaked a process that escaped
   // suiteOwnPids (e.g. PS spawned MSACCESS.EXE outside the harness).
   try {
@@ -1016,7 +1123,7 @@ if (!abortedDueToFailure) {
       `leakDelta=${globalMsAccessLeak}`,
   );
 }
-rows.push({
+appendUnchecked({
   area: "zombies",
   tool: "lingering-access-check",
   pass: !hasLingeringAccess && globalMsAccessLeak === 0,
@@ -1032,6 +1139,14 @@ rows.push({
     return "No suite-owned MSACCESS.EXE lingering; no global MSACCESS.EXE leak.";
   })(),
 });
+if (hasLingeringAccess || globalMsAccessLeak > 0) {
+  await resumeController.fail(
+    "zombies/lingering-access-check",
+    "zombies",
+    suiteOwnPids,
+    { invalidateLast: true },
+  );
+}
 
 if (hasLingeringAccess) {
   console.error("Assertion failed: suite-owned MSACCESS.EXE processes detected at the end of the E2E execution!");
@@ -1049,6 +1164,7 @@ if (abortedDueToFailure || failed.length > 0 || process.env.DYSFLOW_E2E_PRESERVE
   console.log(`Sandbox preserved: ${tempRoot}`);
 } else {
   await rm(tempRoot, { recursive: true, force: true });
+  await rm(phaseSnapshots.root, { recursive: true, force: true });
   console.log("Sandbox cleaned after successful MCP E2E run. Set DYSFLOW_E2E_PRESERVE_SANDBOX=1 to keep it for inspection.");
 }
 process.exitCode = failed.length > 0 || abortedDueToFailure ? 1 : 0;

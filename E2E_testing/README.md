@@ -4,6 +4,21 @@ Canonical real-world validation for `dysflow mcp`. Exercises the live stdio MCP 
 real Microsoft Access frontend/backend pair. The acceptance criterion for changes is **not** unit
 tests alone: `dysflow mcp` must work end-to-end against Access before a release ships.
 
+## Fast recovery after an E2E failure
+
+Use this AI/debug loop; do not replay the full battery after every fix:
+
+1. Run `pnpm test:e2e:mcp`. It stops at the first tool, semantic, or owned-process failure.
+2. Keep the printed sandbox path; `mcp-e2e-checkpoint.json` is its cursor.
+3. Fix the defect. Never kill `MSACCESS.EXE` by process name.
+4. Resume: `pnpm test:e2e:mcp:resume -- "C:\absolute\path\to\dysflow-mcp-e2e-..."`.
+
+Read-only failures retry at the failed step. Partial Access writes restore their snapshot and replay
+**only that phase**. Resume refuses unsafe paths, incompatible checkpoints, or live owned PIDs.
+
+Resume is diagnostic only. Release requires the fresh full gate, which refuses `--resume`:
+`pnpm test:e2e:mcp:release`.
+
 ## Testing strategy — when to run what
 
 E2E is **expensive**: it spawns real `MSACCESS.EXE` processes, holds Access locks for several
