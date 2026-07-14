@@ -29,11 +29,11 @@ export function createResultRows() {
 export function parseResumeArgs(argv, env = process.env) {
   const index = argv.indexOf("--resume");
   if (index < 0) return undefined;
-  const root = argv[index + 1];
-  if (!root || !isAbsolute(root)) throw new Error("--resume requires an absolute sandbox root");
   if (env.DYSFLOW_E2E_RELEASE_GATE === "1" || argv.includes("--release")) {
     throw new Error("Release-gate E2E must be a fresh full run; --resume is refused");
   }
+  const root = argv[index + 1];
+  if (!root || !isAbsolute(root)) throw new Error("--resume requires an absolute sandbox root");
   return resolve(root);
 }
 export async function hashRunIdentity(paths) {

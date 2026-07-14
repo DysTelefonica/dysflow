@@ -68,9 +68,9 @@ describe("mcp-e2e.mjs — global MSACCESS.EXE leak guard (#fix-msaccess-global-z
     // Pin the combined `pass:` predicate. Reverting to the old form
     // `pass: !hasLingeringAccess` would re-introduce the leak class.
     const rowMatch = src.match(
-      /rows\.push\(\{\s*area:\s*"zombies"\s*,\s*tool:\s*"lingering-access-check"[\s\S]*?\}\s*\)/,
+      /appendUnchecked\(\{\s*area:\s*"zombies"\s*,\s*tool:\s*"lingering-access-check"[\s\S]*?\}\s*\)/,
     );
-    expect(rowMatch, "lingering-access-check rows.push not found").not.toBeNull();
+    expect(rowMatch, "lingering-access-check result emission not found").not.toBeNull();
     expect(
       rowMatch?.[0] ?? "",
       "lingering-access-check row's `pass` must combine the suite-owned check AND the global delta (= 0).",
@@ -83,7 +83,7 @@ describe("mcp-e2e.mjs — global MSACCESS.EXE leak guard (#fix-msaccess-global-z
     // so the operator sees the leak from the report without having to
     // correlate against pre/post counts.
     const rowMatch = src.match(
-      /rows\.push\(\{\s*area:\s*"zombies"\s*,\s*tool:\s*"lingering-access-check"[\s\S]*?\}\s*\)/,
+      /appendUnchecked\(\{\s*area:\s*"zombies"\s*,\s*tool:\s*"lingering-access-check"[\s\S]*?\}\s*\)/,
     );
     expect(rowMatch?.[0] ?? "").toMatch(/globalMsAccessLeak/);
   });
