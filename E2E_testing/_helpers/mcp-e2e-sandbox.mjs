@@ -42,10 +42,12 @@ function assertSafeSandboxParent(parent, { scriptDir, repoRoot }) {
   return normalizedParent;
 }
 
-export function buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot }) {
+export function buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot, existingRoot }) {
   const repoRoot = resolve(scriptDir, "..");
   const sandboxParent = assertSafeSandboxParent(sandboxRoot ?? tmpdir(), { scriptDir, repoRoot });
-  const root = join(sandboxParent, `${SANDBOX_BASENAME_PREFIX}${process.pid}-${Date.now()}`);
+  const root = existingRoot
+    ? resolve(existingRoot)
+    : join(sandboxParent, `${SANDBOX_BASENAME_PREFIX}${process.pid}-${Date.now()}`);
   const source = {
     accessPath: join(scriptDir, "NoConformidades.accdb"),
     backendPath: join(scriptDir, "NoConformidades_Datos.accdb"),

@@ -12,6 +12,8 @@
     "test": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "test:e2e:mcp": "node E2E_testing/mcp-e2e.mjs",
+    "test:e2e:mcp:resume": "node E2E_testing/mcp-e2e.mjs --resume",
+    "test:e2e:mcp:release": "node E2E_testing/mcp-e2e.mjs --release",
     "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/\"",
     "build": "tsc -p tsconfig.json",
     "lint": "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ scripts/ E2E_testing/_helpers/",
