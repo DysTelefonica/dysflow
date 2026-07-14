@@ -2,6 +2,7 @@ import type { OperationResult } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
 import { validateInput } from "../../shared/validation/validator.js";
+import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import {
   type McpToolResult,
   type McpWriteAccessResolver,
@@ -18,6 +19,29 @@ import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
  * `src/adapters/http/server.ts`) so the structured block stays uniform
  * across transports.
  */
+export const PROJECT_CONFIG_NOT_WRITE_READY = "PROJECT_CONFIG_NOT_WRITE_READY" as const;
+export function projectConfigNotWriteReady(
+  toolName: string,
+  diagnostic: ProjectConfigDiagnostic,
+): McpToolResult {
+  const message = "Project config is not write-ready.";
+  return {
+    content: [{ type: "text", text: `${PROJECT_CONFIG_NOT_WRITE_READY}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: {
+      code: PROJECT_CONFIG_NOT_WRITE_READY,
+      message,
+      ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
+      details: {
+        operation: toolName,
+        status: diagnostic.status,
+        remediation: diagnostic.remediation,
+      },
+    },
+  };
+}
+
 export const MCP_WRITES_DISABLED = "MCP_WRITES_DISABLED" as const;
 export type McpWritesDisabledCode = typeof MCP_WRITES_DISABLED;
 

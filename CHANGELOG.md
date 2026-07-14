@@ -7,6 +7,13 @@
   reports actionable `src/path:LINE:COL  missing callee: Module.Name (kind)` diagnostics, supports
   consumer exclusions through `DYSFLOW_LINT_EXTRAS`, and honors `' dysflow:lint-ignore-line`.
 
+### Project config runtime contract (#863)
+
+- Added per-call `get_capabilities.projectConfig` diagnosis with normalized paths, typed status, write readiness, diagnostics, and exact remediation.
+- Write-class MCP dispatch now fails closed with `PROJECT_CONFIG_NOT_WRITE_READY` before service, Access, or PowerShell execution, including explicit path overrides and dry-run requests.
+- Config discovery and ownership are bounded to the active Git worktree with Windows-safe path identity; cross-worktree targets and ambiguous legacy config files are rejected.
+- Added non-mutating `doctor --cwd` diagnosis and explicit `setup --cwd --apply` bootstrap. There is intentionally no unconfigured-target escape hatch.
+
 ## [v2.10.1] - 2026-07-14
 
 Patch release fixing three v2.10.0 regressions surfaced by a consumer smoke session (#861).

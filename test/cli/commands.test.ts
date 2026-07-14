@@ -327,6 +327,8 @@ describe("dysflow command modules", () => {
 
     try {
       mkdirSync(dataDir, { recursive: true });
+      mkdirSync(join(workspace, "src"));
+      writeFileSync(join(workspace, ".git"), "gitdir: fixture", "utf8");
       writeFileSync(accessPath, "", "utf8");
       writeFileSync(backendPath, "", "utf8");
 

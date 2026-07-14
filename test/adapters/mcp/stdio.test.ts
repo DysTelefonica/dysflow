@@ -15,6 +15,7 @@ import {
   inputTargetsConfig,
   MCP_PROTOCOL_VERSION,
   MCP_PROTOCOL_VERSION_REVIEW,
+  resolveMcpAccessContextForInput,
   resolveMcpWriteAccessForInput,
   resolveProjectOperationRegistryPath,
   startWithSdkServer,
@@ -52,6 +53,37 @@ class FakeDiagnosticsService {
 }
 
 describe("stdio-services / createUnavailableServices / resolves path", () => {
+  it("re-resolves authorization and execution context for a matching startup projectId", async () => {
+    const project = await mkdtemp(join(tmpdir(), "dysflow-mcp-refresh-"));
+    mkdirSync(join(project, ".dysflow"));
+    const first = join(project, "first.accdb");
+    const second = join(project, "second.accdb");
+    writeFileSync(first, "");
+    writeFileSync(second, "");
+    const configPath = join(project, ".dysflow", "project.json");
+    const startupConfig: DysflowConfig = {
+      configSource: "repo-config",
+      allowWrites: true,
+      accessDbPath: first,
+      projectRoot: project,
+      projectId: "app",
+      timeoutMs: 30_000,
+    };
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        id: "app",
+        accessPath: "second.accdb",
+        capabilities: { allowWrites: false },
+      }),
+    );
+    await expect(
+      resolveMcpWriteAccessForInput({ projectId: "app" }, startupConfig, { cwd: project }),
+    ).resolves.toBe(false);
+    await expect(
+      resolveMcpAccessContextForInput({ projectId: "app" }, startupConfig, { cwd: project }),
+    ).resolves.toMatchObject({ ok: true, data: { accessPath: second } });
+  });
   it("resolves persistent operation registry under repo-local .dysflow/runtime", () => {
     expect(
       resolveProjectOperationRegistryPath({

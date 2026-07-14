@@ -182,7 +182,7 @@ describe("createResolveProjectTool() — tool factory", () => {
     expect(result.ok).toBe(true);
 
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as Record<string, unknown>;
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       projectId: "captured-cwd",
       outcome: "resolved",
       reason: "explicit id match",

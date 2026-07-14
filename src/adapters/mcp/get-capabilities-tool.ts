@@ -8,6 +8,7 @@ import { successResult } from "../../core/contracts/index.js";
 import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
 import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
@@ -71,6 +72,7 @@ export type McpCapabilitySnapshot = {
     projectId: string | null;
     outcome: "resolved" | "unresolved" | "ambiguous";
   };
+  projectConfig?: ProjectConfigDiagnostic;
   allowedProcedures: readonly string[] | undefined;
   dryRunDefault: boolean;
   /**
@@ -289,6 +291,7 @@ export function createGetCapabilitiesTool(opts: {
    * consult.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  projectConfigResolver?: () => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
 }): DysflowMcpTool {
   const snapshot = getCapabilitiesAll({
     writesEnabled: opts.writesEnabled,
@@ -308,7 +311,10 @@ export function createGetCapabilitiesTool(opts: {
     description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
-      const result: OperationResult<McpCapabilitySnapshot> = successResult(snapshot);
+      const projectConfig = await opts.projectConfigResolver?.();
+      const result: OperationResult<McpCapabilitySnapshot> = successResult(
+        projectConfig === undefined ? snapshot : { ...snapshot, projectConfig },
+      );
       return translateCoreResultToMcpContent(result);
     },
   };

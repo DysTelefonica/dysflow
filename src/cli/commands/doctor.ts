@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
+import { diagnoseProjectConfig } from "../../adapters/config/project-config-diagnostic.js";
 import { nodeRegistryFileSystem } from "../../adapters/operations/node-registry-file-system.js";
 import { createDefaultPowerShellExecutor } from "../../adapters/powershell/default-executor.js";
 import { createWindowsAccessOperationPreflightCleanup } from "../../adapters/process/windows-processes.js";
@@ -28,19 +29,33 @@ export async function handleDoctorCommand(
   if (args[0] === "--help" || args[0] === "-h") {
     return {
       exitCode: 0,
-      stdout: "Usage: dysflow doctor\n\nCheck local Dysflow requirements.",
+      stdout:
+        "Usage: dysflow doctor [--cwd <path>]\n\nCheck local Dysflow requirements without modifying the target worktree.",
       stderr: "",
     };
   }
 
   try {
+    const cwdIndex = args.indexOf("--cwd");
+    if (cwdIndex >= 0 && args[cwdIndex + 1] === undefined)
+      return { exitCode: 1, stdout: "", stderr: "Missing value for --cwd." };
+    const requestedCwd = cwdIndex >= 0 ? args[cwdIndex + 1] : undefined;
+    const effectiveCwd =
+      requestedCwd === undefined ? (context.cwd ?? process.cwd()) : path.resolve(requestedCwd);
+    const projectConfig = cwdIndex >= 0 ? diagnoseProjectConfig(effectiveCwd) : undefined;
+    if (projectConfig !== undefined && !projectConfig.writeReady)
+      return { exitCode: 1, stdout: JSON.stringify({ projectConfig }, null, 2), stderr: "" };
+    const effectiveContext = { ...context, cwd: effectiveCwd };
     const diagnosticsService =
-      context.diagnosticsService ?? (await createDiagnosticsService(context));
+      context.diagnosticsService ?? (await createDiagnosticsService(effectiveContext));
     const result = await diagnosticsService.run({ includeEnvironment: true });
 
-    const wiringCheck = await runWiringCheck(context);
+    const wiringCheck = await runWiringCheck(effectiveContext);
 
-    return formatDiagnosticsResult(result, wiringCheck);
+    const formatted = formatDiagnosticsResult(result, wiringCheck);
+    return projectConfig === undefined
+      ? formatted
+      : { ...formatted, stdout: `${JSON.stringify({ projectConfig })}\n${formatted.stdout}` };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to run Dysflow diagnostics.";
     return { exitCode: 1, stdout: "", stderr: message };

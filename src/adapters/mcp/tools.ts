@@ -44,7 +44,8 @@ export {
 } from "./result-translation.js";
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
-import { invalidInput } from "./dispatch-common.js";
+import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import { invalidInput, projectConfigNotWriteReady } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
@@ -531,6 +532,10 @@ export type CreateDysflowMcpToolsOptions = {
   // the MCP `lint_module` tool passes `strictNonAscii: true` to the linter
   // service, restoring the legacy strict (error) severity.
   lintIdentifierSafetyStrict?: boolean;
+  projectConfigResolver?: (
+    input: unknown,
+  ) => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
+  cwd?: string;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -547,6 +552,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     accessDbPath,
     writeExecutionPolicy,
     lintIdentifierSafetyStrict = false,
+    projectConfigResolver,
+    cwd = process.cwd(),
   } = options;
   const accessContextResolver: McpAccessContextResolver =
     accessContextResolverInput ??
@@ -633,6 +640,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
       writeExecutionPolicy,
+      projectConfigResolver:
+        projectConfigResolver === undefined ? undefined : () => projectConfigResolver({}),
     }),
     // issue #701 — read-only VBA procedure introspection
     {
@@ -1081,10 +1090,10 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       },
     },
     // Round-3 Item 1 — project config re-resolution companion tool
-    createResolveProjectTool({ cwd: process.cwd() }),
+    createResolveProjectTool({ cwd }),
   ];
 
-  return registerMcpTools(
+  const registered = registerMcpTools(
     currentTools,
     services,
     writesEnabled,
@@ -1102,4 +1111,21 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // project's active source root before forwarding to vbaSyncToolService.
     accessContextResolver,
   );
+  if (projectConfigResolver === undefined) return registered;
+  return registered.map((tool) => {
+    const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
+    if (contract === undefined || contract.access === "read-only") return tool;
+    return {
+      ...tool,
+      handler: async (input, context) => {
+        const diagnostic = await projectConfigResolver(
+          typeof input === "object" && input !== null
+            ? { ...input, operation: tool.name }
+            : { operation: tool.name },
+        );
+        if (!diagnostic.writeReady) return projectConfigNotWriteReady(tool.name, diagnostic);
+        return tool.handler(input, context);
+      },
+    };
+  });
 }
