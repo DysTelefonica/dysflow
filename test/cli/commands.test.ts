@@ -19,7 +19,9 @@ const missingAccessError =
 
 function createRepoConfigWorkspace(): { root: string; cleanup(): void } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-cli-"));
+  mkdirSync(join(root, ".git"), { recursive: true });
   mkdirSync(join(root, ".dysflow"), { recursive: true });
+  mkdirSync(join(root, "src"), { recursive: true });
   writeFileSync(
     join(root, ".dysflow", "project.json"),
     `${JSON.stringify({ accessPath: "front.accdb", passwordEnv: "DYSFLOW_ACCESS_PASSWORD" }, null, 2)}\n`,
@@ -136,7 +138,7 @@ describe("dysflow command modules", () => {
     const workspace = createRepoConfigWorkspace();
     try {
       const result = await runCli(
-        ["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+        ["setup", "--set-project-id", "00-no-conformidades-staging-clean", "--apply"],
         { cwd: workspace.root, env: {} },
       );
 
@@ -159,7 +161,7 @@ describe("dysflow command modules", () => {
       writeFileSync(join(workspace.root, ".dysflow", "project.json"), "{bad", "utf8");
 
       const result = await runCli(
-        ["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+        ["setup", "--set-project-id", "00-no-conformidades-staging-clean", "--apply"],
         { cwd: workspace.root, env: {} },
       );
 
@@ -179,7 +181,7 @@ describe("dysflow command modules", () => {
       writeFileSync(registryPath, "{bad", "utf8");
 
       const result = await runCli(
-        ["setup", "--set-project-id", "00-no-conformidades-staging-clean"],
+        ["setup", "--set-project-id", "00-no-conformidades-staging-clean", "--apply"],
         { cwd: workspace.root, env: { LOCALAPPDATA: home } },
       );
 
