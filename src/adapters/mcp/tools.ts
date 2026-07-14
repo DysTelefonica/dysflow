@@ -45,7 +45,11 @@ export {
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
-import { invalidInput, projectConfigNotWriteReady } from "./dispatch-common.js";
+import {
+  invalidInput,
+  projectConfigNotWriteReady,
+  requestRequiresWriteReady,
+} from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
   DysflowMcpTool,
@@ -1118,6 +1122,15 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     return {
       ...tool,
       handler: async (input, context) => {
+        if (
+          !(await requestRequiresWriteReady(
+            tool.name,
+            contract.access,
+            input,
+            writeExecutionPolicy,
+          ))
+        )
+          return tool.handler(input, context);
         const diagnostic = await projectConfigResolver(
           typeof input === "object" && input !== null
             ? { ...input, operation: tool.name }

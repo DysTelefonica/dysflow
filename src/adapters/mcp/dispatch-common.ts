@@ -1,6 +1,7 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { validateInput } from "../../shared/validation/validator.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import {
@@ -20,6 +21,31 @@ import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
  * across transports.
  */
 export const PROJECT_CONFIG_NOT_WRITE_READY = "PROJECT_CONFIG_NOT_WRITE_READY" as const;
+
+/** Whether this concrete request can mutate and therefore needs a write-ready project config. */
+export async function requestRequiresWriteReady(
+  toolName: string,
+  access: "read-only" | "read-write" | "conditional-write",
+  input: unknown,
+  policy: WriteExecutionPolicy = "safe-by-default",
+): Promise<boolean> {
+  if (access === "read-only") return false;
+  const request =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+
+  // These contracts select mutation by operation-specific fields rather than
+  // the common apply/dryRun pair.
+  if (toolName === "query_execute") return request.mode === "write" && !resolveIsDryRun(request);
+  if (toolName === "cleanup_access_operation") return request.force === true;
+  if (toolName === "access_force_cleanup_orphaned") return request.confirmPid !== undefined;
+
+  // Load the policy seam only when a concrete request needs it. A static import
+  // here creates an initialization cycle through risks -> contracts -> tools,
+  // which can expose an uninitialized contract registry to ESM consumers.
+  const { resolveEffectiveDryRunInput } = await import("./write-execution-dispatch.js");
+  const effectiveInput = resolveEffectiveDryRunInput(toolName, policy, request);
+  return !resolveIsDryRun(effectiveInput);
+}
 export function projectConfigNotWriteReady(
   toolName: string,
   diagnostic: ProjectConfigDiagnostic,
