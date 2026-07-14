@@ -116,6 +116,15 @@ export function createResumeController({
   async function before(area, tool) {
     const id = stepId(area, tool);
     const mutating = mutatingAreas.has(area) || mutatingAreas.has(`${area}/${tool}`);
+    if (
+      resumedCheckpoint &&
+      state.snapshot?.status === "creating" &&
+      state.snapshot.area === area
+    ) {
+      await snapshotSandbox(area);
+      state.snapshot = { area, status: "ready" };
+      await writeCheckpointAtomic(root, state);
+    }
     if (resumedCheckpoint && recoveryArea === area && mutating && restoredArea !== area) {
       await restoreSandbox(area);
       for (const [completedId, item] of Object.entries(state.completed)) {
@@ -124,7 +133,11 @@ export function createResumeController({
       restoredArea = area;
     }
     if (!resumedCheckpoint && mutating && !snapshottedAreas.has(area)) {
+      state.snapshot = { area, status: "creating" };
+      await writeCheckpointAtomic(root, state);
       await snapshotSandbox(area);
+      state.snapshot = { area, status: "ready" };
+      await writeCheckpointAtomic(root, state);
       snapshottedAreas.add(area);
     }
     const cached = state.completed[id]?.result;
@@ -170,20 +183,25 @@ async function copyExisting(source, destination) {
     if (error?.code !== "ENOENT") throw error;
   }
 }
-async function assertContainedPlainPath(path, root) {
+async function assertContainedPlainPath(path, root, { allowMissing = false } = {}) {
   if ((await lstat(root)).isSymbolicLink())
     throw new Error(`Unsafe MCP E2E restore reparse root: ${root}`);
   const rootReal = await realpath(root);
-  const pathReal = await realpath(path);
-  const rel = relative(rootReal, pathReal);
+  const resolvedPath = resolve(path);
+  const rel = relative(rootReal, resolvedPath);
   if (rel.startsWith("..") || isAbsolute(rel)) {
     throw new Error(`Unsafe MCP E2E restore path: ${path}`);
   }
   let current = rootReal;
   for (const segment of rel.split(/[\\/]/).filter(Boolean)) {
     current = join(current, segment);
-    if ((await lstat(current)).isSymbolicLink())
-      throw new Error(`Unsafe MCP E2E restore reparse point: ${current}`);
+    try {
+      if ((await lstat(current)).isSymbolicLink())
+        throw new Error(`Unsafe MCP E2E restore reparse point: ${current}`);
+    } catch (error) {
+      if (allowMissing && error?.code === "ENOENT") break;
+      throw error;
+    }
   }
 }
 export function createPhaseSnapshots(root, sandboxPaths) {
@@ -205,10 +223,13 @@ export function createPhaseSnapshots(root, sandboxPaths) {
     },
     async restore(area) {
       for (const destination of sandboxPaths) {
-        await assertContainedPlainPath(destination, root);
+        await assertContainedPlainPath(destination, root, { allowMissing: true });
         await assertContainedPlainPath(phasePath(area, destination), snapshotsRoot);
+        const temporary = `${destination}.restore-${process.pid}`;
+        await rm(temporary, { recursive: true, force: true });
+        await copyExisting(phasePath(area, destination), temporary);
         await rm(destination, { recursive: true, force: true });
-        await copyExisting(phasePath(area, destination), destination);
+        await rename(temporary, destination);
       }
     },
     root: snapshotsRoot,

@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
+import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 import {
@@ -32,7 +32,14 @@ if (process.argv.includes("--release")) process.env.DYSFLOW_E2E_RELEASE_GATE = "
 let resumeRoot;
 try {
   resumeRoot = parseResumeArgs(process.argv.slice(2));
-  if (resumeRoot) assertSafeResumeRoot(resumeRoot, { repoRoot, scriptDir });
+  if (resumeRoot) {
+    assertSafeResumeRoot(resumeRoot, { repoRoot, scriptDir });
+    resumeRoot = await assertSafeExistingSandboxRoot(resumeRoot, {
+      repoRoot,
+      scriptDir,
+      sandboxParent: process.env.DYSFLOW_E2E_SANDBOX_ROOT,
+    });
+  }
 } catch (error) {
   console.error(`[mcp-e2e] ${(error && error.message) || error}`);
   process.exit(1);

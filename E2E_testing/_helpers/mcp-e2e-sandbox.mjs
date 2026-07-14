@@ -1,3 +1,4 @@
+import { lstat, realpath } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, parse, relative, resolve } from "node:path";
 
@@ -18,7 +19,7 @@ function looksLikeProductionRuntime(candidate) {
   return /(?:^|[\\/])localappdata[\\/]dysflow$/i.test(candidate);
 }
 
-function assertSafeSandboxParent(parent, { scriptDir, repoRoot }) {
+export function assertSafeSandboxParent(parent, { scriptDir, repoRoot }) {
   const normalizedParent = resolve(parent);
   const normalizedScriptDir = resolve(scriptDir);
   const normalizedRepoRoot = resolve(repoRoot);
@@ -40,6 +41,21 @@ function assertSafeSandboxParent(parent, { scriptDir, repoRoot }) {
   }
 
   return normalizedParent;
+}
+
+export async function assertSafeExistingSandboxRoot(root, options) {
+  const parent = assertSafeSandboxParent(options.sandboxParent ?? tmpdir(), options);
+  const rootInfo = await lstat(root);
+  if (rootInfo.isSymbolicLink()) throw new Error(`Unsafe MCP E2E resume reparse root: ${root}`);
+  const [rootReal, parentReal] = await Promise.all([realpath(root), realpath(parent)]);
+  assertSafeSandboxParent(parentReal, options);
+  if (!isSameOrInside(rootReal, parentReal) || rootReal === parentReal) {
+    throw new Error(`Unsafe MCP E2E resume root outside sandbox parent: ${root}`);
+  }
+  if (!rootReal.split(/[\\/]/).at(-1)?.startsWith(SANDBOX_BASENAME_PREFIX)) {
+    throw new Error(`Unsafe MCP E2E resume root: ${root}`);
+  }
+  return rootReal;
 }
 
 export function buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot, existingRoot }) {
