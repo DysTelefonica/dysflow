@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.11.0] - 2026-07-14
+
+- **feat(tools): add `lint_missing_callees` -- missing-callees detector for VBA callee resolution (#862).**
+  The new `dysflow lint callees [source-root] [--json]` command scans `.bas` and `.cls` sources,
+  reports actionable `src/path:LINE:COL  missing callee: Module.Name (kind)` diagnostics, supports
+  consumer exclusions through `DYSFLOW_LINT_EXTRAS`, and honors `' dysflow:lint-ignore-line`.
+
 ## [v2.10.1] - 2026-07-14
 
 Patch release fixing three v2.10.0 regressions surfaced by a consumer smoke session (#861).

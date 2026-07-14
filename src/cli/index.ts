@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { handleAccessCommand } from "./commands/access.js";
 import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleInstallCommand, handleUpdateCommand } from "./commands/install.js";
+import { handleLintCommand } from "./commands/lint.js";
 import { handleMcpCommand } from "./commands/mcp.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
@@ -30,6 +31,7 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["uninstall", handleUninstallCommand],
   ["serve", handleServeCommand],
   ["access", handleAccessCommand],
+  ["lint", handleLintCommand],
 ]);
 
 /**
