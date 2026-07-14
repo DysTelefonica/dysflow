@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.11.1] - 2026-07-14
+
+- Merge pull request #868 from DysTelefonica/fix/811-e2e-harness-full - fix(e2e): restore Claude's FormCPV-derived harness + apply-mode + inspect_form fix - Merge pull request #867 from DysTelefonica/fix/e2e-harness-fixture-count - fix(e2e): self-contained Form_DysflowMcpE2E fixture + count=5
+
+
 ## [v2.11.0] - 2026-07-14
 
 - **feat(tools): add `lint_missing_callees` -- missing-callees detector for VBA callee resolution (#862).**
