@@ -226,6 +226,7 @@ export function diagnoseProjectConfig(
     request.accessPath,
     request.accessDbPath,
     request.databasePath,
+    request.backendPath,
     ...(sourcePathTargetsDatabase ? [request.sourcePath] : []),
   ].filter((value): value is string => value !== undefined);
   const targets = new Set(
@@ -263,26 +264,41 @@ export function diagnoseProjectConfig(
   if (backendPath !== null) {
     try {
       canonicalBackend = canonical(backendPath);
-      if (
-        !within(backendPath, projectRootNative) ||
-        identity(worktreeRoot(dirname(canonicalBackend)) ?? "") !==
-          identity(canonicalProjectRoot) ||
-        !within(canonicalBackend, canonicalProjectRoot)
-      )
-        throw new Error("different worktree");
     } catch {
       return failWith(
         base,
-        existsSync(backendPath) ? "outside-project-root" : "target-not-found",
-        `Configured backendPath is missing or not canonically owned by this worktree: ${backendPath}.`,
-        `Create or move the backend target under ${projectRoot}.`,
+        "target-not-found",
+        `Configured backendPath does not exist: ${backendPath}.`,
+        `Create or correct the backend target in ${base.configPath}.`,
       );
     }
   }
   if (requestedTarget !== undefined) {
     const target = normalize(resolve(projectRootNative, requestedTarget));
-    const isConfiguredBackend = backendPath !== null && identity(target) === identity(backendPath);
-    if (!isConfiguredBackend && !within(target, projectRootNative))
+    const outsideWorktree = !within(target, projectRootNative);
+    const namesConfiguredBackend =
+      backendPath !== null && identity(target) === identity(backendPath);
+    if (!existsSync(target) && outsideWorktree && !namesConfiguredBackend)
+      return failWith(
+        base,
+        "outside-project-root",
+        `Requested target '${target}' is outside this worktree.`,
+        `Use the MCP process for the target's owning worktree.`,
+      );
+    let canonicalTarget: string;
+    try {
+      canonicalTarget = canonical(target);
+    } catch {
+      return failWith(
+        base,
+        "target-not-found",
+        `Requested target does not exist: ${target}.`,
+        `Correct the target path.`,
+      );
+    }
+    const isConfiguredBackend =
+      canonicalBackend !== null && identity(canonicalTarget) === identity(canonicalBackend);
+    if (!isConfiguredBackend && outsideWorktree)
       return failWith(
         base,
         "outside-project-root",
@@ -290,17 +306,6 @@ export function diagnoseProjectConfig(
         `Use the MCP process for the target's owning worktree.`,
       );
     if (!isConfiguredBackend) {
-      let canonicalTarget: string;
-      try {
-        canonicalTarget = canonical(target);
-      } catch {
-        return failWith(
-          base,
-          "target-not-found",
-          `Requested target does not exist: ${target}.`,
-          `Correct the target path.`,
-        );
-      }
       if (
         identity(worktreeRoot(dirname(canonicalTarget)) ?? "") !== identity(canonicalProjectRoot) ||
         identity(canonicalTarget) !== identity(canonicalAccess)
@@ -312,13 +317,6 @@ export function diagnoseProjectConfig(
           `Run \`dysflow doctor --cwd ${normalize(dirname(target))}\` and call that worktree's MCP process.`,
         );
     }
-    if (isConfiguredBackend && identity(canonical(target)) !== identity(canonicalBackend ?? ""))
-      return failWith(
-        base,
-        "outside-project-root",
-        `Requested backend target '${target}' is not owned by this worktree config.`,
-        `Use backendPath '${backendPath}'.`,
-      );
   }
   if (
     request.destinationRoot !== undefined &&
@@ -329,17 +327,6 @@ export function diagnoseProjectConfig(
       "outside-project-root",
       "Requested destinationRoot is not owned by this worktree config.",
       `Use destinationRoot '${destinationRoot}'.`,
-    );
-  if (
-    request.backendPath !== undefined &&
-    (backendPath === null ||
-      identity(resolve(projectRootNative, request.backendPath)) !== identity(backendPath))
-  )
-    return failWith(
-      base,
-      "outside-project-root",
-      "Requested backendPath is not owned by this worktree config.",
-      `Use backendPath '${backendPath ?? "<configured-backend>"}'.`,
     );
   return { ...base, status: "valid", writeReady: true, diagnostics: [], remediation: null };
 }

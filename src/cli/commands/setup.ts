@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
 import { diagnoseProjectConfig } from "../../adapters/config/project-config-diagnostic.js";
@@ -189,6 +189,7 @@ export async function writeRelativeProjectConfig(
   config: DysflowConfig,
   cwd?: string,
   beforeRename?: () => void | Promise<void>,
+  afterRename?: () => void | Promise<void>,
 ): Promise<{ message: string; projectPath: string }> {
   const projectRoot = cwd ?? process.cwd();
   const projectPath = join(projectRoot, ".dysflow", "project.json");
@@ -210,7 +211,7 @@ export async function writeRelativeProjectConfig(
   };
 
   await mkdir(dirname(projectPath), { recursive: true });
-  await publishProjectConfig(projectRoot, projectJson, beforeRename);
+  await publishProjectConfig(projectRoot, projectJson, beforeRename, afterRename);
   return {
     message: [
       `Wrote portable project config to ${projectPath}`,
@@ -224,6 +225,7 @@ async function publishProjectConfig(
   projectRoot: string,
   projectJson: Record<string, unknown>,
   beforeRename?: () => void | Promise<void>,
+  afterRename?: () => void | Promise<void>,
 ): Promise<void> {
   const projectPath = join(projectRoot, ".dysflow", "project.json");
   const diagnostic = diagnoseProjectConfig(projectRoot, {}, projectJson);
@@ -242,6 +244,7 @@ async function publishProjectConfig(
   const previous = await readFile(projectPath, "utf8").catch(() => undefined);
   const handle = await open(temporaryPath, "wx");
   let canonicalTemporary = temporaryPath;
+  let renamed = false;
   try {
     canonicalTemporary = await realpath(temporaryPath);
     if (dirname(canonicalTemporary) !== canonicalParent || !owns(canonicalTemporary))
@@ -253,13 +256,31 @@ async function publishProjectConfig(
       throw new Error("Project config directory ownership changed before publication.");
     await handle.close();
     await rename(temporaryPath, projectPath);
+    renamed = true;
+    await afterRename?.();
     if ((await realpath(projectPath)) !== join(canonicalParent, "project.json"))
       throw new Error("Published project config escaped the owned directory.");
   } catch (error) {
     await handle.close().catch(() => undefined);
     await rm(canonicalTemporary, { force: true });
     const ownedProjectPath = join(canonicalParent, "project.json");
-    if (previous !== undefined) await writeFile(ownedProjectPath, previous, "utf8");
+    if (renamed) {
+      if (previous === undefined) {
+        await rm(ownedProjectPath, { force: true });
+      } else {
+        const recoveryPath = `${ownedProjectPath}.${process.pid}.${Date.now()}.recovery.tmp`;
+        const recovery = await open(recoveryPath, "wx");
+        try {
+          await recovery.writeFile(previous, "utf8");
+          await recovery.sync();
+          await recovery.close();
+          await rename(recoveryPath, ownedProjectPath);
+        } finally {
+          await recovery.close().catch(() => undefined);
+          await rm(recoveryPath, { force: true });
+        }
+      }
+    }
     throw error;
   }
 }

@@ -226,6 +226,56 @@ describe("handleSetupCommand — successful display", () => {
       rmSync(external, { recursive: true, force: true });
     }
   });
+  it("leaves the destination untouched when publication fails before rename", async () => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const configPath = join(workspace.root, ".dysflow", "project.json");
+    const original = readFileSync(configPath, "utf8");
+    const config: DysflowConfig = {
+      configSource: "explicit-request",
+      allowWrites: true,
+      accessDbPath: join(workspace.root, "front.accdb"),
+      projectRoot: workspace.root,
+      timeoutMs: 30_000,
+    };
+    try {
+      await expect(
+        writeRelativeProjectConfig(config, workspace.root, () => {
+          throw new Error("pre-rename failure");
+        }),
+      ).rejects.toThrow("pre-rename failure");
+      expect(readFileSync(configPath, "utf8")).toBe(original);
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it.each([
+    true,
+    false,
+  ])("recovers the destination after a post-rename failure (previous config: %s)", async (withPrevious) => {
+    const workspace = makeWorkspace({ withAccessDb: true });
+    const configPath = join(workspace.root, ".dysflow", "project.json");
+    const previous = readFileSync(configPath, "utf8");
+    if (!withPrevious) rmSync(configPath);
+    const config: DysflowConfig = {
+      configSource: "explicit-request",
+      allowWrites: true,
+      accessDbPath: join(workspace.root, "front.accdb"),
+      projectRoot: workspace.root,
+      timeoutMs: 30_000,
+    };
+    try {
+      await expect(
+        writeRelativeProjectConfig(config, workspace.root, undefined, () => {
+          throw new Error("post-rename failure");
+        }),
+      ).rejects.toThrow("post-rename failure");
+      expect(existsSync(configPath)).toBe(withPrevious);
+      if (withPrevious) expect(readFileSync(configPath, "utf8")).toBe(previous);
+    } finally {
+      workspace.cleanup();
+    }
+  });
   it("prints redacted config without --write-project", async () => {
     const workspace = makeWorkspace({ withAccessDb: true });
     try {
