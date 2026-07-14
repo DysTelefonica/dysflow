@@ -386,6 +386,44 @@ function New-DaoDbEngine {
     return $null
 }
 
+function Open-DaoDatabaseForMaintenance {
+    [CmdletBinding()]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
+    Param(
+        [Parameter(Mandatory = $true)]$DbEngine,
+        [Parameter(Mandatory = $true)][string]$AccessPath,
+        [string]$Password,
+        [bool]$ReadOnly = $false
+    )
+
+    # issue #861 — ACCESS_VBA_PASSWORD is a VBA *project* password, which is NOT
+    # the same as a database-level password. DAO's OpenDatabase(...;PWD=) expects
+    # a *database* password; passing a VBA-project password (or any password to a
+    # DB that has no database-level password) fails with "No es una contraseña
+    # válida". The maintenance opens here (AllowBypassKey read/write + the
+    # AutoExec/StartupForm disable) only need the file open via DAO, so we try
+    # WITH the password first (covers a real database password) and then fall back
+    # to opening WITHOUT a password (covers the common VBA-project-password /
+    # no-database-password case) before giving up. Returns a structured result
+    # instead of throwing so each caller keeps its own failure contract
+    # (bypass helpers degrade to $null/$false; Disable-StartupFeatures aborts).
+    $attempts = @()
+    if (-not [string]::IsNullOrEmpty($Password)) { $attempts += ";PWD=$Password" }
+    $attempts += ""
+
+    $lastError = ""
+    foreach ($connect in $attempts) {
+        try {
+            $db = $DbEngine.OpenDatabase($AccessPath, $false, $ReadOnly, $connect)
+            return [pscustomobject]@{ Database = $db; ErrorMessage = "" }
+        } catch {
+            $lastError = if ($_.Exception -and $_.Exception.Message) { $_.Exception.Message } else { [string]$_ }
+        }
+    }
+
+    return [pscustomobject]@{ Database = $null; ErrorMessage = $lastError }
+}
+
 function Get-AllowBypassKeyState {
     [CmdletBinding()]
     Param(
@@ -402,14 +440,10 @@ function Get-AllowBypassKeyState {
         $dbEngine = New-DaoDbEngine
         if (-not $dbEngine) { return $null }
 
-        $connect = ""
-        if (-not [string]::IsNullOrEmpty($Password)) {
-            $connect = ";PWD=$Password"
-        }
-
-        try {
-            $database = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
-        } catch {
+        # issue #861 — password fallback (see Open-DaoDatabaseForMaintenance).
+        $opened = Open-DaoDatabaseForMaintenance -DbEngine $dbEngine -AccessPath $AccessPath -Password $Password
+        $database = $opened.Database
+        if (-not $database) {
             return $null
         }
 
@@ -446,14 +480,10 @@ function Enable-AllowBypassKey {
         $dbEngine = New-DaoDbEngine
         if (-not $dbEngine) { return $false }
 
-        $connect = ""
-        if (-not [string]::IsNullOrEmpty($Password)) {
-            $connect = ";PWD=$Password"
-        }
-
-        try {
-            $database = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
-        } catch {
+        # issue #861 — password fallback (see Open-DaoDatabaseForMaintenance).
+        $opened = Open-DaoDatabaseForMaintenance -DbEngine $dbEngine -AccessPath $AccessPath -Password $Password
+        $database = $opened.Database
+        if (-not $database) {
             return $false
         }
 
@@ -495,14 +525,10 @@ function Restore-AllowBypassKey {
         $dbEngine = New-DaoDbEngine
         if (-not $dbEngine) { return }
 
-        $connect = ""
-        if (-not [string]::IsNullOrEmpty($Password)) {
-            $connect = ";PWD=$Password"
-        }
-
-        try {
-            $database = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
-        } catch {
+        # issue #861 — password fallback (see Open-DaoDatabaseForMaintenance).
+        $opened = Open-DaoDatabaseForMaintenance -DbEngine $dbEngine -AccessPath $AccessPath -Password $Password
+        $database = $opened.Database
+        if (-not $database) {
             return
         }
 
@@ -545,8 +571,21 @@ function Disable-StartupFeatures {
             throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm porque no se pudo crear DAO.DBEngine. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution."
         }
 
-        $connect = if ($Password) { ";PWD=$Password" } else { "" }
-        $db = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
+        # issue #861 — try WITH the password first, then WITHOUT it. A DB whose
+        # only secret is a VBA-project password (ACCESS_VBA_PASSWORD) has no
+        # database-level password, so `;PWD=` makes DAO throw "No es una
+        # contraseña válida" and the gate used to abort every bulk-read
+        # (list_vba_modules, list_objects, export ...). The fallback lets the
+        # AutoExec/StartupForm disable succeed on those DBs while still honoring a
+        # real database password when one exists.
+        $opened = Open-DaoDatabaseForMaintenance -DbEngine $dbEngine -AccessPath $AccessPath -Password $Password
+        $db = $opened.Database
+        if (-not $db) {
+            # Raise only the raw DAO detail; the outer catch wraps it in the
+            # canonical "CRITICAL ... mediante DAO. Detalle: {0} ..." message.
+            $detail = if ([string]::IsNullOrWhiteSpace($opened.ErrorMessage)) { "OpenDatabase devolvió null sin excepción." } else { $opened.ErrorMessage }
+            throw $detail
+        }
 
         try {
             $scripts = $db.Containers("Scripts")
@@ -617,8 +656,11 @@ function Restore-StartupFeatures {
         $dbEngine = New-DaoDbEngine
         if (-not $dbEngine) { return }
 
-        $connect = if ($Password) { ";PWD=$Password" } else { "" }
-        $db = $dbEngine.OpenDatabase($AccessPath, $false, $false, $connect)
+        # issue #861 — password fallback (see Open-DaoDatabaseForMaintenance) so
+        # teardown re-enables AutoExec/StartupForm on VBA-project-password DBs too.
+        $opened = Open-DaoDatabaseForMaintenance -DbEngine $dbEngine -AccessPath $AccessPath -Password $Password
+        $db = $opened.Database
+        if (-not $db) { return }
 
         if ($RestoreInfo.RenamedAutoExec) {
             try {
@@ -4944,7 +4986,20 @@ try {
         if ($hasCreated -or $hasReimportedDocuments) {
             $saveNames = @($importResult.CreatedComponentNames)
             if ($hasReimportedDocuments) { $saveNames += @($importResult.ModifiedDocumentNames) }
-            Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($saveNames | Select-Object -Unique)
+            # issue #861 — the per-module import already succeeded and emitted its
+            # DYSFLOW_RESULT (status:"ok"). Save-VbaProjectModules is best-effort
+            # persistence (RunCommand 280 = acCmdSaveAllModules); its per-module
+            # fallback wrongly targets form/report document modules with
+            # acModule=5 and can throw. A throw here used to make the script
+            # exit 1 AFTER a successful import, so the TS adapter wrapped a
+            # status:"ok" result in a misleading VBA_MANAGER_FAILED envelope.
+            # The human compiles in Access before trusting the binary, so a save
+            # hiccup must degrade to a warning, never corrupt the success envelope.
+            try {
+                Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($saveNames | Select-Object -Unique)
+            } catch {
+                Write-Status -Message ("ADVERTENCIA: guardado explícito post-import no completó ({0}). El import se aplicó; compilá en Access (Debug > Compile) para persistir/verificar." -f $_.Exception.Message) -Color Yellow
+            }
         }
         Write-Status -Message ("OK Import completado ({0})" -f $importResult.Total) -Color Green
 

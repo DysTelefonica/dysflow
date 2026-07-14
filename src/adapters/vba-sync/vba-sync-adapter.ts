@@ -758,6 +758,21 @@ export class VbaSyncAdapter implements VbaSyncPort {
       );
     }
     if (result.exitCode !== 0) {
+      // issue #861 — a non-zero process exit AFTER a fully-successful per-module
+      // import (e.g. a best-effort post-import Save-VbaProjectModules that threw)
+      // must NOT masquerade as a `VBA_MANAGER_FAILED exit code 1` wrapper around
+      // a `status:"ok"` result. The per-module structured result is the source of
+      // truth: when every module reports success, the call is a success and must
+      // return the SAME envelope shape as a clean (exit 0) import.
+      if (isImportTool(toolName) && importOutputIsFullySuccessful(parsedOutput)) {
+        return successResult(
+          {
+            result: parsedOutput,
+            ...buildTargetDiagnostics(toolName, params, target.data, true),
+          },
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        );
+      }
       const structuredFailure = failureFromStructuredRunnerResult(
         toolName,
         result,
@@ -1138,6 +1153,34 @@ function isImportTool(toolName: string): boolean {
  */
 function parseOutput(stdout: string, secrets: readonly string[]): unknown {
   return extractResultPayload(stdout, secrets);
+}
+
+/**
+ * issue #861 — decide whether an import's structured `DYSFLOW_RESULT` payload
+ * represents a fully-successful import, independent of the process exit code.
+ *
+ * The runner emits either:
+ *   - a bare per-module object `{module, status:"ok", ...}` (PowerShell unwraps a
+ *     single-element array on ConvertTo-Json), or
+ *   - an array of per-module objects, or
+ *   - a failure envelope `{ok:false, error, modules}` when any module failed.
+ *
+ * A payload is "fully successful" only when every per-module entry reports
+ * `status:"ok"` and it is NOT the `ok:false` failure envelope. An empty array is
+ * NOT treated as success (there is no positive per-module proof to override a
+ * non-zero exit).
+ */
+function importOutputIsFullySuccessful(parsedOutput: unknown): boolean {
+  const moduleIsOk = (entry: unknown): boolean => isRecord(entry) && entry.status === "ok";
+
+  if (Array.isArray(parsedOutput)) {
+    return parsedOutput.length > 0 && parsedOutput.every(moduleIsOk);
+  }
+  if (isRecord(parsedOutput)) {
+    if (parsedOutput.ok === false) return false;
+    return moduleIsOk(parsedOutput);
+  }
+  return false;
 }
 
 function failureFromStructuredRunnerResult(

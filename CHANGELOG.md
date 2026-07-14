@@ -1,5 +1,36 @@
 # Changelog
 
+## [v2.10.1] - 2026-07-14
+
+Patch release fixing three v2.10.0 regressions surfaced by a consumer smoke session (#861).
+
+- **Bulk-read no longer aborts on a VBA-project password (#861).** The AutoExec/StartupForm
+  safety gate opened the database via DAO `OpenDatabase(...;PWD=)`, which expects a *database*
+  password. `ACCESS_VBA_PASSWORD` is a VBA-*project* password, so on a DB with no database-level
+  password DAO threw `No es una contraseña válida` and the gate aborted every tool that enumerates
+  through `OpenDatabase` (`list_vba_modules`, `list_objects`, exports…). The maintenance opens now
+  try the password first and transparently fall back to opening without one (new
+  `Open-DaoDatabaseForMaintenance` seam), so the gate still disables startup code AND bulk-read
+  succeeds. The gate remains active (it is not skipped); only the DAO open was hardened.
+- **`import_modules` returns one consistent envelope (#861).** A best-effort post-import
+  `Save-VbaProjectModules` could throw *after* every module already imported at `status:"ok"`
+  (its per-module fallback wrongly targeted form/report document modules), making the script exit
+  non-zero. The TS adapter then wrapped a fully-successful import in a misleading
+  `VBA_MANAGER_FAILED exit code 1` envelope. Now a non-zero exit with an all-`ok` structured result
+  is reported as success (same `{result, operation, willModifyAccess}` shape as a clean import), and
+  the post-import save failure degrades to a warning instead of failing the run. Genuine per-module
+  failures still surface as typed error envelopes.
+- **Zombie MSACCESS cleanup no longer needs a caller-supplied PID (#861).**
+  `access_force_cleanup_orphaned` (no `confirmPid`) enumerated only MSACCESS instances whose command
+  line carried the `.accdb` path — which dysflow-spawned COM-automation instances never do. Failed
+  operations that leave a live MSACCESS holding the lock are now enumerated from dysflow's own
+  registry records (terminal status + matching project/accessPath), and `confirmPid` cleanup accepts
+  that same registry proof of ownership (with a PID-recycle start-time guard) so those zombies can be
+  retired without knowing the exact command line.
+- Regression tests added at the ports: `Disable-StartupFeatures` password fallback (Pester),
+  `import_modules_envelope_consistent_on_success` (vitest), and
+  `orphan_cleanup_enumerates_dysflow_spawned_zombies` (vitest).
+
 ## [v2.10.0] - 2026-07-14
 
 - Merge pull request #860 from DysTelefonica/feat/858-resumable-e2e - fix(e2e): harden resumable sandbox recovery (#858) - fix(e2e): preserve resumable suite quality gates (#858) - feat(e2e): resume MCP battery from safe checkpoints (#858) - Merge pull request #859 from DysTelefonica/fix/857-complete-form-controls - fix(e2e): complete synthetic form behavior controls (#857) - Merge pull request #856 from DysTelefonica/fix/850-inline-execution-contract - fix(vba): clarify inline result and cleanup contract (#850) - Merge pull request #855 from DysTelefonica/fix/851-link-tables-create-missing - feat(link_tables): create missing linked TableDefs in the runner (#851) - feat(link_tables): add opt-in create-or-relink API surface (#851) - fix(vba-sync): preserve form .cls linkage on form re-import (#849) (#854) - Merge pull request #853 from DysTelefonica/fix/852-non-canonical-form-name-resolver - fix(delete_module): delete non-canonical form document modules via DoCmd.DeleteObject (#852) - fix(forms): make Form_/Report_ source-path resolution idempotent (#852)

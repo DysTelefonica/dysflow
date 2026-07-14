@@ -16,6 +16,21 @@ import type {
   AccessOperationRegistry,
 } from "./access-operation-registry.js";
 
+// #861 — registry states in which dysflow is no longer actively driving the
+// process (so a still-alive MSACCESS for one of these is a leftover), but which
+// are not the in-flight ("running"/"starting") or already-retired ("cleaned")
+// states. Used to surface dysflow-spawned COM zombies from our own records.
+const TERMINAL_ORPHAN_STATUSES: ReadonlySet<string> = new Set([
+  "failed",
+  "timed_out",
+  "completed",
+  "cleanup_pending",
+]);
+
+function isTerminalOrphanStatus(status: string): boolean {
+  return TERMINAL_ORPHAN_STATUSES.has(status);
+}
+
 export type AccessOrphanCandidate = {
   pid: number;
   accessPath: string;
@@ -141,6 +156,41 @@ export class AccessOrphanCleanupService {
       });
     }
 
+    // #861: dysflow spawns MSACCESS via COM automation, so its command line
+    // carries NO .accdb path — the command-line pass above can never match it.
+    // When one of our operations fails, its record moves to a terminal state
+    // but the process may stay alive holding the lock. Surface those from OUR
+    // OWN records: a terminal record whose accessPid is still a live headless
+    // MSACCESS proving the same project + accessPath. The record is the proof of
+    // ownership, so no caller-supplied command-line path match is required.
+    const alreadyListed = new Set<number>(candidates.map((c) => c.pid));
+    const normalizedRequestPath = normalizePathForMatching(request.accessPath);
+    const normalizedRequestRoot = normalizePathForMatching(request.projectRoot);
+    for (const record of registryRecords) {
+      if (record.accessPid == null) continue;
+      if (ownedPids.has(record.accessPid)) continue;
+      if (alreadyListed.has(record.accessPid)) continue;
+      if (!isTerminalOrphanStatus(record.status)) continue;
+      if (normalizePathForMatching(record.projectRootAbs ?? "") !== normalizedRequestRoot) continue;
+      if (normalizePathForMatching(record.accessPath ?? "") !== normalizedRequestPath) continue;
+
+      const proc = processes.find(
+        (p) => p.pid === record.accessPid && p.name.toUpperCase() === "MSACCESS.EXE",
+      );
+      if (proc === undefined) continue;
+      // Skip a proven-visible interactive window; a 0 or unknown handle stays.
+      if (typeof proc.mainWindowHandle === "number" && proc.mainWindowHandle !== 0) continue;
+
+      alreadyListed.add(record.accessPid);
+      candidates.push({
+        pid: record.accessPid,
+        accessPath: request.accessPath,
+        kind: "access",
+        startTime: proc.startTime,
+        mainWindowHandle: proc.mainWindowHandle,
+      });
+    }
+
     return successResult(candidates);
   }
 
@@ -206,22 +256,54 @@ export class AccessOrphanCleanupService {
         );
       }
 
-      if (liveProcess.commandLine === undefined) {
-        return failureResult(
-          createDysflowError(
-            "ORPHAN_CLEANUP_PATH_UNVERIFIED",
-            `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
-          ),
-        );
-      }
+      const pathProven =
+        liveProcess.commandLine !== undefined &&
+        pathMatchesAccessPath(liveProcess.commandLine, accessPath);
 
-      if (!pathMatchesAccessPath(liveProcess.commandLine, accessPath)) {
-        return failureResult(
-          createDysflowError(
-            "ORPHAN_CLEANUP_PATH_MISMATCH",
-            `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-          ),
-        );
+      if (!pathProven) {
+        // #861 — a dysflow-spawned (COM-automation) MSACCESS has no .accdb path
+        // on its command line, so pathMatchesAccessPath can never prove identity.
+        // Fall back to OUR OWN records: a record tracking this PID for the same
+        // project + accessPath proves dysflow created it. Guard against Windows
+        // PID recycling by comparing the recorded start time.
+        const tracked = await this.findMostRecentTrackedRecordForPid(confirmPid, projectRoot);
+        if (!tracked.ok) return failureResult(tracked.error);
+        const record = tracked.record;
+        const registryProven =
+          record !== null &&
+          normalizePathForMatching(record.accessPath ?? "") ===
+            normalizePathForMatching(accessPath);
+
+        if (!registryProven) {
+          if (liveProcess.commandLine === undefined) {
+            return failureResult(
+              createDysflowError(
+                "ORPHAN_CLEANUP_PATH_UNVERIFIED",
+                `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
+              ),
+            );
+          }
+          return failureResult(
+            createDysflowError(
+              "ORPHAN_CLEANUP_PATH_MISMATCH",
+              `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
+            ),
+          );
+        }
+
+        if (
+          record.processStartTime !== undefined &&
+          record.processStartTime !== null &&
+          liveProcess.startTime !== undefined &&
+          record.processStartTime !== liveProcess.startTime
+        ) {
+          return failureResult(
+            createDysflowError(
+              "ORPHAN_CLEANUP_PID_RECYCLED",
+              `Refused to kill PID ${confirmPid}: the live process started at ${liveProcess.startTime ?? "unknown"} but the recorded operation ${record.operationId} started at ${record.processStartTime}. The PID was likely recycled by Windows.`,
+            ),
+          );
+        }
       }
     }
 
