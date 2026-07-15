@@ -4,6 +4,56 @@
 
 - **fix(config):** `resolve_project` accepts a real sibling Git worktree as the binary's owning tree (round-8 follow-up to #863). PATH_MISMATCH and OUTSIDE_PROJECT_ROOT retain their meanings for non-sibling and reparse-point cases. New `projectConfig.owningWorktree` field surfaces the resolved owning tree to consumers.
 
+## [v2.11.2] - 2026-07-15
+
+Patch release fixing the v2.11.1 regression where `list_vba_modules` returned
+`VBA_MANAGER_FAILED: No es una contraseña válida` against password-protected
+Access projects (#869). The PowerShell child process never received
+`$env:ACCESS_VBA_PASSWORD` because `list_vba_modules` is the only raw-executor
+caller of `spawnVbaManager` that passes `password` without `env`; the sibling
+tools (`list_objects`, `verify_code`, `export_modules`, …) all go through
+`executeMappedTool` and attach the env explicitly.
+
+### Fixed
+
+- **vba-sync: forward `ACCESS_VBA_PASSWORD` / `DYSFLOW_ACCESS_PASSWORD` to the
+  child PowerShell process when the raw-executor caller omits `env`
+  (`src/adapters/vba-sync/vba-sync-adapter.ts:1355-1427`).** When
+  `request.password !== undefined && request.env === undefined`,
+  `spawnVbaManager` now derives the child env exactly the way
+  `executeMappedTool` already does for mapped tools
+  (`vba-sync-adapter.ts:592-595`), so the PS fallback at
+  `scripts/dysflow-vba-manager.ps1:259` resolves `$env:ACCESS_VBA_PASSWORD` and
+  `Open-AccessDatabase` accepts the protected binary. Explicit caller `env` is
+  forwarded verbatim — the derivation rule does NOT merge on top and does NOT
+  add a synthetic key. The contract is pinned by
+  `test/adapters/vba-sync/spawn-vba-manager-command-line.test.ts` (Cases A / B / C)
+  and the new E2E
+  `E2E_testing/mcp-e2e-issue-869-list-vba-modules-password-env.mjs`
+  (Round 1: `R1.password_env_forwarded_no_VBA_MANAGER_FAILED`; Round 2:
+  `R2.round8_list_objects_still_works` non-regression).
+
+### Deferred hardening
+
+- **Variant 2 (add `-Password <value>` to the PowerShell args vector) is
+  explicitly rejected** in `openspec/changes/r9-list-vba-modules-password-env/proposal.md`.
+  Putting the password on the process command line would leak via `ps` /
+  Process Monitor, require per-cmdlet `PSAvoidUsingPlainTextForPassword`
+  suppression, and offers no marginal benefit over the env-fallback path.
+  If a future threat model demands command-line isolation, the rejected
+  variant 2 in the proposal is the hardening reference; the round-9 env
+  derivation is the floor.
+
+### Documentation
+
+- New `docs/tools/list-vba-modules.md` documents the ownership chain
+  (`VbaModulesAdapter.execute` → `runListVbaModules` → raw `spawnVbaManager`),
+  the password-resolution contract, the shared dispatch surface (mapped
+  tools via `executeMappedTool`, `verify_code` via
+  `vba-source-comparison.ts:328-331`, and `list_vba_modules` via the new
+  derivation rule), and the known limitations around the rejected
+  `-Password` variant.
+
 ## [v2.11.1] - 2026-07-14
 
 - Merge pull request #868 from DysTelefonica/fix/811-e2e-harness-full - fix(e2e): restore Claude's FormCPV-derived harness + apply-mode + inspect_form fix - Merge pull request #867 from DysTelefonica/fix/e2e-harness-fixture-count - fix(e2e): self-contained Form_DysflowMcpE2E fixture + count=5

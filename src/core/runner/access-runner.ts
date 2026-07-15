@@ -15,6 +15,7 @@ import {
   type OperationResult,
   successResult,
 } from "../contracts/index.js";
+import { isFrontendOnlyAction } from "../mapping/access-query-request-mapper.js";
 import {
   type AccessOperationPreflightCleanup,
   diagnosticsFromPreflightCleanup,
@@ -350,6 +351,23 @@ export class AccessPowerShellRunner implements AccessRunner {
   ): Promise<OperationResult<TData>> {
     let finalOperation = operation;
     if (operation.kind === "query") {
+      // #870 — linked-table and saved-query operations act on the frontend
+      // database even when backendPath is also present as auxiliary input.
+      // Resolve their forced semantic role before the generic target logic,
+      // whose normal explicit-backendPath precedence is correct for general reads.
+      if (
+        operation.request.target === "frontend" &&
+        isFrontendOnlyAction(operation.request.action)
+      ) {
+        finalOperation = {
+          ...operation,
+          request: {
+            ...operation.request,
+            databasePath: operation.request.databasePath ?? config.accessDbPath,
+            target: undefined,
+          },
+        };
+      }
       // #763 — when the caller passed `target: "auto"` and did not supply
       // an explicit `databasePath` or `backendPath`, resolve the target
       // via the cross-DB table lookup primitive. The lookup probes

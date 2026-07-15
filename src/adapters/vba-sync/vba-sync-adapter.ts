@@ -1410,13 +1410,27 @@ export const spawnVbaManager: VbaManagerExecutor = async (request) => {
     args.push(key === "verbose" ? "-VerboseContract" : flag, String(value));
   }
 
+  // ---- ROUND-9 (#869) PATCH BOUNDARY ----
+  // Symmetry target: executeMappedTool (vba-sync-adapter.ts:592-595). When a raw
+  // executor caller passes `password` without `env` (e.g. runListVbaModules), derive
+  // the child PowerShell env exactly the way executeMappedTool does, so
+  // $env:ACCESS_VBA_PASSWORD reaches scripts/dysflow-vba-manager.ps1:259.
+  // Variant 2 (password-in-args) was rejected; see proposal.md.
+  const childEnv: Record<string, string | undefined> | undefined =
+    request.password !== undefined && request.env === undefined
+      ? {
+          ACCESS_VBA_PASSWORD: request.password,
+          DYSFLOW_ACCESS_PASSWORD: request.password,
+        }
+      : request.env;
+  // ---- /ROUND-9 PATCH BOUNDARY ----
   try {
     return await spawnPowerShellProcess({
       command: POWERSHELL_EXE,
       args,
       timeoutMs: request.timeoutMs,
       cwd: request.cwd,
-      env: request.env,
+      env: childEnv,
       signal: request.signal,
     });
   } finally {
