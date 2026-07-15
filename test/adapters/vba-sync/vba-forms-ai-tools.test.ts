@@ -225,7 +225,9 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
     fetchBehaviorEvidence: ReturnType<typeof vi.fn>;
   } {
     return {
-      fetchBehaviorEvidence: vi.fn(impl.fetchBehaviorEvidence ?? (async () => ({ evidence: [] }))),
+      fetchBehaviorEvidence: vi.fn(
+        impl.fetchBehaviorEvidence ?? (async () => ({ evidence: [], codegraphIndexPath: null })),
+      ),
     };
   }
 
@@ -233,6 +235,7 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
     const orchestrator = makeOrchestrator();
     const invoker = mockInvoker({
       fetchBehaviorEvidence: async () => ({
+        codegraphIndexPath: "C:/repo/.codegraph-vba",
         evidence: [
           {
             handler: "cmdSave_Click",
@@ -252,6 +255,7 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
+        codegraphIndexPath: "C:/repo/.codegraph-vba",
         controls: [
           expect.objectContaining({
             name: "cmdSave",
@@ -321,7 +325,11 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
   it("autoFetchCodeGraph:true + invoker returning empty falls back gracefully and merges with caller evidence", async () => {
     const orchestrator = makeOrchestrator();
     const invoker = mockInvoker({
-      fetchBehaviorEvidence: async () => ({ evidence: [], warning: "no index" }),
+      fetchBehaviorEvidence: async () => ({
+        evidence: [],
+        warning: "no index",
+        codegraphIndexPath: null,
+      }),
     });
     const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
 
@@ -354,6 +362,7 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
     const invoker = mockInvoker({
       fetchBehaviorEvidence: async () => ({
         evidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }],
+        codegraphIndexPath: null,
       }),
     });
     const adapter = new VbaFormsAdapter(orchestrator, mockFs(), { codeGraphVbaInvoker: invoker });
@@ -367,11 +376,39 @@ describe("VbaFormsAdapter map_form_behavior autoFetchCodeGraph (#830)", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data).toMatchObject({
+        codegraphIndexPath: null,
         controls: [expect.objectContaining({ name: "cmdSave", codegraphEvidence: [] })],
         warnings: expect.arrayContaining([expect.stringContaining("CodeGraph-VBA evidence")]),
       });
     }
     expect(invoker.fetchBehaviorEvidence).not.toHaveBeenCalled();
+  });
+
+  it("autoFetchCodeGraph with explicit evidence still merges fetched evidence and propagates the index path", async () => {
+    const invoker = mockInvoker({
+      fetchBehaviorEvidence: async () => ({
+        evidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click", "Fetched"] }],
+        codegraphIndexPath: "C:/repo/.codegraph-vba",
+      }),
+    });
+    const adapter = new VbaFormsAdapter(makeOrchestrator(), mockFs(), {
+      codeGraphVbaInvoker: invoker,
+    });
+    const result = await adapter.execute("map_form_behavior", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      autoFetchCodeGraph: true,
+      codegraphEvidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click", "Explicit"] }],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const data = result.data as {
+        codegraphIndexPath: string | null;
+        controls: Array<{ codegraphEvidence: CodeGraphBehaviorEvidence[] }>;
+      };
+      expect(data.codegraphIndexPath).toBe("C:/repo/.codegraph-vba");
+      expect(data.controls[0]?.codegraphEvidence).toHaveLength(2);
+    }
+    expect(invoker.fetchBehaviorEvidence).toHaveBeenCalledOnce();
   });
 
   it("autoFetchCodeGraph:true without an orchestrator-bound invoker falls back gracefully", async () => {
