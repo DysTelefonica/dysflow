@@ -2,7 +2,14 @@
 
 ## [v2.12.0] - 2026-07-15
 
-- **fix(config):** `resolve_project` accepts a real sibling Git worktree as the binary's owning tree (round-8 follow-up to #863). PATH_MISMATCH and OUTSIDE_PROJECT_ROOT retain their meanings for non-sibling and reparse-point cases. New `projectConfig.owningWorktree` field surfaces the resolved owning tree to consumers.
+- fix(mcp): explicit role-based target contracts for DAO/query tools (#871)
+- fix(vba-sync): forward password env for list_vba_modules (closes #869) (#874)
+- fix(config): accept real sibling Git worktree as owning tree for accessPath (#873)
+- merge: bring origin/main into fix/873-sibling-worktree-owning-tree (#875)
+- test(e2e): fix W-C2 assertion fields in mcp-e2e-issue-869-list-vba-modules-password-env (#876)
+- feat(mcp): wire 4 form tools to address issue #872 UX frictions (#877)
+- Merge pull request #875 from DysTelefonica/fix/873-sibling-worktree-owning-tree
+- test(vba-sync): assert no password leak in spawnVbaManager args (issue 869 followup W-C1) (#878)
 
 ## [v2.11.2] - 2026-07-15
 
