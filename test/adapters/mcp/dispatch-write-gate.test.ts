@@ -63,6 +63,8 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     // #809 — sync_binary joins the filesystem-mutating family because
     // apply:true with direction:'binary-to-src' -> export_modules writes
     // the source tree.
+    // #872 — form_set_properties + form_duplicate_control join the
+    // filesystem-mutating family (same applyGuardedFormWrite seam).
     expect([...filesystemWriters].sort()).toEqual(
       [
         "catalog_add_control",
@@ -72,8 +74,10 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
         "form_delete_control",
         "form_deserialize",
         "form_distribute_controls",
+        "form_duplicate_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_properties",
         "form_set_property",
         "apply_form_design_plan",
         "export_all",
@@ -298,9 +302,24 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       value: "Save",
       apply: true,
     },
+    // Issue #872 F1 — atomic batch property updates. Same applyGuardedFormWrite
+    // seam; same write-gate behavior on apply:true when writes are disabled.
+    form_set_properties: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      controlName: "cmd",
+      properties: { Caption: '"Save"', Left: "100" },
+      apply: true,
+    },
     form_delete_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       controlName: "cmdObsolete",
+      apply: true,
+    },
+    // Issue #872 F2 — clone a control. Same seam; same write-gate behavior.
+    form_duplicate_control: {
+      sourcePath: "C:/project/forms/Form_Customer.form.txt",
+      sourceControlName: "cmd",
+      newName: "cmdClone",
       apply: true,
     },
     // Issue #816 phase 3 — form_align_controls + form_distribute_controls
@@ -362,6 +381,9 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         // Issue #809 — sync_binary joins the binary-mutating family
         // (apply:true with direction:'src-to-binary' -> import_modules writes
         // the .accdb).
+        // Issue #872 — form_set_properties + form_duplicate_control join the
+        // same family (atomic batch property updates + control duplication;
+        // same applyGuardedFormWrite seam).
         "delete_module",
         "fix_encoding",
         "import_all",
@@ -373,8 +395,10 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "form_delete_control",
         "form_deserialize",
         "form_distribute_controls",
+        "form_duplicate_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_properties",
         "form_set_property",
         "sync_binary",
         "vba_inline_execution",

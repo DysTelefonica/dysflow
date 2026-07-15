@@ -281,6 +281,25 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
     mutatesFilesystem: true,
     risk: "destructive-write",
   },
+  // Issue #872 F1 + F2 — `form_set_properties` + `form_duplicate_control`
+  // share the applyGuardedFormWrite seam with form_set_property /
+  // form_delete_control. Both MUST join the three-list trio (route table
+  // + isDryRunCapableBinaryWrite + POLICY_EXEMPT_TOOLS) in lockstep —
+  // see dispatch-factory.ts + write-execution-dispatch.ts. Both are
+  // routine-dev-write (a routine property / clone edit gated through the
+  // same seam, not destructive).
+  form_set_properties: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
+  form_duplicate_control: {
+    kind: "vba-sync",
+    mutatesBinary: true,
+    mutatesFilesystem: true,
+    risk: "routine-dev-write",
+  },
   // Issue #816 — Phase 3 (Ergonomic actions). Two batch geometry tools
   // (`form_align_controls` + `form_distribute_controls`) sharing the
   // applyGuardedFormWrite seam. Both route through the same single-write
@@ -358,6 +377,26 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   // must never fire for this tool. Mirrors `analyze_form_layout`'s
   // read-only contract exactly.
   verify_form_bindings: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  // Issue #872 F5 — `form_get_geometry` + `form_list_controls` are pure
+  // read-class helpers. They parse the .form.txt through FormIR and emit
+  // a geometry summary (one control) or a flat inventory (every named
+  // control in the form, with hasEventBinding). Both never open Access,
+  // never write to disk, never call the binary, never fetch anything.
+  // Both mutates flags stay false; risk is read-only — the write-gate
+  // MUST NEVER fire for these tools. They mirror `render_form_preview` /
+  // `analyze_form_layout` / `inspect_form`'s read-only contract exactly.
+  form_get_geometry: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    risk: "read-only",
+  },
+  form_list_controls: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,

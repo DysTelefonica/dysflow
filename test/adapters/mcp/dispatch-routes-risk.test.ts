@@ -58,6 +58,12 @@ const EXPECTED_ROUTE_RISK: Readonly<Partial<Record<GeneratedDispatchToolName, To
   // are routine-dev-write (mirrors the slice-4 form mutation family).
   apply_form_design_plan: "routine-dev-write",
   form_set_property: "routine-dev-write",
+  // Issue #872 F1 + F2 — `form_set_properties` + `form_duplicate_control`
+  // are routine-dev-write (same applyGuardedFormWrite seam as the rest
+  // of the form mutation family; a routine property/clone edit, not a
+  // destructive removal).
+  form_set_properties: "routine-dev-write",
+  form_duplicate_control: "routine-dev-write",
   catalog_add_control: "routine-dev-write",
   generate_erd: "routine-dev-write",
   // VBA sync — read-only (everything else, see auto-assert below)
@@ -95,6 +101,12 @@ const READ_ONLY_ROUTES: ReadonlySet<GeneratedDispatchToolName> = new Set<Generat
     // Issue #818 — Phase 2 Perception cont. Read-only schema-binding
     // validator (ControlSource + RowSource against caller-supplied schema).
     "verify_form_bindings",
+    // Issue #872 F5 — read-only geometry + control-list helpers. Pure
+    // read-class; never opens Access, never writes to disk, never
+    // touches the binary. Mirrors the inspect_form / render_form_preview
+    // / analyze_form_layout read-only contract.
+    "form_get_geometry",
+    "form_list_controls",
     "vba_orphan_audit",
     // query-maintenance read-only
     "list_links",

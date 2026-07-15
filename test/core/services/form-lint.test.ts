@@ -147,6 +147,64 @@ End
     expect(controlBindingErrors[0]?.message).toContain("Me.ListaHitoz");
     expect(controlBindingErrors[0]?.suggestedFix).toBe("Me.ListaHitos");
   });
+
+  // Issue #872 F4 — extend the intrinsic-form-members allowlist. `Me.hWnd`
+  // is the textbook false positive cited in the issue: window handle is a
+  // Form / Report member, not a control. We also pin the wider set members
+  // (`Moveable`, `MaxButton`, `OnOpen`-style event accessors, `Tag`, …)
+  // since the issue author explicitly named them.
+  it("does NOT diagnose Me.hWnd, Me.Moveable, Me.MaxButton (issue #872 F4 allowlist)", () => {
+    const ir = parseWith(formTxtWithControls([{ name: "cmdSave", type: "CommandButton" }]));
+    const cls = [
+      "Public Sub Form_Open(Cancel As Integer)",
+      "    Debug.Print Me.hWnd",
+      "    Me.Moveable = False",
+      "    Me.MaxButton = False",
+      "    Me.MinButton = False",
+      "    Me.CloseButton = True",
+      '    Me.Tag = "frmKPI"',
+      "    Me.BorderStyle = 2",
+      "    Me.ScrollBars = 0",
+      '    Me.OnOpen = "[Event Procedure]"',
+      "    Debug.Print Me.WindowHandle",
+      "    Debug.Print Me.Picture",
+      "    Me.PictureAlignment = 4",
+      "    End Sub",
+    ].join("\n");
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+
+    const controlBindingErrors = result.diagnostics.filter(
+      (d) => d.rule === "form-control-binding",
+    );
+    expect(controlBindingErrors).toEqual([]);
+  });
+
+  it("handles Me.<IntrinsicMember> case-insensitively (Me.Hwnd, Me.HWND, Me.Hwnd)", () => {
+    const ir = parseWith(formTxtWithControls([{ name: "txtName", type: "TextBox" }]));
+    const cls = [
+      "Public Sub OpenForm()",
+      "    a = Me.Hwnd",
+      "    b = Me.HWND",
+      "    c = Me.hWnd",
+      "End Sub",
+    ].join("\n");
+
+    const result = lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    });
+    expect(result.diagnostics.filter((d) => d.rule === "form-control-binding")).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

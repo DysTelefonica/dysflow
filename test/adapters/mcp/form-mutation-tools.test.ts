@@ -49,12 +49,19 @@ describe("public form mutation MCP tools", () => {
   // form_delete_control join the family. apply_form_design_plan is the
   // plan-form dispatch and lives in vba-forms-ai-tools; the 2 net-new
   // standalone tools share the mutateForm seam.
+  //
+  // Issue #872 — `form_set_properties` (F1, atomic batch property
+  // updates) + `form_duplicate_control` (F2, clone an existing control
+  // under a new name) join the same seam. Same write-gate, same
+  // applyGuardedFormWrite flow, same routine-dev-write risk tier.
   const names = [
     "form_add_control",
     "form_move_control",
     "form_rename_control",
     "form_set_property",
     "form_delete_control",
+    "form_set_properties",
+    "form_duplicate_control",
     "create_form_from_template",
   ] as const;
 
@@ -113,6 +120,30 @@ describe("public form mutation MCP tools", () => {
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
+        dryRun: expect.any(Object),
+        apply: expect.any(Object),
+      }),
+    );
+    // Issue #872 F1 — `form_set_properties` accepts `properties: Record<...>`
+    // (not a single `property` + `value` pair) so the schema pins both the
+    // map-shape field and the standard sourcePath/dryRun/apply trio.
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).toEqual(
+      expect.objectContaining({
+        sourcePath: expect.any(Object),
+        controlName: expect.any(Object),
+        properties: expect.any(Object),
+        dryRun: expect.any(Object),
+        apply: expect.any(Object),
+      }),
+    );
+    // Issue #872 F2 — `form_duplicate_control` requires sourceControlName
+    // + newName and accepts an optional overrides map.
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_duplicate_control.properties).toEqual(
+      expect.objectContaining({
+        sourcePath: expect.any(Object),
+        sourceControlName: expect.any(Object),
+        newName: expect.any(Object),
+        overrides: expect.any(Object),
         dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),

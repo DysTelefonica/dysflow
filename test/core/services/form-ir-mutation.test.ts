@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   addControl,
   deleteControl,
+  duplicateControl,
   moveControl,
   parseFormTxt,
   renameControl,
   serializeFormTxt,
+  setProperties,
   setProperty,
 } from "../../../src/core/services/form-ir-service";
 
@@ -173,18 +175,25 @@ End
     );
   });
 
-  it("rejects mutation when preserved metadata changes during the operation", () => {
+  it("accepts a per-control Format on an added control (issue #872 R1-001)", () => {
+    // Control-level `Format ="@"` is a real per-control display property;
+    // `addControl` does not treat it as preserved metadata (form-level
+    // metadata only — preamble + ir.root.entries). The new control
+    // carries its own per-control Format verbatim, and the mutation
+    // succeeds. Form-level preserved metadata (Checksum, Format =255,
+    // PrtDevMode*) is still locked by the FORM_PROPERTY_PROTECTED gate
+    // on `setProperties`/`setProperty`.
     const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
-
-    expect(() =>
-      addControl(ir, {
-        control: {
-          name: "cmdSave",
-          type: "CommandButton",
-          properties: { Left: "1", Format: '"@"' },
-        },
-      }),
-    ).toThrowError(expect.objectContaining({ code: "FORM_METADATA_LOSS" }));
+    const result = addControl(ir, {
+      control: {
+        name: "cmdSave",
+        type: "CommandButton",
+        properties: { Left: "1", Format: '"@"' },
+      },
+    });
+    const source = serializeFormTxt(result.ir);
+    expect(source).toContain('Name ="cmdSave"');
+    expect(source).toContain('Format ="@"');
   });
 
   it("rejects rename-control when the control has event procedure bindings", () => {
@@ -317,5 +326,108 @@ End
       (ir) => deleteControl(ir, { controlName: "grpChoice" }),
       "FORM_CONTROL_HAS_CHILDREN",
     );
+  });
+
+  // -----------------------------------------------------------------------
+  // Issue #872 R3 — setProperties / duplicateControl direct service-layer
+  // coverage (R3-001 determinism, R3-002 atomicity + edge cases).
+  // -----------------------------------------------------------------------
+
+  it("setProperties: same map in different key order produces identical serialized text (issue #872 R3-001)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const ab = setProperties(ir, {
+      controlName: "lblName",
+      properties: { Caption: '"AB"', Left: 100, Top: 200 },
+    });
+    const ba = setProperties(ir, {
+      controlName: "lblName",
+      properties: { Top: 200, Left: 100, Caption: '"AB"' },
+    });
+    expect(serializeFormTxt(ab.ir)).toBe(serializeFormTxt(ba.ir));
+    expect(ab.ir).not.toBe(ba.ir);
+  });
+
+  it("setProperties: protected key aborts the whole batch (issue #872 R3-002)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const before = serializeFormTxt(ir);
+    expect(() =>
+      setProperties(ir, {
+        controlName: "txtName",
+        properties: { Left: 100, Format: '"@"', Top: 200 },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "FORM_PROPERTY_PROTECTED" }));
+    expect(serializeFormTxt(ir)).toBe(before);
+  });
+
+  it("setProperties: LayoutCached* keys are silently dropped (issue #872 R3-002)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const result = setProperties(ir, {
+      controlName: "txtName",
+      properties: { Caption: '"Renamed"', LayoutCachedLeft: 999, LayoutCachedWidth: 999 },
+    });
+    const source = serializeFormTxt(result.ir);
+    expect(source).toContain('Caption ="Renamed"');
+    expect(source).not.toContain("LayoutCachedLeft =999");
+  });
+
+  it("duplicateControl: clones with overrides + verbatim event bindings (issue #872 R3-002)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const result = duplicateControl(ir, {
+      sourceControlName: "txtName",
+      newName: "txtCustomerName",
+      overrides: { Left: 7777, Top: 8888 },
+    });
+    const source = serializeFormTxt(result.ir);
+    expect(source).toContain('Name ="txtCustomerName"');
+    expect(source).toContain("Left =7777");
+    expect(source.match(/OnClick ="\[Event Procedure\]"/g)?.length).toBe(2);
+  });
+
+  it("duplicateControl: rejects missing source + name collision without mutating (issue #872 R3-002)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const before = serializeFormTxt(ir);
+    expect(() =>
+      duplicateControl(ir, { sourceControlName: "missing", newName: "clone1" }),
+    ).toThrowError(expect.objectContaining({ code: "FORM_DUPLICATE_SOURCE_MISSING" }));
+    expect(() =>
+      duplicateControl(ir, { sourceControlName: "txtName", newName: "lblName" }),
+    ).toThrowError(expect.objectContaining({ code: "FORM_DUPLICATE_CONTROL" }));
+    expect(serializeFormTxt(ir)).toBe(before);
+  });
+
+  // -----------------------------------------------------------------------
+  // Issue #872 R1-001 / R1-002 — preserve control-level `Format`, strip
+  // form-level preserved metadata recursively.
+  // -----------------------------------------------------------------------
+
+  it("duplicateControl carries control-level Format verbatim (issue #872 R1-001)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const result = duplicateControl(ir, { sourceControlName: "txtName", newName: "txtFoo" });
+    const source = serializeFormTxt(result.ir);
+    expect(source.match(/Format ="@"/g)?.length).toBe(2);
+    expect(source).toContain("Format =255");
+  });
+
+  it("duplicateControl strips preserved metadata from nested children (issue #872 R1-002)", () => {
+    const sourceForm = `Version =21
+Begin Form
+    Format =255
+    Begin
+        Begin OptionGroup
+            Name ="grpChoice"
+            Begin OptionButton
+                Name ="optFirst"
+                Checksum =111111111
+            End
+        End
+    End
+End
+`;
+    const ir = parseFormTxt(sourceForm, { name: "CustomerForm" });
+    const result = duplicateControl(ir, { sourceControlName: "grpChoice", newName: "grpChoice2" });
+    const source = serializeFormTxt(result.ir);
+    const clonedGroup = source.match(/Begin OptionGroup\s+Name ="grpChoice2"[\s\S]*?End/);
+    expect(clonedGroup).not.toBeNull();
+    expect(clonedGroup?.[0]).not.toContain("Checksum =111111111");
   });
 });

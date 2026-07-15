@@ -137,6 +137,9 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         // Issue #809 — sync_binary joins the binary-mutating family
         // (apply:true with direction:'src-to-binary' -> import_modules writes
         // the .accdb).
+        // Issue #872 F1 + F2 — form_set_properties + form_duplicate_control
+        // join the same family (atomic batch property updates + control
+        // duplication; same applyGuardedFormWrite seam).
         "delete_module",
         "fix_encoding",
         "import_all",
@@ -148,8 +151,10 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         "form_delete_control",
         "form_deserialize",
         "form_distribute_controls",
+        "form_duplicate_control",
         "form_move_control",
         "form_rename_control",
+        "form_set_properties",
         "form_set_property",
         "sync_binary",
         "vba_inline_execution",

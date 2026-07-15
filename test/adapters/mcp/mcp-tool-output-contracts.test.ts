@@ -118,6 +118,23 @@ const OUTPUT_CONTRACT_GROUPS = {
     // the runner) but it composes the three primitives whose contract
     // is the runner DYSFLOW_RESULT surface.
     "sync_binary",
+    // Issue #872 F1 + F2 — `form_set_properties` + `form_duplicate_control`
+    // join the form mutation family. Same `mutateForm` single-write +
+    // single-guarded-import + single-rollback seam as `form_set_property`
+    // / `form_delete_control` / `form_align_controls` /
+    // `form_distribute_controls`. They route through VbaFormsAdapter
+    // → mutateForm → applyGuardedFormWrite; the dispatch surface contract
+    // is identical to the other vbaSync tools here.
+    "form_set_properties",
+    "form_duplicate_control",
+    // Issue #872 F5 — `form_get_geometry` + `form_list_controls` are
+    // pure read-class helpers. They never open Access, never write to
+    // disk, never call the binary, never fetch anything — the write-gate
+    // never fires for them. They mirror the read-class sibling surface
+    // (`render_form_preview` / `analyze_form_layout` /
+    // `diff_form_preview` / `verify_form_bindings`).
+    "form_get_geometry",
+    "form_list_controls",
     "vba_orphan_audit",
     "vba_inline_execution",
   ],
