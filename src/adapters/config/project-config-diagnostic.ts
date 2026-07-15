@@ -228,10 +228,15 @@ export function diagnoseProjectConfig(
       `Move the target under ${projectRoot} or update ${base.configPath}.`,
     );
   try {
-    if (
-      identity(worktreeRoot(canonical(destinationRoot)) ?? "") !== identity(canonicalProjectRoot) ||
-      !within(canonical(destinationRoot), canonicalProjectRoot)
-    )
+    const canonicalDestinationRoot = canonical(destinationRoot);
+    const destinationWorktree = identity(worktreeRoot(canonicalDestinationRoot) ?? "");
+    const destinationOwningRoot =
+      destinationWorktree === identity(effectiveOwning)
+        ? effectiveOwning
+        : destinationWorktree === identity(canonicalProjectRoot)
+          ? canonicalProjectRoot
+          : null;
+    if (destinationOwningRoot === null || !within(canonicalDestinationRoot, destinationOwningRoot))
       throw new Error();
   } catch {
     return failWith(

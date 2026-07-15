@@ -4,6 +4,10 @@
 
 - fix(forms): probe `.codegraph-vba/` before `.codegraph/` for `map_form_behavior` auto-fetch and expose `codegraphIndexPath` (#881)
 
+## [v2.13.0] - 2026-07-15
+
+- fix(config): allow `destinationRoot` inside the recognized sibling worktree that owns the configured Access binary, while continuing to reject foreign worktrees and arbitrary external directories (#880)
+
 ## [v2.12.1] - 2026-07-15
 
 - docs(changelog): document env-isolated harness risk dismissal in v2.12.0 (#879) - docs(changelog): regenerate v2.12.0 entry to match released commits
