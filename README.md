@@ -811,7 +811,9 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
 
 #### 2. SQL Maintenance
 * **`query_sql`**: Read-only SQL query execution.
-  - Parameters: `sql` (string, optional), `query` (string, optional), `projectId`, `contextId`
+  - Parameters: `sql` (string, optional), `query` (string, optional), `projectId`, `contextId`, `accessPath`, `databasePath`, `sourcePath`, `target` (`frontend | backend`)
+  - Resolution priority: an explicit `accessPath` is executed as the query database; otherwise an explicit `databasePath`/`sourcePath` wins, then `target` resolves through project config, and calls without an override keep the configured default. Raw SQL is not parsed to infer a table or database. Successful responses include `resolvedAccessPath` so callers can audit the selected database.
+  - For a conservative simple `SELECT` against one table, Dysflow verifies the resolved database schema and returns `TABLE_NOT_IN_DATABASE` or `COLUMN_NOT_IN_TABLE` with `resolvedAccessPath` in `error.details`. Joins, subqueries, expressions, wildcards, and other complex SQL retain the database engine's existing generic error classification rather than guessing.
 * **`exec_sql`**: Modify-capable SQL execution.
   - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (array, optional), `accessPath`/`backendPath` (optional)
 * **`run_script`**: Execute SQL statements from a disk script file.

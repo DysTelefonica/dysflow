@@ -163,19 +163,31 @@ export function buildQuerySqlRequest(input: unknown): AccessQueryRequest | McpTo
     return invalidInput("query_sql requires sql or query.");
   }
 
+  const accessPath = typeof input.accessPath === "string" ? input.accessPath : undefined;
+  const target =
+    input.target === "frontend" || input.target === "backend" || input.target === "auto"
+      ? input.target
+      : undefined;
+  const databasePath =
+    accessPath ??
+    (typeof input.databasePath === "string"
+      ? input.databasePath
+      : typeof input.sourcePath === "string"
+        ? input.sourcePath
+        : undefined);
+
   return {
     sql,
     mode: "read",
+    // query_sql is an alias whose accessPath means "execute against this
+    // database", not merely a config override. Project it onto the runner's
+    // explicit databasePath so the configured backend cannot win later.
     backendPath: typeof input.backendPath === "string" ? input.backendPath : undefined,
-    databasePath:
-      typeof input.databasePath === "string"
-        ? input.databasePath
-        : typeof input.sourcePath === "string"
-          ? input.sourcePath
-          : undefined,
+    databasePath,
+    ...(target === undefined ? {} : { target }),
     projectId: typeof input.projectId === "string" ? input.projectId : undefined,
     contextId: typeof input.contextId === "string" ? input.contextId : undefined,
-    accessPath: typeof input.accessPath === "string" ? input.accessPath : undefined,
+    accessPath,
     destinationRoot: typeof input.destinationRoot === "string" ? input.destinationRoot : undefined,
     projectRoot: typeof input.projectRoot === "string" ? input.projectRoot : undefined,
     timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,

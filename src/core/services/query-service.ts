@@ -14,6 +14,8 @@ import {
 import { detectWriteSqlKeyword, isRecord, looksLikeReadOnlySql } from "../utils/index.js";
 
 export type AccessQueryResult = {
+  /** Absolute database path selected by the runner for query_sql. */
+  resolvedAccessPath?: string;
   rows?: readonly Record<string, unknown>[];
   affectedRows?: number;
   tables?: readonly string[];

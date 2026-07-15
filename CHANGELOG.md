@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2.12.2] - 2026-07-15
+
+- fix(query_sql): honor caller-supplied `target` and `accessPath`, and report the selected database in `resolvedAccessPath` (#882)
+
+  `query_sql` now projects `accessPath` onto the runner's explicit `databasePath` and preserves semantic `target` overrides, preventing the configured backend from silently winning. Simple, single-table `SELECT` statements receive conservative `TABLE_NOT_IN_DATABASE` / `COLUMN_NOT_IN_TABLE` schema errors; complex SQL retains the ACE/Jet classification rather than guessing.
+
 ## [v2.12.1] - 2026-07-15
 
 - docs(changelog): document env-isolated harness risk dismissal in v2.12.0 (#879) - docs(changelog): regenerate v2.12.0 entry to match released commits
