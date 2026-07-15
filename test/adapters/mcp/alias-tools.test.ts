@@ -183,6 +183,34 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     }
   });
 
+  it("buildQuerySqlRequest preserves query_sql target routing overrides", async () => {
+    const { buildQuerySqlRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+
+    const explicitPath = buildQuerySqlRequest({
+      sql: "SELECT * FROM FrontendOnlyTable",
+      accessPath: "C:/repo/frontend.accdb",
+      backendPath: "C:/repo/backend.accdb",
+    });
+    expect(isMcpToolResult(explicitPath)).toBe(false);
+    if (!isMcpToolResult(explicitPath)) {
+      expect(explicitPath.databasePath).toBe("C:/repo/frontend.accdb");
+      expect(explicitPath.backendPath).toBe("C:/repo/backend.accdb");
+    }
+
+    const semanticTarget = buildQuerySqlRequest({
+      sql: "SELECT * FROM FrontendOnlyTable",
+      target: "frontend",
+      backendPath: "C:/repo/backend.accdb",
+    });
+    expect(isMcpToolResult(semanticTarget)).toBe(false);
+    if (!isMcpToolResult(semanticTarget)) {
+      expect(semanticTarget.target).toBe("frontend");
+      expect(semanticTarget.backendPath).toBe("C:/repo/backend.accdb");
+    }
+  });
+
   // DELTA-010 (mcp-reliability-fix) — query_sql rejects empty sql/query.
   it("buildQuerySqlRequest rejects empty sql and empty query (DELTA-010)", async () => {
     const { buildQuerySqlRequest, isMcpToolResult } = await import(

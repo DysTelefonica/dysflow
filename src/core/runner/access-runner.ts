@@ -32,6 +32,7 @@ import {
   lookupTableAcrossDatabases,
 } from "../runtime/cross-db-table-lookup.js";
 import { isRecord, sanitizeSecrets } from "../utils/index.js";
+import { parseSimpleSelectShape } from "../utils/simple-select-shape.js";
 
 export type {
   AccessProcessOwnership,
@@ -439,15 +440,17 @@ export class AccessPowerShellRunner implements AccessRunner {
         finalOperation.kind === "query" &&
         finalOperation.request.target !== undefined &&
         finalOperation.request.target !== "auto" &&
-        !finalOperation.request.databasePath &&
-        !finalOperation.request.backendPath
+        !finalOperation.request.databasePath
       ) {
-        if (finalOperation.request.target === "backend" && config.backendPath) {
+        if (
+          finalOperation.request.target === "backend" &&
+          (finalOperation.request.backendPath || config.backendPath)
+        ) {
           finalOperation = {
             ...finalOperation,
             request: {
               ...finalOperation.request,
-              backendPath: config.backendPath,
+              backendPath: finalOperation.request.backendPath ?? config.backendPath,
               target: undefined,
             },
           };
@@ -568,6 +571,118 @@ export class AccessPowerShellRunner implements AccessRunner {
                 databasePath: config.accessDbPath,
               },
             };
+          }
+        }
+      }
+
+      // #882 — ACE reports both a missing table and an unknown projected
+      // column as the same "too few parameters" failure. For the deliberately
+      // narrow SELECT shape we can prove, inspect the resolved database schema
+      // before executing and return an actionable code. Complex SQL bypasses
+      // this branch and retains the engine's conservative ACCESS_QUERY_FAILED.
+      if (finalOperation.kind === "query" && finalOperation.request.action === "query_sql") {
+        const shape = parseSimpleSelectShape(finalOperation.request.sql);
+        const resolvedAccessPath =
+          finalOperation.request.databasePath ?? finalOperation.request.backendPath;
+        if (shape !== undefined && resolvedAccessPath !== undefined) {
+          const tablesResult = await this.runProbe(
+            {
+              action: "list_tables",
+              mode: "read",
+              sql: "",
+              databasePath: resolvedAccessPath,
+            },
+            config,
+          );
+          const linkedTablesResult = await this.runProbe(
+            {
+              action: "list_linked_tables",
+              mode: "read",
+              sql: "",
+              databasePath: resolvedAccessPath,
+            },
+            config,
+          );
+          const localTables =
+            tablesResult.ok &&
+            isRecord(tablesResult.data) &&
+            Array.isArray(tablesResult.data.tables)
+              ? tablesResult.data.tables.filter(
+                  (table): table is string => typeof table === "string",
+                )
+              : undefined;
+          const linkedTables =
+            linkedTablesResult.ok &&
+            isRecord(linkedTablesResult.data) &&
+            Array.isArray(linkedTablesResult.data.tables)
+              ? linkedTablesResult.data.tables.filter(
+                  (table): table is string => typeof table === "string",
+                )
+              : undefined;
+          const tables =
+            localTables !== undefined && linkedTables !== undefined
+              ? [...localTables, ...linkedTables]
+              : undefined;
+          if (
+            tables !== undefined &&
+            !tables.some((table) => table.toLowerCase() === shape.tableName.toLowerCase())
+          ) {
+            return failureResult(
+              createDysflowError(
+                "TABLE_NOT_IN_DATABASE",
+                `Table '${shape.tableName}' does not exist in the resolved database.`,
+                { details: { tableName: shape.tableName, resolvedAccessPath } },
+              ),
+            );
+          }
+          // If listing tables itself failed, classification is not provable:
+          // execute the original SQL and preserve the engine's error instead.
+          if (tables !== undefined) {
+            const schemaResult = await this.runProbe(
+              {
+                action: "get_schema",
+                mode: "read",
+                sql: "",
+                tableName: shape.tableName,
+                databasePath: resolvedAccessPath,
+              },
+              config,
+            );
+            const schema =
+              schemaResult.ok &&
+              isRecord(schemaResult.data) &&
+              Array.isArray(schemaResult.data.schema)
+                ? schemaResult.data.schema
+                : undefined;
+            // An unavailable schema is not evidence that a projected column
+            // is absent, so only classify from a concrete schema array.
+            if (schema !== undefined) {
+              const availableColumns = new Set(
+                schema
+                  .filter(isRecord)
+                  .map((column) => column.name)
+                  .filter((name): name is string => typeof name === "string")
+                  .map((name) => name.toLowerCase()),
+              );
+              const missingColumn = shape.columnNames.find(
+                (column) => !availableColumns.has(column.toLowerCase()),
+              );
+              if (missingColumn !== undefined) {
+                return failureResult(
+                  createDysflowError(
+                    "COLUMN_NOT_IN_TABLE",
+                    `Column '${missingColumn}' does not exist in table '${shape.tableName}'.`,
+                    {
+                      details: {
+                        tableName: shape.tableName,
+                        columnName: missingColumn,
+                        resolvedAccessPath,
+                      },
+                    },
+                  ),
+                );
+              }
+            }
           }
         }
       }
@@ -754,7 +869,18 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
 
     try {
-      return successResult(parseRunnerData<TData>(execution.stdout, secrets), {
+      const parsed = parseRunnerData<TData>(execution.stdout, secrets);
+      const data =
+        finalOperation.kind === "query" &&
+        finalOperation.request.action === "query_sql" &&
+        isRecord(parsed)
+          ? ({
+              ...parsed,
+              resolvedAccessPath:
+                finalOperation.request.databasePath ?? finalOperation.request.backendPath,
+            } as TData)
+          : parsed;
+      return successResult(data, {
         diagnostics,
         durationMs: execution.durationMs,
         operation: operationMetadata,
