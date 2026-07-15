@@ -78,8 +78,13 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
       "@node -e \"console.log(JSON.stringify({results:[{handler:'cmdSave_Click',callPath:['cmdSave_Click']}]}))\"\r\n",
     );
     try {
-      const result = await createDefaultCodeGraphVbaInvoker({ command: scriptPath })
-        .fetchBehaviorEvidence({ formName: "Customer", controlNames: ["cmdSave"], projectPath: root });
+      const result = await createDefaultCodeGraphVbaInvoker({
+        command: scriptPath,
+      }).fetchBehaviorEvidence({
+        formName: "Customer",
+        controlNames: ["cmdSave"],
+        projectPath: root,
+      });
       expect(result.codegraphIndexPath).toBe(join(root, ".codegraph-vba"));
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -89,8 +94,9 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
   it("falls back to the upstream .codegraph index", async () => {
     const root = mkdtempSync(join(tmpdir(), "codegraph-vba-upstream-"));
     mkdirSync(join(root, ".codegraph"));
-    const result = await createDefaultCodeGraphVbaInvoker({ command: "missing-codegraph-cli" })
-      .fetchBehaviorEvidence({ formName: "Customer", controlNames: [], projectPath: root });
+    const result = await createDefaultCodeGraphVbaInvoker({
+      command: "missing-codegraph-cli",
+    }).fetchBehaviorEvidence({ formName: "Customer", controlNames: [], projectPath: root });
     expect(result.codegraphIndexPath).toBe(join(root, ".codegraph"));
     rmSync(root, { recursive: true, force: true });
   });
