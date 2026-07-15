@@ -406,7 +406,12 @@ describe("access-query-request-mapper", () => {
       };
       const readRequest = buildQueryReadRequest("query_sql", params);
       const writeRequest = buildWriteFixtureRequest("seed_fixture", params);
-      const maintRequest = buildMaintenanceRequest("link_tables", "write", params, () => undefined);
+      const maintRequest = buildMaintenanceRequest(
+        "compact_repair",
+        "write",
+        params,
+        () => undefined,
+      );
 
       const readSlice = pickOverrideSlice(readRequest as unknown as Record<string, unknown>);
       const writeSlice = pickOverrideSlice(writeRequest as unknown as Record<string, unknown>);
@@ -587,6 +592,35 @@ describe("access-query-request-mapper", () => {
       });
       expect(request.target).toBe("auto");
       expect(request.tableName).toBe("People");
+    });
+  });
+
+  describe("frontend-only DAO actions (#870)", () => {
+    it.each([
+      "list_linked_tables",
+      "list_links",
+      "export_queries",
+      "link_tables",
+      "relink_tables",
+      "localize_backend_links",
+      "unlink_table",
+      "import_queries",
+    ] as const)("forces %s to the frontend role while preserving context", (action) => {
+      const request =
+        action === "list_linked_tables"
+          ? buildQueryReadRequest(action, { projectId: "split" })
+          : buildMaintenanceRequest(
+              action,
+              action === "export_queries" ? "read" : "write",
+              {
+                projectId: "split",
+                backendPath: "C:/data.accdb",
+              },
+              () => undefined,
+            );
+
+      expect(request.projectId).toBe("split");
+      expect(request.target).toBe("frontend");
     });
   });
 });

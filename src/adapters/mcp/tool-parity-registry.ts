@@ -325,20 +325,23 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   query_sql:
     "Run a read-only SQL SELECT against the database and return rows. Pass the statement as sql (or query). Read-only.",
   list_tables:
-    "List the database's tables (names only). Read-only — use get_schema for a table's columns.",
+    "List one database's tables (names only). With projectId/contextId, target:'frontend' or target:'backend' selects the configured database; auto is invalid because there is no table identity to probe. Explicit databasePath/sourcePath wins. Read-only.",
   list_linked_tables:
-    "List tables linked into the frontend from a backend, with their connection sources. Read-only.",
+    "List tables linked into the frontend, with their connection sources. Frontend-only: target may only be 'frontend' and omission resolves to the configured accessPath. Read-only.",
   get_schema:
-    'Return the column schema (names, types, sizes, keys) of a table. Read-only. When `projectId` and `target` (`"frontend"` | `"backend"`) are passed together, Dysflow resolves `target` to the configured `accessPath` / `backendPath` from `.dysflow/project.json` so callers do not have to know the local file paths; explicit `accessPath`/`backendPath`/`databasePath` still win when provided.',
-  count_rows: "Count rows in a table or for a SQL/query predicate. Read-only.",
+    'Return a table column schema. With projectId/contextId, target accepts "frontend", "backend", or "auto"; auto probes both configured databases by tableName and rejects missing or ambiguous tables. Explicit databasePath/sourcePath wins. Read-only.',
+  count_rows:
+    "Count table rows. Table-aware target accepts frontend, backend, or auto; auto resolves by tableName and rejects missing or ambiguous tables. Read-only.",
   distinct_values:
-    "Return the distinct values of a column (by tableName+columnName, or via a SQL/query). Read-only.",
+    "Return distinct column values. Table-aware target accepts frontend, backend, or auto; auto resolves by tableName and rejects missing or ambiguous tables. Read-only.",
   compare_backends:
     "Compare two backend databases (the configured backend vs comparePath) and report schema/data differences. Read-only.",
   list_access_files:
     "List Access database files under a root/directory path. Read-only filesystem scan.",
-  get_relationships: "Return the database's defined relationships (foreign keys). Read-only.",
-  list_links: "List the frontend's linked-table connections. Read-only.",
+  get_relationships:
+    "Return one database's relationships. target accepts frontend or backend; auto is invalid because there is no table identity to probe. Read-only.",
+  list_links:
+    "List the frontend's linked-table connections. Frontend-only: target may only be frontend and omission resolves to accessPath. Read-only.",
   // Query — write & maintenance
   exec_sql:
     "Execute a guarded SQL write (INSERT/UPDATE/DELETE/DDL). Write-gated; dryRun/apply control plan vs commit; allowTables/denyTables constrain which tables may be touched.",
@@ -360,9 +363,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   unlink_table:
     "Remove a linked table from the frontend (does not drop backend data). Write-gated; dryRun:true plans without writing.",
   export_queries:
-    "Export saved queries (QueryDefs) from the database to exportPath/path. Read-only on the binary.",
+    "Export saved frontend QueryDefs to exportPath/path. Frontend-only; omission resolves to accessPath. Read-only on the binary.",
   import_queries:
-    "Import saved query definitions (queryDefinitions/queries) into the database. Write-gated; dryRun:true plans without writing.",
+    "Import saved query definitions into the frontend. Frontend-only; omission resolves to accessPath. Write-gated; dryRun:true plans without writing.",
   compact_repair:
     "Compact and repair the database (maintenance; mutates the file). Write-gated; backupFirst:true backs up before, dryRun/apply control plan vs commit.",
   relink_directory:

@@ -609,7 +609,7 @@ Many MCP tools share common context and override parameters:
 * **Access Database Path Overrides**:
   - `accessPath` / `databasePath` / `sourcePath` (string, optional): Paths to the frontend Access database. Overrides `.dysflow/project.json` settings.
   - `backendPath` / `comparePath` (string, optional): Paths to the backend database.
-  - `target` (string, enum `frontend` | `backend`, optional): Semantic role for project-aware read tools (#716). When passed alongside `projectId` and no explicit path is supplied, Dysflow resolves `target` against `.dysflow/project.json` (`"frontend"` → configured `accessPath`; `"backend"` → configured `backendPath`). Explicit paths still win. Unresolvable roles surface as a typed `CONFIG_MISSING_TARGET_PATH` error before the executor runs. Closed enum: `auto` mode is not implemented in this slice.
+  - `target` selects a semantic database role for project-aware DAO tools. Database-wide reads (`query_sql`, `list_tables`, `get_relationships`) accept `frontend | backend`; table-aware reads (`get_schema`, `count_rows`, `distinct_values`) also accept `auto`, which probes both configured databases by `tableName` and rejects missing or ambiguous matches. Frontend-only linked-table and QueryDef tools accept only `frontend` and default to the configured `accessPath`. Explicit `databasePath` / `sourcePath` overrides the role for general reads. Unresolvable roles surface as `CONFIG_MISSING_TARGET_PATH` before execution.
 * **Workspace Overrides**:
   - `destinationRoot` (string, optional): Directory for VBA module source exports (usually `src`).
   - `projectRoot` (string, optional): Root directory of the repository/worktree.
@@ -823,12 +823,12 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `tableName` (string, optional), `dryRun`, `apply`
 
 #### 3. Database Schema & Links
-* **`list_tables`**: List all tables in the active databases.
+* **`list_tables`**: List tables in one selected database. Use `projectId` plus `target="frontend"` or `target="backend"`; `auto` is intentionally invalid because the operation has no `tableName` to drive lookup.
   - Parameters: `accessPath`, `backendPath`, `databasePath`, `sourcePath`, `target` (optional) — see [`target`](#common-input-parameters) for the projectId-first path
-* **`list_linked_tables`**: List only linked tables.
+* **`list_linked_tables`**: List only frontend linked tables. The role is explicitly frontend-only; omit `target` or pass `target="frontend"`.
   - Parameters: `accessPath`, `backendPath`, `target` (optional)
 * **`get_schema`**: Retrieve column types, sizes, and properties for a table.
-  - Parameters: `tableName` (string, optional), `accessPath` (optional), `target` (optional). When `projectId` + `target` are supplied without an explicit path, Dysflow resolves the role against `.dysflow/project.json` (e.g. `target="frontend"` → configured `accessPath` for frontend-local config tables like `TbConfiguracionBackends`).
+  - Parameters: `tableName` (string, optional), explicit path aliases, and `target="frontend" | "backend" | "auto"`. With `projectId`/`contextId`, `auto` probes backend then frontend by table identity and fails on ambiguity instead of guessing.
 * **`count_rows`**: Get row count for a table or SQL query.
   - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
 * **`distinct_values`**: List distinct values of a column.
