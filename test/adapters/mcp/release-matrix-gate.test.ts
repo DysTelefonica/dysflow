@@ -87,18 +87,24 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     //   sibling of analyze_form_layout + diff_form_preview). Net:
     //   dispatch 67 -> 68, visible 78 -> 79. No modern tools added.
     // #809 (sync_binary workflow tool) — `sync_binary` added (composes
-    //   verify_code + import_modules + export_modules; mutatesBinary +
-    //   mutatesFilesystem both true). Net: dispatch 68 -> 69,
-    //   visible 79 -> 80. No modern tools added.
+    // verify_code + import_modules + export_modules; mutatesBinary +
+    // mutatesFilesystem both true). Net: dispatch 68 -> 69,
+    // visible 79 -> 80. No modern tools added.
+    // #872 — `form_set_properties` + `form_duplicate_control` (write-gated
+    // atomic batch property updates + control duplication, same
+    // applyGuardedFormWrite seam as the rest of the form mutation family)
+    // + `form_get_geometry` + `form_list_controls` (pure read-class
+    // geometry + inventory helpers). Net: dispatch 69 -> 73,
+    // visible 80 -> 84. No modern tools added.
     //   Expected breakdown:
-    //     69 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
+    //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     //     + 11 modern core tools (was 14, lost 3 aliases)
-    //     = 80 visible (was 64 before #795).
-    expect(toolCount).toBe(69);
+    //     = 84 visible (was 64 before #795).
+    expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(11);
-    expect(visibleCount).toBe(80);
+    expect(visibleCount).toBe(84);
   });
 
   it("verifies split-mode coverage explicitly", () => {

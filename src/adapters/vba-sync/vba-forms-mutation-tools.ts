@@ -8,10 +8,12 @@ import type { FormIR } from "../../core/models/form-ir.js";
 import {
   addControl,
   deleteControl,
+  duplicateControl,
   FormMutationError,
   moveControl,
   parseFormTxt,
   renameControl,
+  setProperties,
   setProperty,
 } from "../../core/services/form-ir-service.js";
 import { alignControls, distributeControls } from "../../core/services/form-ui-align-distribute.js";
@@ -32,6 +34,13 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 // single-guarded-import + single-rollback path. No new write seam — the
 // route table, the three-list lockstep, and the tool count cascade
 // (+2: 75 → 77) all extend in lockstep.
+//
+// Issue #872 F1 + F2 — `form_set_properties` (atomic batch property
+// updates against a single control) + `form_duplicate_control` (clone
+// an existing control under a new name with optional overrides) join
+// the same seam. They reuse the same applyGuardedFormWrite path; the
+// service primitives (`setProperties` / `duplicateControl`) live in
+// `form-ir-service.ts`.
 export type FormMutationToolName =
   | "form_add_control"
   | "form_move_control"
@@ -39,7 +48,9 @@ export type FormMutationToolName =
   | "form_set_property"
   | "form_delete_control"
   | "form_align_controls"
-  | "form_distribute_controls";
+  | "form_distribute_controls"
+  | "form_set_properties"
+  | "form_duplicate_control";
 
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
@@ -117,14 +128,26 @@ export async function mutateForm(args: {
               ? deleteControl(ir, {
                   controlName: stringValue(params.controlName) ?? "",
                 })
-              : toolName === "form_align_controls"
-                ? runAlignDistribute("align", ir, params)
-                : toolName === "form_distribute_controls"
-                  ? runAlignDistribute("distribute", ir, params)
-                  : renameControl(ir, {
-                      controlName: stringValue(params.controlName) ?? "",
-                      newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
-                    });
+              : toolName === "form_set_properties"
+                ? setProperties(ir, {
+                    controlName: stringValue(params.controlName) ?? "",
+                    properties: readProperties(params.properties),
+                  })
+                : toolName === "form_duplicate_control"
+                  ? duplicateControl(ir, {
+                      sourceControlName: stringValue(params.sourceControlName) ?? "",
+                      newName: stringValue(params.newName) ?? "",
+                      targetSectionName: stringValue(params.targetSectionName),
+                      overrides: readProperties(params.overrides),
+                    })
+                  : toolName === "form_align_controls"
+                    ? runAlignDistribute("align", ir, params)
+                    : toolName === "form_distribute_controls"
+                      ? runAlignDistribute("distribute", ir, params)
+                      : renameControl(ir, {
+                          controlName: stringValue(params.controlName) ?? "",
+                          newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
+                        });
 
     const apply = params.apply === true || params.dryRun === false;
     if (!apply) {

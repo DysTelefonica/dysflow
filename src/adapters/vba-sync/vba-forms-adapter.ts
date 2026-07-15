@@ -14,8 +14,10 @@ import {
   analyzeFormLayoutTool,
   compareForm,
   diffFormPreviewTool,
+  getFormGeometry,
   inspectForm,
   lintFormCode,
+  listFormControls,
   renderFormPreviewTool,
   verifyFormBindingsTool,
 } from "./vba-forms-read-tools.js";
@@ -92,6 +94,13 @@ export class VbaFormsAdapter {
       // tools sharing the mutateForm seam.
       toolName === "form_set_property" ||
       toolName === "form_delete_control" ||
+      // Issue #872 F1 + F2 — batch property updates + control duplication.
+      // Same `mutateForm` single-write + single-guarded-import +
+      // single-rollback seam as the slice-4 family. The mutation
+      // surface (`setProperties` / `duplicateControl`) is implemented
+      // in `form-ir-service.ts` and called from `vba-forms-mutation-tools.ts`.
+      toolName === "form_set_properties" ||
+      toolName === "form_duplicate_control" ||
       // Issue #816 phase 3 — batch geometry ergonomics. Sibling of
       // form_set_property / form_delete_control; same single-write +
       // single-guarded-import + single-rollback seam. Both must join the
@@ -123,7 +132,15 @@ export class VbaFormsAdapter {
       // pre-aggregated from `get_schema` MCP calls). Pure read-class; never
       // opens Access; the schema is passed in as a parameter, never
       // fetched. Mirrors `analyze_form_layout`'s read-only contract.
-      toolName === "verify_form_bindings"
+      toolName === "verify_form_bindings" ||
+      // Issue #872 F5 — read-only geometry + control-list helpers. Pure
+      // read-class: parses the .form.txt through FormIR and emits a
+      // geometry summary (one control) or a flat inventory (every
+      // named control in the form, with hasEventBinding). Never opens
+      // Access, never writes to disk. Mirrors `render_form_preview` /
+      // `analyze_form_layout` / `inspect_form`'s read-only contract.
+      toolName === "form_get_geometry" ||
+      toolName === "form_list_controls"
     );
   }
 
@@ -148,6 +165,13 @@ export class VbaFormsAdapter {
       // single-rollback seam as the slice-4 family.
       toolName === "form_set_property" ||
       toolName === "form_delete_control" ||
+      // Issue #872 F1 + F2 — atomic batch property updates + control
+      // duplication. Same `mutateForm` seam, same dryRun/apply
+      // semantics, same write-gate. The service primitives
+      // `setProperties` / `duplicateControl` live in
+      // `form-ir-service.ts` and are called from `vba-forms-mutation-tools.ts`.
+      toolName === "form_set_properties" ||
+      toolName === "form_duplicate_control" ||
       // Issue #816 phase 3 — batch align/distribute. Same seam as
       // form_set_property / form_delete_control; same dryRun/apply
       // semantics; same write-gate (see dispatch-factory.ts).
@@ -219,6 +243,22 @@ export class VbaFormsAdapter {
       // (typically aggregated upstream from `get_schema` MCP calls); the
       // adapter never fetches the schema itself.
       return verifyFormBindingsTool(this.fileSystem, params, this.orchestrator);
+    }
+    if (toolName === "form_get_geometry") {
+      // Issue #872 F5 — pure read-class geometry helper. Returns the
+      // Left/Top/Width/Height box for one named control plus the
+      // LayoutCached* values. Mirrors `render_form_preview`'s path-
+      // resolution contract; uses the same fileSystem port +
+      // orchestrator wiring.
+      return getFormGeometry(this.fileSystem, params, this.orchestrator);
+    }
+    if (toolName === "form_list_controls") {
+      // Issue #872 F5 — pure read-class inventory helper. Returns the
+      // flat list of named controls in the parsed FormIR with each
+      // control's geometry and hasEventBinding bit. Mirrors
+      // `render_form_preview`'s path-resolution contract; uses the
+      // same fileSystem port + orchestrator wiring.
+      return listFormControls(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
       return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);

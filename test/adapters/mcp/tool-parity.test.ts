@@ -67,10 +67,15 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #809 added sync_binary (workflow tool composing verify_code +
     // import_modules + export_modules; mutatesBinary + mutatesFilesystem
     // both true): vba-sync 44 -> 45, query unchanged at 24, total 68 -> 69.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(45);
+    // #872 added form_set_properties + form_duplicate_control (write-gated
+    // batch property updates + control duplication, sharing the
+    // applyGuardedFormWrite seam) + form_get_geometry + form_list_controls
+    // (read-only geometry + inventory helpers): vba-sync 45 -> 49,
+    // query unchanged at 24, total 69 -> 73.
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(49);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(69);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(69);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(73);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(73);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -98,6 +103,11 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("verify_form_bindings");
     // #809 (workflow tool)
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("sync_binary");
+    // #872 (form UX frictions reorganization — 4 net-new tools)
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_set_properties");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_duplicate_control");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_get_geometry");
+    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("form_list_controls");
   });
 
   it("exports a typed parity registry that classifies every tool", () => {
@@ -112,8 +122,10 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #817 added diff_form_preview: parity-registry 66 -> 67.
     // #818 added verify_form_bindings: parity-registry 67 -> 68.
     // #809 added sync_binary: parity-registry 68 -> 69.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(69);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(69);
+    // #872 added form_set_properties + form_duplicate_control +
+    // form_get_geometry + form_list_controls: parity-registry 69 -> 73.
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(73);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(73);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

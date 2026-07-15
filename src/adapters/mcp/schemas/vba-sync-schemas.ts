@@ -1031,6 +1031,78 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #872 F5 — `form_get_geometry` is a pure read-only helper. Returns
+  // the Left/Top/Width/Height box (twips) of one named control plus the
+  // LayoutCached* values for symmetry with the source artifact. Resolves
+  // sourcePath/path OR projectId+formName (same as the other Phase 2
+  // Perception siblings). The dispatch write-gate NEVER fires (read-only
+  // route; mutates flags are both false).
+  form_get_geometry: {
+    type: "object",
+    required: ["controlName"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      formName: {
+        type: "string",
+        description: "Optional form/report name (e.g. 'Form_Customer'). Used with projectId.",
+      },
+      name: {
+        type: "string",
+        description: "Alias for formName.",
+      },
+      controlName: {
+        ...SCHEMA_PROPS.controlName,
+        description:
+          "Name of the control whose geometry to read. Returns FORM_CONTROL_NOT_FOUND if the control does not exist in the parsed FormIR.",
+      },
+    },
+  },
+  // Issue #872 F5 — `form_list_controls` is a pure read-only helper. Returns
+  // the flat inventory of named controls in the parsed FormIR (optionally
+  // scoped to one section) with each control's name, type, geometry box,
+  // and hasEventBinding bit. The latter reflects whether the control
+  // carries any OnXxx = [Event Procedure] entry verbatim (mirrors
+  // collectFormEvents + per-control walk). Resolves sourcePath/path OR
+  // projectId+formName. The dispatch write-gate NEVER fires.
+  //
+  // Issue #872 R4-001 — `limit` caps the response so a 10k-control form
+  // does not return an unmetered JSON payload. Hard ceiling is 5000; the
+  // adapter defaults to 1000 when the caller omits `limit`. When the
+  // matched inventory exceeds the limit the response envelope adds
+  // `truncated: true` + `totalCount: <full-match-count>`.
+  form_list_controls: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      formName: {
+        type: "string",
+        description: "Optional form/report name (e.g. 'Form_Customer'). Used with projectId.",
+      },
+      name: {
+        type: "string",
+        description: "Alias for formName.",
+      },
+      section: {
+        type: "string",
+        description:
+          "Optional section name to scope the listing (e.g. 'Detail', 'FormHeader'). When omitted, every named control in the form is returned.",
+      },
+      limit: {
+        type: "number",
+        minimum: 1,
+        maximum: 5000,
+        default: 1000,
+        description:
+          "Maximum controls to return. Hard ceiling is 5000; default is 1000. When the matched inventory exceeds the limit, the response sets `truncated: true` and includes `totalCount` with the full match count so the caller can paginate.",
+      } as JsonSchemaProperty,
+    },
+  },
   // Issue #813 phase 6 — atomic exposure of the two net-new standalone
   // tools. Both share the same sourcePath/path + dryRun/apply + outputMode
   // surface as form_add_control / form_move_control / form_rename_control.
@@ -1079,6 +1151,104 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       controlName: SCHEMA_PROPS.controlName,
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  // Issue #872 F1 — atomic batch property updates against a single
+  // control. Collapses N `form_set_property` calls into one IR mutation:
+  // the schema accepts a `properties` map (Record<key, scalar>) instead
+  // of a single (property, value) pair, so the most common case — full
+  // geometry (Left+Top+Width+Height) — moves from 4 round trips to 1.
+  // LayoutCached* keys are silently dropped by the service layer
+  // (stripLayoutCachedKeys); they are NOT surface-rejected at the
+  // schema level because callers routinely pass them after
+  // form_list_controls / form_get_geometry, and the service layer is
+  // the canonical noise-floor (#872 F3).
+  form_set_properties: {
+    type: "object",
+    required: ["sourcePath", "controlName", "properties"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      controlName: SCHEMA_PROPS.controlName,
+      properties: {
+        // Record<string, string|number|boolean>. The schema declares
+        // `object` so the dysflow validator accepts any JSON map;
+        // the service primitive rejects non-scalar values per-key.
+        // LayoutCached* keys are NOT forbidden at the schema level —
+        // they're stripped by `stripLayoutCachedKeys` at the service.
+        type: "object",
+        additionalProperties: {
+          // Each property value MUST be a scalar (string / number /
+          // boolean). Blob-like values would be rejected at the
+          // FORM_PROPERTY_NOT_SCALAR envelope downstream; surfacing
+          // the schema constraint here gives the caller a clean
+          // `MCP_INPUT_INVALID` upfront instead. The base
+          // JsonSchemaPrimitiveType is a single primitive, so the
+          // cast widens the schema to a union — same pattern as
+          // `form_set_property.value`.
+          type: "string",
+        } as unknown as { type: "string" | "number" | "boolean"; description: string },
+        description:
+          "Map of property name → scalar value. Typical use: `{ Left: 100, Top: 200, Width: 4536, Height: 500, Caption: '\"Tile 1\"' }`. All per-key guards from form_set_property carry over: 'Name' is refused (use form_rename_control), protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement. LayoutCached* keys are silently dropped (Issue #872 F3 — they're Access IDE serialisation noise).",
+      },
+      dryRun: SCHEMA_PROPS.dryRun,
+      apply: SCHEMA_PROPS.apply,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
+      outputMode: SCHEMA_PROPS.outputMode,
+    },
+  },
+  // Issue #872 F2 — duplicate an existing control under a new name
+  // with optional property/geometry overrides. The source control's
+  // type, entries, children, event bindings ([Event Procedure]),
+  // tab order, GUID, and metadata are deep-cloned verbatim — the
+  // caller overrides scalars on top via the `overrides` map.
+  // Event bindings carry over so a duplicated control is pre-wired
+  // with the source's behaviour; that's the whole point of cloning
+  // ("make this new control like that existing one") and matches the
+  // Access IDE's paste-control behaviour.
+  form_duplicate_control: {
+    type: "object",
+    required: ["sourcePath", "sourceControlName", "newName"],
+    additionalProperties: false,
+    properties: {
+      ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
+      sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
+      sourceControlName: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Name of the control to clone. Must exist in the parsed FormIR (FORM_DUPLICATE_SOURCE_MISSING otherwise).",
+      },
+      newName: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Name for the cloned control. Must NOT collide with any existing control (FORM_DUPLICATE_CONTROL otherwise).",
+      },
+      targetSectionName: {
+        type: "string",
+        description:
+          "Optional Access section name (e.g. 'Detalle', 'FormHeader') to push the clone into. Defaults to the form root's default control container when omitted.",
+      },
+      overrides: {
+        type: "object",
+        additionalProperties: {
+          type: "string",
+        } as unknown as { type: "string" | "number" | "boolean"; description: string },
+        description:
+          "Optional map of property name → scalar value applied AFTER the deep-clone. Same per-key guards as form_set_properties: 'Name' is ignored (identity is always `newName`), protected/metadata keys throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement, LayoutCached* keys are silently dropped (#872 F3).",
+      },
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,

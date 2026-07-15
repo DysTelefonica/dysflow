@@ -116,6 +116,16 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
     noWriteAlias: "dryRun",
     defaultBehavior: "plan",
   },
+  // Issue #872 F1 + F2 — `form_set_properties` (atomic batch property
+  // updates) + `form_duplicate_control` (control clone) join the
+  // applyGuardedFormWrite seam. Same plan-by-default contract as the
+  // rest of the form mutation family.
+  form_set_properties: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  form_duplicate_control: {
+    commitFlag: "apply",
+    noWriteAlias: "dryRun",
+    defaultBehavior: "plan",
+  },
   create_form_from_template: {
     commitFlag: "apply",
     noWriteAlias: "dryRun",
@@ -172,6 +182,11 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   analyze_form_layout: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   diff_form_preview: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   verify_form_bindings: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #872 F5 — `form_get_geometry` + `form_list_controls` are pure
+  // read-class helpers. The schema accepts `apply` defensively; the
+  // adapter never mutates. They live here so the snapshot stays uniform.
+  form_get_geometry: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  form_list_controls: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   harvest_form_catalog: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   test_vba: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Process-control tools — schema-rejection of `apply` lands here too.

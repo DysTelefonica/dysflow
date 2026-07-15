@@ -149,6 +149,16 @@ export function createDispatchTool(
     name === "apply_form_design_plan" ||
     name === "form_set_property" ||
     name === "form_delete_control" ||
+    // Issue #872 F1 + F2 — form_set_properties (atomic batch property
+    // updates) + form_duplicate_control (clone a control under a new
+    // name) join the same applyGuardedFormWrite seam. Without this
+    // entry a legitimate dryRun:true preview collapses to
+    // isDryRun===false (the hardcoded branch reserved for raw binary
+    // writers) and is refused by MCP_WRITES_DISABLED — the same
+    // regression the form mutation family had before it joined this
+    // list.
+    name === "form_set_properties" ||
+    name === "form_duplicate_control" ||
     // Issue #816 phase 3 — batch align/distribute. Same seam as
     // form_set_property / form_delete_control. Without this entry a
     // legitimate dryRun:true preview collapses to isDryRun===false (the
@@ -273,6 +283,8 @@ export function createDispatchTool(
               // join the same seam with the same apply/dryRun semantics.
               // sync_binary (#809) joins the same seam: dryRun:true is the
               // plan-only path; apply:true performs the chunked execute.
+              // form_set_properties + form_duplicate_control (#872 F1, F2)
+              // join the same seam with the same apply/dryRun semantics.
               name === "catalog_add_control" ||
               name === "form_add_control" ||
               name === "form_move_control" ||
@@ -284,7 +296,9 @@ export function createDispatchTool(
               name === "form_delete_control" ||
               name === "form_align_controls" ||
               name === "form_distribute_controls" ||
-              name === "sync_binary"
+              name === "sync_binary" ||
+              name === "form_set_properties" ||
+              name === "form_duplicate_control"
               ? resolveIsDryRun(normalizedInput)
               : name === "generate_form" && hasOwn(normalizedInput, "dryRun")
                 ? resolveIsDryRun(normalizedInput)

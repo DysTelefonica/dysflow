@@ -65,6 +65,14 @@ const POLICY_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   "apply_form_design_plan",
   "form_set_property",
   "form_delete_control",
+  // Issue #872 F1 + F2 — form_set_properties + form_duplicate_control
+  // share the form-mutation-family plan-by-default contract. Without this
+  // exemption a preview-intended call (no dryRun/apply key) would silently
+  // perform a REAL write in developer mode because the policy helper
+  // injects dryRun:false for any routine-dev-write tool NOT in this
+  // exempt set when the caller passes neither dryRun nor apply.
+  "form_set_properties",
+  "form_duplicate_control",
   // Issue #816 phase 3 — the form_align_controls + form_distribute_controls
   // tools share the same plan-by-default contract as the rest of the form
   // mutation family. Without this exemption a preview-intended call (no

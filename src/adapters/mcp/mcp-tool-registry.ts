@@ -39,6 +39,27 @@ export const VBA_SYNC_TOOL_NAMES = [
   // type picks them up and the route table can reference them.
   "form_set_property",
   "form_delete_control",
+  // Issue #872 — four net-new tools surface the form-UX frictions that
+  // real-world reorganisations hit. F1 + F2 join the applyGuardedFormWrite
+  // seam (write-gated, mutatesBinary:true, mutatesFilesystem:true);
+  // F5 is pure read-only (mutatesBinary:false, mutatesFilesystem:false).
+  //   F1 `form_set_properties` — atomic batch property updates against a
+  //     single control. Collapses N `form_set_property` calls into one IR
+  //     mutation. LayoutCached* keys are silently stripped (F3).
+  //   F2 `form_duplicate_control` — clone an existing control under a
+  //     new name, with optional property overrides and target section.
+  //     Event bindings carry over verbatim — the duplicated control is
+  //     pre-wired with the source's behaviour.
+  //   F5 `form_get_geometry` — read-only geometry helper for one control.
+  //   F5 `form_list_controls` — read-only flat inventory with the
+  //     hasEventBinding bit per control.
+  // The four names are registered here BEFORE MCP_TOOL_ROUTES so the
+  // GeneratedDispatchToolName type picks them up and the route table can
+  // reference them. vba-sync 45 -> 47 (F1, F2) + 49 (F5); total 69 -> 73.
+  "form_set_properties",
+  "form_duplicate_control",
+  "form_get_geometry",
+  "form_list_controls",
   // Phase 3 (#816) — batch geometry ergonomics. Two net-new write-class
   // tools (form_align_controls + form_distribute_controls) sharing the
   // same applyGuardedFormWrite seam as the Phase 6 form mutation family.

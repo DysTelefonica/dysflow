@@ -61,6 +61,13 @@ const implementedToolNames = new Set<DysflowMcpToolName>([
   // Phase 6 (#813) — atomic exposure of the form mutation family.
   "form_set_property",
   "form_delete_control",
+  // Issue #872 F1 + F2 — batch property updates + control duplication;
+  // F5 — read-only geometry + control-list helpers. See the route table
+  // for the mutates flags + risk classification.
+  "form_set_properties",
+  "form_duplicate_control",
+  "form_get_geometry",
+  "form_list_controls",
   // Phase 3 (#816) — batch geometry ergonomics. Align + distribute verbs.
   "form_align_controls",
   "form_distribute_controls",
@@ -247,6 +254,44 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // LoadFromText gate. Write-gated.
   form_distribute_controls:
     "Distribute N named controls in a version-controlled .form.txt evenly along an axis (horizontal | vertical). Without `spacing`, distributes across the bounding box of the selection (first control stays at start, last at end, middle ones spaced evenly). With `spacing` (twips) provided, uses the exact gap between consecutive control edges. Only the moved axis property (`Left` for horizontal; `Top` for vertical) changes — Name, type, Width, Height, other layout properties, event bindings, and codeBehind are preserved verbatim. Refuses <2 controls (FORM_MUTATION_INVALID — issue acceptance criterion), unknown control names (FORM_CONTROL_NOT_FOUND), and missing geometry (FORM_MUTATION_INVALID). Never touches codeBehind. Routes through the applyGuardedFormWrite seam — defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate. Write-gated.",
+  // Issue #872 F1 — `form_set_properties` collapses N `form_set_property`
+  // calls into one atomic IR mutation. The whole batch either applies
+  // verbatim or throws FORM_PROPERTY_PROTECTED / FORM_PROPERTY_NOT_SCALAR
+  // / FORM_CONTROL_NOT_FOUND before any IR mutation lands. The most
+  // common case (full geometry Left+Top+Width+Height) drops from 4
+  // round trips to 1. LayoutCached* keys are silently dropped (F3) so
+  // a caller passing them after form_list_controls / form_get_geometry
+  // gets a no-op rather than a refusal — Access regenerates them on
+  // the next save and the semantic-diff classifier strips them anyway.
+  // Identity keys (Name) and protected/metadata keys (Checksum, Format,
+  // PrtDevMode*) are still refused with FORM_PROPERTY_PROTECTED. Blob
+  // entries (PrtMip, PrtDevNamesW, FormatConditions, ...) refuse scalar
+  // replacement with FORM_PROPERTY_NOT_SCALAR — same per-key guards
+  // as form_set_property. Routes through the applyGuardedFormWrite seam
+  // (defaults to dry-run; apply:true writes the source and validates
+  // through the import_modules LoadFromText gate). Write-gated.
+  form_set_properties:
+    "Atomically write a map of properties (Caption, Left, Top, Width, Height, ...) against one named control in a version-controlled .form.txt. Collapses N form_set_property round trips into one IR mutation — the typical full-geometry case (Left+Top+Width+Height) drops from 4 calls to 1. LayoutCached* keys are silently dropped (Issue #872 F3 — Access IDE serialisation noise; never written, regenerated on next save). All other per-key guards carry over: 'Name' is refused (use form_rename_control), protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement with FORM_PROPERTY_NOT_SCALAR. The batch is atomic — any per-key throw aborts the whole operation before any IR mutation lands (no partial writes). Refuses unknown controls with FORM_CONTROL_NOT_FOUND. Routes through the applyGuardedFormWrite seam (defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate). Write-gated.",
+  // Issue #872 F2 — `form_duplicate_control` clones an existing control
+  // under a new name with optional property/geometry overrides. The
+  // source control's type, entries, children, event bindings
+  // ([Event Procedure]), tab order, GUID, and metadata are deep-cloned
+  // verbatim — a duplicated control comes pre-wired with the source's
+  // behaviour. The caller can override any scalar on top via the
+  // `overrides` map (Caption, Left, Top, Width, Height, ...). Same
+  // per-key guards as form_set_properties apply to the overrides:
+  // 'Name' is ignored (identity always wins via newName), protected /
+  // metadata keys throw FORM_PROPERTY_PROTECTED, blob-kind entries
+  // refuse scalar replacement, LayoutCached* keys are silently dropped
+  // (F3). Refuses unknown source (FORM_DUPLICATE_SOURCE_MISSING) and
+  // name collisions (FORM_DUPLICATE_CONTROL) — both before any IR
+  // mutation. Optionally targets a different section via
+  // `targetSectionName` (mirrors addControl's section resolution).
+  // Routes through the applyGuardedFormWrite seam (defaults to dry-run;
+  // apply:true writes the source and validates through the
+  // import_modules LoadFromText gate). Write-gated.
+  form_duplicate_control:
+    "Deep-clone an existing control under a new name in a version-controlled .form.txt. The source control's type, entries, children, event bindings (`[Event Procedure]`), tab order, GUID, and metadata are copied verbatim — a duplicated control is pre-wired with the source's behaviour. Caller can override any scalar on top via the `overrides` map (Caption, Left, Top, Width, Height, ...). 'Name' is always ignored in overrides (identity wins via newName); protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED; blob-kind entries refuse scalar replacement (FORM_PROPERTY_NOT_SCALAR); LayoutCached* keys are silently dropped (Issue #872 F3). Optional `targetSectionName` pushes the clone into a different section (mirrors form_add_control's section resolution). Refuses unknown source controls (FORM_DUPLICATE_SOURCE_MISSING) and name collisions (FORM_DUPLICATE_CONTROL) — both before any IR mutation lands. Routes through the applyGuardedFormWrite seam (defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate). Write-gated.",
   verify_form_ui:
     "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
   // Issue #814 — pure, deterministic, read-only. The renderer is the
@@ -293,6 +338,29 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // no filesystem mutation, no schema fetch.
   verify_form_bindings:
     'Validate a .form.txt\'s ControlSource + RowSource bindings against a caller-supplied schema aggregate. Reads the .form.txt through the fileSystem port, parses to FormIR, and delegates to the pure `validateBindings` core service. Returns `{ formName, controls, findings[] }` where every finding carries `code` (typed: `FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN` / `FORM_BINDING_EMPTY` / `FORM_BINDING_SQL_UNPARSEABLE` / `FORM_BINDING_TYPE_MISMATCH`), `severity:"warning"` (informational; never gating), `controlName`, and structured `data` (table, column, binding). The `schema` parameter accepts either a multi-table `Record<tableName, ColumnSchema[]>` aggregate (fan out one `get_schema` per table upstream) or a single-table `get_schema` payload `{schema:[{name,type,nullable}], tableName:"..."}` — the adapter normalizes both. The adapter itself never fetches the schema; the caller owns the upstream `get_schema` calls. Pure read-class — no Access, no COM, no filesystem mutation. Path resolution mirrors the other Phase 2 tools (sourcePath/path or projectId+formName).',
+  // Issue #872 F5 — `form_get_geometry` is the read-only geometry
+  // helper. Returns the Left/Top/Width/Height box (twips) of one named
+  // control plus the LayoutCached* values for symmetry with the source
+  // artifact. Stops agents from parsing .form.txt by hand — this is
+  // the canonical "where is this control on the canvas?" verb. Pure
+  // read-class: never opens Access, never writes to disk, never
+  // touches the binary. Refuses unknown controls with
+  // FORM_CONTROL_NOT_FOUND. Path resolution mirrors the Phase 2
+  // Perception siblings (sourcePath/path or projectId+formName).
+  form_get_geometry:
+    "Return the Left/Top/Width/Height box (twips) of one named control in a version-controlled .form.txt, plus the LayoutCached* values for symmetry with the source artifact. Reads the .form.txt through the fileSystem port, parses to FormIR, and resolves the control via the canonical tree walk. Returns `{ controlName, type, left, top, width, height, layoutCachedLeft?, layoutCachedTop?, layoutCachedWidth?, layoutCachedHeight? }`. Refuses unknown controls with FORM_CONTROL_NOT_FOUND; refuses missing sourcePath with FORM_SPEC_MISSING. Pure read-class — no Access, no COM, no filesystem mutation, no write gate. Path resolution mirrors the Phase 2 Perception siblings (sourcePath/path or projectId+formName). Stops agents from parsing .form.txt by hand — this is the canonical 'where is this control on the canvas?' verb.",
+  // Issue #872 F5 — `form_list_controls` is the read-only inventory
+  // helper. Returns the flat list of every named control in the form
+  // (optionally scoped to one section) with each control's name,
+  // type, geometry box, and hasEventBinding bit. The latter reflects
+  // whether the control carries any OnXxx = [Event Procedure] entry
+  // verbatim — useful for agents that need to enumerate controls
+  // before mutating or wiring handlers. Pure read-class: never opens
+  // Access, never writes to disk, never touches the binary. Path
+  // resolution mirrors the Phase 2 Perception siblings
+  // (sourcePath/path or projectId+formName).
+  form_list_controls:
+    "Return the flat inventory of named controls in a version-controlled .form.txt (optionally scoped to one section via `section`). Each entry carries `{ name, type, left, top, width, height, hasEventBinding }` — the geometry comes from the same parseBoundingBox helper the form UI geometry lint uses, and hasEventBinding reflects whether the control carries any OnXxx = [Event Procedure] entry verbatim. `limit` caps the response (default 1000, hard ceiling 5000); when the matched inventory exceeds the limit the response sets `truncated: true` and includes `totalCount` with the full match count so the caller can paginate. Useful for agents enumerating controls before mutating or wiring handlers. Pure read-class — no Access, no COM, no filesystem mutation, no write gate. Path resolution mirrors the Phase 2 Perception siblings (sourcePath/path or projectId+formName). Stops agents from parsing .form.txt by hand — this is the canonical 'what controls does this form have?' verb.",
   // Issue #809 — sync_binary is a workflow that composes three existing
   // primitives (verify_code + import_modules + export_modules) into a single
   // round-trip: verify -> plan -> execute -> re-verify -> recommend. Default
