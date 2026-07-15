@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2.12.0] - 2026-07-15
+
+- **fix(config):** `resolve_project` accepts a real sibling Git worktree as the binary's owning tree (round-8 follow-up to #863). PATH_MISMATCH and OUTSIDE_PROJECT_ROOT retain their meanings for non-sibling and reparse-point cases. New `projectConfig.owningWorktree` field surfaces the resolved owning tree to consumers.
+
 ## [v2.11.2] - 2026-07-15
 
 Patch release fixing the v2.11.1 regression where `list_vba_modules` returned

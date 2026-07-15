@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -202,5 +202,154 @@ describe("per-worktree project config contract", () => {
       JSON.stringify({ id: "app", accessPath: "app.accdb" }),
     );
     expect(diagnoseProjectConfig(root, { contextId: "request-context" }).status).toBe("valid");
+  });
+});
+
+describe("sibling worktree (#873)", () => {
+  // Two tempdirs at the SAME parent, each with its own stub `.git`, so the
+  // three-way AND criterion (same parent + own .git + different identity) is
+  // satisfied and the accessPath's canonical realpath lands in the sibling.
+  const siblingWorktree = (prefix: string): string => {
+    const r = mkdtempSync(join(tmpdir(), prefix));
+    writeFileSync(join(r, ".git"), "gitdir: fixture");
+    return r;
+  };
+
+  // ADD-873-1 — valid real sibling worktree is accepted.
+  it("accepts a valid real sibling worktree as the binary's owning tree", () => {
+    const cwd = siblingWorktree("dysflow-cwd-sib-");
+    const other = siblingWorktree("dysflow-sibling-");
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(cwd, "src"));
+    const access = join(other, "Expedientes.accdb");
+    writeFileSync(access, "");
+    writeFileSync(
+      join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "expedientes",
+        accessPath: access,
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      const result = diagnoseProjectConfig(cwd, { projectId: "expedientes" });
+      expect(result).toMatchObject({ status: "valid", writeReady: true });
+      expect(result.owningWorktree).toMatch(/^sibling:/);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  // ADD-873-2 — call-level overrides targeting the sibling are accepted.
+  it("accepts call-level overrides that target the sibling worktree", () => {
+    const cwd = siblingWorktree("dysflow-cwd-sib2-");
+    const other = siblingWorktree("dysflow-sibling2-");
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(cwd, "src"));
+    const access = join(other, "Expedientes.accdb");
+    writeFileSync(access, "");
+    writeFileSync(
+      join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "expedientes",
+        accessPath: access,
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      expect(
+        diagnoseProjectConfig(cwd, {
+          projectId: "expedientes",
+          accessPath: access,
+          destinationRoot: join(cwd, "src"),
+        }),
+      ).toMatchObject({ status: "valid", writeReady: true });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  // ADD-873-3 — junction (Windows reparse point) stays REJECTED even though
+  // the sibling is real. Platform-gated; on Linux CI this is a no-op.
+  const itJunction = process.platform === "win32" ? it : it.skip;
+  itJunction("rejects a junction inside cwd that points at the sibling", () => {
+    const cwd = siblingWorktree("dysflow-cwd-junc-");
+    const other = siblingWorktree("dysflow-sibling-junc-");
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(cwd, "src"));
+    mkdirSync(join(cwd, ".worktrees"));
+    const link = join(cwd, ".worktrees", "link");
+    // `symlinkSync(..., 'junction')` builds a Windows directory junction
+    // without admin privileges and without spawning PowerShell.
+    symlinkSync(other, link, "junction");
+    try {
+      const access = join(link, "Expedientes.accdb");
+      writeFileSync(access, "");
+      writeFileSync(
+        join(cwd, ".dysflow", "project.json"),
+        JSON.stringify({
+          id: "expedientes",
+          accessPath: access,
+          destinationRoot: "src",
+        }),
+      );
+      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
+        status: "outside-project-root",
+        writeReady: false,
+      });
+    } finally {
+      rmSync(link, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  // ADD-873-4 — arbitrary cross-project path (no .git at parent) stays
+  // rejected as PATH_MISMATCH. Regression guard for #863 invariant.
+  it("rejects an arbitrary cross-project path that is not a real sibling worktree", () => {
+    const cwd = siblingWorktree("dysflow-cwd-foreign-");
+    const foreign = mkdtempSync(join(tmpdir(), "dysflow-foreign-"));
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(cwd, "src"));
+    const foreignAccess = join(foreign, "otro.accdb");
+    writeFileSync(foreignAccess, "");
+    writeFileSync(
+      join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "foreign",
+        accessPath: foreignAccess,
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      expect(diagnoseProjectConfig(cwd, { projectId: "foreign" })).toMatchObject({
+        status: "path-mismatch",
+        writeReady: false,
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(foreign, { recursive: true, force: true });
+    }
+  });
+
+  // ADD-873-6 — single-worktree happy path: no sibling, owningWorktree is "cwd".
+  it("reports owningWorktree 'cwd' on the single-worktree happy path", () => {
+    const root = siblingWorktree("dysflow-single-873-");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "app", accessPath: "app.accdb", destinationRoot: "src" }),
+    );
+    try {
+      const result = diagnoseProjectConfig(root, { projectId: "app" });
+      expect(result).toMatchObject({ status: "valid", writeReady: true });
+      expect(result.owningWorktree).toBe("cwd");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
