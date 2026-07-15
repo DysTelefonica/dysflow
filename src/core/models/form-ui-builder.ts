@@ -32,6 +32,7 @@ export type CodeGraphBehaviorEvidence = {
 
 export type FormUiBehaviorMap = {
   formName: string;
+  codegraphIndexPath?: string | null;
   controls: Array<{
     name: string;
     type: string;

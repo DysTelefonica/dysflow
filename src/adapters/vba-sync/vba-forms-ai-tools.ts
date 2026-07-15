@@ -96,7 +96,10 @@ async function mapFromFile(
   const autoFetch = params.autoFetchCodeGraph === true;
   const invoker = orchestrator?.codeGraphVbaInvoker;
   if (!autoFetch || !invoker) {
-    return successResult(buildFormUiBehaviorMap(analysisData, callerEvidence));
+    return successResult({
+      ...buildFormUiBehaviorMap(analysisData, callerEvidence),
+      codegraphIndexPath: null,
+    });
   }
   // Issue #830 — opt-in autoFetchCodeGraph path. Best-effort + graceful
   // fallback: any invoker failure (no index, CLI missing, parse error,
@@ -105,6 +108,7 @@ async function mapFromFile(
   const fetched = await safeFetch(invoker, analysisData, orchestrator);
   const merged = mergeEvidence(callerEvidence, fetched.evidence);
   const map = buildFormUiBehaviorMap(analysisData, merged);
+  map.codegraphIndexPath = fetched.codegraphIndexPath;
   if (fetched.warning !== undefined) {
     map.warnings = [...map.warnings, fetched.warning];
   }
@@ -123,11 +127,19 @@ async function safeFetch(
       formName: string;
       controlNames: string[];
       projectPath: string;
-    }) => Promise<{ evidence?: CodeGraphBehaviorEvidence[]; warning?: string }>;
+    }) => Promise<{
+      evidence?: CodeGraphBehaviorEvidence[];
+      codegraphIndexPath?: string | null;
+      warning?: string;
+    }>;
   },
   analysis: ReturnType<typeof analyzeFormUi>,
   orchestrator: VbaFormsOrchestrator | undefined,
-): Promise<{ evidence: CodeGraphBehaviorEvidence[]; warning?: string }> {
+): Promise<{
+  evidence: CodeGraphBehaviorEvidence[];
+  codegraphIndexPath: string | null;
+  warning?: string;
+}> {
   try {
     const result = await invoker.fetchBehaviorEvidence({
       formName: analysis.formName,
@@ -136,12 +148,15 @@ async function safeFetch(
     });
     return {
       evidence: Array.isArray(result?.evidence) ? result.evidence : [],
+      codegraphIndexPath:
+        typeof result?.codegraphIndexPath === "string" ? result.codegraphIndexPath : null,
       warning: typeof result?.warning === "string" ? result.warning : undefined,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
       evidence: [],
+      codegraphIndexPath: null,
       warning: `CodeGraph-VBA invoker threw unexpectedly: ${message}. Falling back to .form.txt-declared events only.`,
     };
   }

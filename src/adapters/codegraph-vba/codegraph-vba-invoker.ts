@@ -18,6 +18,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import type { CodeGraphBehaviorEvidence } from "../../core/models/form-ui-builder.js";
@@ -48,6 +49,7 @@ export type CodeGraphVbaEvidenceRequest = {
  */
 export type CodeGraphVbaEvidenceResult = {
   evidence: CodeGraphBehaviorEvidence[];
+  codegraphIndexPath: string | null;
   warning?: string;
 };
 
@@ -114,14 +116,22 @@ export function createDefaultCodeGraphVbaInvoker(
       if (!existsSync(projectPath)) {
         return {
           evidence: [],
+          codegraphIndexPath: null,
           warning: `CodeGraph-VBA lookup skipped: project path "${projectPath}" does not exist.`,
         };
       }
-      const codegraphDir = joinPath(projectPath, ".codegraph");
-      if (!existsSync(codegraphDir)) {
+      const forkIndex = join(projectPath, ".codegraph-vba");
+      const upstreamIndex = join(projectPath, ".codegraph");
+      const codegraphIndexPath = existsSync(forkIndex)
+        ? forkIndex
+        : existsSync(upstreamIndex)
+          ? upstreamIndex
+          : null;
+      if (codegraphIndexPath === null) {
         return {
           evidence: [],
-          warning: `CodeGraph-VBA lookup skipped: no .codegraph/ index found in "${projectPath}". Run \`codegraph-vba init\` to enable, or pass \`codegraphEvidence\` explicitly.`,
+          codegraphIndexPath: null,
+          warning: `CodeGraph-VBA lookup skipped: no index found at "${forkIndex}/" (fork) or "${upstreamIndex}/" (upstream). Run \`codegraph-vba init\` to enable, or pass \`codegraphEvidence\` explicitly.`,
         };
       }
 
@@ -145,10 +155,11 @@ export function createDefaultCodeGraphVbaInvoker(
         if (evidence.length === 0) {
           return {
             evidence: [],
+            codegraphIndexPath,
             warning: `CodeGraph-VBA returned no handler evidence for form "${formName}". The form may declare events with no VBA handlers, or the index is stale.`,
           };
         }
-        return { evidence };
+        return { evidence, codegraphIndexPath };
       } catch (err) {
         // ENOENT (CLI not in PATH), non-zero exit, timeout, parse failure,
         // and "index not initialized" stderr messages all land here. The
@@ -157,6 +168,7 @@ export function createDefaultCodeGraphVbaInvoker(
         const message = err instanceof Error ? err.message : String(err);
         return {
           evidence: [],
+          codegraphIndexPath,
           warning: `CodeGraph-VBA lookup failed for form "${formName}": ${message}. Falling back to .form.txt-declared events only.`,
         };
       }
@@ -165,12 +177,6 @@ export function createDefaultCodeGraphVbaInvoker(
 }
 
 // ---- helpers --------------------------------------------------------------
-
-function joinPath(parent: string, child: string): string {
-  // Tiny path joiner — we don't need path.resolve semantics here, just
-  // "<parent>/<child>" without a trailing slash on parent.
-  return `${parent.replace(/[\\/]+$/, "")}/${child}`;
-}
 
 /**
  * Parse the JSON output of `codegraph-vba explore --json` into a list of

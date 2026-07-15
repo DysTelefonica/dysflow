@@ -241,6 +241,61 @@ describe("sibling worktree (#873)", () => {
     }
   });
 
+  it("accepts destinationRoot inside the sibling that owns the configured binary", () => {
+    const cwd = siblingWorktree("dysflow-cwd-dest-sib-");
+    const sibling = siblingWorktree("dysflow-dest-sibling-");
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(sibling, "src"));
+    const access = join(sibling, "Expedientes.accdb");
+    writeFileSync(access, "");
+    writeFileSync(
+      join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "expedientes",
+        accessPath: access,
+        destinationRoot: join(sibling, "src"),
+      }),
+    );
+    try {
+      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
+        status: "valid",
+        writeReady: true,
+        owningWorktree: `sibling:${sibling.replaceAll("\\", "/")}`,
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects destinationRoot outside the sibling that owns the configured binary", () => {
+    const cwd = siblingWorktree("dysflow-cwd-dest-foreign-");
+    const sibling = siblingWorktree("dysflow-dest-owner-");
+    const foreign = mkdtempSync(join(tmpdir(), "dysflow-dest-foreign-"));
+    mkdirSync(join(cwd, ".dysflow"));
+    mkdirSync(join(foreign, "src"));
+    const access = join(sibling, "Expedientes.accdb");
+    writeFileSync(access, "");
+    writeFileSync(
+      join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "expedientes",
+        accessPath: access,
+        destinationRoot: join(foreign, "src"),
+      }),
+    );
+    try {
+      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
+        status: "outside-project-root",
+        writeReady: false,
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(sibling, { recursive: true, force: true });
+      rmSync(foreign, { recursive: true, force: true });
+    }
+  });
+
   // ADD-873-2 — call-level overrides targeting the sibling are accepted.
   it("accepts call-level overrides that target the sibling worktree", () => {
     const cwd = siblingWorktree("dysflow-cwd-sib2-");

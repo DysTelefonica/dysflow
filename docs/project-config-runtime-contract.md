@@ -18,6 +18,8 @@ A single repository's `accessPath` may legitimately live in a **sibling Git work
 
 If all three hold, the diagnostic carries `owningWorktree: "sibling:<abs-canonical-sibling-root>"` where `<abs-canonical-sibling-root>` is the canonical realpath of the resolved sibling. For the historical happy path where the configured target lives inside `cwd`, the value is `"cwd"`. The field is **optional** on `ProjectConfigDiagnostic`; consumers reading `get_capabilities.projectConfig.owningWorktree` MUST treat absence as the historical happy path.
 
+Since v2.13.0 (#880), `destinationRoot` uses the same effective owning-worktree identity as `accessPath`: it may remain under the active worktree or live inside the recognized sibling that owns the binary. A destination in any other worktree or arbitrary external directory still fails with `OUTSIDE_PROJECT_ROOT`.
+
 `PATH_MISMATCH` and `OUTSIDE_PROJECT_ROOT` retain their original meanings: `PATH_MISMATCH` is what you get for arbitrary cross-project paths (e.g. a sibling directory with NO `.git` anywhere along its ancestors); `OUTSIDE_PROJECT_ROOT` is what you get for junctions, symlinks, or targets whose canonical worktree is neither cwd nor a recognized sibling.
 
 ### Worked example (EXPEDIENTES layout)

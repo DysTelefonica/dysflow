@@ -1,10 +1,18 @@
 # Changelog
 
-## [v2.12.2] - 2026-07-15
+## [Unreleased]
+
+- fix(forms): probe `.codegraph-vba/` before `.codegraph/` for `map_form_behavior` auto-fetch and expose `codegraphIndexPath` (#881)
+
+## [v2.13.1] - 2026-07-15
 
 - fix(query_sql): honor caller-supplied `target` and `accessPath`, and report the selected database in `resolvedAccessPath` (#882)
 
   `query_sql` now projects `accessPath` onto the runner's explicit `databasePath` and preserves semantic `target` overrides, preventing the configured backend from silently winning. Simple, single-table `SELECT` statements receive conservative `TABLE_NOT_IN_DATABASE` / `COLUMN_NOT_IN_TABLE` schema errors; complex SQL retains the ACE/Jet classification rather than guessing.
+
+## [v2.13.0] - 2026-07-15
+
+- fix(config): allow `destinationRoot` inside the recognized sibling worktree that owns the configured Access binary, while continuing to reject foreign worktrees and arbitrary external directories (#880)
 
 ## [v2.12.1] - 2026-07-15
 
