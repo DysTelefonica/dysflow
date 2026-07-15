@@ -130,6 +130,12 @@ describe("spawnVbaManager — child env derivation (issue #869)", () => {
     return last?.[0]?.env;
   }
 
+  function lastCallArgs(): readonly string[] | undefined {
+    const calls = vi.mocked(spawnPowerShellProcess).mock.calls;
+    const last = calls.at(-1);
+    return last?.[0]?.args;
+  }
+
   it.skipIf(process.platform !== "win32")(
     "Case A — derives ACCESS_VBA_PASSWORD and DYSFLOW_ACCESS_PASSWORD when password is set and env is undefined",
     async () => {
@@ -199,6 +205,65 @@ describe("spawnVbaManager — child env derivation (issue #869)", () => {
       // must stay `undefined` so `buildChildEnv` (default-executor.ts:81-92)
       // does not receive a fabricated stub it might merge with.
       expect(lastCallEnv()).toBeUndefined();
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Case D — password value never appears in the spawnPowerShellProcess args (rejected variant 2 guard)",
+    async () => {
+      // The round-9 fix carries the password via env. Variant 2 (rejected in
+      // proposal.md) would have added `-Password <value>` to the args vector;
+      // that puts the secret on the process command line, visible to `ps` /
+      // Process Monitor / ETW traces. The variant-2-rejection contract is
+      // pinned here so a future maintainer cannot silently re-introduce it.
+      const secret = "secret-token-do-not-leak";
+
+      await spawnVbaManager({
+        scriptPath: "ignored.ps1",
+        action: "List-VbaModules",
+        accessPath: "ignored.accdb",
+        destinationRoot: "ignored",
+        moduleNames: [],
+        json: true,
+        extra: {},
+        timeoutMs: 5_000,
+        password: secret,
+        env: undefined,
+      });
+
+      const args = lastCallArgs() ?? [];
+      // (1) The password value must not appear as a literal array element.
+      expect(args).not.toContain(secret);
+      // (2) The password value must not appear as a substring of any arg.
+      //     Catches the `-Password <value>` leak even if a future maintainer
+      //     wraps it in some flag-prefix helper.
+      const leaked = args.find((arg) => typeof arg === "string" && arg.includes(secret));
+      expect(leaked, `password leaked in args: ${JSON.stringify(args)}`).toBeUndefined();
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Case D-bis — password value never appears in args even when env is explicit (Case B path)",
+    async () => {
+      const secret = "another-secret-token";
+
+      await spawnVbaManager({
+        scriptPath: "ignored.ps1",
+        action: "List-VbaModules",
+        accessPath: "ignored.accdb",
+        destinationRoot: "ignored",
+        moduleNames: [],
+        json: true,
+        extra: {},
+        timeoutMs: 5_000,
+        password: secret,
+        env: { ACCESS_VBA_PASSWORD: "explicit", FOO: "bar" },
+      });
+
+      const args = lastCallArgs() ?? [];
+      expect(args).not.toContain(secret);
+      const leaked = args.find((arg) => typeof arg === "string" && arg.includes(secret));
+      expect(leaked, `password leaked in args: ${JSON.stringify(args)}`).toBeUndefined();
     },
   );
 });
