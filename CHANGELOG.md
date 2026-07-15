@@ -11,6 +11,10 @@
 - Merge pull request #875 from DysTelefonica/fix/873-sibling-worktree-owning-tree
 - test(vba-sync): assert no password leak in spawnVbaManager args (issue 869 followup W-C1) (#878)
 
+### Verified concerns (resolved, no code change required)
+
+- **Env-isolated harness risk** (raised in the round-9 verify-report followups, vicinity of W-C2/W-C1): the `dysflow` MCP's `spawnMcp()` in the new E2E spreads `{ ...process.env, ACCESS_VBA_PASSWORD, DYSFLOW_ACCESS_PASSWORD }` to the child subprocess. `buildChildEnv` (`src/adapters/powershell/default-executor.ts:81-92`) uses a hardcoded 15-key whitelist (`POWERSHELL_SYSTEM_ENV_KEYS`: `SystemRoot`, `windir`, `PATH`, `PATHEXT`, `TEMP`, `TMP`, `USERPROFILE`, `USERNAME`, `COMPUTERNAME`, `LOCALAPPDATA`, `APPDATA`, `HOMEDRIVE`, `HOMEPATH`, `HOME`, `USER`) that excludes `ACCESS_VBA_PASSWORD` and `DYSFLOW_ACCESS_PASSWORD`. The `...process.env` spread is therefore functionally inconsequential — the password does not reach the child PowerShell via that path. Investigation and dismissal lives in PR #876's `explore.md` Q1-Q4.
+
 ## [v2.11.2] - 2026-07-15
 
 Patch release fixing the v2.11.1 regression where `list_vba_modules` returned
