@@ -45,7 +45,7 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
     expect(result.warning).toMatch(/does not exist/);
   });
 
-  it("returns empty evidence + warning when .codegraph/ is absent", async () => {
+  it("reports both supported index paths when neither is present", async () => {
     // Create a fresh sibling temp dir without `.codegraph/` so the absence
     // check fires. The shared `projectRoot` has `.codegraph/`, so we can't
     // reuse it for this case.
@@ -59,11 +59,40 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
       });
 
       expect(result.evidence).toEqual([]);
-      expect(result.warning).toMatch(/no \.codegraph\/ index found/);
+      expect(result.codegraphIndexPath).toBeNull();
+      expect(result.warning).toContain(".codegraph-vba/");
+      expect(result.warning).toContain(".codegraph/");
       expect(result.warning).toMatch(/Run `codegraph-vba init`/);
     } finally {
       rmSync(emptyProjectRoot, { recursive: true, force: true });
     }
+  });
+
+  it("uses the fork .codegraph-vba index before the upstream index", async () => {
+    const root = mkdtempSync(join(tmpdir(), "codegraph-vba-fork-priority-"));
+    mkdirSync(join(root, ".codegraph-vba"));
+    mkdirSync(join(root, ".codegraph"));
+    const scriptPath = join(root, "success.cmd");
+    writeFileSync(
+      scriptPath,
+      "@node -e \"console.log(JSON.stringify({results:[{handler:'cmdSave_Click',callPath:['cmdSave_Click']}]}))\"\r\n",
+    );
+    try {
+      const result = await createDefaultCodeGraphVbaInvoker({ command: scriptPath })
+        .fetchBehaviorEvidence({ formName: "Customer", controlNames: ["cmdSave"], projectPath: root });
+      expect(result.codegraphIndexPath).toBe(join(root, ".codegraph-vba"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to the upstream .codegraph index", async () => {
+    const root = mkdtempSync(join(tmpdir(), "codegraph-vba-upstream-"));
+    mkdirSync(join(root, ".codegraph"));
+    const result = await createDefaultCodeGraphVbaInvoker({ command: "missing-codegraph-cli" })
+      .fetchBehaviorEvidence({ formName: "Customer", controlNames: [], projectPath: root });
+    expect(result.codegraphIndexPath).toBe(join(root, ".codegraph"));
+    rmSync(root, { recursive: true, force: true });
   });
 
   it("returns empty evidence + warning when CLI command is not found (ENOENT)", async () => {

@@ -364,7 +364,7 @@ callers do not have to re-filter `actionableDifferent` themselves.
       "autoFetchCodeGraph": true
     }
     ```
-*   **Notes**: Pass `autoFetchCodeGraph: true` to relax the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba). The adapter invokes codegraph-vba internally to fetch call-path evidence for the form's mapped controls and merges the result with any caller-supplied `codegraphEvidence`. On any invoker failure (no `.codegraph/` index, codegraph-vba CLI missing, parse error), the adapter falls back to the `.form.txt`-declared events alone and appends a warning — never throws. Boundary direction: dysflow → codegraph-vba only. The reverse direction (codegraph-vba calling dysflow) is NOT supported.
+*   **Notes**: Pass `autoFetchCodeGraph: true` to relax the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba). The adapter probes `<project>/.codegraph-vba/` first (fork), then `<project>/.codegraph/` (upstream), and returns the selected absolute directory as `codegraphIndexPath` (`null` when no index was used). It fetches call-path evidence for the form's mapped controls and merges the result with any caller-supplied `codegraphEvidence`. On any invoker failure, the adapter falls back to the `.form.txt`-declared events alone and appends a warning — never throws. Boundary direction: dysflow → codegraph-vba only. The reverse direction (codegraph-vba calling dysflow) is NOT supported.
 
 #### Preview and Verify a Design Plan
 *   **Tool**: `apply_form_design_plan`
