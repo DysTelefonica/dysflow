@@ -157,7 +157,7 @@ console.log("[i869-list-vba-modules-password-env] === Round 1: list_vba_modules 
   const child = spawnMcp();
   try {
     const { result, payload } = await callTool(child, 1, "list_vba_modules", {});
-    expect("R1.exitCode === 0", result.exitCode === 0, { exitCode: result.exitCode, stderrTail: result.stderr.slice(-2000) });
+    expect("R1.exit.code === 0", result.exit?.code === 0, { exitCode: result.exit?.code, stderrTail: result.stderr.slice(-2000) });
     expect("R1.payload parses", payload !== null, payload?.error);
     expect("R1.modules is array", Array.isArray(payload?.modules), payload?.modules);
     expect(
@@ -174,8 +174,8 @@ console.log("[i869-list-vba-modules-password-env] === Round 1: list_vba_modules 
     );
     expect(
       "R1.password_env_forwarded_no_VBA_MANAGER_FAILED",
-      !String(result.stderr ?? "").includes("VBA_MANAGER_FAILED"),
-      result.stderr?.slice(-2000),
+      !String(result.response?.error?.message ?? "").includes("VBA_MANAGER_FAILED"),
+      result.response?.error?.message,
     );
   } finally {
     child.kill();
@@ -193,7 +193,7 @@ console.log("[i869-list-vba-modules-password-env] === Round 2: round-8 non-regre
   const child = spawnMcp();
   try {
     const { result, payload } = await callTool(child, 2, "list_objects", {});
-    expect("R2.exitCode === 0", result.exitCode === 0, { exitCode: result.exitCode, stderrTail: result.stderr.slice(-2000) });
+    expect("R2.exit.code === 0", result.exit?.code === 0, { exitCode: result.exit?.code, stderrTail: result.stderr.slice(-2000) });
     expect("R2.payload parses", payload !== null, payload?.error);
     expect(
       "R2.object inventory is non-empty array",
@@ -202,8 +202,8 @@ console.log("[i869-list-vba-modules-password-env] === Round 2: round-8 non-regre
     );
     expect(
       "R2.round8_list_objects_still_works",
-      !String(result.stderr ?? "").includes("VBA_MANAGER_FAILED"),
-      result.stderr?.slice(-2000),
+      !String(result.response?.error?.message ?? "").includes("VBA_MANAGER_FAILED"),
+      result.response?.error?.message,
     );
   } finally {
     child.kill();
