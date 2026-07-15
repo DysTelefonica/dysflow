@@ -74,8 +74,24 @@ export function lintFormCode(input: LintFormInput, options: LintFormOptions = {}
 // Rule A — form-control-binding
 // ---------------------------------------------------------------------------
 
+// Issue #872 — extended allowlist for Access Form / Report member properties
+// that are NOT controls but live on the form object itself. The list is the
+// canonical subset of `MSForms.UserForm`-flavoured members plus the VBA
+// runtime helpers the Access IDE recognizes as bound to `Me.<X>`. Sources:
+//   - Access VBA language reference (Form / Report property tables).
+//   - Long-standing real-world usage like `Me.hWnd` (window handle),
+//     `Me.Moveable`, `Me.MaxButton` etc. that the IDE accepts as `Me.X`.
+//   - The previous list left `Me.hWnd` etc. as false positives; extending
+//     the set keeps `form-control-binding` trustworthy (#872 F4).
+//
+// Membership rule: the set is case-insensitive (`Set.has(name.toLowerCase())`)
+// so callers may write `Me.Hwnd`, `Me.hWnd`, `Me.HWND` — all three lint
+// cleanly. PR-time extension policy: add a member ONLY when the Access IDE
+// accepts the bare reference (no qualifier), and only when the property
+// ALREADY lives on the `Form` / `Report` object — not on a control.
 const INTRINSIC_ACCESS_FORM_REPORT_MEMBERS = new Set(
   [
+    // Lifecycle / state.
     "ActiveControl",
     "AllowAdditions",
     "AllowDeletions",
@@ -114,6 +130,81 @@ const INTRINSIC_ACCESS_FORM_REPORT_MEMBERS = new Set(
     "Undo",
     "Visible",
     "Width",
+    // Window / chrome (#872 F4 — extended allowlist).
+    "hWnd",
+    "WindowHandle",
+    "AutoResize",
+    "AutoCenter",
+    "BorderStyle",
+    "ControlBox",
+    "CloseButton",
+    "MaxButton",
+    "MinButton",
+    "Moveable",
+    "Resizable",
+    "ScrollBars",
+    "Picture",
+    "PictureSizeMode",
+    "PictureAlignment",
+    "PictureTiling",
+    "Tag",
+    "StatusBarText",
+    "ControlTipText",
+    "DefaultView",
+    "ViewsAllowed",
+    "AllowUpdating",
+    "Cycle",
+    "KeyPreview",
+    "TimerInterval",
+    "ShowToolbar",
+    "ShortcutMenu",
+    // Form-level event accessors the IDE accepts as Me.X (returns the
+    // bound handler signature name). Defensive against the false
+    // positives our real forms at GESTION_RIESGOS hit.
+    "OnOpen",
+    "OnClose",
+    "OnLoad",
+    "OnUnload",
+    "OnResize",
+    "OnTimer",
+    "OnClick",
+    "OnDblClick",
+    "OnKeyDown",
+    "OnKeyUp",
+    "OnKeyPress",
+    "OnMouseDown",
+    "OnMouseUp",
+    "OnMouseMove",
+    "OnError",
+    "OnDirty",
+    "OnUndo",
+    "OnCurrent",
+    "OnBeforeInsert",
+    "OnAfterInsert",
+    "OnBeforeDelConfirm",
+    "OnAfterDelConfirm",
+    "OnBeforeUpdate",
+    "OnAfterUpdate",
+    "OnBeforeScreenTip",
+    "OnConnect",
+    "OnDisconnect",
+    "OnFilter",
+    "OnApplyFilter",
+    "OnDeactivate",
+    "OnActivate",
+    "OnGotFocus",
+    "OnLostFocus",
+    "OnNotInList",
+    "OnPage",
+    "OnChange",
+    "OnUpdated",
+    "OnExit",
+    "OnDirty",
+    "OnPrint",
+    "OnFormat",
+    "OnRetreat",
+    "OnPush",
+    "OnMenuClick",
   ].map((member) => member.toLowerCase()),
 );
 

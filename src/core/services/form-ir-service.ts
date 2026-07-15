@@ -9,6 +9,7 @@ import type {
   CloneFromTemplateOptions,
   CloneFromTemplateResult,
   DeleteControlInput,
+  DuplicateControlInput,
   EmptyLineEntry,
   FormIR,
   FormMutationResult,
@@ -18,6 +19,7 @@ import type {
   PropertyEntry,
   RenameControlInput,
   ScalarEntry,
+  SetPropertiesInput,
   SetPropertyInput,
   TokenMap,
 } from "../models/form-ir.js";
@@ -50,7 +52,8 @@ export class FormMutationError extends Error {
       | "FORM_PROPERTY_PROTECTED"
       | "FORM_PROPERTY_NOT_SCALAR"
       | "FORM_TOKEN_MAP_INVALID"
-      | "FORM_TARGET_EXISTS",
+      | "FORM_TARGET_EXISTS"
+      | "FORM_DUPLICATE_SOURCE_MISSING",
     message: string,
   ) {
     super(message);
@@ -436,6 +439,69 @@ export function serializeFormTxt(ir: FormIR): string {
 
 const PRESERVED_METADATA_KEYS = ["Checksum", "Format", "PrtDevMode"] as const;
 
+/**
+ * Issue #872 F3 — `LayoutCached*` are Access IDE serialisation noise. The
+ * IDE caches the design-time bounding box and re-emits it on SaveAsText,
+ * but the runtime NEVER reads these keys — `parseBoundingBox` reads
+ * `Left`/`Top`/`Width`/`Height` only. The semantic-diff classifier
+ * (`form-noise-keys.ts` → `FORM_NOISE_KEYS`) strips them too, so when an
+ * agent-driven mutation changes geometry these entries drift in the diff
+ * output for no functional reason.
+ *
+ * Mutation primitives DROP caller-supplied `LayoutCached*` keys before
+ * writing. Access regenerates them on the next save, so the invariant is:
+ * "we never set LayoutCached*, Access always re-emits them — they are not
+ * part of the source-of-truth contract for these mutations".
+ */
+export const LAYOUT_CACHED_KEYS = new Set([
+  "LayoutCachedLeft",
+  "LayoutCachedTop",
+  "LayoutCachedWidth",
+  "LayoutCachedHeight",
+]);
+
+/**
+ * Return a NEW properties map with all `LayoutCached*` keys removed.
+ * Callers MUST use the returned map; the input is never mutated. Pure.
+ */
+export function stripLayoutCachedKeys(
+  properties: Readonly<Record<string, string | number | boolean>>,
+): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  let stripped = false;
+  for (const [key, value] of Object.entries(properties)) {
+    if (LAYOUT_CACHED_KEYS.has(key)) {
+      stripped = true;
+      continue;
+    }
+    out[key] = value;
+  }
+  return stripped ? out : { ...properties };
+}
+
+/**
+ * Variant that ALSO returns the stripped keys — useful when the adapter
+ * wants to surface a `strippedProperties` bag in the response envelope.
+ */
+export function stripLayoutCachedKeysWithReport(
+  properties: Readonly<Record<string, string | number | boolean>>,
+): {
+  properties: Record<string, string | number | boolean>;
+  strippedKeys: string[];
+} {
+  const out: Record<string, string | number | boolean> = {};
+  const strippedKeys: string[] = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (LAYOUT_CACHED_KEYS.has(key)) {
+      strippedKeys.push(key);
+      continue;
+    }
+    out[key] = value;
+  }
+  if (strippedKeys.length === 0) return { properties: { ...properties }, strippedKeys };
+  return { properties: out, strippedKeys };
+}
+
 function cloneEntry(entry: PropertyEntry): PropertyEntry {
   if (entry.kind === "empty") return { kind: "empty" };
   if (entry.kind === "blob") return { kind: "blob", key: entry.key, lines: [...entry.lines] };
@@ -448,6 +514,23 @@ function cloneNode(node: FormNode): FormNode {
     entries: node.entries.map(cloneEntry),
     children: node.children.map(cloneNode),
   };
+}
+
+function stripPreservedMetadataFromEntries(entries: PropertyEntry[]): PropertyEntry[] {
+  return entries.filter((entry) => entry.kind === "empty" || !isPreservedMetadataKey(entry.key));
+}
+
+// Issue #872 R1-002 — recursively strip preserved-metadata entries from
+// nested descendants of the cloned control. The cloned ROOT keeps its own
+// entries (R1-001 — per-control Format/Checksum are real per-control
+// properties that Access DOES carry over on Copy/Paste), but descendants
+// must drop theirs so a nested Checksum/PrtDevMode doesn't double the
+// form-level snapshot and trip FORM_METADATA_LOSS.
+function stripPreservedMetadataFromDescendants(node: FormNode): void {
+  for (const child of node.children) {
+    child.entries = stripPreservedMetadataFromEntries(child.entries);
+    stripPreservedMetadataFromDescendants(child);
+  }
 }
 
 function cloneIr(ir: FormIR): FormIR {
@@ -574,25 +657,25 @@ function upsertScalar(node: FormNode, key: string, value: string): void {
 }
 
 function metadataSnapshot(ir: FormIR): string[] {
+  // Issue #872 R1-001 — scope to form-level metadata (preamble +
+  // ir.root.entries). Per-control Format/Checksum are real per-control
+  // properties that Access does NOT propagate to duplicates; counting
+  // them here would (a) trip FORM_METADATA_LOSS on every duplicateControl
+  // and (b) silently rewrite real per-control display format.
   const out: string[] = [];
   const visitEntry = (entry: PropertyEntry): void => {
     if (entry.kind === "empty") return;
-    if (!isPreservedMetadataKey(entry.key)) {
-      return;
-    }
+    if (!isPreservedMetadataKey(entry.key)) return;
     if (entry.kind === "blob") out.push(`${entry.key}=Begin\n${entry.lines.join("\n")}\nEnd`);
     else out.push(`${entry.key}=${entry.value}`);
   };
-  const visitNode = (node: FormNode): void => {
-    node.entries.forEach(visitEntry);
-    node.children.forEach(visitNode);
-  };
   ir.preamble.forEach(visitEntry);
-  visitNode(ir.root);
+  ir.root.entries.forEach(visitEntry);
   return out;
 }
 
 function preservedKeys(ir: FormIR): string[] {
+  // Issue #872 R1-001 — same scope as metadataSnapshot: form-level only.
   const keys = new Set<string>();
   const visitEntry = (entry: PropertyEntry): void => {
     if (entry.kind === "empty") return;
@@ -600,12 +683,8 @@ function preservedKeys(ir: FormIR): string[] {
       if (entry.key === key || entry.key.startsWith(key)) keys.add(key);
     }
   };
-  const visitNode = (node: FormNode): void => {
-    node.entries.forEach(visitEntry);
-    node.children.forEach(visitNode);
-  };
   ir.preamble.forEach(visitEntry);
-  visitNode(ir.root);
+  ir.root.entries.forEach(visitEntry);
   return [...keys].sort();
 }
 
@@ -729,6 +808,15 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
       `Property "${input.property}" is protected. Use renameControl for control identity changes.`,
     );
   }
+  // Issue #872 F3 — `LayoutCached*` are serialisation noise. We drop them
+  // here so a caller that passes them (e.g. an agent that previously
+  // computed them by hand) gets a no-op rather than a `FORM_PROPERTY_PROTECTED`
+  // error. The semantic-diff layer would strip them on the next compare
+  // anyway. The reported `changedKeys` list in the result surface omits the
+  // stripped names too.
+  if (LAYOUT_CACHED_KEYS.has(input.property)) {
+    return mutationResult(ir, next, input.controlName);
+  }
   const existing = control.entries.find(
     (entry) => entry.kind !== "empty" && entry.key === input.property,
   );
@@ -741,6 +829,201 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
 
   upsertScalar(control, input.property, normalizeMutationValue(input.value));
   return mutationResult(ir, next, input.controlName);
+}
+
+/**
+ * Issue #872 F1 — batch property updates against a single control.
+ *
+ * Atomically writes a map of properties (e.g. `{ Left: 100, Top: 200,
+ * Width: 4536, Height: 500, Caption: '"Tile 1"' }`) in one IR mutation.
+ * This collapses what would otherwise be N `setProperty` round trips —
+ * the most common case is the full geometry block (Left+Top+Width+Height)
+ * which previously required 4 separate calls.
+ *
+ * ## Contract vs `setProperty`
+ *
+ * - All the per-key guards carry over: `Name` and Access opaque metadata
+ *   keys (`Checksum`, `Format`, `PrtDevMode*`) throw `FORM_PROPERTY_PROTECTED`;
+ *   existing blob-kind entries refuse scalar replacement with
+ *   `FORM_PROPERTY_NOT_SCALAR` (the FIRST blob conflict aborts the whole
+ *   batch — the IR is never partially written).
+ * - `LayoutCached*` keys are dropped silently (see
+ *   `stripLayoutCachedKeys`). They do NOT appear in `preservedKeys`
+ *   since they're never written.
+ * - `preservedKeys` mirrors `setProperty`'s output (sorted unique set of
+ *   Access metadata keys). The caller never needs to inspect it for the
+ *   batch shape — the IR is either atomically mutated or it throws.
+ * - `changedControlName` is always `input.controlName`, regardless of how
+ *   many keys actually changed — mirroring the single-property contract
+ *   so dispatch tools can route both through the same envelope.
+ *
+ * ## Atomicity
+ *
+ * If ANY key throws, no IR mutation is applied (clone happens once at the
+ * top of the function, every `upsertScalar` walks the same `next` IR).
+ * The exception is propagated verbatim so the adapter can surface the
+ * typed error code.
+ *
+ * Pure: no I/O. Caller passes `ir`; we return a fresh `FormMutationResult`
+ * (immutable clone per the established service contract).
+ */
+export function setProperties(ir: FormIR, input: SetPropertiesInput): FormMutationResult {
+  const { controlName, properties } = input;
+  if (!controlName?.trim()) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "setProperties requires a non-empty controlName.",
+    );
+  }
+  // Issue #872 F3 — strip the LayoutCached* keys up front so the loop
+  // below never sees them, and the batch either happens atomically or
+  // throws before any IR mutation.
+  const { properties: cleanProps, strippedKeys } = stripLayoutCachedKeysWithReport(properties);
+  if (strippedKeys.length > 0 && Object.keys(cleanProps).length === 0) {
+    // The caller ONLY passed LayoutCached* keys. Return an unchanged IR
+    // with the protected-but-stripped acknowledgment on the result.
+    return mutationResult(ir, ir, controlName);
+  }
+  const next = cloneIr(ir);
+  const control = findControlNode(next.root, controlName);
+  if (control === undefined) {
+    throw new FormMutationError(
+      "FORM_CONTROL_NOT_FOUND",
+      `Control "${controlName}" was not found.`,
+    );
+  }
+  // Issue #872 R3-001 — sort the keys so two same-effect calls with
+  // different key order produce byte-identical serialized text. Existing
+  // entries keep their declaration order via upsertScalar's find-then-
+  // update path; new keys are appended in sorted order.
+  const sortedKeys = Object.keys(cleanProps).sort();
+  for (const key of sortedKeys) {
+    const value = cleanProps[key];
+    if (value === undefined) continue;
+    if (key === "Name" || isPreservedMetadataKey(key)) {
+      throw new FormMutationError(
+        "FORM_PROPERTY_PROTECTED",
+        `Property "${key}" is protected. Use renameControl for control identity changes.`,
+      );
+    }
+    const existing = control.entries.find((entry) => entry.kind !== "empty" && entry.key === key);
+    if (existing?.kind === "blob") {
+      throw new FormMutationError(
+        "FORM_PROPERTY_NOT_SCALAR",
+        `Property "${key}" is an opaque blob and cannot be replaced with a scalar value.`,
+      );
+    }
+    upsertScalar(control, key, normalizeMutationValue(value));
+  }
+  // Touch stripped keys to ensure they aren't tree-shaken by the
+  // mutation-side bookkeeping — they never made it into `next` so this
+  // is a no-op at the IR level, but pinning them here lets the adapter
+  // surface the count in `metadata.strippedLayoutCachedKeys`.
+  void strippedKeys;
+  return mutationResult(ir, next, controlName);
+}
+
+/**
+ * Issue #872 F2 — duplicate an existing control under a new name and
+ * (optionally) into a different section, with caller-supplied overrides.
+ *
+ * Algorithm:
+ *
+ *   1. Locate the source control by `sourceControlName` (`findControlNode`).
+ *   2. Deep-clone the source's `entries[]` and `children[]` (`cloneNode`).
+ *   3. Rewrite the cloned `Name` to `newName` (quoted Access form).
+ *   4. Apply caller `overrides` on top, in declaration order. Existing
+ *      blob-kind entries conflict — `FORM_PROPERTY_NOT_SCALAR`.
+ *   5. Push the clone into `findTargetContainer(ir, targetSectionName)`
+ *      (mirrors `addControl`'s section resolution: "Detalle" → detail
+ *      section's child container; default falls back to the form root's
+ *      default control container).
+ *   6. Reject duplicates whose `newName` already exists
+ *      (`FORM_DUPLICATE_CONTROL`) — preserves identity invariant.
+ *
+ * Properties carry over verbatim: type, geometry template, font, color,
+ * special-effect, picture/image bytes, event bindings (`[Event Procedure]`),
+ * tab order, GUID, etc. The caller can override any scalar on top.
+ *
+ * Pure: no I/O. Returns the standard `FormMutationResult` envelope.
+ */
+export function duplicateControl(ir: FormIR, input: DuplicateControlInput): FormMutationResult {
+  const sourceControlName = input.sourceControlName?.trim();
+  const newName = input.newName?.trim();
+  if (!sourceControlName || !newName) {
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      "duplicateControl requires sourceControlName and newName.",
+    );
+  }
+  if (hasControlNamed(ir.root, newName)) {
+    throw new FormMutationError("FORM_DUPLICATE_CONTROL", `Control "${newName}" already exists.`);
+  }
+  const next = cloneIr(ir);
+  const source = findControlNode(next.root, sourceControlName);
+  if (source === undefined) {
+    throw new FormMutationError(
+      "FORM_DUPLICATE_SOURCE_MISSING",
+      `Source control "${sourceControlName}" was not found.`,
+    );
+  }
+  const target = findTargetContainer(next.root, input.targetSectionName);
+  if (target === undefined) {
+    throw new FormMutationError(
+      "FORM_SECTION_NOT_FOUND",
+      `Target section "${input.targetSectionName ?? ""}" was not found.`,
+    );
+  }
+
+  // Deep-clone the source subtree, then rewrite its identity.
+  const clone: FormNode = cloneNode(source);
+  // Issue #872 R1-001 — per-control entries carry over verbatim
+  // (geometry, font, color, special-effect, event bindings, per-control
+  // Format/Checksum). Form-level metadata lives on `ir.root`/`ir.preamble`
+  // outside this clone; per-control preserved-metadata entries are real
+  // per-control properties that Access DOES carry over on Copy/Paste.
+  // Issue #872 R1-002 — strip preserved-metadata entries from nested
+  // descendants so a nested Checksum/PrtDevMode doesn't double the
+  // form-level snapshot and trip FORM_METADATA_LOSS.
+  stripPreservedMetadataFromDescendants(clone);
+  const nameEntry = clone.entries.find(
+    (entry): entry is ScalarEntry => entry.kind === "scalar" && entry.key === "Name",
+  );
+  if (nameEntry === undefined) {
+    // Should be impossible — findControlNode filtered for nodes carrying a
+    // `Name` entry — but be defensive so the failure is typed instead of NPE.
+    throw new FormMutationError(
+      "FORM_MUTATION_INVALID",
+      `Source control "${sourceControlName}" is missing a scalar Name entry.`,
+    );
+  }
+  nameEntry.value = quoteName(newName);
+
+  // Apply caller overrides on top of the clone. Reuse the same per-key
+  // guards as `setProperties` so callers don't have to think about it.
+  if (input.overrides !== undefined) {
+    const { properties: cleanOverrides } = stripLayoutCachedKeysWithReport(input.overrides);
+    for (const [key, value] of Object.entries(cleanOverrides)) {
+      if (key === "Name") continue; // identity always wins via newName above
+      if (isPreservedMetadataKey(key)) {
+        throw new FormMutationError(
+          "FORM_PROPERTY_PROTECTED",
+          `Override property "${key}" is protected.`,
+        );
+      }
+      const existing = clone.entries.find((entry) => entry.kind !== "empty" && entry.key === key);
+      if (existing?.kind === "blob") {
+        throw new FormMutationError(
+          "FORM_PROPERTY_NOT_SCALAR",
+          `Override property "${key}" is an opaque blob on the source control.`,
+        );
+      }
+      upsertScalar(clone, key, normalizeMutationValue(value));
+    }
+  }
+
+  target.children.push(clone);
+  return mutationResult(ir, next, newName);
 }
 
 export function deleteControl(ir: FormIR, input: DeleteControlInput): FormMutationResult {

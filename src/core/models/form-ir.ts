@@ -85,6 +85,46 @@ export type SetPropertyInput = {
   value: string | number | boolean;
 };
 
+/**
+ * Input for batch property updates against a single control.
+ *
+ * Issue #872 F1 — `form_set_properties` collapses a sequence of `form_set_property`
+ * calls into one mutation, preserving the same per-key validation contract
+ * (protected keys are rejected, blob-kind entries refuse scalar replacement,
+ * LayoutCached* entries are silently dropped — they're serialisation noise
+ * that Access regenerates on save and the semantic-diff classifier strips
+ * anyway, see `form-noise-keys.ts`).
+ */
+export type SetPropertiesInput = {
+  controlName: string;
+  properties: Record<string, string | number | boolean>;
+};
+
+/**
+ * Input for duplicating an existing control.
+ *
+ * Issue #872 F2 — `form_duplicate_control` is the canonical "make this new
+ * control like that existing one" verb: copy the entire IR subtree (type,
+ * entries, children), regenerate the `Name`, push the clone into the same
+ * target section, and apply caller-supplied property/position overrides on
+ * top. Event bindings (`[Event Procedure]`) ARE preserved — Access reads
+ * them from the cloned entries verbatim — so a duplicated control comes
+ * pre-wired with the source's behaviour unless the caller explicitly
+ * overrides the affected scalar.
+ */
+export type DuplicateControlInput = {
+  sourceControlName: string;
+  newName: string;
+  targetSectionName?: string;
+  /**
+   * Property overrides applied AFTER deep-clone. Keys may be any scalar
+   * property (`Caption`, `Left`, `Top`, `Width`, `Height`, `FontSize`,
+   * `ForeColor`, `Visible`, …). `Name` is always overridden by `newName`
+   * regardless of whether the caller passes a `Name` key here.
+   */
+  overrides?: Record<string, string | number | boolean>;
+};
+
 export type DeleteControlInput = {
   controlName: string;
 };
