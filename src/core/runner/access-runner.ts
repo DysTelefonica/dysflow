@@ -594,13 +594,34 @@ export class AccessPowerShellRunner implements AccessRunner {
             },
             config,
           );
-          const tables =
+          const linkedTablesResult = await this.runProbe(
+            {
+              action: "list_linked_tables",
+              mode: "read",
+              sql: "",
+              databasePath: resolvedAccessPath,
+            },
+            config,
+          );
+          const localTables =
             tablesResult.ok &&
             isRecord(tablesResult.data) &&
             Array.isArray(tablesResult.data.tables)
               ? tablesResult.data.tables.filter(
                   (table): table is string => typeof table === "string",
                 )
+              : undefined;
+          const linkedTables =
+            linkedTablesResult.ok &&
+            isRecord(linkedTablesResult.data) &&
+            Array.isArray(linkedTablesResult.data.tables)
+              ? linkedTablesResult.data.tables.filter(
+                  (table): table is string => typeof table === "string",
+                )
+              : undefined;
+          const tables =
+            localTables !== undefined && linkedTables !== undefined
+              ? [...localTables, ...linkedTables]
               : undefined;
           if (
             tables !== undefined &&

@@ -13,6 +13,7 @@ const noOpPreflight: AccessOperationPreflightCleanup = {
 
 describe("AccessPowerShellRunner frontend target contract", () => {
   it("reports TABLE_NOT_IN_DATABASE for a simple SELECT whose table is absent", async () => {
+    let linkedTablePresent = false;
     const runner = new AccessPowerShellRunner({
       executor: async (_command, args) => {
         const payloadIndex = args.indexOf("-PayloadJson");
@@ -22,9 +23,11 @@ describe("AccessPowerShellRunner frontend target contract", () => {
           stdout:
             payload.action === "list_tables"
               ? 'DYSFLOW_RESULT {"tables":[]}'
-              : payload.action === "get_schema"
-                ? 'DYSFLOW_RESULT {"schema":[]}'
-                : 'DYSFLOW_RESULT {"rows":[]}',
+              : payload.action === "list_linked_tables"
+                ? `DYSFLOW_RESULT {"tables":${linkedTablePresent ? '["TbConfiguracionBackends"]' : "[]"}}`
+                : payload.action === "get_schema"
+                  ? 'DYSFLOW_RESULT {"schema":[{"name":"BackendActivo"}]}'
+                  : 'DYSFLOW_RESULT {"rows":[]}',
           stderr: "",
           durationMs: 1,
           timedOut: false,
@@ -62,6 +65,26 @@ describe("AccessPowerShellRunner frontend target contract", () => {
         resolvedAccessPath: "C:/project/frontend.accdb",
       });
     }
+
+    linkedTablePresent = true;
+    const linkedResult = await runner.run(
+      {
+        kind: "query",
+        request: {
+          action: "query_sql",
+          mode: "read",
+          sql: "SELECT TOP 1 BackendActivo FROM TbConfiguracionBackends",
+          databasePath: "C:/project/frontend.accdb",
+        },
+      },
+      {
+        configSource: "repo-config",
+        allowWrites: true,
+        accessDbPath: "C:/project/frontend.accdb",
+        timeoutMs: 1_000,
+      },
+    );
+    expect(linkedResult.ok).toBe(true);
   });
 
   it("reports COLUMN_NOT_IN_TABLE for a simple SELECT whose table exists", async () => {
@@ -74,9 +97,11 @@ describe("AccessPowerShellRunner frontend target contract", () => {
           stdout:
             payload.action === "list_tables"
               ? 'DYSFLOW_RESULT {"tables":["TbConfiguracionBackends"]}'
-              : payload.action === "get_schema"
-                ? 'DYSFLOW_RESULT {"schema":[{"name":"BackendActivo"}]}'
-                : 'DYSFLOW_RESULT {"rows":[]}',
+              : payload.action === "list_linked_tables"
+                ? 'DYSFLOW_RESULT {"tables":[]}'
+                : payload.action === "get_schema"
+                  ? 'DYSFLOW_RESULT {"schema":[{"name":"BackendActivo"}]}'
+                  : 'DYSFLOW_RESULT {"rows":[]}',
           stderr: "",
           durationMs: 1,
           timedOut: false,
