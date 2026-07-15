@@ -20,6 +20,15 @@ export type ProjectConfigDiagnostic = {
   backendPath: string | null;
   destinationRoot: string | null;
   writeReady: boolean;
+  /**
+   * v2.12.0 (#873) — owning worktree identity. `"cwd"` when the configured
+   * target lives inside the active worktree (the historical happy path).
+   * `"sibling:<abs-canonical-sibling-root>"` when the target lives in a
+   * real sibling Git worktree (same parent + own `.git` + different
+   * identity, AND the accessPath is NOT a reparse point). Omitted on
+   * failure modes where `writeReady` is `false`.
+   */
+  owningWorktree?: "cwd" | string;
   diagnostics: readonly { code: string; severity: "error" | "warning"; message: string }[];
   remediation: string | null;
 };
@@ -167,6 +176,38 @@ export function diagnoseProjectConfig(
     backendPath,
     destinationRoot,
   });
+  // v2.12.0 (#873) — sibling-worktree recognition. Three-way AND criterion:
+  //   1. the accessPath itself is NOT a reparse point (lexical === canonical);
+  //   2. canonical-access walks up to a directory that owns a `.git` (real Git worktree);
+  //   3. that directory is at the SAME parent as `canonicalProjectRoot` and has
+  //      a different identity than `canonicalProjectRoot` itself.
+  // All three must hold for `siblingRoot` to be non-null. The lexical-vs-canonical
+  // comparison stays fail-closed against Windows junctions / symlinks.
+  const repoSiblingRoot = (): string | null => {
+    if (
+      accessPath === null ||
+      parsed.accessPath === undefined ||
+      typeof parsed.accessPath !== "string"
+    )
+      return null;
+    let canonicalAccess: string;
+    try {
+      canonicalAccess = canonical(accessPath);
+    } catch {
+      return null;
+    }
+    const lexical = normalize(resolve(projectRootNative, parsed.accessPath));
+    if (identity(lexical) !== identity(canonicalAccess)) return null;
+    const sibling = worktreeRoot(dirname(canonicalAccess));
+    if (sibling === null) return null;
+    if (!existsSync(join(sibling, ".git"))) return null;
+    const normalizedSibling = normalize(sibling);
+    if (dirname(canonicalProjectRoot) !== dirname(normalizedSibling)) return null;
+    if (identity(normalizedSibling) === identity(canonicalProjectRoot)) return null;
+    return normalizedSibling;
+  };
+  const siblingRoot = repoSiblingRoot();
+  const effectiveOwning = siblingRoot !== null ? canonical(siblingRoot) : canonicalProjectRoot;
   const requestedId = request.projectId;
   if (requestedId !== undefined && requestedId !== projectId)
     return failWith(
@@ -177,8 +218,8 @@ export function diagnoseProjectConfig(
     );
   if (
     accessPath === null ||
-    !within(accessPath, projectRootNative) ||
-    !within(destinationRoot, projectRootNative)
+    (siblingRoot === null &&
+      (!within(accessPath, projectRootNative) || !within(destinationRoot, projectRootNative)))
   )
     return failWith(
       base,
@@ -250,7 +291,7 @@ export function diagnoseProjectConfig(
   let canonicalAccess: string;
   try {
     canonicalAccess = canonical(accessPath);
-    if (identity(worktreeRoot(dirname(canonicalAccess)) ?? "") !== identity(canonicalProjectRoot))
+    if (identity(worktreeRoot(dirname(canonicalAccess)) ?? "") !== identity(effectiveOwning))
       throw new Error("different worktree");
   } catch {
     return failWith(
@@ -275,7 +316,12 @@ export function diagnoseProjectConfig(
   }
   if (requestedTarget !== undefined) {
     const target = normalize(resolve(projectRootNative, requestedTarget));
-    const outsideWorktree = !within(target, projectRootNative);
+    // When a sibling is recognized as the binary's owning tree, "outside"
+    // is judged against the sibling, not against cwd. This lets a write-class
+    // tool call (e.g. import_modules) override its target to point at the
+    // sibling's actual .accdb without falling into the cross-worktree gate.
+    const ownershipRoot = siblingRoot ?? projectRootNative;
+    const outsideWorktree = !within(target, ownershipRoot);
     const namesConfiguredBackend =
       backendPath !== null && identity(target) === identity(backendPath);
     if (!existsSync(target) && outsideWorktree && !namesConfiguredBackend)
@@ -307,7 +353,7 @@ export function diagnoseProjectConfig(
       );
     if (!isConfiguredBackend) {
       if (
-        identity(worktreeRoot(dirname(canonicalTarget)) ?? "") !== identity(canonicalProjectRoot) ||
+        identity(worktreeRoot(dirname(canonicalTarget)) ?? "") !== identity(effectiveOwning) ||
         identity(canonicalTarget) !== identity(canonicalAccess)
       )
         return failWith(
@@ -328,7 +374,14 @@ export function diagnoseProjectConfig(
       "Requested destinationRoot is not owned by this worktree config.",
       `Use destinationRoot '${destinationRoot}'.`,
     );
-  return { ...base, status: "valid", writeReady: true, diagnostics: [], remediation: null };
+  return {
+    ...base,
+    status: "valid",
+    writeReady: true,
+    diagnostics: [],
+    remediation: null,
+    owningWorktree: siblingRoot !== null ? `sibling:${siblingRoot}` : "cwd",
+  };
 }
 
 function failWith(

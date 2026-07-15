@@ -1,5 +1,9 @@
 # Changelog
 
+## [v2.12.0] - 2026-07-15
+
+- **fix(config):** `resolve_project` accepts a real sibling Git worktree as the binary's owning tree (round-8 follow-up to #863). PATH_MISMATCH and OUTSIDE_PROJECT_ROOT retain their meanings for non-sibling and reparse-point cases. New `projectConfig.owningWorktree` field surfaces the resolved owning tree to consumers.
+
 ## [v2.11.1] - 2026-07-14
 
 - Merge pull request #868 from DysTelefonica/fix/811-e2e-harness-full - fix(e2e): restore Claude's FormCPV-derived harness + apply-mode + inspect_form fix - Merge pull request #867 from DysTelefonica/fix/e2e-harness-fixture-count - fix(e2e): self-contained Form_DysflowMcpE2E fixture + count=5
