@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.12.1] - 2026-07-15
+
+- docs(changelog): document env-isolated harness risk dismissal in v2.12.0 (#879) - docs(changelog): regenerate v2.12.0 entry to match released commits
+
+
 ## [v2.12.0] - 2026-07-15
 
 - fix(mcp): explicit role-based target contracts for DAO/query tools (#871)
