@@ -497,6 +497,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     expect(queryCalls).toEqual([
       {
         action: "list_links",
+        target: "frontend",
         mode: "read",
         sql: "",
         tableName: undefined,
@@ -511,6 +512,7 @@ describe("Dysflow MCP tool parity inventory", () => {
       },
       {
         action: "link_tables",
+        target: "frontend",
         mode: "write",
         sql: "",
         tableName: undefined,

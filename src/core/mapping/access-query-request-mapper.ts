@@ -170,6 +170,34 @@ export function pickQueryTarget(params: Record<string, unknown>): QueryTarget | 
 }
 
 /**
+ * Actions whose semantic target is always the frontend, even when an
+ * auxiliary `backendPath` is also present in the request (#870). This is the
+ * single source of truth for that role: the mapper forces `target: "frontend"`
+ * here, and the runner resolves it to `config.accessDbPath` via
+ * {@link isFrontendOnlyAction}. Adding a frontend-only tool means adding it to
+ * this set only — the `frontend-only-action-parity` suite fails if the MCP
+ * schema layer and this set ever disagree.
+ */
+export const FRONTEND_ONLY_ACTIONS: ReadonlySet<AccessQueryAction> = new Set([
+  "list_linked_tables",
+  "list_links",
+  "export_queries",
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "import_queries",
+]);
+
+export function isFrontendOnlyAction(action: AccessQueryAction | undefined): boolean {
+  return action !== undefined && FRONTEND_ONLY_ACTIONS.has(action);
+}
+
+function targetForAction(action: AccessQueryAction, overrides: OverrideShape): OverrideShape {
+  return isFrontendOnlyAction(action) ? { ...overrides, target: "frontend" } : overrides;
+}
+
+/**
  * Coerces a `timeoutMs` value to `number | undefined`. The Zod schemas at
  * the MCP boundary already declare `timeoutMs: z.number().optional()`,
  * so the string branch is unreachable in practice — but the type
@@ -231,7 +259,7 @@ export function buildQueryReadRequest(
     importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
       queryDefinitionsValue(params.queryDefinitions) ?? queryDefinitionsValue(params.queries),
-    ...pickOverrides(params),
+    ...targetForAction(action, pickOverrides(params)),
   };
 }
 
@@ -259,7 +287,7 @@ export function buildWriteFixtureRequest(
     dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),
-    ...pickOverrides(params),
+    ...targetForAction(action, pickOverrides(params)),
   };
 }
 
@@ -313,6 +341,6 @@ export function buildMaintenanceRequest(
     backendPassword:
       getStr(params, "backendPassword", ["password"]) ??
       (params.passwordEnv ? env(getStr(params, "passwordEnv") ?? "") : undefined),
-    ...pickOverrides(params),
+    ...targetForAction(action, pickOverrides(params)),
   };
 }
