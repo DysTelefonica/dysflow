@@ -1,8 +1,28 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { spawnPowerShellProcess } from "../../../src/adapters/powershell/default-executor.js";
 import { spawnVbaManager } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+
+/**
+ * Module-level mock that wraps the real `spawnPowerShellProcess`. The existing
+ * real-spawn describe never overrides it, so it delegates to the actual
+ * implementation (zero behavior change for the ENAMETOOLONG regression). The
+ * new "child env derivation" describe below resets it to a stub that captures
+ * the call args — the derivation rule only matters at the executor seam, so
+ * inspecting the env passed to `spawnPowerShellProcess` is the user-observable
+ * behaviour we are pinning.
+ */
+vi.mock("../../../src/adapters/powershell/default-executor.js", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../../src/adapters/powershell/default-executor.js")
+  >("../../../src/adapters/powershell/default-executor.js");
+  return {
+    ...actual,
+    spawnPowerShellProcess: vi.fn(actual.spawnPowerShellProcess),
+  };
+});
 
 /**
  * Real-spawn regression for the ENAMETOOLONG bug: a large `proceduresJson` used to
@@ -73,6 +93,112 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
       expect(result.stderr).not.toContain("ENAMETOOLONG");
       expect(result.timedOut).toBe(false);
       expect(result.exitCode).toBe(0);
+    },
+  );
+});
+
+/**
+ * Issue #869: `list_vba_modules` is the only raw-executor caller of
+ * `spawnVbaManager` that passes `password` without `env`. The previous
+ * behaviour forwarded `env === undefined` to `spawnPowerShellProcess`, so
+ * `$env:ACCESS_VBA_PASSWORD` was never set inside the child PowerShell
+ * process and `Open-AccessDatabase` rejected password-protected `.accdb`
+ * projects with `VBA_MANAGER_FAILED: No es una contraseña válida`. The
+ * round-9 fix derives `{ ACCESS_VBA_PASSWORD, DYSFLOW_ACCESS_PASSWORD }`
+ * at the executor seam when `password !== undefined && env === undefined`,
+ * mirroring `executeMappedTool` (vba-sync-adapter.ts:592-595). This block
+ * pins the three contract branches so a future refactor of the executor
+ * cannot silently regress the password forwarding.
+ */
+describe("spawnVbaManager — child env derivation (issue #869)", () => {
+  const fakeResult = {
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+    durationMs: 0,
+    timedOut: false,
+  };
+
+  beforeEach(() => {
+    vi.mocked(spawnPowerShellProcess).mockReset();
+    vi.mocked(spawnPowerShellProcess).mockResolvedValue(fakeResult);
+  });
+
+  function lastCallEnv(): Record<string, string | undefined> | undefined {
+    const calls = vi.mocked(spawnPowerShellProcess).mock.calls;
+    const last = calls.at(-1);
+    return last?.[0]?.env;
+  }
+
+  it.skipIf(process.platform !== "win32")(
+    "Case A — derives ACCESS_VBA_PASSWORD and DYSFLOW_ACCESS_PASSWORD when password is set and env is undefined",
+    async () => {
+      await spawnVbaManager({
+        scriptPath: "ignored.ps1",
+        action: "List-VbaModules",
+        accessPath: "ignored.accdb",
+        destinationRoot: "ignored",
+        moduleNames: [],
+        json: true,
+        extra: {},
+        timeoutMs: 5_000,
+        password: "secret",
+        env: undefined,
+      });
+
+      expect(lastCallEnv()).toEqual({
+        ACCESS_VBA_PASSWORD: "secret",
+        DYSFLOW_ACCESS_PASSWORD: "secret",
+      });
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Case B — explicit env wins over derivation (no double-set, no merge)",
+    async () => {
+      await spawnVbaManager({
+        scriptPath: "ignored.ps1",
+        action: "List-VbaModules",
+        accessPath: "ignored.accdb",
+        destinationRoot: "ignored",
+        moduleNames: [],
+        json: true,
+        extra: {},
+        timeoutMs: 5_000,
+        password: "secret",
+        env: { ACCESS_VBA_PASSWORD: "explicit", FOO: "bar" },
+      });
+
+      // The explicit env must be forwarded verbatim — the derivation must
+      // NOT add a synthetic ACCESS_VBA_PASSWORD / DYSFLOW_ACCESS_PASSWORD
+      // on top, and must NOT merge the derived object over the caller's.
+      expect(lastCallEnv()).toEqual({
+        ACCESS_VBA_PASSWORD: "explicit",
+        FOO: "bar",
+      });
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Case C — undefined password and undefined env leaves env undefined (no synthetic stub)",
+    async () => {
+      await spawnVbaManager({
+        scriptPath: "ignored.ps1",
+        action: "List-VbaModules",
+        accessPath: "ignored.accdb",
+        destinationRoot: "ignored",
+        moduleNames: [],
+        json: true,
+        extra: {},
+        timeoutMs: 5_000,
+        password: undefined,
+        env: undefined,
+      });
+
+      // Without a password there is no contract to honor: the child env
+      // must stay `undefined` so `buildChildEnv` (default-executor.ts:81-92)
+      // does not receive a fabricated stub it might merge with.
+      expect(lastCallEnv()).toBeUndefined();
     },
   );
 });
