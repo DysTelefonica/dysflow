@@ -112,6 +112,7 @@ describe("public form mutation MCP tools", () => {
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         property: expect.any(Object),
+        propertyName: expect.any(Object),
         commitScope: expect.objectContaining({ enum: ["source", "source-and-binary"] }),
         dryRun: expect.any(Object),
         apply: expect.any(Object),
@@ -165,6 +166,56 @@ describe("public form mutation MCP tools", () => {
         apply: expect.any(Object),
       }),
     );
+  });
+
+  it.each([
+    ["propertyName", { propertyName: "Caption" }],
+    ["property", { property: "Caption" }],
+  ])("accepts the %s property-name field and dispatches the canonical propertyName", async (_field, alias) => {
+    const { tool, vbaSyncToolService } = toolByName("form_set_property", false);
+
+    const result = await tool.handler({
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      ...alias,
+      value: '"Save"',
+      dryRun: true,
+    });
+
+    expect(result.isError).toBe(false);
+    expect(vbaSyncToolService.requests).toEqual([
+      {
+        toolName: "form_set_property",
+        input: expect.objectContaining({
+          propertyName: "Caption",
+        }),
+      },
+    ]);
+    expect(vbaSyncToolService.requests[0]?.input).not.toHaveProperty("property");
+  });
+
+  it("names propertyName and property when the property-name field is missing", async () => {
+    const { tool, vbaSyncToolService } = toolByName("form_set_property", false);
+
+    const result = await tool.handler({
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "cmdSave",
+      value: '"Save"',
+      dryRun: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatchObject({ code: "MCP_INPUT_INVALID" });
+    expect(result.error?.message).toContain("propertyName");
+    expect(result.error?.message).toContain("property");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("keeps form_set_properties on its canonical properties map", () => {
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.required).toContain("properties");
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).toHaveProperty("properties");
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).not.toHaveProperty("property");
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).not.toHaveProperty("propertyName");
   });
 
   it("allows dry-run mutation calls when writes are disabled and routes to the VBA sync service", async () => {

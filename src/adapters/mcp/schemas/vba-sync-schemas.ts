@@ -1108,7 +1108,10 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   // surface as form_add_control / form_move_control / form_rename_control.
   form_set_property: {
     type: "object",
-    required: ["sourcePath", "controlName", "property"],
+    // `propertyName` is canonical, while `property` remains an indefinitely
+    // supported compatibility alias. The dispatch boundary enforces that at
+    // least one is present because this validator does not support anyOf.
+    required: ["sourcePath", "controlName"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
@@ -1121,7 +1124,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         type: "string",
         minLength: 1,
         description:
-          "Layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width'). Refused for protected/metadata keys (Checksum, PrtDevMode*, Format) and for 'Name' (use form_rename_control).",
+          "Compatibility alias for propertyName. Layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width').",
+      },
+      propertyName: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Canonical layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width'). Refused for protected/metadata keys (Checksum, PrtDevMode*, Format) and for 'Name' (use form_rename_control).",
       },
       value: {
         // Issue #813 phase 6 — `value` accepts string|number|boolean. The
