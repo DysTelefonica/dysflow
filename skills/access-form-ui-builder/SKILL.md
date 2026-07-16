@@ -79,4 +79,5 @@ Both share the same `applyGuardedFormWrite` seam as `form_set_property` / `form_
 ## References
 
 - `references/golden-path.md`
+- Import-gate error recovery: `docs/diagnostics/form-import-gate-failures.md`.
 - For tool names, flags, error codes: `dysflow-usage` skill (single source of truth, runtime-verified).
