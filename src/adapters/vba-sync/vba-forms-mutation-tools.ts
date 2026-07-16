@@ -52,13 +52,41 @@ export type FormMutationToolName =
   | "form_set_properties"
   | "form_duplicate_control";
 
+// A mutation transaction spans the initial read, source write, guarded import,
+// and possible rollback. Serializing by canonical source path prevents a
+// concurrent request from capturing another request's uncommitted source as
+// its rollback snapshot (#887).
+const sourceTransactions = new Map<string, Promise<void>>();
+
+async function runSourceTransaction<T>(
+  sourcePath: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = sourcePath.replace(/\\/g, "/").toLowerCase();
+  const previous = sourceTransactions.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.then(() => current);
+  sourceTransactions.set(key, queued);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (sourceTransactions.get(key) === queued) sourceTransactions.delete(key);
+  }
+}
+
 export async function mutateForm(args: {
   orchestrator: VbaFormsOrchestrator;
   fileSystem: FormFileSystemPort;
   toolName: FormMutationToolName;
   params: Record<string, unknown>;
+  transactionHeld?: boolean;
 }): Promise<OperationResult<unknown>> {
-  const { orchestrator, fileSystem, toolName, params } = args;
+  const { orchestrator, fileSystem, toolName, params, transactionHeld = false } = args;
   const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
   if (!sourcePath) {
     return failureResult(
@@ -77,9 +105,20 @@ export async function mutateForm(args: {
   });
   if (!source.ok) return source;
 
+  const apply = params.apply === true || params.dryRun === false;
+  if (apply && !transactionHeld) {
+    return runSourceTransaction(source.data.sourcePath, () =>
+      mutateForm({ ...args, transactionHeld: true }),
+    );
+  }
+
   let originalSource: string;
+  let originalSourceBytes: Uint8Array | undefined;
   try {
-    originalSource = await fileSystem.readFile(source.data.sourcePath);
+    [originalSource, originalSourceBytes] = await Promise.all([
+      fileSystem.readFile(source.data.sourcePath),
+      fileSystem.readBytes?.(source.data.sourcePath),
+    ]);
   } catch (err) {
     return failureResult(
       createDysflowError(
@@ -149,7 +188,6 @@ export async function mutateForm(args: {
                           newName: stringValue(params.newName) ?? stringValue(params.name) ?? "",
                         });
 
-    const apply = params.apply === true || params.dryRun === false;
     if (!apply) {
       const outputMode = stringValue(params.outputMode) ?? "full";
       if (outputMode === "summary") {
@@ -211,6 +249,7 @@ export async function mutateForm(args: {
       source: source.data,
       newSource: mutation.source,
       originalSource,
+      originalSourceBytes,
       targetExisted: true,
       forwardedParams: params,
     });

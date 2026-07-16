@@ -24,6 +24,7 @@ export const nodeFormFileSystem: FormFileSystemPort = {
   mkdir: (path, options) => nodeMkdir(path, options),
   readdir: (path) => nodeReaddir(path),
   readFile: (path) => nodeReadFile(path, "utf8"),
+  readBytes: (path) => nodeReadFile(path),
   readJson: async <T>(path: string): Promise<T> => {
     const raw = await nodeReadFile(path, "utf8");
     try {
@@ -33,4 +34,5 @@ export const nodeFormFileSystem: FormFileSystemPort = {
     }
   },
   writeFile: (path, data, encoding) => nodeWriteFile(path, data, encoding),
+  writeBytes: (path, data) => nodeWriteFile(path, data),
 };
