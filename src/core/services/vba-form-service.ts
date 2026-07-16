@@ -18,8 +18,12 @@ export interface FormFileSystemPort {
   mkdir(path: string, options: { recursive: true }): Promise<string | undefined>;
   readdir(path: string): Promise<string[]>;
   readFile(path: string): Promise<string>;
+  /** Optional raw-byte seam used when a failed guarded write must restore exact bytes. */
+  readBytes?(path: string): Promise<Uint8Array>;
   readJson<T>(path: string): Promise<T>;
   writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
+  /** Paired with readBytes; adapters implementing one should implement both. */
+  writeBytes?(path: string, data: Uint8Array): Promise<void>;
 }
 
 export interface FormClockPort {

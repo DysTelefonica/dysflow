@@ -47,6 +47,8 @@ export type ApplyGuardedFormWriteInput = {
   source: ManagedFormSource;
   newSource: string;
   originalSource: string;
+  /** Exact pre-call bytes when the filesystem adapter supports binary snapshots. */
+  originalSourceBytes?: Uint8Array;
   /** #692 — drives `RollbackOutcome.restoredState` / `requiresManualCleanup`. */
   targetExisted: boolean;
   /** Caller-supplied params; merged under the seam's hardcoded fields. */
@@ -66,6 +68,7 @@ export async function applyGuardedFormWrite(
     source,
     newSource,
     originalSource,
+    originalSourceBytes,
     targetExisted,
     forwardedParams,
   } = input;
@@ -102,7 +105,10 @@ export async function applyGuardedFormWrite(
   //    the rollback outcome to the consumer (#692).
   if (!importResult.ok) {
     const rollbackOutcome = await captureRollbackOutcome(
-      () => fileSystem.writeFile(source.sourcePath, originalSource, "utf8"),
+      () =>
+        originalSourceBytes !== undefined && fileSystem.writeBytes !== undefined
+          ? fileSystem.writeBytes(source.sourcePath, originalSourceBytes)
+          : fileSystem.writeFile(source.sourcePath, originalSource, "utf8"),
       targetExisted,
     );
     return failureResult(

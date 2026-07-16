@@ -372,6 +372,80 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     );
   });
 
+  it("serializes concurrent form_set_property transactions so failed gates restore the exact pre-call source", async () => {
+    let persistedSource = SIMPLE_FORM;
+    const originalBytes = new Uint8Array([
+      0xef,
+      0xbb,
+      0xbf,
+      ...new TextEncoder().encode(SIMPLE_FORM),
+    ]);
+    let persistedBytes = originalBytes.slice();
+    const gateResolvers: Array<() => void> = [];
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.executeMappedTool).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          gateResolvers.push(() =>
+            resolve(
+              failureResult({
+                code: "IMPORT_FAILED",
+                message: "import_modules failed",
+                retryable: false,
+              }),
+            ),
+          );
+        }),
+    );
+    const fs = mockFs({
+      readFile: vi.fn(async () => persistedSource),
+      readBytes: vi.fn(async () => persistedBytes.slice()),
+      writeFile: vi.fn(async (_path: string, data: string) => {
+        persistedSource = data;
+        persistedBytes = new TextEncoder().encode(data);
+      }),
+      writeBytes: vi.fn(async (_path: string, data: Uint8Array) => {
+        persistedBytes = data.slice();
+        persistedSource = new TextDecoder().decode(data);
+      }),
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+    const sourcePath = "C:/repo/forms/Form_Customer.form.txt";
+
+    const first = adapter.execute("form_set_property", {
+      sourcePath,
+      controlName: "txtName",
+      property: "Left",
+      value: 800,
+      apply: true,
+    });
+    await vi.waitFor(() => expect(gateResolvers).toHaveLength(1));
+
+    const second = adapter.execute("form_set_property", {
+      sourcePath,
+      controlName: "txtName",
+      property: "Top",
+      value: 900,
+      apply: true,
+    });
+
+    // A second transaction for the same source must wait until the first gate
+    // and rollback have completed; otherwise its rollback snapshot is stale.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const gatesBeforeFirstRollback = gateResolvers.length;
+    gateResolvers[0]?.();
+    if (gatesBeforeFirstRollback === 1) {
+      await vi.waitFor(() => expect(gateResolvers).toHaveLength(2));
+    }
+    gateResolvers[1]?.();
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult).toMatchObject({ ok: false, error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    expect(secondResult).toMatchObject({ ok: false, error: { code: "FORM_IMPORT_GATE_FAILED" } });
+    expect(gatesBeforeFirstRollback).toBe(1);
+    expect(persistedBytes).toEqual(originalBytes);
+  });
+
   // #692 — rollback success must be reported in error details
   it("reports rollback success in error details when import gate fails (deserializeForm)", async () => {
     const orchestrator = makeOrchestrator(
