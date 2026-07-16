@@ -1,0 +1,25 @@
+name: Release Title Guard
+
+on:
+  release:
+    types: [edited]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-title:
+    name: Release title matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout guard script
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Validate edited release title
+        env:
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+        run: node .github/scripts/check-release-title.mjs

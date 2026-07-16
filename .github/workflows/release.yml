@@ -105,8 +105,8 @@ jobs:
 
       # #668 — replaces the dead release-title-guard.yml. Verifies the
       # published release's `name` matches the tag immediately after
-      # creation so a maintainer edit or a future softprops action change
-      # cannot break the AGENTS.md hard rule "release title must equal tag".
+      # creation, protecting against a future softprops action change. Later
+      # human edits are checked independently by release-title-guard.yml.
       - name: Assert release name == tag (#668)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

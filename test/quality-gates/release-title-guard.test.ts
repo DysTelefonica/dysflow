@@ -1,12 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const RELEASE_YML = ".github/workflows/release.yml";
-// #668 — release-title-guard.yml was doubly dead (used `release.title` instead of
-// `.name`, and the `release: [created, edited]` trigger never fires for releases
-// created with GITHUB_TOKEN). The assertion now lives inline in release.yml so
-// it runs in the same job that creates the release, against the correct field.
+// #895 — the independent workflow covers human edits. Creation remains guarded
+// inline in release.yml because GITHUB_TOKEN-created releases do not reliably
+// trigger another workflow.
 const GUARD_YML = ".github/workflows/release-title-guard.yml";
+const GUARD_SCRIPT = ".github/scripts/check-release-title.mjs";
 
 function readText(path: string): string {
   return readFileSync(path, "utf8");
@@ -77,12 +78,42 @@ describe("release name == tag_name CI guard (#668)", () => {
     });
   });
 
-  describe("release-title-guard.yml removed (#668)", () => {
-    it("no longer exists (the workflow was doubly dead)", () => {
-      expect(
-        existsSync(GUARD_YML),
-        `${GUARD_YML} must be removed — the assertion lives in release.yml now`,
-      ).toBe(false);
+  describe("release-title-guard.yml — post-creation edit enforcement (#895)", () => {
+    it("runs only for release edits with read-only repository permissions", () => {
+      expect(existsSync(GUARD_YML)).toBe(true);
+      const workflow = readText(GUARD_YML);
+      expect(workflow).toMatch(/release:\s*\n\s+types:\s*\[edited\]/);
+      expect(workflow).not.toMatch(/types:\s*\[[^\]]*created/);
+      expect(workflow).toMatch(/permissions:\s*\n\s+contents:\s*read/);
+      expect(workflow).not.toMatch(/contents:\s*write/);
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression syntax
+      expect(workflow).toContain("ref: ${{ github.event.repository.default_branch }}");
+      expect(workflow).toContain("persist-credentials: false");
+    });
+
+    it("pins the real release event fields name and tag_name", () => {
+      const workflow = readText(GUARD_YML);
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression syntax
+      expect(workflow).toContain("${{ github.event.release.name }}");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression syntax
+      expect(workflow).toContain("${{ github.event.release.tag_name }}");
+      expect(workflow).not.toContain("github.event.release.title");
+    });
+
+    it.each([
+      ["v2.13.4", "v2.13.4", 0],
+      ["Dysflow v2.13.4", "v2.13.4", 1],
+    ])("validates release name %s against tag %s", (name, tag, expectedStatus) => {
+      const result = spawnSync(process.execPath, [GUARD_SCRIPT], {
+        encoding: "utf8",
+        env: { ...process.env, RELEASE_NAME: name, RELEASE_TAG_NAME: tag },
+      });
+      expect(result.status).toBe(expectedStatus);
+      if (expectedStatus !== 0) {
+        expect(result.stderr).toContain(`name     = ${name}`);
+        expect(result.stderr).toContain(`tag_name = ${tag}`);
+        expect(result.stderr).toContain("Restore the release title");
+      }
     });
   });
 
