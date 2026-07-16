@@ -112,6 +112,7 @@ describe("public form mutation MCP tools", () => {
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         property: expect.any(Object),
+        commitScope: expect.objectContaining({ enum: ["source", "source-and-binary"] }),
         dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
