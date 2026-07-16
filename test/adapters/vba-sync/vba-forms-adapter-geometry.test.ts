@@ -139,6 +139,37 @@ describe("VbaFormsAdapter — form_get_geometry (issue #872 F5)", () => {
     expect(data.layoutCachedHeight).toBe(400);
   });
 
+  it("parses the exact bytes read while resolving a project form candidate", async () => {
+    const readFile = vi
+      .fn<FormFileSystemPort["readFile"]>()
+      .mockResolvedValueOnce(FORM_FOR_GEOMETRY)
+      .mockRejectedValue(new Error("source changed after candidate resolution"));
+    const fs = mockFs(FORM_FOR_GEOMETRY, { readFile });
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue({
+      ok: true,
+      data: {
+        destinationRoot: "C:/repo",
+        projectRoot: "C:/repo",
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_get_geometry", {
+      projectId: "customer-app",
+      formName: "Customer",
+      controlName: "txtName",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(result.data).toMatchObject({ controlName: "txtName", left: 100, top: 200 });
+    expect(readFile).toHaveBeenCalledTimes(1);
+    expect(readFile).toHaveBeenCalledWith("C:/repo/forms/Form_Customer.form.txt");
+  });
+
   it("returns FORM_CONTROL_NOT_FOUND when the control is unknown", async () => {
     const fs = mockFs(FORM_FOR_GEOMETRY);
     const adapter = new VbaFormsAdapter(makeOrchestrator(), fs);

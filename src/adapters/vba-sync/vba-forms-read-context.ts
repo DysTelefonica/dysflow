@@ -23,6 +23,7 @@ export async function readFormContext(
   toolName: string,
 ): Promise<OperationResult<ReadFormContext>> {
   let sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
+  let text: string | undefined;
   const projectId = stringValue(params.projectId);
   const formName = stringValue(params.formName) ?? stringValue(params.name);
 
@@ -46,7 +47,7 @@ export async function readFormContext(
     sourcePath = undefined;
     for (const candidate of candidates) {
       try {
-        await fileSystem.readFile(candidate.absolutePath);
+        text = await fileSystem.readFile(candidate.absolutePath);
         sourcePath = candidate.absolutePath;
         break;
       } catch {
@@ -76,16 +77,17 @@ export async function readFormContext(
     );
   }
 
-  let text: string;
-  try {
-    text = await fileSystem.readFile(sourcePath);
-  } catch (error) {
-    return failureResult(
-      createDysflowError(
-        "FORM_NOT_FOUND",
-        `Cannot read form file at "${sourcePath}". ${error instanceof Error ? error.message : String(error)}`,
-      ),
-    );
+  if (text === undefined) {
+    try {
+      text = await fileSystem.readFile(sourcePath);
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "FORM_NOT_FOUND",
+          `Cannot read form file at "${sourcePath}". ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
   }
 
   const basename = sourcePath.replace(/\\/g, "/").split("/").pop() ?? "";
