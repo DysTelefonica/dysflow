@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v2.13.2] - 2026-07-15
 
 - fix(forms): probe `.codegraph-vba/` before `.codegraph/` for `map_form_behavior` auto-fetch and expose `codegraphIndexPath` (#881)
 
