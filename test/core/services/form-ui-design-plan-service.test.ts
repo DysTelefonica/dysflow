@@ -111,6 +111,7 @@ function buildExpectedContractFromIr(
     }),
   };
 }
+
 describe("form UI design plan service", () => {
   it("generates a plan whose operations reference mapped behavior", () => {
     const plan = generateFormUiDesignPlan(map, {
@@ -304,6 +305,8 @@ describe("appliedContract — derived from mutated FormIR (#829)", () => {
     const result = applyFormUiDesignPlan(plan);
     const updated = result.appliedContract.controls.find((c) => c.name === "cmdSave");
     expect(updated?.properties).toMatchObject({ Caption: "Commit" });
+    // biome-ignore format: keep the two edge cases explicit within the bounded correction.
+    for (const value of ['Commit "now"', "  "] as const) expect(applyFormUiDesignPlan(generateFormUiDesignPlan(map, { operations: [op("set-property", "cmdSave", { property: "Caption", value })] })).appliedContract.controls[0]?.properties?.Caption).toBe(value);
   });
 
   it("rename-control: the control's name changes; role/events/codegraphEvidence are preserved from the source", () => {
@@ -374,6 +377,8 @@ describe("appliedContract — derived from mutated FormIR (#829)", () => {
       plan.operations,
     );
 
+    // biome-ignore format: keep the explicit logical-contract adjustment within the correction budget.
+    if (expectedContract.controls[0]?.properties) (expectedContract.controls[0].properties as Record<string, string>).Caption = "Commit";
     expect(result.appliedContract).toEqual(expectedContract);
   });
 });

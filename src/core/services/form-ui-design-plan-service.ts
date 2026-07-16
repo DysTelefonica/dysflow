@@ -193,7 +193,10 @@ function buildBehaviorMapFromIr(
       // FormIR exposes the control's Name as a scalar entry alongside the
       // blockType-derived type; strip it from properties so it doesn't
       // shadow the contract's first-class `name` field.
-      const { Name: _name, ...rest } = control.properties;
+      const { Name: _name, ...serialized } = control.properties;
+      const rest = Object.fromEntries(
+        Object.entries(serialized).map(([key, value]) => [key, decodeScalar(value)]),
+      );
       const properties = Object.keys(rest).length === 0 ? undefined : rest;
       if (original !== undefined) {
         return {
@@ -217,6 +220,13 @@ function buildBehaviorMapFromIr(
       };
     }),
   };
+}
+
+function decodeScalar(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith('"') && trimmed.endsWith('"')
+    ? trimmed.slice(1, -1).replaceAll('""', '"')
+    : trimmed;
 }
 
 function dispatchOperation(ir: FormIR, operation: FormUiDesignOperation): FormMutationResult {

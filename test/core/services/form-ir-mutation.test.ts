@@ -232,13 +232,19 @@ End
     const result = setProperty(ir, {
       controlName: "lblName",
       property: "Caption",
-      value: '"Customer name"',
+      value: 'Customer "display" name',
     });
 
-    expect(result.source).toContain('Name ="lblName"\n            Caption ="Customer name"');
+    expect(result.source).toContain(
+      'Name ="lblName"\n            Caption ="Customer ""display"" name"',
+    );
     expect(result.ir.codeBehind).toBe(ir.codeBehind);
     expect(serializeFormTxt(ir)).toBe(before);
     expect(result.changedControlName).toBe("lblName");
+    // biome-ignore format: keep the bounded correction matrix reviewable as one behavioral row.
+    for (const [value, encoded] of [["123", '"123"'], ["true", '"true"'], ["", '""'], ["  ", '"  "']] as const) {
+      expect(setProperty(ir, { controlName: "lblName", property: "Caption", value }).source).toContain(`Caption =${encoded}`);
+    }
   });
 
   it("sets a new scalar property using the established mutation value normalization", () => {
@@ -337,13 +343,14 @@ End
     const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
     const ab = setProperties(ir, {
       controlName: "lblName",
-      properties: { Caption: '"AB"', Left: 100, Top: 200 },
+      properties: { Caption: "AB", Left: 100, Top: 200 },
     });
     const ba = setProperties(ir, {
       controlName: "lblName",
-      properties: { Top: 200, Left: 100, Caption: '"AB"' },
+      properties: { Top: 200, Left: 100, Caption: "AB" },
     });
     expect(serializeFormTxt(ab.ir)).toBe(serializeFormTxt(ba.ir));
+    expect(serializeFormTxt(ab.ir)).toContain('Caption ="AB"');
     expect(ab.ir).not.toBe(ba.ir);
   });
 
