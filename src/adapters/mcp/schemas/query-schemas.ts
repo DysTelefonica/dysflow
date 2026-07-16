@@ -325,6 +325,12 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       accessPath: SCHEMA_PROPS.accessPath,
       databasePath: SCHEMA_PROPS.databasePath,
       sourcePath: SCHEMA_PROPS.sourcePath,
+      target: {
+        type: "string",
+        enum: ["frontend", "backend"],
+        description:
+          "Database role to compact. Defaults to frontend. backend resolves to the configured backendPath. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.",
+      } as JsonSchemaProperty,
       backupFirst: SCHEMA_PROPS.backupFirst,
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,

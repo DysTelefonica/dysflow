@@ -306,6 +306,46 @@ describe("access-query-request-mapper", () => {
       expect(off.backupFirst).toBeUndefined();
     });
 
+    it("defaults compact_repair to the frontend and accepts an explicit backend target", () => {
+      expect(buildMaintenanceRequest("compact_repair", "write", {}, () => undefined).target).toBe(
+        "frontend",
+      );
+      expect(
+        buildMaintenanceRequest("compact_repair", "write", { target: "backend" }, () => undefined)
+          .target,
+      ).toBe("backend");
+    });
+
+    it("uses deterministic compact_repair path precedence: databasePath, sourcePath, accessPath", () => {
+      const request = buildMaintenanceRequest(
+        "compact_repair",
+        "write",
+        {
+          accessPath: "C:/explicit/frontend.accdb",
+          sourcePath: "C:/explicit/source.accdb",
+          databasePath: "C:/explicit/database.accdb",
+        },
+        () => undefined,
+      );
+      expect(request.databasePath).toBe("C:/explicit/database.accdb");
+
+      const sourceAlias = buildMaintenanceRequest(
+        "compact_repair",
+        "write",
+        { accessPath: "C:/explicit/frontend.accdb", sourcePath: "C:/explicit/source.accdb" },
+        () => undefined,
+      );
+      expect(sourceAlias.databasePath).toBe("C:/explicit/source.accdb");
+
+      const accessAlias = buildMaintenanceRequest(
+        "compact_repair",
+        "write",
+        { accessPath: "C:/explicit/frontend.accdb" },
+        () => undefined,
+      );
+      expect(accessAlias.databasePath).toBe("C:/explicit/frontend.accdb");
+    });
+
     it("resolves backendPassword from explicit value, then password alias", () => {
       expect(
         buildMaintenanceRequest("link_tables", "write", { backendPassword: "x" }, () => undefined)
@@ -403,6 +443,7 @@ describe("access-query-request-mapper", () => {
         expectedAccessPath: "C:/expected-access.accdb",
         expectedProjectRoot: "C:/expected-proj",
         expectedDestinationRoot: "C:/expected-dest",
+        target: "frontend" as const,
       };
       const readRequest = buildQueryReadRequest("query_sql", params);
       const writeRequest = buildWriteFixtureRequest("seed_fixture", params);

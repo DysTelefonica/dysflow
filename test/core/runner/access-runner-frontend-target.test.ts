@@ -296,4 +296,69 @@ describe("AccessPowerShellRunner frontend target contract", () => {
       backendPath: "C:/project/backend.accdb",
     });
   });
+
+  it("resolves compact_repair semantic targets while explicit databasePath wins", async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const runner = new AccessPowerShellRunner({
+      executor: async (_command, args) => {
+        const payloadIndex = args.indexOf("-PayloadJson");
+        payloads.push(JSON.parse(args[payloadIndex + 1] ?? "{}") as Record<string, unknown>);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"dryRun":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      preflightCleanup: noOpPreflight,
+      scriptPath: "C:/tools/runner.ps1",
+      fileExists: () => true,
+      lockFileSystem: nodeLockFileSystem,
+    });
+    const config: DysflowConfig = {
+      configSource: "repo-config",
+      allowWrites: true,
+      accessDbPath: "C:/project/frontend.accdb",
+      backendPath: "C:/project/backend.accdb",
+      timeoutMs: 1_000,
+    };
+
+    await runner.run(
+      {
+        kind: "query",
+        request: {
+          action: "compact_repair",
+          mode: "write",
+          sql: "",
+          target: "backend",
+          dryRun: true,
+        },
+      },
+      config,
+    );
+    await runner.run(
+      {
+        kind: "query",
+        request: {
+          action: "compact_repair",
+          mode: "write",
+          sql: "",
+          target: "backend",
+          databasePath: "C:/override/explicit.accdb",
+          dryRun: true,
+        },
+      },
+      config,
+    );
+
+    expect(payloads[0]).toMatchObject({
+      action: "compact_repair",
+      backendPath: "C:/project/backend.accdb",
+    });
+    expect(payloads[1]).toMatchObject({
+      action: "compact_repair",
+      databasePath: "C:/override/explicit.accdb",
+    });
+  });
 });

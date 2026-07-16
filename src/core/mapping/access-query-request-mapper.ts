@@ -194,7 +194,18 @@ export function isFrontendOnlyAction(action: AccessQueryAction | undefined): boo
 }
 
 function targetForAction(action: AccessQueryAction, overrides: OverrideShape): OverrideShape {
-  return isFrontendOnlyAction(action) ? { ...overrides, target: "frontend" } : overrides;
+  if (isFrontendOnlyAction(action)) return { ...overrides, target: "frontend" };
+  if (action === "compact_repair") return { ...overrides, target: overrides.target ?? "frontend" };
+  return overrides;
+}
+
+function maintenanceDatabasePath(
+  action: AccessQueryAction,
+  params: Record<string, unknown>,
+): string | undefined {
+  return action === "compact_repair"
+    ? getStr(params, "databasePath", ["sourcePath", "accessPath"])
+    : getStr(params, "databasePath", ["sourcePath"]);
 }
 
 /**
@@ -315,7 +326,7 @@ export function buildMaintenanceRequest(
     columnName: getStr(params, "columnName", ["column"]),
     backendPath: getStr(params, "backendPath", ["comparePath"]),
     rootPath: getStr(params, "rootPath", ["directory"]),
-    databasePath: getStr(params, "databasePath", ["sourcePath"]),
+    databasePath: maintenanceDatabasePath(action, params),
     exportPath: getStr(params, "exportPath", ["path"]),
     importPath: getStr(params, "importPath", ["path"]),
     queryDefinitions:
