@@ -552,9 +552,19 @@ function quoteName(name: string): string {
   return `"${name}"`;
 }
 
-function normalizeMutationValue(value: string | number | boolean): string {
+function normalizeMutationValue(value: string | number | boolean, preserveTokens = false): string {
   if (typeof value === "boolean") return value ? " NotDefault" : "0";
-  return String(value);
+  if (typeof value === "number") return String(value);
+
+  const trimmed = value.trim();
+  const isQuotedLiteral = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
+  const isNumericToken = /^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|&h[0-9a-f]+)$/i.test(
+    trimmed,
+  );
+  const isBooleanToken = /^(?:notdefault|true|false)$/i.test(trimmed);
+
+  if (isQuotedLiteral || (preserveTokens && (isNumericToken || isBooleanToken))) return value;
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function findNameEntry(node: FormNode): ScalarEntry | undefined {
@@ -738,7 +748,7 @@ export function addControl(ir: FormIR, input: AddControlInput): FormMutationResu
   const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: quoteName(name) }];
   for (const [key, value] of Object.entries(input.control.properties ?? {})) {
     if (key === "Name") continue;
-    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value) });
+    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
   }
   target.children.push({ blockType: type, entries, children: [] });
   return mutationResult(ir, next, name);
