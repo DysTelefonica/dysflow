@@ -217,3 +217,62 @@ Rollback boundary: restore the preview and diff bodies in `vba-forms-read-tools.
 `vba-forms-preview-tools.ts`, revert the candidate-snapshot additions in
 `vba-forms-read-context.ts`, and remove the two stateful port regressions. The adapter import,
 dispatch route, core renderer/diff services, and public error/result envelopes require no rollback.
+
+## Issue #914 — layout analysis and binding validation extraction
+
+`vba-forms-layout-binding-tools.ts` now owns `analyzeFormLayoutTool`,
+`verifyFormBindingsTool`, and their private option/schema/counting helpers. The capability depends
+only on the neutral `FormTargetResolver`/`readFormContext` boundary and the core analysis,
+behavior-map, layout-lint, and binding-validator services. It imports neither preview, inspection,
+nor the compatibility barrel. The barrel retains both re-exports, so adapter dispatch, aliases,
+schema normalization, options, messages, and result envelopes are unchanged.
+
+Both project-target paths now parse the exact bytes that selected the successful candidate instead
+of probing a path and reading it again. Stateful filesystem port regressions return valid form
+content once and malformed content on a second read; layout analysis and binding validation both
+succeed with exactly one read through `VbaFormsAdapter.execute`.
+
+| File | Before #914 | After #914 |
+| --- | ---: | ---: |
+| `vba-forms-read-tools.ts` | 676 | 221 |
+| `vba-forms-layout-binding-tools.ts` | 0 | 189 |
+| `vba-forms-read-context.ts` | 135 | 135 |
+
+The same four focused core/adapter suites passed before extraction (**4 files / 72 tests**) and
+after extraction (**4 files / 75 tests**); three additions cover snapshots and error precedence.
+The narrow coverage result is reproducible with this exact four-suite command and include list:
+
+```powershell
+pnpm exec vitest run test/core/services/form-ui-layout-lint.test.ts test/core/services/form-ui-binding-validator.test.ts test/adapters/vba-sync/vba-forms-adapter-layout.test.ts test/adapters/vba-sync/vba-forms-adapter-verify-bindings.test.ts --coverage --coverage.include=src/adapters/vba-sync/vba-forms-read-tools.ts --coverage.include=src/adapters/vba-sync/vba-forms-layout-binding-tools.ts --coverage.include=src/adapters/vba-sync/vba-forms-read-context.ts
+```
+
+| Current file/set | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| `vba-forms-layout-binding-tools.ts` | 91.75% | 86.58% | 100% | 96.29% |
+| `vba-forms-read-context.ts` | 93.54% | 84% | 100% | 93.33% |
+| **Focused include total** | **118/186** | **92/148** | **14/18** | **106/168** |
+
+The process exits **1 only because repository-wide global thresholds apply to this deliberately
+narrow include list**; all **4 files / 75 focused tests pass**. The uncovered compatibility barrel
+is included so the totals state the exact measurement boundary. These denominators are execution
+evidence rather than a percentage-improvement claim; the identical four port/core suites plus the
+stateful port regressions are the behavior-preservation proof.
+
+Tarjan reporting remains reproducible through `node scripts/report-ts-import-cycles.mjs`. The full
+graph changed from **161 modules / 572 edges / 6 cyclic SCCs** to **162 modules / 578 edges / 6
+cyclic SCCs**; cyclic sizes remain **14, 8, 2, 2, 2, 2**. The relevant eight-file induced graph is
+acyclic at **8 modules / 7 edges / 8 SCCs / 0 cyclic SCCs**. Reproduce that result with:
+
+```powershell
+node scripts/report-ts-import-cycles.mjs --files src/adapters/vba-sync/vba-forms-adapter.ts src/adapters/vba-sync/vba-forms-read-tools.ts src/adapters/vba-sync/vba-forms-layout-binding-tools.ts src/adapters/vba-sync/vba-forms-read-context.ts src/core/services/form-ui-analysis-service.ts src/core/services/form-ui-behavior-map-service.ts src/core/services/form-ui-layout-lint.ts src/core/services/form-ui-binding-validator.ts
+```
+
+Verification: the focused command passed **4 files / 75 tests**; `pnpm lint`, `pnpm build`,
+`node scripts/check-core-adapter-boundary.mjs`, and `git diff --check` passed. CodeGraph was indexed
+after the edit and confirms the capability points downward to read context/core while the adapter
+continues through the compatibility barrel.
+
+Rollback boundary: move the two tool bodies and private helpers back into
+`vba-forms-read-tools.ts`, remove `vba-forms-layout-binding-tools.ts`, and remove the two stateful
+port regressions and this section. No adapter dispatch, core contract, external tool name, schema,
+or result envelope requires rollback.

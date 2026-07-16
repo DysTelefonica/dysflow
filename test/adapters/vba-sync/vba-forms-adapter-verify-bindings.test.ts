@@ -3,7 +3,12 @@ import {
   VbaFormsAdapter,
   type VbaFormsOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-forms-adapter";
-import { successResult } from "../../../src/core/contracts/index";
+import { verifyFormBindingsTool } from "../../../src/adapters/vba-sync/vba-forms-layout-binding-tools";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 // ---------------------------------------------------------------------------
@@ -74,6 +79,41 @@ const SCHEMA = {
     { name: "Name", type: "Text", nullable: true },
   ],
 };
+
+it("prioritizes project target errors over invalid or missing schema", async () => {
+  const missingResolver = await verifyFormBindingsTool(mockFs(), {
+    projectId: "test-project",
+    formName: "CustomerView",
+    schema: 42,
+  });
+  const orchestrator = makeOrchestrator();
+  vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue(
+    failureResult(createDysflowError("MCP_INPUT_INVALID", "project resolution failed")),
+  );
+  const resolverFailure = await new VbaFormsAdapter(orchestrator, mockFs()).execute(
+    "verify_form_bindings",
+    {
+      projectId: "test-project",
+      formName: "CustomerView",
+    },
+  );
+  expect(missingResolver).toMatchObject({ ok: false, error: { code: "MCP_INPUT_INVALID" } });
+  expect(resolverFailure).toMatchObject({
+    ok: false,
+    error: { message: "project resolution failed" },
+  });
+  vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue(
+    successResult({ destinationRoot: "C:/repo/src" }),
+  );
+  const project = { projectId: "test-project", formName: "CustomerView" };
+  for (const schema of ["not-an-object", undefined]) {
+    const result = await new VbaFormsAdapter(
+      orchestrator,
+      mockFs({ readFile: vi.fn().mockResolvedValue("malformed form") }),
+    ).execute("verify_form_bindings", { ...project, schema });
+    expect(result).toMatchObject({ ok: false, error: { code: "FORM_BINDING_SCHEMA_INVALID" } });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Tests (#818 — verify_form_bindings adapter wiring)
@@ -324,6 +364,36 @@ describe("VbaFormsAdapter — verify_form_bindings (issue #818)", () => {
 
     expect(result.ok).toBe(true);
     expect(orchestrator.resolveExecutionTarget).toHaveBeenCalled();
+  });
+
+  it("validates the exact successful project candidate snapshot", async () => {
+    const reads = new Map<string, number>();
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        const normalized = path.replace(/\\/g, "/");
+        if (normalized !== "C:/repo/src/forms/Form_CustomerView.form.txt") {
+          throw new Error("ENOENT");
+        }
+        const count = (reads.get(normalized) ?? 0) + 1;
+        reads.set(normalized, count);
+        return count === 1 ? FORM_TEXT : "malformed on second read";
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    orchestrator.resolveExecutionTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+    });
+
+    const result = await new VbaFormsAdapter(orchestrator, fs).execute("verify_form_bindings", {
+      projectId: "test-project",
+      formName: "CustomerView",
+      schema: SCHEMA,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(reads.get("C:/repo/src/forms/Form_CustomerView.form.txt")).toBe(1);
+    if (result.ok) expect((result.data as { formName: string }).formName).toBe("CustomerView");
   });
 
   it("its response is bypass-tested against the successResult shape (issue #813 standards)", async () => {
