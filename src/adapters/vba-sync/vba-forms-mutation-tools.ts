@@ -160,7 +160,7 @@ export async function mutateForm(args: {
           : toolName === "form_set_property"
             ? setProperty(ir, {
                 controlName: stringValue(params.controlName) ?? "",
-                property: stringValue(params.property) ?? "",
+                property: stringValue(params.propertyName) ?? stringValue(params.property) ?? "",
                 value: readScalarValue(params.value),
               })
             : toolName === "form_delete_control"

@@ -98,6 +98,20 @@ function stripDeprecatedCompileParams(name: GeneratedDispatchToolName, input: un
   return next;
 }
 
+function normalizeFormSetPropertyInput(name: GeneratedDispatchToolName, input: unknown): unknown {
+  if (name !== "form_set_property" || !isRecord(input)) return input;
+
+  const hasPropertyName = hasOwn(input, "propertyName");
+  const hasProperty = hasOwn(input, "property");
+  if (!hasPropertyName && !hasProperty) return input;
+
+  const { property: propertyAlias, ...rest } = input;
+  return {
+    ...rest,
+    propertyName: hasPropertyName ? input.propertyName : propertyAlias,
+  };
+}
+
 // ─── Dispatch tool factory ────────────────────────────────────────────────────
 
 export function createDispatchTool(
@@ -193,6 +207,16 @@ export function createDispatchTool(
       // the rationale; tests pin the contract at
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
       let normalizedInput = stripDeprecatedCompileParams(name, input);
+      normalizedInput = normalizeFormSetPropertyInput(name, normalizedInput);
+      if (
+        name === "form_set_property" &&
+        isRecord(normalizedInput) &&
+        !hasOwn(normalizedInput, "propertyName")
+      ) {
+        return invalidInput(
+          "propertyName (alias: property) is required. Provide the FormIR property name to mutate (for example: 'Caption', 'BackColor', or 'Enabled').",
+        );
+      }
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
         // #757 (C4) — when the validation message is the legacy
