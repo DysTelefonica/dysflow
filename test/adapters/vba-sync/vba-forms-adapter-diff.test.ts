@@ -308,6 +308,36 @@ describe("VbaFormsAdapter — diff_form_preview (issue #817)", () => {
     expect(orchestrator.resolveExecutionTarget).toHaveBeenCalled();
   });
 
+  it("diffs both exact resolved candidate snapshots from one read per side", async () => {
+    const reads = new Map<string, number>();
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        const normalized = path.replace(/\\/g, "/");
+        const count = (reads.get(normalized) ?? 0) + 1;
+        reads.set(normalized, count);
+        if (count > 1) return "not the resolved snapshot";
+        if (normalized.endsWith("Form_frmBefore.form.txt")) return BEFORE_FORM;
+        if (normalized.endsWith("Form_frmAfter.form.txt")) return AFTER_FORM;
+        throw new Error("ENOENT");
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    orchestrator.resolveExecutionTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+    });
+
+    const result = await new VbaFormsAdapter(orchestrator, fs).execute("diff_form_preview", {
+      projectId: "test-project",
+      beforeName: "frmBefore",
+      afterName: "frmAfter",
+    });
+
+    expect(result.ok).toBe(true);
+    expect([...reads.values()]).toEqual([1, 1]);
+    expect(orchestrator.resolveExecutionTarget).toHaveBeenCalledTimes(1);
+  });
+
   it("its response is bypass-tested against the successResult shape (issue #813 standards)", async () => {
     const fs = mockFs({
       readFile: vi.fn().mockImplementation(async (path: string) => {
