@@ -2,6 +2,15 @@
 
 Owner: repo-engineering-hardening
 
+## Dependency audit evidence
+
+CI reports dependency audit evidence as `clean`, `vulnerable`, or `unavailable`.
+High/critical advisories fail every run. Registry, protocol, malformed-response,
+and network failures are retried at most three times. After exhaustion, pull
+requests remain unblocked with a visible warning, while the `main` push check
+fails. The job summary records the sanitized registry source, freshness,
+attempts, and policy. `unavailable` is NEVER evidence that dependencies are clean.
+
 ## Current gates
 
 - `pnpm test` — Vitest unit suite (fast, no Access/PowerShell).
