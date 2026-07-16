@@ -347,6 +347,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'function Join-VbaHeaderAndBody',
             'function Merge-AccessDocumentWithCanonicalHeader',
             'function Remove-AccessDocumentRootNameProperty',
+            'function Ensure-AccessFormAutoResizeMarker',
             'function Normalize-AccessDocumentRootEndMarker',
             'function Normalize-AccessDocumentCodeBehindMarker',
             'function Test-LooksLikeVbaCodeLine',
@@ -392,6 +393,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Join-VbaHeaderAndBody',
             'Merge-AccessDocumentWithCanonicalHeader',
             'Remove-AccessDocumentRootNameProperty',
+            'Ensure-AccessFormAutoResizeMarker',
             'Normalize-AccessDocumentRootEndMarker',
             'Normalize-AccessDocumentCodeBehindMarker',
             'Test-LooksLikeVbaCodeLine',
@@ -795,6 +797,49 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             $input = "Begin Form`r`n    Caption = `"Test`"`r`n"
             $result = Remove-AccessDocumentRootNameProperty -DocumentText $input
             $result | Should -Be $input
+        }
+    }
+
+    Context "Ensure-AccessFormAutoResizeMarker (issue #902)" {
+        It "inserts AutoResize immediately after Begin Form when SaveAsText omits it" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    RecordSelectors = NotDefault'
+                '    Begin Section'
+                '    End'
+                'End'
+            ) -join "`r`n"
+
+            $result = Ensure-AccessFormAutoResizeMarker -DocumentText $input
+            $lines = $result -split "`r?`n"
+            $beginIndex = [Array]::IndexOf($lines, 'Begin Form')
+
+            $lines[$beginIndex + 1] | Should -Be '    AutoResize = NotDefault'
+            (@($lines | Where-Object { $_ -match '^\s*AutoResize\s*=' })).Count | Should -Be 1
+        }
+
+        It "relocates an existing AutoResize property to immediately follow Begin Form" {
+            $input = "Begin Form`n    RecordSelectors = NotDefault`n    AutoResize = NotDefault`nEnd`n"
+
+            $result = Ensure-AccessFormAutoResizeMarker -DocumentText $input
+
+            $result | Should -Be "Begin Form`n    AutoResize = NotDefault`n    RecordSelectors = NotDefault`nEnd`n"
+            (@($result -split "`n" | Where-Object { $_ -match '^\s*AutoResize\s*=' })).Count | Should -Be 1
+        }
+
+        It "does not add form-only metadata to reports" {
+            $input = "Begin Report`r`n    Width =10000`r`nEnd`r`n"
+
+            Ensure-AccessFormAutoResizeMarker -DocumentText $input | Should -Be $input
+        }
+
+        It "does not mistake a nested AutoResize property for the root marker" {
+            $input = "Begin Form`n    Begin Subform`n        AutoResize =0`n    End`nEnd`n"
+            $result = Ensure-AccessFormAutoResizeMarker -DocumentText $input
+
+            $result | Should -Match "Begin Form`n    AutoResize = NotDefault`n"
+            $result | Should -Match "        AutoResize =0"
         }
     }
 
@@ -4580,4 +4625,3 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
         }
     }
 }
-

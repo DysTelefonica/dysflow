@@ -1598,6 +1598,34 @@ function Remove-AccessDocumentRootNameProperty {
     )
 }
 
+function Ensure-AccessFormAutoResizeMarker {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText
+    )
+
+    # Access can omit this root marker from otherwise successful SaveAsText
+    # exports. Those files are not reliably loadable again, so make the export
+    # contract deterministic without disturbing forms that already carry it.
+    if ($DocumentText -notmatch '(?im)^\s*Begin\s+Form\s*$') { return $DocumentText }
+    if ($DocumentText -match '(?im)^[ \t]*Begin\s+Form[ \t]*\r?\n {4}AutoResize\s*=\s*NotDefault[ \t]*(?:\r?\n|$)') {
+        return $DocumentText
+    }
+
+    $withoutRootMarker = [regex]::Replace(
+        $DocumentText,
+        '(?im)^ {4}AutoResize\s*=.*(?:\r?\n|$)',
+        ''
+    )
+
+    return [regex]::Replace(
+        $withoutRootMarker,
+        '(?im)^(\s*Begin\s+Form\s*)(\r?\n)',
+        ('$1$2    AutoResize = NotDefault$2'),
+        1
+    )
+}
+
 function Normalize-AccessDocumentRootEndMarker {
     [CmdletBinding()]
     Param(
@@ -2166,6 +2194,9 @@ function Export-VbaModule {
             # truth for everything BUT Attribute VB_Name (which the binary may already
             # be missing on legacy graphs that imported through older dysflow versions).
             $formTxtContent = [System.IO.File]::ReadAllText($finalPath, [System.Text.Encoding]::UTF8)
+            if (-not $isReportDocument) {
+                $formTxtContent = Ensure-AccessFormAutoResizeMarker -DocumentText $formTxtContent
+            }
             $formTxtContent = Ensure-CodeBehindFormVbName -Text $formTxtContent -ModuleName $actualName
             Write-Utf8NoBom -Path $finalPath -Text $formTxtContent
         } else {
