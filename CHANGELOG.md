@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2.13.3] - 2026-07-16
+
+- fix(forms): write form properties through the source-only mutation path (#889, closes #886)
+- fix(forms): prevent partial property mutations by rolling back failed updates (#891, closes #887)
+- docs(forms): document import-gate failure codes and recovery procedures (#890, closes #888)
+
 ## [v2.13.2] - 2026-07-15
 
 - fix(forms): probe `.codegraph-vba/` before `.codegraph/` for `map_form_behavior` auto-fetch and expose `codegraphIndexPath` (#881)
