@@ -23,6 +23,7 @@ describe("release diagnostics bundle", () => {
       const { stdout } = await execFileAsync("tar", ["-tzf", archive]);
       expect(stdout).toContain("references/error-codes.md");
       expect(stdout).toContain("docs/diagnostics/hresult-guide.md");
+      expect(stdout).toContain("docs/diagnostics/form-import-gate-failures.md");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

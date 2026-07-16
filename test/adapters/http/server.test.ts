@@ -219,6 +219,7 @@ describe("Dysflow HTTP adapter", () => {
       error: {
         code: "HTTP_READ_ONLY_SQL_REQUIRED",
         message: "The query/read route only accepts read-only SELECT queries.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],
@@ -333,6 +334,7 @@ describe("Dysflow HTTP adapter", () => {
       error: {
         code: "HTTP_BODY_TOO_LARGE",
         message: "Request body exceeds the 16 byte limit.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],
@@ -353,6 +355,7 @@ describe("Dysflow HTTP adapter", () => {
       error: {
         code: "HTTP_BODY_TOO_LARGE",
         message: "Request body exceeds the 16 byte limit.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],
@@ -397,6 +400,7 @@ describe("Dysflow HTTP adapter", () => {
       error: {
         code: "HTTP_BAD_JSON",
         message: "Request body must be valid JSON.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],
@@ -427,6 +431,7 @@ describe("Dysflow HTTP adapter", () => {
         code: "HTTP_WRITES_DISABLED",
         message:
           "Write routes are disabled. Start dysflow serve with --enable-writes to allow them.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],
@@ -667,6 +672,7 @@ describe("Dysflow HTTP adapter", () => {
         code: "HTTP_WRITES_DISABLED",
         message:
           "Write routes are disabled. Start dysflow serve with --enable-writes to allow them.",
+        remediation: "Review the error message and correct the reported condition before retrying.",
         retryable: false,
       },
       diagnostics: [],

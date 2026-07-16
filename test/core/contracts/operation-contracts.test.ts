@@ -35,7 +35,12 @@ describe("core operation contracts", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { code: "RUNNER_TIMEOUT", message: "Access runner timed out", retryable: true },
+      error: {
+        code: "RUNNER_TIMEOUT",
+        message: "Access runner timed out",
+        remediation: "Review the error message and correct the reported condition before retrying.",
+        retryable: true,
+      },
       diagnostics: [{ level: "error", source: "runner", message: "Timeout after 1000ms" }],
       durationMs: 1000,
     });
