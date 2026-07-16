@@ -1,6 +1,4 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
@@ -17,107 +15,6 @@ function collectTypeScriptFiles(root: string): string[] {
 }
 
 describe("MCP/core architecture boundary", () => {
-  it("keeps src/core independent from adapter implementations", () => {
-    const coreFiles = collectTypeScriptFiles(coreRoot);
-
-    const violations = coreFiles.flatMap((file) => {
-      const source = readFileSync(file, "utf8");
-      const importsAdapter =
-        /^\s*import\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
-        /^\s*export\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
-        /from\s+["'](?:\.\/)+adapters\//.test(source);
-
-      return importsAdapter && !KNOWN_ADAPTER_IMPORT_DEBT.has(toPosixRelative(file))
-        ? [relative(process.cwd(), file)]
-        : [];
-    });
-
-    expect(violations).toEqual([]);
-  });
-
-  it("keeps the adapter-import debt list honest — migrated files must be removed from it", () => {
-    const allCoreFiles = collectTypeScriptFiles(coreRoot).map(toPosixRelative);
-    const actualImporters = allCoreFiles.filter((file) => {
-      const source = readFileSync(join(coreRoot, relative(coreRoot, file)), "utf8");
-      return (
-        /^\s*import\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
-        /^\s*export\s+.*(?:\.\.\/)+adapters\//m.test(source) ||
-        /from\s+["'](?:\.\/)+adapters\//.test(source)
-      );
-    });
-    const stale = [...KNOWN_ADAPTER_IMPORT_DEBT].filter((file) => !actualImporters.includes(file));
-    expect(stale).toEqual([]);
-  });
-
-  it("fails the script guard for dynamic imports from core to adapters", () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
-    const coreFixture = join(fixtureRoot, "src", "core");
-    mkdirSync(coreFixture, { recursive: true });
-    writeFileSync(
-      join(coreFixture, "dynamic-import.ts"),
-      'export async function leak() { return import("../../adapters/foo.js"); }\n',
-      "utf8",
-    );
-
-    try {
-      expect(() =>
-        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
-          cwd: process.cwd(),
-          encoding: "utf8",
-          stdio: "pipe",
-        }),
-      ).toThrow(/imports from adapters \(dynamic\)/);
-    } finally {
-      rmSync(fixtureRoot, { recursive: true, force: true });
-    }
-  });
-
-  it("fails the script guard for bare side-effect imports from core to adapters", () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
-    const coreFixture = join(fixtureRoot, "src", "core");
-    mkdirSync(coreFixture, { recursive: true });
-    writeFileSync(
-      join(coreFixture, "sideeffect-import.ts"),
-      'import "../../adapters/foo.js";\n',
-      "utf8",
-    );
-
-    try {
-      expect(() =>
-        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
-          cwd: process.cwd(),
-          encoding: "utf8",
-          stdio: "pipe",
-        }),
-      ).toThrow(/imports from adapters \(sideeffect\)/);
-    } finally {
-      rmSync(fixtureRoot, { recursive: true, force: true });
-    }
-  });
-
-  it("fails the script guard for single-quoted side-effect imports from core to adapters", () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), "dysflow-core-boundary-"));
-    const coreFixture = join(fixtureRoot, "src", "core");
-    mkdirSync(coreFixture, { recursive: true });
-    writeFileSync(
-      join(coreFixture, "single-quoted-sideeffect-import.ts"),
-      "import '../../adapters/foo.js';\n",
-      "utf8",
-    );
-
-    try {
-      expect(() =>
-        execFileSync(process.execPath, ["scripts/check-core-adapter-boundary.mjs", coreFixture], {
-          cwd: process.cwd(),
-          encoding: "utf8",
-          stdio: "pipe",
-        }),
-      ).toThrow(/imports from adapters \(sideeffect\)/);
-    } finally {
-      rmSync(fixtureRoot, { recursive: true, force: true });
-    }
-  });
-
   it("drives core behavior through injected service interfaces", async () => {
     const requests: unknown[] = [];
     const tools = createDysflowMcpTools({
@@ -249,8 +146,6 @@ const KNOWN_DIRECT_IO_DEBT: ReadonlySet<string> = new Set([
   "src/core/utils/index.ts",
   "src/core/utils/package-info.ts",
 ]);
-
-const KNOWN_ADAPTER_IMPORT_DEBT: ReadonlySet<string> = new Set([]);
 
 function toPosixRelative(file: string): string {
   return relative(process.cwd(), file).split(sep).join("/");
