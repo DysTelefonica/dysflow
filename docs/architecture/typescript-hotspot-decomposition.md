@@ -125,3 +125,95 @@ the extracted behavior remains quantitatively exercised rather than becoming an 
 Rollback boundary: remove the two extracted modules and this document, restore the extracted
 functions in `vba-forms-read-tools.ts`, and remove the additional adapter-envelope assertions. No
 core contract, dispatch route, or external tool name needs reverting.
+
+## Issue #913 — preview rendering and diff extraction
+
+The first planned child slice now lives in `vba-forms-preview-tools.ts`. It owns
+`renderFormPreviewTool`, `diffFormPreviewTool`, and their private option/output orchestration while
+depending downward on `vba-forms-read-context.ts`. It imports neither the inspection capability nor
+the compatibility barrel. `vba-forms-read-tools.ts` continues to re-export both public functions,
+so `VbaFormsAdapter.execute` and every external tool contract remain unchanged.
+
+The read context now exposes a candidate-snapshot seam. Candidate resolution reads each successful
+path once and parses those exact bytes; diff still resolves the execution target once for both
+aliases and preserves before/after-specific read and parse errors. Stateful filesystem port tests
+return invalid content on any second read, proving render and both diff sides retain their first
+successful snapshots without asserting private collaborator calls.
+
+| File | Before #913 | After #913 |
+| --- | ---: | ---: |
+| `vba-forms-read-tools.ts` | 1,055 | 676 |
+| `vba-forms-preview-tools.ts` | 0 | 162 |
+| `vba-forms-read-context.ts` | 107 | 132 |
+
+Verification evidence:
+
+- The four adapter suites are reproducible with
+  `pnpm vitest run test/adapters/vba-sync/vba-forms-adapter-render.test.ts test/adapters/vba-sync/vba-forms-adapter-diff.test.ts test/adapters/vba-sync/vba-forms-adapter-inspect.test.ts test/adapters/vba-sync/vba-forms-adapter-geometry.test.ts`:
+  **4 files / 46 tests passed**.
+- The preview/diff contract run is reproducible with
+  `pnpm vitest run test/core/services/form-ui-render.test.ts test/core/services/form-ui-diff.test.ts test/adapters/vba-sync/vba-forms-adapter-render.test.ts test/adapters/vba-sync/vba-forms-adapter-diff.test.ts`:
+  **4 files / 65 tests passed**. These are two core suites plus two adapter suites, not four adapter
+  suites.
+- `pnpm lint`: passed, including TypeScript and boundary checks.
+- `pnpm build`: passed.
+- `node scripts/check-core-adapter-boundary.mjs`: passed.
+- `git diff --check`: passed.
+- CodeGraph sync including the committed evidence script and test passed (**656 files / 11,533
+  nodes / 37,899 edges**); its dependency query
+  confirms preview imports read context and the adapter still reaches preview only through the
+  compatibility barrel.
+
+The coverage run used the same two core and two adapter preview/diff suites on both trees. The
+narrow current run exited **1 only because repository-wide global coverage thresholds still apply
+to a deliberately narrow `--coverage.include` selection**; all 65 focused tests passed. Exact
+baseline coverage for the
+pre-extraction barrel was:
+
+| Baseline file | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| `vba-forms-read-tools.ts` | 106/335 (31.64%) | 65/255 (25.49%) | 3/17 (17.64%) | 104/315 (33.01%) |
+
+Current focused coverage was:
+
+| Current file/set | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| `vba-forms-preview-tools.ts` | 82.60% | 77.77% | 100% | 85.96% |
+| `vba-forms-read-context.ts` | 83.87% | 76% | 100% | 86.66% |
+| `vba-forms-read-tools.ts` | 0% | 0% | 0% | 0% |
+| **Focused include total** | **522/773 (67.52%)** | **312/543 (57.45%)** | **60/75 (80%)** | **461/666 (69.21%)** |
+
+The barrel's zero row is expected: these suites exercise the extracted preview, inspection, and
+shared-context paths, not its remaining layout, comparison, lint, and binding bodies. Core diff and
+render services remain highly covered and behaviorally unchanged. Baseline and current aggregate
+percentages are not an apples-to-apples improvement claim: extraction redistributes code into new
+denominators and the current aggregate includes core services and already-extracted capabilities.
+The defensible comparison is the same four preview/diff contract suites passing before and after,
+with the new capability and context directly exercised through the two adapter port suites.
+
+Tarjan analysis is now reproducible with the committed
+`node scripts/report-ts-import-cycles.mjs [--root <checkout>] [--files <paths...>]` command. The
+script parses static relative TypeScript imports and re-exports with the TypeScript compiler,
+resolves them with `NodeNext`, sorts its JSON output, and reports both the full graph and an optional
+induced file set. Running it against a temporary detached worktree at the exact issue base
+`04681eeb` and against the current tree produced:
+
+| Graph | Modules | Edges | SCCs | Cyclic SCCs | Cyclic sizes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Base `04681eeb` | 160 | 568 | 135 | 6 | 15, 8, 2, 2, 2, 2 |
+| After #913 | 161 | 572 | 137 | 6 | 14, 8, 2, 2, 2, 2 |
+
+The relevant direct induced graph is acyclic: `adapter -> barrel`; `barrel -> inspection, preview`;
+`inspection -> context`; `preview -> context, core-diff, core-render`; `context -> core`; and
+`core-diff -> core-render`. Reproduce it with
+`node scripts/report-ts-import-cycles.mjs --files src/adapters/vba-sync/vba-forms-adapter.ts src/adapters/vba-sync/vba-forms-read-tools.ts src/adapters/vba-sync/vba-forms-inspection-tools.ts src/adapters/vba-sync/vba-forms-preview-tools.ts src/adapters/vba-sync/vba-forms-read-context.ts src/core/services/form-ui-diff.ts src/core/services/form-ui-render.ts`.
+That command reports **7 modules / 8 edges / 7 SCCs / 0 cyclic SCCs**. The neutral target-resolver port keeps preview and read context as
+singleton SCCs outside the legacy VBA-sync component. Globally, the largest cyclic SCC changes from
+**15 modules at `04681eeb` to 14 modules after #913**; this is not described as “no SCC growth” or
+as an unchanged global graph. Inspection retains its pre-existing #897 membership, while the
+relevant induced capability graph remains acyclic.
+
+Rollback boundary: restore the preview and diff bodies in `vba-forms-read-tools.ts`, remove
+`vba-forms-preview-tools.ts`, revert the candidate-snapshot additions in
+`vba-forms-read-context.ts`, and remove the two stateful port regressions. The adapter import,
+dispatch route, core renderer/diff services, and public error/result envelopes require no rollback.

@@ -261,6 +261,29 @@ describe("VbaFormsAdapter — render_form_preview (issue #814)", () => {
     });
   });
 
+  it("renders the exact resolved candidate snapshot from one filesystem read", async () => {
+    let reads = 0;
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async () => {
+        reads++;
+        return reads === 1 ? SIMPLE_FORM : "not the resolved snapshot";
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    orchestrator.resolveExecutionTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+    });
+
+    const result = await new VbaFormsAdapter(orchestrator, fs).execute("render_form_preview", {
+      projectId: "test-project",
+      formName: "frmMain",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(reads).toBe(1);
+  });
+
   it("its response is bypass-tested against the successResult shape (issue #813 standards)", async () => {
     // Regression guard: render_form_preview MUST follow the same
     // { ok, data } envelope every other adapter returns. If a future
