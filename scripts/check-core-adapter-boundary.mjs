@@ -1,29 +1,11 @@
 #!/usr/bin/env node
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const DEFAULT_TARGET = "src/core";
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules", "scratch"]);
-
-// Label documentation for violation types:
-//   "static"          — same-line named import  : import { Foo } from "...adapters/..."
-//   "multiline-static"— multi-line named import : import { ... } from "...adapters/..."
-//                                        OR multi-line dynamic : import(... ) from "...adapters/..."
-//   "sideeffect"      — bare side-effect import : import "...adapters/...";  (no { ... } or from)
-
-const SAME_LINE_ADAPTER_IMPORT =
-  /^\s*(?:import|export)\s+(?:type\s+)?[^;"']*?\s+from\s+["'][^"']*adapters\//gm;
-
-const MULTILINE_ADAPTER_IMPORT =
-  /(?:^|\n)import\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)export\s*\{[\s\S]*?\}\s+from\s+["'][^"']*adapters\/[^"']*["']|(?:^|\n)import\s*\([\s\S]*?\)\s+from\s+["'][\s\S]*?adapters\/[\s\S]*?["']/g;
-
-// Bare side-effect import — no { ... }, no from, just the path string
-const SIDEEFFECT_ADAPTER_IMPORT =
-  /import\s+["'][^"']*adapters\/[^"']*["']\s*(?![\s]*from\b)[^;]*;/g;
-
-// Dynamic import(...) to adapters/ (import(...) without a following 'from')
-const DYNAMIC_ADAPTER_IMPORT = /import\s*\([\s\S]*?adapters\/[\s\S]*?\)/g;
 
 async function collectTypeScriptFiles(targetPath) {
   const absolutePath = path.resolve(targetPath);
@@ -41,73 +23,105 @@ async function collectTypeScriptFiles(targetPath) {
     }
   }
 
-  if (absolutePath.endsWith(".ts")) {
-    files.push(absolutePath);
-  } else {
-    await walk(absolutePath);
+  if (absolutePath.endsWith(".ts")) files.push(absolutePath);
+  else await walk(absolutePath);
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function loadCompilerOptions(projectRoot) {
+  const configPath = ts.findConfigFile(projectRoot, ts.sys.fileExists, "tsconfig.json");
+  if (configPath === undefined) throw new Error(`tsconfig.json not found from ${projectRoot}`);
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error !== undefined)
+    throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(configPath));
+  if (parsed.errors.length > 0) {
+    throw new Error(
+      parsed.errors
+        .map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n"))
+        .join("\n"),
+    );
   }
-
-  return files;
+  return parsed.options;
 }
 
-function lineAndColumn(sourceText, index) {
-  const prefix = sourceText.slice(0, index);
-  const lines = prefix.split(/\r?\n/);
-  return { line: lines.length, column: lines.at(-1).length + 1 };
+function canonical(value) {
+  const normalized = path.resolve(value).replaceAll("/", path.sep);
+  return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
 }
 
-export async function findCoreAdapterBoundaryViolations(targetPath = DEFAULT_TARGET) {
+function isWithin(candidate, directory) {
+  const relative = path.relative(canonical(directory), canonical(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function moduleReferences(sourceFile) {
+  const references = [];
+  function add(node, specifier) {
+    if (ts.isStringLiteralLike(specifier)) references.push({ node, specifier: specifier.text });
+  }
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier !== undefined) add(node, node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      node.moduleReference.expression !== undefined
+    ) {
+      add(node, node.moduleReference.expression);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length >= 1
+    ) {
+      add(node, node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return references;
+}
+
+export async function findCoreAdapterBoundaryViolations(
+  targetPath = DEFAULT_TARGET,
+  projectRoot = process.cwd(),
+) {
+  const options = loadCompilerOptions(projectRoot);
+  const adapterRoot = path.join(projectRoot, "src", "adapters");
   const files = await collectTypeScriptFiles(targetPath);
   const violations = [];
+  const seen = new Set();
 
   for (const filePath of files) {
-    const sourceText = await readFile(filePath, "utf8");
-
-    // Same-line static import/export: use match index for precise location
-    for (const match of sourceText.matchAll(SAME_LINE_ADAPTER_IMPORT)) {
-      const location = lineAndColumn(sourceText, match.index);
+    const sourceText = ts.sys.readFile(filePath);
+    if (sourceText === undefined) continue;
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      sourceText,
+      options.target ?? ts.ScriptTarget.ES2022,
+      true,
+    );
+    for (const reference of moduleReferences(sourceFile)) {
+      const resolved = ts.resolveModuleName(
+        reference.specifier,
+        filePath,
+        options,
+        ts.sys,
+      ).resolvedModule;
+      if (resolved === undefined || !isWithin(resolved.resolvedFileName, adapterRoot)) continue;
+      const start = reference.node.getStart(sourceFile);
+      const key = `${canonical(filePath)}:${start}:${canonical(resolved.resolvedFileName)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const location = sourceFile.getLineAndCharacterOfPosition(start);
       violations.push({
         filePath,
-        line: location.line,
-        column: location.column,
-        type: "static",
-      });
-    }
-
-    // Multiline named import OR multi-line dynamic import: matchAll gives each occurrence's index
-    for (const match of sourceText.matchAll(MULTILINE_ADAPTER_IMPORT)) {
-      const location = lineAndColumn(sourceText, match.index);
-      violations.push({
-        filePath,
-        line: location.line,
-        column: location.column,
-        type: "multiline-static",
-      });
-    }
-
-    // Dynamic import(...): matchAll gives each occurrence's index
-    for (const match of sourceText.matchAll(DYNAMIC_ADAPTER_IMPORT)) {
-      const location = lineAndColumn(sourceText, match.index);
-      violations.push({
-        filePath,
-        line: location.line,
-        column: location.column,
-        type: "dynamic",
-      });
-    }
-
-    // Bare side-effect import — no { ... }, no from, just the path string
-    for (const match of sourceText.matchAll(SIDEEFFECT_ADAPTER_IMPORT)) {
-      const location = lineAndColumn(sourceText, match.index);
-      violations.push({
-        filePath,
-        line: location.line,
-        column: location.column,
-        type: "sideeffect",
+        resolvedTarget: resolved.resolvedFileName,
+        line: location.line + 1,
+        column: location.character + 1,
       });
     }
   }
-
   return violations;
 }
 
@@ -120,15 +134,19 @@ async function main() {
       ),
     )
   ).flat();
+  violations.sort((left, right) =>
+    `${left.filePath}:${left.line}:${left.column}:${left.resolvedTarget}`.localeCompare(
+      `${right.filePath}:${right.line}:${right.column}:${right.resolvedTarget}`,
+    ),
+  );
 
   if (violations.length === 0) return;
-
   console.error(
     "Core adapter boundary failed. Files under src/core must not import from src/adapters; inject adapter implementations from composition roots instead.",
   );
   for (const violation of violations) {
     console.error(
-      `${violation.filePath}:${violation.line}:${violation.column} imports from adapters (${violation.type})`,
+      `${violation.filePath}:${violation.line}:${violation.column} -> ${violation.resolvedTarget}`,
     );
   }
   process.exitCode = 1;
