@@ -23,7 +23,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-06-14.r5-formtxt-codebehind-split";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-07-16.r6-order-safe-lcs-cap";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -70,10 +70,13 @@ export interface ClassifyVbaPairInput {
 // ---------------------------------------------------------------------------
 
 /**
- * Maximum number of lines per side before LCS falls back to multiset-difference.
+ * Maximum number of lines per side before LCS fails safe as an uncertain diff.
  * VBA files are small; this bound protects against pathological inputs.
  */
 const LCS_LINE_BUDGET = 20_000;
+
+/** Maximum dynamic-programming cells evaluated by the exact LCS path. */
+const LCS_CELL_BUDGET = 4_000_000;
 
 /** File types that are VBA code modules (not form/report serialization). */
 const CODE_FILE_TYPES = new Set(["bas", "cls", "frm"]);
@@ -704,10 +707,17 @@ function normalizeEventProcedureOrderWithinPropertyRuns(text: string): string {
  * @returns { lcs: number, capped: boolean }
  */
 export function lcsLength(a: string[], b: string[]): { lcs: number; capped: boolean } {
-  if (a.length > LCS_LINE_BUDGET || b.length > LCS_LINE_BUDGET) {
-    // Fallback to multiset intersection count for large inputs
-    const multisetLcs = multisetIntersectionCount(a, b);
-    return { lcs: multisetLcs, capped: true };
+  if (
+    a.length > LCS_LINE_BUDGET ||
+    b.length > LCS_LINE_BUDGET ||
+    a.length * b.length > LCS_CELL_BUDGET
+  ) {
+    // Exact ordered equality is handled by classifyVbaPair before reaching this
+    // path. For unequal large inputs, an unordered approximation could hide a
+    // behavior-changing statement reorder. Returning zero commonality is a
+    // bounded, conservative fallback: downstream classification stays
+    // actionable/manual-merge instead of claiming an equivalence we cannot prove.
+    return { lcs: 0, capped: true };
   }
 
   const n = a.length;
@@ -733,27 +743,6 @@ export function lcsLength(a: string[], b: string[]): { lcs: number; capped: bool
   }
 
   return { lcs: prev[m] ?? 0, capped: false };
-}
-
-/**
- * Multiset intersection count — used as LCS fallback when arrays exceed LCS_LINE_BUDGET.
- * Counts min occurrences of each line across both arrays.
- */
-function multisetIntersectionCount(a: string[], b: string[]): number {
-  const countA = new Map<string, number>();
-  for (const line of a) {
-    countA.set(line, (countA.get(line) ?? 0) + 1);
-  }
-  let intersection = 0;
-  const countB = new Map<string, number>();
-  for (const line of b) {
-    countB.set(line, (countB.get(line) ?? 0) + 1);
-  }
-  for (const [line, cntA] of countA) {
-    const cntB = countB.get(line) ?? 0;
-    intersection += Math.min(cntA, cntB);
-  }
-  return intersection;
 }
 
 /**
@@ -803,7 +792,9 @@ function fromFunctionalDiff(
   binUnique: number,
   capped: boolean,
 ): SemanticClassification {
-  const cappedNote = capped ? " (lcs-capped)" : "";
+  const cappedNote = capped
+    ? " (lcs-capped: order-aware comparison budget exceeded; conservatively actionable)"
+    : "";
 
   if (srcUnique > 0 && binUnique === 0) {
     return {

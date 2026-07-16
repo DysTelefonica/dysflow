@@ -987,6 +987,114 @@ describe("line-move — LCS conservative choice", () => {
     expect(result.classification).toBe("bothChanged");
     expect(result.recommendation).toBe("manual_merge");
   });
+
+  it("keeps identical modules over the LCS budget matched", () => {
+    const largeModule = Array.from(
+      { length: 20_001 },
+      (_, index) => `value${index} = ${index}`,
+    ).join("\n");
+
+    const result = classifyVbaPair({
+      sourceText: largeModule,
+      binaryText: largeModule,
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result).toMatchObject({ classification: "matched", actionable: false });
+  });
+
+  it("bounds work at the 20,000-line threshold instead of entering quadratic LCS", () => {
+    const lines = Array.from({ length: 20_000 }, (_, index) => `value${index} = ${index}`);
+    const reordered = [...lines.slice(10_000), ...lines.slice(0, 10_000)];
+
+    const result = classifyVbaPair({
+      sourceText: lines.join("\n"),
+      binaryText: reordered.join("\n"),
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result).toMatchObject({
+      classification: "bothChanged",
+      recommendation: "manual_merge",
+      actionable: true,
+    });
+    expect(result.reason).toContain("lcs-capped");
+  }, 2_000);
+
+  it("fails safe within the performance budget when a large functional block is reordered", () => {
+    const lines = Array.from({ length: 20_001 }, (_, index) => `value${index} = ${index}`);
+    const reordered = [...lines.slice(10_000), ...lines.slice(0, 10_000)];
+
+    const result = classifyVbaPair({
+      sourceText: lines.join("\n"),
+      binaryText: reordered.join("\n"),
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result).toMatchObject({
+      classification: "bothChanged",
+      recommendation: "manual_merge",
+      actionable: true,
+    });
+    expect(result.reason).toContain("lcs-capped");
+    expect(result.reason).toContain("conservatively actionable");
+  }, 2_000);
+
+  it("does not let duplicate lines hide a large reorder", () => {
+    const firstBlock = Array.from({ length: 10_001 }, () => "balance = balance - amount");
+    const secondBlock = Array.from({ length: 10_001 }, () => "If balance < 0 Then Err.Raise 5");
+
+    const result = classifyVbaPair({
+      sourceText: [...firstBlock, ...secondBlock].join("\n"),
+      binaryText: [...secondBlock, ...firstBlock].join("\n"),
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result).toMatchObject({
+      classification: "bothChanged",
+      recommendation: "manual_merge",
+      actionable: true,
+    });
+  });
+
+  it("keeps a large insertion or deletion conservative and actionable", () => {
+    const shared = Array.from({ length: 20_001 }, (_, index) => `value${index} = ${index}`);
+    const result = classifyVbaPair({
+      sourceText: [...shared, "AuditMutation"].join("\n"),
+      binaryText: shared.join("\n"),
+      fileType: "bas",
+      mode: "semantic",
+    });
+
+    expect(result).toMatchObject({
+      classification: "bothChanged",
+      recommendation: "manual_merge",
+      actionable: true,
+    });
+    expect(result.reason).toContain("conservatively actionable");
+  });
+
+  it("keeps strict mode exact for reordered modules over the budget", () => {
+    const lines = Array.from({ length: 20_001 }, (_, index) => `value${index} = ${index}`);
+    const reordered = [...lines].reverse();
+
+    const result = classifyVbaPair({
+      sourceText: lines.join("\n"),
+      binaryText: reordered.join("\n"),
+      fileType: "bas",
+      mode: "strict",
+    });
+
+    expect(result).toMatchObject({
+      classification: "bothChanged",
+      recommendation: "manual_merge",
+      actionable: true,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

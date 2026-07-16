@@ -2055,6 +2055,28 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       expect(result.recommendedAction).toBe("manual_merge");
     });
 
+    it("keeps a capped reordered module actionable and out of automatic bulk lists", async () => {
+      const lines = Array.from({ length: 20_001 }, (_, index) => `value${index} = ${index}`);
+      const reordered = [...lines.slice(10_000), ...lines.slice(0, 10_000)];
+      const fs = makeSemanticFs({
+        "src/LargeReorder.bas": lines.join("\n"),
+        "bin/LargeReorder.bas": reordered.join("\n"),
+      });
+
+      const result = await compareVbaSourceTrees("src", "bin", [], false, fs);
+
+      expect(result.actionableDifferent).toEqual([
+        expect.objectContaining({
+          moduleName: "LargeReorder",
+          classification: "bothChanged",
+        }),
+      ]);
+      expect(result.nonActionableDifferent).toEqual([]);
+      expect(result.bulkImportable).toEqual([]);
+      expect(result.bulkExportable).toEqual([]);
+      expect(result.recommendedAction).toBe("manual_merge");
+    });
+
     // ---- Cross-cutting invariants ----
 
     it("summaryStructured totals agree with bucket sums (cross-cutting)", async () => {
