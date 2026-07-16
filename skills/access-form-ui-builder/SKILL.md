@@ -62,10 +62,10 @@ Return analysis, behavior map, plan, application result, or verification report 
 
 For single-control changes that don't need a full plan:
 
-- **`form_set_property({ sourcePath, controlName, property, value, dryRun?, apply? })`** — set one property on one control. Routes through `mutateForm` seam. Honors the write gate.
+- **`form_set_property({ sourcePath, controlName, property, value, commitScope?, dryRun?, apply? })`** — set one property on one control. `commitScope` defaults to `"source-and-binary"`, which routes through the guarded import seam. Use `commitScope: "source"` with `apply: true` to persist only the `.form.txt` mutation and explicitly skip the Access import gate when the binary must be reconciled later. Both commit scopes honor the write gate.
 - **`form_delete_control({ sourcePath, controlName, dryRun?, apply? })`** — remove one control. Same seam + write gate.
 
-Both refuse with the standard safety-stop error if `MCP_WRITES_DISABLED` is set. Both honor `dryRun` for preview without write. Prefer these for surgical changes; reach for `apply_form_design_plan` only when you need the multi-op coordination + preserve-contract validation.
+Both refuse with the standard safety-stop error if `MCP_WRITES_DISABLED` is set. Both honor `dryRun` for preview without write. A source-only property mutation returns `importGate: "skipped"`; it does not claim the Access binary is synchronized. Prefer these for surgical changes; reach for `apply_form_design_plan` only when you need the multi-op coordination + preserve-contract validation.
 
 ## Batch geometry verbs (issue #816, Phase 3 Ergonomic actions)
 

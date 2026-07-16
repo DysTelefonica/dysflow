@@ -177,6 +177,31 @@ export async function mutateForm(args: {
       }
     }
 
+    // Issue #886 — allow a surgical source commit when Access cannot complete
+    // the SaveAsText/LoadFromText gate. This is deliberately limited to
+    // form_set_property: callers must opt in explicitly and the normal apply
+    // path continues to synchronize source and binary by default.
+    if (toolName === "form_set_property" && params.commitScope === "source") {
+      try {
+        await fileSystem.writeFile(source.data.sourcePath, mutation.source, "utf8");
+      } catch (err) {
+        return failureResult(
+          createDysflowError(
+            "FORM_WRITE_FAILED",
+            `Cannot write mutated form file at "${source.data.sourcePath}". ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
+      }
+      return successResult({
+        mode: "apply",
+        commitScope: "source",
+        sourcePath: source.data.sourcePath,
+        changedControlName: mutation.changedControlName,
+        preservedKeys: mutation.preservedKeys,
+        importGate: "skipped",
+      });
+    }
+
     // Apply: delegate the single-write + single-guarded-import + single-rollback
     // block to the seam. mutateForm always operates on an existing source
     // (readFile succeeded above), so targetExisted is always true.

@@ -1134,6 +1134,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "New scalar value for the property. Accepts string/number/boolean (JSON-shape). Blob-kind entries (PrtMip, PrtDevNamesW, FormatConditions, etc.) are refused at the service level, not at the schema.",
       } as unknown as { type: "string" | "number" | "boolean"; description: string },
+      commitScope: {
+        type: "string",
+        enum: ["source", "source-and-binary"],
+        description:
+          "Persistence boundary. Defaults to 'source-and-binary' (write source, then run the guarded Access import). Use 'source' to persist only the .form.txt mutation and explicitly skip the binary import gate; reconcile the Access binary separately.",
+      },
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,

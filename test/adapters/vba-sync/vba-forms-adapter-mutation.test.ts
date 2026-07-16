@@ -106,6 +106,78 @@ describe("VbaFormsAdapter — form mutation tools", () => {
     );
   });
 
+  it("persists form_set_property in source-only scope without invoking the binary import gate", async () => {
+    const orchestrator = makeOrchestrator(
+      failureResult({ code: "IMPORT_FAILED", message: "SaveAsText failed", retryable: false }),
+    );
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_FormIndicador.form.txt",
+      controlName: "txtName",
+      property: "Left",
+      value: 4536,
+      commitScope: "source",
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(writeFile).toHaveBeenCalledWith(
+      "C:\\repo\\forms\\Form_FormIndicador.form.txt",
+      expect.stringContaining("Left =4536"),
+      "utf8",
+    );
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+    if (result.ok) {
+      expect(result.data).toMatchObject({
+        mode: "apply",
+        commitScope: "source",
+        importGate: "skipped",
+      });
+    }
+  });
+
+  it("keeps form_set_property binary synchronization as the default apply behavior", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs({ writeFile: vi.fn() });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_FormIndicador.form.txt",
+      controlName: "txtName",
+      property: "Left",
+      value: 4536,
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(1);
+    if (result.ok) {
+      expect(result.data).toMatchObject({ importGate: "passed" });
+    }
+  });
+
+  it("reports FORM_WRITE_FAILED when a source-only form_set_property cannot persist", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs({ writeFile: vi.fn().mockRejectedValue(new Error("EACCES")) });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_FormIndicador.form.txt",
+      controlName: "txtName",
+      property: "Left",
+      value: 4536,
+      commitScope: "source",
+      apply: true,
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "FORM_WRITE_FAILED" } });
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
   it("rejects apply when sourcePath is outside the resolved destinationRoot", async () => {
     const orchestrator = makeOrchestrator();
     const fs = mockFs();
