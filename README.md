@@ -865,7 +865,7 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
   - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
 * **`import_queries`**: Bulk import Access QueryDefs.
   - Parameters: `queryDefinitions`/`queries` (optional), `accessPath` (optional), `dryRun`
-* **`compact_repair`**: Execute compact and repair operations.
+* **`compact_repair`**: Execute compact and repair operations. `target` defaults to `frontend`; use `target: "backend"` for the configured backend. Explicit paths override the semantic target with deterministic precedence: `databasePath`, then its `sourcePath` alias, then `accessPath`.
   - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
 * **`relink_directory`**: Bulk relink table references recursively under a directory root.
   - Parameters: `rootPath` (string, required), `dryRun`, `apply`, `backup` (boolean, optional), `recursive` (boolean, optional), `maps` (array, optional), `denyPrefixes` (array, optional), `strictLocal` (boolean, optional), `removeUnresolved` (boolean, optional), `timeoutMs` (number, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional overrides)

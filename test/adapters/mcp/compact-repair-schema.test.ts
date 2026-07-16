@@ -17,4 +17,11 @@ describe("compact_repair schema", () => {
     expect(schema.properties).toHaveProperty("accessPath");
     expect(schema.properties).toHaveProperty("databasePath");
   });
+
+  it("exposes frontend and backend semantic targets", () => {
+    expect(schema.properties.target).toMatchObject({
+      type: "string",
+      enum: ["frontend", "backend"],
+    });
+  });
 });

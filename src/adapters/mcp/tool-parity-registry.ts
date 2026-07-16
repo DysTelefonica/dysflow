@@ -435,7 +435,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   import_queries:
     "Import saved query definitions into the frontend. Frontend-only; omission resolves to accessPath. Write-gated; dryRun:true plans without writing.",
   compact_repair:
-    "Compact and repair the database (maintenance; mutates the file). Write-gated; backupFirst:true backs up before, dryRun/apply control plan vs commit.",
+    "Compact and repair a database (maintenance; mutates the file). target defaults to frontend; target:'backend' selects the configured backend. Explicit databasePath/sourcePath/accessPath overrides target in that precedence order. Write-gated; backupFirst:true backs up before, dryRun/apply control plan vs commit.",
   relink_directory:
     "Batch-relink Access frontends under a root directory to local backends, with alias maps and verification. Large surface (maps/denyPrefixes/strictLocal/removeUnresolved/recursive); write-gated; dryRun/apply control plan vs commit. Prefer passwordEnv over a raw password argument.",
 };
