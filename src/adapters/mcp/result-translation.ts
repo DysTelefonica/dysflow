@@ -170,6 +170,16 @@ export type McpAccessContextResolver = (
   input: unknown,
 ) => Promise<OperationResult<McpAccessContext>>;
 
+function sanitizeMcpErrorDetails(
+  details: Record<string, unknown>,
+  secrets?: readonly string[],
+): Record<string, unknown> {
+  return JSON.parse(sanitizeMcpErrorMessage(stringifyForMcp(details), secrets)) as Record<
+    string,
+    unknown
+  >;
+}
+
 export function translateCoreResultToMcpContent<TData>(
   result: OperationResult<TData>,
   secrets?: readonly string[],
@@ -184,6 +194,21 @@ export function translateCoreResultToMcpContent<TData>(
       ],
       isError: true,
       ok: false,
+      ...(result.error.remediation
+        ? {
+            error: {
+              code: result.error.code,
+              message: sanitizeMcpErrorMessage(result.error.message, secrets),
+              remediation: result.error.remediation,
+              ...(result.error.details
+                ? { details: sanitizeMcpErrorDetails(result.error.details, secrets) }
+                : {}),
+              ...(result.error.allowedProcedures
+                ? { allowedProcedures: result.error.allowedProcedures }
+                : {}),
+            },
+          }
+        : {}),
     };
   }
 

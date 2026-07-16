@@ -21,7 +21,10 @@ This error usually occurs when the Access database engine prevents modification 
 * **Close Active Designers:** Ensure the object is not open in Design View within Access.
 * **Close the VBA Editor:** Close the VBA Editor window (VBE) and restart the sync operation.
 * **Compact & Repair:** Run the "Compact and Repair Database" utility in MS Access, or invoke it programmatically via `compact_repair` tool.
-* **Process Cleanup:** Force close any lingering `MSACCESS.EXE` processes that might hold file locks.
+* **Process Cleanup:** Run `list_access_operations`, then reconcile tracked stale operations with
+  `cleanup_access_operation`. For a verified headless orphan, use
+  `access_force_cleanup_orphaned` with the exact confirmed PID. Never kill `MSACCESS.EXE` by
+  process name.
 
 ---
 

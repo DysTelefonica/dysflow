@@ -115,7 +115,11 @@ export async function applyGuardedFormWrite(
       createDysflowError(
         "FORM_IMPORT_GATE_FAILED",
         `import_modules apply gate failed for "${source.sourcePath}": ${importResult.error.message}`,
-        { details: { cause: importResult.error, rollback: rollbackOutcome } },
+        {
+          details: { cause: importResult.error, rollback: rollbackOutcome },
+          remediation:
+            "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
+        },
       ),
     );
   }

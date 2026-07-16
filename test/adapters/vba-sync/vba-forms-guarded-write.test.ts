@@ -105,6 +105,9 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("FORM_IMPORT_GATE_FAILED");
+      expect(result.error.remediation).toBe(
+        "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
+      );
       expect(result.error.message).toContain(RESOLVED.sourcePath);
       expect(result.error.details).toMatchObject({
         cause: expect.objectContaining({ code: "IMPORT_FAILED" }),

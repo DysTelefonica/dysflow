@@ -23,6 +23,8 @@ import {
   procedureNotAllowed,
   writesDisabled,
 } from "../../../src/adapters/mcp/dispatch-common";
+import { translateCoreResultToMcpContent } from "../../../src/adapters/mcp/result-translation";
+import { createDysflowError, failureResult } from "../../../src/core/contracts/index";
 
 describe("procedureNotAllowed — structured envelope (#659)", () => {
   it("exports a structured error.code = MCP_PROCEDURE_NOT_ALLOWED", () => {
@@ -160,11 +162,28 @@ describe("writesDisabled — structured envelope (#659, gap 4)", () => {
 // #659 follow-up (gap 5) — `invalidInput` keeps the legacy code but now
 // exposes a structured envelope. Per gate-error-codes/spec.md scenario 5:
 //   - `error.code = MCP_INPUT_INVALID`
-//   - `error.remediation` is absent (schema errors are self-describing)
+//   - `error.remediation` gives the consumer a concrete next action
 //   - `error.allowedProcedures` is absent (allowlist was not consulted)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("invalidInput — structured envelope (#659, gap 5)", () => {
+  it("gives non-catalogued typed errors a safe remediation fallback", () => {
+    const result = failureResult(createDysflowError("FORM_SPEC_MISSING", "sourcePath required"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.remediation).toMatch(/Review the error message/);
+  });
+
+  it("does not expose secrets from nested error details", () => {
+    const result = failureResult(
+      createDysflowError("FORM_IMPORT_GATE_FAILED", "Import failed", {
+        details: { cause: { message: "password=hunter2" } },
+      }),
+    );
+    const translated = translateCoreResultToMcpContent(result, ["hunter2"]);
+    expect(translated.error?.details).toEqual({ cause: { message: "password=[REDACTED]" } });
+    expect(JSON.stringify(translated)).not.toContain("hunter2");
+  });
+
   it("structured `error.code` matches the legacy MCP_INPUT_INVALID body prefix", () => {
     const result = invalidInput("bad field 'mode'");
     expect(result.error?.code).toBe("MCP_INPUT_INVALID");
@@ -176,9 +195,21 @@ describe("invalidInput — structured envelope (#659, gap 5)", () => {
     expect(result.error?.message).toBe("bad field 'mode'");
   });
 
-  it("does NOT include remediation (schema rejections are self-describing)", () => {
+  it("includes a one-line schema remediation", () => {
     const result = invalidInput("bad field 'mode'");
-    expect(result.error?.remediation).toBeUndefined();
+    expect(result.error?.remediation).toBe(
+      "Check the tool schema and replace unsupported or missing fields before retrying.",
+    );
+  });
+
+  it("explains the form_set_property propertyName migration precisely", () => {
+    const result = invalidInput('"propertyName" is not allowed.', undefined, {
+      rejectedFlag: "propertyName",
+      toolName: "form_set_property",
+    });
+    expect(result.error?.remediation).toContain(
+      "schema requires `property` (single string token), not `propertyName`",
+    );
   });
 
   it("does NOT include allowedProcedures (the allowlist was not consulted)", () => {

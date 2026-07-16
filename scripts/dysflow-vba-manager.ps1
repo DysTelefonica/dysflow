@@ -4850,6 +4850,14 @@ function Invoke-ImportAction {
                     error           = [ordered]@{
                         code    = $errorCode
                         message = $messageString
+                        remediation = switch ($errorCode) {
+                            "VB_NAME_MISMATCH" { "Make Attribute VB_Name match the target module name before retrying." }
+                            "DUPLICATE_OPTION_DIRECTIVE" { "Keep only one copy of each Option directive before retrying." }
+                            "IMPORT_TRUNCATED" { "Restore the complete module source and retry the import." }
+                            "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED" { "Resolve the snapshot failure before retrying; the import was not started safely." }
+                            "ACCESS_DATABASE_LOCKED" { "Close the verified lock owner or reconcile the tracked Access operation before retrying." }
+                            default { "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding." }
+                        }
                         machine = $machine
                         user    = $user
                         rollbackAttempted = [bool]$script:ImportLastRollbackAttempted

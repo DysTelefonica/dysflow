@@ -236,7 +236,7 @@ export function createDispatchTool(
             toolName: name,
           });
         }
-        return invalidInput(validation);
+        return invalidInput(validation, undefined, { toolName: name });
       }
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
