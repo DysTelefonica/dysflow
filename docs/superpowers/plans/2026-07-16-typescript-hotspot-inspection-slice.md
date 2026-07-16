@@ -15,10 +15,9 @@
 **Files:**
 - Test: `test/adapters/vba-sync/vba-forms-adapter-inspect.test.ts`
 - Test: `test/adapters/vba-sync/vba-forms-adapter-geometry.test.ts`
-- Create: `test/adapters/vba-sync/vba-forms-adapter-list-controls.test.ts`
 
-- [ ] Add port-level assertions through `VbaFormsAdapter.execute` for path aliases, project resolution, missing inputs/files, parse failure, geometry, filtering, limits, truncation, and event binding.
-- [ ] Run `pnpm vitest run test/adapters/vba-sync/vba-forms-adapter-inspect.test.ts test/adapters/vba-sync/vba-forms-adapter-geometry.test.ts test/adapters/vba-sync/vba-forms-adapter-list-controls.test.ts` and record the intentional RED result for the new contract.
+- [ ] Add port-level assertions through `VbaFormsAdapter.execute` for path aliases, project resolution, missing inputs/files, parse failure, geometry, filtering, limits, truncation, and event binding. `list_form_controls` coverage belongs in `vba-forms-adapter-geometry.test.ts`: the describe block starts at line 187, with cases at lines 188, 196, 254, 261, 274, and 293.
+- [ ] Run `pnpm exec vitest run test/adapters/vba-sync/vba-forms-adapter-inspect.test.ts test/adapters/vba-sync/vba-forms-adapter-geometry.test.ts` and record the intentional RED result for the new contract.
 
 ### Task 2: Extract the cohesive capability
 
