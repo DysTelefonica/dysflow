@@ -200,6 +200,8 @@ describe("VbaFormsAdapter — form_list_controls (issue #872 F5)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
     const data = result.data as {
+      formName: string;
+      section: string | null;
       controls: Array<{
         name: string;
         type: string;
@@ -209,7 +211,17 @@ describe("VbaFormsAdapter — form_list_controls (issue #872 F5)", () => {
         height: number;
         hasEventBinding: boolean;
       }>;
+      totalCount: number;
+      truncated: boolean;
+      limit: number;
     };
+    expect(data).toMatchObject({
+      formName: "Customer",
+      section: null,
+      totalCount: 3,
+      truncated: false,
+      limit: 1000,
+    });
     expect(data.controls.map((c) => c.name)).toEqual(
       expect.arrayContaining(["txtName", "cmdSave", "lblName"]),
     );
