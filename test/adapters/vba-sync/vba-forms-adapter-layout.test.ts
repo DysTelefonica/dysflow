@@ -233,6 +233,33 @@ describe("VbaFormsAdapter — analyze_form_layout (issue #815)", () => {
     // lblA and cmdB sit at Left=1000/3500, far past FormHeader width=500.
     expect(offSection.map((f) => f.controlName).sort()).toEqual(["cmdB", "lblA"]);
   });
+
+  it("analyzes the exact successful project candidate snapshot", async () => {
+    const reads = new Map<string, number>();
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        const normalized = path.replace(/\\/g, "/");
+        if (normalized !== "C:/repo/src/forms/Form_Test.form.txt") throw new Error("ENOENT");
+        const count = (reads.get(normalized) ?? 0) + 1;
+        reads.set(normalized, count);
+        return count === 1 ? SAMPLE_FORM : "malformed on second read";
+      }),
+    });
+    const orchestrator = makeOrchestrator();
+    orchestrator.resolveExecutionTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+    });
+
+    const result = await new VbaFormsAdapter(orchestrator, fs).execute("analyze_form_layout", {
+      projectId: "test-project",
+      formName: "Test",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(reads.get("C:/repo/src/forms/Form_Test.form.txt")).toBe(1);
+    if (result.ok) expect((result.data as { formName: string }).formName).toBe("Test");
+  });
 });
 
 // Also covers the successResult envelope shape end-to-end (defensive — we
