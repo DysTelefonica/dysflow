@@ -93,11 +93,12 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   `~/.config/opencode/opencode.json` during development/testing. Build to the throwaway
   `test-runtime/` and point E2E at it with `DYSFLOW_E2E_COMMAND`.
 - Conventional commits. No AI co-author / attribution lines in commit messages.
-- A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.8` → title `v1.2.8`). Enforced
-  by CI via `.github/workflows/release-title-guard.yml` (`release: [created, edited]`); the job fails when the
-  two values differ and the error message names both so a maintainer can re-set the title in the GitHub UI
-  without re-running the workflow. `release.yml` also passes `name: ${{ github.ref_name }}` to the softprops
-  action so the release is born matching the tag (defense-in-depth — the guard catches post-creation edits).
+- A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.8` → title `v1.2.8`). Human edits
+  are checked by `.github/workflows/release-title-guard.yml` (`release: [edited]`); the job fails when the two
+  values differ and names both so a maintainer can restore the title in the GitHub UI. Creation is protected
+  separately inside `release.yml`: softprops receives `name: ${{ github.ref_name }}` and the publishing job
+  immediately validates the live release. The split is intentional because `GITHUB_TOKEN`-created releases
+  do not reliably trigger another workflow.
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
 - Update path security: the ONLY update mechanism is the GitHub Release tar.gz with SHA-256
   verification. There is NO git-clone / source-build fallback. See
