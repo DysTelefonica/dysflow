@@ -47,7 +47,7 @@ jobs:
         # `dysflow update`, defeating the trust model that says we ship
         # exactly the graph we built and signed.
         run: |
-          tar -czf dysflow-${{ github.ref_name }}.tar.gz dist scripts package.json pnpm-lock.yaml README.md CHANGELOG.md
+          tar -czf dysflow-${{ github.ref_name }}.tar.gz dist scripts references/error-codes.md docs/diagnostics/hresult-guide.md docs/diagnostics/form-import-gate-failures.md package.json pnpm-lock.yaml README.md CHANGELOG.md
 
       - name: Generate checksums
         run: sha256sum dysflow-*.tar.gz > SHA256SUMS

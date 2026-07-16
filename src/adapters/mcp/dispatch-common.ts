@@ -119,9 +119,9 @@ export type ExportOverwritesSourceRequiresConfirmationCode =
 /**
  * Issue #659 — schema-rejection envelope. Retains the legacy `MCP_INPUT_INVALID`
  * code (kept for backward compat per `gate-error-codes/spec.md` scenario 5).
- * The structured `error` block carries `code` + `message` but deliberately
- * OMITS `remediation` and `allowedProcedures` because schema rejections are
- * self-describing and the allowlist was never consulted.
+ * The structured `error` block carries `code`, `message`, and a one-line
+ * remediation. `allowedProcedures` remains absent because the allowlist was
+ * never consulted.
  */
 export const MCP_INPUT_INVALID_CODE = "MCP_INPUT_INVALID" as const;
 export type McpInputInvalidCode = typeof MCP_INPUT_INVALID_CODE;
@@ -165,6 +165,9 @@ export function invalidInput(
   const error: McpToolResult["error"] = {
     code: MCP_INPUT_INVALID_CODE,
     message,
+    remediation:
+      remediation ??
+      "Check the tool schema and replace unsupported or missing fields before retrying.",
   };
   if (enrichment?.rejectedFlag !== undefined) {
     error.rejectedFlag = enrichment.rejectedFlag;
@@ -187,7 +190,10 @@ export function invalidInput(
       //   3. The registry has no record (anonymous tool) → fall back
       //      to the message verbatim.
       const guidance =
-        remediation ?? `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`;
+        remediation ??
+        (enrichment.toolName === "form_set_property" && enrichment.rejectedFlag === "propertyName"
+          ? "Check the tool schema: form_set_property's schema requires `property` (single string token), not `propertyName`."
+          : `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`);
       if (noWriteAlias === null) {
         // No-write default: the tool never writes (or never accepts a
         // no-write knob). If the rejected flag IS the commit flag,

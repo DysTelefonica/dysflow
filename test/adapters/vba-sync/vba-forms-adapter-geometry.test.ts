@@ -151,6 +151,9 @@ describe("VbaFormsAdapter — form_get_geometry (issue #872 F5)", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected failure");
     expect(result.error.code).toBe("FORM_CONTROL_NOT_FOUND");
+    expect(result.error.remediation).toBe(
+      "Run dysflow.form_list_controls to enumerate existing controls in the form.",
+    );
   });
 
   it("returns FORM_SPEC_MISSING when sourcePath is not provided", async () => {

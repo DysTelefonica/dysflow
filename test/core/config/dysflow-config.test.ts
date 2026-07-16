@@ -162,6 +162,8 @@ describe("dysflow configuration", () => {
           code: "CONFIG_MISSING_ACCESS_PATH",
           message:
             "Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+          remediation:
+            "Review the error message and correct the reported condition before retrying.",
           retryable: false,
         },
         diagnostics: [],
@@ -182,6 +184,8 @@ describe("dysflow configuration", () => {
           code: "CONFIG_MISSING_ACCESS_PATH",
           message:
             "Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+          remediation:
+            "Review the error message and correct the reported condition before retrying.",
           retryable: false,
         },
         diagnostics: [],

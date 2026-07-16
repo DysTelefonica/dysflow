@@ -28,7 +28,11 @@ describe("get_capabilities projectConfig", () => {
         JSON.stringify({ id: "app", accessPath: "app.accdb", destinationRoot: "src" }),
       );
       const second = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
-      expect(second.projectConfig).toMatchObject({ status: "valid", writeReady: true });
+      expect(second.projectConfig).toMatchObject({
+        status: "valid",
+        writeReady: true,
+        remediation: null,
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

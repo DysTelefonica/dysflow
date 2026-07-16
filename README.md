@@ -769,6 +769,11 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
 
   > **Migration note:** `verify_binary`, `reconcile_binary`, and `compare_module` were four names over this one engine and have been **removed**. Use `verify_code` for all of them: omit `moduleNames` for the whole project (old `verify_binary`), pass a single module for the old `compare_module`, and read `recommendation`/`recommendedAction` for the old `reconcile_binary` plan.
 * **`delete_module`**: Delete one or more modules from the VBA project. Pass `moduleNames` (array) to delete a batch in a single Access session — this avoids the COM collisions that arise from issuing many parallel single-module calls; `moduleName` (singular) is still accepted for one module. The result reports per-module outcomes. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](./docs/diagnostics/hresult-guide.md)). Write-gated.
+
+Typed error envelopes expose a top-level `error.remediation` when the runtime has a canonical next
+action. This field is independent of `get_capabilities.projectConfig.remediation`, whose existing
+diagnostic contract is unchanged. See the shipped [`references/error-codes.md`](./references/error-codes.md)
+for the canonical catalog.
   - Parameters: `moduleNames` (array, optional), `moduleName` (string, optional — single-module shorthand), `force` (boolean, optional — applies to the whole batch), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)

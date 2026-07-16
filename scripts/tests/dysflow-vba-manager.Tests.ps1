@@ -3734,10 +3734,33 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             $mod.status | Should -Be "error"
             $mod.error | Should -Not -BeNullOrEmpty
             $mod.error.code | Should -Be "VBA_IMPORT_PHASE_FAILED"
+            $mod.error.remediation | Should -Be "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding."
             $mod.error.message | Should -BeOfType [string]
             $mod.error.message | Should -Be "plain text error"
             $mod.error.machine | Should -Be $null
             $mod.error.user | Should -Be $null
+        }
+
+        It "provides one-line remediation for typed import failure <ExpectedCode>" -TestCases @(
+            @{ Message = "VB_NAME_MISMATCH: wrong name"; ExpectedCode = "VB_NAME_MISMATCH" }
+            @{ Message = "DUPLICATE_OPTION_DIRECTIVE: duplicate Option Explicit"; ExpectedCode = "DUPLICATE_OPTION_DIRECTIVE" }
+            @{ Message = "IMPORT_TRUNCATED: missing tail"; ExpectedCode = "IMPORT_TRUNCATED" }
+            @{ Message = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED: snapshot failed"; ExpectedCode = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED" }
+            @{ Message = "Database is already in use"; ExpectedCode = "ACCESS_DATABASE_LOCKED" }
+        ) {
+            if ($ExpectedCode -eq "ACCESS_DATABASE_LOCKED") {
+                function global:Test-IsAccessDatabaseLockedError { return $true }
+                function global:Get-AccessDatabaseLockedOwner { return [pscustomobject]@{ machine = $null; user = $null } }
+            }
+            $script:FailOn = @{ ModA = @($Message, $Message, $Message) }
+            $captured = Invoke-AndCaptureDysflowResult -ScriptBlock {
+                Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("ModA") -ModulesPath "C:\fake" -ImportMode "Auto"
+            }
+            $mod = $captured.Payload.modules | Where-Object { $_.module -eq "ModA" }
+            $mod.error.code | Should -Be $ExpectedCode
+            $mod.error.remediation | Should -Not -BeNullOrEmpty
+            $mod.error.remediation | Should -Not -Match "[\r\n]"
+            if ($ExpectedCode -eq "ACCESS_DATABASE_LOCKED") { $mod.error.remediation | Should -Match "verified lock owner|tracked Access operation" }
         }
 
         It "handles a VBE exception whose .Exception.Message is a COM wrapper (0x800A09D5 simulation)" {

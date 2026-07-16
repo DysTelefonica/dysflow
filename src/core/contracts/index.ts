@@ -349,6 +349,19 @@ export {
 /**
  * Creates a normalized Dysflow error for failed operation results.
  */
+const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
+  FORM_CONTROL_NOT_FOUND:
+    "Run dysflow.form_list_controls to enumerate existing controls in the form.",
+  FORM_IMPORT_GATE_FAILED:
+    "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
+  VBA_IMPORT_PHASE_FAILED:
+    "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
+  MCP_INPUT_INVALID:
+    "Check the tool schema and replace unsupported or missing fields before retrying.",
+};
+const DEFAULT_ERROR_REMEDIATION =
+  "Review the error message and correct the reported condition before retrying.";
+
 export function createDysflowError(
   code: string,
   message: string,
@@ -359,13 +372,15 @@ export function createDysflowError(
     remediation?: string;
   } = {},
 ): DysflowError {
+  const remediation =
+    options.remediation ?? CANONICAL_ERROR_REMEDIATION[code] ?? DEFAULT_ERROR_REMEDIATION;
   return {
     code,
     message,
     retryable: options.retryable ?? false,
     ...(options.details ? { details: options.details } : {}),
     ...(options.allowedProcedures ? { allowedProcedures: options.allowedProcedures } : {}),
-    ...(options.remediation ? { remediation: options.remediation } : {}),
+    remediation,
   };
 }
 
