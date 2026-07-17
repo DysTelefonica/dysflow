@@ -70,6 +70,17 @@ function parseDysflowResult(stdout: string): unknown | null {
   return null;
 }
 
+function getModuleEntries(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  if (payload === null || typeof payload !== "object") return [];
+
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.modules)) {
+    return record.modules as Array<Record<string, unknown>>;
+  }
+  return typeof record.module === "string" ? [record] : [];
+}
+
 function makeMinimalModuleFile(name: string, body = "' sanity"): string {
   return [
     `Attribute VB_Name = "${name}"`,
@@ -173,9 +184,7 @@ describe.skipIf(skipReason !== undefined)(
       const payload = parseDysflowResult(result.stdout);
       expect(payload).toBeDefined();
       // The payload can be a per-module array OR a top-level { ok:false, modules:[...] } wrapper.
-      const modules = Array.isArray(payload)
-        ? payload
-        : ((payload as { modules?: unknown[] } | null)?.modules ?? []);
+      const modules = getModuleEntries(payload);
       expect(Array.isArray(modules)).toBe(true);
       expect((modules as unknown[]).length).toBeGreaterThan(0);
 
@@ -184,7 +193,7 @@ describe.skipIf(skipReason !== undefined)(
       expect(entry?.module).toBe("Test_Foo");
       // Verbose was requested; the per-module entry MUST carry the
       // verbose field with source + destination snapshots.
-      const verbose = entry?.verbose as
+      const verbose = (entry?.verbose ?? entry?.Verbose) as
         | { source?: unknown; destination?: unknown; truncated?: boolean; mismatchReason?: string }
         | undefined;
       expect(verbose).toBeDefined();
@@ -218,9 +227,7 @@ describe.skipIf(skipReason !== undefined)(
       ]);
       const payload = parseDysflowResult(result.stdout);
       expect(payload).toBeDefined();
-      const modules = Array.isArray(payload)
-        ? payload
-        : ((payload as { modules?: unknown[] } | null)?.modules ?? []);
+      const modules = getModuleEntries(payload);
       const entry = (modules as Array<Record<string, unknown>>)[0];
       expect(entry).toBeDefined();
       expect(entry?.module).toBe("Test_Foo");
@@ -229,6 +236,7 @@ describe.skipIf(skipReason !== undefined)(
       // consumers parse the response by enumerating known keys; an absent
       // field is the simplest possible backward-compat surface.
       expect(entry).not.toHaveProperty("verbose");
+      expect(entry).not.toHaveProperty("Verbose");
     });
 
     it("a source file whose Attribute VB_Name disagrees with the resolved component surfaces VB_NAME_MISMATCH", async () => {
@@ -237,8 +245,7 @@ describe.skipIf(skipReason !== undefined)(
       // resolves Test_Foo to (potentially) the existing component and
       // compares against the source's declared VB_Name. When the two
       // disagree, the per-module error.code MUST be VB_NAME_MISMATCH.
-      const mismatchedPath = join(sandboxRoot, "MismatchedName.bas");
-      writeFileSync(mismatchedPath, makeMinimalModuleFile("MismatchedName"));
+      writeFileSync(moduleSourcePath, makeMinimalModuleFile("MismatchedName"));
 
       const result = await runPwsh([
         "-Action",
@@ -260,11 +267,10 @@ describe.skipIf(skipReason !== undefined)(
 
       const topHasVbNameMismatch =
         !Array.isArray(payload) &&
+        payload?.error !== null &&
         typeof payload?.error === "object" &&
         ((payload.error as Record<string, unknown>).code as string) === "VB_NAME_MISMATCH";
-      const modules = !Array.isArray(payload)
-        ? ((payload as { modules?: unknown[] })?.modules ?? [])
-        : payload;
+      const modules = getModuleEntries(payload);
       const entry = (modules as Array<Record<string, unknown>>)[0];
       const errorCode = (entry?.error as { code?: string } | undefined)?.code;
       expect(topHasVbNameMismatch || errorCode === "VB_NAME_MISMATCH").toBe(true);
