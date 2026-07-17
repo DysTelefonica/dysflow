@@ -6,7 +6,7 @@
 // marker for the SVG / ASCII surface only.
 //
 // Architecture notes:
-//   - HEXAGONAL: this module is `core`; the adapter layer (vba-forms-read-tools.ts)
+//   - HEXAGONAL: this module is `core`; the preview adapter capability
 //     owns I/O and parses the two .form.txt files. Here we trust that the
 //     caller hands us two FormIRs and we operate on the typed trees.
 //   - SHARED PRIMITIVES: we re-use `BoundingBox` (form-ui-geometry.ts) and
