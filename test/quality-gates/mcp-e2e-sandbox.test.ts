@@ -1,7 +1,12 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, parse, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildMcpE2eSandboxPlan } from "../../E2E_testing/_helpers/mcp-e2e-sandbox.mjs";
+import {
+  buildMcpE2eSandboxPlan,
+  initializeMcpE2eSandbox,
+} from "../../E2E_testing/_helpers/mcp-e2e-sandbox.mjs";
+import { diagnoseProjectConfig } from "../../src/adapters/config/project-config-diagnostic";
 
 describe("MCP E2E fixture sandbox", () => {
   it("plans copied fixture paths under a temporary sandbox", () => {
@@ -29,6 +34,41 @@ describe("MCP E2E fixture sandbox", () => {
     for (const path of plan.mutablePaths) {
       expect(path.startsWith(`${plan.sandbox.root}`)).toBe(true);
       expect(path.startsWith(scriptDir)).toBe(false);
+    }
+  });
+
+  it("initializes the release sandbox as a write-ready Git-owned project", async () => {
+    const scriptDir = resolve("E2E_testing");
+    const sandboxParent = join(tmpdir(), `dysflow-mcp-e2e-test-${process.pid}-${Date.now()}`);
+    const plan = buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot: sandboxParent });
+
+    try {
+      await initializeMcpE2eSandbox(plan, { projectId: "noconformidades-e2e" });
+      writeFileSync(plan.sandbox.accessPath, "fixture");
+      writeFileSync(plan.sandbox.backendPath, "fixture");
+      mkdirSync(plan.sandbox.destinationRoot, { recursive: true });
+
+      expect(existsSync(join(plan.sandbox.root, ".git"))).toBe(true);
+      expect(
+        JSON.parse(readFileSync(join(plan.sandbox.root, ".dysflow", "project.json"), "utf8")),
+      ).toMatchObject({
+        id: "noconformidades-e2e",
+        accessPath: "NoConformidades.accdb",
+        backendPath: "NoConformidades_Datos.accdb",
+        destinationRoot: "src",
+        capabilities: { allowWrites: true },
+      });
+      expect(
+        diagnoseProjectConfig(plan.sandbox.root, { projectId: "noconformidades-e2e" }),
+      ).toMatchObject({
+        status: "valid",
+        writeReady: true,
+        owningWorktree: "cwd",
+      });
+    } finally {
+      await import("node:fs/promises").then(({ rm }) =>
+        rm(sandboxParent, { recursive: true, force: true }),
+      );
     }
   });
 
