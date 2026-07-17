@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.14.1] - 2026-07-17
+
+### Fixed
+
+- fix(form): pre-validate property name and value type in `form_set_property` (#942, closes #941)
+- fix(install): ship `references/error-codes.md`, `docs/diagnostics/hresult-guide.md`, and `docs/diagnostics/form-import-gate-failures.md` in the actual install, and expose a `documentationBundle` field on `get_capabilities` so consumers can detect missing diagnostics up-front (#943, closes #940)
+
 ## [v2.14.0] - 2026-07-17
 
 ### Added
