@@ -8,7 +8,8 @@ the message and nested details as diagnostic evidence; do not parse localized Ac
 | Code | Meaning | Remediation |
 | --- | --- | --- |
 | `FORM_CONTROL_NOT_FOUND` | The named control is absent from the resolved form source. | Run `dysflow.form_list_controls` and retry with an existing control name. |
-| `FORM_IMPORT_GATE_FAILED` | A guarded form write reached `import_modules`, which failed. Disk rollback and the nested import cause are reported separately. | Inspect `details.rollback` and `details.cause`; follow the typed nested code before retrying. |
+| `FORM_IMPORT_GATE_FAILED` | A guarded form write reached `import_modules`, which failed — including a gate result whose payload carries per-module errors (#951). The source mutation is reverted on any gate failure; `details.rollback` reports the outcome and `details.rollbackApplied` mirrors `rollback.applied`. | Inspect `details.rollback` and `details.cause`; follow the typed nested code before retrying. |
+| `FORM_NAME_RESOLUTION_FAILED` | A form/report module name resolves to an empty Access object name (e.g. a source named exactly `Form_.form.txt`), so `SaveAsText`/`LoadFromText` cannot address the document. No source mutation is performed. | Rename the source file so it carries a real form/report name, then retry. |
 | `VBA_IMPORT_PHASE_FAILED` | Access rejected one module during the named import phase. | Validate the source and inspect the `phase`; see [form import-gate recovery](../docs/diagnostics/form-import-gate-failures.md). |
 
 ## Input, project, path, and schema failures

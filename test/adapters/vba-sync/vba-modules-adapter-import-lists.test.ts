@@ -82,8 +82,11 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
   });
 
   it("R2 — round-trips the rich per-module payload (phase, durationMs, rollbackApplied) through the sentinel", async () => {
+    // issue #951 — a payload with an error entry is now a FAILURE envelope
+    // (per-module validation on the exit-0 path), so the success round-trip
+    // is pinned with all-ok entries. The partial-failure contract lives in
+    // vba-sync-adapter-import-exit0-951.test.ts.
     const adapter = buildAdapter(async () => {
-      // Simulate what the new PowerShell contract emits for a partial failure.
       const payload = [
         {
           module: "ModA",
@@ -95,16 +98,11 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
         },
         {
           module: "ModB",
-          status: "error",
-          phase: "import",
-          error: {
-            code: "VBA_IMPORT_PHASE_FAILED",
-            message: "synthetic import failure",
-            machine: null,
-            user: null,
-          },
+          status: "ok",
+          phase: null,
+          error: null,
           durationMs: 7,
-          rollbackApplied: false,
+          rollbackApplied: true,
         },
       ];
       return {
@@ -146,19 +144,11 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
     });
     expect(modules[1]).toMatchObject({
       module: "ModB",
-      status: "error",
-      phase: "import",
+      status: "ok",
+      phase: null,
       durationMs: 7,
-      rollbackApplied: false,
-      error: {
-        code: "VBA_IMPORT_PHASE_FAILED",
-        message: "synthetic import failure",
-      },
+      rollbackApplied: true,
     });
-    const failedModule = modules[1];
-    expect(failedModule).toBeDefined();
-    expect(failedModule?.error?.machine).toBeNull();
-    expect(failedModule?.error?.user).toBeNull();
   });
 
   it("R4 — empty moduleNames list is dispatched as Import with [], NOT expanded to import-all", async () => {

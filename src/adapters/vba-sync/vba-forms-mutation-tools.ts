@@ -105,6 +105,22 @@ export async function mutateForm(args: {
   });
   if (!source.ok) return source;
 
+  // issue #951 — mutateForm targets document modules (.form.txt/.report.txt),
+  // whose import gate resolves the Access object name by stripping the
+  // `Form_`/`Report_` prefix from the module name. When that resolution yields
+  // an empty name (e.g. a file named exactly `Form_.form.txt`), the PowerShell
+  // side would hand COM an empty SaveAsText/LoadFromText object name. Fail
+  // typed and early — before any filesystem read or write.
+  const accessObjectName = source.data.moduleName.replace(/^(Form|Report)_/, "").trim();
+  if (accessObjectName.length === 0) {
+    return failureResult(
+      createDysflowError(
+        "FORM_NAME_RESOLUTION_FAILED",
+        `${toolName} cannot resolve a non-empty Access object name from "${source.data.sourcePath}" (resolved module name "${source.data.moduleName}"). Rename the source file so it carries a real form/report name.`,
+      ),
+    );
+  }
+
   const apply = params.apply === true || params.dryRun === false;
   if (apply && !transactionHeld) {
     return runSourceTransaction(source.data.sourcePath, () =>

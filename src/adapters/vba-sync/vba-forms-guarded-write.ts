@@ -1,10 +1,13 @@
 import {
   createDysflowError,
+  type DysflowError,
   failureResult,
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
+import { isRecord, stringValue } from "../../core/utils/index.js";
+import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { ManagedFormSource, VbaFormsOrchestrator } from "./vba-forms-types.js";
@@ -26,10 +29,16 @@ import type { ManagedFormSource, VbaFormsOrchestrator } from "./vba-forms-types.
  *      `{ ...forwardedParams, sourcePath, destinationRoot, moduleNames,
  *      importMode: "Auto", apply: true, dryRun: false }` and the
  *      `import_modules_gate` mapping.
- *   3. On import success → `successResult({ importResult })`.
- *   4. On import failure → best-effort restore of `originalSource`, captures
+ *   3. On import success → `successResult({ importResult })`. A gate result
+ *      that is `ok:true` but whose payload carries per-module errors (#951)
+ *      is NOT a success: it is treated as a gate failure exactly like an
+ *      `ok:false` result.
+ *   4. On ANY gate failure — an `ok:false` gate result OR an `ok:true` result
+ *      whose payload reports per-module errors — the source mutation is
+ *      reverted: best-effort restore of `originalSource`, captures
  *      `RollbackOutcome` (targetExisted-aware, #692), and returns
- *      `failureResult(FORM_IMPORT_GATE_FAILED, { details: { cause, rollback } })`.
+ *      `failureResult(FORM_IMPORT_GATE_FAILED, { details: { cause, rollback,
+ *      rollbackApplied } })`.
  *   5. On pre-import write failure → `failureResult(FORM_WRITE_FAILED)` and
  *      import_modules is NEVER invoked.
  *   6. The rollback path is a `writeFile` only — it MUST NOT re-invoke
@@ -59,6 +68,31 @@ export type ApplyGuardedFormWriteSuccess = {
   importResult: unknown;
 };
 
+/**
+ * issue #951 — derive a typed cause from a gate payload that reported
+ * per-module failures inside an `ok:true` gate result. The failure envelope
+ * `{ok:false, error:{code,message}}` keeps its own code/message; a bare
+ * per-module array (or unwrapped record) is summarized by naming the failed
+ * modules.
+ */
+function deriveNestedGateCause(payload: unknown): DysflowError {
+  if (isRecord(payload) && isRecord(payload.error)) {
+    return createDysflowError(
+      stringValue(payload.error.code) ?? "VBA_IMPORT_FAILED",
+      stringValue(payload.error.message) ??
+        "The import gate reported per-module failures in its structured result.",
+    );
+  }
+  const entries = Array.isArray(payload) ? payload : [payload];
+  const failedModules = entries
+    .filter((entry): entry is Record<string, unknown> => isRecord(entry) && entry.status !== "ok")
+    .map((entry) => stringValue(entry.module) ?? "<unknown module>");
+  return createDysflowError(
+    "VBA_IMPORT_FAILED",
+    `import_modules reported per-module failures for: ${failedModules.join(", ")}.`,
+  );
+}
+
 export async function applyGuardedFormWrite(
   input: ApplyGuardedFormWriteInput,
 ): Promise<OperationResult<ApplyGuardedFormWriteSuccess>> {
@@ -72,6 +106,37 @@ export async function applyGuardedFormWrite(
     targetExisted,
     forwardedParams,
   } = input;
+
+  // Shared gate-failure path (#951): best-effort restore of the pre-apply
+  // source, then a single FORM_IMPORT_GATE_FAILED envelope with the rollback
+  // outcome surfaced to the consumer (#692). `rollbackApplied` mirrors
+  // `rollback.applied` as a top-level convenience boolean.
+  const failGateWithRollback = async (
+    cause: DysflowError,
+  ): Promise<OperationResult<ApplyGuardedFormWriteSuccess>> => {
+    const rollbackOutcome = await captureRollbackOutcome(
+      () =>
+        originalSourceBytes !== undefined && fileSystem.writeBytes !== undefined
+          ? fileSystem.writeBytes(source.sourcePath, originalSourceBytes)
+          : fileSystem.writeFile(source.sourcePath, originalSource, "utf8"),
+      targetExisted,
+    );
+    return failureResult(
+      createDysflowError(
+        "FORM_IMPORT_GATE_FAILED",
+        `import_modules apply gate failed for "${source.sourcePath}": ${cause.message}`,
+        {
+          details: {
+            cause,
+            rollback: rollbackOutcome,
+            rollbackApplied: rollbackOutcome.applied,
+          },
+          remediation:
+            "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
+        },
+      ),
+    );
+  };
 
   // 1. Write the new source.
   try {
@@ -104,24 +169,17 @@ export async function applyGuardedFormWrite(
   // 3. On gate failure, best-effort restore the pre-apply source and surface
   //    the rollback outcome to the consumer (#692).
   if (!importResult.ok) {
-    const rollbackOutcome = await captureRollbackOutcome(
-      () =>
-        originalSourceBytes !== undefined && fileSystem.writeBytes !== undefined
-          ? fileSystem.writeBytes(source.sourcePath, originalSourceBytes)
-          : fileSystem.writeFile(source.sourcePath, originalSource, "utf8"),
-      targetExisted,
-    );
-    return failureResult(
-      createDysflowError(
-        "FORM_IMPORT_GATE_FAILED",
-        `import_modules apply gate failed for "${source.sourcePath}": ${importResult.error.message}`,
-        {
-          details: { cause: importResult.error, rollback: rollbackOutcome },
-          remediation:
-            "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
-        },
-      ),
-    );
+    return failGateWithRollback(importResult.error);
+  }
+
+  // 4. Defense-in-depth (#951): an ok:true gate result whose payload carries
+  //    per-module errors is a gate failure too. The gate's data shape is
+  //    `{ result: <parsedOutput>, ...targetDiagnostics }`; trusting the outer
+  //    `ok` alone let a silent-success import leave the mutated source on disk
+  //    with no rollback and a success envelope hiding the error.
+  const gatePayload = isRecord(importResult.data) ? importResult.data.result : undefined;
+  if (importOutputReportsModuleFailure(gatePayload)) {
+    return failGateWithRollback(deriveNestedGateCause(gatePayload));
   }
 
   return successResult({ importResult: importResult.data });

@@ -3108,6 +3108,12 @@ function Import-VbaModule {
         if ($isDocumentTxt) {
             if (-not $AccessApplication) { throw "Se necesita -AccessApplication para importar documentos (.form.txt/.report.txt)" }
             $objectName = $ModuleName -replace '^(Form|Report)_', ''
+            # issue #951 — un nombre de objeto vacío haría fallar SaveAsText/LoadFromText
+            # con un error COM críptico que no nombra el formulario. Fallar aquí con un
+            # error tipado que identifica el módulo y la fuente sin resolver.
+            if ([string]::IsNullOrWhiteSpace($objectName)) {
+                throw ("FORM_NAME_RESOLUTION_FAILED: no se pudo resolver el nombre del objeto Access desde el módulo '{0}' (fuente '{1}')." -f $ModuleName, $src)
+            }
             $objectType = if ($isReportTxt -or $ModuleName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
             $script:ImportCurrentPhase = "remove-existing"
             $importDocumentText = [System.IO.File]::ReadAllText($src, [System.Text.Encoding]::UTF8)
@@ -4858,6 +4864,8 @@ function Invoke-ImportAction {
                     $errorCode = "IMPORT_TRUNCATED"
                 } elseif ($messageString.StartsWith("VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED:")) {
                     $errorCode = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED"
+                } elseif ($messageString.StartsWith("FORM_NAME_RESOLUTION_FAILED:")) {
+                    $errorCode = "FORM_NAME_RESOLUTION_FAILED"
                 } elseif (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
                     if (Test-IsAccessDatabaseLockedError -Message $messageString) {
                         $errorCode = "ACCESS_DATABASE_LOCKED"
@@ -4880,6 +4888,7 @@ function Invoke-ImportAction {
                             "DUPLICATE_OPTION_DIRECTIVE" { "Keep only one copy of each Option directive before retrying." }
                             "IMPORT_TRUNCATED" { "Restore the complete module source and retry the import." }
                             "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED" { "Resolve the snapshot failure before retrying; the import was not started safely." }
+                            "FORM_NAME_RESOLUTION_FAILED" { "Rename the form/report source so its module name resolves to a non-empty Access object name before retrying." }
                             "ACCESS_DATABASE_LOCKED" { "Close the verified lock owner or reconcile the tracked Access operation before retrying." }
                             default { "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding." }
                         }
