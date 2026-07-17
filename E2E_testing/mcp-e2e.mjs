@@ -369,7 +369,7 @@ await record("query", "list_tables", { projectId, ...backendTarget });
 await record("query", "get_schema", { projectId, ...backendTarget, tableName: "TbNoConformidades" });
 await record("query", "count_rows", { projectId, accessPath, backendPath, tableName: "TbNoConformidades" });
 await record("query", "distinct_values", { projectId, accessPath, backendPath, tableName: "TbNoConformidades", columnName: "ESTADO" });
-await record("query", "list_linked_tables", { projectId, accessPath, backendPath });
+await record("query", "list_linked_tables", { projectId, accessPath });
 await record("query", "list_links", { projectId, accessPath });
 await record("query", "get_relationships", { projectId, ...backendTarget });
 await record("query", "compare_backends", { projectId, accessPath, backendPath, comparePath: backendPath });
