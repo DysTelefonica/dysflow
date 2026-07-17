@@ -4425,6 +4425,76 @@ Describe "Invoke-ExportAction — missing module pre-validation (#804, total ove
     }
 }
 
+Describe "export_modules_succeeds_against_form_with_anomalous_module_name" {
+    BeforeAll {
+        $managerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $managerPath).Path, [ref]$null, [ref]$null
+        )
+        foreach ($functionName in @('Invoke-ExportAction', 'Export-VbaModule')) {
+            $functionAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq $functionName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $functionAst) { throw "$functionName not found in $managerPath" }
+            Invoke-Expression $functionAst.Extent.Text
+        }
+
+        function script:Write-Status { param([string]$Message, $Color) }
+        function script:Write-DysflowResult { param($Result, [int]$Depth = 20) $script:ExportResult = $Result }
+        function script:Resolve-AccessObjectInfo {
+            param($AccessApplication, [string]$ModuleName)
+            [pscustomobject]@{ Exists = $true; Kind = 'Form'; Name = 'FormFormX' }
+        }
+        function script:Get-ComponentExtension { param($Component, $ModuleName, $AccessApplication) '.form.txt' }
+        function script:Get-ComponentFolder { param($Component, $ModuleName, $AccessApplication) 'forms' }
+        function script:Convert-AnsiToUtf8NoBom { param($InputPath, $OutputPath) Copy-Item $InputPath $OutputPath -Force }
+        function script:Ensure-AccessFormAutoResizeMarker { param($DocumentText) $DocumentText }
+        function script:Ensure-CodeBehindFormVbName { param($Text, $ModuleName) $Text }
+        function script:Ensure-VbNameAttributeAtTop { param($Text, $ModuleName) "Attribute VB_Name = `"$ModuleName`"`r`n$Text" }
+        function script:Write-Utf8NoBom { param($Path, $Text) [System.IO.File]::WriteAllText($Path, $Text) }
+    }
+
+    BeforeEach {
+        $script:ExportResult = $null
+        $script:SaveAsTextObjectName = $null
+        $script:ExportRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-952-{0}" -f [guid]::NewGuid().ToString('N'))
+        [System.IO.Directory]::CreateDirectory((Join-Path $script:ExportRoot 'forms')) | Out-Null
+
+        $codeModule = [pscustomobject]@{ CountOfLines = 1 }
+        $codeModule | Add-Member ScriptMethod Lines { param($start, $count) 'Private Sub Form_Load(): End Sub' }
+        $component = [pscustomobject]@{ Name = 'FormFormX'; CodeModule = $codeModule }
+        $components = [pscustomobject]@{}
+        $components | Add-Member ScriptMethod Item {
+            param($name)
+            if ($name -ceq 'FormFormX') { return $component }
+            throw "Component not found: $name"
+        }.GetNewClosure()
+        $vbProject = [pscustomobject]@{ VBComponents = $components }
+        $accessApplication = [pscustomobject]@{}
+        $accessApplication | Add-Member ScriptMethod SaveAsText {
+            param($objectType, $objectName, $path)
+            $script:SaveAsTextObjectName = $objectName
+            [System.IO.File]::WriteAllText($path, "Begin Form`r`nEnd")
+        }
+        $script:Session952 = [pscustomobject]@{ VbProject = $vbProject; AccessApplication = $accessApplication }
+    }
+
+    AfterEach {
+        Remove-Item $script:ExportRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "preserves canonical, Access object, and VBComponent identities" {
+        Invoke-ExportAction -Session $script:Session952 -NormalizedModules @('Form_FormFormX') -ModulesPath $script:ExportRoot -Json
+
+        $script:ExportResult.exported | Should -Be @('Form_FormFormX')
+        $script:ExportResult.warnings | Should -BeNullOrEmpty
+        $script:SaveAsTextObjectName | Should -Be 'FormFormX'
+        Test-Path (Join-Path $script:ExportRoot 'forms\Form_FormFormX.form.txt') | Should -BeTrue
+        Test-Path (Join-Path $script:ExportRoot 'forms\Form_FormFormX.cls') | Should -BeTrue
+    }
+}
+
 # ===========================================================================
 # Issue #849 — `Import-DocumentCodeBehind` must normalize the .cls via
 # `Ensure-VbNameAttributeAtTop` before AddFromFile. Without the normalization,
