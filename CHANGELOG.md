@@ -18,6 +18,13 @@
 - fix(forms): preserve FormIR string encoding (#899, commit 76b02551)
 - fix(forms): recognize the AutoResize root marker (#904, closes #902)
 - fix(semantic-diff): preserve order beyond the LCS budget (#910, closes #894)
+- fix(e2e): align the `list_linked_tables` release-harness payload with its tool contract (#928, closes #924)
+- fix(e2e): run write-capable Access E2E in isolated Git-owned sandboxes and align Unicode JSON-RPC parsing (#929, closes #925)
+- test(vba): preserve conservative `bothChanged` / `manual_merge` evidence in the real fixture (#930, closes #927)
+- fix(test): accept the current single-module import envelope while preserving legacy envelopes (#931, closes #926)
+- fix(e2e): make the release sandbox Git-owned and write-ready without weakening production diagnostics (#935, closes #933)
+- fix(e2e): hash the canonical installed launcher and `app/dist` runtime without a `bin/dist` compatibility copy (#936, closes #934)
+- fix(test): run the non-ASCII module import integration workspace inside an isolated Git worktree (#938, closes #937)
 
 ### Security
 
