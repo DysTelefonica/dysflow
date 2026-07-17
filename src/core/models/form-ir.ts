@@ -134,6 +134,14 @@ export type FormMutationResult = {
   source: string;
   changedControlName: string;
   preservedKeys: string[];
+  /**
+   * Issue #941 — pre-validation gate result for `form_set_property`.
+   * Populated only on success; absent when no pre-validation ran (other
+   * mutation verbs). `controlKnown` is always `true` here (a missing
+   * control throws FORM_CONTROL_NOT_FOUND earlier); `propertyKnown` and
+   * `valueTypeOk` reflect the per-key allowlist + value type check.
+   */
+  preValidation?: { controlKnown: true; propertyKnown: boolean; valueTypeOk: boolean };
 };
 
 // ---------------------------------------------------------------------------

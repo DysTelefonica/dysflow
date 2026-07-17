@@ -23,6 +23,12 @@ import type {
   SetPropertyInput,
   TokenMap,
 } from "../models/form-ir.js";
+import {
+  KNOWN_ADDABLE_PROPERTY_NAMES,
+  KNOWN_FORM_PROPERTY_TYPES,
+  runtimeKindOf,
+  validateFormPropertyValue,
+} from "./form-ir-property-types.js";
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -53,8 +59,11 @@ export class FormMutationError extends Error {
       | "FORM_PROPERTY_NOT_SCALAR"
       | "FORM_TOKEN_MAP_INVALID"
       | "FORM_TARGET_EXISTS"
-      | "FORM_DUPLICATE_SOURCE_MISSING",
+      | "FORM_DUPLICATE_SOURCE_MISSING"
+      | "FORM_UNKNOWN_PROPERTY"
+      | "FORM_PROPERTY_VALUE_INVALID",
     message: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "FormMutationError";
@@ -713,14 +722,17 @@ function mutationResult(
   before: FormIR,
   after: FormIR,
   changedControlName: string,
+  preValidation?: { controlKnown: true; propertyKnown: boolean; valueTypeOk: boolean },
 ): FormMutationResult {
   assertMetadataPreserved(before, after);
-  return {
+  const out: FormMutationResult = {
     ir: after,
     source: serializeFormTxt(after),
     changedControlName,
     preservedKeys: preservedKeys(after),
   };
+  if (preValidation !== undefined) out.preValidation = preValidation;
+  return out;
 }
 
 export function addControl(ir: FormIR, input: AddControlInput): FormMutationResult {
@@ -827,6 +839,49 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
   if (LAYOUT_CACHED_KEYS.has(input.property)) {
     return mutationResult(ir, next, input.controlName);
   }
+
+  // Issue #941 P1 — pre-validate the property name against the per-control
+  // existing keys (scalar AND blob, read from the cloned FormIR) and the
+  // explicit KNOWN_ADDABLE_PROPERTY_NAMES allowlist. Reject before mutating
+  // the IR so Access never sees an arbitrary token (which would fail its
+  // LoadFromText parser with `Esperado: 'End'`). Including blob keys here
+  // means a legitimate "replace this blob" call reaches the FORM_PROPERTY_NOT_SCALAR
+  // branch below instead of being prematurely rejected as unknown.
+  const existingKeys = new Set(
+    control.entries.filter((entry) => entry.kind !== "empty").map((entry) => entry.key),
+  );
+  if (!existingKeys.has(input.property) && !KNOWN_ADDABLE_PROPERTY_NAMES.has(input.property)) {
+    const knownProperties = [...existingKeys].sort();
+    throw new FormMutationError(
+      "FORM_UNKNOWN_PROPERTY",
+      `Property "${input.property}" is not recognized for control "${input.controlName}". Pass a key the control already carries, or one from the addable allowlist (see remediation).`,
+      {
+        controlName: input.controlName,
+        attemptedKey: input.property,
+        knownProperties,
+      },
+    );
+  }
+
+  // Issue #941 P2 — pre-validate the value's runtime type against the
+  // property's expected type. Mismatches throw FORM_PROPERTY_VALUE_INVALID
+  // with a structured `details` block listing expectedType / actualType so
+  // the caller can coerce (e.g. wrap as `"value"`, true/false, finite
+  // number, &HBBGGRR& hex).
+  const validation = validateFormPropertyValue(input.property, input.value);
+  if (validation === null) {
+    throw new FormMutationError(
+      "FORM_PROPERTY_VALUE_INVALID",
+      `Value for property "${input.property}" on control "${input.controlName}" has the wrong type. Expected "${expectedTypeOf(input.property)}", received "${runtimeKindOf(input.value)}".`,
+      {
+        controlName: input.controlName,
+        property: input.property,
+        expectedType: expectedTypeOf(input.property),
+        actualType: runtimeKindOf(input.value),
+      },
+    );
+  }
+
   const existing = control.entries.find(
     (entry) => entry.kind !== "empty" && entry.key === input.property,
   );
@@ -838,7 +893,22 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
   }
 
   upsertScalar(control, input.property, normalizeMutationValue(input.value));
-  return mutationResult(ir, next, input.controlName);
+  return mutationResult(ir, next, input.controlName, {
+    controlKnown: true,
+    propertyKnown: true,
+    valueTypeOk: true,
+  });
+}
+
+/**
+ * Resolve the canonical expected-type label for a property. Returns
+ * `"string"` for keys absent from {@link KNOWN_FORM_PROPERTY_TYPES}; mirrors
+ * the `expectedType` field of the FORM_PROPERTY_VALUE_INVALID envelope.
+ */
+function expectedTypeOf(key: string): string {
+  // Inline import would create a cycle through the module header — access
+  // through the imported binding already at the top of the file.
+  return KNOWN_FORM_PROPERTY_TYPES.get(key) ?? "string";
 }
 
 /**

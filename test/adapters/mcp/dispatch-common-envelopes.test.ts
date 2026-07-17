@@ -212,6 +212,50 @@ describe("invalidInput — structured envelope (#659, gap 5)", () => {
     );
   });
 
+  it("FORM_UNKNOWN_PROPERTY has a catalogued remediation pointing to inspect_form / form_list_controls (issue #941)", () => {
+    // Issue #941 — the remediation for FORM_UNKNOWN_PROPERTY must tell the
+    // caller how to find the right key, mirroring the propertyName migration
+    // pattern above. The catalogued string lives in
+    // CANONICAL_ERROR_REMEDIATION; reaching it via createDysflowError is the
+    // production wiring.
+    const result = failureResult(
+      createDysflowError("FORM_UNKNOWN_PROPERTY", "Property 'NoSuch' is not recognized.", {
+        details: {
+          controlName: "txtName",
+          attemptedKey: "NoSuch",
+          knownProperties: ["Caption", "Left"],
+        },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Remediation must mention BOTH the inventory tools the caller can use.
+    expect(result.error.remediation).toContain("form_list_controls");
+    expect(result.error.remediation).toContain("inspect_form");
+  });
+
+  it("FORM_PROPERTY_VALUE_INVALID has a catalogued remediation mapping expectedType to a literal (issue #941)", () => {
+    const result = failureResult(
+      createDysflowError("FORM_PROPERTY_VALUE_INVALID", "Value type mismatch.", {
+        details: {
+          controlName: "txtName",
+          property: "TabIndex",
+          expectedType: "integer",
+          actualType: "string",
+        },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Remediation must spell out the literal conversion for at least the
+    // canonical integer / boolean / color / twip cases so a caller does not
+    // need to grep the codebase.
+    expect(result.error.remediation).toContain("integer");
+    expect(result.error.remediation).toContain("boolean");
+    expect(result.error.remediation).toContain("color");
+    expect(result.error.remediation).toContain("twip");
+  });
+
   it("does NOT include allowedProcedures (the allowlist was not consulted)", () => {
     const result = invalidInput("bad field 'mode'");
     expect(result.error?.allowedProcedures).toBeUndefined();

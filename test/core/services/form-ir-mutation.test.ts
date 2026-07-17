@@ -438,3 +438,133 @@ End
     expect(clonedGroup?.[0]).not.toContain("Checksum =111111111");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #941 — pre-validation for form_set_property. Reject unknown property
+// names (FORM_UNKNOWN_PROPERTY) and value/type mismatches (FORM_PROPERTY_VALUE_INVALID)
+// BEFORE the IR mutation, surfacing a typed envelope that lists the
+// alternatives. The happy path returns `preValidation` in the result so the
+// dryRun adapter can echo it back to the caller.
+// ---------------------------------------------------------------------------
+
+describe("setProperty — pre-validation (issue #941)", () => {
+  it("rejects a property name the control does not already have and that is not in KNOWN_ADDABLE_PROPERTY_NAMES (FORM_UNKNOWN_PROPERTY)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+    const before = serializeFormTxt(ir);
+
+    expect(() =>
+      setProperty(ir, {
+        controlName: "txtName",
+        property: "NoSuchProperty_xyz",
+        value: "anything",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "FORM_UNKNOWN_PROPERTY",
+        message: expect.stringContaining("NoSuchProperty_xyz"),
+      }),
+    );
+
+    // No IR mutation may have occurred.
+    expect(serializeFormTxt(ir)).toBe(before);
+  });
+
+  it("FORM_UNKNOWN_PROPERTY details carry the attemptedKey and a sorted list of knownProperties", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    try {
+      setProperty(ir, {
+        controlName: "txtName",
+        property: "NoSuchProperty_xyz",
+        value: "anything",
+      });
+      throw new Error("expected setProperty to throw");
+    } catch (err) {
+      expect(err).toMatchObject({
+        code: "FORM_UNKNOWN_PROPERTY",
+        details: expect.objectContaining({
+          controlName: "txtName",
+          attemptedKey: "NoSuchProperty_xyz",
+        }),
+      });
+      const details = (err as { details: { knownProperties: string[] } }).details;
+      expect(details.knownProperties).toEqual([...details.knownProperties].sort());
+      // The control's existing scalar keys must appear (Name/Left/Top/OnClick/Format).
+      expect(details.knownProperties).toEqual(
+        expect.arrayContaining(["Name", "Left", "Top", "OnClick", "Format"]),
+      );
+    }
+  });
+
+  it("accepts a property name that is in KNOWN_ADDABLE_PROPERTY_NAMES even when the control does not yet carry it", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    // `txtName` has Name/Left/Top/OnClick/Format — Caption is NOT among them.
+    // Caption IS in KNOWN_ADDABLE_PROPERTY_NAMES, so P1 passes.
+    const result = setProperty(ir, {
+      controlName: "txtName",
+      property: "Caption",
+      value: "New Caption",
+    });
+
+    expect(result.source).toContain('Caption ="New Caption"');
+    expect(result.changedControlName).toBe("txtName");
+  });
+
+  it("rejects a value whose runtime type does not match the property's expected type (FORM_PROPERTY_VALUE_INVALID)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    expect(() =>
+      setProperty(ir, {
+        controlName: "txtName",
+        property: "TabIndex",
+        value: "not-a-number",
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "FORM_PROPERTY_VALUE_INVALID",
+        details: expect.objectContaining({
+          controlName: "txtName",
+          property: "TabIndex",
+          expectedType: "integer",
+          actualType: "string",
+        }),
+      }),
+    );
+  });
+
+  it("happy path returns preValidation on the FormMutationResult", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    const result = setProperty(ir, {
+      controlName: "lblName",
+      property: "Caption",
+      value: "Renamed",
+    });
+
+    expect(result.preValidation).toEqual({
+      controlKnown: true,
+      propertyKnown: true,
+      valueTypeOk: true,
+    });
+  });
+
+  it("happy path on a control that already has the property returns preValidation", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    // `txtName` already has `Left` — P1 must accept via the "already in
+    // properties map" branch (not via KNOWN_ADDABLE_PROPERTY_NAMES).
+    const result = setProperty(ir, {
+      controlName: "txtName",
+      property: "Left",
+      value: 500,
+    });
+
+    expect(result.preValidation).toEqual({
+      controlKnown: true,
+      propertyKnown: true,
+      valueTypeOk: true,
+    });
+    expect(result.source).toContain("Left =500");
+  });
+});
