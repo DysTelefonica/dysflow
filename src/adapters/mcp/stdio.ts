@@ -24,6 +24,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
+import { resolveDocumentationBundleStatus } from "../../shared/install-docs.js";
 import { createDefaultCodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { diagnoseProjectConfig } from "../config/project-config-diagnostic.js";
@@ -120,6 +121,12 @@ export async function startMcpStdioAdapter(
         process.cwd(),
         typeof input === "object" && input !== null ? (input as Record<string, string>) : {},
       ),
+    // Issue #940 — documentation bundle resolver. Probes the live install
+    // for the diagnostic markdown files so `get_capabilities` can report
+    // which docs are present without an explicit filesystem call from the
+    // caller. Uses `process.env` so `DYSFLOW_HOME` and the system marker
+    // keep working in the stdio adapter.
+    documentationBundleResolver: () => resolveDocumentationBundleStatus(process.env),
     cwd: process.cwd(),
     // allowWrites: leave undefined → defaults to writesEnabled at the
     // capabilities snapshot layer.

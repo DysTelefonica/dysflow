@@ -108,6 +108,38 @@ async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promis
   if (await fileExists(sourceChangelog)) {
     await cp(sourceChangelog, runtimePaths.changelogPath, { force: true });
   }
+
+  // Issue #940 — the install pipeline ships three diagnostic docs in the
+  // release tarball. Older releases stripped them at extract time, leaving
+  // every typed error envelope's `remediation` field pointing at a markdown
+  // anchor that did not exist on disk. Copy them through, creating parent
+  // directories as needed.
+  await copyDocIfPresent(
+    packageRoot,
+    path.join("references", "error-codes.md"),
+    path.join(runtimePaths.runtimeDir, "references", "error-codes.md"),
+  );
+  await copyDocIfPresent(
+    packageRoot,
+    path.join("docs", "diagnostics", "hresult-guide.md"),
+    path.join(runtimePaths.runtimeDir, "docs", "diagnostics", "hresult-guide.md"),
+  );
+  await copyDocIfPresent(
+    packageRoot,
+    path.join("docs", "diagnostics", "form-import-gate-failures.md"),
+    path.join(runtimePaths.runtimeDir, "docs", "diagnostics", "form-import-gate-failures.md"),
+  );
+}
+
+async function copyDocIfPresent(
+  packageRoot: string,
+  relativeSource: string,
+  destination: string,
+): Promise<void> {
+  const source = path.join(packageRoot, relativeSource);
+  if (!(await fileExists(source))) return;
+  await mkdir(path.dirname(destination), { recursive: true });
+  await cp(source, destination, { force: true });
 }
 
 export async function writeRuntimeMarker(markerPath: string, runtimeDir: string): Promise<void> {
@@ -127,7 +159,9 @@ export function createInstallReport(
     `Configured agents: ${configuredAgents.length === 0 ? "(none)" : configuredAgents.join(", ")}`,
     "",
     "Note:",
-    "- Runtime docs were copied to INSTALL_DIR: README.md and CHANGELOG.md.",
+    "- Runtime docs were copied to INSTALL_DIR: README.md, CHANGELOG.md,",
+    "  references/error-codes.md, docs/diagnostics/hresult-guide.md,",
+    "  and docs/diagnostics/form-import-gate-failures.md.",
     `- MCP server command used in integrations: ${path.join(runtimeDir, "bin", "dysflow.cmd")}`,
     "- Re-run `dysflow install` to refresh runtime + integrations.",
   ].join("\n");

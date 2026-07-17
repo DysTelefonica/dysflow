@@ -539,6 +539,11 @@ export type CreateDysflowMcpToolsOptions = {
   projectConfigResolver?: (
     input: unknown,
   ) => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
+  // Issue #940 — optional resolver for the runtime documentation bundle
+  // status. When omitted, the snapshot reports fail-closed defaults. The
+  // stdio entry point wires a resolver that probes the live install dir
+  // for `references/error-codes.md` and `docs/diagnostics/hresult-guide.md`.
+  documentationBundleResolver?: () => import("../../shared/install-docs.js").DocumentationBundleStatus;
   cwd?: string;
 };
 
@@ -557,6 +562,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     writeExecutionPolicy,
     lintIdentifierSafetyStrict = false,
     projectConfigResolver,
+    documentationBundleResolver,
     cwd = process.cwd(),
   } = options;
   const accessContextResolver: McpAccessContextResolver =
@@ -646,6 +652,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       writeExecutionPolicy,
       projectConfigResolver:
         projectConfigResolver === undefined ? undefined : () => projectConfigResolver({}),
+      // Issue #940 — forward the documentation bundle resolver so the
+      // snapshot reports the live on-disk verdict for the runtime docs.
+      documentationBundleResolver,
     }),
     // issue #701 — read-only VBA procedure introspection
     {

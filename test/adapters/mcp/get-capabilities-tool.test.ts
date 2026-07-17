@@ -371,3 +371,66 @@ describe("getCapabilitiesAll() — humanCompilePending snapshot field (#762)", (
     expect(snapshot.humanCompilePending).toBe(false);
   });
 });
+
+// Issue #940 — `documentationBundle` must always be present on the snapshot
+// so callers can detect missing docs up-front without probing the filesystem.
+// Default path (no resolver wired) is fail-closed: every flag is false and
+// version is the adapter version, or "unknown" when the caller does not pass
+// one. When the stdio surface wires a resolver, the resolver's verdict wins.
+describe("getCapabilitiesAll() — documentationBundle snapshot field (#940)", () => {
+  it("default path: documentationBundle is present with all flags false and version 'unknown'", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+    });
+
+    expect(snapshot.documentationBundle).toEqual({
+      errorCodesMd: false,
+      hresultGuideMd: false,
+      version: "unknown",
+    });
+  });
+
+  it("resolver result flows through verbatim when wired", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+      documentationBundleResolver: () => ({
+        errorCodesMd: true,
+        hresultGuideMd: false,
+        version: "2.14.1-test",
+      }),
+    });
+
+    expect(snapshot.documentationBundle).toEqual({
+      errorCodesMd: true,
+      hresultGuideMd: false,
+      version: "2.14.1-test",
+    });
+  });
+
+  it("mixed truthy/falsy values: each boolean field is independent (no conflation)", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: false,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: false,
+      documentationBundleResolver: () => ({
+        errorCodesMd: false,
+        hresultGuideMd: true,
+        version: "v2.14.0-mixed",
+      }),
+    });
+
+    expect(snapshot.documentationBundle.errorCodesMd).toBe(false);
+    expect(snapshot.documentationBundle.hresultGuideMd).toBe(true);
+    expect(snapshot.documentationBundle.version).toBe("v2.14.0-mixed");
+  });
+});
