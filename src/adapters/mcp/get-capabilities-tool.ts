@@ -8,6 +8,7 @@ import { successResult } from "../../core/contracts/index.js";
 import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
 import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
@@ -101,6 +102,17 @@ export type McpCapabilitySnapshot = {
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
   humanCompilePending: boolean;
   /**
+   * v2.14.1 (#940) — runtime documentation bundle status. Always present
+   * (never undefined) so consumers can branch on the shape without a guard.
+   * The two booleans report whether the install pipeline copied the
+   * referenced markdown files into `<runtimeDir>`. `version` is the runtime
+   * version (read from `<runtimeDir>/app/package.json` when present) or
+   * `"unknown"` when the caller did not wire a resolver. Default path
+   * (no resolver) is fail-closed: every flag is `false` and `version` is
+   * the adapter version or `"unknown"`.
+   */
+  documentationBundle: DocumentationBundleStatus;
+  /**
    * v2.9.0 (#757 C2) — per-tool commit-flag metadata. An AI consumer
    * can branch on `tools[toolName].commitFlag` instead of reading
    * schema docs. The shape is the contract:
@@ -144,6 +156,15 @@ export type GetCapabilitiesAllInput = {
    * so legacy callers continue to work.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  /**
+   * v2.14.1 (#940) — optional resolver for the runtime documentation
+   * bundle status. When omitted, the snapshot falls back to a fail-closed
+   * default (`errorCodesMd: false, hresultGuideMd: false, version:
+   * adapterVersion ?? "unknown"`). The stdio adapter wires a resolver
+   * that probes `<runtimeDir>/references/error-codes.md` and
+   * `<runtimeDir>/docs/diagnostics/hresult-guide.md`.
+   */
+  documentationBundleResolver?: () => DocumentationBundleStatus;
 };
 
 // ─── Pure aggregate function ──────────────────────────────────────────────────
@@ -186,6 +207,23 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     tools[name] = commitFlagMetadataForOrNoop(name);
   }
 
+  // v2.14.1 (#940) — documentation bundle status. When the caller wires a
+  // resolver (the stdio adapter does), use the live on-disk verdict. When
+  // no resolver is wired, fall back to a fail-closed default: every flag
+  // is false and version is the raw `adapterVersion` from the input (or
+  // "unknown" when the caller did not pass one). We deliberately do NOT
+  // consult `readAdapterVersion()` here — the no-resolver path means the
+  // caller has not wired filesystem probing, so the version reported for
+  // the bundle should match what the caller declared for the adapter.
+  const documentationBundle: DocumentationBundleStatus =
+    input.documentationBundleResolver !== undefined
+      ? input.documentationBundleResolver()
+      : {
+          errorCodesMd: false,
+          hresultGuideMd: false,
+          version: input.adapterVersion ?? "unknown",
+        };
+
   return {
     adapterVersion,
     surface,
@@ -207,6 +245,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     toolsVisible: toolNames.length,
     writeClassToolsPermitted,
     humanCompilePending,
+    documentationBundle,
     tools: Object.freeze(tools),
   };
 }
@@ -292,6 +331,15 @@ export function createGetCapabilitiesTool(opts: {
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
   projectConfigResolver?: () => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
+  /**
+   * v2.14.1 (#940) — optional resolver for the runtime documentation
+   * bundle status. When omitted, the snapshot reports every flag as
+   * `false` and the version as the raw `adapterVersion` (or `"unknown"`).
+   * The stdio entry point wires a resolver that probes
+   * `<runtimeDir>/references/error-codes.md` and
+   * `<runtimeDir>/docs/diagnostics/hresult-guide.md` for the live install.
+   */
+  documentationBundleResolver?: () => DocumentationBundleStatus;
 }): DysflowMcpTool {
   const snapshot = getCapabilitiesAll({
     writesEnabled: opts.writesEnabled,
@@ -304,11 +352,12 @@ export function createGetCapabilitiesTool(opts: {
     allowWrites: opts.allowWrites,
     accessDbPath: opts.accessDbPath,
     writeExecutionPolicy: opts.writeExecutionPolicy,
+    documentationBundleResolver: opts.documentationBundleResolver,
   });
 
   return {
     name: "get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const projectConfig = await opts.projectConfigResolver?.();
