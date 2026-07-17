@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveRuntimeDir } from "./runtime-dir.js";
 
 /**
@@ -62,6 +63,27 @@ export function resolveDocumentationBundleStatus(
     hresultGuideMd,
     version: readRuntimeVersion(runtimeDir, options.adapterVersion),
   };
+}
+
+/**
+ * Resolve bundle status from the runtime that contains a packaged entry point.
+ *
+ * An MCP client can preserve a stale `DYSFLOW_HOME` across an in-place update.
+ * The running entry point is stronger evidence: packaged adapters live at
+ * `<runtime>/app/dist/adapters/mcp/*.js`. Fall back to the normal environment
+ * and marker precedence outside that packaged layout (for example in source
+ * checkouts and tests).
+ */
+export function resolveDocumentationBundleStatusNearModule(
+  moduleUrl: string,
+  env: NodeJS.ProcessEnv,
+  adapterVersion?: string,
+): DocumentationBundleStatus {
+  const modulePath = fileURLToPath(moduleUrl);
+  const packagedRuntimeDir = path.resolve(path.dirname(modulePath), "../../../..");
+  const packagedManifest = path.join(packagedRuntimeDir, "app", "package.json");
+  const runtimeDir = existsSync(packagedManifest) ? packagedRuntimeDir : undefined;
+  return resolveDocumentationBundleStatus(env, { runtimeDir, adapterVersion });
 }
 
 function readRuntimeVersion(runtimeDir: string, adapterVersion: string | undefined): string {

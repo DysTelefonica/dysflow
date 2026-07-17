@@ -24,7 +24,7 @@ import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
-import { resolveDocumentationBundleStatus } from "../../shared/install-docs.js";
+import { resolveDocumentationBundleStatusNearModule } from "../../shared/install-docs.js";
 import { createDefaultCodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { diagnoseProjectConfig } from "../config/project-config-diagnostic.js";
@@ -124,9 +124,10 @@ export async function startMcpStdioAdapter(
     // Issue #940 — documentation bundle resolver. Probes the live install
     // for the diagnostic markdown files so `get_capabilities` can report
     // which docs are present without an explicit filesystem call from the
-    // caller. Uses `process.env` so `DYSFLOW_HOME` and the system marker
-    // keep working in the stdio adapter.
-    documentationBundleResolver: () => resolveDocumentationBundleStatus(process.env),
+    // caller. Prefer the packaged entry point's runtime over ambient variables;
+    // long-lived MCP clients can retain a stale DYSFLOW_HOME across updates.
+    documentationBundleResolver: () =>
+      resolveDocumentationBundleStatusNearModule(import.meta.url, process.env, SERVER_VERSION),
     cwd: process.cwd(),
     // allowWrites: leave undefined → defaults to writesEnabled at the
     // capabilities snapshot layer.
