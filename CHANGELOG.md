@@ -1,5 +1,32 @@
 # Changelog
 
+## [v2.14.0] - 2026-07-17
+
+### Added
+
+- feat(compact-repair): default to the frontend database while supporting explicit frontend/backend selection and documented path precedence (#909, closes #893)
+- feat(errors): add canonical remediation and sanitized structured details to typed MCP/import errors, with bundled diagnostic references (#906, closes #900)
+
+### Changed
+
+- fix(forms): make `propertyName` canonical for `form_set_property` while retaining `property` as an alias (#905, closes #901)
+- refactor(architecture): enforce AST and module-resolution boundaries (#908, closes #898)
+- refactor(mcp): decompose read tools through #917-#921 and retire the barrel while preserving contracts and single snapshots (closes #897, #913, #914, #915, #916)
+
+### Fixed
+
+- fix(forms): preserve FormIR string encoding (#899, commit 76b02551)
+- fix(forms): recognize the AutoResize root marker (#904, closes #902)
+- fix(semantic-diff): preserve order beyond the LCS budget (#910, closes #894)
+
+### Security
+
+- security(dependencies): add dependency-audit states, retries, and policy enforcement (#912, closes #896)
+
+### CI
+
+- ci(release): guard release titles against tag-name drift (#911, closes #895)
+
 ## [v2.13.3] - 2026-07-16
 
 - fix(forms): write form properties through the source-only mutation path (#889, closes #886)
