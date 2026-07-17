@@ -276,3 +276,56 @@ Rollback boundary: move the two tool bodies and private helpers back into
 `vba-forms-read-tools.ts`, remove `vba-forms-layout-binding-tools.ts`, and remove the two stateful
 port regressions and this section. No adapter dispatch, core contract, external tool name, schema,
 or result envelope requires rollback.
+
+## Issue #915 — comparison and lint wrapper extraction
+
+`vba-forms-comparison-tools.ts` now owns `compareForm`; it depends on the neutral
+`FormTargetResolver` and snapshot readers rather than another capability or the compatibility
+barrel. Project comparisons resolve their target once, read each successful candidate once, and
+parse exactly those bytes. Direct comparisons retain the `sourcePath`/`path` and
+`targetPath`/`target` aliases and read each side once. Both paths are validated before reads; source
+and target reads precede source and target parsing, with the existing side-specific messages.
+
+`vba-forms-lint-tools.ts` owns only the public parameter normalization and delegation to the
+unchanged `VbaFormsLintAdapter`. Its tests continue to lock the lint adapter's intentional
+probe-then-reread behavior. The former hotspot is now a five-line compatibility re-export surface:
+
+| File | Before #915 | After #915 |
+| --- | ---: | ---: |
+| `vba-forms-read-tools.ts` | 221 | 5 |
+| `vba-forms-lint-tools.ts` | 0 | 31 |
+
+The RED boundary was:
+
+```powershell
+pnpm exec vitest run test/core/services/form-ir-compare.test.ts test/core/services/form-lint.test.ts test/adapters/vba-sync/vba-forms-adapter-compare.test.ts test/adapters/vba-sync/vba-forms-lint-adapter.test.ts
+```
+
+Before implementation it reported **4 files: 3 passed, 1 failed; 63 tests: 62 passed, 1 failed**
+because a project candidate was read twice and the second, stateful response was parsed. The same
+command after correction reports **4 files / 66 tests passed**. The added adapter-port regressions
+cover one-read project snapshots, one-read direct paths, target resolution once, aliases, competing
+read/parse failures, and exact source/target parse diagnostics without observing private helpers.
+
+The architecture boundary is reproducible with:
+
+```powershell
+pnpm lint
+pnpm build
+node scripts/check-core-adapter-boundary.mjs
+git diff --check
+```
+
+All four commands pass. The focused import graph is reproducible with:
+
+```powershell
+node scripts/report-ts-import-cycles.mjs --files src/adapters/vba-sync/vba-forms-adapter.ts src/adapters/vba-sync/vba-forms-read-tools.ts src/adapters/vba-sync/vba-forms-comparison-tools.ts src/adapters/vba-sync/vba-forms-lint-tools.ts src/adapters/vba-sync/vba-forms-read-context.ts src/adapters/vba-sync/vba-forms-lint-adapter.ts src/core/services/form-ir-compare-service.ts src/core/services/form-lint.ts
+```
+
+It reports **8 modules / 7 edges / 8 SCCs / 0 cyclic SCCs**. The full reporter result is **164
+modules / 583 edges / 139 SCCs / 6 cyclic SCCs**, with cyclic sizes **15, 8, 2, 2, 2, 2**.
+
+Rollback boundary: restore comparison and lint wrapper bodies in `vba-forms-read-tools.ts`, remove
+`vba-forms-comparison-tools.ts` and `vba-forms-lint-tools.ts`, and remove the three new adapter-port
+regressions and this section. The unchanged lint adapter, core compare/lint services, adapter
+dispatch, public tool names, aliases, and result envelopes require no rollback.
