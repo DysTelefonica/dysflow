@@ -9,18 +9,12 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeFormFileSystem } from "../services/node-form-file-system.js";
 import { executeFormUiBuilderTool, type FormUiBuilderToolName } from "./vba-forms-ai-tools.js";
 import { cloneFormFromTemplate } from "./vba-forms-clone-tools.js";
+import { compareForm } from "./vba-forms-comparison-tools.js";
+import { getFormGeometry, inspectForm, listFormControls } from "./vba-forms-inspection-tools.js";
+import { analyzeFormLayoutTool, verifyFormBindingsTool } from "./vba-forms-layout-binding-tools.js";
+import { lintFormCode } from "./vba-forms-lint-tools.js";
 import { mutateForm } from "./vba-forms-mutation-tools.js";
-import {
-  analyzeFormLayoutTool,
-  compareForm,
-  diffFormPreviewTool,
-  getFormGeometry,
-  inspectForm,
-  lintFormCode,
-  listFormControls,
-  renderFormPreviewTool,
-  verifyFormBindingsTool,
-} from "./vba-forms-read-tools.js";
+import { diffFormPreviewTool, renderFormPreviewTool } from "./vba-forms-preview-tools.js";
 import { deserializeForm, serializeForm } from "./vba-forms-serialization-tools.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";

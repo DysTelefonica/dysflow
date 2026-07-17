@@ -7,18 +7,20 @@ slices. Each slice keeps the public adapter contract stable and is independently
 
 ```text
 VbaFormsAdapter.execute
-  -> vba-forms-read-tools.ts (compatibility exports + remaining read capabilities)
-       -> vba-forms-inspection-tools.ts (inspection and inventory capability)
-            -> vba-forms-read-context.ts (resolve, read, parse)
-                 -> core resolver/contracts/FormIR/parser/filesystem port
-                 -> vba-forms-types.ts (type-only orchestrator boundary)
+  -> vba-forms-comparison-tools.ts
+  -> vba-forms-inspection-tools.ts
+  -> vba-forms-layout-binding-tools.ts
+  -> vba-forms-lint-tools.ts
+  -> vba-forms-preview-tools.ts
+       -> vba-forms-read-context.ts (resolve, read, parse)
+            -> core resolver/contracts/FormIR/parser/filesystem port + vba-forms-types.ts boundary
 ```
 
 `vba-forms-read-context.ts` owns the shared source-path resolution, filesystem read, filename-derived
 form identity, and canonical parse error envelope. `vba-forms-inspection-tools.ts` owns
 `inspectForm`, `getFormGeometry`, and `listFormControls`, including capability-private geometry,
-limit, event-binding, and section-filter helpers. `vba-forms-read-tools.ts` remains the compatible
-import surface while retaining rendering, comparison, lint, layout, and binding behavior.
+limit, event-binding, and section-filter helpers. `VbaFormsAdapter` imports every read capability
+directly from its owning module; the `vba-forms-read-tools.ts` compatibility barrel is retired.
 
 ## Dependency-ordered child slices
 
@@ -329,3 +331,42 @@ Rollback boundary: restore comparison and lint wrapper bodies in `vba-forms-read
 `vba-forms-comparison-tools.ts` and `vba-forms-lint-tools.ts`, and remove the three new adapter-port
 regressions and this section. The unchanged lint adapter, core compare/lint services, adapter
 dispatch, public tool names, aliases, and result envelopes require no rollback.
+
+## Issue #916 — compatibility barrel retirement
+
+`VbaFormsAdapter` now imports each read capability directly from its owning module, in the same
+comparison, inspection, layout/binding, lint, and preview initialization order previously exposed
+by `vba-forms-read-tools.ts`. The five-line compatibility barrel had no remaining live caller and
+has been deleted. Dispatch order, public tool names, filesystem-port seams, and result/error
+envelopes are unchanged; the existing adapter-port suites are therefore the behavioral regression
+boundary and no implementation-coupled test was added.
+
+| File | Before #916 | After #916 |
+| --- | ---: | ---: |
+| `vba-forms-read-tools.ts` | 5 lines | deleted |
+| Direct adapter capability imports | 1 barrel | 5 owning modules |
+
+The focused behavioral baseline and post-change check are reproducible with:
+
+```powershell
+pnpm exec vitest run test/adapters/vba-sync/vba-forms-adapter-diff.test.ts test/adapters/vba-sync/vba-forms-adapter-layout.test.ts test/adapters/vba-sync/vba-forms-adapter.test.ts
+```
+
+Both runs report **3 files / 31 tests passed**. Caller proof is reproducible with
+`git grep -n "vba-forms-read-tools" -- "src/**/*.ts" "test/**/*.ts"`; after retirement it returns
+no live TypeScript caller. Historical plans and earlier issue evidence retain the old filename as
+an intentional record of their then-current architecture.
+
+The focused import graph is reproducible with:
+
+```powershell
+node scripts/report-ts-import-cycles.mjs --files src/adapters/vba-sync/vba-forms-adapter.ts src/adapters/vba-sync/vba-forms-comparison-tools.ts src/adapters/vba-sync/vba-forms-inspection-tools.ts src/adapters/vba-sync/vba-forms-layout-binding-tools.ts src/adapters/vba-sync/vba-forms-lint-tools.ts src/adapters/vba-sync/vba-forms-preview-tools.ts
+```
+
+Before retirement, the same capability set plus the barrel reported **7 modules / 6 edges / 7
+SCCs / 0 cyclic SCCs**. After retirement it reports **6 modules / 5 edges / 6 SCCs / 0 cyclic
+SCCs**: the forwarding node and edge disappeared without introducing a cycle.
+
+Rollback boundary: restore the five-line compatibility barrel and point the adapter's read-tool
+imports back to it. No capability implementation, core contract, dispatch route, external schema,
+or test needs reverting.
