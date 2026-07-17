@@ -358,6 +358,10 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
     "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
   MCP_INPUT_INVALID:
     "Check the tool schema and replace unsupported or missing fields before retrying.",
+  FORM_UNKNOWN_PROPERTY:
+    "Inspect details.knownProperties to find the right key. Use form_list_controls, form_get_geometry, or inspect_form for the full inventory.",
+  FORM_PROPERTY_VALUE_INVALID:
+    'Inspect details.expectedType vs details.actualType. Wrap as the appropriate literal: text → "value", boolean → true/false, integer → number, color → &HBBGGRR& hex, twip → finite number 0..50000.',
 };
 const DEFAULT_ERROR_REMEDIATION =
   "Review the error message and correct the reported condition before retrying.";

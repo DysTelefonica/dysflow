@@ -197,6 +197,9 @@ export async function mutateForm(args: {
           changedControlName: mutation.changedControlName,
           preservedKeys: mutation.preservedKeys,
           importGate: "not-run",
+          ...(mutation.preValidation !== undefined
+            ? { preValidation: mutation.preValidation }
+            : {}),
         });
       } else if (outputMode === "file") {
         return successResult({
@@ -211,6 +214,9 @@ export async function mutateForm(args: {
           changedControlName: mutation.changedControlName,
           preservedKeys: mutation.preservedKeys,
           importGate: "not-run",
+          ...(mutation.preValidation !== undefined
+            ? { preValidation: mutation.preValidation }
+            : {}),
         });
       }
     }
@@ -237,6 +243,7 @@ export async function mutateForm(args: {
         changedControlName: mutation.changedControlName,
         preservedKeys: mutation.preservedKeys,
         importGate: "skipped",
+        ...(mutation.preValidation !== undefined ? { preValidation: mutation.preValidation } : {}),
       });
     }
 
@@ -262,10 +269,15 @@ export async function mutateForm(args: {
       preservedKeys: mutation.preservedKeys,
       importGate: "passed",
       importResult: write.data.importResult,
+      ...(mutation.preValidation !== undefined ? { preValidation: mutation.preValidation } : {}),
     });
   } catch (err) {
     if (err instanceof FormMutationError) {
-      return failureResult(createDysflowError(err.code, err.message));
+      return failureResult(
+        createDysflowError(err.code, err.message, {
+          ...(err.details !== undefined ? { details: err.details } : {}),
+        }),
+      );
     }
     return failureResult(
       createDysflowError("FORM_MUTATION_INVALID", err instanceof Error ? err.message : String(err)),

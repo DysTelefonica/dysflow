@@ -1161,6 +1161,122 @@ describe("VbaFormsAdapter — mutation outputMode filtering", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Issue #941 — form_set_property pre-validation: the adapter must surface
+// FORM_UNKNOWN_PROPERTY and FORM_PROPERTY_VALUE_INVALID envelopes verbatim
+// (no wrapping in FORM_MUTATION_INVALID) AND must echo preValidation on the
+// happy-path dryRun summary output.
+// ---------------------------------------------------------------------------
+
+describe("VbaFormsAdapter — form_set_property pre-validation (issue #941)", () => {
+  it("forwards FORM_UNKNOWN_PROPERTY envelope when the property is not in the control's map and not in KNOWN_ADDABLE_PROPERTY_NAMES", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "txtName",
+      property: "NoSuchProperty_xyz",
+      value: "anything",
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({
+      error: expect.objectContaining({
+        code: "FORM_UNKNOWN_PROPERTY",
+        details: expect.objectContaining({
+          controlName: "txtName",
+          attemptedKey: "NoSuchProperty_xyz",
+          knownProperties: expect.any(Array),
+        }),
+      }),
+    });
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("forwards FORM_PROPERTY_VALUE_INVALID envelope when the value type does not match the expected type", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const fs = mockFs({ writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "txtName",
+      property: "TabIndex",
+      value: "not-a-number",
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({
+      error: expect.objectContaining({
+        code: "FORM_PROPERTY_VALUE_INVALID",
+        details: expect.objectContaining({
+          controlName: "txtName",
+          property: "TabIndex",
+          expectedType: "integer",
+          actualType: "string",
+        }),
+      }),
+    });
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("dryRun summary output includes preValidation on the happy path", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "txtName",
+      property: "Caption",
+      value: "New Caption",
+      dryRun: true,
+      outputMode: "summary",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.preValidation).toEqual({
+      controlKnown: true,
+      propertyKnown: true,
+      valueTypeOk: true,
+    });
+  });
+
+  it("dryRun full output includes preValidation on the happy path", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_set_property", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      controlName: "txtName",
+      property: "Caption",
+      value: "New Caption",
+      dryRun: true,
+      outputMode: "full",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const data = result.data as Record<string, unknown>;
+    expect(data.preValidation).toEqual({
+      controlKnown: true,
+      propertyKnown: true,
+      valueTypeOk: true,
+    });
+  });
+});
+
 describe("VbaFormsAdapter — clone outputMode filtering", () => {
   it("clone dry-run summary mode: omits targetSource, includes details", async () => {
     const orchestrator = makeOrchestrator();
