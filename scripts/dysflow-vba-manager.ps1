@@ -2124,7 +2124,9 @@ function Export-VbaModule {
         [Parameter(Mandatory = $true)]$VbProject,
         [Parameter(Mandatory = $true)][string]$ModuleName,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
-        $AccessApplication = $null  # FIX: necesario para SaveAsText de formularios
+        $AccessApplication = $null,  # FIX: necesario para SaveAsText de formularios
+        [string]$AccessObjectName,
+        [string]$VbComponentName
     )
 
     $component = $null
@@ -2134,9 +2136,9 @@ function Export-VbaModule {
     try {
         # Buscar en VBProject: primero con el nombre tal cual, luego con prefijos documentales
         $component = $null
-        $actualName = $ModuleName  # nombre real del componente en VBProject
+        $actualName = if ($VbComponentName) { $VbComponentName } else { $ModuleName }
         try {
-            $component = $VbProject.VBComponents.Item($ModuleName)
+            $component = $VbProject.VBComponents.Item($actualName)
         } catch {
             $baseName = $ModuleName -replace '^(Form|Report)_', ''
             foreach ($candidate in @("Form_$baseName", "Report_$baseName") | Select-Object -Unique) {
@@ -2154,13 +2156,13 @@ function Export-VbaModule {
             New-Item -Path $targetFolder -ItemType Directory -Force | Out-Null
         }
 
-        $finalPath = Join-Path -Path $targetFolder -ChildPath ($actualName + $ext)
+        $finalPath = Join-Path -Path $targetFolder -ChildPath ($ModuleName + $ext)
 
         # FIX: formularios/reportes usan SaveAsText para obtener UI + codigo completo
         # SaveAsText requiere el nombre del objeto Access SIN prefijo "Form_"/"Report_"
         if ($ext -eq ".form.txt" -or $ext -eq ".report.txt") {
             $isReportDocument = ($actualName -match '^Report_') -or ($ext -ieq '.report.txt') -or ($folder -eq 'reports')
-            $objectName = $actualName -replace '^(Form|Report)_', ''
+            $objectName = if ($AccessObjectName) { $AccessObjectName } else { $actualName -replace '^(Form|Report)_', '' }
             $objectType = if ($isReportDocument) { 3 } else { 2 } # acReport=3, acForm=2
             $beginMarker = if ($isReportDocument) { 'Begin Report' } else { 'Begin Form' }
             $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_export_{0}.txt" -f [guid]::NewGuid().ToString("N"))
@@ -2209,13 +2211,13 @@ function Export-VbaModule {
         }
 
         # Exportar tambien el codigo VBA como .cls para document modules (para diff y lectura rapida)
-        if ($component -and ($actualName -match "^(Form|Report)_|^frm")) {
-            $clsSubFolder = if ($actualName -match "^Report_") { "reports" } else { "forms" }
+        if ($component -and ($ext -eq ".form.txt" -or $ext -eq ".report.txt")) {
+            $clsSubFolder = if ($ext -eq ".report.txt") { "reports" } else { "forms" }
             $clsFolder = Join-Path -Path $ModulesPath -ChildPath $clsSubFolder
             if (-not (Test-Path -Path $clsFolder)) {
                 New-Item -Path $clsFolder -ItemType Directory -Force | Out-Null
             }
-            $clsPath = Join-Path -Path $clsFolder -ChildPath ($actualName + ".cls")
+            $clsPath = Join-Path -Path $clsFolder -ChildPath ($ModuleName + ".cls")
             $codeModule = $component.CodeModule
             if ($codeModule -and $codeModule.CountOfLines -gt 0) {
                 $codeLines = $codeModule.Lines(1, $codeModule.CountOfLines)
@@ -4167,13 +4169,21 @@ function Invoke-ExportAction {
         # get a full missingInBinary[] back instead of an opaque abort.
         foreach ($requestedName in $NormalizedModules) {
             $found = $false
+            $vbComponentName = $null
+            $accessObjectName = $null
             try {
-                $null = $vbProject.VBComponents.Item($requestedName)
+                $matchedComponent = $vbProject.VBComponents.Item($requestedName)
+                $vbComponentName = [string]$matchedComponent.Name
                 $found = $true
             } catch {
                 $baseName = $requestedName -replace '^(Form|Report)_', ''
                 foreach ($candidate in @("Form_$baseName", "Report_$baseName")) {
-                    try { $null = $vbProject.VBComponents.Item($candidate); $found = $true; break } catch { Write-Debug "Diagnostics: $_" }
+                    try {
+                        $matchedComponent = $vbProject.VBComponents.Item($candidate)
+                        $vbComponentName = [string]$matchedComponent.Name
+                        $found = $true
+                        break
+                    } catch { Write-Debug "Diagnostics: $_" }
                 }
             }
             if (-not $found) {
@@ -4181,6 +4191,14 @@ function Invoke-ExportAction {
                 $info = Resolve-AccessObjectInfo -AccessApplication $Session.AccessApplication -ModuleName $requestedName
                 if ($info.Exists) {
                     $found = $true
+                    $accessObjectName = [string]$info.Name
+                    foreach ($componentCandidate in @($info.Name, ("Form_" + $info.Name), ("Report_" + $info.Name)) | Select-Object -Unique) {
+                        try {
+                            $matchedComponent = $vbProject.VBComponents.Item($componentCandidate)
+                            $vbComponentName = [string]$matchedComponent.Name
+                            break
+                        } catch { Write-Debug "Diagnostics: $_" }
+                    }
                 }
             }
             if (-not $found) {
@@ -4192,7 +4210,11 @@ function Invoke-ExportAction {
                 }
                 continue
             }
-            $targets += $requestedName
+            $targets += [pscustomobject]@{
+                ModuleName       = $requestedName
+                AccessObjectName = $accessObjectName
+                VbComponentName  = $vbComponentName
+            }
         }
     } else {
         # Collect all standard modules and class modules from VBProject (type 1 and 2)
@@ -4242,11 +4264,14 @@ function Invoke-ExportAction {
     $exported = @()
     $total = $targets.Count
     $idx = 0
-    foreach ($name in $targets) {
+    foreach ($target in $targets) {
+        $name = if ($target -is [string]) { $target } else { [string]$target.ModuleName }
+        $accessObjectName = if ($target -is [string]) { $null } else { [string]$target.AccessObjectName }
+        $vbComponentName = if ($target -is [string]) { $null } else { [string]$target.VbComponentName }
         $idx++
         Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
         try {
-            Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication
+            Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -AccessObjectName $accessObjectName -VbComponentName $vbComponentName
             $exported += $name
         } catch {
             if ($Json) {
