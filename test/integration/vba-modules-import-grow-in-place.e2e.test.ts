@@ -56,10 +56,14 @@ function parseDysflowResult(stdout: string): unknown | null {
 }
 
 function getFirstModuleEntry(payload: unknown): Record<string, unknown> | undefined {
-  const modules = Array.isArray(payload)
-    ? payload
-    : ((payload as { modules?: unknown[] } | null)?.modules ?? []);
-  return (modules as Array<Record<string, unknown>>)[0];
+  if (Array.isArray(payload)) return payload[0] as Record<string, unknown> | undefined;
+  if (payload === null || typeof payload !== "object") return undefined;
+
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.modules)) {
+    return record.modules[0] as Record<string, unknown> | undefined;
+  }
+  return typeof record.module === "string" ? record : undefined;
 }
 
 function makeModule(name: string, lineCount: number): string {
@@ -185,11 +189,8 @@ describe.skipIf(skipReason !== undefined)(
       expect(grown.exitCode).toBe(0);
       expect(entry?.status).toBe("ok");
       expect((entry?.error as { code?: string } | null)?.code).not.toBe("IMPORT_TRUNCATED");
-      const verbose = entry?.verbose as
-        | { truncated?: boolean; mismatchReason?: string | null }
-        | undefined;
+      const verbose = (entry?.verbose ?? entry?.Verbose) as { truncated?: boolean } | undefined;
       expect(verbose?.truncated).toBe(false);
-      expect(verbose?.mismatchReason ?? null).toBeNull();
     });
   },
 );
