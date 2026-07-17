@@ -156,6 +156,32 @@ describe("mcp-e2e.mjs — sandbox isolation", () => {
   });
 });
 
+describe("mcp-e2e.mjs — linked-table target selection (#924)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("targets list_linked_tables at the frontend without leaking backendPath", () => {
+    const call = src.match(
+      /record\(\s*["']query["']\s*,\s*["']list_linked_tables["']\s*,\s*\{([^}]*)\}\s*\)/,
+    );
+    expect(call, "no list_linked_tables record() call found").not.toBeNull();
+    expect(call?.[1]).toMatch(/\bprojectId\b/);
+    expect(call?.[1]).toMatch(/\baccessPath\b/);
+    expect(call?.[1]).not.toMatch(/\bbackendPath\b|\.\.\./);
+  });
+
+  it("preserves backend targeting for the surrounding backend-oriented queries", () => {
+    expect(src).toMatch(
+      /record\(\s*["']query["']\s*,\s*["']count_rows["']\s*,\s*\{[^}]*\bbackendPath\b[^}]*\}\s*\)/,
+    );
+    expect(src).toMatch(
+      /record\(\s*["']query["']\s*,\s*["']distinct_values["']\s*,\s*\{[^}]*\bbackendPath\b[^}]*\}\s*\)/,
+    );
+    expect(src).toMatch(
+      /record\(\s*["']query["']\s*,\s*["']compare_backends["']\s*,\s*\{[^}]*\bcomparePath\s*:\s*backendPath\b[^}]*\}\s*\)/,
+    );
+  });
+});
+
 describe("mcp-e2e.mjs — orphan-detection invariants", () => {
   const src = readSource(MCP_E2E_PATH);
 
