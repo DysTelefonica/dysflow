@@ -3,6 +3,7 @@ import {
   VbaFormsAdapter,
   type VbaFormsOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-forms-adapter";
+import { compareForm } from "../../../src/adapters/vba-sync/vba-forms-comparison-tools";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,8 @@ End
 // ---------------------------------------------------------------------------
 
 describe("VbaFormsAdapter — compare_form", () => {
+  it("rejects project names without an orchestrator", async () =>
+    expect((await compareForm(mockFs(), { projectId: "p", formName: "A" })).ok).toBe(false));
   it("handles compare_form and keeps inspect_form / lint_form_code handled", () => {
     expect(VbaFormsAdapter.handles("compare_form")).toBe(true);
     expect(VbaFormsAdapter.handles("inspect_form")).toBe(true);
@@ -229,5 +232,95 @@ describe("VbaFormsAdapter — compare_form", () => {
     });
 
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it("parses each project candidate from the exact successful read snapshot", async () => {
+    const reads = new Map<string, number>();
+    const readFile = vi.fn(async (path: string) => {
+      const normalized = path.replace(/\\/g, "/");
+      const count = (reads.get(normalized) ?? 0) + 1;
+      reads.set(normalized, count);
+      if (
+        normalized.endsWith("/forms/Form_A.form.txt") ||
+        normalized.endsWith("/forms/Form_B.form.txt")
+      ) {
+        return count === 1 ? SIMPLE_FORM : "malformed after successful probe";
+      }
+      throw new Error("ENOENT");
+    });
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+      diagnostics: [],
+      durationMs: 0,
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs({ readFile }));
+
+    const result = await adapter.execute("compare_form", {
+      projectId: "project",
+      formName: "Form_A",
+      targetName: "Form_B",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.resolveExecutionTarget).toHaveBeenCalledTimes(1);
+    expect([...reads.values()]).toEqual([1, 1]);
+  });
+
+  it("reads each direct comparison path exactly once", async () => {
+    const readFile = vi.fn().mockResolvedValue(SIMPLE_FORM);
+    const adapter = new VbaFormsAdapter(makeOrchestrator(), mockFs({ readFile }));
+
+    const result = await adapter.execute("compare_form", {
+      path: "C:/repo/forms/Form_A.form.txt",
+      target: "C:/repo/forms/Form_B.form.txt",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(readFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an unreadable direct target before parsing a malformed source", async () => {
+    const readFile = vi.fn(async (path: string) => {
+      if (path.includes("Form_A")) return "malformed";
+      throw new Error("target denied");
+    });
+    const adapter = new VbaFormsAdapter(makeOrchestrator(), mockFs({ readFile }));
+
+    const result = await adapter.execute("compare_form", {
+      sourcePath: "C:/repo/forms/Form_A.form.txt",
+      targetPath: "C:/repo/forms/Form_B.form.txt",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("FORM_NOT_FOUND");
+      expect(result.error.message).toContain("target form file");
+    }
+  });
+
+  it("reports an unresolved project target before parsing a malformed source", async () => {
+    const orchestrator = makeOrchestrator();
+    vi.mocked(orchestrator.resolveExecutionTarget).mockResolvedValue({
+      ok: true,
+      data: { destinationRoot: "C:/repo/src", projectRoot: "C:/repo" },
+      diagnostics: [],
+      durationMs: 0,
+    });
+    const readFile = vi.fn(async (path: string) => {
+      if (path.replace(/\\/g, "/").endsWith("/forms/Form_A.form.txt")) return "malformed";
+      throw new Error("ENOENT");
+    });
+    const adapter = new VbaFormsAdapter(orchestrator, mockFs({ readFile }));
+
+    const result = await adapter.execute("compare_form", {
+      projectId: "project",
+      formName: "Form_A",
+      targetName: "Form_Missing",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_NOT_FOUND");
   });
 });

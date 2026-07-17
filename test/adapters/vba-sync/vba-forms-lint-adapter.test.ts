@@ -1,6 +1,8 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { VbaFormsAdapter } from "../../../src/adapters/vba-sync/vba-forms-adapter";
 import { VbaFormsLintAdapter } from "../../../src/adapters/vba-sync/vba-forms-lint-adapter";
+import { lintFormCode } from "../../../src/adapters/vba-sync/vba-forms-lint-tools";
 import type { VbaFormsOrchestrator } from "../../../src/adapters/vba-sync/vba-forms-types";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
@@ -79,6 +81,42 @@ End Sub
 `;
 
 describe("VbaFormsLintAdapter", () => {
+  it("normalizes the public execute payload before lint delegation", async () => {
+    const fs = mockFs({
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        if (path.endsWith(".form.txt")) return VALID_FORM_TXT;
+        throw new Error("ENOENT");
+      }),
+    });
+    const orchestrator = {
+      executor: vi.fn(),
+      env: {},
+      cwd: "C:/repo",
+      resolveExecutionTarget: vi.fn(),
+      validateStrictContext: vi.fn(),
+      executeMappedTool: vi.fn(),
+    } as unknown as VbaFormsOrchestrator;
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("lint_form_code", {
+      destinationRoot: "C:/repo",
+      formName: "Form_frmMain",
+      moduleNames: [42, "Form_ignored"],
+      rules: [false, "form-option-explicit"],
+      strict: "true",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("MCP_INPUT_INVALID");
+
+    const normalized = await lintFormCode(fs, {
+      destinationRoot: "C:/repo",
+      formName: "Form_frmMain",
+      moduleNames: [42],
+      rules: [false],
+    });
+    expect(normalized.ok).toBe(true);
+  });
   it("returns failure when formName and moduleNames are both passed", async () => {
     const fs = mockFs();
     const adapter = new VbaFormsLintAdapter(fs);
