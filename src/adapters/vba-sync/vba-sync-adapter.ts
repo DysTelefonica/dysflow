@@ -30,6 +30,7 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
+import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import {
   runSyncBinary,
   type SyncBinaryAdapterLike,
@@ -785,6 +786,20 @@ export class VbaSyncAdapter implements VbaSyncPort {
       });
     }
     if (toolName === "import_all" || toolName === "import_modules") {
+      // issue #951 — a zero process exit does NOT prove a successful import.
+      // The runner can exit 0 while the structured payload carries per-module
+      // failures (e.g. a `remove-existing` SaveAsText error). Wrapping that
+      // payload as success made `applyGuardedFormWrite` skip its rollback and
+      // leaked the error inside a `mode:"apply"` success shape. The per-module
+      // structured result is the source of truth on BOTH exit paths, and the
+      // failure envelope construction is shared with the exit≠0 branch so
+      // consumers see one consistent shape.
+      if (importOutputReportsModuleFailure(parsedOutput)) {
+        return failureResult(
+          failureFromStructuredRunnerResult(toolName, result, parsedOutput, secrets),
+          { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+        );
+      }
       return successResult(
         {
           result: parsedOutput,
@@ -1219,9 +1234,17 @@ function failureFromStructuredRunnerResult(
     return createDysflowError(code, `${message}${suffix}`, { details: extraDetails });
   }
 
+  // issue #951 — the exit-0 per-module validation can reach this generic
+  // branch (array payload with an error entry but no top-level envelope).
+  // Blaming "exit code 0" would read as a contradiction, so name the real
+  // signal: the structured result reported per-module failures.
+  const failureOrigin =
+    result.exitCode === 0
+      ? "reported per-module failures in its structured result"
+      : `failed with exit code ${result.exitCode ?? "unknown"}`;
   return createDysflowError(
     "VBA_MANAGER_FAILED",
-    `${toolName} failed with exit code ${result.exitCode ?? "unknown"}: ${outputDetails.displayOutput}`,
+    `${toolName} ${failureOrigin}: ${outputDetails.displayOutput}`,
     { details: outputDetails.details },
   );
 }

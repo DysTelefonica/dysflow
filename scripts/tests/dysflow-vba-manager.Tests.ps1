@@ -3338,6 +3338,49 @@ Describe "Invoke-ImportAction — behavioral (decompose S7)" {
         $result.CreatedComponentNames | Should -Contain "BrandNew"
         $script:StatusMessages | Should -Not -Contain "OK Import completado (1)"
     }
+
+    It "maps a FORM_NAME_RESOLUTION_FAILED throw to its typed per-module error code (#951)" {
+        $guardMessage = "FORM_NAME_RESOLUTION_FAILED: no se pudo resolver el nombre del objeto Access desde el módulo 'Form_' (fuente 'C:\fake\forms\Form_.form.txt')."
+        $script:FailOn = @{ "Form_" = @($guardMessage, $guardMessage, $guardMessage) }
+
+        $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("Form_") -ModulesPath "C:\fake\forms" -ImportMode "Auto"
+
+        $result.HasErrors | Should -Be $true
+        $script:DysflowResults.Count | Should -Be 1
+        $payload = $script:DysflowResults[0]
+        $payload.ok | Should -Be $false
+        $moduleEntry = @($payload.modules)[0]
+        $moduleEntry.status | Should -Be "error"
+        $moduleEntry.error.code | Should -Be "FORM_NAME_RESOLUTION_FAILED"
+        $moduleEntry.error.message | Should -Match "Form_"
+        $moduleEntry.error.remediation | Should -Not -BeNullOrEmpty
+    }
+}
+
+Describe "Import-VbaModule — FORM_NAME_RESOLUTION_FAILED guard (#951)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
+        $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Import-VbaModule' }, $true) | Select-Object -First 1
+        if (-not $fnAst) { throw "Import-VbaModule not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $fnAst.Extent.Text
+    }
+
+    BeforeEach {
+        # The guard must fire BEFORE any file read or COM call, so the only
+        # collaborator that needs stubbing is the source-file resolver.
+        function script:Resolve-ImportFileForModule {
+            param([string]$ModulesPath, [string]$ModuleName, [string]$ImportMode)
+            return (Join-Path $ModulesPath "Form_.form.txt")
+        }
+    }
+
+    It "throws FORM_NAME_RESOLUTION_FAILED when the resolved Access object name is empty (#951)" {
+        $fakeApp = [pscustomobject]@{ Id = "fake-app" }
+        {
+            Import-VbaModule -VbProject ([pscustomobject]@{ Id = "fake-vbproject" }) -ModuleName "Form_" -ModulesPath "C:\fake\forms" -AccessApplication $fakeApp -ImportMode "Auto"
+        } | Should -Throw "*FORM_NAME_RESOLUTION_FAILED*"
+    }
 }
 
 Describe "Invoke-AccessProcedure — optional ByRef argument marshaling (issue #428)" {
