@@ -28,6 +28,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  createGitOwnedE2eWorkspace,
+  type GitOwnedE2eWorkspace,
+} from "../integration/_helpers/git-owned-e2e-workspace";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cliCommand =
@@ -509,7 +513,8 @@ describe.skipIf(!canRunE2e)(
 // Root cause: DoCmd.CopyObject mangles non-ASCII chars in the new object name (e.g. Módulo1 →
 // Mód×lo1). The fix forces VBComponent.Name via the COM property setter after CopyObject. These
 // tests verify the full create and delete+re-import paths against a temporary fixture workspace.
-const nonAsciiWorkspace = join(tmpdir(), `dysflow-nonascii-e2e-${process.pid}-${Date.now()}`);
+let nonAsciiSandbox: GitOwnedE2eWorkspace;
+let nonAsciiWorkspace: string;
 const nonAsciiModuleName = "TestMódulo"; // TestMódulo — ó = U+00F3
 const nonAsciiProjectId = "dysflow-nonascii-e2e";
 
@@ -557,11 +562,13 @@ describe.skipIf(!canRunE2e)(
   "import_modules: non-ASCII module name roundtrip (CopyObject Unicode-safe fix)",
   () => {
     beforeAll(() => {
+      nonAsciiSandbox = createGitOwnedE2eWorkspace(repoRoot, "nonascii-import");
+      nonAsciiWorkspace = nonAsciiSandbox.root;
       setupNonAsciiWorkspace();
     });
     afterAll(() => {
       try {
-        rmSync(nonAsciiWorkspace, { recursive: true, force: true });
+        nonAsciiSandbox.cleanup();
       } catch {
         /* ignore */
       }
