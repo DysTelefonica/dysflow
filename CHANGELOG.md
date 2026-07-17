@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.14.2] - 2026-07-17
+
+### Fixed
+
+- fix(release): stamp the packaged runtime version from the immutable release tag and reject malformed tags (#946, closes #945)
+- fix(mcp): resolve the diagnostics documentation bundle from the packaged runtime when long-lived clients retain a stale `DYSFLOW_HOME` (#947, closes #944)
+- fix(release): make the diagnostics bundle quality gate deterministic on Windows while retaining real archive inspection on non-Windows runners (#949, closes #948)
+- fix(vba-sync): preserve resolved Access object and VBA component identities when exporting forms or reports with anomalous module names (#953, closes #952)
+- fix(vba-sync): treat structured per-module import failures as failed operations and roll back guarded form source writes atomically (#954, closes #951)
+
 ## [v2.14.1] - 2026-07-17
 
 ### Fixed
