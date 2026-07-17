@@ -1,4 +1,5 @@
-import { lstat, realpath } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, parse, relative, resolve } from "node:path";
 
@@ -101,4 +102,40 @@ export function buildMcpE2eSandboxPlan({ scriptDir, sandboxRoot, existingRoot })
       sandbox.catalogPath,
     ],
   };
+}
+
+export async function initializeMcpE2eSandbox(plan, { projectId }) {
+  await mkdir(plan.sandbox.root, { recursive: true });
+  const initialized = spawnSync("git", ["init", "--quiet"], {
+    cwd: plan.sandbox.root,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (initialized.status !== 0) {
+    throw new Error(
+      `Could not initialize Git-owned MCP E2E sandbox: ${initialized.stderr || initialized.error || "git init failed"}`,
+    );
+  }
+
+  const configDir = join(plan.sandbox.root, ".dysflow");
+  await mkdir(configDir, { recursive: true });
+  await writeFile(
+    join(configDir, "project.json"),
+    `${JSON.stringify(
+      {
+        id: projectId,
+        accessPath: "NoConformidades.accdb",
+        backendPath: "NoConformidades_Datos.accdb",
+        destinationRoot: "src",
+        timeoutMs: 90000,
+        passwordEnv: "ACCESS_VBA_PASSWORD",
+        frontendPasswordEnv: "ACCESS_VBA_PASSWORD",
+        backendPasswordEnv: "ACCESS_VBA_PASSWORD",
+        capabilities: { allowWrites: true },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
 }

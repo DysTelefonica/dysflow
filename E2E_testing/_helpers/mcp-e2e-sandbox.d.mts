@@ -29,3 +29,7 @@ export function buildMcpE2eSandboxPlan(options: {
   scriptDir: string;
   sandboxRoot?: string;
 }): McpE2eSandboxPlan;
+export function initializeMcpE2eSandbox(
+  plan: McpE2eSandboxPlan,
+  options: { projectId: string },
+): Promise<void>;

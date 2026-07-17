@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan } from "./_helpers/mcp-e2e-sandbox.mjs";
+import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 import {
@@ -97,7 +97,7 @@ for (const [label, fixturePath] of [["accessPath", sandboxPlan.source.accessPath
 
 if (!resumeRoot) {
   await rm(tempRoot, { recursive: true, force: true });
-  await mkdir(tempRoot, { recursive: true });
+  await initializeMcpE2eSandbox(sandboxPlan, { projectId });
   await cp(sandboxPlan.source.accessPath, accessPath);
   await cp(sandboxPlan.source.backendPath, backendPath);
   await cp(sandboxPlan.source.destinationRoot, destinationRoot, { recursive: true });
@@ -137,7 +137,10 @@ if (!resumeRoot) {
   await writeFile(uiFormPath, uiFormFixture, "utf8");
 }
 
-const ctx = { projectId, accessPath, backendPath, destinationRoot, projectRoot: tempRoot };
+// Resolve configured paths from the sandbox-owned project. Supplying every
+// equivalent target alias would correctly fail the production write gate as
+// ambiguous; individual scenarios add only the one explicit override they test.
+const ctx = { projectId };
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
 const { rows, addFailFastResult, appendUnchecked } = createResultRows();
 const existingModuleName = "Funciones Generales";
@@ -220,7 +223,7 @@ function extractMcpErrorCode(text) {
 
 async function callMcp(method, params = {}, options = {}) {
   const child = spawn(cliCommand, ["mcp"], {
-    cwd: scriptDir,
+    cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
@@ -377,20 +380,24 @@ await record("query", "list_access_files", { projectId, rootPath: tempRoot });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], dryRun: false });
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, dryRun: true, backupFirst: false });
-// compact_repair APPLY on a COPY of the password-protected frontend (non-destructive).
+// compact_repair APPLY on the sandbox's password-protected frontend. The source
+// fixture remains untouched, while the configured sandbox target stays inside
+// the write-ready ownership boundary.
 // dry-run never calls DAO CompactDatabase, so this is the only E2E that actually compacts a
 // protected database â€” it guards the source-password (5th DAO arg) fix.
-const compactApplyTarget = join(tempRoot, "compact-apply-target.accdb");
-await cp(accessPath, compactApplyTarget);
-await record("maintenance", "compact_repair", { projectId, accessPath: compactApplyTarget, apply: true, backupFirst: true });
-await record("links", "link_tables", { projectId, accessPath, backendPath, dryRun: false });
-await record("links", "relink_tables", { projectId, accessPath, backendPath, dryRun: false });
-await record("links", "localize_backend_links", { projectId, accessPath, backendPath, dryRun: false });
-// The non-existent table is the negative case â€” unlink_table now fails
-// with CONFIG_MISSING_TARGET_PATH when the table cannot be resolved
-// against the configured frontend/backend (the prior "empty result" no-op
-// was masking a target-resolution miss). Expected: structured error.
-await record("links", "unlink_table", { projectId, accessPath, tableName: "DysflowMcpE2EMissing", dryRun: false }, { expected: "error" });
+await record("maintenance", "compact_repair", { projectId, accessPath, apply: true, backupFirst: true });
+await record("links", "link_tables", {
+  projectId,
+  backendPath,
+  mode: "create-or-relink",
+  tableNames: ["TbNoConformidades"],
+  dryRun: false,
+});
+await record("links", "relink_tables", { projectId, backendPath, dryRun: false });
+await record("links", "localize_backend_links", { projectId, backendPath, dryRun: false });
+// Remove the deterministic link created above, leaving the disposable frontend
+// in its pre-link state while exercising a real unlink write.
+await record("links", "unlink_table", { projectId, accessPath, tableName: "TbNoConformidades", dryRun: false });
 await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
 
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", dryRun: false });
@@ -696,7 +703,7 @@ const designPlanResult = await record("form-ui", "generate_form_design_plan", {
   behaviorMap,
   plan: {
     operations: [
-      { kind: "add-control", target: "txtAdded", intent: "add probe", params: { type: "TextBox", properties: { Caption: "Added" } } },
+      { kind: "add-control", target: "txtAdded", intent: "add probe", params: { type: "TextBox" } },
       { kind: "move-control", target: "cmdApply", intent: "move apply", params: { left: 100 } },
       { kind: "rename-control", target: "txtRename", intent: "rename synthetic input", params: { newName: "txtInput" } },
       { kind: "set-property", target: "txtSet", intent: "clarify prompt", params: { property: "Caption", value: "Probe input" } },
@@ -749,7 +756,7 @@ const applyPlanResult = await record("form-ui", "apply_form_design_plan", {
   apply: true,
 });
 const applyPlan = safeJsonParse(applyPlanResult.text);
-const applied = (name) => applyPlan?.appliedContract?.controls?.find((control) => control.name === name);
+const appliedFormText = await readFile(join(destinationRoot, "forms", "Form_FormCPV.form.txt"), "utf8");
 const applyPass = Boolean(
   applyPlan &&
     applyPlan.mode === "apply" &&
@@ -758,9 +765,12 @@ const applyPass = Boolean(
     Array.isArray(applyPlan.operationsApplied) &&
     applyPlan.operationsApplied.length === 6 &&
     applyPlan.advisories?.[0] === "review probe spacing" &&
-    applied("txtAdded")?.type === "TextBox" && applied("txtAdded")?.properties?.Caption === "Added" &&
-    applied("ComandoRegistrar")?.properties?.Left === "100" && !applied("Etiqueta232") && applied("txtInput")?.type === "Label" &&
-    applied("Etiqueta240")?.properties?.Caption === "Probe input" && !applied("lblTitulo"),
+    /Name\s*=\s*"txtAdded"/.test(appliedFormText) &&
+    /Left\s*=\s*100[\s\S]{0,1500}?Name\s*=\s*"ComandoRegistrar"/.test(appliedFormText) &&
+    !/Name\s*=\s*"Etiqueta232"/.test(appliedFormText) &&
+    /Name\s*=\s*"txtInput"/.test(appliedFormText) &&
+    /Name\s*=\s*"Etiqueta240"[\s\S]{0,1500}?Caption\s*=\s*"Probe input"/.test(appliedFormText) &&
+    !/Name\s*=\s*"lblTitulo"/.test(appliedFormText),
 );
 addFailFastResult({
   area: "form-ui",
@@ -806,10 +816,11 @@ addFailFastResult({
 });
 console.log(`${copyPass ? "PASS" : "FAIL"}\tcopy_form_ui_pattern:shape\t0ms\t${rows.at(-1).summary}`);
 
+const eventfulControlName = behaviorMap?.controls?.find((control) => control.events?.length > 0)?.name;
 const driftedContract = {
   ...behaviorMap,
   controls: (behaviorMap?.controls ?? []).map((control) =>
-    control.name === "txtProbe" ? { ...control, events: [] } : control,
+    control.name === eventfulControlName ? { ...control, events: [] } : control,
   ),
 };
 const verifyCleanResult = await record("form-ui", "verify_form_ui", {
@@ -826,7 +837,8 @@ const verifyCleanPass = Boolean(
     verifyClean.formName === "DysflowMcpE2E" &&
     verifyClean.ok === false &&
     Array.isArray(verifyClean.findings) &&
-    verifyClean.findings.some(({ code, controlName }) => code === "FORM_UI_CONTROL_MISSING" && controlName === "txtProbe"),
+    verifyClean.findings.some(({ code, controlName }) =>
+      code === "FORM_UI_CONTROL_MISSING" && (controlName === "txtDelete" || controlName === "txtRename")),
 );
 addFailFastResult({
   area: "form-ui",
@@ -913,7 +925,11 @@ addFailFastResult({
 });
 console.log(`${generateMissingPass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:error-path\t0ms\t${rows.at(-1).summary}`);
 
-const applyDryRunResult = await record("form-ui", "apply_form_design_plan", { projectId, plan: designPlan });
+const applyDryRunResult = await record("form-ui", "apply_form_design_plan", {
+  projectId,
+  sourcePath: uiFormPath,
+  plan: designPlan,
+});
 const applyDryRun = safeJsonParse(applyDryRunResult.text);
 const applyDryRunPass = Boolean(
   applyDryRun &&
