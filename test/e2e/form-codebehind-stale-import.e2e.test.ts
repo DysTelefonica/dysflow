@@ -16,11 +16,11 @@ delete process.env.DYSFLOW_HOME;
  *   - importMode "Code" (control case: only the .cls is used; CodeBehindForm is not involved)
  */
 import { execFileSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createGitOwnedE2eWorkspace } from "../integration/_helpers/git-owned-e2e-workspace";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,7 +79,10 @@ if (!canRunE2e) {
 // Workspace
 // ---------------------------------------------------------------------------
 
-const workspaceRoot = join(tmpdir(), `dysflow-stale-codebehind-e2e-${process.pid}-${Date.now()}`);
+const ownedWorkspace = canRunE2e
+  ? createGitOwnedE2eWorkspace(repoRoot, "stale-codebehind")
+  : undefined;
+const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "stale-skipped");
 const projectId = "dysflow-stale-codebehind-e2e";
 
 function setupWorkspace(): void {
@@ -173,6 +176,8 @@ interface McpToolResponse {
   timedOut: boolean;
 }
 
+const activeMcpChildren = new Set<ReturnType<typeof spawn>>();
+
 async function callMcp(
   toolName: string,
   args: Record<string, unknown>,
@@ -194,6 +199,7 @@ async function callMcp(
           process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD,
       },
     });
+    activeMcpChildren.add(child);
     let buf = "";
     let settled = false;
     const finish = (r: McpToolResponse) => {
@@ -242,6 +248,7 @@ async function callMcp(
       finish({ ok: false, isError: true, text: e.message, timedOut: false }),
     );
     child.on("close", () => {
+      activeMcpChildren.delete(child);
       if (!settled) finish({ ok: false, isError: true, text: "MCP closed", timedOut: false });
     });
     child.stdin.write(
@@ -281,12 +288,12 @@ describe.skipIf(!canRunE2e)(
       setupWorkspace();
     });
 
-    afterAll(() => {
-      try {
-        rmSync(workspaceRoot, { recursive: true, force: true });
-      } catch {
-        /* ignore */
+    afterAll(async () => {
+      const deadline = Date.now() + 10_000;
+      while (activeMcpChildren.size > 0 && Date.now() < deadline) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 100));
       }
+      ownedWorkspace?.cleanup();
     });
 
     it('importMode "Auto": re-exported .cls reflects the .cls source, not the stale CodeBehindForm', async () => {

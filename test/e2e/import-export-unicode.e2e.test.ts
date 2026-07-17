@@ -31,11 +31,11 @@ delete process.env.DYSFLOW_HOME;
  *     NoConformidades.accdb fixtures exist under `E2E_testing/`.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
+import { createGitOwnedE2eWorkspace } from "../integration/_helpers/git-owned-e2e-workspace";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cliCommand =
@@ -123,26 +123,37 @@ async function callMcp(
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
-      const sentinel = "DYSFLOW_RESULT ";
-      let idx = stdout.indexOf(sentinel);
-      while (idx >= 0) {
-        const lineEnd = stdout.indexOf("\n", idx);
-        if (lineEnd < 0) break;
-        const line = stdout.slice(idx + sentinel.length, lineEnd).trim();
-        clearTimeout(timer);
+      const lineEnd = stdout.lastIndexOf("\n");
+      if (lineEnd < 0) return;
+      for (const line of stdout.slice(0, lineEnd).split("\n")) {
+        const candidate = line.trim();
+        if (!candidate) continue;
         try {
-          const parsed = JSON.parse(line) as { ok?: boolean; isError?: boolean };
+          const parsed = JSON.parse(candidate) as {
+            id?: number;
+            result?: {
+              content?: Array<{ type: string; text?: string }>;
+              isError?: boolean;
+              ok?: boolean;
+            };
+            error?: unknown;
+          };
+          if (parsed.id !== 1) continue;
+          clearTimeout(timer);
+          const text = parsed.result?.content?.map((entry) => entry.text ?? "").join("\n") ?? "";
+          const isError = Boolean(parsed.error ?? parsed.result?.isError);
           settle({
-            ok: parsed.ok === true,
-            isError: parsed.isError === true,
-            text: line,
+            ok: !isError && parsed.result?.ok !== false,
+            isError,
+            text,
             timedOut: false,
           });
+          return;
         } catch {
-          settle({ ok: false, isError: true, text: line, timedOut: false });
+          /* Keep reading until the JSON-RPC response arrives. */
         }
-        idx = stdout.indexOf(sentinel, lineEnd);
       }
+      stdout = stdout.slice(lineEnd + 1);
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -157,7 +168,7 @@ async function callMcp(
         settle({
           ok: false,
           isError: true,
-          text: `process exited before sentinel (stdout tail: ${stdout.slice(-400)}, stderr tail: ${stderr.slice(-400)})`,
+          text: `process exited before JSON-RPC response (stdout tail: ${stdout.slice(-400)}, stderr tail: ${stderr.slice(-400)})`,
           timedOut: false,
         });
       }
@@ -174,7 +185,8 @@ async function callMcp(
   });
 }
 
-const workspaceRoot = join(tmpdir(), `dysflow-unicode-e2e-${process.pid}-${Date.now()}`);
+const ownedWorkspace = canRunE2e ? createGitOwnedE2eWorkspace(repoRoot, "unicode") : undefined;
+const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "unicode-skipped");
 
 function setupWorkspace(): void {
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
@@ -189,6 +201,7 @@ function setupWorkspace(): void {
         accessPath: "NoConformidades.accdb",
         backendPath: "NoConformidades_Datos.accdb",
         destinationRoot: "src",
+        capabilities: { allowWrites: true },
         timeoutMs: 120_000,
       },
       null,
@@ -235,9 +248,7 @@ function setupWorkspace(): void {
 }
 
 function cleanupWorkspace(): void {
-  if (existsSync(workspaceRoot)) {
-    rmSync(workspaceRoot, { recursive: true, force: true });
-  }
+  ownedWorkspace?.cleanup();
 }
 
 // Setup once at module load so the workspace is ready when each case runs.
@@ -258,7 +269,7 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
         importMode: "Code",
       });
       expect(importResp.timedOut).toBe(false);
-      expect(importResp.ok).toBe(true);
+      expect(importResp.ok, importResp.text).toBe(true);
 
       // 2. Export it back to disk.
       const exportResp = await callMcp("export_modules", {
@@ -267,7 +278,7 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
         destinationRoot: join(workspaceRoot, "src", "modules"),
       });
       expect(exportResp.timedOut).toBe(false);
-      expect(exportResp.ok).toBe(true);
+      expect(exportResp.ok, exportResp.text).toBe(true);
 
       // 3. Read the exported file (written as UTF-8 no BOM by the export path).
       const exportedPath = join(workspaceRoot, "src", "modules", "TestUnicodeRoundTrip.bas");
@@ -287,12 +298,6 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
     },
     120_000,
   );
-});
 
-// Always-on cleanup, even if the suite was skipped.
-if (canRunE2e) {
-  // Cleanup is registered as a side-effecting import; vitest does not provide
-  // a global teardown for skipped suites so we rely on the OS tmpdir reaper.
-  process.on("exit", cleanupWorkspace);
-  process.on("beforeExit", cleanupWorkspace);
-}
+  afterAll(cleanupWorkspace);
+});
