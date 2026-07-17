@@ -149,11 +149,9 @@ $env:ACCESS_VBA_PASSWORD = "<fixture password>"
 git pull --ff-only origin main
 pnpm build
 
-# 2. Stage the build into the throwaway test-runtime. The launcher reads
-#    test-runtime/bin/dist (NOT test-runtime/app/dist — that path is stale in the
-#    memory of past Engram entries; the .cmd wrapper does %SCRIPT_DIR%dist\cli\index.js).
-Remove-Item .\test-runtime\bin\dist -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item .\dist .\test-runtime\bin\dist -Recurse -Force
+# 2. Install into the throwaway test runtime. This writes launchers under bin/
+#    and the canonical runtime distribution under app/dist/.
+node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui
 
 # 3. Run the harness. Auto-uses test-runtime/bin/dysflow.cmd.
 node E2E_testing/mcp-e2e.mjs
@@ -184,12 +182,9 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
 
 ## Gotchas
 
-- **The launcher reads `test-runtime/bin/dist/`, not `app/dist/`.** Earlier session memory says
-  `app/dist/`; that is stale. The `dysflow.cmd` wrapper expands `%SCRIPT_DIR%` to the directory
-  of the script (`bin/`), so it runs `bin\dist\cli\index.js`. If you sync the build to the wrong
-  path, the harness will spawn an old binary and E2E will fail with "Tool not found" for tools
-  added since the last sync — the unit test will pass (it loads `src/` directly) but E2E will
-  catch the divergence.
+- **The installer and launcher use `test-runtime/app/dist/`.** Do not create a compatibility
+  copy under `bin/dist`; the release identity hash follows the same canonical tree the launcher
+  executes, so stale or tampered runtime bytes fail checkpoint validation.
 - **Advertised tool count is hardcoded twice.** `mcp-e2e.mjs` and
   `test/adapters/mcp/advertised-tool-count.test.ts` must agree. When you add a visible tool,
   bump both, in the same PR, or the protocol preflight flips red.
@@ -226,7 +221,7 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
 | `E2E_testing/src/forms/Form_DysflowMcpE2E.form.txt` | Minimal form used by the form-ui E2E assertions (`analyze`/`map`/`plan`/`copy`/`verify`). |
 | `E2E_testing/tests/`, `E2E_testing/forms/` | Auxiliary fixture assets. |
 | `test-runtime/bin/dysflow.cmd` | Throwaway launcher. **What the harness spawns.** Built from `pnpm build` + sync step above. |
-| `test-runtime/bin/dist/` | Throwaway CLI dist. **What gets refreshed on every release-gate run.** |
+| `test-runtime/app/dist/` | Canonical throwaway CLI dist installed and executed by the launcher. |
 | `%TEMP%/dysflow-mcp-e2e-*/` | Per-run sandbox (frontend copy, backend copy, exports, report). Auto-removed on success; preserved on failure. |
 
 ## Rules for maintainers

@@ -10,6 +10,7 @@ import {
   hashRunIdentity,
   parseResumeArgs,
   readCheckpoint,
+  runtimeIdentityPaths,
   validateCheckpoint,
 } from "../../E2E_testing/_helpers/mcp-e2e-resume.mjs";
 import { assertSafeExistingSandboxRoot } from "../../E2E_testing/_helpers/mcp-e2e-sandbox.mjs";
@@ -28,6 +29,20 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "dysflow-mcp-e2e-"));
 });
 describe("MCP E2E resumable cursor", () => {
+  it("binds installed runtime identity to the canonical app/dist tree", async () => {
+    const runtime = join(root, "test-runtime");
+    const launcher = join(runtime, "bin", "dysflow.cmd");
+    const dist = join(runtime, "app", "dist");
+    await mkdir(dist, { recursive: true });
+    await mkdir(join(runtime, "bin"), { recursive: true });
+    await writeFile(launcher, "launcher");
+    await writeFile(join(dist, "index.js"), "v1");
+
+    expect(runtimeIdentityPaths(launcher)).toEqual([launcher, dist]);
+    const first = await hashRunIdentity(runtimeIdentityPaths(launcher));
+    await writeFile(join(dist, "index.js"), "tampered");
+    expect(await hashRunIdentity(runtimeIdentityPaths(launcher))).not.toBe(first);
+  });
   it("aborts immediately on a failed semantic row", () => {
     const { rows, addFailFastResult, appendUnchecked } = createResultRows();
     expect(Object.hasOwn(rows, "push")).toBe(false);

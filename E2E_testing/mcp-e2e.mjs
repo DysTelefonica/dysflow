@@ -11,6 +11,7 @@ import {
   createPhaseSnapshots,
   createResumeController,
   hashRunIdentity,
+  runtimeIdentityPaths,
   parseResumeArgs,
   readCheckpoint,
   validateCheckpoint,
@@ -152,8 +153,7 @@ const existingModuleName = "Funciones Generales";
 // checks verify only those PIDs â€” never a global MSACCESS.EXE scan.
 const suiteOwnPids = new Set();
 const runIdentity = await hashRunIdentity([
-  cliCommand,
-  join(dirname(cliCommand), "dist"),
+  ...runtimeIdentityPaths(cliCommand),
   fileURLToPath(import.meta.url),
   join(scriptDir, "_helpers", "mcp-e2e-resume.mjs"),
   join(scriptDir, "_helpers", "mcp-e2e-sandbox.mjs"),
