@@ -290,7 +290,11 @@ describe.skipIf(skipReason !== undefined)(
         expect(sadData.actionableOk).toBe(false);
         expect(sadData.hasFunctionalDifferences).toBe(true);
         expect(sadData.different).toHaveLength(1);
-        expect(sadData.diffs?.[0]?.classification).toBe("sourceNewer");
+        const functionalDiff = sadData.diffs?.[0];
+        expect(functionalDiff?.classification).toBe("bothChanged");
+        expect(functionalDiff?.srcUniqueFunctionalLines).toBeGreaterThan(0);
+        expect(functionalDiff?.binaryUniqueFunctionalLines).toBeGreaterThan(0);
+        expect(functionalDiff?.recommendation).toBe("manual_merge");
 
         // Clean up the added class module from the database copy before finishing
         await service.execute("delete_module", { moduleName: "TempVerifyClass" });
