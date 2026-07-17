@@ -11,7 +11,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 export const CHECKPOINT_FILE = "mcp-e2e-checkpoint.json";
 export const CHECKPOINT_VERSION = 1;
 
@@ -47,6 +47,10 @@ export async function hashRunIdentity(paths) {
   }
   for (const path of paths) await add(resolve(path));
   return `checkpoint-v2|${hash.digest("hex")}`;
+}
+export function runtimeIdentityPaths(cliCommand) {
+  const runtimeRoot = dirname(dirname(resolve(cliCommand)));
+  return [resolve(cliCommand), join(runtimeRoot, "app", "dist")];
 }
 export function assertSafeResumeRoot(root, { repoRoot, scriptDir }) {
   const resolved = resolve(root);
