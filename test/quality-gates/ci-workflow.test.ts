@@ -113,7 +113,7 @@ describe("repository quality gates", () => {
 
     expect(packageJson.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.lint).toBe(
-      "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ scripts/ E2E_testing/_helpers/",
+      "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ tests/ scripts/ E2E_testing/_helpers/",
     );
     expect(packageJson.scripts).toHaveProperty("format");
     expect(packageJson.scripts).toHaveProperty("format:check");
@@ -132,7 +132,7 @@ describe("repository quality gates", () => {
     expect(testConfig.compilerOptions?.noEmit).toBe(true);
     expect(testConfig.compilerOptions?.rootDir).toBe(".");
     expect(testConfig.compilerOptions?.moduleResolution).toBe("Bundler");
-    expect(testConfig.include).toEqual(["src/**/*.ts", "test/**/*.ts"]);
+    expect(testConfig.include).toEqual(["src/**/*.ts", "test/**/*.ts", "tests/**/*.ts"]);
   });
 
   it("configures Vitest coverage for source files without generated output", async () => {
