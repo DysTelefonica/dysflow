@@ -1,4 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
+import type { Remediation } from "../../core/contracts/remediation.js";
 import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
@@ -58,7 +59,7 @@ function ensureDiagnostics(error: McpToolError): ReadonlyArray<{
   code: string;
   severity: "error" | "warning" | "info";
   message: string;
-  remediation?: string;
+  remediation?: Remediation | string;
 }> {
   const existing = error.diagnostics;
   if (existing && existing.length > 0) {
@@ -67,7 +68,7 @@ function ensureDiagnostics(error: McpToolError): ReadonlyArray<{
       severity:
         entry.severity === "warning" || entry.severity === "info" ? entry.severity : "error",
       message: entry.message,
-      ...(typeof entry.remediation === "string" ? { remediation: entry.remediation } : {}),
+      ...(entry.remediation !== undefined ? { remediation: entry.remediation } : {}),
     }));
   }
   return [
@@ -75,7 +76,7 @@ function ensureDiagnostics(error: McpToolError): ReadonlyArray<{
       code: error.code,
       severity: "error" as const,
       message: error.message,
-      ...(typeof error.remediation === "string" ? { remediation: error.remediation } : {}),
+      ...(error.remediation !== undefined ? { remediation: error.remediation } : {}),
     },
   ];
 }

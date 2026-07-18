@@ -17,7 +17,11 @@ import {
   type ExplainObject,
   relatedIssueNumbersForCode,
 } from "../../../src/adapters/mcp/explain-builder.js";
-import { createDysflowError, failureResult, successResult } from "../../../src/core/contracts/index.js";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index.js";
 
 /**
  * Every ExplainObject MUST contain at least 3 steps (per #972). Pin
