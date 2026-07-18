@@ -26,7 +26,17 @@ export function sanitizeMcpErrorMessage(message: string, secrets?: readonly stri
   // POSIX paths with database extension: /path/to/file.accdb
   result = result.replace(/(?<!\S)\/[^:\r\n]*?\.(?:accdb|mdb|accde|mde|laccdb)\b/gi, "[PATH]");
   // Windows drive root paths: C:\dir/...
-  result = result.replace(/[A-Za-z]:\\(?:[^\\\s"'<>|:*?]+(?:\\[^\\\s"'<>|:*?]+)*\\?)?/g, "[PATH]");
+  // Issue #957 P1 — the original regex required the first path component
+  // to be 1+ non-special chars, which failed when the JSON-serialized path
+  // started with an escaped backslash (e.g. `C:\\Proyectos\\...`). The
+  // `+` couldn't match the leading `\\`, the engine backtracked, and the
+  // whole optional group matched 0 chars — leaving the rest of the path
+  // in the output. That produced a half-sanitized string that downstream
+  // `JSON.parse` rejected with "Bad escaped character". Simplified to
+  // `[^\\s"',]*` (zero or more non-special chars) which reliably matches
+  // both the bare drive root `C:\` and full paths like `C:\dir\sub\file`,
+  // and prevents the partial-replacement JSON corruption.
+  result = result.replace(/[A-Za-z]:\\[^\s"',]*/g, "[PATH]");
   // POSIX directory paths: /dir/subdir/...
   result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
 

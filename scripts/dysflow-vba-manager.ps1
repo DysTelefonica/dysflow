@@ -3214,6 +3214,17 @@ function Import-VbaModule {
             if ($documentExistsInAccess) {
                 $tmpCanonical = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_import_canonical_{0}.txt" -f [guid]::NewGuid().ToString("N"))
                 try {
+                    # Issue #957 P2 — close the form/report before SaveAsText
+                    # so a freshly-imported (and therefore "dirty" in the
+                    # current Access session) document does not surface
+                    # DISP_E_BADINDEX (ACE 3265, "La clave de busqueda no
+                    # se encontro en ningun registro") on the second
+                    # successive form_set_property apply:true call. We save
+                    # no changes (acSaveNo=1) so this is a read-side flush,
+                    # not a write. Wrapped in a try/catch because the form
+                    # is usually already closed in single-shot imports, and
+                    # closing an already-closed document throws benignly.
+                    try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch { Write-Debug "Diagnostics (pre-SaveAsText close): $_" }
                     $AccessApplication.SaveAsText($objectType, $objectName, $tmpCanonical)
                     if (Test-Path -Path $tmpCanonical) {
                         $canonicalDocumentText = [System.IO.File]::ReadAllText($tmpCanonical, [System.Text.Encoding]::GetEncoding(1252))
@@ -3223,6 +3234,39 @@ function Import-VbaModule {
                         $importDocumentText = Merge-AccessDocumentWithCanonicalHeader -LocalDocumentText $importDocumentText -CanonicalDocumentText $canonicalDocumentText
                     }
                 } catch {
+                    # Issue #957 P1 — surface the failure with the diagnostic
+                    # data consumers need to localize the root cause: the
+                    # COM ErrorCode (ACE 3265 is the specific signature),
+                    # and the live CurrentProject.AllForms/AllReports.Properties.Count
+                    # so they can tell stale-handle from stale-state from
+                    # property-collection issues. The diagnostic values are
+                    # stashed in $script:LastRebuildDiagnostic so the
+                    # outer Invoke-ImportAction can lift them into the
+                    # structured per-module error envelope without
+                    # contaminating the human-readable message (paths in
+                    # the message would break JSON serialization).
+                    $aceCode = "unknown"
+                    $propertiesCount = "n/a"
+                    try {
+                        $inner = $_.Exception
+                        if ($inner -and $inner.InnerException) {
+                            $aceCode = [string]$inner.InnerException.ErrorCode
+                        }
+                        $currentProject = $AccessApplication.CurrentProject
+                        if ($currentProject) {
+                            $docList = if ($objectType -eq 3) { $currentProject.AllReports } else { $currentProject.AllForms }
+                            if ($docList) {
+                                $docObj = $docList.Item($objectName)
+                                if ($docObj) { $propertiesCount = [string]$docObj.Properties.Count }
+                            }
+                        }
+                    } catch { Write-Debug "Diagnostics (post-failure introspection): $_" }
+                    $script:LastRebuildDiagnostic = [ordered]@{
+                        aceCode         = $aceCode
+                        propertiesCount = $propertiesCount
+                        objectName      = $objectName
+                    }
+                    $script:ImportCurrentPhase = "import-phase-failed"
                     throw ("No se pudo reconstruir el header canónico desde Access para '{0}': {1}. Se aborta el import para evitar usar un header local potencialmente desactualizado." -f $objectName, $_.Exception.Message)
                 }
             } else {
@@ -4970,6 +5014,15 @@ function Invoke-ImportAction {
                     error           = [ordered]@{
                         code    = $errorCode
                         message = $messageString
+                        # Issue #957 P1 — surface rebuild-path diagnostic data so
+                        # consumers can tell stale-handle (ACE 3265) from
+                        # property-collection (Properties.Count missing) from
+                        # identity (objectName mismatch) issues. The diagnostic
+                        # is set inside the canonical-header rebuild catch
+                        # block; the lift into the structured envelope happens
+                        # here so the human-readable message stays free of
+                        # path-bearing data that would break JSON encoding.
+                        data    = if ($script:LastRebuildDiagnostic) { $script:LastRebuildDiagnostic } else { $null }
                         remediation = switch ($errorCode) {
                             "VB_NAME_MISMATCH" { "Make Attribute VB_Name match the target module name before retrying." }
                             "DUPLICATE_OPTION_DIRECTIVE" { "Keep only one copy of each Option directive before retrying." }
