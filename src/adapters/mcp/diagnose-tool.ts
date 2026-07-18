@@ -403,7 +403,16 @@ function shapeProjectConfig(raw: ProjectConfigDiagnostic): DiagnoseProjectConfig
       code: d.code,
       severity: d.severity,
       message: d.message,
-      remediation: d.remediation ?? "",
+      // Issue #970 — preserve the human-readable description when the
+      // diagnostic carries a structured Remediation; fall back to the
+      // legacy string verbatim. The diagnose tool's surface intentionally
+      // exposes a flat string for consumers that do not parse JSON-typed
+      // remediation objects; full structured shape is reachable via the
+      // MCP error envelope and `get_capabilities` instead.
+      remediation:
+        typeof d.remediation === "object" && d.remediation !== null
+          ? d.remediation.description
+          : (d.remediation ?? ""),
     })),
     owningWorktree: raw.owningWorktree ?? null,
   };
