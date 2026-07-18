@@ -208,6 +208,7 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   // `resolve_project` (config resolution) — pairs with them under the
   // Round-12 #965 umbrella.
   diagnose: ["#965"],
+  state: ["#978"],
   list_access_operations: ["#777"],
   cleanup_access_operation: ["#659", "#777"],
   run_vba: ["#621", "#659"],

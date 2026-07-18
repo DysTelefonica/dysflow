@@ -58,8 +58,12 @@
  * #976 adds `clean_stale_markers` (Round-12 user-callable companion to
  * the #967 auto-cleanup; dry-run default true, apply requires
  * `confirm: true`, write-gated through MCP_WRITES_DISABLED when writes
- * are off): 86 -> 87. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 87;
+ * are off): 86 -> 87.
+ * #978 adds `state` (Round-12 read-only runtime operational state —
+ * surfaces `{ operations, markers, locks, counters }` aggregated from
+ * the access operation registry and `.dysflow/runtime/markers/`; never
+ * opens Access, never spawns PowerShell, never mutates state): 87 -> 88. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 88;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

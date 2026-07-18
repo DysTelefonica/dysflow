@@ -210,6 +210,12 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // `confirm: true` paired with `dryRun: false`). Listing it here keeps
   // the snapshot uniform with `access_force_cleanup_orphaned`.
   clean_stale_markers: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Round-12 (#978) — `state` is pure read-only. The schema defensively
+  // accepts `apply` for symmetry with every other advertised tool, but
+  // `state` never writes — the handler ignores any commit signal and
+  // returns the snapshot verbatim. `noop` semantics match
+  // `schema` / `resolve_project` / `list_access_operations`.
+  state: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Query read tools.
   list_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   list_linked_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
