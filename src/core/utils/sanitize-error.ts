@@ -33,10 +33,10 @@ export function sanitizeMcpErrorMessage(message: string, secrets?: readonly stri
   // whole optional group matched 0 chars — leaving the rest of the path
   // in the output. That produced a half-sanitized string that downstream
   // `JSON.parse` rejected with "Bad escaped character". Simplified to
-  // `[^\\s"',]+` (any char except whitespace, quote, or comma) which
-  // reliably matches the full path in one pass and prevents the partial-
-  // replacement JSON corruption.
-  result = result.replace(/[A-Za-z]:\\[^\s"',]+/g, "[PATH]");
+  // `[^\\s"',]*` (zero or more non-special chars) which reliably matches
+  // both the bare drive root `C:\` and full paths like `C:\dir\sub\file`,
+  // and prevents the partial-replacement JSON corruption.
+  result = result.replace(/[A-Za-z]:\\[^\s"',]*/g, "[PATH]");
   // POSIX directory paths: /dir/subdir/...
   result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
 
