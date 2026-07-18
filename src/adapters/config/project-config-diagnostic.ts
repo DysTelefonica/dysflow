@@ -1,5 +1,13 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import type { Remediation } from "../../core/contracts/remediation.js";
+import {
+  remediationForCapabilitiesDisallowWrite,
+  remediationForDestinationRootNotFound,
+  remediationForMissingProjectConfig,
+  remediationForProjectIdMismatch,
+  remediationForWriteLockedByRunningOp,
+} from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
 
 export type ProjectConfigStatus =
@@ -37,7 +45,12 @@ export type ProjectConfigDiagnostic = {
     code: string;
     severity: "error" | "warning";
     message: string;
-    remediation?: string;
+    /**
+     * Issue #970 — structured remediation. Accepts either a legacy plain
+     * string (treated as `description` by `structureRemediation`) or the
+     * new structured shape (`{description, command, platform, ...}`).
+     */
+    remediation?: Remediation | string;
   }[];
   remediation: string | null;
 };
@@ -122,26 +135,29 @@ export function diagnoseProjectConfig(
   const fail = (
     status: ProjectConfigStatus,
     message: string,
-    remediation: string,
-  ): ProjectConfigDiagnostic => ({
-    ...base,
-    status,
-    writeReady: false,
-    diagnostics: [
-      {
-        code: status.toUpperCase().replaceAll("-", "_"),
-        severity: "error",
-        message,
-        remediation,
-      },
-    ],
-    remediation,
-  });
+    remediation: Remediation | string,
+  ): ProjectConfigDiagnostic => {
+    const descText = typeof remediation === "string" ? remediation : remediation.description;
+    return {
+      ...base,
+      status,
+      writeReady: false,
+      diagnostics: [
+        {
+          code: status.toUpperCase().replaceAll("-", "_"),
+          severity: "error",
+          message,
+          remediation,
+        },
+      ],
+      remediation: descText,
+    };
+  };
   if (present.length === 0)
     return fail(
       "missing",
       "No per-worktree .dysflow/project.json was found.",
-      `Run \`dysflow setup --cwd ${cwd} --apply --access-path <path>\` to bootstrap a per-worktree .dysflow/project.json. No write operation was performed.`,
+      remediationForMissingProjectConfig(cwd),
     );
   if (present.length > 1)
     return fail(
@@ -230,7 +246,7 @@ export function diagnoseProjectConfig(
       base,
       "id-mismatch",
       `Requested project identity '${requestedId}' does not match '${projectId ?? "(missing)"}'.`,
-      `Run \`dysflow doctor --cwd ${cwd}\`, then retry with projectId '${projectId ?? "<configured-id>"}' or update ${base.configPath}.`,
+      remediationForProjectIdMismatch(projectId),
       "PROJECT_ID_MISMATCH",
     );
   const capabilities = parsed.capabilities;
@@ -244,7 +260,7 @@ export function diagnoseProjectConfig(
       base,
       "capabilities-disallow-write",
       `Project '${projectId ?? "(missing)"}' has capabilities.allowWrites = false.`,
-      `Set capabilities.allowWrites to true in ${base.configPath}, then run \`dysflow doctor --cwd ${cwd}\`.`,
+      remediationForCapabilitiesDisallowWrite(base.configPath),
     );
   if (
     accessPath === null ||
@@ -262,7 +278,7 @@ export function diagnoseProjectConfig(
       base,
       "destination-root-not-found",
       `Configured destinationRoot directory does not exist: ${destinationRoot}.`,
-      `Run \`mkdir -p '${destinationRoot}/classes' '${destinationRoot}/modules' '${destinationRoot}/forms'\`, then retry the write operation.`,
+      remediationForDestinationRootNotFound(destinationRoot),
     );
   try {
     const canonicalDestinationRoot = canonical(destinationRoot);
@@ -425,7 +441,7 @@ export function diagnoseProjectConfig(
       base,
       "write-locked-by-running-op",
       `Running Access operations block this write: ${blockingOperations.join(", ")}.`,
-      "Call `access_force_cleanup_orphaned({})` to list candidates, verify process ownership, then call `access_force_cleanup_orphaned({ confirmPid: <pid> })` for the confirmed orphan and retry.",
+      remediationForWriteLockedByRunningOp(blockingOperations),
     );
   return {
     ...base,
@@ -601,15 +617,16 @@ function failWith(
   base: Omit<ProjectConfigDiagnostic, "status" | "writeReady" | "diagnostics" | "remediation">,
   status: ProjectConfigStatus,
   message: string,
-  remediation: string,
+  remediation: Remediation | string,
   code: string = status.toUpperCase().replaceAll("-", "_"),
 ): ProjectConfigDiagnostic {
+  const descText = typeof remediation === "string" ? remediation : remediation.description;
   return {
     ...base,
     status,
     writeReady: false,
     diagnostics: [{ code, severity: "error", message, remediation }],
-    remediation,
+    remediation: descText,
   };
 }
 

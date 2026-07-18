@@ -223,13 +223,23 @@ describe("central project config write guard", () => {
     }
   });
 
-  it("wrapper includes diagnostic.diagnostics[0].remediation in error.remediation", async () => {
+  it("wrapper includes diagnostic.diagnostics[0].remediation as structured Remediation (issue #970)", async () => {
     for (const [mode, expectedCode, nextCommand] of writeGateCases) {
       const { root, result } = await runWriteGateCase(mode);
       try {
         expect(result.error?.code).toBe(expectedCode);
         expect(result.error?.remediation).toContain(nextCommand);
-        expect(result.error?.diagnostics?.[0]?.remediation).toContain(nextCommand);
+        // Issue #970 — diagnostics[].remediation is now a structured Remediation.
+        // The legacy string is wrapped into { description: <original>, ... }.
+        const diagRem = result.error?.diagnostics?.[0]?.remediation as
+          | { description?: string; command?: string; platform?: string }
+          | undefined;
+        expect(typeof diagRem).toBe("object");
+        expect(diagRem).not.toBeNull();
+        expect(typeof diagRem?.description).toBe("string");
+        expect(diagRem?.description).toContain(nextCommand);
+        expect(diagRem?.command).toBeDefined();
+        expect(diagRem?.platform).toBeDefined();
       } finally {
         rmSync(root, { recursive: true, force: true });
       }

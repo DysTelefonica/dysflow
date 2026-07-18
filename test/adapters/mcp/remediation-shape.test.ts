@@ -12,7 +12,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -86,7 +86,11 @@ describe("Remediation structured shape (#970)", () => {
     // Bash-style: forward slashes, no Windows-style backslashes
     expect(r.command).not.toContain("\\");
     // Real bash verbs
-    expect(/^(mkdir|cp|mv|rm|git |dysflow |chmod|chown|sed|awk|echo|export|cd|ls|rmdir|touch|cat)/.test(r.command)).toBe(true);
+    expect(
+      /^(mkdir|cp|mv|rm|git |dysflow |chmod|chown|sed|awk|echo|export|cd|ls|rmdir|touch|cat)/.test(
+        r.command,
+      ),
+    ).toBe(true);
   });
 
   it("remediation.alternatives includes windows-powershell for Windows consumers", () => {
@@ -183,18 +187,14 @@ describe("Remediation structured shape (#970)", () => {
 
     // Execute the remediation command in bash; verify exit 0 and directory exists.
     // We use Git Bash (the path that ships with Git for Windows) so the test is portable.
-    const bash = process.env["DYSFLOW_TEST_BASH"] ?? "C:/Program Files/Git/bin/bash.exe";
+    const bash = process.env.DYSFLOW_TEST_BASH ?? "C:/Program Files/Git/bin/bash.exe";
     const res = spawnSync(bash, ["-lc", rem.command], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
     expect(res.status).toBe(0);
     // Verify the directories that mkdir -p created (last segments in rem.command)
-    const expectedPaths = [
-      join(target, "classes"),
-      join(target, "modules"),
-      join(target, "forms"),
-    ];
+    const expectedPaths = [join(target, "classes"), join(target, "modules"), join(target, "forms")];
     for (const p of expectedPaths) {
       const probe = spawnSync(bash, ["-lc", `[ -d "${p.replaceAll("\\", "/")}" ] && echo yes`], {
         encoding: "utf8",
