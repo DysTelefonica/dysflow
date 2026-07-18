@@ -122,7 +122,7 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(16);
-    expect(visibleCount).toBe(84);
+    expect(visibleCount).toBe(89);
   });
 
   it("verifies split-mode coverage explicitly", () => {

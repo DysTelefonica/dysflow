@@ -68,7 +68,7 @@
  * surfaces `{ operations, markers, locks, counters }` aggregated from
  * the access operation registry and `.dysflow/runtime/markers/`; never
  * opens Access, never spawns PowerShell, never mutates state): 88 -> 89. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 84;
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 89;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;
