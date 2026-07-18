@@ -14,6 +14,10 @@ import {
   type AccessDiagnosticsResult,
   AccessDiagnosticsService,
 } from "../../core/services/diagnostics-service.js";
+import {
+  runSupplementDriftCheckFromEnv,
+  type SupplementDriftDiagnostic,
+} from "./codegraph-supplement-drift-check.js";
 import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
 import { ensureObject } from "./install/file-utils.js";
 import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
@@ -51,8 +55,9 @@ export async function handleDoctorCommand(
     const result = await diagnosticsService.run({ includeEnvironment: true });
 
     const wiringCheck = await runWiringCheck(effectiveContext);
+    const supplementDriftCheck = await runSupplementDriftCheck(effectiveContext);
 
-    const formatted = formatDiagnosticsResult(result, wiringCheck);
+    const formatted = formatDiagnosticsResult(result, wiringCheck, supplementDriftCheck);
     return projectConfig === undefined
       ? formatted
       : { ...formatted, stdout: `${JSON.stringify({ projectConfig })}\n${formatted.stdout}` };
@@ -113,9 +118,32 @@ async function runWiringCheck(context: CliCommandContext): Promise<McpWiringChec
   });
 }
 
+async function runSupplementDriftCheck(
+  context: CliCommandContext,
+): Promise<SupplementDriftDiagnostic | null> {
+  if (context.checkSupplementDrift === false) {
+    // Explicit opt-out — used by callers that want to suppress the check.
+    return null;
+  }
+  if (context.checkSupplementDrift) {
+    return context.checkSupplementDrift();
+  }
+
+  const env = context.env ?? (process.env as Record<string, string | undefined>);
+  try {
+    return await runSupplementDriftCheckFromEnv(env);
+  } catch {
+    // Drift check is best-effort — never block the doctor on a scan
+    // failure. Returning null drops the line entirely so a broken fs
+    // never becomes a hard doctor failure.
+    return null;
+  }
+}
+
 function formatDiagnosticsResult(
   result: OperationResult<AccessDiagnosticsResult>,
   wiringCheck: McpWiringCheck | null,
+  supplementDriftCheck: SupplementDriftDiagnostic | null,
 ): CliResult {
   if (!result.ok) {
     return { exitCode: 1, stdout: "", stderr: `${result.error.code}: ${result.error.message}` };
@@ -131,8 +159,18 @@ function formatDiagnosticsResult(
     lines.push(`${symbol} ${wiringCheck.name}: ${wiringCheck.message}`);
   }
 
+  if (supplementDriftCheck !== null) {
+    // Drift is a remediation hint — ⚠ instead of ✗. Detailed findings
+    // are available on demand via `--verbose`; the single-line summary
+    // keeps the doctor output scannable.
+    const symbol = supplementDriftCheck.ok ? "✓" : "⚠";
+    lines.push(`${symbol} ${supplementDriftCheck.name}: ${supplementDriftCheck.message}`);
+  }
+
   const stdout = lines.join("\n");
-  // Exit code is driven by core diagnostics checks only — the wiring check is warn-only.
+  // Exit code is driven by core diagnostics checks only — wiring + drift
+  // are warn-only so the doctor can be safely run in CI without flipping
+  // the exit code on a stale supplement block.
   const exitCode = result.data.checks.every((check) => check.ok) ? 0 : 1;
   return { exitCode, stdout, stderr: "" };
 }
