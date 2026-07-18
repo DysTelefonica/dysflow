@@ -49,8 +49,12 @@
  * #971 adds `schema` (pure read-class runtime contract discovery —
  * surfaces the documented parameter / return / error-code /
  * cross-reference surface for every advertised MCP tool, never opens
- * Access, never spawns PowerShell, never mutates state): 84 -> 85. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 85;
+ * Access, never spawns PowerShell, never mutates state): 84 -> 85.
+ * #976 adds `clean_stale_markers` (Round-12 user-callable companion to
+ * the #967 auto-cleanup; dry-run default true, apply requires
+ * `confirm: true`, write-gated through MCP_WRITES_DISABLED when writes
+ * are off): 85 -> 86. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 86;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

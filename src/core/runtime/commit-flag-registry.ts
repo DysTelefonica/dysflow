@@ -201,6 +201,11 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
     noWriteAlias: null,
     defaultBehavior: "noop",
   },
+  // Round-12 (#976) — `clean_stale_markers` is plan-by-default; the schema
+  // does not declare `apply` (the explicit user-callable commit signal is
+  // `confirm: true` paired with `dryRun: false`). Listing it here keeps
+  // the snapshot uniform with `access_force_cleanup_orphaned`.
+  clean_stale_markers: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Query read tools.
   list_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   list_linked_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },

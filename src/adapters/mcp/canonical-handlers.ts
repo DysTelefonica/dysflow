@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
 import type { AccessOperationListEntry } from "../../core/operations/access-operation-registry.js";
@@ -15,6 +16,7 @@ import {
 } from "./dispatch-common.js";
 import type {
   DysflowMcpServices,
+  McpAccessContextResolver,
   McpToolResult,
   McpWriteAccessResolver,
 } from "./result-translation.js";
@@ -253,4 +255,102 @@ export async function handleMcpAccessOrphanCleanup(
       confirmPid: request.confirmPid,
     }),
   );
+}
+
+/**
+ * Round-12 (#976) — `dysflow.clean_stale_markers` MCP handler.
+ *
+ * User-callable companion to the #967 auto-cleanup. The handler is
+ * the contract surface for the four guardrails the spec promises:
+ *
+ *   1. **`dryRun` defaults to `true`** — the tool never writes without
+ *      the caller asking.
+ *   2. **`olderThanMinutes` defaults to 30** — mirrors the #967 default.
+ *   3. **`keepFailed` defaults to `true`** — preserves diagnostic value.
+ *   4. **`confirm: true` is REQUIRED for `dryRun: false`** — refused with
+ *      `MCP_INPUT_INVALID` BEFORE any service call so a missed confirm
+ *      never reaches the filesystem.
+ *
+ * The handler resolves the project root via the `McpAccessContextResolver`
+ * the same way every other write-class tool does; the markers directory
+ * is computed as `<projectRoot>/.dysflow/runtime/markers` (the canonical
+ * location for #967 markers). The service does the actual sweep.
+ */
+export async function handleMcpCleanStaleMarkers(
+  input: unknown,
+  schema: JsonObjectSchema,
+  services: DysflowMcpServices,
+  writesEnabled: boolean,
+  writeAccessResolver: McpWriteAccessResolver | undefined,
+  accessContextResolver: McpAccessContextResolver,
+): Promise<McpToolResult> {
+  const validation = validateInput(input, schema);
+  if (validation !== undefined) return invalidInput(validation);
+
+  if (services.cleanStaleMarkersService === undefined) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: "CLEAN_STALE_MARKERS_NOT_CONFIGURED: clean_stale_markers service is not configured.",
+        },
+      ],
+      isError: true,
+      ok: false,
+    };
+  }
+
+  const options = (
+    typeof input === "object" && input !== null
+      ? (input as Record<string, unknown>).options
+      : undefined
+  ) as
+    | {
+        olderThanMinutes?: number;
+        dryRun?: boolean;
+        keepFailed?: boolean;
+        confirm?: boolean;
+      }
+    | undefined;
+
+  const dryRun = options?.dryRun ?? true;
+  const keepFailed = options?.keepFailed ?? true;
+  const olderThanMinutes =
+    typeof options?.olderThanMinutes === "number" && options.olderThanMinutes > 0
+      ? options.olderThanMinutes
+      : 30;
+
+  // Confirm gate — refuse any non-dry-run call without literal confirm:true.
+  if (dryRun === false && options?.confirm !== true) {
+    return invalidInput(
+      "clean_stale_markers requires options.confirm === true whenever options.dryRun === false. Re-run with dryRun omitted (default true) to plan without writing, or pass { dryRun: false, confirm: true } to apply.",
+      "Pass { dryRun: true } (or omit dryRun) to plan, or pass { dryRun: false, confirm: true } to apply.",
+    );
+  }
+
+  // Resolve the project root so we can locate the markers directory. The
+  // access-context resolver is the same seam every other MCP write tool
+  // uses, so an empty markersRoot fallback to `<cwd>/.dysflow/runtime/markers`
+  // is consistent with the rest of the surface.
+  const context = await accessContextResolver(input);
+  if (!context.ok) return translateCoreResultToMcpContent(context);
+  const markersRoot = join(context.data.projectRoot, ".dysflow", "runtime", "markers");
+
+  // Non-dry-run still goes through the write-gate: a dry-run by definition
+  // does not mutate, so it skips the gate; an apply with confirm does
+  // mutate and is gated like any other write-class tool.
+  if (dryRun === false) {
+    if (!(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
+      return writesDisabled("clean_stale_markers");
+    }
+  }
+
+  const result = await services.cleanStaleMarkersService.run({
+    markersRoot,
+    olderThanMs: olderThanMinutes * 60 * 1000,
+    keepFailed,
+    dryRun,
+  });
+
+  return translateCoreResultToMcpContent(successResult(result));
 }

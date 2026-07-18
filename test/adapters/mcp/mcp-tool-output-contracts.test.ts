@@ -41,6 +41,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #971 — read-only runtime contract discovery. Pure catalog: never
     // opens Access, never spawns PowerShell, never mutates state.
     "schema",
+    // Round-12 (#976) — `clean_stale_markers`. Conditional-write
+    // (dry-run default true, apply requires confirm:true); user-callable
+    // companion to the #967 auto-cleanup. Same group as `resolve_project`
+    // because it bypasses the dispatch layer.
+    "clean_stale_markers",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

@@ -53,6 +53,12 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   schema: "read-only",
   // query_execute — write-side is arbitrary
   query_execute: "arbitrary-write",
+  // Round-12 (#976) — `clean_stale_markers` is filesystem-control on apply.
+  // Dry-run (default) never mutates; apply transitions stale markers'
+  // status to `abandoned`. Pairs with the #967 auto-cleanup which already
+  // runs the same sweep before every operation start, so the risk tier
+  // is the same: a routine but explicit filesystem write.
+  clean_stale_markers: "routine-dev-write",
 };
 
 /**

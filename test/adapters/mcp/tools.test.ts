@@ -264,6 +264,7 @@ describe("MCP tool registration over core services", () => {
       "lint_module",
       "resolve_project",
       "schema",
+      "clean_stale_markers",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

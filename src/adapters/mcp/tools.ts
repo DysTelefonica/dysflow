@@ -21,7 +21,11 @@ import {
   listVbaProcedures,
 } from "../../core/services/vba-procedure-service.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
-import { handleMcpAccessOrphanCleanup, handleMcpQueryExecute } from "./canonical-handlers.js";
+import {
+  handleMcpAccessOrphanCleanup,
+  handleMcpCleanStaleMarkers,
+  handleMcpQueryExecute,
+} from "./canonical-handlers.js";
 import { registerMcpTools } from "./dispatch.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
@@ -59,6 +63,7 @@ import type {
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import {
+  CLEAN_STALE_MARKERS_SCHEMA,
   DETECT_DEAD_CODE_SCHEMA,
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
@@ -484,6 +489,10 @@ export const MODERN_TOOL_NAMES = [
   // get_capabilities (live state) and resolve_project (project
   // resolution).
   "schema",
+  // Round-12 (#976) — explicit user-callable cleanup of stale `running`
+  // markers under `.dysflow/runtime/markers/`. Safe-by-default (dryRun:true);
+  // apply requires `confirm: true`. Pairs with the #967 auto-cleanup.
+  "clean_stale_markers",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -642,6 +651,26 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
               confirmPid: request.confirmPid,
             };
           },
+        ),
+    },
+    // Round-12 (#976) — `clean_stale_markers`. User-callable companion
+    // to the #967 auto-cleanup. Same write-class as `access_force_cleanup_orphaned`
+    // (conditional-write, dry-run safe by default, apply requires
+    // `confirm: true`). Does NOT participate in `MCP_TOOL_ROUTES` /
+    // dispatch-factory because the cleanup itself is filesystem-local
+    // and the access context is resolved directly via the resolver.
+    {
+      name: "clean_stale_markers",
+      description: `Sweep <projectRoot>/.dysflow/runtime/markers/ and either plan or apply transitions of stale \`status: "running"\` markers (and, when keepFailed is false, stale \`status: "failed"\` markers) to \`status: "abandoned"\`. Dry-run is the default; any apply call requires \`options.confirm: true\` and is write-gated (returns MCP_WRITES_DISABLED when writes are off). ${MCP_TOOL_CONTRACTS.clean_stale_markers.summary}`,
+      inputSchema: CLEAN_STALE_MARKERS_SCHEMA,
+      handler: async (input) =>
+        handleMcpCleanStaleMarkers(
+          input,
+          CLEAN_STALE_MARKERS_SCHEMA,
+          services,
+          writesEnabled,
+          writeAccessResolver,
+          accessContextResolver,
         ),
     },
     // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
