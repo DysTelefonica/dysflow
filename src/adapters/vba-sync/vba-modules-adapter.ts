@@ -29,6 +29,7 @@ import {
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 // ========================================================================
@@ -313,6 +314,17 @@ export class VbaModulesAdapter {
     // is redundant. The branch mirrors the import_* shape.
     if (dryRun && toolName === "delete_module") {
       return this.planDelete(params);
+    }
+
+    // Issue #958 — pre-import structural quality gate. Every planned
+    // .form.txt / .report.txt must parse with the strict FormIR parser
+    // BEFORE the runner (and Access) is spawned. Metadata-only legacy
+    // defects pass through (the PS import path self-heals them); an
+    // unparseable control tree fails closed with FORM_SOURCE_MALFORMED
+    // so a broken source can never half-load into the binary.
+    if (toolName === "import_all" || toolName === "import_modules") {
+      const gate = await this.gateImportFormSources(toolName, params);
+      if (!gate.ok) return gate;
     }
 
     // Issue #807 (Feature 2) — import_modules bulk by directory. When
@@ -851,6 +863,56 @@ export class VbaModulesAdapter {
     }
   }
 
+  /**
+   * Issue #958 — resolve the planned form/report sources and run the
+   * structural quality gate over them. Returns a failure envelope with
+   * `FORM_SOURCE_MALFORMED` (and the per-file defect list in `details`)
+   * when any planned document source cannot be parsed; the runner is
+   * never invoked in that case.
+   */
+  private async gateImportFormSources(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<undefined>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const defects = await this.collectImportFormDefects(toolName, params, target.data);
+    if (defects.length === 0) return successResult(undefined);
+    const listing = defects.map((d) => `${d.file} — ${d.message}`).join(" | ");
+    return failureResult(
+      createDysflowError(
+        "FORM_SOURCE_MALFORMED",
+        `Pre-import quality gate rejected ${defects.length} form/report source file(s): ${listing}`,
+        {
+          details: { defects },
+          remediation:
+            "Repair the listed .form.txt/.report.txt files (or re-export them from a healthy binary with export_modules/export_all) and retry. Metadata-only legacy defects are self-healed during import; this gate only rejects structural damage the importer cannot repair.",
+        },
+      ),
+    );
+  }
+
+  private async collectImportFormDefects(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
+  ): Promise<FormSourceDefect[]> {
+    // includeForms:false (#807 bulk) excludes every Form_*/Report_* source
+    // from the import — nothing document-shaped will reach LoadFromText, so
+    // there is nothing for the structural gate to protect.
+    if (params.includeForms === false) return [];
+    const moduleNames = stringArray(params.moduleNames);
+    const sourceDir = stringValue(params.sourceDir);
+    return collectFormSourceDefects(
+      {
+        root: sourceDir ?? target.destinationRoot,
+        moduleNames: toolName === "import_modules" ? moduleNames : [],
+        sourcePath: stringValue(params.sourcePath),
+      },
+      this.fileSystem,
+    );
+  }
+
   private async planImport(
     toolName: "import_all" | "import_modules",
     params: Record<string, unknown>,
@@ -870,6 +932,12 @@ export class VbaModulesAdapter {
     await stat(target.data.destinationRoot).catch(() =>
       errors.push(`destinationRoot not found: ${target.data.destinationRoot}`),
     );
+    // Issue #958 — surface structural form-source defects in the plan so a
+    // dryRun consumer sees exactly what the real run would fail closed on.
+    const formDefects = await this.collectImportFormDefects(toolName, params, target.data);
+    for (const defect of formDefects) {
+      errors.push(`FORM_SOURCE_MALFORMED: ${defect.file} — ${defect.message}`);
+    }
     if (target.data.accessPath !== undefined) {
       await stat(target.data.accessPath).catch(() =>
         errors.push(`accessPath not found: ${target.data.accessPath}`),
