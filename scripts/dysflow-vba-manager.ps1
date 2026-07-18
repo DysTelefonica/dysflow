@@ -3124,6 +3124,17 @@ function Import-VbaModule {
             if ($documentExistsInAccess) {
                 $tmpCanonical = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_import_canonical_{0}.txt" -f [guid]::NewGuid().ToString("N"))
                 try {
+                    # Issue #957 P2 — close the form/report before SaveAsText
+                    # so a freshly-imported (and therefore "dirty" in the
+                    # current Access session) document does not surface
+                    # DISP_E_BADINDEX (ACE 3265, "La clave de busqueda no
+                    # se encontro en ningun registro") on the second
+                    # successive form_set_property apply:true call. We save
+                    # no changes (acSaveNo=1) so this is a read-side flush,
+                    # not a write. Wrapped in a try/catch because the form
+                    # is usually already closed in single-shot imports, and
+                    # closing an already-closed document throws benignly.
+                    try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch { Write-Debug "Diagnostics (pre-SaveAsText close): $_" }
                     $AccessApplication.SaveAsText($objectType, $objectName, $tmpCanonical)
                     if (Test-Path -Path $tmpCanonical) {
                         $canonicalDocumentText = [System.IO.File]::ReadAllText($tmpCanonical, [System.Text.Encoding]::GetEncoding(1252))
