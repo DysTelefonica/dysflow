@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**85 visible MCP tools · Windows / Node 20+**
+**86 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 85 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 86 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -733,6 +733,15 @@ Return the runtime contract for every tool in the consumer's dysflow installatio
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Optional tool name to filter the catalog to a single entry. Omit for the full catalog.
 * **Returns**: `{ projectId, tools: [{ name, description, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault }] }`.
+
+#### `diagnose`
+Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Replaces the 4-5 round-trip pattern (`get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Pairs with `get_capabilities` (live adapter state) and `schema` (static contract): `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.
+* **Parameters**:
+  - `projectId` (string, optional): ProjectId to verify against `.dysflow/project.json`. Mirrors `resolve_project` semantics.
+  - `accessPath` (string, optional): Explicit Access target override. Reserved for v2.16.x.
+  - `contextId` (string, optional): Reserved for a future per-context scoping extension (#966 follow-up).
+  - `verbose` (boolean, optional): Reserved for v2.16.x — currently always reports the default stale-marker threshold (5 minutes).
+* **Returns**: `{ projectConfig: { status, projectId, writeReady, diagnostics[], owningWorktree }, filesystem: { accessPath, backendPath, destinationRoot, projectRoot }, runtime: { staleMarkers, activeOps, orphans, dysflowVersion, writeExecutionPolicy } }`. Each `filesystem.X` block carries `{ path, exists, hint? }` so the consumer can detect missing-directory footguns (the `destinationRoot.hint` includes the `git rm -r` remediation).
 
 ---
 

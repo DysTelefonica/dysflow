@@ -296,6 +296,11 @@ function readAdapterVersion(): string {
   }
 }
 
+// Re-exported so `tools.ts` can build the `diagnose` snapshot from the same
+// source the `get_capabilities` snapshot consults (#965 — single source of
+// truth for `runtime.dysflowVersion`).
+export { readAdapterVersion };
+
 // ─── Tool factory ─────────────────────────────────────────────────────────────
 
 /**

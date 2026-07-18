@@ -41,6 +41,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #971 — read-only runtime contract discovery. Pure catalog: never
     // opens Access, never spawns PowerShell, never mutates state.
     "schema",
+    // #965 — read-only aggregated project health surface (projectConfig +
+    // filesystem + runtime). Replaces the 4-5 round-trip pattern AI
+    // consumers hit today. Never opens Access, never spawns PowerShell,
+    // never writes to disk.
+    "diagnose",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

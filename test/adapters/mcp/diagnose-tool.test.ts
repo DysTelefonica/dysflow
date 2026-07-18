@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,11 +8,11 @@ import {
   type DiagnoseResult,
 } from "../../../src/adapters/mcp/diagnose-tool.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
+import { successResult } from "../../../src/core/contracts/index.js";
 import {
   type AccessOperationRecord,
   createInMemoryAccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry.js";
-import { successResult } from "../../../src/core/contracts/index.js";
 
 /**
  * Issue #965 — `dysflow.diagnose(projectId?, accessPath?, contextId?, verbose?)`
@@ -52,7 +52,9 @@ class FakeDiagnosticsService {
   }
 }
 
-function makeServices(opts?: { registry?: ReturnType<typeof createInMemoryAccessOperationRegistry> }) {
+function makeServices(opts?: {
+  registry?: ReturnType<typeof createInMemoryAccessOperationRegistry>;
+}) {
   return {
     vbaService: new FakeVbaService(),
     queryService: new FakeQueryService(),
@@ -65,6 +67,11 @@ let workdir: string;
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "dysflow-diagnose-"));
+  // Plant a `.git` marker so `diagnoseProjectConfig` treats `workdir` as a
+  // Git worktree. Same trick used by `resolve-project-idempotence.test.ts`
+  // — `worktreeRoot()` walks the directory tree looking for a `.git` entry
+  // and treats it as the worktree root.
+  writeFileSync(join(workdir, ".git"), "gitdir: isolated-fixture", "utf-8");
 });
 
 afterEach(() => {
@@ -95,7 +102,11 @@ function writeProjectConfigWithExistingAccessPath(contents: {
   return { accessFile, destinationRoot };
 }
 
-function makeAccessPath(opId: string, status: AccessOperationRecord["status"], updatedAt: string): AccessOperationRecord {
+function makeAccessPath(
+  opId: string,
+  status: AccessOperationRecord["status"],
+  updatedAt: string,
+): AccessOperationRecord {
   return {
     operationId: opId,
     action: "vba",
@@ -111,9 +122,19 @@ function makeAccessPath(opId: string, status: AccessOperationRecord["status"], u
   };
 }
 
+/**
+ * The diagnostic normalizes Windows paths to forward slashes
+ * (`path.normalize` + `replaceAll("\\", "/")`). Compare both sides under the
+ * same normalization so the test does not fail on host-OS differences.
+ */
+function normalizePath(value: string | null): string {
+  if (value === null) return "";
+  return value.replaceAll("\\", "/");
+}
+
 describe("computeDiagnose — pure aggregator (#965)", () => {
-  it("returns the documented DiagnoseResult schema with all required fields", () => {
-    const result = computeDiagnose({
+  it("returns the documented DiagnoseResult schema with all required fields", async () => {
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -167,10 +188,10 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(["safe-by-default", "developer"]).toContain(result.runtime.writeExecutionPolicy);
   });
 
-  it("filesystem.destinationRoot.exists is false when the directory is missing", () => {
+  it("filesystem.destinationRoot.exists is false when the directory is missing", async () => {
     // No project.json, no destinationRoot — destinationRoot defaults to <projectRoot>/src,
     // which does NOT exist in a freshly created mkdtemp workdir.
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -184,10 +205,9 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.filesystem.destinationRoot.hint).toMatch(/git\s+rm|mkdir|create/i);
   });
 
-  it("runtime.staleMarkers counts ONLY status=running markers older than 5 minutes", () => {
+  it("runtime.staleMarkers counts ONLY status=running markers older than 5 minutes", async () => {
     // Anchor "now" so the test is deterministic.
     const nowMs = Date.parse("2026-07-18T12:00:00.000Z");
-    const fiveMinAgo = new Date(nowMs - 5 * 60 * 1000).toISOString();
     const tenMinAgo = new Date(nowMs - 10 * 60 * 1000).toISOString();
     const oneMinAgo = new Date(nowMs - 60 * 1000).toISOString();
 
@@ -198,7 +218,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     registry.create(makeAccessPath("op-failed", "failed", tenMinAgo));
     registry.create(makeAccessPath("op-completed", "completed", tenMinAgo));
 
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -213,7 +233,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.runtime.staleMarkers).toBe(1);
   });
 
-  it("runtime.staleMarkers threshold is configurable (custom 2-minute window)", () => {
+  it("runtime.staleMarkers threshold is configurable (custom 2-minute window)", async () => {
     const nowMs = Date.parse("2026-07-18T12:00:00.000Z");
     const threeMinAgo = new Date(nowMs - 3 * 60 * 1000).toISOString();
     const oneMinAgo = new Date(nowMs - 60 * 1000).toISOString();
@@ -222,7 +242,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     registry.create(makeAccessPath("op-3min-running", "running", threeMinAgo));
     registry.create(makeAccessPath("op-1min-running", "running", oneMinAgo));
 
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -237,7 +257,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.runtime.activeOps).toBe(2);
   });
 
-  it("single-call info matches the 4-tool equivalent (snapshot + projectConfig + access ops)", () => {
+  it("single-call info matches the 4-tool equivalent (snapshot + projectConfig + access ops)", async () => {
     const { accessFile, destinationRoot } = writeProjectConfigWithExistingAccessPath({
       id: "diagnose-equivalence",
       accessPath: "frontend.accdb",
@@ -250,7 +270,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     const fiveMinAgo = new Date(nowMs - 10 * 60 * 1000).toISOString();
     registry.create(makeAccessPath("op-stale", "running", fiveMinAgo));
 
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -271,13 +291,17 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.runtime.activeOps).toBeGreaterThanOrEqual(1);
 
     // filesystem.accessPath reflects the file we wrote (true existence + size > 0).
-    expect(result.filesystem.accessPath.path).toBe(accessFile);
+    // The diagnostic normalizes the path to POSIX separators (forward slash)
+    // regardless of host OS, so compare against the normalized form.
+    expect(normalizePath(result.filesystem.accessPath.path)).toBe(normalizePath(accessFile));
     expect(result.filesystem.accessPath.exists).toBe(true);
     expect(result.filesystem.accessPath.sizeBytes).toBeGreaterThan(0);
     expect(typeof result.filesystem.accessPath.lastModified).toBe("string");
 
     // filesystem.destinationRoot reflects the directory we created.
-    expect(result.filesystem.destinationRoot.path).toBe(destinationRoot);
+    expect(normalizePath(result.filesystem.destinationRoot.path)).toBe(
+      normalizePath(destinationRoot),
+    );
     expect(result.filesystem.destinationRoot.exists).toBe(true);
 
     // projectConfig block was resolved from the same workdir/cwd the resolver uses.
@@ -286,7 +310,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.projectConfig.projectId).toBe("diagnose-equivalence");
   });
 
-  it("filesystem.accessPath.exists is false when accessPath is missing", () => {
+  it("filesystem.accessPath.exists is false when accessPath is missing", async () => {
     // Project.json declares an accessPath that does NOT exist on disk.
     writeProjectConfig({
       id: "missing-access",
@@ -294,7 +318,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
       destinationRoot: "src",
     });
 
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -305,10 +329,11 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.filesystem.accessPath.exists).toBe(false);
   });
 
-  it("projectConfig diagnostics surface typed codes when project.json is malformed", () => {
+  it("projectConfig diagnostics surface typed codes when project.json is malformed", async () => {
+    mkdirSync(join(workdir, ".dysflow"), { recursive: true });
     writeFileSync(join(workdir, ".dysflow", "project.json"), "{ not valid json", "utf-8");
 
-    const result = computeDiagnose({
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -321,7 +346,7 @@ describe("computeDiagnose — pure aggregator (#965)", () => {
     expect(result.projectConfig.diagnostics.length).toBeGreaterThan(0);
     const code = result.projectConfig.diagnostics[0]?.code;
     expect(typeof code).toBe("string");
-    expect(code!.length).toBeGreaterThan(0);
+    expect(code?.length).toBeGreaterThan(0);
   });
 });
 
@@ -422,8 +447,8 @@ describe("createDysflowMcpTools — diagnose tool wiring (#965)", () => {
 });
 
 describe("DiagnoseResult — type contract smoke test (#965)", () => {
-  it("returns null owningWorktree when project config is invalid", () => {
-    const result = computeDiagnose({
+  it("returns null owningWorktree when project config is invalid", async () => {
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -431,11 +456,14 @@ describe("DiagnoseResult — type contract smoke test (#965)", () => {
       },
     });
 
-    expect(result.projectConfig.owningWorktree === null || typeof result.projectConfig.owningWorktree === "string").toBe(true);
+    expect(
+      result.projectConfig.owningWorktree === null ||
+        typeof result.projectConfig.owningWorktree === "string",
+    ).toBe(true);
   });
 
-  it("returns null destinationRoot path when no project config exists", () => {
-    const result = computeDiagnose({
+  it("returns null destinationRoot path when no project config exists", async () => {
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",
@@ -445,11 +473,13 @@ describe("DiagnoseResult — type contract smoke test (#965)", () => {
 
     // Either a path with exists:false, or null when the diagnostic fail-closed.
     const dest = result.filesystem.destinationRoot;
-    expect(dest === null || (typeof dest.path === "string" && typeof dest.exists === "boolean")).toBe(true);
+    expect(
+      dest === null || (typeof dest.path === "string" && typeof dest.exists === "boolean"),
+    ).toBe(true);
   });
 
-  it("accepts an empty cwd-less call shape", () => {
-    const result = computeDiagnose({
+  it("accepts an empty cwd-less call shape", async () => {
+    const result = await computeDiagnose({
       cwd: workdir,
       snapshot: {
         adapterVersion: "2.16.0-test",

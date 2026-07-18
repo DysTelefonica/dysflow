@@ -49,8 +49,13 @@
  * #971 adds `schema` (pure read-class runtime contract discovery —
  * surfaces the documented parameter / return / error-code /
  * cross-reference surface for every advertised MCP tool, never opens
- * Access, never spawns PowerShell, never mutates state): 84 -> 85. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 85;
+ * Access, never spawns PowerShell, never mutates state): 84 -> 85.
+ * #965 adds `diagnose` (pure read-class aggregated project health
+ * surface that replaces the 4-5 round-trip pattern AI consumers hit
+ * today; never opens Access, never spawns PowerShell, never writes to
+ * disk; same risk family as `schema` / `resolve_project` /
+ * `get_capabilities`): 85 -> 86. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 86;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;
