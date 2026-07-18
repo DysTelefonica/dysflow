@@ -203,6 +203,43 @@ describe("per-worktree project config contract", () => {
     );
     expect(diagnoseProjectConfig(root, { contextId: "request-context" }).status).toBe("valid");
   });
+
+  it("diagnoseProjectConfig returns destination-root-not-found when destinationRoot dir is missing", () => {
+    const root = worktree();
+    mkdirSync(join(root, ".dysflow"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "app", accessPath: "app.accdb", destinationRoot: "src" }),
+    );
+    const result = diagnoseProjectConfig(root, { projectId: "app" });
+    expect(result.status).toBe("destination-root-not-found");
+    expect(result.diagnostics[0]?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
+    expect(result.remediation).toContain("mkdir");
+    expect(result.diagnostics[0]?.remediation).toContain("mkdir");
+  });
+
+  it("diagnoseProjectConfig returns capabilities-disallow-write status when capabilities.allowWrites=false", () => {
+    const root = worktree();
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "app",
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+        capabilities: { allowWrites: false },
+      }),
+    );
+    const result = diagnoseProjectConfig(root, { projectId: "app" });
+    expect(result.status).toBe("capabilities-disallow-write");
+    expect(result.diagnostics[0]?.code).toBe("CAPABILITIES_DISALLOW_WRITE");
+    expect(result.diagnostics[0]?.message).toContain("allowWrites = false");
+    expect(result.remediation).toContain("dysflow doctor --cwd");
+    expect(result.diagnostics[0]?.remediation).toContain("dysflow doctor --cwd");
+  });
 });
 
 describe("sibling worktree (#873)", () => {

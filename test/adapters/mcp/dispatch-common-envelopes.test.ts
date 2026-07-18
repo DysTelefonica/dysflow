@@ -16,15 +16,56 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic";
 import {
   invalidInput,
   MCP_PROCEDURE_NOT_ALLOWED,
   MCP_WRITES_DISABLED,
   procedureNotAllowed,
+  projectConfigNotWriteReady,
   writesDisabled,
 } from "../../../src/adapters/mcp/dispatch-common";
 import { translateCoreResultToMcpContent } from "../../../src/adapters/mcp/result-translation";
 import { createDysflowError, failureResult } from "../../../src/core/contracts/index";
+
+function writeGateDiagnostic(
+  status: string,
+  code: string,
+  remediation: string,
+): ProjectConfigDiagnostic {
+  return {
+    status,
+    cwd: "C:/repo",
+    configPath: "C:/repo/.dysflow/project.json",
+    projectRoot: "C:/repo",
+    projectId: "app",
+    accessPath: "C:/repo/app.accdb",
+    backendPath: null,
+    destinationRoot: "C:/repo/src",
+    writeReady: false,
+    diagnostics: [{ code, severity: "error", message: `${code} diagnostic`, remediation }],
+    remediation,
+  } as unknown as ProjectConfigDiagnostic;
+}
+
+function expectWriteGateEnvelope(
+  status: string,
+  code: string,
+  remediation: string,
+): ReturnType<typeof projectConfigNotWriteReady> {
+  const result = projectConfigNotWriteReady(
+    "export_modules",
+    writeGateDiagnostic(status, code, remediation),
+  );
+  expect(result.error?.code).toBe(code);
+  expect(result.error?.diagnostics?.[0]?.code).toBe(code);
+  expect(result.error?.remediation).toContain(remediation);
+  expect(result.error?.diagnostics?.[0]?.remediation).toContain(remediation);
+  expect(result.error?.message).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
+  expect(result.content[0]?.text).toContain(code);
+  expect(result.content[0]?.text).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
+  return result;
+}
 
 describe("procedureNotAllowed — structured envelope (#659)", () => {
   it("exports a structured error.code = MCP_PROCEDURE_NOT_ALLOWED", () => {
@@ -259,5 +300,66 @@ describe("invalidInput — structured envelope (#659, gap 5)", () => {
   it("does NOT include allowedProcedures (the allowlist was not consulted)", () => {
     const result = invalidInput("bad field 'mode'");
     expect(result.error?.allowedProcedures).toBeUndefined();
+  });
+});
+
+describe("projectConfigNotWriteReady — distinct denial envelopes (#962)", () => {
+  it("export_modules apply:true with missing destinationRoot returns DESTINATION_ROOT_NOT_FOUND with mkdir remediation", () => {
+    expectWriteGateEnvelope(
+      "destination-root-not-found",
+      "DESTINATION_ROOT_NOT_FOUND",
+      "mkdir C:/repo/src",
+    );
+  });
+
+  it("export_modules apply:true with accessPath outside projectRoot returns OUTSIDE_PROJECT_ROOT", () => {
+    expectWriteGateEnvelope(
+      "outside-project-root",
+      "OUTSIDE_PROJECT_ROOT",
+      "dysflow doctor --cwd C:/repo",
+    );
+  });
+
+  it("export_modules apply:true with stale marker.status='running' returns WRITE_LOCKED_BY_RUNNING_OP", () => {
+    expectWriteGateEnvelope(
+      "write-locked-by-running-op",
+      "WRITE_LOCKED_BY_RUNNING_OP",
+      "access_force_cleanup_orphaned",
+    );
+  });
+
+  it("export_modules apply:true with capabilities.allowWrites=false returns CAPABILITIES_DISALLOW_WRITE", () => {
+    expectWriteGateEnvelope(
+      "capabilities-disallow-write",
+      "CAPABILITIES_DISALLOW_WRITE",
+      "dysflow doctor --cwd C:/repo",
+    );
+  });
+
+  it("export_modules apply:true with projectId mismatch returns PROJECT_ID_MISMATCH", () => {
+    expectWriteGateEnvelope("id-mismatch", "PROJECT_ID_MISMATCH", "dysflow doctor --cwd C:/repo");
+  });
+
+  it("projectConfigNotWriteReady propagates diagnostic.diagnostics[] to error.diagnostics[]", () => {
+    const diagnostic = writeGateDiagnostic(
+      "outside-project-root",
+      "OUTSIDE_PROJECT_ROOT",
+      "dysflow doctor --cwd C:/repo",
+    );
+    const result = projectConfigNotWriteReady("export_modules", diagnostic);
+    expect(result.error?.diagnostics).toEqual(diagnostic.diagnostics);
+  });
+
+  it("projectConfigNotWriteReady preserves legacy PROJECT_CONFIG_NOT_WRITE_READY substring in error.message", () => {
+    const result = projectConfigNotWriteReady(
+      "export_modules",
+      writeGateDiagnostic(
+        "outside-project-root",
+        "OUTSIDE_PROJECT_ROOT",
+        "dysflow doctor --cwd C:/repo",
+      ),
+    );
+    expect(result.error?.message).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
+    expect(result.content[0]?.text).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
   });
 });
