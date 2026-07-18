@@ -1743,12 +1743,27 @@ function Normalize-AccessDocumentOrphanCodeBehindSection {
 function Normalize-AccessDocumentTextForLoadFromText {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText,
+        # issue #958 — canonical module identity (e.g. "Form_Cliente"). When
+        # supplied, the CodeBehindForm block's Attribute VB_Name is realigned
+        # to it, mirroring what Export-VbaModule guarantees on the way out.
+        [string]$ModuleName
     )
     $withoutRootName = Remove-AccessDocumentRootNameProperty -DocumentText $DocumentText
     $withRootEnd = Normalize-AccessDocumentRootEndMarker -DocumentText $withoutRootName
     $withMarker = Normalize-AccessDocumentCodeBehindMarker -DocumentText $withRootEnd
-    return Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $withMarker
+    $withOrphanSection = Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $withMarker
+    # issue #958 — self-healing import. Apply the SAME canonicalizations the
+    # export path applies (#902/#904 AutoResize marker, #743 VB_Name), so a
+    # .form.txt produced by an older dysflow version is imported as if the
+    # current version had exported it. Without this, a pre-v2.14.0 export
+    # missing `AutoResize = NotDefault` after `Begin Form` loads into the
+    # binary as a form with zero resolvable controls.
+    $withAutoResize = Ensure-AccessFormAutoResizeMarker -DocumentText $withOrphanSection
+    if (-not [string]::IsNullOrEmpty($ModuleName)) {
+        return Ensure-CodeBehindFormVbName -Text $withAutoResize -ModuleName $ModuleName
+    }
+    return $withAutoResize
 }
 
 function Assert-AccessDocumentTextLooksLoadable {
@@ -3146,7 +3161,7 @@ function Import-VbaModule {
             } else {
                 Write-Status -Message ("WARN: '{0}' no existe en Access; se importará como documento nuevo usando el .form.txt/.report.txt local." -f $objectName) -Color DarkYellow
             }
-            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText
+            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText -ModuleName $ModuleName
             $documentKindLabel = if ($objectType -eq 3) { "Report" } else { "Form" }
             Assert-AccessDocumentTextLooksLoadable -DocumentText $importDocumentText -Kind $documentKindLabel -SourcePath $src
 

@@ -843,6 +843,127 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
         }
     }
 
+    Context "Normalize-AccessDocumentTextForLoadFromText — self-healing import (issue #958)" {
+        It "injects AutoResize = NotDefault after Begin Form for a legacy markerless form export" {
+            $input = @(
+                'Version =21'
+                'VersionRequired =20'
+                'Checksum =-1497896998'
+                'Begin Form'
+                '    RecordSelectors = NotDefault'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtCliente"'
+                '        End'
+                '    End'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Cliente"'
+                'Option Compare Database'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input
+            $lines = $result -split "`r?`n"
+            $beginIndex = [Array]::IndexOf($lines, 'Begin Form')
+
+            $lines[$beginIndex + 1] | Should -Be '    AutoResize = NotDefault' `
+                -Because "a pre-v2.14.0 export without the marker breaks the binary on LoadFromText (issue #902); import must self-heal it"
+            (@($lines | Where-Object { $_ -match '^\s*AutoResize\s*=' })).Count | Should -Be 1
+        }
+
+        It "returns an already-canonical form text byte-for-byte unchanged (idempotence)" {
+            $input = @(
+                'Version =21'
+                'VersionRequired =20'
+                'Checksum =1180213458'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    RecordSelectors = NotDefault'
+                '    Begin Section'
+                '    End'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Canonico"'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Canonico'
+
+            $result | Should -Be $input `
+                -Because "export X -> import X on the same dysflow version must be a no-op on canonical text"
+        }
+
+        It "never injects the form-only AutoResize marker into a report" {
+            $input = @(
+                'Version =21'
+                'Begin Report'
+                '    Width =10000'
+                'End'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Report_Listado'
+
+            $result | Should -Not -Match 'AutoResize' `
+                -Because "AutoResize is a Begin Form root marker; reports must pass through untouched"
+        }
+
+        It "repairs a mismatched Attribute VB_Name in CodeBehindForm when -ModuleName is supplied" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_TempSccObj3"'
+                'Option Compare Database'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Cliente'
+
+            $lines = $result -split "`r?`n"
+            $vbNameLines = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
+            $vbNameLines.Count | Should -Be 1
+            $vbNameLines[0] | Should -Be 'Attribute VB_Name = "Form_Cliente"' `
+                -Because "a stale placeholder identity from an old export must be realigned to the filename-derived module name before LoadFromText"
+        }
+
+        It "injects Attribute VB_Name into a CodeBehindForm block that lost it (legacy #646 export)" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Cliente'
+
+            $lines = $result -split "`r?`n"
+            $markerIdx = [Array]::IndexOf($lines, 'CodeBehindForm')
+            $lines[$markerIdx + 1] | Should -Be 'Attribute VB_Name = "Form_Cliente"' `
+                -Because "exports made through the pre-#743 pipeline dropped VB_Name; import must restore the canonical identity"
+        }
+
+        It "keeps the legacy no-ModuleName call shape working (backward compatibility)" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Viejo"'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input
+
+            $result | Should -Match 'Attribute VB_Name = "Form_Viejo"' `
+                -Because "without -ModuleName there is no canonical identity to enforce; VB_Name must be left alone"
+        }
+    }
+
     Context "Normalize-AccessDocumentRootEndMarker" {
         It "replaces 'End Form' with 'End'" {
             $result = Normalize-AccessDocumentRootEndMarker -DocumentText "End Form"
