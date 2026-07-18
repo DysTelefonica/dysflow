@@ -69,6 +69,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the caller
       // passes this flag. Ignored in `safe-by-default` mode.
       confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
+      // Issue #968 — opt-in acknowledgment that the accessPath override
+      // lives outside the active worktree. Honored because `export_modules`
+      // never mutates the binary; reads from a release `.accdb` are allowed
+      // when the caller has explicitly opted in. Ignored for binary writers
+      // (`import_modules`, etc.).
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
@@ -183,6 +189,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       filter: SCHEMA_PROPS.filter,
+      // Issue #968 — opt-in for external accessPath on read-only tools.
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -211,6 +219,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Glob-style name filter (e.g. 'Test_*' matches any name starting with Test_; '*Issue*' matches any name containing Issue). The single '*' wildcard is supported on either end; non-*` patterns match as substrings. Empty string matches nothing.",
       },
+      // Issue #968 — opt-in for external accessPath on read-only tools.
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -287,6 +297,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Issue #807 (Feature 3) - per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.",
       },
+      // Issue #968 — opt-in for external accessPath on read-only tools.
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

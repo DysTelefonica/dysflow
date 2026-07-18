@@ -61,6 +61,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -78,6 +79,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: false,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
       expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
@@ -95,6 +97,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "export_modules",
         projectId: "release-read",
         accessPath: foreignAccess,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
       expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
@@ -113,6 +116,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -129,6 +133,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "list_vba_modules",
         projectId: "release-read",
         accessPath: foreignAccess,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
     } finally {
@@ -146,6 +151,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -162,6 +168,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "list_objects",
         projectId: "release-read",
         accessPath: foreignAccess,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
     } finally {
@@ -179,6 +186,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -195,6 +203,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "verify_code",
         projectId: "release-read",
         accessPath: foreignAccess,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
     } finally {
@@ -212,6 +221,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: true,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
       expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
@@ -230,6 +240,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: true,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
       expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
@@ -247,8 +258,8 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "sync_binary",
         projectId: "release-read",
         accessPath: foreignAccess,
-        direction: "src-to-binary",
         allowExternalAccessPath: true,
+        mutatesBinary: true,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
       expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
@@ -266,8 +277,8 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "sync_binary",
         projectId: "release-read",
         accessPath: foreignAccess,
-        direction: "binary-to-src",
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -284,6 +295,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         operation: "export_modules",
         projectId: "release-read",
         accessPath: foreignAccess,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
     } finally {
@@ -301,6 +313,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: join(cwd, "app.accdb"),
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(result).toMatchObject({ status: "valid", writeReady: true });
     } finally {
@@ -318,6 +331,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: true,
       });
       expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
     } finally {
@@ -326,7 +340,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
     }
   });
 
-  it("flag set true with ext accessPath still requires backendPath to be inside projectRoot (backend is untouched)", () => {
+  it("flag set true with ext accessPath still requires backendPath alias to target the configured backend", () => {
     const cwd = worktree("dysflow-r968-bpkb-");
     const external = mkdtempSync(join(tmpdir(), "dysflow-r968-bpkb-"));
     const foreignAccess = join(external, "release.accdb");
@@ -348,6 +362,7 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         projectId: "release-read",
         accessPath: foreignAccess,
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
       expect(valid).toMatchObject({ status: "valid", writeReady: true });
       const stillGated = diagnoseProjectConfig(cwd, {
@@ -356,11 +371,13 @@ describe("read-only tools with external accessPath (#968 allowExternalAccessPath
         accessPath: foreignAccess,
         backendPath: join(external, "other.accdb"),
         allowExternalAccessPath: true,
+        mutatesBinary: false,
       });
-      // The backend alias is a database-touching alias and external backend
-      // is rejected unless the request alias targets the EXACT configured
-      // backend. With a non-configured external backend the gate fires
-      // normally — the flag does not extend to backendPath.
+      // The backend alias is a database-touching alias and an external
+      // backend is rejected unless the request alias targets the EXACT
+      // configured backend. With a non-configured external backend the
+      // gate fires normally — the flag is scoped to accessPath, not
+      // backendPath.
       expect(stillGated.status).not.toBe("valid");
     } finally {
       rmSync(external, { recursive: true, force: true });

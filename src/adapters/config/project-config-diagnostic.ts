@@ -53,6 +53,31 @@ export type ProjectConfigRequest = {
   destinationRoot?: string;
   projectRoot?: string;
   contextId?: string;
+  /**
+   * Issue #968 — opt-in flag that lets read-only-side tools target an
+   * `.accdb` outside the active worktree. Honored ONLY when the operation
+   * does not mutate the binary (`mutatesBinary === false`); writes to a
+   * foreign `.accdb` stay gated because that is precisely the risk
+   * `OUTSIDE_PROJECT_ROOT` exists to prevent.
+   *
+   * Defaults to `false` (omit the field) so backward compat is preserved:
+   * external accessPath targets fall through to the current
+   * `OUTSIDE_PROJECT_ROOT` verdict.
+   */
+  allowExternalAccessPath?: boolean;
+  /**
+   * Issue #968 — forwarded by the MCP dispatcher from
+   * `MCP_TOOL_ROUTES[name].mutatesBinary`. When true, `allowExternalAccessPath`
+   * is ignored regardless of the caller's intent; when false (and the flag
+   * is true), the `OUTSIDE_PROJECT_ROOT` verdict on the accessPath override
+   * is bypassed so consumers can read release binaries without copying them
+   * into the worktree.
+   *
+   * Forwarded explicitly instead of imported from
+   * `adapters/mcp/dispatch-routes` to keep the diagnostic module
+   * independent of MCP-layer routing semantics.
+   */
+  mutatesBinary?: boolean;
 };
 
 const normalize = (value: string): string => resolve(value).replaceAll("\\", "/");
@@ -323,6 +348,17 @@ export function diagnoseProjectConfig(
       "Pass exactly one of accessPath, accessDbPath, databasePath, or sourcePath.",
     );
   const requestedTarget = targetAliases[0];
+  // Issue #968 — `allowExternalAccessPath` opt-in flag. When the caller
+  // supplies `allowExternalAccessPath: true` AND the operation is
+  // explicitly declared non-binary-mutating (the dispatcher forwards
+  // `MCP_TOOL_ROUTES[name].mutatesBinary === false`), the `OUTSIDE_PROJECT_ROOT`
+  // verdict on the accessPath override is skipped — the binary is being READ,
+  // not written, so the safety guarantee the gate normally enforces (don't
+  // mutate a foreign .accdb) is moot. Binary-mutating tools (`mutatesBinary
+  // === true`) and tools that omit the field (treated as unknown-default)
+  // both ignore the flag — fail-closed by construction.
+  const externalAccessPathAllowedByFlag =
+    request.allowExternalAccessPath === true && request.mutatesBinary === false;
   if (!existsSync(accessPath))
     return failWith(
       base,
@@ -366,7 +402,12 @@ export function diagnoseProjectConfig(
     const outsideWorktree = !within(target, ownershipRoot);
     const namesConfiguredBackend =
       backendPath !== null && identity(target) === identity(backendPath);
-    if (!existsSync(target) && outsideWorktree && !namesConfiguredBackend)
+    if (
+      !existsSync(target) &&
+      outsideWorktree &&
+      !namesConfiguredBackend &&
+      !externalAccessPathAllowedByFlag
+    )
       return failWith(
         base,
         "outside-project-root",
@@ -386,14 +427,14 @@ export function diagnoseProjectConfig(
     }
     const isConfiguredBackend =
       canonicalBackend !== null && identity(canonicalTarget) === identity(canonicalBackend);
-    if (!isConfiguredBackend && outsideWorktree)
+    if (!isConfiguredBackend && outsideWorktree && !externalAccessPathAllowedByFlag)
       return failWith(
         base,
         "outside-project-root",
         `Requested target '${target}' is outside this worktree.`,
         `The accessPath override must be inside projectRoot '${projectRoot}'. Run \`dysflow doctor --cwd ${projectRoot}\` and retry with a path owned by that worktree.`,
       );
-    if (!isConfiguredBackend) {
+    if (!isConfiguredBackend && !externalAccessPathAllowedByFlag) {
       if (
         identity(worktreeRoot(dirname(canonicalTarget)) ?? "") !== identity(effectiveOwning) ||
         identity(canonicalTarget) !== identity(canonicalAccess)
