@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.15.0] - 2026-07-18
+
+- chore(changelog): fold Unreleased into the upcoming release section - fix(forms): close form/report before SaveAsText (#957) (#960) - fix(forms): self-heal legacy .form.txt metadata and fail closed on structural damage before LoadFromText (#959, closes #958)
+
+
 ## [v2.14.2] - 2026-07-17
 
 ### Fixed
