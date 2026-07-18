@@ -216,7 +216,10 @@ describe("per-worktree project config contract", () => {
     expect(result.status).toBe("destination-root-not-found");
     expect(result.diagnostics[0]?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
     expect(result.remediation).toContain("mkdir");
-    expect(result.diagnostics[0]?.remediation).toContain("mkdir");
+    // Issue #970 — diagnostics[].remediation is now a structured Remediation
+    // object. The original text survives as `description`.
+    const destRem = result.diagnostics[0]?.remediation as { description?: string } | undefined;
+    expect(destRem?.description).toContain("mkdir");
   });
 
   it("diagnoseProjectConfig returns capabilities-disallow-write status when capabilities.allowWrites=false", () => {
@@ -238,7 +241,9 @@ describe("per-worktree project config contract", () => {
     expect(result.diagnostics[0]?.code).toBe("CAPABILITIES_DISALLOW_WRITE");
     expect(result.diagnostics[0]?.message).toContain("allowWrites = false");
     expect(result.remediation).toContain("dysflow doctor --cwd");
-    expect(result.diagnostics[0]?.remediation).toContain("dysflow doctor --cwd");
+    // Issue #970 — diagnostics[].remediation is now a structured Remediation.
+    const capsRem = result.diagnostics[0]?.remediation as { description?: string } | undefined;
+    expect(capsRem?.description).toContain("dysflow doctor --cwd");
   });
 });
 

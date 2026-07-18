@@ -4,6 +4,7 @@ import type {
   OperationResult,
   VbaSyncPort,
 } from "../../core/contracts/index.js";
+import type { Remediation } from "../../core/contracts/remediation.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type {
@@ -49,7 +50,12 @@ export type McpToolError = {
     code: string;
     severity: string;
     message: string;
-    remediation?: string;
+    /**
+     * Issue #970 — structured remediation. Accepts either a legacy plain
+     * string (treated as `description` by `structureRemediation`) or the
+     * new structured shape (`{description, command, platform, ...}`).
+     */
+    remediation?: Remediation | string;
   }[];
   /**
    * Optional allowlist surfaced when the rejection is an allowlist

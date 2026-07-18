@@ -60,7 +60,16 @@ function expectWriteGateEnvelope(
   expect(result.error?.code).toBe(code);
   expect(result.error?.diagnostics?.[0]?.code).toBe(code);
   expect(result.error?.remediation).toContain(remediation);
-  expect(result.error?.diagnostics?.[0]?.remediation).toContain(remediation);
+  // Issue #970 — diagnostics[].remediation is now a structured Remediation.
+  // The legacy string is wrapped into { description: <original>, ... }, so
+  // assertions must check the description (or the structured shape).
+  const diagRem = result.error?.diagnostics?.[0]?.remediation as
+    | { description?: string; command?: string; platform?: string }
+    | undefined;
+  expect(diagRem).toBeDefined();
+  expect(typeof diagRem).toBe("object");
+  expect(typeof diagRem?.description).toBe("string");
+  expect(diagRem?.description).toContain(remediation);
   expect(result.error?.message).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
   expect(result.content[0]?.text).toContain(code);
   expect(result.content[0]?.text).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
@@ -340,14 +349,21 @@ describe("projectConfigNotWriteReady — distinct denial envelopes (#962)", () =
     expectWriteGateEnvelope("id-mismatch", "PROJECT_ID_MISMATCH", "dysflow doctor --cwd C:/repo");
   });
 
-  it("projectConfigNotWriteReady propagates diagnostic.diagnostics[] to error.diagnostics[]", () => {
+  it("projectConfigNotWriteReady propagates diagnostic.diagnostics[] to error.diagnostics[] (structured remediation)", () => {
     const diagnostic = writeGateDiagnostic(
       "outside-project-root",
       "OUTSIDE_PROJECT_ROOT",
       "dysflow doctor --cwd C:/repo",
     );
     const result = projectConfigNotWriteReady("export_modules", diagnostic);
-    expect(result.error?.diagnostics).toEqual(diagnostic.diagnostics);
+    // Issue #970 — diagnostics[].remediation is wrapped into a structured
+    // Remediation. The original text survives as `description`. Compare the
+    // structured shape on the LHS so the test survives the wrapping shim.
+    expect(result.error?.diagnostics).toHaveLength(1);
+    const entry = result.error?.diagnostics?.[0];
+    expect(entry?.code).toBe("OUTSIDE_PROJECT_ROOT");
+    const rem = entry?.remediation as { description?: string } | undefined;
+    expect(rem?.description).toBe("dysflow doctor --cwd C:/repo");
   });
 
   it("projectConfigNotWriteReady preserves legacy PROJECT_CONFIG_NOT_WRITE_READY substring in error.message", () => {

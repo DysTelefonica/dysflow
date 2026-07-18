@@ -1,4 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
+import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
@@ -147,9 +148,20 @@ function buildWriteGateErrorEnvelope(
   options: { explain?: boolean } = {},
 ): McpToolResult {
   const code = resolveWriteGateErrorCode(diagnostic);
-  const diagnostics = diagnostic.diagnostics.map((entry, index) =>
-    index === 0 && entry.code !== code ? { ...entry, code } : entry,
-  );
+  // Issue #970 — promote each diagnostic.remediation to the structured
+  // Remediation shape so consumers can branch on description/command/platform
+  // without string-parsing. A legacy string is wrapped via
+  // `structureRemediation` (description = original text); a structured
+  // Remediation is forwarded verbatim.
+  const diagnostics = diagnostic.diagnostics.map((entry, index) => {
+    const coerced: typeof entry = {
+      ...entry,
+      ...(entry.remediation === undefined
+        ? {}
+        : { remediation: structureRemediation(entry.remediation) }),
+    };
+    return index === 0 && entry.code !== code ? { ...coerced, code } : coerced;
+  });
   const specificMessage = diagnostics[0]?.message ?? "Project config is not write-ready.";
   const message = `${specificMessage} [legacy: ${PROJECT_CONFIG_NOT_WRITE_READY}]`;
   return {
