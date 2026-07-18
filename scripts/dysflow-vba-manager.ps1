@@ -1743,12 +1743,87 @@ function Normalize-AccessDocumentOrphanCodeBehindSection {
 function Normalize-AccessDocumentTextForLoadFromText {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText,
+        # issue #958 — canonical module identity (e.g. "Form_Cliente"). When
+        # supplied, the CodeBehindForm block's Attribute VB_Name is realigned
+        # to it, mirroring what Export-VbaModule guarantees on the way out.
+        [string]$ModuleName
     )
     $withoutRootName = Remove-AccessDocumentRootNameProperty -DocumentText $DocumentText
     $withRootEnd = Normalize-AccessDocumentRootEndMarker -DocumentText $withoutRootName
     $withMarker = Normalize-AccessDocumentCodeBehindMarker -DocumentText $withRootEnd
-    return Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $withMarker
+    $withOrphanSection = Normalize-AccessDocumentOrphanCodeBehindSection -DocumentText $withMarker
+    # issue #958 — self-healing import. Apply the SAME canonicalizations the
+    # export path applies (#902/#904 AutoResize marker, #743 VB_Name), so a
+    # .form.txt produced by an older dysflow version is imported as if the
+    # current version had exported it. Without this, a pre-v2.14.0 export
+    # missing `AutoResize = NotDefault` after `Begin Form` loads into the
+    # binary as a form with zero resolvable controls.
+    $withAutoResize = Ensure-AccessFormAutoResizeMarker -DocumentText $withOrphanSection
+    if (-not [string]::IsNullOrEmpty($ModuleName)) {
+        return Ensure-CodeBehindFormVbName -Text $withAutoResize -ModuleName $ModuleName
+    }
+    return $withAutoResize
+}
+
+# issue #958 — structural pre-import guard. Walks the LAYOUT section of a
+# .form.txt/.report.txt (everything before the CodeBehind* marker) tracking
+# Begin/End nesting with the same rules the orphan-section normalizer uses:
+# `Begin` / `Begin <Type>` and `<key> = Begin` (hex blob) open a level, a bare
+# `End` closes one. Returns $null when balanced, or a human-readable defect
+# description when the tree cannot be trusted. Pure: no COM, no filesystem.
+function Get-AccessDocumentLayoutNestingDefect {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DocumentText
+    )
+
+    $normalized = Normalize-Newlines -Text $DocumentText -Newline "`n"
+    $lines = @($normalized -split "`n")
+    $depth = 0
+    $started = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $trimmed = ([string]$lines[$i]).Trim()
+        # The balance contract covers ONLY the layout tree. A bare `End` is a
+        # legal VBA statement, so everything after the CodeBehind* marker is
+        # out of scope.
+        if ($trimmed -match '^CodeBehind\w*$') { break }
+        if ($trimmed -match '^Begin(?:\s+\w+)?$' -or $trimmed -match '^\w+\s*=\s*Begin$') {
+            $depth++
+            $started = $true
+            continue
+        }
+        if ($trimmed -eq "End") {
+            if ($depth -eq 0) {
+                return ("linea {0}: 'End' sin un 'Begin' abierto (End sobrante en la seccion de layout)" -f ($i + 1))
+            }
+            $depth--
+        }
+    }
+    if ($started -and $depth -gt 0) {
+        return ("faltan {0} 'End' de cierre: hay bloques Begin sin cerrar en la seccion de layout" -f $depth)
+    }
+    return $null
+}
+
+# issue #958 — derive the Access object name LoadFromText/SaveAsText expect
+# from a dysflow module name, refusing an empty result. Importing a document
+# under an empty name creates the unnameable broken-form state ("el
+# formulario que se llama ''"). Throws the FORM_NAME_RESOLUTION_FAILED code
+# issue #951 established (mapped + documented in references/error-codes.md).
+# Pure: no COM, no filesystem.
+function Resolve-AccessDocumentObjectName {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ModuleName,
+        [string]$SourcePath = "<sin resolver>"
+    )
+
+    $objectName = ($ModuleName -replace '^(Form|Report)_', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($objectName)) {
+        throw ("FORM_NAME_RESOLUTION_FAILED: no se pudo resolver el nombre del objeto Access desde el módulo '{0}' (fuente '{1}')." -f $ModuleName, $SourcePath)
+    }
+    return $objectName
 }
 
 function Assert-AccessDocumentTextLooksLoadable {
@@ -1788,6 +1863,15 @@ function Assert-AccessDocumentTextLooksLoadable {
     $beginPattern = '(?im)^\s*Begin\s+' + [regex]::Escape($Kind) + '\b'
     if ($normalized -notmatch $beginPattern) {
         throw ("{0} no contiene 'Begin {1}'. No se puede importar como {1}." -f $label, $Kind)
+    }
+
+    # issue #958 — fail-closed on a broken control tree BEFORE LoadFromText
+    # touches the binary. A half-parseable layout can load as a form with
+    # missing/zero controls, which is binary corruption from the consumer's
+    # point of view.
+    $nestingDefect = Get-AccessDocumentLayoutNestingDefect -DocumentText $normalized
+    if ($nestingDefect) {
+        throw ("FORM_SOURCE_MALFORMED: {0} tiene un arbol Begin/End desbalanceado ({1}). Repara el .form.txt/.report.txt (o re-exportalo desde un binario sano) antes de importar." -f $label, $nestingDefect)
     }
 
     $section = Split-CodeBehindSection -Text $normalized
@@ -3107,13 +3191,11 @@ function Import-VbaModule {
         # FIX: formularios/reportes usan LoadFromText — nunca VBComponents.Import
         if ($isDocumentTxt) {
             if (-not $AccessApplication) { throw "Se necesita -AccessApplication para importar documentos (.form.txt/.report.txt)" }
-            $objectName = $ModuleName -replace '^(Form|Report)_', ''
-            # issue #951 — un nombre de objeto vacío haría fallar SaveAsText/LoadFromText
-            # con un error COM críptico que no nombra el formulario. Fallar aquí con un
-            # error tipado que identifica el módulo y la fuente sin resolver.
-            if ([string]::IsNullOrWhiteSpace($objectName)) {
-                throw ("FORM_NAME_RESOLUTION_FAILED: no se pudo resolver el nombre del objeto Access desde el módulo '{0}' (fuente '{1}')." -f $ModuleName, $src)
-            }
+            # issue #951/#958 — un nombre de objeto vacío haría fallar
+            # SaveAsText/LoadFromText con un error COM críptico que no nombra
+            # el formulario. Resolve-AccessDocumentObjectName lanza el error
+            # tipado FORM_NAME_RESOLUTION_FAILED identificando módulo y fuente.
+            $objectName = Resolve-AccessDocumentObjectName -ModuleName $ModuleName -SourcePath $src
             $objectType = if ($isReportTxt -or $ModuleName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
             $script:ImportCurrentPhase = "remove-existing"
             $importDocumentText = [System.IO.File]::ReadAllText($src, [System.Text.Encoding]::UTF8)
@@ -3146,7 +3228,7 @@ function Import-VbaModule {
             } else {
                 Write-Status -Message ("WARN: '{0}' no existe en Access; se importará como documento nuevo usando el .form.txt/.report.txt local." -f $objectName) -Color DarkYellow
             }
-            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText
+            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText -ModuleName $ModuleName
             $documentKindLabel = if ($objectType -eq 3) { "Report" } else { "Form" }
             Assert-AccessDocumentTextLooksLoadable -DocumentText $importDocumentText -Kind $documentKindLabel -SourcePath $src
 
@@ -4858,6 +4940,11 @@ function Invoke-ImportAction {
                 $errorCode = "VBA_IMPORT_PHASE_FAILED"
                 if ($messageString.StartsWith("VB_NAME_MISMATCH:")) {
                     $errorCode = "VB_NAME_MISMATCH"
+                } elseif ($messageString.StartsWith("FORM_SOURCE_MALFORMED:")) {
+                    # issue #958 — structural pre-import guard rejected the
+                    # .form.txt/.report.txt before LoadFromText touched the
+                    # binary.
+                    $errorCode = "FORM_SOURCE_MALFORMED"
                 } elseif ($messageString.StartsWith("DUPLICATE_OPTION_DIRECTIVE:")) {
                     $errorCode = "DUPLICATE_OPTION_DIRECTIVE"
                 } elseif ($messageString.StartsWith("IMPORT_TRUNCATED:")) {

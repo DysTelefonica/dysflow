@@ -369,7 +369,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             # issue #752 defensive-validations helpers (pure — no COM, no Access).
             'function Get-VbNameFromSourceFile',
             'function Test-SourceFileHasDuplicateOptions',
-            'function Get-SourceFileSizeSnapshot'
+            'function Get-SourceFileSizeSnapshot',
+            # issue #958 structural pre-import guards (pure — no COM, no Access).
+            'function Get-AccessDocumentLayoutNestingDefect',
+            'function Assert-AccessDocumentTextLooksLoadable',
+            'function Resolve-AccessDocumentObjectName'
         )
 
         $ast = [System.Management.Automation.Language.Parser]::ParseInput(
@@ -413,7 +417,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             # issue #752 defensive-validations helpers (pure — no COM, no Access).
             'Get-VbNameFromSourceFile',
             'Test-SourceFileHasDuplicateOptions',
-            'Get-SourceFileSizeSnapshot'
+            'Get-SourceFileSizeSnapshot',
+            # issue #958 structural pre-import guards (pure — no COM, no Access).
+            'Get-AccessDocumentLayoutNestingDefect',
+            'Assert-AccessDocumentTextLooksLoadable',
+            'Resolve-AccessDocumentObjectName'
         )
 
         $extractedCode = ($functionDefs |
@@ -840,6 +848,222 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
             $result | Should -Match "Begin Form`n    AutoResize = NotDefault`n"
             $result | Should -Match "        AutoResize =0"
+        }
+    }
+
+    Context "Normalize-AccessDocumentTextForLoadFromText — self-healing import (issue #958)" {
+        It "injects AutoResize = NotDefault after Begin Form for a legacy markerless form export" {
+            $input = @(
+                'Version =21'
+                'VersionRequired =20'
+                'Checksum =-1497896998'
+                'Begin Form'
+                '    RecordSelectors = NotDefault'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtCliente"'
+                '        End'
+                '    End'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Cliente"'
+                'Option Compare Database'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input
+            $lines = $result -split "`r?`n"
+            $beginIndex = [Array]::IndexOf($lines, 'Begin Form')
+
+            $lines[$beginIndex + 1] | Should -Be '    AutoResize = NotDefault' `
+                -Because "a pre-v2.14.0 export without the marker breaks the binary on LoadFromText (issue #902); import must self-heal it"
+            (@($lines | Where-Object { $_ -match '^\s*AutoResize\s*=' })).Count | Should -Be 1
+        }
+
+        It "returns an already-canonical form text byte-for-byte unchanged (idempotence)" {
+            $input = @(
+                'Version =21'
+                'VersionRequired =20'
+                'Checksum =1180213458'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    RecordSelectors = NotDefault'
+                '    Begin Section'
+                '    End'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Canonico"'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Canonico'
+
+            $result | Should -Be $input `
+                -Because "export X -> import X on the same dysflow version must be a no-op on canonical text"
+        }
+
+        It "never injects the form-only AutoResize marker into a report" {
+            $input = @(
+                'Version =21'
+                'Begin Report'
+                '    Width =10000'
+                'End'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Report_Listado'
+
+            $result | Should -Not -Match 'AutoResize' `
+                -Because "AutoResize is a Begin Form root marker; reports must pass through untouched"
+        }
+
+        It "repairs a mismatched Attribute VB_Name in CodeBehindForm when -ModuleName is supplied" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_TempSccObj3"'
+                'Option Compare Database'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Cliente'
+
+            $lines = $result -split "`r?`n"
+            $vbNameLines = @($lines | Where-Object { $_ -match '^Attribute\s+VB_Name\b' })
+            $vbNameLines.Count | Should -Be 1
+            $vbNameLines[0] | Should -Be 'Attribute VB_Name = "Form_Cliente"' `
+                -Because "a stale placeholder identity from an old export must be realigned to the filename-derived module name before LoadFromText"
+        }
+
+        It "injects Attribute VB_Name into a CodeBehindForm block that lost it (legacy #646 export)" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Option Compare Database'
+                'Option Explicit'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input -ModuleName 'Form_Cliente'
+
+            $lines = $result -split "`r?`n"
+            $markerIdx = [Array]::IndexOf($lines, 'CodeBehindForm')
+            $lines[$markerIdx + 1] | Should -Be 'Attribute VB_Name = "Form_Cliente"' `
+                -Because "exports made through the pre-#743 pipeline dropped VB_Name; import must restore the canonical identity"
+        }
+
+        It "keeps the legacy no-ModuleName call shape working (backward compatibility)" {
+            $input = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_Viejo"'
+            ) -join "`r`n"
+
+            $result = Normalize-AccessDocumentTextForLoadFromText -DocumentText $input
+
+            $result | Should -Match 'Attribute VB_Name = "Form_Viejo"' `
+                -Because "without -ModuleName there is no canonical identity to enforce; VB_Name must be left alone"
+        }
+    }
+
+    Context "Assert-AccessDocumentTextLooksLoadable — structural guards (issue #958)" {
+        It "throws FORM_SOURCE_MALFORMED when a control Begin block is never closed" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtRoto"'
+                '    End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Roto.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_SOURCE_MALFORMED*' `
+                -Because "an unbalanced Begin/End control tree half-loads through LoadFromText and corrupts the binary form"
+        }
+
+        It "throws FORM_SOURCE_MALFORMED on a stray End inside the layout section" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Extra.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_SOURCE_MALFORMED*'
+        }
+
+        It "accepts a balanced layout containing a hex-blob key = Begin block" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    PrtDevMode = Begin'
+                '        0x6d69630061630000000000000000000000000000000000000000000000000000 ,'
+                '    End'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtSano"'
+                '        End'
+                '    End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Sano.form.txt' } |
+                Should -Not -Throw
+        }
+
+        It "does not count a lone VBA End statement inside CodeBehindForm as layout nesting" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_ConEnd"'
+                'Private Sub cmdSalir_Click()'
+                'End'
+                'End Sub'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_ConEnd.form.txt' } |
+                Should -Not -Throw `
+                -Because "the balance check must stop at the CodeBehindForm marker: a bare End is a legal VBA statement"
+        }
+    }
+
+    Context "Resolve-AccessDocumentObjectName (issue #958)" {
+        It "strips the Form_ prefix" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Form_Cliente' | Should -Be 'Cliente'
+        }
+
+        It "strips the Report_ prefix" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Report_Listado' | Should -Be 'Listado'
+        }
+
+        It "passes through an unprefixed name" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Cliente' | Should -Be 'Cliente'
+        }
+
+        It "throws FORM_NAME_RESOLUTION_FAILED when the derived name is empty" {
+            { Resolve-AccessDocumentObjectName -ModuleName 'Form_' -SourcePath 'forms/Form_.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_NAME_RESOLUTION_FAILED*' `
+                -Because "LoadFromText with an empty object name creates the unnameable broken-form state (#951 typed code)"
+        }
+
+        It "throws FORM_NAME_RESOLUTION_FAILED on a whitespace-only derived name" {
+            { Resolve-AccessDocumentObjectName -ModuleName 'Form_   ' } |
+                Should -Throw -ExpectedMessage 'FORM_NAME_RESOLUTION_FAILED*'
         }
     }
 
@@ -3364,6 +3588,12 @@ Describe "Import-VbaModule — FORM_NAME_RESOLUTION_FAILED guard (#951)" {
         $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Import-VbaModule' }, $true) | Select-Object -First 1
         if (-not $fnAst) { throw "Import-VbaModule not found in $($script:VbaManagerPath)" }
         Invoke-Expression $fnAst.Extent.Text
+        # issue #958 — the guard now lives in the pure helper
+        # Resolve-AccessDocumentObjectName; extract it too so the pinned
+        # contract (guard fires before any file read or COM call) still runs.
+        $helperAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Resolve-AccessDocumentObjectName' }, $true) | Select-Object -First 1
+        if (-not $helperAst) { throw "Resolve-AccessDocumentObjectName not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $helperAst.Extent.Text
     }
 
     BeforeEach {

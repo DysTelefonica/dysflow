@@ -1164,8 +1164,20 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(sourceRoot, "reports"), { recursive: true });
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    await writeFile(join(sourceRoot, "forms", "Form_Main.form.txt"), "", "utf8");
-    await writeFile(join(sourceRoot, "reports", "Report_Invoice.report.txt"), "", "utf8");
+    // #958 — the pre-import quality gate rejects empty/unparseable document
+    // sources, so these placeholder fixtures must be minimal VALID SaveAsText
+    // documents. The prune-alias contract under test is unchanged.
+    await writeFile(
+      join(sourceRoot, "forms", "Form_Main.form.txt"),
+      'Version =21\r\nBegin Form\r\n    AutoResize = NotDefault\r\nEnd\r\nCodeBehindForm\r\nAttribute VB_Name = "Form_Main"\r\n',
+      "utf8",
+    );
+    await writeFile(
+      join(sourceRoot, "reports", "Report_Invoice.report.txt"),
+      "Version =21\r\nBegin Report\r\n    Width =10000\r\nEnd\r\nCodeBehindForm\r\n" +
+        'Attribute VB_Name = "Report_Invoice"\r\n',
+      "utf8",
+    );
     await writeFile(
       join(root, ".dysflow", "project.json"),
       JSON.stringify({ id: "doc-aliases", accessPath: "front.accdb", destinationRoot: "src" }),

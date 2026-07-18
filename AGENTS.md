@@ -155,6 +155,11 @@ recoverable, and aligned with the write-gate contract.
    whole-tree resync. Mutations persist via save-only (`acCmdSaveAllModules` = RunCommand 280) — the
    runtime no longer compiles; the human compiles in Access (Debug > Compile) before re-running tests.
 4. Re-run `verify_code` and the focused `test_vba` plan before trusting the binary.
+5. Form/report sources are protected two ways on import (#958): a structural pre-import gate
+   rejects unparseable `.form.txt`/`.report.txt` (`FORM_SOURCE_MALFORMED`) before Access is
+   spawned, and repairable legacy metadata (missing `AutoResize = NotDefault`, stale/absent
+   `Attribute VB_Name`) is self-healed during import — a file exported by an older dysflow is
+   imported as if the current version had exported it. `export X` → `import X` is idempotent.
 
 ### Timeout and orphan recovery
 
