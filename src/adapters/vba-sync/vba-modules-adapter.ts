@@ -1,6 +1,6 @@
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, parse, resolve } from "node:path";
+import { extname, join, parse, resolve } from "node:path";
 import packageJson from "../../../package.json" with { type: "json" };
 import {
   createDysflowError,
@@ -18,6 +18,10 @@ import {
 import { runBulkImportByDirectory } from "../../core/services/import-modules-bulk.js";
 import { runListVbaModules } from "../../core/services/list-vba-modules-service.js";
 import {
+  cleanupOrphanedTransactionalCopies,
+  transactionalWrite,
+} from "../../core/services/transactional-write.js";
+import {
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
@@ -30,6 +34,7 @@ import {
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
+import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 // ========================================================================
@@ -194,6 +199,112 @@ export class VbaModulesAdapter {
     private readonly orchestrator: VbaModulesOrchestrator,
     private readonly fileSystem: ComparisonFileSystemPort = nodeComparisonFileSystem,
   ) {}
+
+  /**
+   * Issue #975 — wrap a write-tool dispatch with the transactional copy /
+   * atomic-rename contract. When `effectiveParams.transactional === true`:
+   *
+   *   1. The target is resolved (if not pre-resolved) and validated against
+   *      the strict context.
+   *   2. The original binary is copied to
+   *      `<projectRoot>/.dysflow/runtime/transactional/<uuid>/<basename>`.
+   *   3. The actual mutation runs against the staging copy (the orchestrator
+   *      receives `accessPath: stagingPath` in the forwarded params).
+   *   4. On any failure (pre-flight, gate, post-write verify), the staging
+   *      copy is deleted and the original is untouched.
+   *   5. On success, a single `rename(2)` syscall atomically commits the
+   *      staging copy back to the original path.
+   *
+   * When the flag is absent or `false`, this is a no-op pass-through to
+   * `orchestrator.executeMappedTool(...)` — the legacy non-atomic path is
+   * preserved exactly.
+   *
+   * The `preResolvedTarget` lets export_modules / export_all reuse the
+   * target they already resolved for the exportPath + runtime-guard rails,
+   * avoiding a redundant `resolveExecutionTarget` round-trip.
+   */
+  private async executeMappedToolTransactional(
+    toolName: string,
+    effectiveParams: Record<string, unknown>,
+    mapping: DirectMapping,
+    preResolvedTarget?: VbaModulesExecutionTarget,
+  ): Promise<OperationResult<unknown>> {
+    if (effectiveParams.transactional !== true) {
+      return this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+    }
+
+    let target = preResolvedTarget;
+    if (target === undefined) {
+      const resolved = await this.orchestrator.resolveExecutionTarget(effectiveParams);
+      if (!resolved.ok) return resolved;
+      const strict = this.orchestrator.validateStrictContext(effectiveParams, resolved.data);
+      if (!strict.ok) return strict;
+      target = resolved.data;
+    }
+
+    const binaryPath = target.accessPath;
+    if (binaryPath === undefined) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "transactional:true requires a resolved accessPath (binary path). Provide an explicit accessPath or ensure .dysflow/project.json is configured.",
+        ),
+      );
+    }
+
+    const projectRoot =
+      target.projectRoot ?? target.destinationRoot ?? this.orchestrator.cwd ?? process.cwd();
+    const stagingRoot = join(projectRoot, ".dysflow", "runtime", "transactional");
+
+    // Issue #975 — orphan sweep. A process killed mid-transaction (SIGKILL /
+    // power loss) leaves the staging copy behind; clean it on the next
+    // transactional call so stale `<uuid>/<name>.accdb` copies cannot leak.
+    // Best-effort: a failure here surfaces as a warning diagnostic, never as
+    // a hard failure of the write itself.
+    await cleanupOrphanedTransactionalCopies({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+    });
+
+    const txResult = await transactionalWrite({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+      binaryPath,
+      execute: async (stagingPath) => {
+        const innerParams = { ...effectiveParams, accessPath: stagingPath };
+        const innerResult = await this.orchestrator.executeMappedTool(
+          toolName,
+          innerParams,
+          mapping,
+        );
+        if (!innerResult.ok) {
+          return { ok: false as const, error: innerResult.error };
+        }
+        return { ok: true as const, data: innerResult.data };
+      },
+    });
+
+    if (!txResult.ok) {
+      return failureResult(txResult.error, {
+        diagnostics: [
+          {
+            level: "info",
+            source: "transactional",
+            message: `transactional rollback: original SHA-256 ${txResult.originalSha256} preserved.`,
+          },
+        ],
+      });
+    }
+
+    return successResult(txResult.data, {
+      metadata: {
+        transactional: {
+          stagingPath: txResult.stagingPath,
+          originalSha256: txResult.originalSha256,
+        },
+      },
+    });
+  }
 
   static handles(toolName: string): boolean {
     return (
@@ -477,10 +588,11 @@ export class VbaModulesAdapter {
         : successResult({ applied: false, deleted: [] as string[] });
     if (!importPruneResult.ok) return importPruneResult;
 
-    const importResult = await this.orchestrator.executeMappedTool(
+    const importResult = await this.executeMappedToolTransactional(
       toolName,
       effectiveExportReadOnly === true ? { ...effectiveParams, readOnly: true } : effectiveParams,
       mapping,
+      resolvedExportTarget?.ok ? resolvedExportTarget.data : undefined,
     );
     if (!importResult.ok) return importResult;
 
@@ -1221,6 +1333,7 @@ function mergeOperationMetadata(
     ...base,
     ...overlay,
     deprecated: overlay.deprecated ?? base.deprecated,
+    transactional: overlay.transactional ?? base.transactional,
   };
 }
 

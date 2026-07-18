@@ -209,6 +209,18 @@ export const SCHEMA_PROPS = {
     description: "Create a backup before compact/repair.",
   } as JsonSchemaProperty,
   diff: { type: "boolean", description: "Include a diff when supported." } as JsonSchemaProperty,
+  // Issue #975 — transactional mode for write-tools. When true, the binary
+  // is copied to `<projectRoot>/.dysflow/runtime/transactional/<uuid>/`,
+  // the write runs against the copy, post-write verification runs, and on
+  // success the copy is atomically renamed back to the original. On any
+  // failure the copy is deleted and the original is byte-for-byte
+  // untouched (SHA-256 evidence is surfaced on the response envelope).
+  // Default false preserves current non-atomic behavior.
+  transactional: {
+    type: "boolean",
+    description:
+      "Issue #975 — transactional mode. Copies the binary to a staging directory, runs the write against the copy, runs post-write verification (when applicable), and atomically renames the copy back to the original on success. On any failure the copy is deleted and the original is untouched. Default false.",
+  } as JsonSchemaProperty,
   prune: {
     type: "boolean",
     description:
