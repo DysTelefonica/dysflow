@@ -248,6 +248,101 @@ export const EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION =
 export type ExportOverwritesSourceRequiresConfirmationCode =
   typeof EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION;
 
+// ─── Read-tool taxonomy (#980) ─────────────────────────────────────────────────
+
+/**
+ * Issue #980 — extends the #962 write-tool taxonomy to ALL dysflow tools
+ * (read + write) with six new error codes that cover the binary/lock/
+ * password/format/internal failure paths. The codes are reachable from the
+ * dispatch boundary (helper envelopes below) AND from the runner layer
+ * (legacy `CONFIG_TARGET_NOT_FOUND` etc. are remapped to these canonical
+ * codes at the dispatch-factory seam — see `dispatch-factory.ts`).
+ *
+ *   BINARY_NOT_FOUND            accessPath does not resolve to a real file
+ *   BINARY_LOCKED               accessPath is locked by another process
+ *   BINARY_PASSWORD_INVALID     ACCESS_VBA_PASSWORD is set but incorrect
+ *   BINARY_FORMAT_UNSUPPORTED   .accdb is not a recognized Access format
+ *   INTERNAL_ERROR              unexpected internal exception (no raw stack leak)
+ *   RUNTIME_STALE               runtime state is corrupted; restart recommended
+ */
+export const BINARY_NOT_FOUND = "BINARY_NOT_FOUND" as const;
+export type BinaryNotFoundCode = typeof BINARY_NOT_FOUND;
+
+export const BINARY_LOCKED = "BINARY_LOCKED" as const;
+export type BinaryLockedCode = typeof BINARY_LOCKED;
+
+export const BINARY_PASSWORD_INVALID = "BINARY_PASSWORD_INVALID" as const;
+export type BinaryPasswordInvalidCode = typeof BINARY_PASSWORD_INVALID;
+
+export const BINARY_FORMAT_UNSUPPORTED = "BINARY_FORMAT_UNSUPPORTED" as const;
+export type BinaryFormatUnsupportedCode = typeof BINARY_FORMAT_UNSUPPORTED;
+
+export const INTERNAL_ERROR = "INTERNAL_ERROR" as const;
+export type InternalErrorCode = typeof INTERNAL_ERROR;
+
+export const RUNTIME_STALE = "RUNTIME_STALE" as const;
+export type RuntimeStaleCode = typeof RUNTIME_STALE;
+
+/**
+ * Issue #980 — legacy runner-layer codes remapped to the canonical taxonomy.
+ * The runner (`access-runner.ts`) emits these older codes; the dispatch
+ * layer (`dispatch-factory.ts`) translates them to the #980 canonical codes
+ * before the envelope reaches the MCP wire so consumers can branch on a
+ * single field name regardless of where the failure originated.
+ */
+export const LEGACY_READ_TOOL_CODE_MAP: Readonly<Record<string, string>> = {
+  CONFIG_TARGET_NOT_FOUND: BINARY_NOT_FOUND,
+  BINARY_ALREADY_LOCKED: BINARY_LOCKED,
+  ACCESS_PASSWORD_INVALID: BINARY_PASSWORD_INVALID,
+  ACCDB_FORMAT_UNSUPPORTED: BINARY_FORMAT_UNSUPPORTED,
+};
+
+/**
+ * Issue #980 — per-code field-renames applied during the legacy→canonical
+ * remap so the canonical envelope carries the canonical field names.
+ * Today this normalizes `accessDbPath` (the runner-layer name for the
+ * target access file) to `accessPath` (the #980 canonical name).
+ * Unknown fields are forwarded verbatim so the remap is additive.
+ */
+const LEGACY_READ_TOOL_DETAIL_RENAMES: Readonly<Record<string, Readonly<Record<string, string>>>> =
+  {
+    CONFIG_TARGET_NOT_FOUND: { accessDbPath: "accessPath" },
+  };
+
+/**
+ * Remap a runner-layer error code to the canonical #980 taxonomy. Returns
+ * the input verbatim when no remap exists so legacy / unmapped codes
+ * (including future ones) flow through the translator untouched. The
+ * caller is responsible for forwarding the remapped code + original
+ * details so structured introspection survives the translation.
+ */
+export function remapLegacyReadToolCode(code: string): string {
+  return LEGACY_READ_TOOL_CODE_MAP[code] ?? code;
+}
+
+/**
+ * Issue #980 — apply per-code detail renames when a legacy code was
+ * remapped to a canonical code. When the code has no rename map the
+ * input details are returned verbatim (shallow-copied). Used at the
+ * dispatch boundary so the canonical envelope carries the canonical
+ * field names (`accessPath` instead of `accessDbPath`) regardless of
+ * the runner-layer naming convention.
+ */
+export function normalizeLegacyReadToolDetails(
+  code: string,
+  details: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (details === undefined) return undefined;
+  const renames = LEGACY_READ_TOOL_DETAIL_RENAMES[code];
+  if (renames === undefined) return { ...details };
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(details)) {
+    const renamed = renames[key] ?? key;
+    out[renamed] = value;
+  }
+  return out;
+}
+
 /**
  * Issue #659 — schema-rejection envelope. Retains the legacy `MCP_INPUT_INVALID`
  * code (kept for backward compat per `gate-error-codes/spec.md` scenario 5).
@@ -257,6 +352,277 @@ export type ExportOverwritesSourceRequiresConfirmationCode =
  */
 export const MCP_INPUT_INVALID_CODE = "MCP_INPUT_INVALID" as const;
 export type McpInputInvalidCode = typeof MCP_INPUT_INVALID_CODE;
+
+// ─── Read-tool envelope helpers (#980) ─────────────────────────────────────────
+
+/**
+ * Issue #980 — `BINARY_NOT_FOUND` envelope. Emitted when the accessPath
+ * the runner tried to open does not resolve to a real file on disk. The
+ * structured `details.accessPath` lets a consumer branch on the missing
+ * path without parsing the message body.
+ *
+ * Mirrors the write-gate envelope shape: legacy `<CODE>: <message>`
+ * prefix on `content[0].text`, structured `error.code` for programmatic
+ * dispatch, uniform Round-12 (#972) envelope (errorCode alias,
+ * diagnostics array, relatedIssueNumbers).
+ */
+export function binaryNotFound(
+  args: { accessPath: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { accessPath } = args;
+  const message = `Access database not found at '${accessPath}'. Verify the configured accessPath / databasePath points to an existing .accdb file.`;
+  const remediation =
+    `Verify the file at '${accessPath}' exists on disk (path is case-sensitive on Windows). ` +
+    `If the path moved recently, update 'accessPath' in .dysflow/project.json or pass ` +
+    `'databasePath' / 'sourcePath' explicitly on the call.`;
+  return {
+    content: [{ type: "text", text: `${BINARY_NOT_FOUND}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: BINARY_NOT_FOUND,
+        message,
+        remediation,
+        details: { accessPath },
+      },
+      options,
+    ),
+  };
+}
+
+/**
+ * Issue #980 — `BINARY_LOCKED` envelope. Emitted when the accessPath is
+ * held open by another process (typical: a stray MSACCESS.EXE instance,
+ * or a non-headless interactive Access session with the same frontend).
+ * The structured `details.holderPid` lets a consumer introspect the
+ * blocking process without string-parsing.
+ *
+ * `lockType` is the kind of lock observed (e.g. `"laccdb"`, `"ldb"`,
+ * `"ldbin"`). When omitted, the envelope just omits the field rather than
+ * fabricate a value.
+ */
+export function binaryLocked(
+  args: { accessPath: string; holderPid: number; lockType?: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { accessPath, holderPid, lockType } = args;
+  const message = `Access database at '${accessPath}' is locked by another process (pid=${holderPid}${lockType ? `, lock=${lockType}` : ""}). The runtime cannot open an exclusive handle until the lock is released.`;
+  const remediation =
+    `Close the process holding the lock (pid=${holderPid}) or, if it's a stray orphan, ` +
+    `call 'access_force_cleanup_orphaned({confirmPid: ${holderPid}})' to terminate it. ` +
+    `Never kill MSACCESS.EXE by process name — verify headless ownership first.`;
+  return {
+    content: [{ type: "text", text: `${BINARY_LOCKED}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: BINARY_LOCKED,
+        message,
+        remediation,
+        details: {
+          accessPath,
+          holderPid,
+          ...(lockType !== undefined ? { lockType } : {}),
+        },
+      },
+      options,
+    ),
+  };
+}
+
+/**
+ * Issue #980 — `BINARY_PASSWORD_INVALID` envelope. Emitted when the
+ * database is password-protected and the value pointed to by the env var
+ * named in `passwordEnv` does not unlock the file. SECURITY: only the
+ * env-var NAME is echoed; the password VALUE is never reflected on the
+ * wire. Callers that need to rotate credentials must reset the env var
+ * (and restart any spawned child process if applicable).
+ *
+ * The structured `details.passwordEnv` field carries the env-var name so
+ * a consumer can grep process environment without re-deriving it from
+ * the message.
+ */
+export function binaryPasswordInvalid(
+  args: { accessPath: string; passwordEnv: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { accessPath, passwordEnv } = args;
+  const message =
+    `Access database at '${accessPath}' is password-protected and the value ` +
+    `in env var '${passwordEnv}' did not unlock it. The password value itself ` +
+    `is never reflected on the wire.`;
+  const remediation =
+    `Verify the value in env var '${passwordEnv}' matches the database password. ` +
+    `If you recently rotated the password, restart any spawned child processes so ` +
+    `they pick up the new env var. The value itself is never echoed — set the env ` +
+    `var in the shell that launches the MCP adapter.`;
+  return {
+    content: [{ type: "text", text: `${BINARY_PASSWORD_INVALID}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: BINARY_PASSWORD_INVALID,
+        message,
+        remediation,
+        details: { accessPath, passwordEnv },
+      },
+      options,
+    ),
+  };
+}
+
+/**
+ * Issue #980 — `BINARY_FORMAT_UNSUPPORTED` envelope. Emitted when the
+ * file at `accessPath` exists but does not parse as a recognized Access
+ * format. The structured `details.observedMagic` carries the leading
+ * bytes the runner read so a consumer can distinguish a corrupt
+ * truncation from a misnamed non-Access file (e.g. a renamed .docx).
+ */
+export function binaryFormatUnsupported(
+  args: { accessPath: string; observedMagic?: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { accessPath, observedMagic } = args;
+  const magicSuffix = observedMagic !== undefined ? ` (observed magic: '${observedMagic}')` : "";
+  const message =
+    `Access database at '${accessPath}' is not a recognized Access format${magicSuffix}. ` +
+    `The runtime expects .accdb (Office 2007+) or legacy .mdb.`;
+  const remediation =
+    `Verify '${accessPath}' is an Access database file (.accdb / .mdb). ` +
+    `If it is a renamed file or a corrupt copy, restore the original from backup. ` +
+    `If you recently upgraded the project from a pre-2007 format, run Access's ` +
+    `'Convert Database' tool and retry.`;
+  return {
+    content: [{ type: "text", text: `${BINARY_FORMAT_UNSUPPORTED}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: BINARY_FORMAT_UNSUPPORTED,
+        message,
+        remediation,
+        details: {
+          accessPath,
+          ...(observedMagic !== undefined ? { observedMagic } : {}),
+        },
+      },
+      options,
+    ),
+  };
+}
+
+/**
+ * Issue #980 — `INTERNAL_ERROR` envelope. Emitted when the dispatch
+ * layer catches an unexpected exception (synchronous throw OR async
+ * rejection) from a downstream service. The structured
+ * `details.errorClass` carries the JS error constructor name (e.g.
+ * `"TypeError"`) so a consumer can branch on it without parsing
+ * stacks.
+ *
+ * SECURITY: the raw `error.message` and `error.stack` are NEVER reflected
+ * on the wire — only the class name and a synthesized sanitized
+ * description. Stack frames routinely contain file system paths and
+ * other process-local context; consumers that need them should opt into
+ * debug logging at the adapter layer, not the public envelope.
+ *
+ * The helper accepts a captured `Error` (preferred) OR a pre-extracted
+ * `errorClass` + `message` pair so tests and refactor-safe call sites
+ * that already normalized the throw can pass components verbatim.
+ *
+ * NOTE: even when the caller passes `message` explicitly via the
+ * `{errorClass, message}` overload, the string is dropped — it is
+ * captured only for backward source compatibility (tests + call sites
+ * that normalized the throw) but is NEVER reflected on the wire. The
+ * wire message intentionally does NOT include the captured text so the
+ * contract (`not.toContain(<raw-message>)`) holds regardless of caller.
+ */
+export function internalError(
+  args: { errorClass: string; message?: string } | { error: Error; message?: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  let errorClass: string;
+  // Two overloads: pass an Error directly, OR pass the pre-extracted
+  // class name. The runtime union narrowing via the `in` operator is
+  // forbidden by `check-optional-presence-guards.mjs` (treats the
+  // `in` on `args` as a presence guard); use the optional fields'
+  // undefined state instead so the discriminator is value-driven.
+  const maybeError = (args as { error?: Error }).error;
+  if (maybeError !== undefined) {
+    errorClass = maybeError.name || "Error";
+    // maybeError.message / args.message are intentionally NOT forwarded
+    // to the wire envelope. Only the error class is.
+  } else {
+    errorClass = (args as { errorClass: string }).errorClass;
+  }
+  const message = `Unexpected internal error of type ${errorClass}. See server logs for the full stack (never reflected on the wire).`;
+  const remediation =
+    `This is a runtime defect, not a caller error. Inspect the MCP adapter's ` +
+    `stderr for the full stack (rotated to logs by the runtime). If the failure ` +
+    `persists across retries, open an issue with the captured errorClass, the ` +
+    `tool name, and the input payload (with secrets redacted).`;
+  return {
+    content: [{ type: "text", text: `${INTERNAL_ERROR}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: INTERNAL_ERROR,
+        message,
+        remediation,
+        details: { errorClass },
+      },
+      options,
+    ),
+  };
+}
+
+/**
+ * Issue #980 — `RUNTIME_STALE` envelope. Emitted when the runtime's
+ * in-memory state is corrupted beyond self-healing (e.g. the service
+ * cache overflows its hard cap, or a marker file holds an impossible
+ * combination of fields). The structured `details.tool` carries the
+ * tool name that detected the corruption, and `details.signal` carries
+ * a short machine-grep-able description of WHY the runtime declared
+ * itself stale.
+ *
+ * Remediation always mentions a restart as the canonical recovery
+ * action. The runtime does NOT auto-restart: a stale runtime requires
+ * human / orchestrator intervention because state corruption can be
+ * silent and a clean restart is the only way to re-derive invariants.
+ */
+export function runtimeStale(
+  args: { tool: string; signal: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { tool, signal } = args;
+  const message =
+    `Runtime state is corrupted beyond self-healing (detected by '${tool}', signal: '${signal}'). ` +
+    `The runtime cannot safely continue; a restart is required to re-derive invariants.`;
+  const remediation =
+    `Restart the MCP adapter (kill the process and relaunch). The runtime does NOT ` +
+    `auto-restart because stale state can be silent and a clean boot is the only way ` +
+    `to re-derive the invariants. If the failure recurs within minutes of restart, ` +
+    `inspect runtime state under .dysflow/runtime/ for orphan markers or oversized ` +
+    `caches and file an issue with the captured 'tool' + 'signal'.`;
+  return {
+    content: [{ type: "text", text: `${RUNTIME_STALE}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: RUNTIME_STALE,
+        message,
+        remediation,
+        details: { tool, signal },
+      },
+      options,
+    ),
+  };
+}
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
