@@ -253,6 +253,7 @@ describe("MCP tool registration over core services", () => {
     // #971 added `schema` (read-only runtime contract discovery).
     // #965 added `diagnose` (read-only aggregated project health).
     // #976 added `clean_stale_markers` (conditional-write cleanup tool).
+    // #978 added `state` (Round-12 read-only runtime operational state).
     const expectedNames = [
       "query_execute",
       "doctor",
@@ -268,6 +269,7 @@ describe("MCP tool registration over core services", () => {
       "schema",
       "diagnose",
       "clean_stale_markers",
+      "state",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);
