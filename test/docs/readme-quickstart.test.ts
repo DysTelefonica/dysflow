@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
 
@@ -22,9 +22,10 @@ describe("README AI-agent quickstart (Round-12 #974)", () => {
     const readme = readRepoFile("README.md");
     const section = extractSection(readme, "Quickstart (AI agent)");
     const commandCount = countCommandBlocks(section);
-    expect(commandCount, "Quickstart must contain at least 3 command blocks").toBeGreaterThanOrEqual(
-      3,
-    );
+    expect(
+      commandCount,
+      "Quickstart must contain at least 3 command blocks",
+    ).toBeGreaterThanOrEqual(3);
     // Each command block must come from a known read-only tool surface so an AI agent can rely on it.
     expect(section).toMatch(/resolve_project|get_capabilities|list_vba_modules|diagnose|doctor/);
   });
@@ -83,20 +84,20 @@ describe("README AI-agent quickstart (Round-12 #974)", () => {
 });
 
 function extractSection(content: string, heading: string): string {
-  const headingRegex = new RegExp(`^##\\s+${escapeRegex(heading)}.*$`, "m");
-  const start = content.search(headingRegex);
+  // Match the heading literally, anchored to start-of-line `## `.
+  const headingAnchor = `## ${heading}`;
+  const start = content.indexOf(headingAnchor);
   if (start < 0) return "";
   const afterHeading = content.indexOf("\n", start) + 1;
-  const nextHeading = content.slice(afterHeading).search(/^##\s+/m);
-  if (nextHeading < 0) return content.slice(afterHeading);
-  return content.slice(afterHeading, afterHeading + nextHeading);
+  const rest = content.slice(afterHeading);
+  const nextHeading = rest.search(/^##\s+/m);
+  if (nextHeading < 0) return rest;
+  return rest.slice(0, nextHeading);
 }
 
 function countCommandBlocks(section: string): number {
-  const fenced = section.match(/```(?:powershell|bash|sh|text)\n[\s\S]*?\n```/g);
+  // Count any fenced code block (powershell, bash, sh, text, json).
+  // Accept both LF and CRLF line endings — repo-authored files use CRLF on Windows.
+  const fenced = section.match(/```(?:powershell|bash|sh|text|json)(?:\r?\n)[\s\S]*?(?:\r?\n)```/g);
   return fenced?.length ?? 0;
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
