@@ -252,6 +252,7 @@ describe("MCP tool registration over core services", () => {
     // tool names in this sense — they are pre-existing aliases.
     // #971 added `schema` (read-only runtime contract discovery).
     // #965 added `diagnose` (read-only aggregated project health).
+    // #976 added `clean_stale_markers` (conditional-write cleanup tool).
     const expectedNames = [
       "query_execute",
       "doctor",
@@ -266,6 +267,7 @@ describe("MCP tool registration over core services", () => {
       "resolve_project",
       "schema",
       "diagnose",
+      "clean_stale_markers",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

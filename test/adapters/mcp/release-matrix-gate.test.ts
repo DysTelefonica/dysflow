@@ -96,16 +96,24 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // + `form_get_geometry` + `form_list_controls` (pure read-class
     // geometry + inventory helpers). Net: dispatch 69 -> 73,
     // visible 80 -> 84. No modern tools added.
+    // #976 — `clean_stale_markers` (Round-12 user-callable companion to
+    // the #967 auto-cleanup; dry-run default true, apply requires
+    // `confirm: true`, write-gated through MCP_WRITES_DISABLED when writes
+    // are off). Net: dispatch unchanged (it bypasses MCP_TOOL_ROUTES and
+    // is registered directly in tools.ts), modern 11 -> 12, visible
+    // 84 -> 85.
+    // #971 adds `schema` (pure read-class runtime contract discovery):
+    // modern 12 -> 13, visible 85 -> 86.
     //   Expected breakdown:
     //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
-    // + 13 modern core tools (was 14, lost 3 aliases; +1 for #971 schema;
-    // +1 for #965 diagnose)
-    //     = 86 visible (was 64 before #795).
+    // + 14 modern core tools (was 14, lost 3 aliases; +1 for #971 schema,
+    // +1 for #965 diagnose, +1 for #976 clean_stale_markers)
+    //     = 87 visible (was 64 before #795).
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(13);
-    expect(visibleCount).toBe(86);
+    expect(modernCount).toBe(14);
+    expect(visibleCount).toBe(87);
   });
 
   it("verifies split-mode coverage explicitly", () => {

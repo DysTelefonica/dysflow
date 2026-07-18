@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**86 visible MCP tools · Windows / Node 20+**
+**87 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 86 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 87 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -726,6 +726,16 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
 * **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`, where `outcome` is `resolved` or `unresolved`, and `reason` is one of: `explicit id match`, `single project config found`, `project.json not found`, `id mismatch`, `unknown`.
+
+#### `clean_stale_markers`
+Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transitions of stale `status: "running"` markers (and, when `keepFailed` is false, stale `status: "failed"` markers) to `status: "abandoned"`. User-callable companion to the #967 auto-cleanup. Safe-by-default: dry-run is the default; any apply call requires `options.confirm: true` AND writes enabled (returns `MCP_WRITES_DISABLED` when writes are off).
+* **Parameters**:
+  - `projectId` (optional): Trace identity; `accessPath` resolves from `.dysflow/project.json` when omitted.
+  - `options.olderThanMinutes` (number, optional, default `30`): Stale cutoff in minutes. Markers with `updatedAt` older than this are reap candidates.
+  - `options.dryRun` (boolean, optional, default `true`): When true (default), return the plan without writing. When false, perform real transitions (requires `confirm: true`).
+  - `options.keepFailed` (boolean, optional, default `true`): When true, markers from failed operations are NEVER transitioned regardless of age. Set false to also reap stale failed markers.
+  - `options.confirm` (boolean, optional): Required for any non-dry-run call. Literal `true` is the only acceptable value; omitting it or passing false leaves the tool in dry-run mode.
+* **Returns**: `{ ok, scanned, removed, kept, removedMarkerIds, keptMarkerIds, errors }`. `scanned` counts every `*.json` file inspected; `removed` + `kept` partition successful decisions; `errors[]` carries per-file failures that did not abort the sweep.
 
 #### `schema`
 Return the runtime contract for every tool in the consumer's dysflow installation: parameters (typed + required + description + enumValues + default), returns (JSON Schema fragment), errorCodes (with recoverable flag), crossReferences (issue numbers), requiredCapabilities, safeByDefault. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `get_capabilities` (which reports live state) and `diagnose` (which surfaces diagnostic verdicts): `schema` reports the static contract every other tool advertises.

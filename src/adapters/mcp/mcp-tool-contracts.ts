@@ -226,6 +226,17 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Round-12 (#976) — `clean_stale_markers`. Companion to #967 auto-cleanup.
+  // Conditional-write: dry-run (default) is read-class, apply requires
+  // confirm:true AND writes enabled. The handler refuses
+  // `dryRun: false` without `confirm: true` BEFORE any service call.
+  clean_stale_markers: {
+    access: "conditional-write",
+    writeGate: "conditional",
+    dryRunDefault: true,
+    summary:
+      "Conditional-write MCP contract; dry-run is read-class (default), apply requires confirm:true and is write-gated when markers would transition on disk.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {
