@@ -122,4 +122,3 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     expect(advertisedToolCount()).toBe(88);
   });
 });
-});
