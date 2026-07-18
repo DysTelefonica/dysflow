@@ -162,6 +162,7 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "backup",
       "backupFirst",
       "diff",
+      "transactional",
       "prune",
       "limit",
       "timeoutMs",
