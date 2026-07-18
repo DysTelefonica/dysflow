@@ -13,7 +13,7 @@
  * self-heals them (`Normalize-AccessDocumentTextForLoadFromText`), which is
  * how pre-v2.14.0 exports get progressively repaired.
  */
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { parseFormTxt } from "../../core/services/form-ir-service.js";
 import type { ComparisonFileSystemPort } from "../../core/services/vba-source-comparison.js";
 
@@ -21,7 +21,7 @@ import type { ComparisonFileSystemPort } from "../../core/services/vba-source-co
 export type FormSourceQualityFileSystem = Pick<ComparisonFileSystemPort, "readdir" | "readFile">;
 
 export type FormSourceDefect = {
-  /** Absolute path of the offending source file. */
+  /** Root-relative path (forward slashes) of the offending source file. */
   file: string;
   /** Parser message describing why the file cannot be trusted. */
   message: string;
@@ -138,6 +138,15 @@ export async function collectFormSourceDefects(
     }
   }
 
+  // Report root-relative paths (forward slashes): absolute Windows paths in
+  // an error envelope both leak machine layout and break the MCP error-path
+  // sanitizer's stringify→sanitize→re-parse round-trip (backslash escapes).
+  const displayPath = (file: string): string => {
+    const rel = input.root !== undefined ? relative(input.root, file) : file;
+    const chosen = rel !== "" && !rel.startsWith("..") ? rel : (file.split(/[\\/]/).pop() ?? file);
+    return chosen.replace(/\\/g, "/");
+  };
+
   const defects: FormSourceDefect[] = [];
   for (const file of candidates) {
     let text: string;
@@ -145,7 +154,7 @@ export async function collectFormSourceDefects(
       text = await fileSystem.readFile(file, "utf8");
     } catch (err) {
       defects.push({
-        file,
+        file: displayPath(file),
         message: `Cannot read file: ${err instanceof Error ? err.message : String(err)}`,
       });
       continue;
@@ -154,14 +163,17 @@ export async function collectFormSourceDefects(
       parseFormTxt(text);
     } catch (err) {
       defects.push({
-        file,
+        file: displayPath(file),
         message: err instanceof Error ? err.message : String(err),
       });
       continue;
     }
     const nestingDefect = findLayoutNestingDefect(text);
     if (nestingDefect !== null) {
-      defects.push({ file, message: `Unbalanced Begin/End layout tree: ${nestingDefect}` });
+      defects.push({
+        file: displayPath(file),
+        message: `Unbalanced Begin/End layout tree: ${nestingDefect}`,
+      });
     }
   }
   return defects;
