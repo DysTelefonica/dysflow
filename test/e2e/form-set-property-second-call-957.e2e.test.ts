@@ -145,7 +145,11 @@ interface McpToolResponse {
 }
 
 interface McpSession {
-  callTool(toolName: string, args: Record<string, unknown>, timeoutMs?: number): Promise<McpToolResponse>;
+  callTool(
+    toolName: string,
+    args: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<McpToolResponse>;
   close(): Promise<void>;
 }
 
@@ -165,7 +169,10 @@ async function openMcpSession(): Promise<McpSession> {
   });
 
   // JSON-RPC message queue, one Promise per request id, FIFO dispatch.
-  const pending = new Map<number, { resolve: (r: McpToolResponse) => void; reject: (e: Error) => void }>();
+  const pending = new Map<
+    number,
+    { resolve: (r: McpToolResponse) => void; reject: (e: Error) => void }
+  >();
   let nextId = 1;
   let buf = "";
   let closed = false;
@@ -397,10 +404,7 @@ describe.skipIf(!canRunE2e)(
         90_000,
       );
       expect(importResult.timedOut, `import timed out: ${importResult.text}`).toBe(false);
-      expect(
-        importResult.isError,
-        `pre-import must succeed: ${importResult.text}`,
-      ).toBe(false);
+      expect(importResult.isError, `pre-import must succeed: ${importResult.text}`).toBe(false);
 
       // --- First mutation: Caption on ComandoBusquedaSimple -----------------
       // Pre-fix: succeeds (well-trodden path, no dirty state yet).
@@ -418,10 +422,7 @@ describe.skipIf(!canRunE2e)(
       );
       expect(first.timedOut, `first call timed out: ${first.text}`).toBe(false);
       const firstEnv = parseEnvelope(first.text);
-      expect(
-        firstEnv.ok,
-        `first call should succeed, got: ${first.text}`,
-      ).toBe(true);
+      expect(firstEnv.ok, `first call should succeed, got: ${first.text}`).toBe(true);
       expect(firstEnv.importGate, `first call importGate: ${first.text}`).toBe("passed");
 
       // --- Second mutation: Caption on ComandoBusquedaCompleta -------------
