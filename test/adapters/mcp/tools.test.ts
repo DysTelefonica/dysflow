@@ -251,6 +251,9 @@ describe("MCP tool registration over core services", () => {
     // in DYSFLOW_MCP_TOOL_NAMES as VBA_SYNC_TOOL_NAMES) are NOT modern
     // tool names in this sense — they are pre-existing aliases.
     // #971 added `schema` (read-only runtime contract discovery).
+    // #976 added `clean_stale_markers` (Round-12 user-callable companion
+    // to the #967 auto-cleanup).
+    // #978 added `state` (Round-12 read-only runtime operational state).
     const expectedNames = [
       "query_execute",
       "doctor",
@@ -265,6 +268,7 @@ describe("MCP tool registration over core services", () => {
       "resolve_project",
       "schema",
       "clean_stale_markers",
+      "state",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

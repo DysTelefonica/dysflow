@@ -104,15 +104,17 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // 84 -> 85.
     // #971 adds `schema` (pure read-class runtime contract discovery):
     // modern 12 -> 13, visible 85 -> 86.
+    // #978 adds `state` (Round-12 read-only runtime operational state):
+    // modern 13 -> 14, visible 86 -> 87.
     //   Expected breakdown:
     //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
-    //     + 13 modern core tools (was 14, lost 3 aliases; +1 for #971 schema, +1 for #976)
-    //     = 86 visible (was 64 before #795).
+    //     + 14 modern core tools (was 14, lost 3 aliases; +1 for #971 schema, +1 for #976, +1 for #978)
+    //     = 87 visible (was 64 before #795).
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(13);
-    expect(visibleCount).toBe(86);
+    expect(modernCount).toBe(14);
+    expect(visibleCount).toBe(87);
   });
 
   it("verifies split-mode coverage explicitly", () => {

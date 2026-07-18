@@ -8,6 +8,7 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
+import { resolveAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import {
@@ -31,6 +32,7 @@ import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createSchemaTool } from "./schema-tool.js";
+import { createStateTool } from "./state-tool.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -493,6 +495,11 @@ export const MODERN_TOOL_NAMES = [
   // markers under `.dysflow/runtime/markers/`. Safe-by-default (dryRun:true);
   // apply requires `confirm: true`. Pairs with the #967 auto-cleanup.
   "clean_stale_markers",
+  // Round-12 (#978) — `state` runtime operational state. Read-only
+  // snapshot that surfaces `{ operations, markers, locks, counters }`
+  // for monitoring and post-mortem. Pairs with `diagnose` (current
+  // health), `logs` (event timeline), and `resolve_project` (config).
+  "state",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -1147,6 +1154,16 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // state. Pairs with get_capabilities (live state) and resolve_project
     // (project resolution).
     createSchemaTool(),
+    // Issue #978 — runtime operational state. Read-only tool that
+    // surfaces `{ operations, markers, locks, counters }` aggregated
+    // over the access operation registry + `.dysflow/runtime/markers/`.
+    // Never opens Access, never spawns PowerShell, never mutates state.
+    // Pairs with `diagnose` (health), `logs` (event timeline),
+    // `resolve_project` (config).
+    createStateTool({
+      cwd,
+      registry: resolveAccessOperationRegistry(services.operationRegistry),
+    }),
   ];
 
   const registered = registerMcpTools(

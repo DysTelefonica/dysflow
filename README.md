@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**86 visible MCP tools · Windows / Node 20+**
+**87 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 86 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 87 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -743,6 +743,12 @@ Return the runtime contract for every tool in the consumer's dysflow installatio
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Optional tool name to filter the catalog to a single entry. Omit for the full catalog.
 * **Returns**: `{ projectId, tools: [{ name, description, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault }] }`.
+
+#### `state`
+Return the runtime operational state of a dysflow project as `{ operations, markers, locks, counters }`. `operations` lists every persisted record from the access operation registry (cross-ref `list_access_operations`) normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`. `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock. `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices over the registry's persisted records. `locks` is reserved for a future lock-registry split (#967 follow-up); today it is an empty array. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `resolve_project` (config), `diagnose` (current health), and `logs` (event timeline): `state` is the structured complement that answers "what is happening right now?".
+* **Parameters**:
+  - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current snapshot is global.
+* **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
 
 ---
 

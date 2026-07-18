@@ -223,6 +223,16 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     summary:
       "Conditional-write MCP contract; dry-run is read-class (default), apply requires confirm:true and is write-gated when markers would transition on disk.",
   },
+  // Round-12 (#978) — `state` runtime operational state. Read-only:
+  // aggregates the access operation registry + `.dysflow/runtime/markers/`
+  // into `{ operations, markers, locks, counters }`. Never opens Access,
+  // never spawns PowerShell, never mutates state. Pairs with `diagnose`
+  // (current health), `logs` (event timeline), `resolve_project` (config).
+  state: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {

@@ -59,6 +59,10 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // runs the same sweep before every operation start, so the risk tier
   // is the same: a routine but explicit filesystem write.
   clean_stale_markers: "routine-dev-write",
+  // Round-12 (#978) — `state` is a pure read-class snapshot. Never opens
+  // Access, never spawns PowerShell, never mutates state. Same risk
+  // family as `schema` / `diagnose` / `logs` / `resolve_project`.
+  state: "read-only",
 };
 
 /**

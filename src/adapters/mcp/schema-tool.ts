@@ -203,6 +203,7 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   lint_module: ["#704", "#789"],
   resolve_project: ["#963", "#962"],
   schema: ["#971"],
+  state: ["#978"],
   list_access_operations: ["#777"],
   cleanup_access_operation: ["#659", "#777"],
   run_vba: ["#621", "#659"],
