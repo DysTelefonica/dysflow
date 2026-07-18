@@ -1148,16 +1148,25 @@ describe("MCP tool registration over core services", () => {
       },
     );
 
-    expect(translateCoreResultToMcpContent(result)).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "RUNNER_FAILED: PowerShell runner failed for [PATH] and [PATH]: password=[REDACTED]",
-        },
-      ],
-      isError: true,
-      ok: false,
-    });
+    // #972 — uniform ErrorEnvelope. The failure surfaces the structured
+    // `error` block (with uniform `errorCode` / `errorMessage` /
+    // `relatedIssueNumbers` aliases) even when no `remediation` is
+    // supplied, so consumers get a single uniform shape across every
+    // write-tool.
+    const translated = translateCoreResultToMcpContent(result);
+    expect(translated.content).toEqual([
+      {
+        type: "text",
+        text: "RUNNER_FAILED: PowerShell runner failed for [PATH] and [PATH]: password=[REDACTED]",
+      },
+    ]);
+    expect(translated.isError).toBe(true);
+    expect(translated.ok).toBe(false);
+    expect(translated.error?.code).toBe("RUNNER_FAILED");
+    expect(translated.error?.errorCode).toBe("RUNNER_FAILED");
+    expect(translated.error?.relatedIssueNumbers).toEqual(["#972"]);
+    expect(translated.error?.message).not.toContain("Jane Doe");
+    expect(translated.error?.message).not.toContain("powershell.stderr");
   });
 
   it("routes doctor runner timeouts to safe MCP tool error content", async () => {
@@ -1176,13 +1185,22 @@ describe("MCP tool registration over core services", () => {
       },
     });
 
-    await expect(
-      tools.find((tool) => tool.name === "doctor")?.handler({ projectId: "dysflow" }),
-    ).resolves.toEqual({
-      content: [{ type: "text", text: "RUNNER_TIMEOUT: Timed out opening [PATH]" }],
-      isError: true,
-      ok: false,
-    });
+    // #972 — uniform ErrorEnvelope: every failure carries the structured
+    // `error` block alongside the legacy `content[0].text` body. The
+    // caller can branch on `error.code` (or its alias `errorCode`)
+    // without parsing the text body, so we test the shape directly
+    // rather than `toEqual` to keep the test refactor-safe as new
+    // uniform fields are added.
+    const result = await tools
+      .find((tool) => tool.name === "doctor")
+      ?.handler({
+        projectId: "dysflow",
+      });
+    expect(result?.content[0]?.text).toBe("RUNNER_TIMEOUT: Timed out opening [PATH]");
+    expect(result?.isError).toBe(true);
+    expect(result?.ok).toBe(false);
+    expect(result?.error?.errorCode).toBe("RUNNER_TIMEOUT");
+    expect(result?.error?.relatedIssueNumbers).toEqual(["#972"]);
     expect(diagnostics.requests).toEqual([{ projectId: "dysflow" }]);
   });
 
@@ -1202,13 +1220,19 @@ describe("MCP tool registration over core services", () => {
       },
     });
 
-    await expect(
-      tools.find((tool) => tool.name === "list_tables")?.handler({ projectId: "dysflow" }),
-    ).resolves.toEqual({
-      content: [{ type: "text", text: "RUNNER_FAILED: PowerShell failed for [PATH]" }],
-      isError: true,
-      ok: false,
-    });
+    // #972 — uniform ErrorEnvelope: see comment in doctor timeout test
+    // above. Use property assertions so future uniform-envelope additions
+    // don't break refactor-safety.
+    const result = await tools
+      .find((tool) => tool.name === "list_tables")
+      ?.handler({
+        projectId: "dysflow",
+      });
+    expect(result?.content[0]?.text).toBe("RUNNER_FAILED: PowerShell failed for [PATH]");
+    expect(result?.isError).toBe(true);
+    expect(result?.ok).toBe(false);
+    expect(result?.error?.errorCode).toBe("RUNNER_FAILED");
+    expect(result?.error?.relatedIssueNumbers).toEqual(["#972"]);
     expect(query.requests).toEqual([
       expect.objectContaining({ action: "list_tables", mode: "read" }),
     ]);
