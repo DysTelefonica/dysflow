@@ -98,13 +98,20 @@ describe("MCP/core architecture boundary", () => {
       writes: true,
     });
 
-    await expect(
-      tools.find((tool) => tool.name === "export_all")?.handler({ projectRoot: "C:/project" }),
-    ).resolves.toEqual({
-      content: [{ type: "text", text: "TOOL_NOT_IMPLEMENTED: not implemented" }],
-      isError: true,
-      ok: false,
-    });
+    // #972 — uniform ErrorEnvelope: every failure now carries the
+    // structured `error` block (uniform `errorCode` / `errorMessage` /
+    // `relatedIssueNumbers`). Use property assertions instead of
+    // `toEqual` so future additive envelope fields stay refactor-safe.
+    const result = await tools
+      .find((tool) => tool.name === "export_all")
+      ?.handler({
+        projectRoot: "C:/project",
+      });
+    expect(result?.content[0]?.text).toBe("TOOL_NOT_IMPLEMENTED: not implemented");
+    expect(result?.isError).toBe(true);
+    expect(result?.ok).toBe(false);
+    expect(result?.error?.errorCode).toBe("TOOL_NOT_IMPLEMENTED");
+    expect(result?.error?.relatedIssueNumbers).toEqual(["#972"]);
 
     expect(vbaSyncRequests).toEqual([
       // Issue #785 (v2.1.1) — the dispatch seam injects the policy-driven

@@ -21,6 +21,8 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
+import type { ExplainObject } from "./explain-builder.js";
+import { relatedIssueNumbersForCode } from "./explain-builder.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
 
@@ -89,6 +91,41 @@ export type McpToolError = {
    * without parsing the legacy text body.
    */
   toolCommitFlag?: "apply" | "dryRun" | "diff" | "none";
+  /**
+   * Round-12 (#972) — uniform ErrorEnvelope. Alias of `code` so consumers
+   * can branch on a single field name regardless of code origin. When
+   * populated, `errorCode === code` (set together by every envelope
+   * builder). Omitted only when the error block is omitted entirely
+   * (success envelopes).
+   */
+  errorCode?: string;
+  /**
+   * Round-12 (#972) — alias of `message` for the same reason as
+   * {@link McpToolError.errorCode}. Both keys carry the identical string;
+   * the alias exists for consumers that prefer the uniform-envelope
+   * field names.
+   */
+  errorMessage?: string;
+  /**
+   * Round-12 (#972) — issue numbers related to this error code, sourced
+   * from the canonical {@link RELATED_ISSUE_NUMBERS} table in
+   * `explain-builder.ts`. Consumers can grep these to learn the PR that
+   * introduced the code, surfaced remediation guidance, and any
+   * regression tests the runtime ships.
+   *
+   * Always populated for error envelopes from canonical codes
+   * (#962, #659, #757, #785, #941, #972). Falls back to `["#972"]` for
+   * codes without a registered entry.
+   */
+  relatedIssueNumbers?: readonly string[];
+  /**
+   * Round-12 (#972) — explain-mode attachment. Populated only when the
+   * caller passed `explain: true` on the original tool call. Carries the
+   * decision tree (≥3 steps) and a human-readable summary, sourced from
+   * `explain-builder.ts`. Consumers can render this directly in a UI or
+   * skip it for log-mode callers.
+   */
+  explain?: ExplainObject;
 };
 
 export type McpToolResult = {
@@ -200,30 +237,48 @@ export function translateCoreResultToMcpContent<TData>(
   secrets?: readonly string[],
 ): McpToolResult {
   if (!result.ok) {
+    const sanitizedMessage = sanitizeMcpErrorMessage(result.error.message, secrets);
+    const errorCode = result.error.code;
+    const relatedIssueNumbers = relatedIssueNumbersForCode(errorCode);
+    // Round-12 (#972) — uniform diagnostics array. The core envelope
+    // (DysflowError) does not carry per-diagnostic entries (it has
+    // `details` instead), so synthesize one entry from the canonical
+    // (code, message, remediation) tuple.
+    const synthesizedDiagnostics = [
+      {
+        code: errorCode,
+        severity: "error" as const,
+        message: sanitizedMessage,
+        ...(typeof result.error.remediation === "string"
+          ? { remediation: result.error.remediation }
+          : {}),
+      },
+    ];
     return {
       content: [
         {
           type: "text",
-          text: `${result.error.code}: ${sanitizeMcpErrorMessage(result.error.message, secrets)}`,
+          text: `${errorCode}: ${sanitizedMessage}`,
         },
       ],
       isError: true,
       ok: false,
-      ...(result.error.remediation
-        ? {
-            error: {
-              code: result.error.code,
-              message: sanitizeMcpErrorMessage(result.error.message, secrets),
-              remediation: result.error.remediation,
-              ...(result.error.details
-                ? { details: sanitizeMcpErrorDetails(result.error.details, secrets) }
-                : {}),
-              ...(result.error.allowedProcedures
-                ? { allowedProcedures: result.error.allowedProcedures }
-                : {}),
-            },
-          }
-        : {}),
+      error: {
+        code: errorCode,
+        // Round-12 (#972) — uniform envelope aliases.
+        errorCode,
+        message: sanitizedMessage,
+        errorMessage: sanitizedMessage,
+        diagnostics: synthesizedDiagnostics,
+        relatedIssueNumbers,
+        ...(result.error.remediation ? { remediation: result.error.remediation } : {}),
+        ...(result.error.details
+          ? { details: sanitizeMcpErrorDetails(result.error.details, secrets) }
+          : {}),
+        ...(result.error.allowedProcedures
+          ? { allowedProcedures: result.error.allowedProcedures }
+          : {}),
+      },
     };
   }
 

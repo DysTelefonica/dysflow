@@ -4,12 +4,80 @@ import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-r
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { validateInput } from "../../shared/validation/validator.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
+  type McpToolError,
   type McpToolResult,
   type McpWriteAccessResolver,
   translateCoreResultToMcpContent,
 } from "./result-translation.js";
 import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
+
+/**
+ * Round-12 (#972) — uniform ErrorEnvelope. `explain`-mode-aware helper
+ * that every gate envelope builder funnels through. Mutates a shallow
+ * copy so the input envelope stays untouched (callers may extend it
+ * further).
+ *
+ * Adds:
+ *   - `errorCode`        — alias of `code`
+ *   - `errorMessage`     — alias of `message`
+ *   - `relatedIssueNumbers` — from the canonical lookup table
+ *   - `explain?`         — when caller passed `explain: true`
+ */
+function applyUniformEnvelope(
+  error: McpToolError,
+  options: { explain?: boolean } = {},
+): McpToolError {
+  const out: McpToolError = {
+    ...error,
+    errorCode: error.code,
+    errorMessage: error.message,
+    diagnostics: ensureDiagnostics(error),
+    relatedIssueNumbers: relatedIssueNumbersForCode(error.code),
+  };
+  if (options.explain === true) {
+    out.explain = buildExplainObject({
+      code: error.code,
+      message: error.message,
+      ...(typeof error.remediation === "string" ? { remediation: error.remediation } : {}),
+      ...(error.details !== undefined ? { details: error.details } : {}),
+    });
+  }
+  return out;
+}
+
+/**
+ * Round-12 (#972) — uniform `diagnostics` array. Every error envelope
+ * MUST carry this field (possibly empty). When the source error already
+ * supplies a `diagnostics` array, that wins; otherwise synthesize one
+ * entry from the canonical `code` + `message` + `remediation`.
+ */
+function ensureDiagnostics(error: McpToolError): ReadonlyArray<{
+  code: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+  remediation?: string;
+}> {
+  const existing = error.diagnostics;
+  if (existing && existing.length > 0) {
+    return existing.map((entry) => ({
+      code: entry.code,
+      severity:
+        entry.severity === "warning" || entry.severity === "info" ? entry.severity : "error",
+      message: entry.message,
+      ...(typeof entry.remediation === "string" ? { remediation: entry.remediation } : {}),
+    }));
+  }
+  return [
+    {
+      code: error.code,
+      severity: "error" as const,
+      message: error.message,
+      ...(typeof error.remediation === "string" ? { remediation: error.remediation } : {}),
+    },
+  ];
+}
 
 // ─── Gate error codes (#659) ───────────────────────────────────────────────────
 
@@ -76,6 +144,7 @@ function resolveWriteGateErrorCode(diagnostic: ProjectConfigDiagnostic): string 
 function buildWriteGateErrorEnvelope(
   toolName: string,
   diagnostic: ProjectConfigDiagnostic,
+  options: { explain?: boolean } = {},
 ): McpToolResult {
   const code = resolveWriteGateErrorCode(diagnostic);
   const diagnostics = diagnostic.diagnostics.map((entry, index) =>
@@ -87,25 +156,35 @@ function buildWriteGateErrorEnvelope(
     content: [{ type: "text", text: `${code}: ${message}` }],
     isError: true,
     ok: false,
-    error: {
-      code,
-      message,
-      diagnostics,
-      ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
-      details: {
-        operation: toolName,
-        status: diagnostic.status,
-        remediation: diagnostic.remediation,
+    error: applyUniformEnvelope(
+      {
+        code,
+        message,
+        diagnostics,
+        ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
+        details: {
+          operation: toolName,
+          status: diagnostic.status,
+          ...(diagnostic.configPath !== undefined ? { configPath: diagnostic.configPath } : {}),
+          ...(diagnostic.destinationRoot !== null
+            ? { destinationRoot: diagnostic.destinationRoot }
+            : {}),
+          ...(diagnostic.accessPath !== null ? { accessPath: diagnostic.accessPath } : {}),
+          remediation: diagnostic.remediation,
+          projectId: diagnostic.projectId,
+        },
       },
-    },
+      options,
+    ),
   };
 }
 
 export function projectConfigNotWriteReady(
   toolName: string,
   diagnostic: ProjectConfigDiagnostic,
+  options: { explain?: boolean } = {},
 ): McpToolResult {
-  return buildWriteGateErrorEnvelope(toolName, diagnostic);
+  return buildWriteGateErrorEnvelope(toolName, diagnostic, options);
 }
 
 export const MCP_WRITES_DISABLED = "MCP_WRITES_DISABLED" as const;
@@ -168,7 +247,10 @@ export type McpInputInvalidCode = typeof MCP_INPUT_INVALID_CODE;
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
-export function writesDisabled(toolName?: string): McpToolResult {
+export function writesDisabled(
+  toolName?: string,
+  options: { explain?: boolean } = {},
+): McpToolResult {
   const suffix = toolName ? ` (attempted: ${toolName})` : "";
   const message = `Write tools are disabled for this MCP adapter${suffix}. Enable writes by setting "allowWrites": true in .dysflow/project.json (per-repo, recommended) or by launching the server with \`dysflow mcp --enable-writes\` (process-wide).`;
   const remediation = `Set "allowWrites": true in .dysflow/project.json, or launch the server with \`dysflow mcp --enable-writes\` (process-wide).`;
@@ -176,11 +258,15 @@ export function writesDisabled(toolName?: string): McpToolResult {
     content: [{ type: "text", text: `MCP_WRITES_DISABLED: ${message}` }],
     isError: true,
     ok: false,
-    error: {
-      code: MCP_WRITES_DISABLED,
-      message,
-      remediation,
-    },
+    error: applyUniformEnvelope(
+      {
+        code: MCP_WRITES_DISABLED,
+        message,
+        remediation,
+        ...(toolName !== undefined ? { details: { toolName } } : {}),
+      },
+      options,
+    ),
   };
 }
 
@@ -201,6 +287,7 @@ export function invalidInput(
     /** Tool name — used to look up the tool's commit-flag metadata. */
     toolName?: string;
   },
+  options: { explain?: boolean } = {},
 ): McpToolResult {
   const error: McpToolResult["error"] = {
     code: MCP_INPUT_INVALID_CODE,
@@ -261,7 +348,7 @@ export function invalidInput(
     content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
     isError: true,
     ok: false,
-    error,
+    error: applyUniformEnvelope(error, options),
   };
 }
 
@@ -280,6 +367,7 @@ export function invalidInput(
 export function procedureNotAllowed(
   procedureName: string,
   allowedProcedures: readonly string[],
+  options: { explain?: boolean } = {},
 ): McpToolResult {
   const allowedJson = JSON.stringify([...allowedProcedures]);
   const remediation =
@@ -293,12 +381,16 @@ export function procedureNotAllowed(
     content: [{ type: "text", text: `MCP_PROCEDURE_NOT_ALLOWED: ${message}` }],
     isError: true,
     ok: false,
-    error: {
-      code: MCP_PROCEDURE_NOT_ALLOWED,
-      message,
-      allowedProcedures: [...allowedProcedures],
-      remediation,
-    },
+    error: applyUniformEnvelope(
+      {
+        code: MCP_PROCEDURE_NOT_ALLOWED,
+        message,
+        allowedProcedures: [...allowedProcedures],
+        remediation,
+        details: { procedure: procedureName },
+      },
+      options,
+    ),
   };
 }
 
@@ -312,7 +404,10 @@ export function procedureNotAllowed(
  * body and the structured `error` block. No `allowedProcedures` field is
  * surfaced because there is no allowlist to introspect.
  */
-export function allowlistNotConfigured(procedureName: string): McpToolResult {
+export function allowlistNotConfigured(
+  procedureName: string,
+  options: { explain?: boolean } = {},
+): McpToolResult {
   const remediation =
     `Declare a non-empty 'allowedProcedures' allowlist in .dysflow/project.json ` +
     `(it is re-read per call — no server restart is needed), or pass dryRun:true ` +
@@ -324,11 +419,15 @@ export function allowlistNotConfigured(procedureName: string): McpToolResult {
     content: [{ type: "text", text: `${MCP_ALLOWLIST_NOT_CONFIGURED}: ${message}` }],
     isError: true,
     ok: false,
-    error: {
-      code: MCP_ALLOWLIST_NOT_CONFIGURED,
-      message,
-      remediation,
-    },
+    error: applyUniformEnvelope(
+      {
+        code: MCP_ALLOWLIST_NOT_CONFIGURED,
+        message,
+        remediation,
+        details: { procedure: procedureName },
+      },
+      options,
+    ),
   };
 }
 
@@ -346,11 +445,14 @@ export function allowlistNotConfigured(procedureName: string): McpToolResult {
  * `error.sourceRoot` for diagnostic introspection, legacy
  * `content[0].text` regex prefix for legacy consumers.
  */
-export function exportSourceGuardRefused(args: {
-  toolName: string;
-  destination: string;
-  sourceRoot: string;
-}): McpToolResult {
+export function exportSourceGuardRefused(
+  args: {
+    toolName: string;
+    destination: string;
+    sourceRoot: string;
+  },
+  options: { explain?: boolean } = {},
+): McpToolResult {
   const { toolName, destination, sourceRoot } = args;
   const remediation =
     `Pass confirmOverwriteSource: true to confirm the overwrite, or point ` +
@@ -367,13 +469,17 @@ export function exportSourceGuardRefused(args: {
     ],
     isError: true,
     ok: false,
-    error: {
-      code: EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
-      message,
-      destination,
-      sourceRoot,
-      remediation,
-    },
+    error: applyUniformEnvelope(
+      {
+        code: EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
+        message,
+        destination,
+        sourceRoot,
+        remediation,
+        details: { toolName, destination, sourceRoot },
+      },
+      options,
+    ),
   };
 }
 

@@ -159,17 +159,14 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
       ),
       { explain: true },
     );
-    const decisionTree = (
-      result.error?.explain as { decisionTree: Array<Record<string, unknown>> }
-    )?.decisionTree;
+    const decisionTree = result.error?.explain?.decisionTree;
     expect(decisionTree).toBeDefined();
-    expect(decisionTree.length).toBeGreaterThanOrEqual(3);
+    expect(decisionTree?.length).toBeGreaterThanOrEqual(3);
 
-    const failedStep = decisionTree.find((step) => step.result === "FAIL");
-    const hypothesisStep = decisionTree.find((step) => step.result === "LIKELY");
-    const remediationStep = decisionTree.find(
-      (step) =>
-        typeof step.remediation === "string" && (step.remediation as string).length > 0,
+    const failedStep = decisionTree?.find((step) => step.result === "FAIL");
+    const hypothesisStep = decisionTree?.find((step) => step.result === "LIKELY");
+    const remediationStep = decisionTree?.find(
+      (step) => typeof step.remediation === "string" && (step.remediation as string).length > 0,
     );
     expect(failedStep).toBeDefined();
     expect(hypothesisStep).toBeDefined();
@@ -180,11 +177,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
   it("relatedIssueNumbers is populated from the diagnostic code (#962 mapping)", () => {
     const destMissing = projectConfigNotWriteReady(
       "export_modules",
-      writeGateDiagnostic(
-        "destination-root-not-found",
-        "DESTINATION_ROOT_NOT_FOUND",
-        "mkdir",
-      ),
+      writeGateDiagnostic("destination-root-not-found", "DESTINATION_ROOT_NOT_FOUND", "mkdir"),
     );
     const capsLocked = projectConfigNotWriteReady(
       "export_modules",
@@ -196,28 +189,20 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     );
     const writesOff = writesDisabled();
 
-    expect(
-      (destMissing.error?.relatedIssueNumbers as string[] | undefined) ?? [],
-    ).toContain("#962");
-    expect(
-      (capsLocked.error?.relatedIssueNumbers as string[] | undefined) ?? [],
-    ).toContain("#962");
+    expect((destMissing.error?.relatedIssueNumbers as string[] | undefined) ?? []).toContain(
+      "#962",
+    );
+    expect((capsLocked.error?.relatedIssueNumbers as string[] | undefined) ?? []).toContain("#962");
     // MCP_WRITES_DISABLED was introduced earlier (#659); the lookup MUST
     // attach that issue number so consumers can grep.
-    expect((writesOff.error?.relatedIssueNumbers as string[] | undefined) ?? []).toContain(
-      "#659",
-    );
+    expect((writesOff.error?.relatedIssueNumbers as string[] | undefined) ?? []).toContain("#659");
   });
 
   // ── (5) explain:false or omitted does NOT add explain field ──
   it("omitting explain does NOT add an explain field to the envelope", () => {
     const result = projectConfigNotWriteReady(
       "export_modules",
-      writeGateDiagnostic(
-        "destination-root-not-found",
-        "DESTINATION_ROOT_NOT_FOUND",
-        "mkdir",
-      ),
+      writeGateDiagnostic("destination-root-not-found", "DESTINATION_ROOT_NOT_FOUND", "mkdir"),
     );
     expect(result.error?.explain).toBeUndefined();
   });
@@ -225,11 +210,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
   it("explain:false does NOT add an explain field to the envelope", () => {
     const result = projectConfigNotWriteReady(
       "export_modules",
-      writeGateDiagnostic(
-        "destination-root-not-found",
-        "DESTINATION_ROOT_NOT_FOUND",
-        "mkdir",
-      ),
+      writeGateDiagnostic("destination-root-not-found", "DESTINATION_ROOT_NOT_FOUND", "mkdir"),
       { explain: false },
     );
     expect(result.error?.explain).toBeUndefined();
@@ -246,13 +227,9 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     // uniform shape (so when explain=true is passed downstream, the
     // envelope has errorCode / errorMessage / diagnostics / relatedIssueNumbers).
     const coreResult = failureResult(
-      createDysflowError(
-        "FORM_UNKNOWN_PROPERTY",
-        "Property 'NoSuch' is not recognized.",
-        {
-          remediation: "Use inspect_form / form_list_controls to find the right key.",
-        },
-      ),
+      createDysflowError("FORM_UNKNOWN_PROPERTY", "Property 'NoSuch' is not recognized.", {
+        remediation: "Use inspect_form / form_list_controls to find the right key.",
+      }),
     );
     const translated = translateCoreResultToMcpContent(coreResult);
     expect(translated.ok).toBe(false);
@@ -266,11 +243,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
   it("no extra undocumented fields appear on the envelope error block", () => {
     const writeGate = projectConfigNotWriteReady(
       "import_modules",
-      writeGateDiagnostic(
-        "destination-root-not-found",
-        "DESTINATION_ROOT_NOT_FOUND",
-        "mkdir",
-      ),
+      writeGateDiagnostic("destination-root-not-found", "DESTINATION_ROOT_NOT_FOUND", "mkdir"),
       { explain: true },
     );
     const keys = uniformEnvelopeKeys(writeGate);
@@ -279,6 +252,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     // reflected here AND tested. Order matters (stable sort for snapshot).
     const allowed = [
       "code",
+      "details",
       "diagnostics",
       "errorCode",
       "errorMessage",
