@@ -1,10 +1,90 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
+import type { McpToolResult } from "../../../src/adapters/mcp/result-translation.js";
 import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
+
+type WriteGateMode =
+  | "missing-destination"
+  | "outside-access"
+  | "running-operation"
+  | "capabilities-disabled"
+  | "project-id-mismatch";
+
+const writeGateCases = [
+  ["missing-destination", "DESTINATION_ROOT_NOT_FOUND", "mkdir"],
+  ["outside-access", "OUTSIDE_PROJECT_ROOT", "dysflow doctor --cwd"],
+  ["running-operation", "WRITE_LOCKED_BY_RUNNING_OP", "access_force_cleanup_orphaned"],
+  ["capabilities-disabled", "CAPABILITIES_DISALLOW_WRITE", "dysflow doctor --cwd"],
+  ["project-id-mismatch", "PROJECT_ID_MISMATCH", "dysflow doctor --cwd"],
+] as const satisfies readonly [WriteGateMode, string, string][];
+
+async function runWriteGateCase(
+  mode: WriteGateMode,
+): Promise<{ root: string; result: McpToolResult }> {
+  const root = mkdtempSync(join(tmpdir(), "dysflow-write-gate-taxonomy-"));
+  writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
+  mkdirSync(join(root, ".dysflow"));
+  if (mode !== "missing-destination") mkdirSync(join(root, "src"));
+  writeFileSync(join(root, "app.accdb"), "");
+  writeFileSync(
+    join(root, ".dysflow", "project.json"),
+    JSON.stringify({
+      id: "app",
+      accessPath: "app.accdb",
+      destinationRoot: "src",
+      capabilities: { allowWrites: mode !== "capabilities-disabled" },
+    }),
+  );
+  if (mode === "running-operation") {
+    mkdirSync(join(root, ".dysflow", "runtime"));
+    writeFileSync(
+      join(root, ".dysflow", "runtime", "operations.json"),
+      JSON.stringify({
+        records: [
+          {
+            operationId: "op-running",
+            action: "export",
+            accessPath: join(root, "app.accdb"),
+            projectRootAbs: root,
+            destinationRootAbs: join(root, "src"),
+            metadata: {},
+            status: "running",
+            accessPid: 123,
+            processStartTime: "2026-07-18T10:00:00.000Z",
+            updatedAt: "2026-07-18T10:00:00.000Z",
+          },
+        ],
+      }),
+    );
+  }
+  const execute = vi.fn(async () => successResult({}));
+  const tools = createDysflowMcpTools({
+    services: {
+      vbaService: { execute },
+      queryService: { execute },
+      diagnosticsService: { run: execute },
+      vbaSyncToolService: { execute },
+    } as unknown as DysflowMcpServices,
+    writes: true,
+    allowWrites: mode !== "capabilities-disabled",
+    cwd: root,
+    projectConfigResolver: (input) => diagnoseProjectConfig(root, input as Record<string, string>),
+  });
+  const tool = tools.find((candidate) => candidate.name === "export_modules");
+  if (tool === undefined) throw new Error("export_modules not registered");
+  const result = await tool.handler({
+    moduleNames: ["Example"],
+    projectId: mode === "project-id-mismatch" ? "other" : "app",
+    ...(mode === "outside-access" ? { accessPath: join(root, "..", "outside", "app.accdb") } : {}),
+    apply: true,
+    confirmOverwriteSource: true,
+  });
+  return { root, result };
+}
 
 describe("central project config write guard", () => {
   it("does not interpret a form mutation sourcePath as an Access target alias", async () => {
@@ -122,5 +202,31 @@ describe("central project config write guard", () => {
     const result = await tools.find((tool) => tool.name === toolName)?.handler(input);
     expect(result?.error?.code).toBe("PROJECT_CONFIG_NOT_WRITE_READY");
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("wrapper exposes 5 distinct error codes through the gate", async () => {
+    for (const [mode, expectedCode] of writeGateCases) {
+      const { root, result } = await runWriteGateCase(mode);
+      try {
+        expect(result.error?.code).toBe(expectedCode);
+        expect(result.error?.diagnostics?.[0]?.code).toBe(expectedCode);
+        expect(result.error?.message).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("wrapper includes diagnostic.diagnostics[0].remediation in error.remediation", async () => {
+    for (const [mode, expectedCode, nextCommand] of writeGateCases) {
+      const { root, result } = await runWriteGateCase(mode);
+      try {
+        expect(result.error?.code).toBe(expectedCode);
+        expect(result.error?.remediation).toContain(nextCommand);
+        expect(result.error?.diagnostics?.[0]?.remediation).toContain(nextCommand);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
   });
 });

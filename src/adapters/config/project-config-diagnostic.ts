@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export type ProjectConfigStatus =
@@ -7,6 +7,9 @@ export type ProjectConfigStatus =
   | "id-mismatch"
   | "path-mismatch"
   | "outside-project-root"
+  | "destination-root-not-found"
+  | "write-locked-by-running-op"
+  | "capabilities-disallow-write"
   | "target-not-found"
   | "ambiguous";
 
@@ -29,7 +32,12 @@ export type ProjectConfigDiagnostic = {
    * failure modes where `writeReady` is `false`.
    */
   owningWorktree?: "cwd" | string;
-  diagnostics: readonly { code: string; severity: "error" | "warning"; message: string }[];
+  diagnostics: readonly {
+    code: string;
+    severity: "error" | "warning";
+    message: string;
+    remediation?: string;
+  }[];
   remediation: string | null;
 };
 
@@ -118,7 +126,14 @@ export function diagnoseProjectConfig(
     ...base,
     status,
     writeReady: false,
-    diagnostics: [{ code: status.toUpperCase().replaceAll("-", "_"), severity: "error", message }],
+    diagnostics: [
+      {
+        code: status.toUpperCase().replaceAll("-", "_"),
+        severity: "error",
+        message,
+        remediation,
+      },
+    ],
     remediation,
   });
   if (present.length === 0)
@@ -214,7 +229,21 @@ export function diagnoseProjectConfig(
       base,
       "id-mismatch",
       `Requested project identity '${requestedId}' does not match '${projectId ?? "(missing)"}'.`,
-      `Use projectId '${projectId ?? "<configured-id>"}' or update ${base.configPath}.`,
+      `Run \`dysflow doctor --cwd ${cwd}\`, then retry with projectId '${projectId ?? "<configured-id>"}' or update ${base.configPath}.`,
+      "PROJECT_ID_MISMATCH",
+    );
+  const capabilities = parsed.capabilities;
+  if (
+    capabilities !== null &&
+    typeof capabilities === "object" &&
+    !Array.isArray(capabilities) &&
+    (capabilities as Record<string, unknown>).allowWrites === false
+  )
+    return failWith(
+      base,
+      "capabilities-disallow-write",
+      `Project '${projectId ?? "(missing)"}' has capabilities.allowWrites = false.`,
+      `Set capabilities.allowWrites to true in ${base.configPath}, then run \`dysflow doctor --cwd ${cwd}\`.`,
     );
   if (
     accessPath === null ||
@@ -226,6 +255,13 @@ export function diagnoseProjectConfig(
       "path-mismatch",
       "Configured accessPath or destinationRoot is outside the owning worktree.",
       `Move the target under ${projectRoot} or update ${base.configPath}.`,
+    );
+  if (!existsSync(destinationRoot))
+    return failWith(
+      base,
+      "destination-root-not-found",
+      `Configured destinationRoot directory does not exist: ${destinationRoot}.`,
+      `Run \`mkdir -p '${destinationRoot}/classes' '${destinationRoot}/modules' '${destinationRoot}/forms'\`, then retry the write operation.`,
     );
   try {
     const canonicalDestinationRoot = canonical(destinationRoot);
@@ -334,7 +370,7 @@ export function diagnoseProjectConfig(
         base,
         "outside-project-root",
         `Requested target '${target}' is outside this worktree.`,
-        `Use the MCP process for the target's owning worktree.`,
+        `The accessPath override must be inside projectRoot '${projectRoot}'. Run \`dysflow doctor --cwd ${projectRoot}\` and retry with a path owned by that worktree.`,
       );
     let canonicalTarget: string;
     try {
@@ -354,7 +390,7 @@ export function diagnoseProjectConfig(
         base,
         "outside-project-root",
         `Requested target '${target}' is outside this worktree.`,
-        `Use the MCP process for the target's owning worktree.`,
+        `The accessPath override must be inside projectRoot '${projectRoot}'. Run \`dysflow doctor --cwd ${projectRoot}\` and retry with a path owned by that worktree.`,
       );
     if (!isConfiguredBackend) {
       if (
@@ -379,6 +415,14 @@ export function diagnoseProjectConfig(
       "Requested destinationRoot is not owned by this worktree config.",
       `Use destinationRoot '${destinationRoot}'.`,
     );
+  const blockingOperations = findRunningOperations(projectRootNative, accessPath);
+  if (blockingOperations.length > 0)
+    return failWith(
+      base,
+      "write-locked-by-running-op",
+      `Running Access operations block this write: ${blockingOperations.join(", ")}.`,
+      "Call `access_force_cleanup_orphaned({})` to list candidates, verify process ownership, then call `access_force_cleanup_orphaned({ confirmPid: <pid> })` for the confirmed orphan and retry.",
+    );
   return {
     ...base,
     status: "valid",
@@ -389,17 +433,83 @@ export function diagnoseProjectConfig(
   };
 }
 
+function findRunningOperations(projectRoot: string, accessPath: string): string[] {
+  const candidates: { value: unknown; fallbackId: string }[] = [];
+  const registryPath = join(projectRoot, ".dysflow", "runtime", "operations.json");
+  if (existsSync(registryPath)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(registryPath, "utf8"));
+      const parsedObject =
+        parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+      const records = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsedObject?.records)
+          ? parsedObject.records
+          : [];
+      for (const record of records)
+        candidates.push({ value: record, fallbackId: "operations.json" });
+    } catch {}
+  }
+  const markerRoot = join(projectRoot, ".dysflow", "runtime", "markers");
+  if (existsSync(markerRoot)) {
+    try {
+      for (const name of readdirSync(markerRoot)) {
+        if (!name.endsWith(".json")) continue;
+        try {
+          candidates.push({
+            value: JSON.parse(readFileSync(join(markerRoot, name), "utf8")),
+            fallbackId: name,
+          });
+        } catch {}
+      }
+    } catch {}
+  }
+  return [
+    ...new Set(
+      candidates.flatMap(({ value, fallbackId }) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value)) return [];
+        const record = value as Record<string, unknown>;
+        const marker =
+          record.marker !== null &&
+          typeof record.marker === "object" &&
+          !Array.isArray(record.marker)
+            ? (record.marker as Record<string, unknown>)
+            : record;
+        if (marker.status !== "running") return [];
+        if (
+          typeof marker.projectRootAbs === "string" &&
+          identity(marker.projectRootAbs) !== identity(projectRoot)
+        )
+          return [];
+        if (
+          typeof marker.accessPath === "string" &&
+          identity(marker.accessPath) !== identity(accessPath)
+        )
+          return [];
+        return [
+          typeof marker.operationId === "string" && marker.operationId.length > 0
+            ? marker.operationId
+            : fallbackId,
+        ];
+      }),
+    ),
+  ];
+}
+
 function failWith(
   base: Omit<ProjectConfigDiagnostic, "status" | "writeReady" | "diagnostics" | "remediation">,
   status: ProjectConfigStatus,
   message: string,
   remediation: string,
+  code: string = status.toUpperCase().replaceAll("-", "_"),
 ): ProjectConfigDiagnostic {
   return {
     ...base,
     status,
     writeReady: false,
-    diagnostics: [{ code: status.toUpperCase().replaceAll("-", "_"), severity: "error", message }],
+    diagnostics: [{ code, severity: "error", message, remediation }],
     remediation,
   };
 }

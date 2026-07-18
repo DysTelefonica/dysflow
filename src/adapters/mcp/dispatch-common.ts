@@ -21,6 +21,27 @@ import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
  * across transports.
  */
 export const PROJECT_CONFIG_NOT_WRITE_READY = "PROJECT_CONFIG_NOT_WRITE_READY" as const;
+export const DESTINATION_ROOT_NOT_FOUND = "DESTINATION_ROOT_NOT_FOUND" as const;
+export const OUTSIDE_PROJECT_ROOT = "OUTSIDE_PROJECT_ROOT" as const;
+export const WRITE_LOCKED_BY_RUNNING_OP = "WRITE_LOCKED_BY_RUNNING_OP" as const;
+export const CAPABILITIES_DISALLOW_WRITE = "CAPABILITIES_DISALLOW_WRITE" as const;
+export const PROJECT_ID_MISMATCH = "PROJECT_ID_MISMATCH" as const;
+
+const writeGateCodes = new Set<string>([
+  DESTINATION_ROOT_NOT_FOUND,
+  OUTSIDE_PROJECT_ROOT,
+  WRITE_LOCKED_BY_RUNNING_OP,
+  CAPABILITIES_DISALLOW_WRITE,
+  PROJECT_ID_MISMATCH,
+]);
+
+const writeGateCodeByStatus: Partial<Record<ProjectConfigDiagnostic["status"], string>> = {
+  "destination-root-not-found": DESTINATION_ROOT_NOT_FOUND,
+  "outside-project-root": OUTSIDE_PROJECT_ROOT,
+  "write-locked-by-running-op": WRITE_LOCKED_BY_RUNNING_OP,
+  "capabilities-disallow-write": CAPABILITIES_DISALLOW_WRITE,
+  "id-mismatch": PROJECT_ID_MISMATCH,
+};
 
 /** Whether this concrete request can mutate and therefore needs a write-ready project config. */
 export async function requestRequiresWriteReady(
@@ -46,18 +67,30 @@ export async function requestRequiresWriteReady(
   const effectiveInput = resolveEffectiveDryRunInput(toolName, policy, request);
   return !resolveIsDryRun(effectiveInput);
 }
-export function projectConfigNotWriteReady(
+function resolveWriteGateErrorCode(diagnostic: ProjectConfigDiagnostic): string {
+  const diagnosticCode = diagnostic.diagnostics[0]?.code;
+  if (diagnosticCode !== undefined && writeGateCodes.has(diagnosticCode)) return diagnosticCode;
+  return writeGateCodeByStatus[diagnostic.status] ?? PROJECT_CONFIG_NOT_WRITE_READY;
+}
+
+function buildWriteGateErrorEnvelope(
   toolName: string,
   diagnostic: ProjectConfigDiagnostic,
 ): McpToolResult {
-  const message = "Project config is not write-ready.";
+  const code = resolveWriteGateErrorCode(diagnostic);
+  const diagnostics = diagnostic.diagnostics.map((entry, index) =>
+    index === 0 && entry.code !== code ? { ...entry, code } : entry,
+  );
+  const specificMessage = diagnostics[0]?.message ?? "Project config is not write-ready.";
+  const message = `${specificMessage} [legacy: ${PROJECT_CONFIG_NOT_WRITE_READY}]`;
   return {
-    content: [{ type: "text", text: `${PROJECT_CONFIG_NOT_WRITE_READY}: ${message}` }],
+    content: [{ type: "text", text: `${code}: ${message}` }],
     isError: true,
     ok: false,
     error: {
-      code: PROJECT_CONFIG_NOT_WRITE_READY,
+      code,
       message,
+      diagnostics,
       ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
       details: {
         operation: toolName,
@@ -66,6 +99,13 @@ export function projectConfigNotWriteReady(
       },
     },
   };
+}
+
+export function projectConfigNotWriteReady(
+  toolName: string,
+  diagnostic: ProjectConfigDiagnostic,
+): McpToolResult {
+  return buildWriteGateErrorEnvelope(toolName, diagnostic);
 }
 
 export const MCP_WRITES_DISABLED = "MCP_WRITES_DISABLED" as const;
