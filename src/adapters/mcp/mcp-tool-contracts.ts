@@ -200,6 +200,18 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+// Issue #971 — runtime contract discovery. The `schema` tool exposes
+  // the documented parameter / return / error-code / cross-reference
+  // surface for every advertised MCP tool. It is read-only: it never
+  // opens Access, never spawns PowerShell, never mutates state, and is
+  // never write-gated. The catalog is built from `MCP_TOOL_CONTRACTS`,
+  // `MCP_TOOL_SCHEMAS`, and `MCP_TOOL_ROUTES`, so the static contract
+  // stays aligned with the dispatcher by construction.
+  schema: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
   // Round-12 (#976) — `clean_stale_markers`. Companion to #967 auto-cleanup.
   // Conditional-write: dry-run (default) is read-class, apply requires
   // confirm:true AND writes enabled. The handler refuses

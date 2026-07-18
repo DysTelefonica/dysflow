@@ -535,6 +535,6 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after #976").toBe(85);
+expect(visible, "visible tool count after #971 + #976").toBe(86);
   });
 });

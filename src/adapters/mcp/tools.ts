@@ -30,6 +30,7 @@ import { registerMcpTools } from "./dispatch.js";
 import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
+import { createSchemaTool } from "./schema-tool.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -481,6 +482,13 @@ export const MODERN_TOOL_NAMES = [
   "lint_module",
   // Round-3 Item 1 — project config re-resolution companion tool
   "resolve_project",
+  // Issue #971 — runtime contract discovery. Read-only catalog that
+  // surfaces the documented schema for every MCP tool in the consumer's
+  // dysflow installation (parameters, returns, errorCodes,
+  // crossReferences, requiredCapabilities, safeByDefault). Pairs with
+  // get_capabilities (live state) and resolve_project (project
+  // resolution).
+  "schema",
   // Round-12 (#976) — explicit user-callable cleanup of stale `running`
   // markers under `.dysflow/runtime/markers/`. Safe-by-default (dryRun:true);
   // apply requires `confirm: true`. Pairs with the #967 auto-cleanup.
@@ -1133,6 +1141,12 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     },
     // Round-3 Item 1 — project config re-resolution companion tool
     createResolveProjectTool({ cwd }),
+    // Issue #971 — runtime contract discovery. Read-only tool that
+    // surfaces the documented schema for every advertised MCP tool. Pure
+    // catalog: never opens Access, never spawns PowerShell, never mutates
+    // state. Pairs with get_capabilities (live state) and resolve_project
+    // (project resolution).
+    createSchemaTool(),
   ];
 
   const registered = registerMcpTools(

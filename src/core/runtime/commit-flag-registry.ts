@@ -172,6 +172,11 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   form_serialize: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   inspect_form: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   compare_form: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #971 — runtime contract discovery. Pure read-class tool: the
+  // schema accepts `apply` defensively for symmetry with the snapshot
+  // surface, but the handler never mutates state. Same family as
+  // `verify_code` / `inspect_form` / `doctor` — `defaultBehavior: "noop"`.
+  schema: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   lint_form_code: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   analyze_form_ui: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   map_form_behavior: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },

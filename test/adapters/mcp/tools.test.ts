@@ -236,7 +236,7 @@ describe("MCP tool registration over core services", () => {
     expect(tools.find((tool) => tool.name === "run_vba")).toBeDefined();
   });
 
-  it("regression: MODERN_TOOL_NAMES are exactly the 11 underscore-only names and none contains a dot", () => {
+  it("regression: MODERN_TOOL_NAMES are exactly the 12 underscore-only names and none contains a dot", () => {
     // This test is the authoritative contract for modern tool names.
     // It guards against accidental regression to dotted names (e.g. dysflow.vba.execute).
     // PR-1 (#656) added get_capabilities (read-only introspection).
@@ -250,6 +250,7 @@ describe("MCP tool registration over core services", () => {
     // `list_access_operations`, and `cleanup_access_operation` (already
     // in DYSFLOW_MCP_TOOL_NAMES as VBA_SYNC_TOOL_NAMES) are NOT modern
     // tool names in this sense — they are pre-existing aliases.
+    // #971 added `schema` (read-only runtime contract discovery).
     const expectedNames = [
       "query_execute",
       "doctor",
@@ -262,6 +263,7 @@ describe("MCP tool registration over core services", () => {
       "validate_manifest",
       "lint_module",
       "resolve_project",
+      "schema",
       "clean_stale_markers",
     ];
 

@@ -38,6 +38,9 @@ const OUTPUT_CONTRACT_GROUPS = {
     "lint_module",
     // #760 — read-only project-config resolution without Access.
     "resolve_project",
+    // #971 — read-only runtime contract discovery. Pure catalog: never
+    // opens Access, never spawns PowerShell, never mutates state.
+    "schema",
     // Round-12 (#976) — `clean_stale_markers`. Conditional-write
     // (dry-run default true, apply requires confirm:true); user-callable
     // companion to the #967 auto-cleanup. Same group as `resolve_project`
