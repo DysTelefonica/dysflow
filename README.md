@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**88 visible MCP tools · Windows / Node 20+**
+**89 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 88 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 89 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -862,6 +862,20 @@ Return the runtime operational state of a dysflow project as `{ operations, mark
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current snapshot is global.
 * **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
+
+#### `logs`
+Return runtime log entries from `.dysflow/runtime/` (operations.json + per-operation markers/*.json) as a structured envelope. Pairs with `get_capabilities` (live state) and `schema` (static contract catalog): `logs` surfaces the historical operation log an AI consumer needs to answer "what happened?" without hand-parsing the runtime dir. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+* **Parameters**:
+  - `projectId` (string, optional): Canonical project identity for traceability. The runtime dir is always `<cwd>/.dysflow/runtime/`; `projectId` is echoed back in the response for future per-project scoping.
+  - `options` (object, optional): Filters and pagination.
+    - `since` (string, ISO 8601, optional): Lower bound on `timestamp`.
+    - `until` (string, ISO 8601, optional): Upper bound on `timestamp`.
+    - `level` (string, optional): One of `error`, `warning`, `info`, `debug`. Status mapping: `failed` / `timed_out` / `abandoned` → `error`; `cleanup_pending` → `warning`; `completed` / `cleaned` → `info`; everything else → `debug`.
+    - `operationId` (string, optional): Narrow to a single operationId.
+    - `tool` (string, optional): Filter by tool/action (e.g. `vba`, `query`, `diagnostics`, `import`, `test`, `run`).
+    - `limit` (number, optional, 1..1000): Maximum entries to return. Defaults to `100`.
+    - `orderBy` (string, optional): `asc` or `desc`. Defaults to `desc` (most recent first).
+* **Returns**: `{ entries: LogEntry[], totalCount, truncated }` where each `LogEntry` carries `{ timestamp, level, operationId, tool, message, context }`. `totalCount` is the post-filter cardinality and `truncated: true` signals more entries exist past `limit`.
 
 ---
 

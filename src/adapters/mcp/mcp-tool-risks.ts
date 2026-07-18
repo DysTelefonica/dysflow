@@ -56,6 +56,10 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // PowerShell, never writes to disk. Same risk family as `schema` and
   // `resolve_project`.
   diagnose: "read-only",
+  // #973 — AI-aware log access. Pure read-class: never opens Access,
+  // never spawns PowerShell, never mutates state. Same risk family as
+  // `schema` / `doctor` / `resolve_project`.
+  logs: "read-only",
   // query_execute — write-side is arbitrary
   query_execute: "arbitrary-write",
   // Round-12 (#976) — `clean_stale_markers` is filesystem-control on apply.

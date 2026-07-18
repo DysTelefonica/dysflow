@@ -36,6 +36,7 @@ import {
   WRITE_LOCKED_BY_RUNNING_OP,
 } from "./dispatch-common.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
+import { LOGS_TOOL_SCHEMA } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
@@ -209,6 +210,10 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   // Round-12 #965 umbrella.
   diagnose: ["#965"],
   state: ["#978"],
+  // Issue #973 — AI-aware log access. Pure read-only structured view
+  // of `.dysflow/runtime/`. Pairs with `get_capabilities` (live state)
+  // and `schema` (static contract catalog).
+  logs: ["#973"],
   list_access_operations: ["#777"],
   cleanup_access_operation: ["#659", "#777"],
   run_vba: ["#621", "#659"],
@@ -258,6 +263,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   lint_module: LINT_MODULE_SCHEMA,
   resolve_project: RESOLVE_PROJECT_SCHEMA,
   schema: NO_INPUT_SCHEMA,
+  logs: LOGS_TOOL_SCHEMA,
 };
 
 /**

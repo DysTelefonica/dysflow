@@ -247,6 +247,18 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Issue #973 — AI-aware log access. The `logs` tool returns a
+  // structured view of `.dysflow/runtime/` (operations.json + per-op
+  // markers) with filters / pagination / ordering. It is read-only: it
+  // never opens Access, never spawns PowerShell, never mutates state,
+  // and is never write-gated. Pairs with `get_capabilities` (live
+  // state), `schema` (static contract catalog), and the rest of the
+  // read-only family.
+  logs: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {
