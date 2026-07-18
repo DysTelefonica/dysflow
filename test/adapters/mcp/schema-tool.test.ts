@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { EXPECTED_ADVERTISED_TOOL_COUNT } from "../../../E2E_testing/_helpers/advertised-tool-count.mjs";
 import {
-  EXPECTED_ADVERTISED_TOOL_COUNT,
-} from "../../../E2E_testing/_helpers/advertised-tool-count.mjs";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import {
+  buildToolSchemaCatalog,
   type SchemaInput,
   type ToolSchema,
-  buildToolSchemaCatalog,
-} from "../../../src/core/mcp/tool-schema.js";
+} from "../../../src/adapters/mcp/schema-tool.js";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 
 /**
@@ -75,9 +73,7 @@ function findTool(schemas: readonly ToolSchema[], name: string): ToolSchema {
 describe("buildToolSchemaCatalog — pure aggregate (#971)", () => {
   it("returns schema for every advertised tool (>= 84)", () => {
     const catalog = buildToolSchemaCatalog({});
-    expect(catalog.tools.length).toBeGreaterThanOrEqual(
-      EXPECTED_ADVERTISED_TOOL_COUNT - 1,
-    );
+    expect(catalog.tools.length).toBeGreaterThanOrEqual(EXPECTED_ADVERTISED_TOOL_COUNT - 1);
     const names = catalog.tools.map((t) => t.name);
     expect(names).toContain("export_modules");
     expect(names).toContain("import_modules");
@@ -174,11 +170,11 @@ describe("buildToolSchemaCatalog — pure aggregate (#971)", () => {
     const catalog = buildToolSchemaCatalog({ toolName: "export_modules" });
     const exportModules = findTool(catalog.tools, "export_modules");
     // `apply` is a documented boolean flag on export_modules.
-    const apply = exportModules.parameters["apply"];
+    const apply = exportModules.parameters.apply;
     expect(apply).toBeDefined();
-    expect(apply.type).toBe("boolean");
-    expect(apply.required).toBe(false);
-    expect(typeof apply.description).toBe("string");
+    expect(apply?.type).toBe("boolean");
+    expect(apply?.required).toBe(false);
+    expect(typeof apply?.description).toBe("string");
   });
 
   it("schema is duplicate-free by tool name", () => {
@@ -199,15 +195,14 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool!.handler({}, undefined as never);
+    const result = await schemaTool?.handler({}, undefined as never);
+    if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     expect(result.ok).toBe(true);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
       tools: Array<{ name: string }>;
     };
-    expect(payload.tools.length).toBeGreaterThanOrEqual(
-      EXPECTED_ADVERTISED_TOOL_COUNT - 1,
-    );
+    expect(payload.tools.length).toBeGreaterThanOrEqual(EXPECTED_ADVERTISED_TOOL_COUNT - 1);
     const names = payload.tools.map((t) => t.name);
     expect(names).toContain("export_modules");
     expect(names).toContain("schema");
@@ -217,10 +212,8 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool!.handler(
-      { toolName: "export_modules" },
-      undefined as never,
-    );
+    const result = await schemaTool?.handler({ toolName: "export_modules" }, undefined as never);
+    if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
       tools: Array<{ name: string }>;
@@ -235,10 +228,8 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool!.handler(
-      { toolName: "schema" },
-      undefined as never,
-    );
+    const result = await schemaTool?.handler({ toolName: "schema" }, undefined as never);
+    if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
       tools: Array<{ name: string; safeByDefault: boolean }>;
@@ -250,7 +241,7 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const properties = schemaTool!.inputSchema?.properties ?? {};
+    const properties = schemaTool?.inputSchema?.properties ?? {};
     expect(properties).toHaveProperty("projectId");
     expect(properties).toHaveProperty("toolName");
   });

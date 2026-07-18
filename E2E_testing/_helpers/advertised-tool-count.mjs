@@ -45,8 +45,12 @@
  * atomic batch property updates + control duplication, same
  * applyGuardedFormWrite seam as form_set_property / form_delete_control)
  * + form_get_geometry + form_list_controls (pure read-class geometry +
- * inventory helpers, never open Access, never write to disk): 80 -> 84. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 84;
+ * inventory helpers, never open Access, never write to disk): 80 -> 84.
+ * #971 adds `schema` (pure read-class runtime contract discovery —
+ * surfaces the documented parameter / return / error-code /
+ * cross-reference surface for every advertised MCP tool, never opens
+ * Access, never spawns PowerShell, never mutates state): 84 -> 85. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 85;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

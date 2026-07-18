@@ -105,9 +105,10 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // 79 -> 80.
     // #872 adds form_set_properties + form_duplicate_control +
     // form_get_geometry + form_list_controls: 80 -> 84.
+    // #971 adds `schema` (runtime contract discovery): 84 -> 85.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(84);
+    expect(advertisedToolCount()).toBe(85);
   });
 });

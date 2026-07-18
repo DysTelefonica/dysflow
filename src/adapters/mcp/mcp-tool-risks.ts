@@ -47,6 +47,10 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   validate_manifest: "read-only",
   // #704 read-only module linting
   lint_module: "read-only",
+  // #971 — runtime contract discovery. Pure read-class: never opens
+  // Access, never spawns PowerShell, never mutates state. Same risk
+  // family as `doctor` / `get_capabilities` / `resolve_project`.
+  schema: "read-only",
   // query_execute — write-side is arbitrary
   query_execute: "arbitrary-write",
 };

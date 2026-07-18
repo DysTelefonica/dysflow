@@ -38,6 +38,9 @@ const OUTPUT_CONTRACT_GROUPS = {
     "lint_module",
     // #760 — read-only project-config resolution without Access.
     "resolve_project",
+    // #971 — read-only runtime contract discovery. Pure catalog: never
+    // opens Access, never spawns PowerShell, never mutates state.
+    "schema",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [
