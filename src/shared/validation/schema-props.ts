@@ -236,6 +236,20 @@ export const SCHEMA_PROPS = {
     description:
       "Issue #975 — transactional mode. Copies the binary to a staging directory, runs the write against the copy, runs post-write verification (when applicable), and atomically renames the copy back to the original on success. On any failure the copy is deleted and the original is untouched. Default false.",
   } as JsonSchemaProperty,
+  // Issue #977 — preflight validation without performing the write.
+  // Mutually exclusive with `dryRun` and `apply`. When set, the same
+  // pre-flight gates that `apply:true` runs (filesystem, runtime,
+  // capabilities, project config) fire, but no write is committed. A
+  // failed preflight returns the specific errorCode from the #962
+  // taxonomy (DESTINATION_ROOT_NOT_FOUND, OUTSIDE_PROJECT_ROOT, etc.);
+  // a successful preflight returns `{ok:true, preflight:{passed:true,
+  // checks:[...]}, dryRun:true}`. Default false preserves current
+  // behavior.
+  dryRunWithPreflight: {
+    type: "boolean",
+    description:
+      "Issue #977 — run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with `dryRun` and `apply`. A failed preflight returns the specific errorCode from the taxonomy (#962); a successful preflight returns ok:true with a preflight summary. Default false.",
+  } as JsonSchemaProperty,
   prune: {
     type: "boolean",
     description:

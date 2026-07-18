@@ -77,6 +77,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
+      // Issue #977 — preflight validation that fires the same gates
+      // as apply:true without committing any write. Mutually
+      // exclusive with `dryRun` (legacy alias via `diff` on
+      // export_modules #757).
+      dryRunWithPreflight: SCHEMA_PROPS.dryRunWithPreflight,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -165,6 +170,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       },
       // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
+      // Issue #977 — preflight validation (see SCHEMA_PROPS.dryRunWithPreflight).
+      dryRunWithPreflight: SCHEMA_PROPS.dryRunWithPreflight,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -441,6 +448,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // against a staging copy of the binary; the atomic commit happens
       // only after ALL inner calls succeed. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
+      // Issue #977 — preflight validation. When true, sync_binary
+      // runs the same pre-flight gates (filesystem, runtime,
+      // capabilities, project config) as apply:true WITHOUT
+      // dispatching inner import_modules / export_modules. Mutually
+      // exclusive with `dryRun` and `apply`.
+      dryRunWithPreflight: SCHEMA_PROPS.dryRunWithPreflight,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

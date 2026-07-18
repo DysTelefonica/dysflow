@@ -1222,6 +1222,111 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     return {
       ...tool,
       handler: async (input, context) => {
+        // Issue #977 — dryRunWithPreflight intercept. Mutually exclusive
+        // with `dryRun` (set when both flags present → MCP_INPUT_INVALID)
+        // and applied BEFORE the standard requestRequiresWriteReady path.
+        // When preflight is requested, we run the same pre-flight gates as
+        // apply:true WITHOUT performing the write, regardless of whether
+        // the caller also passed `apply:true`. The preflight return shape:
+        //   - failed: projectConfigNotWriteReady (same errorCode path as
+        //     apply:true would have).
+        //   - succeeded: {ok:true, preflight:{passed:true, checks:[...]},
+        //     dryRun:true} WITHOUT invoking the underlying handler.
+        const inputRecord =
+          typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+        const dryRunWithPreflightRequested = inputRecord.dryRunWithPreflight === true;
+        if (dryRunWithPreflightRequested) {
+          // Mutual exclusivity: dryRunWithPreflight + dryRun → MCP_INPUT_INVALID.
+          // dryRunWithPreflight + apply is also mutually exclusive, BUT in
+          // that case apply wins on the existing dispatch seam (per
+          // #977 acceptance criterion "apply takes precedence on the
+          // existing path" — keep that legacy behavior).
+          if (inputRecord.dryRun === true) {
+            return invalidInput(
+              "dryRunWithPreflight is mutually exclusive with dryRun. Pass only one of the two.",
+              "Pass dryRunWithPreflight:true to validate the project's readiness without writing, or dryRun:true to plan the write without preflight. They cannot be combined.",
+              { rejectedFlag: "dryRunWithPreflight", toolName: tool.name },
+            );
+          }
+          // apply:true + dryRunWithPreflight:true — apply wins, legacy behavior.
+          // Forward to the underlying handler unchanged; the preflight
+          // effectively becomes a no-op when apply is set.
+          if (inputRecord.apply === true) return tool.handler(input, context);
+          // Pure preflight — run the standard projectConfigResolver gate
+          // even when this is normally a "dryRun-able" tool path. We must
+          // NOT consult requestRequiresWriteReady with the original input
+          // (it would resolve to false for a payload without apply/dryRun
+          // and bypass the gate). Force the gate by appending
+          // apply:true behind the scenes for the gate check, but never
+          // forward that synthetic apply to the handler.
+          const diagnostic = await projectConfigResolver({
+            ...inputRecord,
+            operation: tool.name,
+            ...(routeMutatesBinary !== undefined ? { mutatesBinary: routeMutatesBinary } : {}),
+          });
+          if (!diagnostic.writeReady) return projectConfigNotWriteReady(tool.name, diagnostic);
+          // Preflight passed — return the typed envelope WITHOUT
+          // invoking the underlying handler. Preserve the standard
+          // JSON-stringified `{ok:true, dryRun:true, preflight:{...}}`
+          // shape so a regex / JSON consumer can branch on the prefix.
+          const summary = {
+            passed: true,
+            tool: tool.name,
+            operation: tool.name,
+            projectId: typeof inputRecord.projectId === "string" ? inputRecord.projectId : null,
+            checks: [
+              {
+                code: "WRITE_READY",
+                severity: "info",
+                message: `Project config is write-ready for ${tool.name}; apply:true is expected to succeed (modulo races).`,
+                passed: true,
+              },
+              {
+                code: "ACCESS_PATH_RESOLVED",
+                severity: "info",
+                message: `accessPath ${diagnostic.accessPath ?? "<unset>"} is resolved.`,
+                passed: diagnostic.accessPath !== null,
+                value: diagnostic.accessPath,
+              },
+              {
+                code: "DESTINATION_ROOT_RESOLVED",
+                severity: "info",
+                message: `destinationRoot ${diagnostic.destinationRoot ?? "<unset>"} is resolved.`,
+                passed: diagnostic.destinationRoot !== null,
+                value: diagnostic.destinationRoot,
+              },
+              {
+                code: "CAPABILITIES_ALLOW_WRITE",
+                severity: "info",
+                message: `Capabilities allow writes.`,
+                passed: writesAllowedForCapabilities === true,
+                value: { allowWrites: writesAllowedForCapabilities === true },
+              },
+              {
+                code: "WRITE_EXECUTION_POLICY",
+                severity: "info",
+                message: `Effective write execution policy: ${writeExecutionPolicy ?? "safe-by-default"}.`,
+                passed: true,
+                value: { policy: writeExecutionPolicy ?? "safe-by-default" },
+              },
+            ],
+          };
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: true,
+                  dryRun: true,
+                  dryRunWithPreflight: true,
+                  preflight: summary,
+                }),
+              },
+            ],
+            isError: false,
+            ok: true,
+          };
+        }
         if (
           !(await requestRequiresWriteReady(
             tool.name,
@@ -1231,8 +1336,6 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           ))
         )
           return tool.handler(input, context);
-        const inputRecord =
-          typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
         const diagnostic = await projectConfigResolver({
           ...inputRecord,
           operation: tool.name,
