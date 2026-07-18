@@ -29,6 +29,7 @@ import {
 } from "./canonical-handlers.js";
 import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
+import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { createGetCapabilitiesTool, readAdapterVersion } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
@@ -1210,6 +1211,14 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
   return registered.map((tool) => {
     const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
     if (contract === undefined || contract.access === "read-only") return tool;
+    // Issue #968 — read `mutatesBinary` from the dispatch route table once
+    // per tool so `projectConfigResolver → diagnoseProjectConfig` can decide
+    // whether the caller's `allowExternalAccessPath` opt-in should bypass
+    // the `OUTSIDE_PROJECT_ROOT` verdict for read-only-side tools. The route
+    // table remains the single source of truth — adding a new tool is a
+    // single entry.
+    const route = MCP_TOOL_ROUTES[tool.name as keyof typeof MCP_TOOL_ROUTES];
+    const routeMutatesBinary = route?.kind === "vba-sync" ? route.mutatesBinary : undefined;
     return {
       ...tool,
       handler: async (input, context) => {
@@ -1222,11 +1231,17 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           ))
         )
           return tool.handler(input, context);
-        const diagnostic = await projectConfigResolver(
-          typeof input === "object" && input !== null
-            ? { ...input, operation: tool.name }
-            : { operation: tool.name },
-        );
+        const inputRecord =
+          typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+        const diagnostic = await projectConfigResolver({
+          ...inputRecord,
+          operation: tool.name,
+          // Issue #968 — forward `mutatesBinary` from the dispatch route so
+          // the diagnostic honors `allowExternalAccessPath` for read-only-side
+          // tools and ignores it for binary writers. See
+          // `src/adapters/mcp/dispatch-routes.ts` for the source-of-truth.
+          ...(routeMutatesBinary !== undefined ? { mutatesBinary: routeMutatesBinary } : {}),
+        });
         if (!diagnostic.writeReady) return projectConfigNotWriteReady(tool.name, diagnostic);
         return tool.handler(input, context);
       },

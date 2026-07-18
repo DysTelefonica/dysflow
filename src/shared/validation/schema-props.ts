@@ -209,6 +209,21 @@ export const SCHEMA_PROPS = {
     description: "Create a backup before compact/repair.",
   } as JsonSchemaProperty,
   diff: { type: "boolean", description: "Include a diff when supported." } as JsonSchemaProperty,
+  // Issue #968 — opt-in flag for read-only-side tools (`export_modules`,
+  // `list_objects`, `list_vba_modules`, `verify_code`) that lets a caller
+  // point `accessPath` at an `.accdb` outside the active worktree (e.g. a
+  // release build in a downloads folder). When true and the tool does not
+  // mutate the binary, the `OUTSIDE_PROJECT_ROOT` verdict on the override
+  // is bypassed. Default false preserves backward compat — external
+  // accessPath targets fall through to the current OUTSIDE_PROJECT_ROOT
+  // rejection. Ignored for binary-mutating tools (`import_modules`,
+  // `import_all`, `sync_binary src-to-binary`, `delete_module`, etc.):
+  // those still require the binary inside the worktree.
+  allowExternalAccessPath: {
+    type: "boolean",
+    description:
+      "Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior.",
+  } as JsonSchemaProperty,
   // Issue #975 — transactional mode for write-tools. When true, the binary
   // is copied to `<projectRoot>/.dysflow/runtime/transactional/<uuid>/`,
   // the write runs against the copy, post-write verification runs, and on

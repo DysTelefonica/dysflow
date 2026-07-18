@@ -208,6 +208,11 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // entry so the description stays in one place rather than being
       // copy-pasted into the two export_* schemas.
       "confirmOverwriteSource",
+      // Issue #968 — opt-in acknowledgment for read-only-side tools that
+      // bypasses the `OUTSIDE_PROJECT_ROOT` verdict on the `accessPath`
+      // override. Added as a single shared entry so the description lives
+      // in one place rather than being copy-pasted into four tool schemas.
+      "allowExternalAccessPath",
       // feat-forms-output-modes
       "outputMode",
       "includeSerialized",
