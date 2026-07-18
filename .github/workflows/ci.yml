@@ -41,6 +41,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Public test suite (#979)
+        run: pnpm test:public
+
       - name: Build
         run: pnpm build
 
