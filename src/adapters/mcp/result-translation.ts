@@ -42,6 +42,12 @@ export type McpToolError = {
    * (e.g. "call get_capabilities to introspect the allowlist").
    */
   remediation?: string;
+  diagnostics?: readonly {
+    code: string;
+    severity: string;
+    message: string;
+    remediation?: string;
+  }[];
   /**
    * Optional allowlist surfaced when the rejection is an allowlist
    * membership check (#659). Equals the array that was active at the time
