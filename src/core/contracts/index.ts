@@ -62,11 +62,13 @@ export type OperationResult<T> =
 /**
  * Structured machine-readable metadata returned alongside an operation result.
  *
- * Today this carries a single `deprecated` slot (issue #757, C1 — surfacing
- * `diff:true → apply:true` migration hints on `export_all` / `export_modules`).
+ * Today this carries `deprecated` (issue #757, C1 — surfacing
+ * `diff:true → apply:true` migration hints on `export_all` / `export_modules`)
+ * and `transactional` (issue #975 — proof of the copy / atomic-rename
+ * round-trip when `transactional: true` was requested).
  * Future versions may add additional fields; consumers should treat unknown
- * keys as forward-compatible and use `metadata.deprecated` as the stable
- * branch key for migrations.
+ * keys as forward-compatible and use `metadata.deprecated` / `metadata.transactional`
+ * as the stable branch keys for migrations.
  */
 export type OperationMetadata = {
   /**
@@ -81,6 +83,21 @@ export type OperationMetadata = {
     since: string;
     /** The replacement flag the caller should switch to (e.g. `"apply"`). */
     use: string;
+  };
+  /**
+   * Issue #975 — surfaced when the caller passed `transactional: true` and
+   * the operation committed atomically. The SHA-256 of the ORIGINAL binary
+   * is included so the consumer can verify the round-trip byte-for-byte.
+   * The `stagingPath` field reports the absolute path of the staging copy
+   * before the atomic commit. On failure the `transactional` field is
+   * absent; the failure envelope already carries the originalSha256 inside
+   * `details.originalSha256` so a rollback can be proven.
+   */
+  transactional?: {
+    /** Absolute path the staging copy lived at before the atomic rename. */
+    stagingPath: string;
+    /** SHA-256 (hex) of the original binary BEFORE the staging copy was taken. */
+    originalSha256: string;
   };
 };
 

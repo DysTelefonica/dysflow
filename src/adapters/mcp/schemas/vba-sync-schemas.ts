@@ -69,6 +69,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the caller
       // passes this flag. Ignored in `safe-by-default` mode.
       confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
+      // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
+      transactional: SCHEMA_PROPS.transactional,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -155,6 +157,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Issue #807 (Feature 2) — behavior when a chunk fails. continue (default) records chunk-level errors in chunkFailures[] and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.",
       },
+      // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
+      transactional: SCHEMA_PROPS.transactional,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -420,6 +424,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Issue #809 - when true, preSync and postSync include the full verify_code `diffs` array. Default false (only the actionable / missing counts are surfaced, matching the sync_binary workflow payload contract).",
       },
+      // Issue #975 — opt-in transactional mode. When true, every inner
+      // import_modules / export_modules call wrapped by sync_binary runs
+      // against a staging copy of the binary; the atomic commit happens
+      // only after ALL inner calls succeed. See SCHEMA_PROPS.transactional.
+      transactional: SCHEMA_PROPS.transactional,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
