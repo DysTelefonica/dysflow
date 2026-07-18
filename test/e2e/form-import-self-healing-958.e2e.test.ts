@@ -112,7 +112,11 @@ function setupWorkspace(): void {
   if (/^\s*AutoResize\s*=/m.test(legacyFormTxt)) {
     throw new Error("Failed to strip the AutoResize marker from the fixture");
   }
-  writeFileSync(join(workspaceRoot, "src", "forms", `${FORM_NAME}.form.txt`), legacyFormTxt, "utf8");
+  writeFileSync(
+    join(workspaceRoot, "src", "forms", `${FORM_NAME}.form.txt`),
+    legacyFormTxt,
+    "utf8",
+  );
 
   const controlMatch = formTxtContent.match(/^\s*Name\s*=\s*"([^"]+)"/m);
   sentinelControlName = controlMatch?.[1] ?? "";
@@ -215,7 +219,9 @@ async function callMcp(
         }
       }
     });
-    child.on("error", (e) => finish({ ok: false, isError: true, text: e.message, timedOut: false }));
+    child.on("error", (e) =>
+      finish({ ok: false, isError: true, text: e.message, timedOut: false }),
+    );
     child.on("close", () => {
       activeMcpChildren.delete(child);
       if (!settled) finish({ ok: false, isError: true, text: "MCP closed", timedOut: false });

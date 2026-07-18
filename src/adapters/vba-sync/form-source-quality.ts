@@ -46,7 +46,7 @@ async function walkForDocumentSources(
   dir: string,
   out: string[],
 ): Promise<void> {
-  let entries;
+  let entries: Awaited<ReturnType<FormSourceQualityFileSystem["readdir"]>>;
   try {
     entries = await fileSystem.readdir(dir);
   } catch {
