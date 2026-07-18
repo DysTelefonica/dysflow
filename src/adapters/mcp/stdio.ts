@@ -18,6 +18,7 @@ import {
   createProjectAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import { AccessOrphanCleanupService } from "../../core/operations/access-orphan-cleanup.js";
+import { createCleanStaleMarkersService } from "../../core/operations/clean-stale-markers-service.js";
 import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
@@ -29,6 +30,7 @@ import { createDefaultCodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import { diagnoseProjectConfig } from "../config/project-config-diagnostic.js";
 import { nodeRegistryFileSystem } from "../operations/node-registry-file-system.js";
+import { nodeStaleMarkerFileSystem } from "../operations/node-stale-marker-file-system.js";
 import { createDefaultPowerShellExecutor } from "../powershell/default-executor.js";
 import {
   createWindowsAccessOperationPreflightCleanup,
@@ -335,6 +337,13 @@ export function createConfiguredServices(
     operationRegistry,
     cleanupService,
     orphanCleanupService,
+    // Round-12 (#976) — user-callable companion to the #967 auto-cleanup.
+    // Wired against the production `nodeStaleMarkerFileSystem` port so
+    // the dynamic-services wrapper below can resolve it per-call without
+    // re-reading the filesystem port from disk.
+    cleanStaleMarkersService: createCleanStaleMarkersService({
+      fileSystem: nodeStaleMarkerFileSystem,
+    }),
     vbaSyncToolService: new VbaSyncAdapter({
       operationRegistry,
       cleanupService,
@@ -510,6 +519,23 @@ export function createDynamicServices(
           });
         }
         return res.services.orphanCleanupService.cleanupOrphan(request);
+      },
+    },
+    // Round-12 (#976) — `clean_stale_markers` is a pure I/O sweep, so the
+    // wrapper just forwards to the resolved config's service. The MCP
+    // handler computes the markersRoot from the resolved project root and
+    // passes it in; no extra resolution is needed at this layer. The
+    // handler is responsible for surfacing service-unavailability as
+    // CLEAN_STALE_MARKERS_NOT_CONFIGURED before reaching this wrapper.
+    cleanStaleMarkersService: {
+      run: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) throw res.error;
+        const svc = res.services.cleanStaleMarkersService;
+        if (svc === undefined) {
+          throw new Error("CLEAN_STALE_MARKERS_NOT_CONFIGURED");
+        }
+        return svc.run(request);
       },
     },
     operationRegistry: {

@@ -369,6 +369,58 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   },
 };
 
+// Round-12 (#976) — `clean_stale_markers`. The user-callable companion to
+// the #967 auto-cleanup. Safe-by-default: `dryRun` defaults to true and
+// `confirm` is required before any non-dry-run call is allowed through.
+//
+//   - `olderThanMinutes` defaults to 30 (matches the #967 default).
+//   - `keepFailed` defaults to true (preserves diagnostic value of
+//     markers from failed operations regardless of age).
+//   - `dryRun` defaults to true; `confirm` is only consulted when
+//     `dryRun: false`.
+//
+// The handler refuses `dryRun: false` without `confirm: true` BEFORE
+// any service call, so a missed confirm never reaches the filesystem.
+export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  required: [],
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
+    },
+    options: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        olderThanMinutes: {
+          type: "number",
+          minimum: 1,
+          description:
+            "Stale cutoff in minutes. Markers with `updatedAt` older than this are reap candidates. Defaults to 30.",
+        },
+        dryRun: {
+          type: "boolean",
+          description:
+            "When true (default), return the plan without writing. When false, perform real transitions (requires confirm:true).",
+        },
+        keepFailed: {
+          type: "boolean",
+          description:
+            "When true (default), markers from failed operations are NEVER transitioned regardless of age. Set false to also reap stale failed markers.",
+        },
+        confirm: {
+          type: "boolean",
+          description:
+            "Required for any non-dry-run call. Literal `true` is the only acceptable value; omitting it or passing false leaves the tool in dry-run mode.",
+        },
+      },
+    },
+  },
+};
+
 // issue #705 — `detect_dead_code`. The schema mirrors the
 // `find_references` shape: the caller either supplies an inline
 // `modules` map (so the handler never opens Access) or relies on the

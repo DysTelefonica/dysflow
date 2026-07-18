@@ -45,8 +45,12 @@
  * atomic batch property updates + control duplication, same
  * applyGuardedFormWrite seam as form_set_property / form_delete_control)
  * + form_get_geometry + form_list_controls (pure read-class geometry +
- * inventory helpers, never open Access, never write to disk): 80 -> 84. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 84;
+ * inventory helpers, never open Access, never write to disk): 80 -> 84.
+ * #976 adds `clean_stale_markers` (Round-12 user-callable companion to
+ * the #967 auto-cleanup; dry-run default true, apply requires
+ * `confirm: true`, write-gated through MCP_WRITES_DISABLED when writes
+ * are off): 84 -> 85. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 85;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

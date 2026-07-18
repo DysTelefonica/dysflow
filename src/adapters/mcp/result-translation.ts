@@ -10,6 +10,7 @@ import type {
   AccessOrphanCandidate,
   AccessOrphanCleanupResult,
 } from "../../core/operations/access-orphan-cleanup.js";
+import type { CleanStaleMarkersService } from "../../core/operations/clean-stale-markers-service.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import {
   getHumanCompileState,
@@ -160,6 +161,14 @@ export type DysflowMcpServices = {
       confirmPid: number;
     }): Promise<OperationResult<AccessOrphanCleanupResult>>;
   };
+  /**
+   * Round-12 (#976) — explicit user-callable cleanup of stale
+   * `status: "running"` markers under
+   * `<projectRoot>/.dysflow/runtime/markers/`. Wraps the #967
+   * auto-cleanup with explicit `dryRun` / `olderThanMinutes` /
+   * `keepFailed` / `confirm` semantics.
+   */
+  cleanStaleMarkersService?: CleanStaleMarkersService;
   /** Injected adapter for VBA sync tool dispatch. See VbaSyncPort in core/contracts. */
   vbaSyncToolService?: VbaSyncPort;
 };

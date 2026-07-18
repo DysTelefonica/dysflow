@@ -1,9 +1,8 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  createDysflowMcpTools,
-  MODERN_TOOL_NAMES,
-} from "../../../src/adapters/mcp/tools.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
+import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools.js";
+import { successResult } from "../../../src/core/contracts/index.js";
 import type {
   CleanStaleMarkersError,
   CleanStaleMarkersResult,
@@ -52,9 +51,9 @@ class FakeCleanStaleMarkersService {
 
 function makeBaseServices() {
   return {
-    vbaService: { execute: async () => ({ ok: true as const, data: { returnValue: "ok" } }) },
-    queryService: { execute: async () => ({ ok: true as const, data: { rows: [] } }) },
-    diagnosticsService: { run: async () => ({ ok: true as const, data: { checks: [] } }) },
+    vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+    queryService: { execute: async () => successResult({ rows: [] }) },
+    diagnosticsService: { run: async () => successResult({ checks: [] }) },
   };
 }
 
@@ -64,6 +63,9 @@ function makeServices(fake: FakeCleanStaleMarkersService): DysflowMcpServices {
     cleanStaleMarkersService: fake,
   } as unknown as DysflowMcpServices;
 }
+
+const PROJECT_ROOT = "C:/proj";
+const EXPECTED_MARKERS_ROOT = join(PROJECT_ROOT, ".dysflow", "runtime", "markers");
 
 const TOOL = "clean_stale_markers";
 
@@ -81,10 +83,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
 
     const tool = tools.find((t) => t.name === TOOL);
@@ -126,10 +126,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
@@ -140,7 +138,7 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     expect(result?.isError).toBe(false);
     expect(fake.calls).toEqual([
       {
-        markersRoot: "C:/proj/.dysflow/runtime/markers",
+        markersRoot: EXPECTED_MARKERS_ROOT,
         olderThanMs: 30 * 60 * 1000,
         keepFailed: true,
         dryRun: true,
@@ -166,10 +164,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
@@ -181,7 +177,7 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     expect(result?.isError).toBe(false);
     expect(fake.calls).toEqual([
       {
-        markersRoot: "C:/proj/.dysflow/runtime/markers",
+        markersRoot: EXPECTED_MARKERS_ROOT,
         olderThanMs: 30 * 60 * 1000,
         keepFailed: true,
         dryRun: false,
@@ -211,10 +207,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
@@ -225,7 +219,7 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
 
     expect(fake.calls).toEqual([
       {
-        markersRoot: "C:/proj/.dysflow/runtime/markers",
+        markersRoot: EXPECTED_MARKERS_ROOT,
         olderThanMs: 60 * 60 * 1000,
         keepFailed: false,
         dryRun: true,
@@ -246,10 +240,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
@@ -277,10 +269,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeBaseServices() as DysflowMcpServices,
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
@@ -305,10 +295,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(fake),
       writes: true,
-      accessContextResolver: async () => ({
-        ok: true,
-        data: { accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" },
-      }),
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
     });
     const tool = tools.find((t) => t.name === TOOL);
 
