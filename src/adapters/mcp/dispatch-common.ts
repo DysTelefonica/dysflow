@@ -67,17 +67,21 @@ export async function requestRequiresWriteReady(
   const effectiveInput = resolveEffectiveDryRunInput(toolName, policy, request);
   return !resolveIsDryRun(effectiveInput);
 }
-export function projectConfigNotWriteReady(
+function resolveWriteGateErrorCode(diagnostic: ProjectConfigDiagnostic): string {
+  const diagnosticCode = diagnostic.diagnostics[0]?.code;
+  if (diagnosticCode !== undefined && writeGateCodes.has(diagnosticCode)) return diagnosticCode;
+  return writeGateCodeByStatus[diagnostic.status] ?? PROJECT_CONFIG_NOT_WRITE_READY;
+}
+
+function buildWriteGateErrorEnvelope(
   toolName: string,
   diagnostic: ProjectConfigDiagnostic,
 ): McpToolResult {
-  const diagnosticCode = diagnostic.diagnostics[0]?.code;
-  const code =
-    diagnosticCode !== undefined && writeGateCodes.has(diagnosticCode)
-      ? diagnosticCode
-      : (writeGateCodeByStatus[diagnostic.status] ?? PROJECT_CONFIG_NOT_WRITE_READY);
-  const specificMessage =
-    diagnostic.diagnostics[0]?.message ?? "Project config is not write-ready.";
+  const code = resolveWriteGateErrorCode(diagnostic);
+  const diagnostics = diagnostic.diagnostics.map((entry, index) =>
+    index === 0 && entry.code !== code ? { ...entry, code } : entry,
+  );
+  const specificMessage = diagnostics[0]?.message ?? "Project config is not write-ready.";
   const message = `${specificMessage} [legacy: ${PROJECT_CONFIG_NOT_WRITE_READY}]`;
   return {
     content: [{ type: "text", text: `${code}: ${message}` }],
@@ -86,7 +90,7 @@ export function projectConfigNotWriteReady(
     error: {
       code,
       message,
-      diagnostics: diagnostic.diagnostics,
+      diagnostics,
       ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
       details: {
         operation: toolName,
@@ -95,6 +99,13 @@ export function projectConfigNotWriteReady(
       },
     },
   };
+}
+
+export function projectConfigNotWriteReady(
+  toolName: string,
+  diagnostic: ProjectConfigDiagnostic,
+): McpToolResult {
+  return buildWriteGateErrorEnvelope(toolName, diagnostic);
 }
 
 export const MCP_WRITES_DISABLED = "MCP_WRITES_DISABLED" as const;
