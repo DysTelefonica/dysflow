@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { McpToolResult } from "../../../src/adapters/mcp/result-translation.js";
 import { createResolveProjectTool } from "../../../src/adapters/mcp/resolve-project-tool.js";
+import type { McpToolResult } from "../../../src/adapters/mcp/result-translation.js";
 
 /**
  * Issue #963 — `resolve_project` MUST be idempotent.
