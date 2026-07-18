@@ -200,7 +200,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
-// Issue #971 — runtime contract discovery. The `schema` tool exposes
+  // Issue #971 — runtime contract discovery. The `schema` tool exposes
   // the documented parameter / return / error-code / cross-reference
   // surface for every advertised MCP tool. It is read-only: it never
   // opens Access, never spawns PowerShell, never mutates state, and is
