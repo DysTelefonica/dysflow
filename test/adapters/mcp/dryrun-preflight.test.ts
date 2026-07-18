@@ -1,18 +1,18 @@
 /**
  * Round-12 / Issue #977 — `dryRunWithPreflight: true` for write-tools.
  *
- * Adds a new input flag (mutually exclusive with `dryRun`) that runs the
- * same pre-flight checks as `apply: true` (filesystem, runtime,
- * capabilities, project config) WITHOUT performing any write. Closes the
- * false-confidence gap exposed by #962 — today `dryRun: true` only
- * validates the plan, not the filesystem state.
+ * Adds a new input flag (mutually exclusive with `dryRun` and `apply`)
+ * that runs the same pre-flight checks as `apply: true` (filesystem,
+ * runtime, capabilities, project config) WITHOUT performing any write.
+ * Closes the false-confidence gap exposed by #962 — today
+ * `dryRun: true` only validates the plan, not the filesystem state.
  *
  * Acceptance criteria:
  *   1. preflight validates the same checks that apply does.
  *   2. a failed preflight returns the specific errorCode from the
  *      taxonomy (#962), not a generic `PROJECT_CONFIG_NOT_WRITE_READY`.
- *   3. a successful preflight guarantees that `apply: true` will succeed
- *      (modulo races).
+ *   3. a successful preflight guarantees that `apply: true` will
+ *      succeed (modulo races).
  *   4. tests RED verify preflight failure replicates apply failure,
  *      and preflight success returns ok:true without writing.
  */
@@ -44,7 +44,12 @@ class FakeDiagnosticsService {
   }
 }
 
-function makeServices() {
+function makeServices(): {
+  vbaService: FakeVbaService;
+  vbaSyncToolService: FakeVbaService;
+  queryService: FakeQueryService;
+  diagnosticsService: FakeDiagnosticsService;
+} {
   return {
     vbaService: new FakeVbaService(),
     vbaSyncToolService: new FakeVbaService(),
@@ -53,9 +58,22 @@ function makeServices() {
   };
 }
 
+type ToolsList = ReturnType<typeof createDysflowMcpTools>;
+
 const freshRoots: string[] = [];
 
-function makeRoot(): string {
+async function callTool(
+  tools: ToolsList,
+  name: string,
+  input: Record<string, unknown>,
+): Promise<McpToolResult> {
+  const tool = tools.find((candidate) => candidate.name === name);
+  if (tool === undefined) throw new Error(`Tool not registered: ${name}`);
+  const result = await tool.handler(input);
+  return result;
+}
+
+function makeHealthyRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "dysflow-977-preflight-"));
   freshRoots.push(root);
   writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
@@ -74,18 +92,30 @@ function makeRoot(): string {
   return root;
 }
 
-function makeTools(root: string, allowWrites: boolean) {
-  const execute = async () => successResult({});
-  const services = {
-    vbaService: { execute },
-    vbaSyncToolService: { execute },
-    queryService: { execute },
-    diagnosticsService: { run: execute },
-  } as unknown as DysflowMcpServices;
+function makeRootWithConfig(
+  config: Record<string, unknown>,
+  extras: {
+    gitDir?: boolean;
+    createSrc?: boolean;
+    createAppAccdb?: boolean;
+    appAccdbContents?: string;
+  } = {},
+): string {
+  const root = mkdtempSync(join(tmpdir(), "dysflow-977-custom-"));
+  freshRoots.push(root);
+  if (extras.gitDir !== false) writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
+  mkdirSync(join(root, ".dysflow"));
+  if (extras.createSrc !== false) mkdirSync(join(root, "src"));
+  if (extras.createAppAccdb !== false)
+    writeFileSync(join(root, "app.accdb"), extras.appAccdbContents ?? "");
+  writeFileSync(join(root, ".dysflow", "project.json"), JSON.stringify(config));
+  return root;
+}
+
+function makeHealthyTools(root: string) {
   return createDysflowMcpTools({
-    services,
+    services: makeServices() as unknown as DysflowMcpServices,
     writes: true,
-    allowWrites,
     cwd: root,
     projectConfigResolver: (input) => diagnoseProjectConfig(root, input as Record<string, string>),
   });
@@ -108,25 +138,14 @@ beforeEach(() => {
 
 describe("dryRunWithPreflight — failed preflight mirrors apply failure (#977)", () => {
   it("export_modules fails preflight with DESTINATION_ROOT_NOT_FOUND when destinationRoot is missing", async () => {
-    const root = mkdtempSync(join(tmpdir(), "dysflow-977-missing-dest-"));
-    freshRoots.push(root);
-    writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
-    mkdirSync(join(root, ".dysflow"));
-    writeFileSync(join(root, "app.accdb"), "");
-    // Intentionally NO `src/` directory, AND destinationRoot points to it.
-    writeFileSync(
-      join(root, ".dysflow", "project.json"),
-      JSON.stringify({
-        id: "app",
-        accessPath: "app.accdb",
-        destinationRoot: "src-does-not-exist",
-        capabilities: { allowWrites: true },
-      }),
-    );
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+    const root = makeRootWithConfig({
+      id: "app",
+      accessPath: "app.accdb",
+      destinationRoot: "src-does-not-exist",
+      capabilities: { allowWrites: true },
+    });
+    const tools = makeHealthyTools(root);
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
@@ -136,12 +155,10 @@ describe("dryRunWithPreflight — failed preflight mirrors apply failure (#977)"
   });
 
   it("export_modules fails preflight with OUTSIDE_PROJECT_ROOT when accessPath is external (no allowExternalAccessPath)", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
+    const root = makeHealthyRoot();
+    const tools = makeHealthyTools(root);
     const externalPath = join(root, "..", "outside-project", "external.accdb");
-    const result = await exportModules!.handler({
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       accessPath: externalPath,
@@ -151,26 +168,31 @@ describe("dryRunWithPreflight — failed preflight mirrors apply failure (#977)"
     expect(result.error?.code).toBe("OUTSIDE_PROJECT_ROOT");
   });
 
-  it("export_modules fails preflight with CAPABILITIES_DISALLOW_WRITE when allowWrites=false", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, false);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+  it("export_modules fails preflight with CAPABILITIES_DISALLOW_WRITE when project.json declares allowWrites=false", async () => {
+    // Project setup: project.json with capabilities.allowWrites:false. The
+    // preflight path mirrors apply:true → fires the project config
+    // resolver → surfaces the specific CAPABILITIES_DISALLOW_WRITE code
+    // from #962, NOT the generic MCP_WRITES_DISABLED.
+    const root = makeRootWithConfig({
+      id: "app",
+      accessPath: "app.accdb",
+      destinationRoot: "src",
+      capabilities: { allowWrites: false },
+    });
+    const tools = makeHealthyTools(root);
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
     });
     expect(result.isError).toBe(true);
-    expect(result.error?.code).toBe("MCP_WRITES_DISABLED");
+    expect(result.error?.code).toBe("CAPABILITIES_DISALLOW_WRITE");
   });
 
   it("export_modules fails preflight with PROJECT_ID_MISMATCH when projectId disagrees", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+    const root = makeHealthyRoot();
+    const tools = makeHealthyTools(root);
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "wrong-id",
       dryRunWithPreflight: true,
@@ -184,19 +206,15 @@ describe("dryRunWithPreflight — failed preflight mirrors apply failure (#977)"
 
 describe("dryRunWithPreflight — healthy project returns ok:true without writing (#977)", () => {
   it("export_modules dryRunWithPreflight on healthy project returns ok:true with preflight summary", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+    const root = makeHealthyRoot();
+    const tools = makeHealthyTools(root);
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
     });
     expect(result.isError, JSON.stringify(result)).toBeFalsy();
     expect(result.ok).toBe(true);
-    // The preflight payload is additive — `preflight.passed` and the
-    // check list are part of the contract.
     const text = result.content[0]?.text ?? "";
     expect(text).toContain("preflight");
     expect(text).toContain("passed");
@@ -204,41 +222,35 @@ describe("dryRunWithPreflight — healthy project returns ok:true without writin
   });
 
   it("preflight does NOT trigger the service-layer execute path", async () => {
-    const root = makeRoot();
+    const root = makeHealthyRoot();
     const localServices = makeServices();
     const tools = createDysflowMcpTools({
       services: localServices as unknown as DysflowMcpServices,
       writes: true,
-      allowWrites: true,
       cwd: root,
-      projectConfigResolver: (input) => diagnoseProjectConfig(root, input as Record<string, string>),
+      projectConfigResolver: (input) =>
+        diagnoseProjectConfig(root, input as Record<string, string>),
     });
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
     });
     expect(result.isError, JSON.stringify(result)).toBeFalsy();
-    // The fake service must NOT receive an execute() call because
-    // the preflight short-circuits before the dispatch seam.
     expect(localServices.vbaSyncToolService.requests).toEqual([]);
   });
 
   it("import_modules dryRunWithPreflight on healthy project returns ok:true without spawning Access", async () => {
-    const root = makeRoot();
+    const root = makeHealthyRoot();
     const localServices = makeServices();
     const tools = createDysflowMcpTools({
       services: localServices as unknown as DysflowMcpServices,
       writes: true,
-      allowWrites: true,
       cwd: root,
-      projectConfigResolver: (input) => diagnoseProjectConfig(root, input as Record<string, string>),
+      projectConfigResolver: (input) =>
+        diagnoseProjectConfig(root, input as Record<string, string>),
     });
-    const importModules = tools.find((candidate) => candidate.name === "import_modules");
-    expect(importModules).toBeDefined();
-    const result = await importModules!.handler({
+    const result = await callTool(tools, "import_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
@@ -249,18 +261,16 @@ describe("dryRunWithPreflight — healthy project returns ok:true without writin
   });
 
   it("sync_binary dryRunWithPreflight on healthy project returns ok:true without invoking inner dispatch", async () => {
-    const root = makeRoot();
+    const root = makeHealthyRoot();
     const localServices = makeServices();
     const tools = createDysflowMcpTools({
       services: localServices as unknown as DysflowMcpServices,
       writes: true,
-      allowWrites: true,
       cwd: root,
-      projectConfigResolver: (input) => diagnoseProjectConfig(root, input as Record<string, string>),
+      projectConfigResolver: (input) =>
+        diagnoseProjectConfig(root, input as Record<string, string>),
     });
-    const syncBinary = tools.find((candidate) => candidate.name === "sync_binary");
-    expect(syncBinary).toBeDefined();
-    const result = await syncBinary!.handler({
+    const result = await callTool(tools, "sync_binary", {
       projectId: "app",
       direction: "src-to-binary",
       dryRunWithPreflight: true,
@@ -275,30 +285,20 @@ describe("dryRunWithPreflight — healthy project returns ok:true without writin
 
 describe("dryRunWithPreflight — failed preflight replicates apply failure (#977)", () => {
   it("export_modules preflight + apply both fail with DESTINATION_ROOT_NOT_FOUND on missing destinationRoot", async () => {
-    const root = mkdtempSync(join(tmpdir(), "dysflow-977-mirror-dest-"));
-    freshRoots.push(root);
-    writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
-    mkdirSync(join(root, ".dysflow"));
-    writeFileSync(join(root, "app.accdb"), "");
-    writeFileSync(
-      join(root, ".dysflow", "project.json"),
-      JSON.stringify({
-        id: "app",
-        accessPath: "app.accdb",
-        destinationRoot: "src-does-not-exist",
-        capabilities: { allowWrites: true },
-      }),
-    );
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
+    const root = makeRootWithConfig({
+      id: "app",
+      accessPath: "app.accdb",
+      destinationRoot: "src-does-not-exist",
+      capabilities: { allowWrites: true },
+    });
+    const tools = makeHealthyTools(root);
 
-    const preflight: McpToolResult = await exportModules!.handler({
+    const preflight = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRunWithPreflight: true,
     });
-    const applyResult: McpToolResult = await exportModules!.handler({
+    const applyResult = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       apply: true,
@@ -307,23 +307,19 @@ describe("dryRunWithPreflight — failed preflight replicates apply failure (#97
 
     expect(preflight.error?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
     expect(applyResult.error?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
-    // The exact same code shape — both surface the taxonomy code in
-    // diagnostics[0] so a consumer reading either path lands on the
-    // same typed envelope.
+    // Same diagnostics[0].code too (the typed envelope is identical).
     expect(preflight.error?.diagnostics?.[0]?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
     expect(applyResult.error?.diagnostics?.[0]?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
   });
 });
 
-// ─── Acceptance criterion (3) — dryRunWithPreflight is mutually exclusive with dryRun ─
+// ─── Acceptance criterion (3) — dryRunWithPreflight is mutually exclusive with dryRun/apply ─
 
 describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
   it("dryRunWithPreflight + dryRun both set returns MCP_INPUT_INVALID (documented behavior)", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+    const root = makeHealthyRoot();
+    const tools = makeHealthyTools(root);
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       dryRun: true,
@@ -333,28 +329,31 @@ describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
     expect(result.error?.code).toBe("MCP_INPUT_INVALID");
   });
 
-  it("dryRunWithPreflight + apply both set returns MCP_INPUT_INVALID (apply already wins on dispatch)", async () => {
-    const root = makeRoot();
-    const tools = makeTools(root, true);
-    const exportModules = tools.find((candidate) => candidate.name === "export_modules");
-    expect(exportModules).toBeDefined();
-    const result = await exportModules!.handler({
+  it("dryRunWithPreflight + apply both set runs the apply path (apply takes precedence)", async () => {
+    const root = makeHealthyRoot();
+    const localServices = makeServices();
+    const tools = createDysflowMcpTools({
+      services: localServices as unknown as DysflowMcpServices,
+      writes: true,
+      cwd: root,
+      projectConfigResolver: (input) =>
+        diagnoseProjectConfig(root, input as Record<string, string>),
+    });
+    const result = await callTool(tools, "export_modules", {
       moduleNames: ["Example"],
       projectId: "app",
       apply: true,
       dryRunWithPreflight: true,
+      confirmOverwriteSource: true,
     });
-    // apply takes precedence on the existing dispatch seam; preflight
-    // is therefore disabled and the call runs the apply path. Capture
-    // whichever typed shape the runtime surfaces; the contract here is
-    // "preflight is OFF when apply is set" — document that by accepting
-    // either a successful execute or an MCP_INPUT_INVALID if a future
-    // strict gate enforces mutual exclusion at the schema layer.
-    expect(["MCP_INPUT_INVALID", undefined].includes(result.error?.code)).toBe(true);
-    if (result.error?.code === undefined) {
-      // The apply path ran instead — ok:true is allowed because the
-      // contract says "preflight is bypassed when apply:true wins".
-      expect(result.ok).toBe(true);
-    }
+    // apply wins on the existing dispatch seam — the preflight is
+    // bypassed and the call runs the apply path. The apply path
+    // invokes vbaSyncToolService.execute with dryRun resolved by
+    // resolveIsDryRun; export_modules' legacy noWriteAlias is
+    // `diff`, so without a dryRun flag it falls through to
+    // apply:true semantics.
+    expect(result.error?.code === "MCP_INPUT_INVALID").toBe(false);
+    expect(result.isError).toBe(false);
+    expect(localServices.vbaSyncToolService.requests.length).toBeGreaterThanOrEqual(1);
   });
 });
