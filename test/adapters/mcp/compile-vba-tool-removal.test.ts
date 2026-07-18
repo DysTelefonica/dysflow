@@ -81,7 +81,7 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     expect(VbaModulesAdapter.handles("compile_vba")).toBe(false);
   });
 
-  it("advertised MCP tool count is 88 after #976 clean_stale_markers + #973 logs + #978 state", () => {
+  it("advertised MCP tool count is 89 after #976 clean_stale_markers + #978 state + #973 logs", () => {
     // #759 removed `compile_vba` (v1.19.0): 68 -> 67.
     // #777 Opción A (58405eb2) renamed 7 dysflow_* tools whose canonical
     //   forms already existed in alias-tools.ts: count unchanged at 67.
@@ -119,11 +119,10 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // #973 adds `logs` (read-only AI-aware log access over
     // .dysflow/runtime/, surfaces the recorded operation log with filters
     // since/until/level/operationId/tool, pagination limit, ordering):
-    // 88 -> 88 in this branch (already counted into the 87 → 88 cascade
-    // driven by #978; net change is the unified cascade ending at 88).
+    // 88 -> 89.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(88);
+    expect(advertisedToolCount()).toBe(89);
   });
 });

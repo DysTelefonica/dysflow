@@ -63,12 +63,12 @@
  * view of `.dysflow/runtime/` (operations.json + markers/*.json) with
  * filters since/until/level/operationId/tool, pagination limit
  * (default 100, max 1000), ordering (default desc). Never opens Access,
- * never spawns PowerShell, never mutates state): 86 -> 87.
+ * never spawns PowerShell, never mutates state): 87 -> 88.
  * #978 adds `state` (Round-12 read-only runtime operational state —
  * surfaces `{ operations, markers, locks, counters }` aggregated from
  * the access operation registry and `.dysflow/runtime/markers/`; never
- * opens Access, never spawns PowerShell, never mutates state): 87 -> 88. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 88;
+ * opens Access, never spawns PowerShell, never mutates state): 88 -> 89. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 89;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

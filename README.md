@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**88 visible MCP tools · Windows / Node 20+**
+**89 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 88 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 89 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
