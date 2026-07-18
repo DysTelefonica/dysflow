@@ -371,7 +371,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'function Test-SourceFileHasDuplicateOptions',
             'function Get-SourceFileSizeSnapshot',
             # issue #958 structural pre-import guards (pure — no COM, no Access).
-            'function Test-AccessDocumentLayoutBeginEndBalanced',
+            'function Get-AccessDocumentLayoutNestingDefect',
             'function Assert-AccessDocumentTextLooksLoadable',
             'function Resolve-AccessDocumentObjectName'
         )
@@ -419,7 +419,7 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             'Test-SourceFileHasDuplicateOptions',
             'Get-SourceFileSizeSnapshot',
             # issue #958 structural pre-import guards (pure — no COM, no Access).
-            'Test-AccessDocumentLayoutBeginEndBalanced',
+            'Get-AccessDocumentLayoutNestingDefect',
             'Assert-AccessDocumentTextLooksLoadable',
             'Resolve-AccessDocumentObjectName'
         )
@@ -1055,15 +1055,15 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             Resolve-AccessDocumentObjectName -ModuleName 'Cliente' | Should -Be 'Cliente'
         }
 
-        It "throws FORM_OBJECT_NAME_EMPTY when the derived name is empty" {
-            { Resolve-AccessDocumentObjectName -ModuleName 'Form_' } |
-                Should -Throw -ExpectedMessage 'FORM_OBJECT_NAME_EMPTY*' `
-                -Because "LoadFromText with an empty object name creates the unnameable broken-form state"
+        It "throws FORM_NAME_RESOLUTION_FAILED when the derived name is empty" {
+            { Resolve-AccessDocumentObjectName -ModuleName 'Form_' -SourcePath 'forms/Form_.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_NAME_RESOLUTION_FAILED*' `
+                -Because "LoadFromText with an empty object name creates the unnameable broken-form state (#951 typed code)"
         }
 
-        It "throws FORM_OBJECT_NAME_EMPTY on a whitespace-only derived name" {
+        It "throws FORM_NAME_RESOLUTION_FAILED on a whitespace-only derived name" {
             { Resolve-AccessDocumentObjectName -ModuleName 'Form_   ' } |
-                Should -Throw -ExpectedMessage 'FORM_OBJECT_NAME_EMPTY*'
+                Should -Throw -ExpectedMessage 'FORM_NAME_RESOLUTION_FAILED*'
         }
     }
 
@@ -3588,6 +3588,12 @@ Describe "Import-VbaModule — FORM_NAME_RESOLUTION_FAILED guard (#951)" {
         $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Import-VbaModule' }, $true) | Select-Object -First 1
         if (-not $fnAst) { throw "Import-VbaModule not found in $($script:VbaManagerPath)" }
         Invoke-Expression $fnAst.Extent.Text
+        # issue #958 — the guard now lives in the pure helper
+        # Resolve-AccessDocumentObjectName; extract it too so the pinned
+        # contract (guard fires before any file read or COM call) still runs.
+        $helperAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Resolve-AccessDocumentObjectName' }, $true) | Select-Object -First 1
+        if (-not $helperAst) { throw "Resolve-AccessDocumentObjectName not found in $($script:VbaManagerPath)" }
+        Invoke-Expression $helperAst.Extent.Text
     }
 
     BeforeEach {
