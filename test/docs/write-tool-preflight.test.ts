@@ -57,7 +57,9 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
     const script = await readFile(VERIFY_SCRIPT_PATH, "utf8");
     // A single regex that matches all three steps in sequence with
     // tolerated whitespace: removing src/, recreating it, then exporting.
-    expect(script).toMatch(/git rm -r[^\n]*\n[\s\S]*?mkdir[\s\S]*?export_modules[\s\S]*?apply\s*:\s*true/s);
+    expect(script).toMatch(
+      /git rm -r[^\n]*\n[\s\S]*?mkdir[\s\S]*?export_modules[\s\S]*?apply\s*:\s*true/s,
+    );
     // The recovery story must be named in prose so reviewers can spot
     // it without grepping the syntax.
     expect(script).toMatch(/git rm -r/);
@@ -96,18 +98,34 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
 });
 
 /**
- * Returns the slice of `source` starting at the `toolName:` entry
- * declaration and ending at the next `toolName:` (or end of source).
- * Captures only the body of one schema entry, so per-tool asserts stay
- * scoped and don't fail when a sibling tool's doc grows.
+ * Returns the slice of `source` from the leading JSDoc-style comment
+ * block (`// ...`) directly above the `toolName:` entry, through the
+ * body of one schema entry, ending at the next sibling top-level key
+ * (or end of source). Captures both the canonical-wording JSDoc block
+ * AND the body, so per-tool asserts stay scoped AND don't fail when a
+ * sibling tool's doc grows.
  */
 function sectionAfterToolEntry(source: string, toolEntry: string): string {
-  const start = source.indexOf(toolEntry);
-  expect(start, `missing tool entry ${toolEntry}`).toBeGreaterThanOrEqual(0);
-  // Find the next sibling top-level key (`  tool_name:`) so we read the
-  // body of one entry at a time. Crude — collapses on 2-space indent.
-  const rest = source.slice(start + toolEntry.length);
-  const nextKeyMatch = rest.match(/\n  \w+_?\w+:\s*\{/);
+  const idx = source.indexOf(toolEntry);
+  expect(idx, `missing tool entry ${toolEntry}`).toBeGreaterThanOrEqual(0);
+  // Walk back through preceding single-line `// ...` comments (plus
+  // blank separator lines) to capture the JSDoc block that documents
+  // the schema entry.
+  const allLines = source.split("\n");
+  const entryLine = source.slice(0, idx).split("\n").length - 1;
+  let leadLine = entryLine;
+  while (leadLine > 0) {
+    const prev = allLines[leadLine - 1] ?? "";
+    if (/^\s*\/\//.test(prev) || /^\s*$/.test(prev)) {
+      leadLine--;
+      continue;
+    }
+    break;
+  }
+  // Compose slice from line `leadLine` (inclusive) to next sibling key.
+  const startOffset = allLines.slice(0, leadLine).join("\n").length + (leadLine > 0 ? 1 : 0);
+  const rest = source.slice(startOffset);
+  const nextKeyMatch = rest.slice(toolEntry.length).match(/\n {2}\w+_?\w+:\s*\{/);
   const end = nextKeyMatch?.index ?? rest.length;
-  return rest.slice(0, end);
+  return rest.slice(0, end + toolEntry.length);
 }
