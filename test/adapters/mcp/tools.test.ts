@@ -251,6 +251,8 @@ describe("MCP tool registration over core services", () => {
     // in DYSFLOW_MCP_TOOL_NAMES as VBA_SYNC_TOOL_NAMES) are NOT modern
     // tool names in this sense — they are pre-existing aliases.
     // #971 added `schema` (read-only runtime contract discovery).
+    // #965 added `diagnose` (read-only aggregated project health).
+    // #976 added `clean_stale_markers` (conditional-write cleanup tool).
     const expectedNames = [
       "query_execute",
       "doctor",
@@ -264,6 +266,7 @@ describe("MCP tool registration over core services", () => {
       "lint_module",
       "resolve_project",
       "schema",
+      "diagnose",
       "clean_stale_markers",
     ];
 

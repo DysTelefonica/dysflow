@@ -26,8 +26,9 @@ import {
   handleMcpCleanStaleMarkers,
   handleMcpQueryExecute,
 } from "./canonical-handlers.js";
+import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
-import { createGetCapabilitiesTool } from "./get-capabilities-tool.js";
+import { createGetCapabilitiesTool, readAdapterVersion } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createSchemaTool } from "./schema-tool.js";
@@ -489,6 +490,13 @@ export const MODERN_TOOL_NAMES = [
   // get_capabilities (live state) and resolve_project (project
   // resolution).
   "schema",
+  // Issue #965 — `dysflow.diagnose(projectId?, accessPath?, contextId?,
+  // verbose?)` is the single-call aggregated project health surface
+  // (projectConfig + filesystem + runtime). Read-only — never opens
+  // Access, never spawns PowerShell, never writes to disk. Pairs with
+  // get_capabilities (live state), resolve_project (config), and schema
+  // (static contract).
+  "diagnose",
   // Round-12 (#976) — explicit user-callable cleanup of stale `running`
   // markers under `.dysflow/runtime/markers/`. Safe-by-default (dryRun:true);
   // apply requires `confirm: true`. Pairs with the #967 auto-cleanup.
@@ -1147,6 +1155,20 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // state. Pairs with get_capabilities (live state) and resolve_project
     // (project resolution).
     createSchemaTool(),
+    // Issue #965 — `dysflow.diagnose` aggregates projectConfig + filesystem
+    // + runtime health in a single call, replacing the 4-5 round-trip
+    // pattern AI consumers hit today. Read-only by construction: never
+    // opens Access, never spawns PowerShell, never writes to disk. The
+    // snapshot is captured from the same options the `get_capabilities`
+    // tool consults, so `runtime.dysflowVersion` and
+    // `runtime.writeExecutionPolicy` agree by construction.
+    createDiagnoseTool({
+      cwd,
+      snapshot: {
+        adapterVersion: readAdapterVersion(),
+        writeExecutionPolicy: writeExecutionPolicy ?? "safe-by-default",
+      },
+    }),
   ];
 
   const registered = registerMcpTools(

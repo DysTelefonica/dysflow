@@ -514,7 +514,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     );
   });
 
-  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77 -> 78 -> 79 -> 80 -> 84 -> 85)", () => {
+  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77 -> 78 -> 79 -> 80 -> 84 -> 85 -> 86 -> 87)", () => {
     // Issue #807 (Feature 1) added `list_vba_modules`: visible 70 -> 71.
     // Phase 6 adds 2 more (form_set_property + form_delete_control):
     // 71 -> 73.
@@ -527,14 +527,16 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     // #809 adds sync_binary workflow tool: 79 -> 80.
     // #872 adds form_set_properties + form_duplicate_control +
     // form_get_geometry + form_list_controls: 80 -> 84.
+    // #971 adds `schema` (read-only runtime contract discovery): 84 -> 85.
+    // #965 adds `diagnose` (read-only aggregated project health): 85 -> 86.
     // #976 adds clean_stale_markers (Round-12 user-callable companion to
     // the #967 auto-cleanup; dry-run default true, apply requires
-    // confirm:true): 84 -> 85.
+    // confirm:true): 86 -> 87.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after #971 + #976").toBe(86);
+    expect(visible, "visible tool count after #872 + #971 + #965 + #976").toBe(87);
   });
 });
