@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createLogsTool,
   type LogEntry,
-  type LogsInput,
   type LogsResult,
   tryReadLogs,
 } from "../../../src/adapters/mcp/logs-tool";
@@ -92,11 +91,7 @@ function writeRuntimeDir(records: FixtureRecord[], markers: Record<string, unkno
     const markersPath = join(runtimePath, "markers");
     mkdirSync(markersPath, { recursive: true });
     markers.forEach((marker, index) => {
-      writeFileSync(
-        join(markersPath, `marker-${index}.json`),
-        JSON.stringify(marker),
-        "utf-8",
-      );
+      writeFileSync(join(markersPath, `marker-${index}.json`), JSON.stringify(marker), "utf-8");
     });
   }
 }
@@ -430,11 +425,12 @@ describe("createLogsTool — factory (issue #973)", () => {
 describe("createDysflowMcpTools registration (issue #973)", () => {
   it("registers the logs tool alongside the existing read-only tools", async () => {
     const { createDysflowMcpTools } = await import("../../../src/adapters/mcp/tools");
+    const { successResult } = await import("../../../src/core/contracts/index.js");
     const tools = createDysflowMcpTools({
       services: {
-        vbaService: { execute: async () => ({ ok: true, data: { returnValue: "ok" } }) },
-        queryService: { execute: async () => ({ ok: true, data: { rows: [] } }) },
-        diagnosticsService: { run: async () => ({ ok: true, data: { checks: [] } }) },
+        vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+        queryService: { execute: async () => successResult({ rows: [] }) },
+        diagnosticsService: { run: async () => successResult({ checks: [] }) },
       },
     });
 

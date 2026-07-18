@@ -532,6 +532,8 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     // #976 adds clean_stale_markers (Round-12 user-callable companion to
     // the #967 auto-cleanup; dry-run default true, apply requires
     // confirm:true): 86 -> 87.
+    // #973 adds `logs` (read-only AI-aware log access over
+    // .dysflow/runtime/): 87 -> 88 (combined with #978 in this branch).
     // #978 adds `state` (Round-12 read-only runtime operational state):
     // 87 -> 88.
     const tools = createDysflowMcpTools({
@@ -539,6 +541,6 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
       writes: true,
     });
     const visible = tools.filter((tool) => !tool.hidden).length;
-    expect(visible, "visible tool count after #872 + #971 + #965 + #976 + #978").toBe(88);
+    expect(visible, "visible tool count after #872 + #971 + #965 + #976 + #973 + #978").toBe(88);
   });
 });

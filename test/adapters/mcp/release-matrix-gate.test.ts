@@ -106,11 +106,15 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // modern 12 -> 13, visible 85 -> 86.
     // #978 adds `state` (Round-12 read-only runtime operational state):
     // modern 13 -> 14, visible 86 -> 87.
+    // #973 adds `logs` (read-only AI-aware log access over
+    // .dysflow/runtime/). Net: dispatch unchanged (read-only tool,
+    // bypasses MCP_TOOL_ROUTES), modern 14 -> 15, visible 87 -> 88.
     //   Expected breakdown:
     //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     // + 15 modern core tools (was 14, lost 3 aliases; +1 for #971 schema,
-    // +1 for #965 diagnose, +1 for #976 clean_stale_markers, +1 for #978 state)
+    // +1 for #965 diagnose, +1 for #976 clean_stale_markers, +1 for #978 state,
+    // +1 for #973 logs)
     //     = 88 visible (was 64 before #795).
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);

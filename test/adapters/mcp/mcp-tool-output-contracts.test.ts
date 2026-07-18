@@ -56,6 +56,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // Never opens Access, never spawns PowerShell, never mutates state.
     // Same group as `schema` / `resolve_project`.
     "state",
+    // #973 — read-only AI-aware log access. Pure read-class sibling of
+    // `schema` / `doctor` / `resolve_project`: reads `.dysflow/runtime/`
+    // (operations.json + markers/*.json) and returns structured log
+    // entries; never opens Access, never mutates state.
+    "logs",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

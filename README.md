@@ -863,6 +863,20 @@ Return the runtime operational state of a dysflow project as `{ operations, mark
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current snapshot is global.
 * **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
 
+#### `logs`
+Return runtime log entries from `.dysflow/runtime/` (operations.json + per-operation markers/*.json) as a structured envelope. Pairs with `get_capabilities` (live state) and `schema` (static contract catalog): `logs` surfaces the historical operation log an AI consumer needs to answer "what happened?" without hand-parsing the runtime dir. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+* **Parameters**:
+  - `projectId` (string, optional): Canonical project identity for traceability. The runtime dir is always `<cwd>/.dysflow/runtime/`; `projectId` is echoed back in the response for future per-project scoping.
+  - `options` (object, optional): Filters and pagination.
+    - `since` (string, ISO 8601, optional): Lower bound on `timestamp`.
+    - `until` (string, ISO 8601, optional): Upper bound on `timestamp`.
+    - `level` (string, optional): One of `error`, `warning`, `info`, `debug`. Status mapping: `failed` / `timed_out` / `abandoned` → `error`; `cleanup_pending` → `warning`; `completed` / `cleaned` → `info`; everything else → `debug`.
+    - `operationId` (string, optional): Narrow to a single operationId.
+    - `tool` (string, optional): Filter by tool/action (e.g. `vba`, `query`, `diagnostics`, `import`, `test`, `run`).
+    - `limit` (number, optional, 1..1000): Maximum entries to return. Defaults to `100`.
+    - `orderBy` (string, optional): `asc` or `desc`. Defaults to `desc` (most recent first).
+* **Returns**: `{ entries: LogEntry[], totalCount, truncated }` where each `LogEntry` carries `{ timestamp, level, operationId, tool, message, context }`. `totalCount` is the post-filter cardinality and `truncated: true` signals more entries exist past `limit`.
+
 ---
 
 ### MCP Tools

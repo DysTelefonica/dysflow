@@ -181,6 +181,13 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // one read-only call. Same read-class family as `schema`,
   // `resolve_project`, `doctor`, `inspect_form` — `defaultBehavior: "noop"`.
   diagnose: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #973 — AI-aware log access. Pure read-class tool: the schema
+  // accepts `apply` defensively for symmetry with the snapshot surface,
+  // but the handler never mutates state. Reads `.dysflow/runtime/`
+  // (operations.json + markers/*.json) and returns structured log
+  // entries with filters + pagination + ordering. Same family as
+  // `schema` / `doctor` / `resolve_project`.
+  logs: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   lint_form_code: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   analyze_form_ui: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   map_form_behavior: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },

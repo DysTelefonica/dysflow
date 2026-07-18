@@ -31,6 +31,7 @@ import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { createGetCapabilitiesTool, readAdapterVersion } from "./get-capabilities-tool.js";
+import { createLogsTool } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createSchemaTool } from "./schema-tool.js";
@@ -509,6 +510,14 @@ export const MODERN_TOOL_NAMES = [
   // for monitoring and post-mortem. Pairs with `diagnose` (current
   // health), `logs` (event timeline), and `resolve_project` (config).
   "state",
+  // Issue #973 — AI-aware log access. Read-only structured view of
+  // `.dysflow/runtime/` (operations.json + markers/*.json). Surfaces the
+  // recorded operation log with filters (since/until/level/operationId/
+  // tool), pagination (limit, default 100, max 1000), and ordering
+  // (orderBy, default desc). Never opens Access, never spawns
+  // PowerShell, never mutates state. Pairs with get_capabilities (live
+  // state) and schema (static contract catalog).
+  "logs",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];
@@ -1187,6 +1196,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       cwd,
       registry: resolveAccessOperationRegistry(services.operationRegistry),
     }),
+    // Issue #973 — AI-aware log access. Pure read-only surface over
+    // <cwd>/.dysflow/runtime/. Reads operations.json + markers/*.json,
+    // maps to LogEntry[], applies filters/ordering/pagination, and
+    // returns { entries, totalCount, truncated }. Never opens Access,
+    // never spawns PowerShell, never mutates state. Pairs with
+    // get_capabilities (live state) and schema (static contract catalog).
+    createLogsTool({ cwd }),
   ];
 
   const registered = registerMcpTools(
