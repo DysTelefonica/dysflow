@@ -216,6 +216,14 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // feat-forms-output-modes
       "outputMode",
       "includeSerialized",
+      // Issue #977 — dryRunWithPreflight: opt-in validation-only flag for
+      // write-tools that runs the same pre-flight gates (filesystem +
+      // runtime + capabilities) as `apply:true` WITHOUT performing any
+      // write. Added as a single shared SCHEMA_PROPS entry so the
+      // description stays in one place rather than being copy-pasted
+      // across the three write-tool schemas (`export_modules`,
+      // `import_modules`, `sync_binary`).
+      "dryRunWithPreflight",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });
