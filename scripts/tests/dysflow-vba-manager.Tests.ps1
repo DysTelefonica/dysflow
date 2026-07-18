@@ -369,7 +369,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             # issue #752 defensive-validations helpers (pure — no COM, no Access).
             'function Get-VbNameFromSourceFile',
             'function Test-SourceFileHasDuplicateOptions',
-            'function Get-SourceFileSizeSnapshot'
+            'function Get-SourceFileSizeSnapshot',
+            # issue #958 structural pre-import guards (pure — no COM, no Access).
+            'function Test-AccessDocumentLayoutBeginEndBalanced',
+            'function Assert-AccessDocumentTextLooksLoadable',
+            'function Resolve-AccessDocumentObjectName'
         )
 
         $ast = [System.Management.Automation.Language.Parser]::ParseInput(
@@ -413,7 +417,11 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             # issue #752 defensive-validations helpers (pure — no COM, no Access).
             'Get-VbNameFromSourceFile',
             'Test-SourceFileHasDuplicateOptions',
-            'Get-SourceFileSizeSnapshot'
+            'Get-SourceFileSizeSnapshot',
+            # issue #958 structural pre-import guards (pure — no COM, no Access).
+            'Test-AccessDocumentLayoutBeginEndBalanced',
+            'Assert-AccessDocumentTextLooksLoadable',
+            'Resolve-AccessDocumentObjectName'
         )
 
         $extractedCode = ($functionDefs |
@@ -961,6 +969,101 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
 
             $result | Should -Match 'Attribute VB_Name = "Form_Viejo"' `
                 -Because "without -ModuleName there is no canonical identity to enforce; VB_Name must be left alone"
+        }
+    }
+
+    Context "Assert-AccessDocumentTextLooksLoadable — structural guards (issue #958)" {
+        It "throws FORM_SOURCE_MALFORMED when a control Begin block is never closed" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtRoto"'
+                '    End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Roto.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_SOURCE_MALFORMED*' `
+                -Because "an unbalanced Begin/End control tree half-loads through LoadFromText and corrupts the binary form"
+        }
+
+        It "throws FORM_SOURCE_MALFORMED on a stray End inside the layout section" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Extra.form.txt' } |
+                Should -Throw -ExpectedMessage 'FORM_SOURCE_MALFORMED*'
+        }
+
+        It "accepts a balanced layout containing a hex-blob key = Begin block" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                '    PrtDevMode = Begin'
+                '        0x6d69630061630000000000000000000000000000000000000000000000000000 ,'
+                '    End'
+                '    Begin Section'
+                '        Begin TextBox'
+                '            Name ="txtSano"'
+                '        End'
+                '    End'
+                'End'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_Sano.form.txt' } |
+                Should -Not -Throw
+        }
+
+        It "does not count a lone VBA End statement inside CodeBehindForm as layout nesting" {
+            $doc = @(
+                'Version =21'
+                'Begin Form'
+                '    AutoResize = NotDefault'
+                'End'
+                'CodeBehindForm'
+                'Attribute VB_Name = "Form_ConEnd"'
+                'Private Sub cmdSalir_Click()'
+                'End'
+                'End Sub'
+            ) -join "`r`n"
+
+            { Assert-AccessDocumentTextLooksLoadable -DocumentText $doc -Kind Form -SourcePath 'forms/Form_ConEnd.form.txt' } |
+                Should -Not -Throw `
+                -Because "the balance check must stop at the CodeBehindForm marker: a bare End is a legal VBA statement"
+        }
+    }
+
+    Context "Resolve-AccessDocumentObjectName (issue #958)" {
+        It "strips the Form_ prefix" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Form_Cliente' | Should -Be 'Cliente'
+        }
+
+        It "strips the Report_ prefix" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Report_Listado' | Should -Be 'Listado'
+        }
+
+        It "passes through an unprefixed name" {
+            Resolve-AccessDocumentObjectName -ModuleName 'Cliente' | Should -Be 'Cliente'
+        }
+
+        It "throws FORM_OBJECT_NAME_EMPTY when the derived name is empty" {
+            { Resolve-AccessDocumentObjectName -ModuleName 'Form_' } |
+                Should -Throw -ExpectedMessage 'FORM_OBJECT_NAME_EMPTY*' `
+                -Because "LoadFromText with an empty object name creates the unnameable broken-form state"
+        }
+
+        It "throws FORM_OBJECT_NAME_EMPTY on a whitespace-only derived name" {
+            { Resolve-AccessDocumentObjectName -ModuleName 'Form_   ' } |
+                Should -Throw -ExpectedMessage 'FORM_OBJECT_NAME_EMPTY*'
         }
     }
 
