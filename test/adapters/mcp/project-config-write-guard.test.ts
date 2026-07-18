@@ -41,6 +41,12 @@ async function runWriteGateCase(
   );
   if (mode === "running-operation") {
     mkdirSync(join(root, ".dysflow", "runtime"));
+    // #967 — set updatedAt to NOW so the record is fresh relative to the
+    // real wall clock; the stale-marker auto-cleanup would otherwise reap it
+    // (default threshold = 30 min) and the gate would no longer block the
+    // write. The "running-operation" scenario is exercising the gate's
+    // active-blocker path, not the stale-cleanup path.
+    const freshUpdatedAt = new Date().toISOString();
     writeFileSync(
       join(root, ".dysflow", "runtime", "operations.json"),
       JSON.stringify({
@@ -55,7 +61,7 @@ async function runWriteGateCase(
             status: "running",
             accessPid: 123,
             processStartTime: "2026-07-18T10:00:00.000Z",
-            updatedAt: "2026-07-18T10:00:00.000Z",
+            updatedAt: freshUpdatedAt,
           },
         ],
       }),
