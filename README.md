@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**84 visible MCP tools · Windows / Node 20+**
+**85 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 84 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 85 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -726,6 +726,13 @@ Read `.dysflow/project.json` from the supplied `cwd` and return a structured dia
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
 * **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`, where `outcome` is `resolved` or `unresolved`, and `reason` is one of: `explicit id match`, `single project config found`, `project.json not found`, `id mismatch`, `unknown`.
+
+#### `schema`
+Return the runtime contract for every tool in the consumer's dysflow installation: parameters (typed + required + description + enumValues + default), returns (JSON Schema fragment), errorCodes (with recoverable flag), crossReferences (issue numbers), requiredCapabilities, safeByDefault. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `get_capabilities` (which reports live state) and `diagnose` (which surfaces diagnostic verdicts): `schema` reports the static contract every other tool advertises.
+* **Parameters**:
+  - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
+  - `toolName` (string, optional): Optional tool name to filter the catalog to a single entry. Omit for the full catalog.
+* **Returns**: `{ projectId, tools: [{ name, description, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault }] }`.
 
 ---
 
