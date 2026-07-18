@@ -1,16 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- feat(vba-sync): pre-import structural quality gate — `import_all` / `import_modules` parse every planned `.form.txt` / `.report.txt` (strict FormIR parse + Begin/End layout balance) before spawning the runner and fail closed with `FORM_SOURCE_MALFORMED`, so a structurally broken source can never half-load into the Access binary; `dryRun` plans surface the same defects under `errors` (#958)
-
-### Fixed
-
-- fix(vba-sync): self-heal legacy `.form.txt` metadata on import — the import normalization pipeline now applies the same canonicalizations the export path guarantees (`AutoResize = NotDefault` root marker from #902/#904 and `CodeBehindForm` `Attribute VB_Name` identity from #743), so exports produced by dysflow ≤ v2.13.x no longer break binary forms on `LoadFromText`; the pipeline is byte-identical on already-canonical text, keeping `export → import` idempotent (#958)
-- fix(vba-sync): the import runner rejects an unbalanced Begin/End layout tree (`FORM_SOURCE_MALFORMED`) and an empty derived object name (`FORM_NAME_RESOLUTION_FAILED`, now enforced through the pure `Resolve-AccessDocumentObjectName` helper) before `LoadFromText` touches the binary (#958)
-
 ## [v2.14.2] - 2026-07-17
 
 ### Fixed
