@@ -43,9 +43,40 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
+  // Issue #966 — Pre-flight checks docs block (Round-12).
+  // The `description` field is the canonical carrier for the per-tool
+  // pre-flight checklist that an AI agent reads before passing
+  // `apply:true`. The runtime enforces these gates automatically and
+  // surfaces a typed error envelope when one fails; this block exists
+  // so the same content lives next to the schema rather than only in
+  // prose the agent might skip.
+  //
+  // Pre-flight checks (executed automatically at apply:true):
+  // - destinationRoot must exist as a directory (NOT a file, NOT a
+  //   non-existent path). Common footgun: `git rm -r src/` removes
+  //   the directory itself, not just its contents. After running
+  //   `git rm -r <destinationRoot>` you MUST `mkdir <destinationRoot>`
+  //   before calling this tool with apply:true.
+  // - accessPath must exist and be readable. When overridden it must
+  //   resolve inside projectRoot (or pass `allowExternalAccessPath:true`
+  //   for read-only tools — see #968).
+  // - No stale markers with status="running" in
+  //   .dysflow/runtime/markers/.
+  // - capabilities.allowWrites must be true in .dysflow/project.json
+  //   AND writesProcess.enabled must be true at the runtime level.
+  // - projectId (when supplied) must match .dysflow/project.json id.
+  //
+  // On any failure the response carries a typed errorCode
+  // (DESTINATION_ROOT_NOT_FOUND, ACCESS_PATH_NOT_FOUND,
+  // OUTSIDE_PROJECT_ROOT, WRITE_LOCKED_BY_RUNNING_OP,
+  // CAPABILITIES_DISALLOW_WRITE, MCP_WRITES_DISABLED,
+  // PROJECT_ID_MISMATCH) and a diagnostics[].remediation field with
+  // the concrete next command.
   export_modules: {
     type: "object",
     additionalProperties: false,
+    description:
+      "Issue #966 Pre-flight checks: before apply:true the runtime confirms (1) destinationRoot exists as a directory — `git rm -r src/` removes the directory itself, recreate it with `mkdir src/` before calling apply:true; (2) accessPath exists and resolves inside projectRoot or carries allowExternalAccessPath:true (#968); (3) no stale running markers in .dysflow/runtime/markers/; (4) capabilities.allowWrites=true and writesProcess.enabled=true; (5) projectId matches .dysflow/project.json. Failures surface as typed errorCodes with diagnostics[].remediation carrying the next command — see references/error-codes.md#DESTINATION_ROOT_NOT_FOUND for the destinationRoot case.",
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
@@ -109,9 +140,17 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
+  // Issue #966 — Pre-flight checks docs block (Round-12).
+  // See `export_modules` above for the full canonical block. The same
+  // five gates apply: destinationRoot existence, accessPath ownership,
+  // no stale running markers, capabilities.allowWrites, projectId match.
+  // The destinationRoot footgun — `git rm -r <destinationRoot>` removes
+  // the directory itself, not just its files — applies equally here.
   import_modules: {
     type: "object",
     additionalProperties: false,
+    description:
+      "Issue #966 Pre-flight checks: before apply:true the runtime confirms (1) destinationRoot exists as a directory — `git rm -r src/` removes the directory itself, recreate it with `mkdir src/` before calling apply:true; (2) accessPath exists and resolves inside projectRoot (binary writers do NOT honor allowExternalAccessPath); (3) no stale running markers; (4) capabilities.allowWrites=true and writesProcess.enabled=true; (5) projectId matches .dysflow/project.json. Failures surface typed errorCodes with diagnostics[].remediation carrying the next command.",
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
@@ -321,9 +360,18 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   // returnFullDiff / directoryPath / recursive / includeTests / includeForms
   // is forwarded from the SCHEMA_PROPS / CTX_PROPS / STRICT_CTX surface
   // already shared with the three primitives.
+  // Issue #966 — Pre-flight checks docs block (Round-12).
+  // `sync_binary` composes `verify_code` + `import_modules` +
+  // `export_modules`. Pre-flight checks listed for `export_modules`
+  // and `import_modules` apply equally to every inner step; the
+  // compose gate is the same five checks and the destinationRoot
+  // footgun — `git rm -r <destinationRoot>` removes the directory
+  // itself — breaks all three inner primitives in one shot.
   sync_binary: {
     type: "object",
     additionalProperties: false,
+    description:
+      "Issue #966 Pre-flight checks: before apply:true the runtime confirms (1) destinationRoot exists as a directory — `git rm -r src/` removes the directory itself, recreate it with `mkdir src/` before calling apply:true; (2) accessPath exists and resolves inside projectRoot; (3) no stale running markers; (4) capabilities.allowWrites=true and writesProcess.enabled=true; (5) projectId matches .dysflow/project.json. sync_binary composes verify_code + import_modules + export_modules, so a single failed gate aborts the whole composition. Failures surface typed errorCodes with diagnostics[].remediation carrying the next command.",
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,

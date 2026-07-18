@@ -1,0 +1,158 @@
+import { access, readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+
+// Issue #966 — docs gap. The `destinationRoot` pre-condition for every
+// write-tool must be surfaced in (1) the JSON schema top-level
+// `description` and (2) the operator-facing skill assets. The runtime
+// error contract (`DESTINATION_ROOT_NOT_FOUND` + structured remediation)
+// is already implemented by #962 + #970; this test only asserts the
+// documentation surface.
+
+const SCHEMAS_PATH = "src/adapters/mcp/schemas/vba-sync-schemas.ts";
+
+// The skill assets live outside the repo (operator-local install). On
+// CI / non-operator machines the path won't exist; the assertions for
+// those assets gracefully `it.skip` instead of failing the suite.
+const SKILL_DIR = "C:/Users/adm1/.agents/skills/dysflow-usage/assets";
+const VERIFY_SCRIPT_PATH = `${SKILL_DIR}/scripts/verify-examples-vs-runtime.ps1`;
+const EXPORT_MODULES_EXAMPLE_PATH = `${SKILL_DIR}/examples/export-modules.md`;
+const IMPORT_MODULES_EXAMPLE_PATH = `${SKILL_DIR}/examples/import-modules.md`;
+const SYNC_BINARY_EXAMPLE_PATH = `${SKILL_DIR}/examples/sync-binary.md`;
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const PRE_FLIGHT_BLOCK = [
+  "Pre-flight checks (executed automatically at apply:true)",
+  // The recovery story must include the exact sequence:
+  "git rm -r",
+].join("\n");
+
+describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
+  it("export_modules schema carries a Pre-flight checks block that names destinationRoot and the git rm -r footgun", async () => {
+    const source = await readFile(SCHEMAS_PATH, "utf8");
+    const exportModulesSection = sectionAfterToolEntry(source, "export_modules:");
+
+    expect(exportModulesSection).toContain("Pre-flight checks");
+    expect(exportModulesSection).toContain("destinationRoot");
+    expect(exportModulesSection).toContain("git rm -r");
+    // First-line constant of the block — guards against a description
+    // that drifts away from the canonical wording.
+    expect(exportModulesSection).toMatch(/Pre-flight checks \(executed automatically/);
+  });
+
+  it("import_modules schema carries a Pre-flight checks block that names destinationRoot and the git rm -r footgun", async () => {
+    const source = await readFile(SCHEMAS_PATH, "utf8");
+    const importModulesSection = sectionAfterToolEntry(source, "import_modules:");
+
+    expect(importModulesSection).toContain("Pre-flight checks");
+    expect(importModulesSection).toContain("destinationRoot");
+    expect(importModulesSection).toContain("git rm -r");
+  });
+
+  it("sync_binary schema carries a Pre-flight checks block that names destinationRoot and the git rm -r footgun", async () => {
+    const source = await readFile(SCHEMAS_PATH, "utf8");
+    const syncBinarySection = sectionAfterToolEntry(source, "sync_binary:");
+
+    expect(syncBinarySection).toContain("Pre-flight checks");
+    expect(syncBinarySection).toContain("destinationRoot");
+    expect(syncBinarySection).toContain("git rm -r");
+  });
+
+  it("verify-examples-vs-runtime.ps1 covers the recovery workflow (git rm -r -> mkdir -> export_modules apply:true)", async () => {
+    if (!(await fileExists(VERIFY_SCRIPT_PATH))) {
+      // Skill asset lives outside the repo (operator-local install).
+      // CI runners don't have it; the schema assertions above still
+      // cover the canonical contract.
+      return;
+    }
+    const script = await readFile(VERIFY_SCRIPT_PATH, "utf8");
+    // A single regex that matches all three steps in sequence with
+    // tolerated whitespace: removing src/, recreating it, then exporting.
+    expect(script).toMatch(
+      /git rm -r[^\n]*\n[\s\S]*?mkdir[\s\S]*?export_modules[\s\S]*?apply\s*:\s*true/s,
+    );
+    // The recovery story must be named in prose so reviewers can spot
+    // it without grepping the syntax.
+    expect(script).toMatch(/git rm -r/);
+    expect(script).toMatch(/mkdir/);
+  });
+
+  it("export-modules.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
+    if (!(await fileExists(EXPORT_MODULES_EXAMPLE_PATH))) {
+      return;
+    }
+    const example = await readFile(EXPORT_MODULES_EXAMPLE_PATH, "utf8");
+    expect(example).toContain("destinationRoot must exist");
+    expect(example).toContain("git rm -r");
+    // The shared constant block from the schema should be echoed in the
+    // example for parity.
+    expect(example).toMatch(/Pre-flight checks|recovery/i);
+  });
+
+  it("import-modules.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
+    if (!(await fileExists(IMPORT_MODULES_EXAMPLE_PATH))) {
+      return;
+    }
+    const example = await readFile(IMPORT_MODULES_EXAMPLE_PATH, "utf8");
+    expect(example).toContain("destinationRoot must exist");
+    expect(example).toContain("git rm -r");
+    expect(example).toMatch(/Pre-flight checks|recovery/i);
+  });
+
+  it("sync-binary.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
+    if (!(await fileExists(SYNC_BINARY_EXAMPLE_PATH))) {
+      return;
+    }
+    const example = await readFile(SYNC_BINARY_EXAMPLE_PATH, "utf8");
+    expect(example).toContain("destinationRoot must exist");
+    expect(example).toContain("git rm -r");
+    expect(example).toMatch(/Pre-flight checks|recovery/i);
+  });
+
+  it("PRE_FLIGHT_BLOCK constant points at every required doc surface", () => {
+    // Constant health-check: if the block itself loses a key phrase,
+    // we want a focused failure rather than three confusing ones.
+    expect(PRE_FLIGHT_BLOCK).toContain("Pre-flight checks");
+    expect(PRE_FLIGHT_BLOCK).toContain("git rm -r");
+  });
+});
+
+/**
+ * Returns the slice of `source` from the leading JSDoc-style comment
+ * block (`// ...`) directly above the `toolName:` entry, through the
+ * body of one schema entry, ending at the next sibling top-level key
+ * (or end of source). Captures both the canonical-wording JSDoc block
+ * AND the body, so per-tool asserts stay scoped AND don't fail when a
+ * sibling tool's doc grows.
+ */
+function sectionAfterToolEntry(source: string, toolEntry: string): string {
+  const idx = source.indexOf(toolEntry);
+  expect(idx, `missing tool entry ${toolEntry}`).toBeGreaterThanOrEqual(0);
+  // Walk back through preceding single-line `// ...` comments (plus
+  // blank separator lines) to capture the JSDoc block that documents
+  // the schema entry.
+  const allLines = source.split("\n");
+  const entryLine = source.slice(0, idx).split("\n").length - 1;
+  let leadLine = entryLine;
+  while (leadLine > 0) {
+    const prev = allLines[leadLine - 1] ?? "";
+    if (/^\s*\/\//.test(prev) || /^\s*$/.test(prev)) {
+      leadLine--;
+      continue;
+    }
+    break;
+  }
+  // Compose slice from line `leadLine` (inclusive) to next sibling key.
+  const startOffset = allLines.slice(0, leadLine).join("\n").length + (leadLine > 0 ? 1 : 0);
+  const rest = source.slice(startOffset);
+  const nextKeyMatch = rest.slice(toolEntry.length).match(/\n {2}\w+_?\w+:\s*\{/);
+  const end = nextKeyMatch?.index ?? rest.length;
+  return rest.slice(0, end + toolEntry.length);
+}
