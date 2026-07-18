@@ -574,6 +574,110 @@ Dysflow keeps Access PID ownership state separate from stable project configurat
 
 ---
 
+## Quickstart (AI agent)
+
+> **Who this is for.** You are an AI agent (Claude Code, OpenCode, Codex, or any MCP-aware assistant) and you have just been handed an Access/VBA project. Do these steps **once per project/worktree** before calling any Dysflow tool — they take 3 minutes and replace 30 minutes of trial-and-error.
+
+### 3-command hello world
+
+The minimum viable agent loop — verify the project is wired, list its modules, plan an export. All three calls are read-only and never open Access.
+
+```powershell
+# 1. Confirm dysflow is installed and reachable.
+dysflow --version
+```
+
+```powershell
+# 2. Resolve the project the agent is sitting in. Returns the canonical
+#    projectId plus the resolved accessPath / backendPath / destinationRoot.
+dysflow resolve_project
+```
+
+```powershell
+# 3. List every VBA module the project owns (read-only, no Access spawned).
+dysflow list_vba_modules
+```
+
+If step 2 returns `unresolved`, you are not inside a project worktree — run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>` and retry. The `Primer proyecto` recipe below shows the canonical copy-paste-ready command.
+
+### Primer proyecto (copy-paste-ready recipe)
+
+Run once per Access project/worktree. Replace `<project-id>`, `<frontend.accdb>`, and `<backend.accdb>` with your project's values. Use the **same `projectId`** as your memory/Engram project so traces line up:
+
+```powershell
+cd C:\Projects\<your-access-project>
+
+dysflow setup --write-project `
+  --project-id   <project-id> `
+  --access-path  <frontend.accdb> `
+  --backend-path <backend.accdb>
+
+$env:ACCESS_VBA_PASSWORD   = "<access-password>"   # never commit
+$env:DYSFLOW_BACKEND_PASSWORD = "<backend-password>"
+
+dysflow doctor            # gate before any write tool
+```
+
+After that, every MCP call should be short and traceable:
+
+```json
+{ "projectId": "<project-id>" }
+```
+
+Do **not** repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` on every tool call when they already live in `.dysflow/project.json` — repeated overrides are for deliberate one-off exceptions only.
+
+### Skill cross-references
+
+Load the canonical skills before touching VBA, Access state, or write-class tools. Each skill is an `agent-instructions` file the runtime will inject on demand:
+
+| Task | Load skill | Why |
+| --- | --- | --- |
+| Operating dysflow MCP (write-flags, error codes, preflight) | `dysflow-usage` | Tool/flag/error reference; pre-flight checklist before any dysflow call. |
+| Operating harness (HR-1..HR-8, anti-patterns, 8-step loop) | `dysflow-arnes` | Hard rules every dysflow session must follow. |
+| TDD loop for VBA tests (manifest, fixtures, isolation) | `access-vba-tdd` + sub-skill | Pre-flight the manifest, write the atom, run the runner. |
+| Diagnose source ⇄ binary drift (`.cls` = behavior, `.form.txt` = UI) | `vba-binary-drift` | Read first, then sync; never edit both sides blind. |
+| Author forms (perceive → act → verify) | `access-form-ui-builder` | Generate / verify a `.form.txt` plan without opening Access. |
+| Sync source ⇄ binary in one shot | `vba-binary-sync` | `verify_code` → `import_modules` → `export_modules` → re-verify pipeline. |
+| SQL impact / table change | `vba-sql-impact` | Tables, saved queries, RecordSource/RowSource lineage. |
+
+Onboarding companion: see [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboarding.md) for the 5-minute "what can go wrong" guide.
+
+### Quick checklist
+
+- [ ] You are inside the Access project repo/worktree, not the dysflow repo.
+- [ ] `.dysflow/project.json` exists with repo-relative `accessPath` and `backendPath`.
+- [ ] `projectId` matches the Engram project name when Engram is available.
+- [ ] Secrets live in env vars (`ACCESS_VBA_PASSWORD`, `DYSFLOW_BACKEND_PASSWORD`) — never in the config.
+- [ ] You pass `projectId` on every MCP call and never repeat `accessPath`.
+- [ ] After any timeout or crash, you call `list_access_operations` and `cleanup_access_operation` against the specific `operationId` — never `Stop-Process -Name MSACCESS`.
+
+---
+
+## Common pitfalls cheat-sheet
+
+When a Dysflow call returns an error envelope, the first 30 seconds should be spent on this table, not on reading stack traces. Every entry maps an error code to the fastest path back to a green build, and cross-references the Round-11/12 issue that introduced or hardened the behavior.
+
+| Symptom (error code) | What it really means | Fastest fix | See |
+| --- | --- | --- | --- |
+| `MCP_WRITES_DISABLED` | The MCP session started with `--disable-writes`, or this repo's `.dysflow/project.json` has `allowWrites: false`. | Confirm the session posture first (`get_capabilities.writesProcess.enabled`). If the repo is intentionally read-only, use `dryRun: true` or work in a different worktree; otherwise flip `allowWrites: true` and reload. | #962 |
+| `PROJECT_CONFIG_NOT_WRITE_READY` (and its 5 split children: `ACCESS_PATH_NOT_FOUND`, `BACKEND_PATH_NOT_FOUND`, `DESTINATION_ROOT_NOT_FOUND`, `OUTSIDE_PROJECT_ROOT`, `PROJECT_ID_MISMATCH`) | The project is unwired, the `destinationRoot` is missing, or the requested `projectId` does not match `.dysflow/project.json`. Each child code tells you exactly which invariant broke. | Run `dysflow resolve_project` first to read the resolved config and `diagnostics[]`; then `dysflow doctor`; then re-run `dysflow setup --write-project` if a path is missing. For `OUTSIDE_PROJECT_ROOT`, copy the file into `destinationRoot` or pass an explicit `projectRoot` override — do not bend the path gate. | #962, #966, #968 |
+| `WRITE_LOCKED_BY_RUNNING_OP` / `OPERATION_ALREADY_RUNNING` | A prior Dysflow-owned Access operation is still holding the marker file in `.dysflow/runtime/markers/`. | List the operations with `list_access_operations`, then either wait for completion or call `cleanup_access_operation` on the specific `operationId`. For stale `status:"running"` markers (no PID, idle past the grace window), call `clean_stale_markers` with explicit `confirm: true`. | #967, #976 |
+| `LACCDB_STALE_DETECTED` / `LIVE_PROCESS_HOLDS_LACCDB` | Dysflow found a `*.laccdb` lock file when launching Access. The first means no live Access process holds the lock — it removes the stale lock and continues; the second means a real `MSACCESS.EXE` is bound to the same `accessPath` and refuses to start. | For `LACCDB_STALE_DETECTED`, no action needed (Dysflow removed it). For `LIVE_PROCESS_HOLDS_LACCDB`, identify the holder PID with `access_force_cleanup_orphaned`, verify it is **headless** and bound to **the same** `accessPath`, then pass `confirmPid` explicitly. Never `Stop-Process -Name MSACCESS`. | #967, #976 |
+| `MCP_ALLOWLIST_NOT_CONFIGURED` / `MCP_PROCEDURE_NOT_ALLOWED` | You tried to call a VBA procedure but the project's `allowedProcedures` (or `capabilities.procedures.allow`) does not list it. | Add the procedure name to `.dysflow/project.json` under `capabilities.procedures.allow` and reload. An empty list means *all procedures are allowed* — that is rarely what production wants. | #962, Round-3 |
+| `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` | An `export_modules` / `export_all` call in developer mode is about to overwrite the active source tree. | Re-target the export to a sibling directory (`<repo>/export/`) or pass `confirmOverwriteSource: true` after confirming the destination is intentional. `prune:true` + `filter:...` is always rejected (`INVALID_INPUT`). | #779, #619 |
+| `RUNNER_INVALID_JSON` / `CONFIG_TARGET_NOT_FOUND` | Dysflow launched PowerShell but the runner did not return structured JSON, or the target `.accdb` is missing. | Run `dysflow doctor` — it surfaces both the runner binary path and the Access install. Then verify `accessPath` resolves against `.dysflow/project.json` (do **not** assume a fresh `pwd` if you are inside a worktree). | #594, #962 |
+| `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | The `.form.txt`/`.report.txt`/`.bas`/`.cls` source the agent tried to import does not parse. | Run `lint_module` (or the form import gate's structural pre-flight) before re-importing; repair the metadata with the `vba-form-metadata-repair` skill. | #958 |
+
+### Failure patterns that have nothing to do with the error code
+
+- **"My doctor says green but the write tool still refuses."** Check `get_capabilities.writesProcess.enabled` — `dysflow serve` (HTTP) starts writes-disabled by default; pass `--enable-writes` explicitly or switch to `dysflow mcp` (stdio, writes on).
+- **"I see two different `projectId`s for the same repo."** One is in `.dysflow/project.json` and the other is the Engram/memory project name. Pick one canonical name with `dysflow setup --set-project-id <id>` and use it everywhere — the agent-side `projectId` field on every MCP call is the trace identity, not the trace content.
+- **"My changes keep colliding with a teammate's working tree."** You are likely running two Dysflow writers against the same `.accdb` from different worktrees. Check `.dysflow/project.json.owningWorktree` (when present) or pick one worktree to own the binary; the other worktree should only run read-only tools.
+
+See [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboarding.md) for the 5-minute guided tour of the same pitfalls with concrete fixes.
+
+---
+
 ## MCP (stdlib-style stdio)
 
 The main production entrypoint is:
