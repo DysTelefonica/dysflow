@@ -93,6 +93,13 @@ export const RELATED_ISSUE_NUMBERS: Readonly<Record<string, readonly string[]>> 
   // #941 — form-property catalog
   FORM_UNKNOWN_PROPERTY: ["#941"],
   FORM_PROPERTY_VALUE_INVALID: ["#941"],
+  // #980 — read-tool taxonomy
+  BINARY_NOT_FOUND: ["#980"],
+  BINARY_LOCKED: ["#980"],
+  BINARY_PASSWORD_INVALID: ["#980"],
+  BINARY_FORMAT_UNSUPPORTED: ["#980"],
+  INTERNAL_ERROR: ["#980"],
+  RUNTIME_STALE: ["#980"],
 };
 
 /**
@@ -534,6 +541,235 @@ function explainFormPropertyValueInvalid(input: ExplainInput): ExplainObject {
   };
 }
 
+// ─── #980 — read-tool decision tree builders ───────────────────────────────────
+
+function explainBinaryNotFound(input: ExplainInput): ExplainObject {
+  const accessPath =
+    typeof input.details?.accessPath === "string"
+      ? (input.details.accessPath as string)
+      : "<accessPath>";
+  return {
+    summary: `Access database not found at '${accessPath}'.`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `fs.existsSync('${accessPath}') === true`,
+        result: "FAIL",
+        evidence: `Runner-layer fs.existsSync returned false for '${accessPath}'.`,
+      },
+      {
+        step: 2,
+        check:
+          "Did a recent move / rename / clean checkout drop this path, or is the configured accessPath stale?",
+        result: "LIKELY",
+        evidence:
+          "The most common cause is a moved .accdb or a stale `accessPath` in .dysflow/project.json after a directory restructure.",
+      },
+      {
+        step: 3,
+        check: "Update the path or restore the file, then retry.",
+        result: "LIKELY",
+        evidence:
+          "After `fs.existsSync` returns true, the runner opens an exclusive handle and the call succeeds.",
+        remediation:
+          input.remediation ??
+          `Verify '${accessPath}' exists on disk, or update 'accessPath' in .dysflow/project.json (or pass 'databasePath' / 'sourcePath' on the call) to point at the correct file.`,
+      },
+    ],
+  };
+}
+
+function explainBinaryLocked(input: ExplainInput): ExplainObject {
+  const accessPath =
+    typeof input.details?.accessPath === "string"
+      ? (input.details.accessPath as string)
+      : "<accessPath>";
+  const holderPid =
+    typeof input.details?.holderPid === "number"
+      ? (input.details.holderPid as number)
+      : "<holderPid>";
+  const lockType =
+    typeof input.details?.lockType === "string" ? (input.details.lockType as string) : "<lockType>";
+  return {
+    summary: `Access database at '${accessPath}' is locked by pid=${holderPid} (lock=${lockType}).`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `accessPath '${accessPath}' is NOT exclusively held by pid ${holderPid}`,
+        result: "FAIL",
+        evidence: `Exclusive open attempt rejected — pid=${holderPid} holds a lock (type=${lockType}).`,
+      },
+      {
+        step: 2,
+        check:
+          "Is the holder pid a headless dysflow operation, a stray orphan, or an interactive Access session?",
+        result: "LIKELY",
+        evidence:
+          "Stray MSACCESS.EXE instances (from a crashed test run or an interactive user) are the dominant cause. `list_access_operations` shows live ops; `access_force_cleanup_orphaned({})` lists orphans.",
+      },
+      {
+        step: 3,
+        check: "Release or kill the holder (verify headless + accessPath ownership first).",
+        result: "LIKELY",
+        evidence: "After the lock is released, the runtime opens the file on the next retry.",
+        remediation:
+          input.remediation ??
+          `Close the process holding pid=${holderPid} (or call 'access_force_cleanup_orphaned({confirmPid: ${holderPid}})' if it's an orphan). NEVER kill MSACCESS.EXE by process name — verify headless + accessPath ownership first.`,
+      },
+    ],
+  };
+}
+
+function explainBinaryPasswordInvalid(input: ExplainInput): ExplainObject {
+  const passwordEnv =
+    typeof input.details?.passwordEnv === "string"
+      ? (input.details.passwordEnv as string)
+      : "<passwordEnv>";
+  const accessPath =
+    typeof input.details?.accessPath === "string"
+      ? (input.details.accessPath as string)
+      : "<accessPath>";
+  return {
+    summary: `Password in env var '${passwordEnv}' did not unlock '${accessPath}'.`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `process.env['${passwordEnv}'] matches the database password`,
+        result: "FAIL",
+        evidence: `Access rejected the password supplied via '${passwordEnv}' for '${accessPath}'.`,
+      },
+      {
+        step: 2,
+        check:
+          "Did the password rotate recently, or is the env var set in a different shell than the one launching the MCP adapter?",
+        result: "LIKELY",
+        evidence:
+          "Two common causes: (1) the password was rotated in the database but the env var still holds the old value, or (2) the env var was set in a parent shell that did not propagate to the spawned MCP adapter.",
+      },
+      {
+        step: 3,
+        check: "Update the env var to the current password and restart the adapter.",
+        result: "LIKELY",
+        evidence: "After updating the env var, the next open attempt succeeds.",
+        remediation:
+          input.remediation ??
+          `Set env var '${passwordEnv}' to the current password in the shell that launches the MCP adapter, then restart. The password value is never echoed on the wire.`,
+      },
+    ],
+  };
+}
+
+function explainBinaryFormatUnsupported(input: ExplainInput): ExplainObject {
+  const accessPath =
+    typeof input.details?.accessPath === "string"
+      ? (input.details.accessPath as string)
+      : "<accessPath>";
+  const observedMagic =
+    typeof input.details?.observedMagic === "string"
+      ? (input.details.observedMagic as string)
+      : "<unknown>";
+  return {
+    summary: `'${accessPath}' is not a recognized Access format (magic: '${observedMagic}').`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `first bytes of '${accessPath}' match a recognized Access format (.accdb / .mdb)`,
+        result: "FAIL",
+        evidence: `Runner read magic '${observedMagic}' which does not match any Access format.`,
+      },
+      {
+        step: 2,
+        check:
+          "Is the file a renamed non-Access file, a corrupt copy, or a pre-2007 .mdb that was never converted?",
+        result: "LIKELY",
+        evidence:
+          "Renamed .docx / .pdf / .xlsx files share no magic with .accdb. Corrupt copies often read all-zero magic.",
+      },
+      {
+        step: 3,
+        check: "Restore the original Access file or convert from .mdb.",
+        result: "LIKELY",
+        evidence:
+          "After the file is a valid .accdb, the runner opens it without firing this envelope.",
+        remediation:
+          input.remediation ??
+          `Verify '${accessPath}' is a real .accdb / .mdb file. If it was renamed from another format, restore the original. If it is a pre-2007 .mdb, run Access's 'Convert Database' tool and retry.`,
+      },
+    ],
+  };
+}
+
+function explainInternalError(input: ExplainInput): ExplainObject {
+  const errorClass =
+    typeof input.details?.errorClass === "string"
+      ? (input.details.errorClass as string)
+      : "<errorClass>";
+  return {
+    summary: `Unexpected internal exception of type ${errorClass} (no raw stack leaked on the wire).`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `the dispatch boundary did NOT encounter a throw from a downstream service`,
+        result: "FAIL",
+        evidence: `Caught ${errorClass} thrown by a downstream service during tool execution.`,
+      },
+      {
+        step: 2,
+        check:
+          "Was the input shape valid AND the runtime state healthy, or is this a true runtime defect?",
+        result: "LIKELY",
+        evidence:
+          "INTERNAL_ERROR fires only after schema validation passes — the failure is in service / adapter logic, not in the caller's payload.",
+      },
+      {
+        step: 3,
+        check: "Inspect server logs and file an issue with the captured errorClass + tool name.",
+        result: "LIKELY",
+        evidence:
+          "Server-side stack (in stderr / log rotation) is the canonical diagnostic source — the wire envelope intentionally omits it.",
+        remediation:
+          input.remediation ??
+          `Inspect the MCP adapter's stderr for the full stack (never reflected on the wire). Open an issue with the captured errorClass='${errorClass}', the tool name, and the input payload (with secrets redacted).`,
+      },
+    ],
+  };
+}
+
+function explainRuntimeStale(input: ExplainInput): ExplainObject {
+  const tool = typeof input.details?.tool === "string" ? (input.details.tool as string) : "<tool>";
+  const signal =
+    typeof input.details?.signal === "string" ? (input.details.signal as string) : "<signal>";
+  return {
+    summary: `Runtime state is corrupted (detected by '${tool}', signal: '${signal}'). Restart required.`,
+    decisionTree: [
+      {
+        step: 1,
+        check: "runtime invariants hold (cache sizes, marker consistency, service registry sanity)",
+        result: "FAIL",
+        evidence: `Runtime detector '${tool}' fired with signal '${signal}' — invariants violated.`,
+      },
+      {
+        step: 2,
+        check:
+          "Is the runtime accumulating stale markers / oversized caches from prior crashed runs?",
+        result: "LIKELY",
+        evidence:
+          "Stale markers from crashed operations and caches that overflow their hard caps are the dominant causes. `clean_stale_markers` is the canonical fix; restart re-derives the rest.",
+      },
+      {
+        step: 3,
+        check: "Restart the MCP adapter and re-derive invariants.",
+        result: "LIKELY",
+        evidence:
+          "After restart, all caches are empty and invariants hold; the stale signal does not reappear.",
+        remediation:
+          input.remediation ??
+          `Restart the MCP adapter. The runtime does NOT auto-restart because stale state can be silent. If the signal reappears within minutes of restart, call 'clean_stale_markers' and inspect .dysflow/runtime/ for orphans.`,
+      },
+    ],
+  };
+}
+
 /**
  * Generic fallback for codes without a tree-specific decision list. Still
  * MUST emit ≥3 steps so the contract holds regardless of code.
@@ -569,23 +805,28 @@ function genericExplain(input: ExplainInput): ExplainObject {
   };
 }
 
-const EXPLAIN_BUILDERS: ReadonlyMap<string, (input: ExplainInput) => ExplainObject> = new Map<
-  string,
-  (input: ExplainInput) => ExplainObject
->([
-  ["DESTINATION_ROOT_NOT_FOUND", explainDestinationRootNotFound],
-  ["OUTSIDE_PROJECT_ROOT", explainOutsideProjectRoot],
-  ["WRITE_LOCKED_BY_RUNNING_OP", explainWriteLockedByRunningOp],
-  ["CAPABILITIES_DISALLOW_WRITE", explainCapabilitiesDisallowWrite],
-  ["PROJECT_ID_MISMATCH", explainProjectIdMismatch],
-  ["MCP_WRITES_DISABLED", explainWritesDisabled],
-  ["MCP_PROCEDURE_NOT_ALLOWED", explainProcedureNotAllowed],
-  ["MCP_ALLOWLIST_NOT_CONFIGURED", explainAllowlistNotConfigured],
-  ["MCP_INPUT_INVALID", explainInputInvalid],
-  ["EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION", explainExportSourceGuardRefused],
-  ["FORM_UNKNOWN_PROPERTY", explainFormUnknownProperty],
-  ["FORM_PROPERTY_VALUE_INVALID", explainFormPropertyValueInvalid],
-]);
+export const EXPLAIN_BUILDERS: ReadonlyMap<string, (input: ExplainInput) => ExplainObject> =
+  new Map<string, (input: ExplainInput) => ExplainObject>([
+    ["DESTINATION_ROOT_NOT_FOUND", explainDestinationRootNotFound],
+    ["OUTSIDE_PROJECT_ROOT", explainOutsideProjectRoot],
+    ["WRITE_LOCKED_BY_RUNNING_OP", explainWriteLockedByRunningOp],
+    ["CAPABILITIES_DISALLOW_WRITE", explainCapabilitiesDisallowWrite],
+    ["PROJECT_ID_MISMATCH", explainProjectIdMismatch],
+    ["MCP_WRITES_DISABLED", explainWritesDisabled],
+    ["MCP_PROCEDURE_NOT_ALLOWED", explainProcedureNotAllowed],
+    ["MCP_ALLOWLIST_NOT_CONFIGURED", explainAllowlistNotConfigured],
+    ["MCP_INPUT_INVALID", explainInputInvalid],
+    ["EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION", explainExportSourceGuardRefused],
+    ["FORM_UNKNOWN_PROPERTY", explainFormUnknownProperty],
+    ["FORM_PROPERTY_VALUE_INVALID", explainFormPropertyValueInvalid],
+    // #980 — read-tool taxonomy
+    ["BINARY_NOT_FOUND", explainBinaryNotFound],
+    ["BINARY_LOCKED", explainBinaryLocked],
+    ["BINARY_PASSWORD_INVALID", explainBinaryPasswordInvalid],
+    ["BINARY_FORMAT_UNSUPPORTED", explainBinaryFormatUnsupported],
+    ["INTERNAL_ERROR", explainInternalError],
+    ["RUNTIME_STALE", explainRuntimeStale],
+  ]);
 
 /**
  * Build the ExplainObject for an error. The summary + decisionTree are

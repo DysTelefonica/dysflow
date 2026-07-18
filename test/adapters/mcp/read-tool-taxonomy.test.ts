@@ -36,7 +36,6 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createDispatchTool } from "../../../src/adapters/mcp/dispatch-factory";
 import {
   BINARY_FORMAT_UNSUPPORTED,
   BINARY_LOCKED,
@@ -51,14 +50,19 @@ import {
   RUNTIME_STALE,
   runtimeStale,
 } from "../../../src/adapters/mcp/dispatch-common";
-import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation";
-import type { OperationResult, VbaSyncPort } from "../../../src/core/contracts/index";
-import { createDysflowError, failureResult, successResult } from "../../../src/core/contracts/index";
+import { createDispatchTool } from "../../../src/adapters/mcp/dispatch-factory";
 import {
   buildExplainObject,
   EXPLAIN_BUILDERS,
   relatedIssueNumbersForCode,
 } from "../../../src/adapters/mcp/explain-builder";
+import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation";
+import type { OperationResult, VbaSyncPort } from "../../../src/core/contracts/index";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 
 // ─── 1. Constants — full taxonomy is exported (#980 acceptance criterion #3) ─
 

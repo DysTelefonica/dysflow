@@ -8,9 +8,12 @@ import { isRecord } from "../../core/utils/index.js";
 
 import {
   exportSourceGuardRefused,
+  internalError,
   invalidInput,
   isWriteAllowed,
   mcpSchemaFor,
+  normalizeLegacyReadToolDetails,
+  remapLegacyReadToolCode,
   writesDisabled,
 } from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -410,7 +413,53 @@ export function createDispatchTool(
             // even if the caller passed them. The strip happens at the dispatch
             // boundary; downstream contracts (the VBA-sync port, the vba-modules
             // adapter) only see the cleaned payload.
-            const coreResult = await services.vbaSyncToolService.execute(name, normalizedInput);
+            //
+            // #980 — wrap unexpected throws from `vbaSyncToolService.execute`
+            // (synchronous OR async-rejected promise) with an INTERNAL_ERROR
+            // envelope. The wire response carries the JS error class name in
+            // `details.errorClass` and a sanitized message; raw stacks NEVER
+            // reach the MCP wire. This applies to BOTH read and write tools so
+            // any unexpected throw from a vba-sync service is observable from
+            // the same envelope shape across the whole taxonomy.
+            //
+            // #980 — when the service returns a legacy runner-layer code
+            // (`CONFIG_TARGET_NOT_FOUND`, `BINARY_ALREADY_LOCKED`,
+            // `ACCESS_PASSWORD_INVALID`, `ACCDB_FORMAT_UNSUPPORTED`) the
+            // dispatch boundary remaps it to the canonical #980 taxonomy
+            // (`BINARY_NOT_FOUND`, `BINARY_LOCKED`, `BINARY_PASSWORD_INVALID`,
+            // `BINARY_FORMAT_UNSUPPORTED`) BEFORE the envelope reaches the
+            // translator. The original message + remediation + details survive
+            // the translation so consumers see the canonical code with the
+            // runner's diagnostics intact.
+            let coreResult: Awaited<
+              ReturnType<NonNullable<typeof services.vbaSyncToolService>["execute"]>
+            >;
+            try {
+              coreResult = await services.vbaSyncToolService.execute(name, normalizedInput);
+            } catch (caught) {
+              const err = caught instanceof Error ? caught : new Error(String(caught));
+              return internalError({ error: err });
+            }
+            if (!coreResult.ok) {
+              const remappedCode = remapLegacyReadToolCode(coreResult.error.code);
+              if (remappedCode !== coreResult.error.code) {
+                coreResult = {
+                  ...coreResult,
+                  error: {
+                    ...coreResult.error,
+                    code: remappedCode,
+                    ...(coreResult.error.details !== undefined
+                      ? {
+                          details: normalizeLegacyReadToolDetails(
+                            coreResult.error.code,
+                            coreResult.error.details,
+                          ),
+                        }
+                      : {}),
+                  },
+                };
+              }
+            }
             const mcpResult = translateCoreResultToMcpContent(coreResult);
             // #850 — inline syntax validation returns caller-relative details and
             // remediation from the adapter. Preserve those fields at the public
