@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
 
 export type ProjectConfigStatus =
   | "valid"
@@ -415,6 +416,9 @@ export function diagnoseProjectConfig(
       "Requested destinationRoot is not owned by this worktree config.",
       `Use destinationRoot '${destinationRoot}'.`,
     );
+  const thresholdMs = resolveStaleMarkerThresholdMs(capabilities);
+  reapStaleMarkerFiles(join(projectRootNative, ".dysflow", "runtime", "markers"), thresholdMs);
+  reapStaleOperationsRegistry(projectRootNative, thresholdMs);
   const blockingOperations = findRunningOperations(projectRootNative, accessPath);
   if (blockingOperations.length > 0)
     return failWith(
@@ -431,6 +435,101 @@ export function diagnoseProjectConfig(
     remediation: null,
     owningWorktree: siblingRoot !== null ? `sibling:${siblingRoot}` : "cwd",
   };
+}
+
+/**
+ * Issue #967 — read the stale-marker threshold from
+ * `capabilities.staleMarkerThresholdMinutes` in `.dysflow/project.json`,
+ * falling back to {@link DEFAULT_STALE_MARKER_THRESHOLD_MS} (30 min) when
+ * absent or malformed. Returns a value in milliseconds because the
+ * downstream `cleanupStaleMarkers` does wall-clock comparison in ms.
+ */
+export function resolveStaleMarkerThresholdMs(capabilities: unknown): number {
+  if (capabilities === null || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+    return DEFAULT_STALE_MARKER_THRESHOLD_MS;
+  }
+  const raw = (capabilities as Record<string, unknown>).staleMarkerThresholdMinutes;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_STALE_MARKER_THRESHOLD_MS;
+  }
+  return Math.floor(raw * 60 * 1000);
+}
+
+/**
+ * Reap stale `status: "running"` records from `<projectRoot>/.dysflow/runtime/operations.json`,
+ * flipping them to `status: "abandoned"`. Pairs with `cleanupStaleMarkers`
+ * to cover both data sources that {@link findRunningOperations} reads.
+ *
+ * Returns the number of records flipped. A missing or malformed file is
+ * treated as zero reaped and surfaces in `errors[]` (silent on read —
+ * never blocks the pre-write gate on diagnostics noise).
+ *
+ * SYNC by design — same rationale as {@link reapStaleMarkerFiles}.
+ */
+export function reapStaleOperationsRegistry(
+  projectRoot: string,
+  thresholdMs: number,
+  options: { nowMs?: number } = {},
+): { reaped: number; errors: string[] } {
+  const registryPath = join(projectRoot, ".dysflow", "runtime", "operations.json");
+  const result: { reaped: number; errors: string[] } = { reaped: 0, errors: [] };
+  if (!existsSync(registryPath)) return result;
+
+  const nowMs = options.nowMs ?? Date.now();
+  let raw: string;
+  try {
+    raw = readFileSync(registryPath, "utf8");
+  } catch (err) {
+    result.errors.push(`operations.json read failed: ${formatError(err)}`);
+    return result;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Malformed registry is not our concern here — it's the registry's
+    // contract to handle corruption (quarantine). Skip silently.
+    return result;
+  }
+
+  if (!isPlainObjectRecord(parsed)) return result;
+
+  const wrapped = Array.isArray(parsed.records);
+  if (!wrapped && !Array.isArray(parsed)) return result;
+
+  const records = (wrapped ? parsed.records : parsed) as unknown[];
+  let mutated = false;
+  const abandonedAtIso = new Date(nowMs).toISOString();
+  for (const entry of records) {
+    if (!isPlainObjectRecord(entry)) continue;
+    if (entry.status !== "running") continue;
+    const updatedAtMs = Date.parse(typeof entry.updatedAt === "string" ? entry.updatedAt : "");
+    if (!Number.isFinite(updatedAtMs)) continue;
+    if (nowMs - updatedAtMs < thresholdMs) continue;
+    entry.status = "abandoned";
+    entry.abandonedAt = abandonedAtIso;
+    mutated = true;
+    result.reaped += 1;
+  }
+
+  if (mutated) {
+    try {
+      writeFileSync(registryPath, JSON.stringify(parsed), "utf8");
+    } catch (err) {
+      result.errors.push(`operations.json write failed: ${formatError(err)}`);
+      result.reaped = 0;
+    }
+  }
+  return result;
+}
+
+function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function findRunningOperations(projectRoot: string, accessPath: string): string[] {
@@ -512,4 +611,67 @@ function failWith(
     diagnostics: [{ code, severity: "error", message, remediation }],
     remediation,
   };
+}
+
+/**
+ * Issue #967 — `findRunningOperations` with stale-marker auto-cleanup
+ * pre-applied. Runs `cleanupStaleMarkers` over the project-local markers
+ * folder, then `reapStaleOperationsRegistry` over `operations.json`,
+ * BEFORE listing blockers. Best-effort: a single corrupt file surfaces
+ * via the inner `errors[]` arrays but never prevents the gate from
+ * rendering a verdict.
+ *
+ * SYNC by design — `diagnoseProjectConfig` runs synchronously on every
+ * tool call and adding an async hop there would force the function to
+ * become `Promise<...>` and ripple through every caller (MCP resolver,
+ * CLI commands, tests). The async port-backed
+ * {@link cleanupStaleMarkers} (the unit-testable pure function) is still
+ * available for callers that want async semantics — this inlined version
+ * uses the same algorithm but mirrored onto sync filesystem I/O.
+ */
+function reapStaleMarkerFiles(markersRoot: string, thresholdMs: number): void {
+  if (!existsSync(markersRoot)) return;
+  const nowMs = Date.now();
+  let entries: string[];
+  try {
+    entries = readdirSync(markersRoot);
+  } catch {
+    return;
+  }
+  const abandonedAtIso = new Date(nowMs).toISOString();
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) continue;
+    const filePath = join(markersRoot, entry);
+    let raw: string;
+    try {
+      raw = readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!isPlainObjectRecord(parsed)) continue;
+    const record = isPlainObjectRecord(parsed.marker) ? parsed.marker : parsed;
+    if (record.status !== "running") continue;
+    const updatedAtMs = typeof record.updatedAt === "string" ? Date.parse(record.updatedAt) : NaN;
+    if (!Number.isFinite(updatedAtMs)) continue;
+    if (nowMs - updatedAtMs < thresholdMs) continue;
+    const next: Record<string, unknown> = {
+      ...parsed,
+      status: "abandoned",
+      abandonedAt: abandonedAtIso,
+    };
+    if (parsed.marker !== undefined) {
+      next.marker = { ...record, status: "abandoned", abandonedAt: abandonedAtIso };
+    }
+    try {
+      writeFileSync(filePath, JSON.stringify(next), "utf8");
+    } catch {
+      // Best-effort: a single write failure is not a gate-stopping event.
+    }
+  }
 }

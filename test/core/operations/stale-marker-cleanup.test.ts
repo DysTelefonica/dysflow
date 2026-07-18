@@ -2,7 +2,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { nodeStaleMarkerFileSystem } from "../../../src/adapters/operations/node-stale-marker-file-system.js";
 import { cleanupStaleMarkers } from "../../../src/core/operations/stale-marker-cleanup.js";
+import type { StaleMarkerFileSystemPort } from "../../../src/core/operations/stale-marker-file-system-port.js";
 
 /**
  * Stale marker auto-cleanup (#967).
@@ -18,10 +20,15 @@ import { cleanupStaleMarkers } from "../../../src/core/operations/stale-marker-c
  *
  * `cleanupStaleMarkers` is the pure unit that drives the transition. It
  * reads every `*.json` file under `markersRoot`, evaluates `status` and
- * `updatedAt`, and rewrites stale running markers with `status` flipped to
- * `"abandoned"`. The function is called from `diagnoseProjectConfig`
+ * `updatedAt`, and rewrites stale running markers with `status` flipped
+ * to `"abandoned"`. The function is called from `diagnoseProjectConfig`
  * (the pre-write gate) so every new operation's first read also reaps stale
  * markers proactively.
+ *
+ * These tests inject the production Node adapter (`nodeStaleMarkerFileSystem`)
+ * to exercise the real I/O surface — the port is a structural seam, not a
+ * mock surface. Per `core-boundary.test.ts` the `src/core` module is the
+ * contract surface; the port mismatch is caught at compile time.
  */
 
 const NOW_MS = Date.parse("2026-07-18T12:00:00.000Z");
@@ -58,6 +65,7 @@ describe("stale marker auto-cleanup (#967)", () => {
     });
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -67,7 +75,6 @@ describe("stale marker auto-cleanup (#967)", () => {
     expect(result.errors).toEqual([]);
     const after = await readMarkerFile(root, "op-stale.json");
     expect(after.status).toBe("abandoned");
-    // Original fields preserved
     expect(after.operationId).toBe("op-stale");
     expect(after.accessPath).toBe("C:/proj/app.accdb");
     expect(after.updatedAt).toBe(oneHourAgo);
@@ -84,6 +91,7 @@ describe("stale marker auto-cleanup (#967)", () => {
     });
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -115,6 +123,7 @@ describe("stale marker auto-cleanup (#967)", () => {
     });
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -140,6 +149,7 @@ describe("stale marker auto-cleanup (#967)", () => {
     });
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -159,8 +169,9 @@ describe("stale marker auto-cleanup (#967)", () => {
     });
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
-      thresholdMs: 60 * 60 * 1000, // 60min
+      thresholdMs: 60 * 60 * 1000,
       nowMs: NOW_MS,
     });
 
@@ -171,6 +182,7 @@ describe("stale marker auto-cleanup (#967)", () => {
   it("returns empty cleaned list and no errors when markersRoot does not exist", async () => {
     const missing = join(root, "does-not-exist");
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: missing,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -181,17 +193,16 @@ describe("stale marker auto-cleanup (#967)", () => {
   });
 
   it("captures per-file errors without aborting the rest of the sweep", async () => {
-    // valid stale marker (should be cleaned)
     const oneHourAgo = new Date(NOW_MS - 60 * 60 * 1000).toISOString();
     await setupMarkerFile(root, "op-stale.json", {
       operationId: "op-stale",
       status: "running",
       updatedAt: oneHourAgo,
     });
-    // invalid JSON file — should surface as an error but not block the others
     await writeFile(join(root, "op-corrupt.json"), "this is not JSON", "utf8");
 
     const result = await cleanupStaleMarkers({
+      fileSystem: nodeStaleMarkerFileSystem,
       markersRoot: root,
       thresholdMs: 30 * 60 * 1000,
       nowMs: NOW_MS,
@@ -199,7 +210,38 @@ describe("stale marker auto-cleanup (#967)", () => {
 
     expect(result.cleaned).toEqual(["op-stale.json"]);
     expect(result.errors.some((e) => e.file === "op-corrupt.json")).toBe(true);
-    // The stale one was still reaped despite the corrupt sibling
     expect((await readMarkerFile(root, "op-stale.json")).status).toBe("abandoned");
+  });
+
+  it("works with an injected fake port (no real I/O)", async () => {
+    const oneHourAgo = new Date(NOW_MS - 60 * 60 * 1000).toISOString();
+    const stored = new Map<string, string>([
+      [
+        "op-fake.json",
+        JSON.stringify({ operationId: "op-fake", status: "running", updatedAt: oneHourAgo }),
+      ],
+    ]);
+    const fakePort: StaleMarkerFileSystemPort = {
+      readdir: async () => [...stored.keys()],
+      readFile: async (path) => {
+        const content = stored.get(path.split(/[\\/]/).pop() ?? "");
+        if (content === undefined) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+        return content;
+      },
+      writeFile: async (path, data) => {
+        stored.set(path.split(/[\\/]/).pop() ?? "", data);
+      },
+    };
+
+    const result = await cleanupStaleMarkers({
+      fileSystem: fakePort,
+      markersRoot: "/virtual/markers",
+      thresholdMs: 30 * 60 * 1000,
+      nowMs: NOW_MS,
+    });
+
+    expect(result.cleaned).toEqual(["op-fake.json"]);
+    const written = JSON.parse(stored.get("op-fake.json") ?? "{}") as Record<string, unknown>;
+    expect(written.status).toBe("abandoned");
   });
 });

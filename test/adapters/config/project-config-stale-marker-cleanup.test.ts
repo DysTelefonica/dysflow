@@ -19,9 +19,11 @@ import { diagnoseProjectConfig } from "../../../src/adapters/config/project-conf
  *     in `.dysflow/project.json`. Default 30 minutes when missing.
  *   - Write-gate returns `status: "valid"` when only `status: "abandoned"`
  *     markers are present.
+ *
+ * Every timestamp in these tests is anchored to `Date.now()` (the same
+ * clock the diagnostic reads via `Date.now()`), so the threshold
+ * comparison is deterministic regardless of host wall-clock drift.
  */
-
-const NOW_MS = Date.parse("2026-07-18T12:00:00.000Z");
 
 type Fixture = {
   root: string;
@@ -53,11 +55,7 @@ function writeProjectJson(
   );
 }
 
-function writeMarkerFile(
-  fixture: Fixture,
-  name: string,
-  body: Record<string, unknown>,
-): void {
+function writeMarkerFile(fixture: Fixture, name: string, body: Record<string, unknown>): void {
   const markersDir = join(fixture.root, ".dysflow", "runtime", "markers");
   mkdirSync(markersDir, { recursive: true });
   writeFileSync(join(markersDir, name), JSON.stringify(body), "utf8");
@@ -66,11 +64,7 @@ function writeMarkerFile(
 function writeOperationsJson(fixture: Fixture, records: unknown[]): void {
   const runtimeDir = join(fixture.root, ".dysflow", "runtime");
   mkdirSync(runtimeDir, { recursive: true });
-  writeFileSync(
-    join(runtimeDir, "operations.json"),
-    JSON.stringify({ records }),
-    "utf8",
-  );
+  writeFileSync(join(runtimeDir, "operations.json"), JSON.stringify({ records }), "utf8");
 }
 
 describe("stale marker auto-cleanup integration (#967)", () => {
@@ -85,7 +79,7 @@ describe("stale marker auto-cleanup integration (#967)", () => {
   });
 
   it("reaps stale markers to abandoned BEFORE the write-gate decision", () => {
-    const oneHourAgo = new Date(NOW_MS - 60 * 60 * 1000).toISOString();
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     writeProjectJson(fixture, {});
     writeMarkerFile(fixture, "op-stale.json", {
       operationId: "op-stale",
@@ -97,24 +91,21 @@ describe("stale marker auto-cleanup integration (#967)", () => {
 
     const markerPath = join(fixture.root, ".dysflow", "runtime", "markers", "op-stale.json");
 
-    // BEFORE the call, the on-disk marker is still `running`.
     const beforeRaw = JSON.parse(readFileSync(markerPath, "utf8")) as Record<string, unknown>;
     expect(beforeRaw.status).toBe("running");
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
 
-    // Write-gate outcome: the stale marker must NOT block the gate.
     expect(result.status).toBe("valid");
     expect(result.writeReady).toBe(true);
 
-    // AFTER the call, the marker is now `abandoned`.
     const afterRaw = JSON.parse(readFileSync(markerPath, "utf8")) as Record<string, unknown>;
     expect(afterRaw.status).toBe("abandoned");
     expect(typeof afterRaw.abandonedAt).toBe("string");
   });
 
   it("does NOT reap fresh markers (updatedAt within threshold)", () => {
-    const fiveMinAgo = new Date(NOW_MS - 5 * 60 * 1000).toISOString();
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     writeProjectJson(fixture, {});
     writeMarkerFile(fixture, "op-fresh.json", {
       operationId: "op-fresh",
@@ -126,13 +117,12 @@ describe("stale marker auto-cleanup integration (#967)", () => {
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
 
-    // Fresh running marker DOES block the gate.
     expect(result.status).toBe("write-locked-by-running-op");
     expect(result.diagnostics[0]?.code).toBe("WRITE_LOCKED_BY_RUNNING_OP");
   });
 
   it("reaps stale operations.json registry records to abandoned as well", () => {
-    const oneHourAgo = new Date(NOW_MS - 60 * 60 * 1000).toISOString();
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     writeProjectJson(fixture, {});
     writeOperationsJson(fixture, [
       {
@@ -144,14 +134,13 @@ describe("stale marker auto-cleanup integration (#967)", () => {
         metadata: {},
         status: "running",
         accessPid: 9999,
-        processStartTime: "2026-07-18T10:30:00.000Z",
+        processStartTime: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
         updatedAt: oneHourAgo,
       },
     ]);
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
 
-    // The stale registry record was reaped to `abandoned`, so the gate passes.
     expect(result.status).toBe("valid");
     expect(result.writeReady).toBe(true);
   });
@@ -163,8 +152,8 @@ describe("stale marker auto-cleanup integration (#967)", () => {
       accessPath: fixture.app,
       projectRootAbs: fixture.root,
       status: "abandoned",
-      updatedAt: new Date(NOW_MS - 24 * 60 * 60 * 1000).toISOString(),
-      abandonedAt: new Date(NOW_MS - 23 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      abandonedAt: new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString(),
     });
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
@@ -174,8 +163,7 @@ describe("stale marker auto-cleanup integration (#967)", () => {
   });
 
   it("respects staleMarkerThresholdMinutes from project.json capabilities", () => {
-    const fortyFiveMinAgo = new Date(NOW_MS - 45 * 60 * 1000).toISOString();
-    // 60-minute threshold — a 45-minute-old running marker must NOT be reaped.
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     writeProjectJson(fixture, {
       capabilities: { staleMarkerThresholdMinutes: 60 },
     });
@@ -184,29 +172,27 @@ describe("stale marker auto-cleanup integration (#967)", () => {
       accessPath: fixture.app,
       projectRootAbs: fixture.root,
       status: "running",
-      updatedAt: fortyFiveMinAgo,
+      updatedAt: thirtyMinAgo,
     });
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
 
-    // Still running, gate is blocked.
     expect(result.status).toBe("write-locked-by-running-op");
   });
 
   it("defaults to 30 minutes when capabilities.staleMarkerThresholdMinutes is absent", () => {
-    const thirtyOneMinAgo = new Date(NOW_MS - 31 * 60 * 1000).toISOString();
-    writeProjectJson(fixture, {}); // no capabilities override
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    writeProjectJson(fixture, {});
     writeMarkerFile(fixture, "op-default-stale.json", {
       operationId: "op-default-stale",
       accessPath: fixture.app,
       projectRootAbs: fixture.root,
       status: "running",
-      updatedAt: thirtyOneMinAgo,
+      updatedAt: oneHourAgo,
     });
 
     const result = diagnoseProjectConfig(fixture.root, { projectId: "app" }, undefined);
 
-    // Default 30m threshold: a 31m-old running marker MUST be reaped and the gate passes.
     expect(result.status).toBe("valid");
   });
 });

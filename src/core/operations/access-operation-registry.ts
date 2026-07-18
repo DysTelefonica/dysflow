@@ -13,7 +13,8 @@ export type AccessOperationStatus =
   | "cleanup_pending"
   | "cleaned"
   | "pid_unknown"
-  | "running_untracked";
+  | "running_untracked"
+  | "abandoned";
 
 export type AccessOperationAction = "vba" | "query" | "diagnostics" | "import" | "test" | "run";
 
