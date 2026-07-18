@@ -189,6 +189,24 @@ export const RESOLVE_PROJECT_SCHEMA = {
  * pure: it captures `cwd` once at construction and the handler reads it
  * on every invocation. Tests pass a `mkdtempSync` directory so the
  * integration exercise does not depend on `process.cwd()`.
+ *
+ * #963 — Idempotence contract.
+ *
+ * The handler MUST perform a fresh filesystem validation on every call. No
+ * in-memory cache, no memoization wrapper, no TTL — `tryResolveProject`
+ * reads `<cwd>/.dysflow/project.json` via `readFile` and
+ * `diagnoseProjectConfig` performs fresh sync probes (`existsSync`,
+ * `realpathSync`, `readFileSync`) every invocation. 10 sequential calls
+ * with the same input return byte-identical JSON when the filesystem is
+ * stable, and mutations between calls (destinationRoot added/removed,
+ * project id changed) are reflected in the immediately subsequent call.
+ *
+ * Do NOT introduce a cache at this layer without first reading the
+ * contract-pinning test at
+ * `test/adapters/mcp/resolve-project-idempotence.test.ts` — it asserts
+ * the three acceptance criteria (AC1: 10-call byte-equality, AC2:
+ * filesystem-change reflection, AC3: no-cache behaviour) and is the
+ * authoritative guard against accidental cache regressions.
  */
 export function createResolveProjectTool(opts: { cwd: string }): DysflowMcpTool {
   return {
