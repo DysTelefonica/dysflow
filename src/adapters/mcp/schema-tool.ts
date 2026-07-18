@@ -203,6 +203,11 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   lint_module: ["#704", "#789"],
   resolve_project: ["#963", "#962"],
   schema: ["#971"],
+  // #965 — `diagnose` collapses the 4-5 round-trip pattern into one
+  // read-only call. Sibling of `schema` (static contract) and
+  // `resolve_project` (config resolution) — pairs with them under the
+  // Round-12 #965 umbrella.
+  diagnose: ["#965"],
   state: ["#978"],
   list_access_operations: ["#777"],
   cleanup_access_operation: ["#659", "#777"],

@@ -106,18 +106,20 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // #872 adds form_set_properties + form_duplicate_control +
     // form_get_geometry + form_list_controls: 80 -> 84.
     // #971 adds `schema` (runtime contract discovery): 84 -> 85.
+    // #965 adds `diagnose` (aggregated project health): 85 -> 86.
     // #976 adds `clean_stale_markers` (Round-12 user-callable companion
     // to the #967 auto-cleanup; dry-run default true, apply requires
     // confirm:true, write-gated through MCP_WRITES_DISABLED when writes
-    // are off): 85 -> 86.
+    // are off): 86 -> 87.
     // #978 adds `state` (Round-12 read-only runtime operational state —
     // surfaces { operations, markers, locks, counters } aggregated from
     // the access operation registry and `.dysflow/runtime/markers/`;
     // never opens Access, never spawns PowerShell, never mutates state):
-    // 86 -> 87.
+    // 87 -> 88.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(87);
+    expect(advertisedToolCount()).toBe(88);
   });
+});
 });

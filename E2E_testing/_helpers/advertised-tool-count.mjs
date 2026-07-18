@@ -50,15 +50,20 @@
  * surfaces the documented parameter / return / error-code /
  * cross-reference surface for every advertised MCP tool, never opens
  * Access, never spawns PowerShell, never mutates state): 84 -> 85.
+ * #965 adds `diagnose` (pure read-class aggregated project health
+ * surface that replaces the 4-5 round-trip pattern AI consumers hit
+ * today; never opens Access, never spawns PowerShell, never writes to
+ * disk; same risk family as `schema` / `resolve_project` /
+ * `get_capabilities`): 85 -> 86.
  * #976 adds `clean_stale_markers` (Round-12 user-callable companion to
  * the #967 auto-cleanup; dry-run default true, apply requires
  * `confirm: true`, write-gated through MCP_WRITES_DISABLED when writes
- * are off): 85 -> 86.
+ * are off): 86 -> 87.
  * #978 adds `state` (Round-12 read-only runtime operational state —
  * surfaces `{ operations, markers, locks, counters }` aggregated from
  * the access operation registry and `.dysflow/runtime/markers/`; never
- * opens Access, never spawns PowerShell, never mutates state): 86 -> 87. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 87;
+ * opens Access, never spawns PowerShell, never mutates state): 87 -> 88. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 88;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

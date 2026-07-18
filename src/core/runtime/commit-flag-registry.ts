@@ -177,6 +177,10 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // surface, but the handler never mutates state. Same family as
   // `verify_code` / `inspect_form` / `doctor` — `defaultBehavior: "noop"`.
   schema: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #965 — `diagnose` collapses the 4-5 round-trip pattern into
+  // one read-only call. Same read-class family as `schema`,
+  // `resolve_project`, `doctor`, `inspect_form` — `defaultBehavior: "noop"`.
+  diagnose: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   lint_form_code: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   analyze_form_ui: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   map_form_behavior: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
