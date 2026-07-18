@@ -72,6 +72,11 @@ describe("dysflow command modules", () => {
             checks: [{ name: "access-db-path", ok: true, message: "configured" }],
           }),
       },
+      // Opt out of the codegraph supplement drift check — the TUI
+      // dashboard doctor flow exercises the wiring to `diagnosticsService`
+      // only; the drift check is covered separately in
+      // `codegraph-supplement-drift-check.test.ts`.
+      checkSupplementDrift: false,
     });
 
     expect(frames.at(-1)).toContain("▸ Doctor");
@@ -364,6 +369,10 @@ describe("dysflow command modules", () => {
             checks: [{ name: "access-db-path", ok: true, message: "configured" }],
           }),
       },
+      // Opt out of the codegraph supplement drift check — the wiring
+      // contract is covered separately in this file's `doctor renders
+      // the codegraph-supplement-drift line` test below.
+      checkSupplementDrift: false,
       env: {},
     });
 
@@ -462,6 +471,9 @@ describe("dysflow command modules", () => {
               checks: [{ name: "access-db-path", ok: true, message: "configured" }],
             }),
         },
+        // Opt out of the codegraph supplement drift check — covered
+        // separately in `test/cli/commands/codegraph-supplement-drift-check.test.ts`.
+        checkSupplementDrift: false,
         env: {},
       }),
     ).resolves.toEqual({
@@ -513,5 +525,49 @@ describe("dysflow command modules", () => {
     const result = await runCli(["access", "unknown-cmd"]);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toMatch(/unknown access subcommand/i);
+  });
+
+  // Issue #961 (B component) — the doctor command renders the codegraph
+  // supplement drift check as a warn-only diagnostic line. Pin the wiring
+  // here so a future refactor cannot silently drop the new check from the
+  // doctor output.
+  it("doctor renders the codegraph-supplement-drift line when the check is injected", async () => {
+    const result = await handleDoctorCommand([], {
+      diagnosticsService: {
+        run: async () =>
+          successResult({
+            checks: [{ name: "access-db-path", ok: true, message: "configured" }],
+          }),
+      },
+      checkSupplementDrift: async () => ({
+        name: "codegraph-supplement-drift",
+        ok: false,
+        message:
+          "Found 1 stale codegraph-vba runtime version reference(s) in user-supplement blocks.",
+        result: {
+          ok: false,
+          filesScanned: 1,
+          blocksScanned: 1,
+          driftDetected: [
+            {
+              filePath: "/home/u/.config/opencode/AGENTS.md",
+              blockId: "ardelperal:codegraph-extra-tools",
+              line: 243,
+              snippet: "live runtime version: codegraph-vba v1.10.0",
+              matchedVersion: "v1.10.0",
+              remediation: "Replace the literal version with `codegraph --version`.",
+            },
+          ],
+          errors: [],
+        },
+        warnOnly: true,
+      }),
+      env: {},
+    });
+
+    expect(result.exitCode).toBe(0); // Drift is warn-only — never flips the exit code.
+    expect(result.stdout).toMatch(/✓ access-db-path: configured/);
+    expect(result.stdout).toMatch(/⚠ codegraph-supplement-drift:/);
+    expect(result.stdout).toMatch(/1 stale codegraph-vba/i);
   });
 });
