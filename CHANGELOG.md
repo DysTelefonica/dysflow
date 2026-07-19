@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.16.0] - 2026-07-19
+
+### Fixed
+
+- fix(e2e): use mcp-e2e sandbox for per-issue scripts; sandbox isolation proven against the stale repo-root F16 config that triggered the original failure (#1001, closes #1003)
+- fix(vba-sync): chunk-recursion guard for verify_code — `compareSourceAgainstBinary` no longer re-enters itself through `chunkSize` / `parallelChunks` / `onChunkTimeout` (chunk-control strip before single-flight comparison, 14 new regression assertions, #1001)
+- fix(e2e): tolerate null `failure.detail` in the mcp-e2e failure-detail printer; previous code crashed with `TypeError: Cannot read properties of undefined (reading 'slice')` on 807 / 869 (#1001)
+
+### Docs
+
+- docs(review): voluntary post-merge review for PR #1003 (#1001) — focused `review-reliability` lens over the chunk-recursion fix, runnable post-merge by anyone who wants to close the audit gap left by the explicit review-gate bypass (see `docs/post-merge-review-1001.md`)
+
+### Notes
+
+- Explicit review-gate bypass: PR #1003 was merged with an explicit operator authorization bypassing the bounded-review receipt gate. The native `gentle-ai review start` refused the diff because two historical compact-v2 recovery edges in `.git/gentle-ai/review-transactions/v2/` carry both anomalies simultaneously (escalated disposition + free-form recovery binding); `gentle-ai 2.1.8` `reconcile-authority` supports each anomaly individually but refuses the combined class. Upstream fix `Gentleman-Programming/gentle-ai#1465` is open and mergeable, not yet released. No `--force` was used (none exists on `review *`); no `.git/gentle-ai/*` was hand-edited (forbidden by contract); no upstream release was bypassed. The diff passed `pnpm lint`, full unit / integration (93 + 14 new assertions), the public test suite (#979), and the `Quality gates` + `Windows PowerShell/Access smoke` CI jobs. Audit trail: PR #1003 body, issue #1001 closure comment, commit `e9b06453`, and Engram observation `20827` (topic `dysflow/issue-1001/bypass`, literal operator authorization text).
+- Issue #961 (`dysflow-codegraph-update` ARN chain user-supplement drift) remains OPEN by design — the canonical fix lives in `DysTelefonica/workflow` (archived 2026-07-18). In-repo mitigation shipped: PR #999 (`b56de4af`, supplement drift detector). Closes when the upstream repo is unarchived and the ARN extension lands.
+- The full `C:\Proyectos\dysflow\E2E_testing` battery was executed once at release time per the `autonomous-issue-release-loop` hard rule.
+
 ## [v2.15.0] - 2026-07-18
 
 - chore(changelog): fold Unreleased into the upcoming release section - fix(forms): close form/report before SaveAsText (#957) (#960) - fix(forms): self-heal legacy .form.txt metadata and fail closed on structural damage before LoadFromText (#959, closes #958)
