@@ -81,6 +81,7 @@ C:/Users/adm1/AppData/Local/dysflow/bin/dysflow.cmd mcp
 
 Criterios de aceptación:
 
+- [ ] No aparece `C:/Proyectos/skills/dysflow/mcp.js`.
 - [ ] No aparece `C:/Proyectos/workflow/skills/dysflow/mcp.js`.
 - [ ] No aparece `MCP_STDIO_RUNTIME_NOT_IMPLEMENTED`.
 - [ ] No aparece `Connection closed`.
