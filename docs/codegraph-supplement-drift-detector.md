@@ -113,7 +113,31 @@ type SupplementDriftFinding = {
 
 ## Operator remediation
 
-When the doctor emits a drift finding:
+When the doctor emits a drift finding, the fastest path is the auto-fix
+command (A component, issue #961):
+
+```
+dysflow codegraph-drift          # read-only dry-run: lists the rewrites, exits 1 on drift
+dysflow codegraph-drift --apply  # rewrites the stale references in place
+```
+
+The rewrite replaces each stale reference with runtime-neutral phrasing that
+points at `codegraph --version` as the single source of the runtime version:
+
+- strict: `codegraph-vba v1.10.0` → ``codegraph-vba (installed runtime — see `codegraph --version`)``
+- loose: `for v1.10.0 semantics` → ``for the installed runtime (see `codegraph --version`) semantics``
+
+Guarantees:
+
+- Only prose inside `<!-- user-supplement:* -->` blocks is touched; gentle-ai
+  managed blocks and surrounding markdown stay verbatim.
+- A file whose supplement block never closes is skipped fail-closed — restore
+  the `<!-- /user-supplement:... -->` marker first, then re-run.
+- The rewrite is idempotent and detector-clean: a second run makes zero
+  changes, and the doctor scan reports zero findings afterwards.
+- CRLF/LF line endings are preserved.
+
+Manual fallback:
 
 1. Open the file at the line number reported.
 2. Replace the literal version with a `codegraph --version` pointer, e.g.
@@ -127,4 +151,6 @@ When the doctor emits a drift finding:
 
 Once the canonical fix lands in `DysTelefonica/workflow`'s ARN chain, this
 detector should keep running as a guard rail. Its job is to surface drift
-fast (no remote sync needed) so the user knows to refresh inline.
+fast (no remote sync needed) so the user knows to refresh inline — and the
+`codegraph-drift --apply` fix keeps working as the local remediation either
+way.
