@@ -19,6 +19,9 @@ Thumbs.db
 dysflow-release.key
 *.release-signing.key
 
+# compact_repair backups: dysflow-access-runner.ps1 writes <path>.bak-<timestamp>[-<rand>].
+*.bak-*
+
 # Real Access E2E fixtures may live under E2E_testing/, but source code there must stay tracked/reviewable.
 E2E_testing/**/*.accdb
 E2E_testing/**/*.mdb

@@ -78,7 +78,7 @@ console.log(`[mcp-e2e] Using dysflow runtime: ${cliCommand} (source: ${resolvedC
 // instead of inheriting a host-shell `DYSFLOW_HOME` that points at the stale
 // production install. `resolveDefaultRunnerScriptPath` returns
 // `${DYSFLOW_HOME}/app/scripts/dysflow-access-runner.ps1` when the env var is
-// set, and falls back to a relative path otherwise â€” and the E2E's cwd is
+// set, and falls back to a relative path otherwise — and the E2E's cwd is
 // `E2E_testing/`, not the repo root, so the relative fallback would not find
 // the script. Set the env var explicitly to the repo-local test-runtime.
 process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
@@ -150,7 +150,7 @@ const existingModuleName = "Funciones Generales";
 // spawned itself. PIDs from other Dysflow consumers (e.g. gestion_riesgos
 // running concurrently on the same host) are out of scope. The driver
 // records the `childPid` returned by every `callMcp` and the zombie
-// checks verify only those PIDs â€” never a global MSACCESS.EXE scan.
+// checks verify only those PIDs — never a global MSACCESS.EXE scan.
 const suiteOwnPids = new Set();
 const runIdentity = await hashRunIdentity([
   ...runtimeIdentityPaths(cliCommand),
@@ -302,7 +302,7 @@ try {
 }
 
 async function runBattery() {
-// #586 â€” `tools/list` MUST be called via `record()` so the suite-owned
+// #586 — `tools/list` MUST be called via `record()` so the suite-owned
 // child PID is tracked; do NOT call it via a separate `callMcp`. The
 // returned row also feeds the advertised-tool-count preflight check
 // below. `list.response.result.tools` is the MCP server's `tools/list`
@@ -310,7 +310,7 @@ async function runBattery() {
 const list = await record("protocol", "tools/list");
 try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); } catch {}
 // Advertised (non-hidden) tool count. Pinned at unit speed by
-// test/adapters/mcp/advertised-tool-count.test.ts â€” both import the same constant
+// test/adapters/mcp/advertised-tool-count.test.ts — both import the same constant
 // from _helpers/advertised-tool-count.mjs, so a future add/remove flips one place.
 addFailFastResult({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
 const missingIssue713Tools = ISSUE_713_REQUIRED_TOOLS.filter((name) => !advertised.includes(name));
@@ -328,7 +328,7 @@ addFailFastResult({
 await record("diagnostics", "doctor", { projectId, includeEnvironment: true });
 await record("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
 await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
-// #786 regression â€” inline execution must run a snippet and return its `result`.
+// #786 regression — inline execution must run a snippet and return its `result`.
 // (record() asserts the transport did not error; the deep inner-ok + returnValue
 // assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
 await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' }, { timeoutMs: 120000 });
@@ -336,13 +336,13 @@ await record("operations", "list_access_operations", {});
 await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
-// Same harness shape as every other tool â€” record() runs the call through the suite-owned
+// Same harness shape as every other tool — record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
 await record("capabilities", "get_capabilities", { projectId });
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
-  // Drift here means the unit test pin and the live MCP server disagree â€” flag it loudly.
+  // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
   const crossStart = Date.now();
   const cross = await callMcp("tools/call", { name: "get_capabilities", arguments: { projectId } });
   const crossMs = Date.now() - crossStart;
@@ -384,7 +384,7 @@ await record("maintenance", "compact_repair", { projectId, accessPath, databaseP
 // fixture remains untouched, while the configured sandbox target stays inside
 // the write-ready ownership boundary.
 // dry-run never calls DAO CompactDatabase, so this is the only E2E that actually compacts a
-// protected database â€” it guards the source-password (5th DAO arg) fix.
+// protected database — it guards the source-password (5th DAO arg) fix.
 await record("maintenance", "compact_repair", { projectId, accessPath, apply: true, backupFirst: true });
 await record("links", "link_tables", {
   projectId,
@@ -415,7 +415,7 @@ await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, dif
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
 // prune does a full project export plus an orphan scan, so it is heavier than a plain
-// export_all â€” give the operation (and the harness) ample time on large fixtures.
+// export_all — give the operation (and the harness) ample time on large fixtures.
 const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, timeoutMs: 120000 }, { timeoutMs: 120000 });
 try {
   const pruneData = JSON.parse(pruneResult.text ?? "{}");
@@ -428,11 +428,11 @@ try {
 }
 // Guard: prune + filter must be rejected (a filtered prune would delete everything else).
 await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, filter: existingModuleName }, { expected: "error" });
-// feat-759-no-compile (v1.19.0) â€” `compile` parameter on import_tools
+// feat-759-no-compile (v1.19.0) — `compile` parameter on import_tools
 // is gone. Callers passing it are rejected by Zod additionalProperties:false.
 await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true });
 await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true });
-// feat-759-no-compile (v1.19.0) â€” the `compile_vba` MCP tool was removed.
+// feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool was removed.
 // The mojibake-state pin test was retired; compile is no longer a
 // runtime concern (the human compiles in Access). The fixture binary's
 // mojibake is still real but no longer surfaces as a structured
@@ -441,7 +441,7 @@ await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expecte
 // verify_code exports every requested module to a temp dir and compares line
 // by line against the binary's VBA source. On the 131-component fixture
 // (`E2E_testing/NoConformidades.accdb`) the round-trip plus 131 module
-// exports runs well over the 30s default â€” 180s leaves headroom for the
+// exports runs well over the 30s default — 180s leaves headroom for the
 // Access COM open / export / close cycle per module.
 const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: false, timeoutMs: 180000 }, { timeoutMs: 180000 });
 // Semantic path assertion: verify_code now runs in semantic mode by default.
@@ -456,7 +456,7 @@ try {
   console.log(`FAIL\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 }
 // verify_code single-module: the unified tool covers the old compare_module via a moduleNames filter.
-// Same 180s budget as the full pass above (line 241) â€” even a single-module
+// Same 180s budget as the full pass above (line 241) — even a single-module
 // call walks the module + runs semantic diff + serializes the per-module
 // diff payload, which on a 600-line module clears the 30s default.
 const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true, timeoutMs: 180000 }, { timeoutMs: 180000 });
@@ -471,7 +471,7 @@ try {
   console.log(`FAIL\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 }
 
-// Round 5 / PR5 (v2.4.0) â€” verify_code returns bulkImportable as a drop-in
+// Round 5 / PR5 (v2.4.0) — verify_code returns bulkImportable as a drop-in
 // for import_modules. This is the real consumer flow: the fleet consumer
 // (expedientes round 5) reads verify_code.summaryStructured + bulkImportable
 // + bulkExportable, and passes bulkImportable straight to import_modules
@@ -480,7 +480,7 @@ try {
 //
 // DEFERRED in this environment: the frontend .accdb fixture is not present
 // in the working tree (only .bak-* snapshots of the backend). The block is
-// wired and ready to run as soon as the fixture is restored â€” see the
+// wired and ready to run as soon as the fixture is restored — see the
 // fixture copy loop at the top of this file (the "Missing E2E fixture"
 // guard at line ~63). Marked pass:true so the absence does NOT fail the
 // suite; the mem_save observation records the deferral.
@@ -580,7 +580,7 @@ addFailFastResult({
 });
 console.log(`${missingFormUiTools.length === 0 ? "PASS" : "FAIL"}\tform-ui-tools-advertised\t0ms\t${rows.at(-1).summary}`);
 
-// form-ui (issue #795) â€” offline analysis + plan/verify surface for AI-assisted UI work.
+// form-ui (issue #795) — offline analysis + plan/verify surface for AI-assisted UI work.
 const analyzeFormUiResult = await record("form-ui", "analyze_form_ui", { projectId, sourcePath: uiFormPath });
 const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
 const analyzePass = Boolean(
@@ -977,10 +977,10 @@ await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedur
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
 
-// issue #701 â€” read-only VBA procedure introspection tools. These tests
+// issue #701 — read-only VBA procedure introspection tools. These tests
 // exercise both new visible MCP tools (`list_procedures` and
 // `get_procedure`) through a live `tools/call` JSON-RPC round-trip.
-// Inline `source` is used to keep these rows hermetic â€” the inline path does
+// Inline `source` is used to keep these rows hermetic — the inline path does
 // NOT touch Access or the project filesystem, so the success path does not
 // depend on the fixture's actual modules being present. A second pair of
 // rows covers the project's on-disk source tree (via `existingModuleName`)
@@ -1031,7 +1031,7 @@ await record("vba-introspection", "list_procedures", {
 // sandbox's `destinationRoot`. Use the existing fixture module the suite
 // already exercises (`existingModuleName`) to prove the disk path is
 // wired correctly end-to-end. Pass the E2E_testing/ source tree (the
-// configured project's source root, NOT the sandbox's copy) â€” the security
+// configured project's source root, NOT the sandbox's copy) — the security
 // check inside `resolveVbaSourceFile` rejects any caller-supplied
 // `destinationRoot` that does not match the configured root, so a
 // sandbox-root `destinationRoot` would falsely fail with MODULE_NOT_FOUND.
@@ -1049,7 +1049,7 @@ await record("vba-manifest", "validate_manifest", {
   modules: { DysflowMcpE2EInline: inlineSourceFixture },
 });
 
-// Phase 4 â€” real projectId resolution E2E against the existing
+// Phase 4 — real projectId resolution E2E against the existing
 // `E2E_testing/.dysflow/project.json` fixture (id: noconformidades-e2e,
 // destinationRoot: "src"). Reuses the tracked fixture so the test is
 // idempotent and never collateral-deletes tracked files. The success
@@ -1110,7 +1110,7 @@ await record("vba-manifest", "validate_manifest", {
 // and if the parent is gone, walks its descendant tree via wmic to detect
 // grandchildren (e.g. an MSACCESS.EXE spawned by a PowerShell that the
 // harness itself spawned). The OS rejects the signal (ESRCH) when the
-// process is gone. We never scan global MSACCESS.EXE â€” only the PIDs this
+// process is gone. We never scan global MSACCESS.EXE — only the PIDs this
 // E2E itself spawned. The descendant walk is delegated to the helper so
 // vitest tests and the E2E suite share the same implementation.
 function isOwnPidAlive(pid) {
@@ -1120,7 +1120,7 @@ function isOwnPidAlive(pid) {
 async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
   const start = Date.now();
   // Check all known suite-owned PIDs (a single tool may leave more than
-  // one â€” e.g. a child PowerShell that itself spawned MSACCESS.EXE).
+  // one — e.g. a child PowerShell that itself spawned MSACCESS.EXE).
   const watched = Array.from(suiteOwnPids);
   while (true) {
     const survivors = watched.filter((p) => isOwnPidAlive(p));
@@ -1138,7 +1138,7 @@ async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
 // battery. If it grows by more than 1, the e2e leaked a process that
 // escaped the suiteOwnPids watch list (e.g. a PS script that spawned
 // MSACCESS.EXE outside the harness child process). Cheap global check
-// â€” no extra run, no extra tools, just `(Get-Process -Name MSACCESS
+// — no extra run, no extra tools, just `(Get-Process -Name MSACCESS
 // -ErrorAction SilentlyContinue).Count` at start and end.
 const PRUDENT_ZOMBIE_DELAY_MS = 1000;
 const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
@@ -1162,7 +1162,7 @@ const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCES
   // The suite intentionally leaves the global count out of scope for
   // in-suite checks (other consumers may legitimately run MSACCESS.EXE).
   // For the battery's own leak detection, we only flag a DELTA from start
-  // to end-of-battery â€” not the absolute count. A delta of 0 is the
+  // to end-of-battery — not the absolute count. A delta of 0 is the
   // happy path; a delta > 0 means WE leaked a process that escaped
   // suiteOwnPids (e.g. PS spawned MSACCESS.EXE outside the harness).
   try {

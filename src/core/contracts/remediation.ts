@@ -78,7 +78,7 @@ export function remediationForDestinationRootNotFound(destinationRoot: string): 
     platform: "posix",
     alternatives: {
       "windows-powershell": `New-Item -ItemType Directory -Force -Path '${destinationRoot}\\classes','${destinationRoot}\\modules','${destinationRoot}\\forms','${destinationRoot}\\reports'`,
-      "windows-cmd": `if not exist "${destinationRoot}\\classes" mkdir "${destinationRoot}\\classes" "${destinationRoot}\\modules" "${destinationRoot}\\forms" "${destinationRoot}\\reports"`,
+      "windows-cmd": `if not exist "${destinationRoot}\\classes" mkdir "${destinationRoot}\\classes" & if not exist "${destinationRoot}\\modules" mkdir "${destinationRoot}\\modules" & if not exist "${destinationRoot}\\forms" mkdir "${destinationRoot}\\forms" & if not exist "${destinationRoot}\\reports" mkdir "${destinationRoot}\\reports"`,
     },
     // mkdir -p is idempotent — safe to auto-execute.
     safeToAutoExecute: true,
