@@ -4,6 +4,214 @@ Canonical guide for **any** agent working in this repo — Claude Code, OpenCode
 This file is authoritative. Claude Code loads it via `CLAUDE.md` (which imports this file). Read it
 before working, and do not silently override it.
 
+## Dysflow & VBA Skill Catalog
+
+This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` so any agent with read access to this repo can operate dysflow without an extra skill load. The block between `<!-- dysflow:arnés -->` and `<!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
+
+<!-- dysflow:arnés -->
+<!--
+  Copy-paste this block into any AI agent's system prompt that operates
+  dysflow. Self-contained: an agent that loads ONLY this arnés can operate
+  dysflow with minimum rigor. For depth on a specific topic, the companion
+  skills in §5 below are the canonical references.
+-->
+
+# dysflow — Operating Harness
+
+You are an AI agent operating in a Microsoft Access / VBA project that uses the
+dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
+execution, test execution, and form UI operations on Access projects.
+
+## 0. What this harness IS
+
+The single copy-pasteable block of rules, constraints, and workflow that lets
+any AI agent operate dysflow safely. The runtime (`get_capabilities`) is the
+source of truth for tool names and flags; this arnés is the source of truth
+for **how to behave** when calling those tools.
+
+## 1. When this arnés applies (load it when...)
+
+- The project contains `*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, `.dysflow/*`,
+  or `tests/*.json` files.
+- You are about to call any dysflow MCP tool.
+- You receive an MCP error envelope from dysflow.
+- You are about to write a new test, helper, fixture, or form handler.
+- You are deciding whether a write should happen (`dryRun` vs `apply`).
+
+## 2. Hard rules (NEVER violate)
+
+- **HR-1 — The HUMAN compiles.** You NEVER call `compile_vba`, NEVER pass
+  `compile:true`. Required loop for any slice ending in `test_vba`:
+  (1) write source → (2) `import_modules({moduleNames:[...], dryRun:true})` →
+  (3) ASK the user to compile manually (Debug → Compile VBA Project) →
+  (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`. Failures from
+  `test_vba` are test failures, never compile errors.
+
+- **HR-2 — NEVER kill MSACCESS.EXE generically.** Forbidden operations
+  (verbatim):
+  `Stop-Process -Name MSACCESS`,
+  `taskkill /F /IM MSACCESS.EXE`,
+  `pkill MSACCESS`,
+  `Get-Process | Stop-Process -Force`,
+  `kill -9` on `Get-Process` results.
+  Use ONLY dysflow-owned cleanup: `list_access_operations` →
+  `access_force_cleanup_orphaned({confirmPid:null})` →
+  `access_force_cleanup_orphaned({confirmPid:<real pid>})` → OR
+  `cleanup_access_operation({operationId:<real id>})`.
+
+- **HR-3 — NEVER write to production backend.** `m_TestingMode=True` is the
+  ONLY path for test data. If sandbox unreachable → surface "TESTS BLOCKED",
+  do NOT touch data. Production writes = silent corruption.
+
+- **HR-4 — Pre-flight BEFORE every dysflow write call.** Self-check (5 points):
+  (1) `adapterVersion` is current,
+  (2) `effectiveDryRunDefault[toolName]` matches your intent,
+  (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
+  (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
+  (5) `toolsVisible` is consistent with anything you cite.
+  If any check fails, STOP and surface the gap.
+
+- **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
+  defaults, or error codes from any doc. Re-fetch via `get_capabilities`
+  before any non-trivial call sequence. If runtime value disagrees with
+  this arnés or any skill, trust runtime and surface drift to the user.
+
+- **HR-6 — Test definitions live in `tests/*.json` manifests, NOT in
+  `.dysflow/project.json` allowlist.** The allowlist is a runtime gate, not a
+  test registry. Adding test names to allowlist on each fix is an anti-pattern.
+
+- **HR-7 — Verify process liveness BEFORE asserting or blocking.** Never
+  assert a process exists from cached / registry / prior-turn state.
+  Read-only checks: `list_access_operations`,
+  `cleanup_access_operation({force:false})`,
+  `access_force_cleanup_orphaned({confirmPid:null})`. Never fabricate
+  process details a tool did not return.
+
+- **HR-8 — Writes are serialized per process.** Never batch dysflow write
+  calls in parallel from one agent context. One call → wait → audit → next.
+  To batch related ops, use List-shape arguments in ONE call.
+
+## 3. Workflow loop (canonical 8 steps)
+
+For any feature that touches dysflow-managed artifacts:
+
+- **Step 0** — `get_capabilities({})`. Capture `adapterVersion`,
+  `writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
+  `toolsVisible`, `projectConfig.status`.
+- **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
+  `src/modules/` + entry in `tests/tests.vba.json`. Change → identify the
+  failing test or write one.
+- **Step 2** — Production code. Write `<Feature>.bas` in `src/modules/`.
+- **Step 3** — Pre-compile audit. Declarations at top, no VBA landmines,
+  signature consistency, binary in sync (`verify_code`).
+- **Step 4** — Sync forms if applicable. `verify_code`.
+- **Step 5** — Import. `import_modules({moduleNames:[...], dryRun:true})` →
+  review the plan → `import_modules({moduleNames:[...], dryRun:false})`.
+  ALL with `compile:false` per HR-1.
+- **Step 6** — Notify the user to compile manually. Block. Wait for "ya está".
+- **Step 7** — Run tests. `test_vba({testsPath:"tests/tests.vba.json"})`. On
+  failure → read failure reports + `run.logs`, fix, return to Step 3.
+- **Step 8** — Analyze and refactor. Refactor-safety: a behavior-preserving
+  refactor MUST NOT break tests. If it does, the test is the defect.
+
+For sync-binary one-shots prefer `sync_binary` over the manual loop. For UAT bridge
+load `access-vba-e2e-methodology`.
+
+## 4. Companion skills to load (matrix)
+
+| When you are... | Load this skill FIRST |
+|---|---|
+| Calling any dysflow tool | `dysflow-usage` (canonical tool / flag / error tables) |
+| Writing or reviewing VBA | `vba-access` (MS best practices + Telefónica D&S) |
+| Implementing a feature with TDD | `access-vba-tdd-loop` (§8 8-step loop) |
+| Writing test atoms | `access-vba-tdd-fundamentos` (§1 rules, §2 JSON contract) |
+| Setting up sandbox / test env | `access-vba-tdd-sandbox` (§3 `m_TestingMode`, §5 isolation, §7 safety) |
+| Diagnosing test quality / coverage | `access-vba-tdd-quality` (§4 quality, §6 telemetry) |
+| Bridging TDD ↔ UAT | `access-vba-e2e-methodology` |
+| Working on forms (perceive→act→verify) | `access-form-ui-builder` |
+| Syncing source ↔ binary one-shot | `vba-binary-sync` |
+| Documenting capabilities (SDD-grade) | `access-vba-capability-docs` |
+| Detected runtime drift, skills disagree | `dysflow-codegraph-update` (MAINTENANCE — not for daily work) |
+| Hit OpenCode Code Mode JSON-wrapping bug | `dysflow-usage` §"Code Mode JSON-wrapping workaround" |
+
+## 5. Anti-patterns (forbidden actions)
+
+- **AP-1** — `Stop-Process -Name MSACCESS` (any variant). See HR-2.
+- **AP-2** — `compile_vba` or `compile:true` on `import_modules` / `import_all`. See HR-1.
+- **AP-3** — Inventing a `dryRun` flag for `export_modules` / `export_all`. The
+  live registry reports `commitFlag:"apply"`, `noWriteAlias:"diff"`,
+  `defaultBehavior:"writes"`. Use `apply:true` to commit, `apply:false` (or legacy
+  `diff:true`) to preview; `dryRun:true` is NOT a valid alias for these tools.
+- **AP-4** — Forgetting that `export_*` defaults to WRITE behavior. When no flag
+  is passed, `defaultBehavior:"writes"` means the call writes. Explicit intent
+  (`apply:true`/`apply:false`) is the preferred contract on every call.
+- **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
+- **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
+- **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
+  DATA; never serve to skip the data-layer E2E.
+- **AP-8** — Mutating `TbConfiguracionBackends` from test code. Config table is
+  production state; tests READ it once via `BeginTestSession`, never WRITE.
+- **AP-9** — `Debug.Print` / `MsgBox` in test atoms. `Debug.Print` is invisible
+  to COM; `MsgBox` blocks unattended execution.
+- **AP-10** — `DELETE` without `WHERE` (even in sandbox). Use `TEST_ID_BASE`
+  (900000+) as guard for fixture cleanup.
+- **AP-11** — Claiming "TDD-green" without BOTH user-confirmed compile AND
+  all-green `test_vba` result.
+
+## 6. Companion depth layer (where detail lives)
+
+The arnés is the LEAN pointer. Depth lives in:
+
+- `C:\Users\adm1\.config\opencode\rules\dysflow-codegraph.md` — operational
+  depth for dysflow + codegraph-vba (kill ban, liveness, human-compile loop,
+  codegraph-vba operation).
+- `C:\Users\adm1\.config\opencode\AGENTS.md` — global core (persona, rules,
+  engram protocol) — always-on, not dysflow-specific.
+- `dysflow-usage` skill — canonical tool names, flags, defaults, error codes.
+- `access-vba-tdd-*` skills — TDD discipline details.
+- `access-vba-e2e-methodology` — TDD ↔ UAT bridge.
+
+## 7. Memory (dysflow-specific)
+
+The runtime (`get_capabilities`) IS the memory. Do NOT cache tool names,
+write-flags, default `dryRun` values, or error codes across sessions.
+Re-fetch at session start and after any `adapterVersion` bump.
+
+Engram IS useful for project-level facts (sandbox URLs, project conventions,
+user preferences) — NOT for the runtime surface.
+
+## 8. Delegation
+
+dysflow does NOT spawn sub-agents. You call tools directly. If isolation is
+needed (long test run, parallel investigation), use the host agent's
+delegation mechanism — do NOT invent dysflow-specific delegation.
+
+## 9. Codegraph guidance
+
+For repo maps, architecture, call flow, dependencies, symbol references,
+impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic
+CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration.
+Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project
+folders. `codegraph_sync` only when the watcher is disabled or files fail
+to self-refresh; `codegraph_uninit` is destructive and reserved for explicit
+user request.
+
+## 10. Version + authorship
+
+dysflow harness v0.1.4 · last_verified 2026-07-19 · requires
+dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
+
+Source of truth: live `get_capabilities`. If this arnés disagrees with
+runtime, **runtime wins**; surface the drift and update via
+`dysflow-codegraph-update`.
+<!-- /dysflow:arnés -->
+
+### Project-context (this worktree, NOT inside the canonical block)
+
+- `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
+- `Variables Globales.bas` path — TODO: locate in this worktree's `src/` before any test.
+- Drift window: any update to `dysflow-arnes/SKILL.md` lines 19–215 must propagate here via `dysflow-codegraph-update` ARN-1 → ARN-2 → re-embed.
+
 ## What this is
 
 dysflow — a TypeScript **MCP + CLI runtime** that drives Microsoft Access (VBA sync, query tools,
