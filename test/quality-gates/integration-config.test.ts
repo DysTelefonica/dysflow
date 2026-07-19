@@ -8,16 +8,20 @@ function readIntegrationConfig(): string {
 }
 
 describe("integration suite configuration (#562)", () => {
-  it("serializes Access COM tests with singleFork + fileParallelism false", () => {
+  it("serializes Access COM tests with fileParallelism false + maxWorkers 1", () => {
     const config = readIntegrationConfig();
 
-    // Vitest with `maxWorkers: 1` alone is not enough: Vitest may still
-    // schedule multiple files within a worker. `singleFork: true` +
-    // `fileParallelism: false` is the contract that guarantees one live
-    // Access instance at a time. See #562.
+    // Vitest 4 removed `poolOptions.forks.singleFork`; the serialization
+    // contract that guarantees one live Access instance at a time is now
+    // `fileParallelism: false` (no concurrent file scheduling) plus
+    // `maxWorkers: 1` (a single fork worker). See #562 and the quality
+    // round that dropped the dead poolOptions block.
     expect(config).toContain('pool: "forks"');
-    expect(config).toContain("singleFork: true");
     expect(config).toMatch(/fileParallelism:\s*false/);
+    expect(config).toMatch(/maxWorkers:\s*1/);
+    // The comment may still MENTION poolOptions (explaining its removal);
+    // only an actual config block would resurrect the dead Vitest 3 shape.
+    expect(config).not.toMatch(/poolOptions:\s*\{/);
   });
 
   it("references a globalSetup that sweeps stale dysflow-* temp sandboxes", () => {
