@@ -183,6 +183,46 @@ describe("runChunkedVerify (#807 Feature 3)", () => {
     }
   });
 
+  it("removes chunk controls before invoking each single-flight comparison", async () => {
+    const tmpRoot = await mkdtemp(join(tmpdir(), "dysflow-chunk-single-flight-"));
+    const { rm } = await import("node:fs/promises");
+    try {
+      const received: Record<string, unknown>[] = [];
+      const compareChunk = async (params: Record<string, unknown>) => {
+        received.push(params);
+        return {
+          ok: true as const,
+          data: makeEmptyVerifyResult(tmpRoot),
+        };
+      };
+      await runChunkedVerify({
+        params: {
+          chunkSize: 1,
+          parallelChunks: 2,
+          onChunkTimeout: "skip",
+          timeoutMs: 1234,
+          accessPath: "C:/db.accdb",
+        },
+        ctx: makeContext(),
+        fileSystem: stubFileSystem(),
+        requestedModules: ["Mod0", "Mod1"],
+        options: { chunkSize: 1, parallelChunks: 2, onChunkTimeout: "skip" },
+        compareChunk: compareChunk as never,
+      });
+
+      expect(received).toHaveLength(2);
+      for (const params of received) {
+        expect(params).not.toHaveProperty("chunkSize");
+        expect(params).not.toHaveProperty("parallelChunks");
+        expect(params).not.toHaveProperty("onChunkTimeout");
+        expect(params).toMatchObject({ timeoutMs: 1234, accessPath: "C:/db.accdb" });
+        expect(params.moduleNames).toEqual(expect.arrayContaining([expect.stringMatching(/^Mod/)]));
+      }
+    } finally {
+      await rm(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
   it("onChunkTimeout: retry re-runs the chunk once before giving up", async () => {
     const tmpRoot = await mkdtemp(join(tmpdir(), "dysflow-chunk-retry-"));
     const { rm } = await import("node:fs/promises");

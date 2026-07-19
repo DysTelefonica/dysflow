@@ -168,6 +168,11 @@ export async function runChunkedVerify(input: ChunkedVerifyRunInput): Promise<Ch
       return m.compareSourceAgainstBinary(p, c, f);
     });
 
+  const singleFlightParams = { ...params };
+  delete singleFlightParams.chunkSize;
+  delete singleFlightParams.parallelChunks;
+  delete singleFlightParams.onChunkTimeout;
+
   const runOneChunk = async (chunkIndex: number): Promise<ChunkOutcome> => {
     const slice = chunks[chunkIndex];
     if (slice === undefined) {
@@ -188,7 +193,11 @@ export async function runChunkedVerify(input: ChunkedVerifyRunInput): Promise<Ch
       | undefined;
     while (attempt <= 1) {
       attempt += 1;
-      const r = await compareFn({ ...params, moduleNames: [...slice] }, ctx, fileSystem);
+      const r = await compareFn(
+        { ...singleFlightParams, moduleNames: [...slice] },
+        ctx,
+        fileSystem,
+      );
       lastResult = r;
       if (r.ok) break;
       if (isTimeoutErrorCode(r.error.code) && onChunkTimeout === "retry" && attempt === 1) {

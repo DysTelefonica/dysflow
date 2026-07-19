@@ -1,17 +1,16 @@
 import { spawn } from "node:child_process";
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const fixturePath = join(scriptDir, "NoConformidades.accdb");
-const tempRoot = join(process.env.TEMP ?? process.env.TMP ?? ".", `dysflow-f16-import-grow-${Date.now()}`);
-const accessPath = join(tempRoot, "NoConformidades.accdb");
-const modulesRoot = join(tempRoot, "modules");
+const projectId = "noconformidades-f16-import-grow-e2e";
 const moduleName = "Test_F16GrowImport";
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
@@ -76,9 +75,16 @@ if (!resolvedCommand.ok) {
 const cliCommand = resolvedCommand.command;
 process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
 
-async function callImport(verbose = false) {
-  const child = spawn(cliCommand, ["mcp"], {
-    cwd: scriptDir,
+const sandboxPlan = buildMcpE2eSandboxPlan({ scriptDir });
+const tempRoot = sandboxPlan.sandbox.root;
+const accessPath = sandboxPlan.sandbox.accessPath;
+const destinationRoot = sandboxPlan.sandbox.destinationRoot;
+const modulesRoot = join(destinationRoot, "modules");
+const modulePath = join(modulesRoot, `${moduleName}.bas`);
+
+function spawnMcp() {
+  return spawn(cliCommand, ["mcp"], {
+    cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
@@ -87,31 +93,65 @@ async function callImport(verbose = false) {
       DYSFLOW_ACCESS_PASSWORD: password,
     },
   });
+}
+
+async function callTool(name, args) {
+  const child = spawnMcp();
   return await runMcpHarness({
     child,
     requestId: 2,
     method: "tools/call",
-    params: {
-      name: "import_modules",
-      arguments: {
-        accessPath,
-        destinationRoot: modulesRoot,
-        moduleNames: [moduleName],
-        dryRun: false,
-        verbose,
-      },
-    },
+    params: { name, arguments: args },
     timeoutMs,
     closeWatchdogMs,
   });
 }
 
+async function callImport(verbose = false) {
+  return await callTool("import_modules", {
+    accessPath,
+    destinationRoot,
+    moduleNames: [moduleName],
+    dryRun: false,
+    verbose,
+  });
+}
+
 try {
   await rm(tempRoot, { recursive: true, force: true });
-  await mkdir(modulesRoot, { recursive: true });
+  await initializeMcpE2eSandbox(sandboxPlan, { projectId });
+  // The sandbox helper always writes a `backendPath` into project.json. This
+  // script does not exercise the backend, so strip the field — otherwise the
+  // write-ready gate trips with "Configured backendPath does not exist" and
+  // aborts before import_modules runs (#1001).
+  {
+    const projectJsonPath = join(tempRoot, ".dysflow", "project.json");
+    const projectConfig = JSON.parse(await readFile(projectJsonPath, "utf8"));
+    delete projectConfig.backendPath;
+    await writeFile(projectJsonPath, `${JSON.stringify(projectConfig, null, 2)}\n`, "utf8");
+  }
   await cp(fixturePath, accessPath);
+  await mkdir(modulesRoot, { recursive: true });
 
-  const modulePath = join(modulesRoot, `${moduleName}.bas`);
+  const capabilityResult = await callTool("get_capabilities", { projectId });
+  const capabilityPayload = toolPayload(capabilityResult.response);
+  const snapshot = capabilityPayload?.snapshot ?? capabilityPayload;
+  const config = snapshot?.projectConfig;
+  const sandboxReady =
+    !capabilityResult.isError &&
+    typeof snapshot?.adapterVersion === "string" &&
+    typeof snapshot?.toolsVisible === "number" &&
+    snapshot?.writesProcess?.enabled === true &&
+    snapshot?.writesProject?.allowWrites === true &&
+    config?.status === "valid" &&
+    config?.writeReady === true &&
+    config?.projectId === projectId &&
+    typeof config?.projectRoot === "string" &&
+    resolve(config.projectRoot).toLowerCase() === resolve(tempRoot).toLowerCase();
+  if (!sandboxReady) {
+    throw new Error(`Sandbox capability preflight failed. snapshot=${JSON.stringify(snapshot)}`);
+  }
+
   await writeFile(modulePath, makeModule(moduleName, 2), "utf8");
   const initial = await callImport(false);
   if (initial.isError || firstModule(toolPayload(initial.response))?.status !== "ok") {
