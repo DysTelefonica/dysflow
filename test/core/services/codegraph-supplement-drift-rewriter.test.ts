@@ -48,7 +48,9 @@ describe("rewriteSupplementDriftInContent — pure kernel", () => {
     expect(result.content).not.toContain("v1.10.0");
     expect(result.content).toContain("codegraph --version");
     // Markers and surrounding lines stay verbatim.
-    expect(result.content.split("\n")[0]).toBe("<!-- user-supplement:ardelperal:codegraph-extra-tools -->");
+    expect(result.content.split("\n")[0]).toBe(
+      "<!-- user-supplement:ardelperal:codegraph-extra-tools -->",
+    );
   });
 
   it("rewrites loose prose like 'v1.10.0 semantics' to neutral phrasing keeping the keyword", () => {

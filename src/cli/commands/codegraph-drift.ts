@@ -62,7 +62,9 @@ function renderFixResult(result: SupplementDriftFixResult): string {
       `[${mode}] Scanned ${result.filesScanned} instruction file(s); ${verb} ${result.rewrites.length} stale reference(s) in ${result.filesChanged} file(s).`,
     );
     for (const rewrite of result.rewrites) {
-      lines.push(`  ${rewrite.filePath}:${rewrite.line} ${rewrite.matchedVersion} -> runtime-neutral pointer`);
+      lines.push(
+        `  ${rewrite.filePath}:${rewrite.line} ${rewrite.matchedVersion} -> runtime-neutral pointer`,
+      );
     }
     if (!result.apply) {
       lines.push("Run `dysflow codegraph-drift --apply` to rewrite in place.");
