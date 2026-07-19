@@ -3,6 +3,7 @@
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { handleAccessCommand } from "./commands/access.js";
+import { handleCodegraphDriftCommand } from "./commands/codegraph-drift.js";
 import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleInstallCommand, handleUpdateCommand } from "./commands/install.js";
 import { handleLintCommand } from "./commands/lint.js";
@@ -32,6 +33,7 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["serve", handleServeCommand],
   ["access", handleAccessCommand],
   ["lint", handleLintCommand],
+  ["codegraph-drift", handleCodegraphDriftCommand],
 ]);
 
 /**

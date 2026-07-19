@@ -194,7 +194,8 @@ const GENTLE_CLOSE = /^<!--\s*\/gentle-ai:[^>]*?\s*-->$/;
 const DEFAULT_REMEDIATION =
   "Replace the literal `codegraph-vba vX.Y[.Z]` reference with a `codegraph --version` " +
   "pointer so the block tracks the live runtime version. Skill versions (e.g. " +
-  "`codegraph-usage v1.2`) are fine — only the runtime version drift is flagged here.";
+  "`codegraph-usage v1.2`) are fine — only the runtime version drift is flagged here. " +
+  "Run `dysflow codegraph-drift --apply` to rewrite it automatically.";
 
 /**
  * Pure content scanner. Walks every line of `content`, tracks which
@@ -375,6 +376,263 @@ export async function detectSupplementDrift(
     filesScanned,
     blocksScanned,
     driftDetected,
+    errors,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Issue #961 (A component) — auto-rewrite kernel
+// ---------------------------------------------------------------------------
+
+/**
+ * Neutral replacement for a strict `codegraph-vba vX.Y[.Z]` reference. The
+ * phrasing keeps the tool name so the sentence still reads naturally, and
+ * points at `codegraph --version` as the single authoritative place for the
+ * runtime version (HR-9: one authoritative place per runtime rule).
+ */
+const NEUTRAL_RUNTIME_REFERENCE = "codegraph-vba (installed runtime — see `codegraph --version`)";
+
+/**
+ * Neutral replacement for a loose bare `vX.Y[.Z]` token that qualifies as
+ * drift (followed by a semantics/runtime/spec keyword). Only the version
+ * token is replaced; the qualifying keyword stays so the sentence keeps its
+ * meaning (e.g. `for v1.10.0 semantics` → `for the installed runtime (see
+ * \`codegraph --version\`) semantics`).
+ */
+const NEUTRAL_LOOSE_REFERENCE = "the installed runtime (see `codegraph --version`)";
+
+/** One applied (or planned) rewrite, mirroring `SupplementDriftFinding`. */
+export type SupplementDriftRewrite = {
+  filePath: string;
+  blockId: string;
+  /** 1-indexed line number inside `filePath`. */
+  line: number;
+  /** The trimmed original line. */
+  before: string;
+  /** The trimmed rewritten line. */
+  after: string;
+  /** The first literal version string rewritten on the line, e.g. `v1.10.0`. */
+  matchedVersion: string;
+};
+
+/** Result of rewriting a single file's content. Pure — no I/O. */
+export type SupplementRewriteResult = {
+  /** Rewritten content; byte-identical to the input when `rewrites` is empty. */
+  content: string;
+  rewrites: SupplementDriftRewrite[];
+  /**
+   * `true` when a supplement block never closed before EOF. The content is
+   * returned UNTOUCHED in that case (fail closed on structural damage,
+   * mirroring the import-side philosophy of #958) — the user must restore
+   * the closing marker before the auto-fix will touch the file.
+   */
+  malformedClosing: boolean;
+};
+
+/**
+ * Rewrite one line: strict pass first (`codegraph-vba vX.Y[.Z]` → neutral
+ * runtime reference), then a loose pass over the intermediate result (bare
+ * `vX.Y[.Z]` + qualifying keyword tail → neutral loose reference). Fixing
+ * BOTH classes on the same line is deliberate — the detector suppresses
+ * loose findings when a strict one matched the line, so a strict-only
+ * rewrite would surface a brand-new loose finding on re-scan.
+ */
+function rewriteLine(rawLine: string): { line: string; matchedVersion: string | null } {
+  let matchedVersion: string | null = null;
+
+  STRICT_DRIFT_REGEX.lastIndex = 0;
+  const afterStrict = rawLine.replace(STRICT_DRIFT_REGEX, (_full, version: string) => {
+    matchedVersion = matchedVersion ?? version;
+    return NEUTRAL_RUNTIME_REFERENCE;
+  });
+
+  let out = "";
+  let cursor = 0;
+  LOOSE_DRIFT_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null = LOOSE_DRIFT_REGEX.exec(afterStrict);
+  while (match !== null) {
+    const version = match[1];
+    if (version !== undefined) {
+      const tail = afterStrict.slice(match.index + version.length);
+      if (LOOSE_DRIFT_KEYWORDS.test(tail)) {
+        matchedVersion = matchedVersion ?? version;
+        out += afterStrict.slice(cursor, match.index) + NEUTRAL_LOOSE_REFERENCE;
+        // Keep the original whitespace after the token so spacing survives.
+        cursor = match.index + version.length;
+      }
+    }
+    match = LOOSE_DRIFT_REGEX.exec(afterStrict);
+  }
+
+  return { line: out + afterStrict.slice(cursor), matchedVersion };
+}
+
+/**
+ * Pure content rewriter — the fix (a) counterpart of
+ * {@link scanSupplementDriftInContent}. Walks the same block state machine:
+ * only lines inside an open `<!-- user-supplement:* -->` block (and outside
+ * gentle-ai managed blocks) are eligible. Splitting on `\n` keeps a trailing
+ * `\r` attached to each line, so CRLF files round-trip verbatim.
+ */
+export function rewriteSupplementDriftInContent(
+  content: string,
+  filePath: string,
+): SupplementRewriteResult {
+  const lines = content.split("\n");
+  const rewrites: SupplementDriftRewrite[] = [];
+
+  let inGentleBlock = false;
+  let inSupplementBlock = false;
+  let currentBlockId = "<none>";
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index] ?? "";
+    const trimmedLine = rawLine.trim();
+
+    if (inGentleBlock) {
+      if (GENTLE_CLOSE.test(trimmedLine)) inGentleBlock = false;
+      continue;
+    }
+    if (GENTLE_OPEN.test(trimmedLine)) {
+      inGentleBlock = true;
+      continue;
+    }
+
+    const openMatch = OPEN_MARKER.exec(trimmedLine);
+    if (openMatch !== null) {
+      inSupplementBlock = true;
+      currentBlockId = openMatch[1]?.trim() || "<empty>";
+      continue;
+    }
+    if (CLOSE_MARKER.test(trimmedLine)) {
+      inSupplementBlock = false;
+      currentBlockId = "<none>";
+      continue;
+    }
+    if (!inSupplementBlock) continue;
+
+    const rewritten = rewriteLine(rawLine);
+    if (rewritten.matchedVersion !== null && rewritten.line !== rawLine) {
+      rewrites.push({
+        filePath,
+        blockId: currentBlockId,
+        line: index + 1,
+        before: rawLine.trim(),
+        after: rewritten.line.trim(),
+        matchedVersion: rewritten.matchedVersion,
+      });
+      lines[index] = rewritten.line;
+    }
+  }
+
+  if (inSupplementBlock) {
+    // Fail closed: never mutate a structurally damaged file.
+    return { content, rewrites: [], malformedClosing: true };
+  }
+
+  return {
+    content: rewrites.length === 0 ? content : lines.join("\n"),
+    rewrites,
+    malformedClosing: false,
+  };
+}
+
+/**
+ * Read/write port for the fix path. `writeFile` MUST throw on failure —
+ * the kernel catches and surfaces the error uniformly per file.
+ */
+export type InstructionFileReadWritePort = InstructionFileReadPort & {
+  writeFile: (filePath: string, content: string) => Promise<void>;
+};
+
+export type SupplementDriftFixError = {
+  filePath: string;
+  code: "FILE_READ_FAILED" | "FILE_WRITE_FAILED";
+  message: string;
+};
+
+export type SupplementDriftFixOptions = {
+  /** Absolute file paths to scan (and rewrite when `apply` is true). */
+  filePaths: readonly string[];
+  port: InstructionFileReadWritePort;
+  /** `false` = dry-run: plan the rewrites, write nothing. */
+  apply: boolean;
+};
+
+export type SupplementDriftFixResult = {
+  /** `true` when zero errors AND zero files skipped for malformed closings. */
+  ok: boolean;
+  /** Echo of the requested mode so renderers need no extra plumbing. */
+  apply: boolean;
+  filesScanned: number;
+  /** Files with at least one rewrite (written only when `apply` is true). */
+  filesChanged: number;
+  rewrites: SupplementDriftRewrite[];
+  /** Files left untouched because a supplement block never closed. */
+  skippedMalformed: string[];
+  errors: SupplementDriftFixError[];
+};
+
+/**
+ * Multi-file fix entry point — the write-capable sibling of
+ * {@link detectSupplementDrift}. A missing file does NOT abort the sweep;
+ * it surfaces in `errors[]` and the remaining files are still processed.
+ */
+export async function applySupplementDriftFix(
+  options: SupplementDriftFixOptions,
+): Promise<SupplementDriftFixResult> {
+  const { filePaths, port, apply } = options;
+  const rewrites: SupplementDriftRewrite[] = [];
+  const skippedMalformed: string[] = [];
+  const errors: SupplementDriftFixError[] = [];
+  let filesScanned = 0;
+  let filesChanged = 0;
+
+  for (const filePath of filePaths) {
+    let content: string;
+    try {
+      content = await port.readFile(filePath);
+    } catch (error) {
+      errors.push({
+        filePath,
+        code: "FILE_READ_FAILED",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+
+    filesScanned += 1;
+    const result = rewriteSupplementDriftInContent(content, filePath);
+
+    if (result.malformedClosing) {
+      skippedMalformed.push(filePath);
+      continue;
+    }
+    if (result.rewrites.length === 0) continue;
+
+    filesChanged += 1;
+    rewrites.push(...result.rewrites);
+
+    if (apply) {
+      try {
+        await port.writeFile(filePath, result.content);
+      } catch (error) {
+        errors.push({
+          filePath,
+          code: "FILE_WRITE_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0 && skippedMalformed.length === 0,
+    apply,
+    filesScanned,
+    filesChanged,
+    rewrites,
+    skippedMalformed,
     errors,
   };
 }

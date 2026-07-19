@@ -68,6 +68,7 @@ export const HELP_TEXT = [
   "  serve   Start local HTTP API",
   "  access  Batch Access database operations (e.g. relink-directory)",
   "  lint    Run static VBA source checks (e.g. lint callees)",
+  "  codegraph-drift Scan or fix stale codegraph-vba runtime refs in user-supplement blocks",
 ].join("\n");
 
 export type CommandHandler = (
