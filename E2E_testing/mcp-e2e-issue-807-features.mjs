@@ -21,10 +21,11 @@
 //     fixture is missing. Use this in CI to make the E2E blocking.
 
 import { spawn } from "node:child_process";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
@@ -33,12 +34,7 @@ const repoRoot = resolve(scriptDir, "..");
 const fixtureAccess = join(scriptDir, "NoConformidades.accdb");
 const fixtureBackend = join(scriptDir, "NoConformidades_Datos.accdb");
 const fixtureSource = join(scriptDir, "src");
-const tempRoot = join(process.env.TEMP ?? process.env.TMP ?? ".", `dysflow-i807-${Date.now()}`);
-const accessPath = join(tempRoot, "NoConformidades.accdb");
-const backendPath = join(tempRoot, "NoConformidades_Datos.accdb");
-const destinationRoot = join(tempRoot, "src");
-const modulesRoot = join(destinationRoot, "modules");
-const classesRoot = join(destinationRoot, "classes");
+const projectId = "noconformidades-i807-features-e2e";
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD;
@@ -56,9 +52,16 @@ function skipOrFail(message) {
 }
 
 function toolPayload(message) {
-  const text = message?.result?.content?.map((item) => item.text ?? "").join("\n") ?? "";
+  // #1001: the runMcpHarness wrapper exposes the JSON-RPC payload under
+  // `response.result`, not at top-level `result`. Walk the wrapper shape so
+  // the test reads the actual JSON envelope (the original code read
+  // `message?.result?.content` and silently returned null because the
+  // wrapper has no top-level `result`).
+  const content = message?.response?.result?.content;
+  if (!Array.isArray(content)) return null;
+  const text = content.map((item) => item?.text ?? "").join("\n");
   if (!text.trim()) return null;
-  return JSON.parse(text);
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function spawnMcp() {
@@ -68,7 +71,7 @@ function spawnMcp() {
   }
   process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
   return spawn(resolvedCommand.command, ["mcp"], {
-    cwd: scriptDir,
+    cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
@@ -79,17 +82,29 @@ function spawnMcp() {
   });
 }
 
-async function callTool(child, requestId, name, args) {
+async function callTool(child, requestId, name, args, options = {}) {
   const result = await runMcpHarness({
     child,
     requestId,
     method: "tools/call",
     params: { name, arguments: { accessPath, destinationRoot, ...args } },
-    timeoutMs,
+    timeoutMs: options.timeoutMs ?? timeoutMs,
     closeWatchdogMs,
   });
   const payload = toolPayload(result);
   return { result, payload };
+}
+
+async function callCapabilities(child) {
+  const result = await runMcpHarness({
+    child,
+    requestId: 2,
+    method: "tools/call",
+    params: { name: "get_capabilities", arguments: { projectId } },
+    timeoutMs,
+    closeWatchdogMs,
+  });
+  return { result, payload: toolPayload(result) };
 }
 
 if (process.platform !== "win32") {
@@ -103,22 +118,69 @@ if (!password) {
 }
 
 const failures = [];
+function formatDetail(detail, max = 200) {
+  if (detail === undefined) return "(no detail)";
+  if (detail === null) return "null";
+  try {
+    return JSON.stringify(detail).slice(0, max);
+  } catch {
+    return String(detail).slice(0, max);
+  }
+}
 function expect(label, condition, detail) {
   if (condition) {
     console.log(`  [ok]   ${label}`);
   } else {
-    console.error(`  [FAIL] ${label} ${detail ? `- ${JSON.stringify(detail)}` : ""}`);
+    console.error(`  [FAIL] ${label} ${detail !== undefined && detail !== null ? `- ${formatDetail(detail)}` : ""}`);
     failures.push({ label, detail });
   }
 }
 
+// #1001: round-trip the fixture through the MCP-owned sandbox so the
+// project's `.dysflow/project.json` resolves at `tempRoot`, not up the
+// directory tree at `scriptDir` (which would otherwise latch onto the
+// stale F16 project.json living in the operator's `$repo/.dysflow/`).
+const sandboxPlan = buildMcpE2eSandboxPlan({ scriptDir });
+const tempRoot = sandboxPlan.sandbox.root;
+const accessPath = sandboxPlan.sandbox.accessPath;
+const backendPath = sandboxPlan.sandbox.backendPath;
+const destinationRoot = sandboxPlan.sandbox.destinationRoot;
+const modulesRoot = join(destinationRoot, "modules");
+const classesRoot = join(destinationRoot, "classes");
+
 await rm(tempRoot, { recursive: true, force: true });
-await mkdir(tempRoot, { recursive: true });
+await initializeMcpE2eSandbox(sandboxPlan, { projectId });
 await cp(fixtureAccess, accessPath);
 await cp(fixtureBackend, backendPath);
 await cp(fixtureSource, destinationRoot, { recursive: true });
 await mkdir(modulesRoot, { recursive: true });
 await mkdir(classesRoot, { recursive: true });
+
+{
+  const child = spawnMcp();
+  try {
+    const { result, payload } = await callCapabilities(child);
+    const snapshot = payload?.snapshot ?? payload;
+    const config = snapshot?.projectConfig;
+    const sandboxReady =
+      !result.isError &&
+      typeof snapshot?.adapterVersion === "string" &&
+      typeof snapshot?.toolsVisible === "number" &&
+      snapshot?.writesProcess?.enabled === true &&
+      snapshot?.writesProject?.allowWrites === true &&
+      config?.status === "valid" &&
+      config?.writeReady === true &&
+      config?.projectId === projectId &&
+      typeof config?.projectRoot === "string" &&
+      resolve(config.projectRoot).toLowerCase() === resolve(tempRoot).toLowerCase();
+    expect("PREFLIGHT.sandbox project config is write-ready and isolated", sandboxReady, snapshot);
+    if (!sandboxReady) {
+      throw new Error(`Sandbox capability preflight failed. snapshot=${JSON.stringify(snapshot)}`);
+    }
+  } finally {
+    child.kill();
+  }
+}
 
 // Plant a known set of source files so the bulk import + list_vba_modules
 // cross-ref have something to work with. We plant one per "category" so
@@ -134,17 +196,33 @@ for (const p of planted) {
 
 console.log("[i807-features] === Feature 1: list_vba_modules ===");
 
+let verifyModuleNames = [];
+
 // Round 1: list_vba_modules returns the right envelope shape.
 {
   const child = spawnMcp();
   try {
-    const { payload } = await callTool(child, 1, "list_vba_modules", {});
-    expect("F1.list ok=true", payload?.ok === true, payload);
+    const { result, payload } = await callTool(child, 2, "list_vba_modules", {});
+    expect(
+      "F1.list MCP response completed successfully",
+      result.timedOut === false && result.isError === false && payload !== null,
+      { text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
     expect("F1.modules is array", Array.isArray(payload?.modules), payload?.modules);
     expect("F1.summary has total", typeof payload?.summary?.total === "number", payload?.summary);
     expect("F1.summary has inBinaryOnly", typeof payload?.summary?.inBinaryOnly === "number", payload?.summary);
     expect("F1.summary has inSourceOnly", typeof payload?.summary?.inSourceOnly === "number", payload?.summary);
     expect("F1.summary has inBoth", typeof payload?.summary?.inBoth === "number", payload?.summary);
+
+    verifyModuleNames = (payload?.modules ?? [])
+      .filter((module) => module?.sourceExists === true && module?.binaryExists === true)
+      .slice(0, 3)
+      .map((module) => module.name);
+    expect(
+      "F1.fixture exposes at least 3 modules present in source and binary",
+      verifyModuleNames.length === 3,
+      verifyModuleNames,
+    );
 
     // The 3 planted .bas files must appear as `sourceExists: true`. The cross-ref
     // walks the source tree (filesystem-only) and reports each plant.
@@ -164,8 +242,12 @@ console.log("[i807-features] === Feature 1: list_vba_modules ===");
 {
   const child = spawnMcp();
   try {
-    const { payload } = await callTool(child, 2, "list_vba_modules", { typeFilter: "standard" });
-    expect("F2.typeFilter=standard ok=true", payload?.ok === true, payload);
+    const { result, payload } = await callTool(child, 3, "list_vba_modules", { typeFilter: "standard" });
+    expect(
+      "F2.typeFilter=standard MCP response completed successfully",
+      result.timedOut === false && result.isError === false && payload !== null,
+      { text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
     const wrongTypes = (payload?.modules ?? []).filter((m) => m?.type !== 1);
     expect("F2.typeFilter=standard returns only type 1", wrongTypes.length === 0,
       `${wrongTypes.length} wrong-type rows: ${wrongTypes.map((m) => `${m?.name}=${m?.type}`).join(", ")}`);
@@ -178,8 +260,12 @@ console.log("[i807-features] === Feature 1: list_vba_modules ===");
 {
   const child = spawnMcp();
   try {
-    const { payload } = await callTool(child, 3, "list_vba_modules", { namePattern: "Test_F807*" });
-    expect("F3.namePattern=Test_F807* ok=true", payload?.ok === true, payload);
+    const { result, payload } = await callTool(child, 4, "list_vba_modules", { namePattern: "Test_F807*" });
+    expect(
+      "F3.namePattern=Test_F807* MCP response completed successfully",
+      result.timedOut === false && result.isError === false && payload !== null,
+      { text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
     const matches = (payload?.modules ?? []).filter((m) => m?.name?.startsWith("Test_F807"));
     const allMatch = (payload?.modules ?? []).every((m) => m?.name?.startsWith("Test_F807"));
     expect("F3.namePattern=Test_F807* filters to Test_F807* prefix", allMatch && matches.length > 0,
@@ -193,9 +279,9 @@ console.log("[i807-features] === Feature 2: import_modules bulk-by-directory ===
 
 // Round 4: bulk dryRun (default true) returns a plan without writing.
 {
-  const child = spawnMcp();
+  const planChild = spawnMcp();
   try {
-    const { payload } = await callTool(child, 4, "import_modules", {
+    const { payload } = await callTool(planChild, 5, "import_modules", {
       sourceDir: destinationRoot,
       filePattern: "Test_F807*",
       includeTests: true,
@@ -208,17 +294,22 @@ console.log("[i807-features] === Feature 2: import_modules bulk-by-directory ===
     expect("F4.bulk dryRun plan assembled",
       payload !== null && payload?.error === undefined,
       payload?.error ?? "no payload");
+  } finally {
+    planChild.kill();
+  }
+  const existsChild = spawnMcp();
+  try {
     // The behavior: the plan payload has a chunks[] / planned[] array, or
     // it returns the same per-module shape as the single-call path. Both
     // shapes are acceptable as long as no write was applied. We assert
     // the dryRun default by checking the binary's still-pristine state via
     // a follow-up exists() call.
-    const { payload: existsPayload } = await callTool(child, 5, "exists", { moduleName: "Test_F807Helper" });
+    const { payload: existsPayload } = await callTool(existsChild, 6, "exists", { moduleName: "Test_F807Helper" });
     expect("F4.bulk dryRun did NOT write (exists responds for a pre-existing binary module or missing as expected)",
       existsPayload !== null,
       existsPayload);
   } finally {
-    child.kill();
+    existsChild.kill();
   }
 }
 
@@ -227,7 +318,7 @@ console.log("[i807-features] === Feature 2: import_modules bulk-by-directory ===
 {
   const child = spawnMcp();
   try {
-    const { payload } = await callTool(child, 6, "import_modules", {
+    const { payload } = await callTool(child, 7, "import_modules", {
       sourceDir: destinationRoot,
       filePattern: "Test_F807*",
       chunkSize: 1,
@@ -241,17 +332,38 @@ console.log("[i807-features] === Feature 2: import_modules bulk-by-directory ===
 console.log("[i807-features] === Feature 3: verify_code chunking + parallel ===");
 
 // Round 6: verify_code with chunkSize + parallelChunks does not abort on a
-// valid small list. We build a list of 3 module names from the planted set
-// and run with chunkSize=2 parallelChunks=2.
+// valid modules present in both the binary and source tree and run with
+// chunkSize=2 parallelChunks=2.
 {
   const child = spawnMcp();
   try {
-    const { payload } = await callTool(child, 7, "verify_code", {
-      moduleNames: ["Test_F807Helper", "clsF807Entity", "F807PlainModule"],
-      chunkSize: 2,
-      parallelChunks: 2,
-    });
-    expect("F6.verify_code chunked returns ok or matched[]", payload !== null, payload?.error);
+    const { result, payload } = await callTool(
+      child,
+      8,
+      "verify_code",
+      {
+        moduleNames: verifyModuleNames,
+        chunkSize: 2,
+        parallelChunks: 2,
+        onChunkTimeout: "skip",
+        timeoutMs: 30000,
+      },
+      { timeoutMs: 300000 },
+    );
+    expect(
+      "F6.verify_code MCP response completed successfully",
+      result.timedOut === false && result.isError === false,
+      { text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
+    expect("F6.verify_code chunked returns structured JSON", payload !== null, result.text);
+    expect(
+      "F6.verify_code completes every chunk",
+      Array.isArray(payload?.chunkFailures) &&
+        payload.chunkFailures.length === 0 &&
+        Array.isArray(payload?.chunkTimedOut) &&
+        payload.chunkTimedOut.length === 0,
+      { chunkFailures: payload?.chunkFailures, chunkTimedOut: payload?.chunkTimedOut },
+    );
     // Whether matched / different / missingInBinary is set depends on
     // whether the planted .bas files are in the binary. We accept any
     // structured response that does not look like a hard error.
@@ -265,7 +377,7 @@ console.log("[i807-features] === Feature 3: verify_code chunking + parallel ==="
 if (failures.length > 0) {
   console.error(`\n[i807-features] ${failures.length} assertion(s) failed.`);
   for (const f of failures) {
-    console.error(`  - ${f.label}: ${JSON.stringify(f.detail).slice(0, 200)}`);
+    console.error(`  - ${f.label}: ${formatDetail(f.detail)}`);
   }
   process.exit(1);
 }

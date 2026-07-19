@@ -36,10 +36,11 @@
 //     is missing.
 
 import { spawn } from "node:child_process";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 
@@ -48,13 +49,7 @@ const repoRoot = resolve(scriptDir, "..");
 const fixtureAccess = join(scriptDir, "NoConformidades.accdb");
 const fixtureBackend = join(scriptDir, "NoConformidades_Datos.accdb");
 const fixtureSource = join(scriptDir, "src");
-const tempRoot = join(
-  process.env.TEMP ?? process.env.TMP ?? ".",
-  `dysflow-i869-${Date.now()}`,
-);
-const accessPath = join(tempRoot, "NoConformidades.accdb");
-const backendPath = join(tempRoot, "NoConformidades_Datos.accdb");
-const destinationRoot = join(tempRoot, "src");
+const projectId = "noconformidades-i869-password-env-e2e";
 const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD;
@@ -72,9 +67,16 @@ function skipOrFail(message) {
 }
 
 function toolPayload(message) {
-  const text = message?.result?.content?.map((item) => item.text ?? "").join("\n") ?? "";
+  // #1001: the runMcpHarness wrapper exposes the JSON-RPC payload under
+  // `response.result`, not at top-level `result`. Walk the wrapper shape so
+  // the test reads the actual JSON envelope (the original code read
+  // `message?.result?.content` and silently returned null because the
+  // wrapper has no top-level `result`).
+  const content = message?.response?.result?.content;
+  if (!Array.isArray(content)) return null;
+  const text = content.map((item) => item?.text ?? "").join("\n");
   if (!text.trim()) return null;
-  return JSON.parse(text);
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function spawnMcp() {
@@ -88,7 +90,7 @@ function spawnMcp() {
   // wrong Update path into the test environment.
   process.env.DYSFLOW_HOME = join(repoRoot, "test-runtime");
   return spawn(resolvedCommand.command, ["mcp"], {
-    cwd: scriptDir,
+    cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
     env: {
@@ -112,6 +114,18 @@ async function callTool(child, requestId, name, args) {
   return { result, payload };
 }
 
+async function callCapabilities(child) {
+  const result = await runMcpHarness({
+    child,
+    requestId: 2,
+    method: "tools/call",
+    params: { name: "get_capabilities", arguments: { projectId } },
+    timeoutMs,
+    closeWatchdogMs,
+  });
+  return { result, payload: toolPayload(result) };
+}
+
 if (process.platform !== "win32") {
   skipOrFail("Windows + Access required.");
 }
@@ -129,20 +143,65 @@ if (!existsSync(fixtureAccess) || !existsSync(fixtureBackend)) {
 }
 
 const failures = [];
+function formatDetail(detail, max = 200) {
+  if (detail === undefined) return "(no detail)";
+  if (detail === null) return "null";
+  try {
+    return JSON.stringify(detail).slice(0, max);
+  } catch {
+    return String(detail).slice(0, max);
+  }
+}
 function expect(label, condition, detail) {
   if (condition) {
     console.log(`  [ok]   ${label}`);
   } else {
-    console.error(`  [FAIL] ${label} ${detail ? `- ${JSON.stringify(detail)}` : ""}`);
+    console.error(`  [FAIL] ${label} ${detail !== undefined && detail !== null ? `- ${formatDetail(detail)}` : ""}`);
     failures.push({ label, detail });
   }
 }
 
+// #1001: round-trip the fixture through the MCP-owned sandbox so the
+// project's `.dysflow/project.json` resolves at `tempRoot`, not up the
+// directory tree at `scriptDir` (which would otherwise latch onto the
+// stale F16 project.json living in the operator's `$repo/.dysflow/`).
+const sandboxPlan = buildMcpE2eSandboxPlan({ scriptDir });
+const tempRoot = sandboxPlan.sandbox.root;
+const accessPath = sandboxPlan.sandbox.accessPath;
+const backendPath = sandboxPlan.sandbox.backendPath;
+const destinationRoot = sandboxPlan.sandbox.destinationRoot;
+
 await rm(tempRoot, { recursive: true, force: true });
-await mkdir(tempRoot, { recursive: true });
+await initializeMcpE2eSandbox(sandboxPlan, { projectId });
 await cp(fixtureAccess, accessPath);
 await cp(fixtureBackend, backendPath);
 await cp(fixtureSource, destinationRoot, { recursive: true });
+
+{
+  const child = spawnMcp();
+  try {
+    const { result, payload } = await callCapabilities(child);
+    const snapshot = payload?.snapshot ?? payload;
+    const config = snapshot?.projectConfig;
+    const sandboxReady =
+      !result.isError &&
+      typeof snapshot?.adapterVersion === "string" &&
+      typeof snapshot?.toolsVisible === "number" &&
+      snapshot?.writesProcess?.enabled === true &&
+      snapshot?.writesProject?.allowWrites === true &&
+      config?.status === "valid" &&
+      config?.writeReady === true &&
+      config?.projectId === projectId &&
+      typeof config?.projectRoot === "string" &&
+      resolve(config.projectRoot).toLowerCase() === resolve(tempRoot).toLowerCase();
+    expect("PREFLIGHT.sandbox project config is write-ready and isolated", sandboxReady, snapshot);
+    if (!sandboxReady) {
+      throw new Error(`Sandbox capability preflight failed. snapshot=${JSON.stringify(snapshot)}`);
+    }
+  } finally {
+    child.kill();
+  }
+}
 
 console.log("[i869-list-vba-modules-password-env] === Round 1: list_vba_modules happy path ===");
 
@@ -156,8 +215,12 @@ console.log("[i869-list-vba-modules-password-env] === Round 1: list_vba_modules 
 {
   const child = spawnMcp();
   try {
-    const { result, payload } = await callTool(child, 1, "list_vba_modules", {});
-    expect("R1.exit.code === 0", result.exit?.code === 0, { exitCode: result.exit?.code, stderrTail: result.stderr.slice(-2000) });
+    const { result, payload } = await callTool(child, 2, "list_vba_modules", {});
+    expect(
+      "R1.MCP response completed successfully",
+      result.timedOut === false && result.isError === false && result.response !== null,
+      { exit: result.exit, timedOut: result.timedOut, text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
     expect("R1.payload parses", payload !== null, payload?.error);
     expect("R1.modules is array", Array.isArray(payload?.modules), payload?.modules);
     expect(
@@ -192,13 +255,22 @@ console.log("[i869-list-vba-modules-password-env] === Round 2: round-8 non-regre
 {
   const child = spawnMcp();
   try {
-    const { result, payload } = await callTool(child, 2, "list_objects", {});
-    expect("R2.exit.code === 0", result.exit?.code === 0, { exitCode: result.exit?.code, stderrTail: result.stderr.slice(-2000) });
-    expect("R2.payload parses", payload !== null, payload?.error);
+    const { result, payload } = await callTool(child, 3, "list_objects", {});
     expect(
-      "R2.object inventory is non-empty array",
-      Array.isArray(payload?.objects) && payload.objects.length > 0,
-      { count: payload?.objects?.length, payload },
+      "R2.MCP response completed successfully",
+      result.timedOut === false && result.isError === false && result.response !== null,
+      { exit: result.exit, timedOut: result.timedOut, text: result.text, stderrTail: result.stderr.slice(-2000) },
+    );
+    expect("R2.payload parses", payload !== null, payload?.error);
+    const inventoryKeys = ["forms", "reports", "modules", "classes", "documentModules"];
+    const inventoryCounts = Object.fromEntries(
+      inventoryKeys.map((key) => [key, Array.isArray(payload?.[key]) ? payload[key].length : 0]),
+    );
+    const inventoryCount = Object.values(inventoryCounts).reduce((total, count) => total + count, 0);
+    expect(
+      "R2.object inventory is non-empty",
+      inventoryCount > 0,
+      { inventoryCounts, payload },
     );
     expect(
       "R2.round8_list_objects_still_works",
@@ -215,7 +287,7 @@ if (failures.length > 0) {
     `\n[i869-list-vba-modules-password-env] ${failures.length} assertion(s) failed.`,
   );
   for (const f of failures) {
-    console.error(`  - ${f.label}: ${JSON.stringify(f.detail).slice(0, 200)}`);
+    console.error(`  - ${f.label}: ${formatDetail(f.detail)}`);
   }
   process.exit(1);
 }
