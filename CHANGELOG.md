@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.17.1] - 2026-07-19
+
+- chore(quality): apply review round 2 fixes (#1005)
+
+
 ## [v2.17.0] - 2026-07-19
 
 - feat(codegraph-drift): auto-rewrite stale supplement runtime refs (#961) (#1004) - docs(harness): embed canonical dysflow arn├®s v0.1.4 in project AGENTS.md - docs(testing): update MCP e2e spec to also reject C:\Proyectos\skills path leak
