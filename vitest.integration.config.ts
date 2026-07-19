@@ -19,19 +19,15 @@ export default defineConfig({
     environment: "node",
     // Real Access/COM operations are slow and MUST NOT run concurrently: parallel
     // process spawning under the fork pool exhausts Windows handles and throws
-    // spawn UNKNOWN (errno -4094). One fork, files executed sequentially
-    // (issue #562): `singleFork` keeps a single fork process alive and
+    // spawn UNKNOWN (errno -4094). Files must execute sequentially (issue #562):
+    // `maxWorkers: 1` caps the fork pool to a single worker and
     // `fileParallelism: false` prevents Vitest from scheduling multiple files
-    // inside that one fork, which would still contend on the Access ROT.
+    // concurrently, which would contend on the Access ROT. (Vitest 4 removed
+    // `poolOptions.forks.singleFork`; these two top-level options replace it.)
     globalSetup: "./vitest.integration.global-setup.ts",
     testTimeout: 300_000,
     hookTimeout: 60_000,
     pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     fileParallelism: false,
     maxWorkers: 1,
   },
