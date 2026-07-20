@@ -1042,24 +1042,45 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
                     ...params,
                     exportPath: tempRoot,
                     prune: false,
+                    // The export targets a disposable directory and must materialize files for
+                    // the binary walker; a plan-only export yields phantom source-only drift.
+                    apply: true,
                   });
 
-                  if (exportResult.ok) {
-                    const subfolders = ["modules", "classes", "forms", "reports"];
-                    for (const folder of subfolders) {
-                      const folderPath = resolve(tempRoot, folder);
-                      try {
-                        const files = await readdir(folderPath);
-                        for (const file of files) {
-                          if (file.endsWith(".bas") || file.endsWith(".cls")) {
-                            const name = file.slice(0, -4);
-                            const content = await readFile(resolve(folderPath, file), "utf-8");
-                            binaryModules[name] = content;
-                          }
+                  if (!exportResult.ok) {
+                    const message = `Binary reference export failed: ${exportResult.error.message}`;
+                    return {
+                      content: [
+                        {
+                          type: "text",
+                          text: `BINARY_INSPECTION_UNAVAILABLE: ${message}`,
+                        },
+                      ],
+                      isError: true,
+                      ok: false,
+                      error: {
+                        code: "BINARY_INSPECTION_UNAVAILABLE",
+                        message,
+                        errorCode: "BINARY_INSPECTION_UNAVAILABLE",
+                        errorMessage: message,
+                      },
+                    };
+                  }
+
+                  const subfolders = ["modules", "classes", "forms", "reports"];
+                  for (const folder of subfolders) {
+                    const folderPath = resolve(tempRoot, folder);
+                    try {
+                      const files = await readdir(folderPath);
+                      for (const file of files) {
+                        if (file.endsWith(".bas") || file.endsWith(".cls")) {
+                          const name = file.slice(0, -4);
+                          const content = await readFile(resolve(folderPath, file), "utf-8");
+                          binaryModules[name] = content;
                         }
-                      } catch {
-                        // Ignore missing subfolders
                       }
+                    } catch {
+                      // Ignore missing subfolders
                     }
                   }
                 } finally {
