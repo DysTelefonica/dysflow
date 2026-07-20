@@ -41,6 +41,33 @@ function fakeInspector(info: Partial<OsProcessInfo> = {}): ProcessInspector {
   };
 }
 
+/**
+ * Issue #1016 Part B — kill-verification helper. Mirrors a real OS process:
+ * alive on the first read (drives the kill decision), gone on subsequent reads
+ * (mirrors the post-kill state after `Stop-Process` actually took). Use this
+ * anywhere the test expects `cleanup` to reach the kill branch AND succeed;
+ * `fakeInspector` is only safe in tests where the kill is never reached.
+ */
+function fakeInspectorKillable(info: Partial<OsProcessInfo> = {}): ProcessInspector {
+  let calls = 0;
+  return {
+    getProcess: async () => {
+      calls += 1;
+      // First read: process is alive (drives kill). After that: process is
+      // gone (mirrors Stop-Process succeeding). Issue #1016 Part B verifies
+      // the kill took by re-inspecting here.
+      if (calls > 1) return undefined;
+      return {
+        pid: 999,
+        name: "MSACCESS.EXE",
+        startTime: "2026-05-28T10:00:00.000Z",
+        commandLine: 'MSACCESS.EXE "C:\\data\\app.accdb"',
+        ...info,
+      };
+    },
+  };
+}
+
 function fakeKiller(): { killer: ProcessKiller; killed: number[] } {
   const killed: number[] = [];
   return {
@@ -70,7 +97,7 @@ async function makeService(
 describe("AccessOperationCleanupService — path normalization", () => {
   it("matches when request uses forward slashes but record has backslashes", async () => {
     const { killer, killed } = fakeKiller();
-    const svc = await makeService(BASE_RECORD, fakeInspector(), killer);
+    const svc = await makeService(BASE_RECORD, fakeInspectorKillable(), killer);
 
     const result = await svc.cleanup({
       operationId: "op-1",
@@ -84,7 +111,7 @@ describe("AccessOperationCleanupService — path normalization", () => {
   it("matches when request uses backslashes but record has forward slashes", async () => {
     const { killer, killed } = fakeKiller();
     const record = { ...BASE_RECORD, accessPath: "C:/data/app.accdb" };
-    const svc = await makeService(record, fakeInspector(), killer);
+    const svc = await makeService(record, fakeInspectorKillable(), killer);
 
     const result = await svc.cleanup({
       operationId: "op-1",
@@ -97,7 +124,7 @@ describe("AccessOperationCleanupService — path normalization", () => {
 
   it("matches case-insensitively across mixed separators", async () => {
     const { killer, killed } = fakeKiller();
-    const svc = await makeService(BASE_RECORD, fakeInspector(), killer);
+    const svc = await makeService(BASE_RECORD, fakeInspectorKillable(), killer);
 
     const result = await svc.cleanup({
       operationId: "op-1",
@@ -123,7 +150,7 @@ describe("AccessOperationCleanupService — path normalization", () => {
 
   it("accepts when commandLine has forward slashes but record.accessPath has backslashes", async () => {
     const { killer, killed } = fakeKiller();
-    const inspector = fakeInspector({
+    const inspector = fakeInspectorKillable({
       commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
     });
     const svc = await makeService(BASE_RECORD, inspector, killer);
@@ -209,7 +236,7 @@ describe("AccessOperationCleanupService — dead-PID cleanup", () => {
     await registry.create(record);
     const svc = new AccessOperationCleanupService({
       registry,
-      processInspector: fakeInspector({
+      processInspector: fakeInspectorKillable({
         name: "MSACCESS.EXE",
         startTime: "2026-05-28T10:00:00.000Z",
       }),
@@ -421,7 +448,7 @@ describe("AccessOperationCleanupService — tolerant start-time comparison", () 
     await registry.create(record);
     const svc = new AccessOperationCleanupService({
       registry,
-      processInspector: fakeInspector({
+      processInspector: fakeInspectorKillable({
         name: "MSACCESS.EXE",
         // 7-digit PS format, same second as stored 3-digit value
         startTime: "2026-05-28T10:00:00.0000000Z",

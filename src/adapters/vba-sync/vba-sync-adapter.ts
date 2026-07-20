@@ -645,6 +645,25 @@ export class VbaSyncAdapter implements VbaSyncPort {
     await this.finishTrackedOperation(trackedOperation, {
       status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
     });
+    // Issue #1016 Part A — on a non-timeout failure for a binary-mutating
+    // tool, the runner's `finally` block tried to kill the spawned MSACCESS
+    // but the kill can fail silently (`Stop-AccessPidAndWait` returning
+    // false leaves the process alive holding the lock). Reap the orphan
+    // HERE — before the failure envelope reaches the consumer — so the
+    // bench never reaches DIRTY state with a stuck MSACCESS that the
+    // cleanup tools can later find.
+    //
+    // The timeout path (#757 F3) already runs the same preflight; this
+    // mirrors it for non-timeout failures so the recovery contract is
+    // uniform across all failure modes.
+    if (result.exitCode !== 0 && !result.timedOut && result.spawnError === undefined) {
+      try {
+        await this.runPreflightCleanup(target.data);
+      } catch {
+        // Defensive: a failure-path reap must NEVER mask the original
+        // failure. The preflight itself is best-effort.
+      }
+    }
     const secrets = [password].filter((secret): secret is string => Boolean(secret));
     // #781 P2 — surface a spawn failure (e.g. ENOENT for `pwsh` not on PATH,
     // EACCES on Windows) with a specific diagnostic code instead of letting it
