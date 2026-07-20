@@ -1209,7 +1209,15 @@ function Convert-VbaTextForCodeModuleString {
     $lines = @($Text -split "`r?`n")
     $kept = New-Object System.Collections.Generic.List[string]
     foreach ($line in $lines) {
-        if ($line -match '^\s*Attribute\s+VB_\w+\s*=') { continue }
+        # issue #1010 — also strip member-level metadata
+        # `Attribute <var>.VB_VarHelpID = -1` (the optional `<ident>.` prefix
+        # binds a WithEvents declaration to its event source). VBE strips
+        # these on AddFromString, so the post-import truncation guard
+        # (visibleSourceLines vs. CodeModule.CountOfLines) would otherwise
+        # throw a false IMPORT_TRUNCATED for legitimate WithEvents re-imports.
+        # The `^` + leading-whitespace anchor and the `(?:\w+\.)*` group keep
+        # comment/string bodies that happen to contain `Attribute` verbatim.
+        if ($line -match '^\s*Attribute\s+(?:\w+\.)*VB_\w+\s*=') { continue }
         $kept.Add($line) | Out-Null
     }
 
