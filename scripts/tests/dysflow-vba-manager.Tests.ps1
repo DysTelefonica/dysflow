@@ -4831,9 +4831,44 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
         $script:AddFromFileCalls = [System.Collections.Generic.List[object]]::new()
         $script:EnsureVbNameOverride = $null  # when set, return this string instead of running the real helper
 
+        # Cache the real Ensure-VbNameAttributeAtTop function FIRST. Round-3 (#1020):
+        # the previous shape wrapped the function definition inside
+        # `scriptblock::Create("param(...) " + text)`, but the inner `[CmdletBinding()]`
+        # and `Param(...)` block conflicted with the outer wrapper and made the
+        # scriptblock return $null. Dot-sourcing the function definition into a
+        # throwaway .ps1 makes the real function actually executable through the
+        # mock's `& $script:RealEnsureFnAst` call. We cache the function reference
+        # BEFORE installing the mock so the dot-source can't overwrite the mock.
+        $ensureAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        ).FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Ensure-VbNameAttributeAtTop' },
+            $true
+        ) | Select-Object -First 1
+        if ($ensureAst) {
+            $tmpEnsurePath = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow_ensure_{0}.ps1" -f [guid]::NewGuid().ToString("N"))
+            try {
+                Set-Content -LiteralPath $tmpEnsurePath -Value $ensureAst.Extent.Text -Encoding UTF8
+                . $tmpEnsurePath
+                $script:RealEnsureFnAst = ${function:Ensure-VbNameAttributeAtTop}
+            } finally {
+                Remove-Item -LiteralPath $tmpEnsurePath -Force -ErrorAction SilentlyContinue
+            }
+        }
+
         # Mock Ensure-VbNameAttributeAtTop: capture args + (optionally) return a controlled text.
-        # When $script:EnsureVbNameOverride is null, run the REAL function (idempotent pass-through).
-        function script:Ensure-VbNameAttributeAtTop {
+        # When $script:EnsureVbNameOverride is null, delegate to the real function (cached above).
+        #
+        # Round-3 (#1020): we install the mock via `Set-Item -Path "Function:..."`
+        # instead of `function script:Ensure-VbNameAttributeAtTop { ... }`. The
+        # `function script:` syntax in BeforeEach creates the function in a child
+        # scope that is NOT visible from `Import-DocumentCodeBehind` (which was
+        # dot-extracted via Invoke-Expression in BeforeAll into the parent script
+        # scope). The mock silently never fires. `Set-Item` on the Function: drive
+        # replaces the entry in the parent script scope where Import-DocumentCodeBehind
+        # resolves names, so the mock is actually invoked.
+        $mockEnsureSb = {
             param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
                   [Parameter(Mandatory = $true)][string]$ModuleName)
             $script:EnsureVbNameCalls.Add([pscustomobject]@{
@@ -4843,7 +4878,6 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
             if ($null -ne $script:EnsureVbNameOverride) {
                 return [string]$script:EnsureVbNameOverride
             }
-            # Delegate to the real function by re-extracting and invoking.
             $realFn = $script:RealEnsureFnAst
             if ($realFn) {
                 $localText = $Text
@@ -4852,21 +4886,7 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
             }
             return $Text
         }
-        # Cache the real Ensure-VbNameAttributeAtTop function so the mock can delegate
-        # for pass-through assertions.
-        $ensureAst = [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
-        ).FindAll(
-            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-              $args[0].Name -eq 'Ensure-VbNameAttributeAtTop' },
-            $true
-        ) | Select-Object -First 1
-        if ($ensureAst) {
-            # Invoke the real function in the script scope; $script:RealEnsureFnAst holds
-            # the ScriptBlock. Used only when $script:EnsureVbNameOverride is $null.
-            $sb = [scriptblock]::Create("param([string]`$Text,[string]`$ModuleName) " + $ensureAst.Extent.Text)
-            $script:RealEnsureFnAst = $sb
-        }
+        Set-Item -Path "Function:Ensure-VbNameAttributeAtTop" -Value $mockEnsureSb
 
         # Mock Convert-Utf8CodeImportToAnsiTempFile: copy the source verbatim to the
         # requested temp path. Encoding round-trip is not under test here.
@@ -4964,6 +4984,99 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
             # Re-run and capture the temp file mid-call by overriding the cleanup is impractical,
             # so the contract we exercise here is: AddFromFile saw content with the canonical
             # VB_Name header. That is the observable behavior the fix delivers.
+        } finally {
+            if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It "preserves an existing Form_/Report_ prefix on Attribute VB_Name when ModuleName lacks the prefix (issue #1020 round-3 RED)" {
+        # Arrange: .cls file already carries `Attribute VB_Name = "Form_frmSplash"`
+        # (with prefix, as emitted by Access SaveAsText / LoadFromText). The caller
+        # passes the bare basename `ModuleName = "frmSplash"` — the same shape that
+        # `import_modules({moduleNames:["frmSplash"]})` produces end-to-end.
+        #
+        # Bug: Import-DocumentCodeBehind hands the bare basename to
+        # `Ensure-VbNameAttributeAtTop`, which sees the prefix mismatch and rewrites
+        # the .cls to `Attribute VB_Name = "frmSplash"`. AddFromFile then loads it
+        # under that stripped identity, the .cls <-> Form_frmSplash form-instance
+        # link breaks, and `LoadFromText` reports "No se encontro el modulo".
+        #
+        # Fix contract: the function must pass the *resolved* component name (the
+        # one with Form_/Report_ prefix, if any) to Ensure-VbNameAttributeAtTop so
+        # the prefix is preserved on idempotent pass-through.
+        $clsText = @(
+            'Attribute VB_Name = "Form_frmSplash"'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Bar()'
+            'End Sub'
+        ) -join "`r`n"
+        $tmpSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("idc_1020_{0}.cls" -f [guid]::NewGuid().ToString("N"))
+        try {
+            [System.IO.File]::WriteAllText($tmpSrc, $clsText, [System.Text.Encoding]::UTF8)
+
+            # Use the REAL Ensure-VbNameAttributeAtTop (no override) — the bug
+            # surfaces only when the helper runs against the real input. The mock
+            # still captures the call for the second assertion below.
+            $script:EnsureVbNameOverride = $null
+
+            # Act: caller passes the bare basename (no prefix), matching what the
+            # production `Import-VbaModule` path forwards after LoadFromText.
+            Import-DocumentCodeBehind -VbProject $script:FakeVbProject -ModuleName "frmSplash" -SourcePath $tmpSrc
+
+            # Assert: Ensure-VbNameAttributeAtTop was invoked exactly once with the
+            # *resolved* component name (Form_frmSplash), NOT the bare basename.
+            # Without the fix the call uses "frmSplash" and the helper rewrites
+            # the file; with the fix the call uses "Form_frmSplash" and the file
+            # is preserved byte-identical.
+            $script:EnsureVbNameCalls.Count | Should -Be 1 `
+                -Because "issue #1020: Import-DocumentCodeBehind MUST normalize the .cls via Ensure-VbNameAttributeAtTop before AddFromFile"
+            $script:EnsureVbNameCalls[0].ModuleName | Should -Be "Form_frmSplash" `
+                -Because "issue #1020: the helper must receive the resolved component name (with Form_/Report_ prefix), not the bare ModuleName basename — otherwise the prefix is silently stripped on re-import"
+
+            # Assert: AddFromFile saw content that still carries the Form_ prefix.
+            $script:AddFromFileCalls.Count | Should -Be 1 `
+                -Because "exactly one AddFromFile call per Import-DocumentCodeBehind invocation"
+            $script:AddFromFileCalls[0].Content | Should -Match 'Attribute VB_Name = "Form_frmSplash"' `
+                -Because "issue #1020: AddFromFile must receive the .cls with the Form_ prefix preserved, otherwise the .cls <-> form-instance link breaks"
+            $script:AddFromFileCalls[0].Content | Should -Not -Match 'Attribute VB_Name = "frmSplash"\s*$' `
+                -Because "issue #1020: the bare-basename rewrite is the exact regression we are guarding against"
+        } finally {
+            if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It "preserves an existing Report_ prefix on Attribute VB_Name when ModuleName lacks the prefix (issue #1020 round-3 regression coverage)" {
+        # Symmetric coverage for the report branch — same bug, different prefix.
+        $clsText = @(
+            'Attribute VB_Name = "Report_rptAudit"'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Baz()'
+            'End Sub'
+        ) -join "`r`n"
+        $tmpSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("idc_1020rpt_{0}.cls" -f [guid]::NewGuid().ToString("N"))
+        try {
+            [System.IO.File]::WriteAllText($tmpSrc, $clsText, [System.Text.Encoding]::UTF8)
+
+            # Re-mock Resolve-ExistingComponentName for the report branch so the
+            # resolved name carries Report_.
+            function script:Resolve-ExistingComponentName {
+                param($VbProject, [string]$ModuleName)
+                if ($ModuleName -match '^(Form|Report)_') { return $ModuleName }
+                if ($ModuleName -eq 'rptAudit') { return 'Report_rptAudit' }
+                return "Form_$ModuleName"
+            }
+
+            $script:EnsureVbNameOverride = $null
+
+            Import-DocumentCodeBehind -VbProject $script:FakeVbProject -ModuleName "rptAudit" -SourcePath $tmpSrc
+
+            $script:EnsureVbNameCalls.Count | Should -Be 1
+            $script:EnsureVbNameCalls[0].ModuleName | Should -Be "Report_rptAudit" `
+                -Because "issue #1020: the helper must receive the resolved Report_-prefixed name, not the bare basename"
+            $script:AddFromFileCalls[0].Content | Should -Match 'Attribute VB_Name = "Report_rptAudit"' `
+                -Because "issue #1020: report code-behind must keep the Report_ prefix to stay linked to its report document"
         } finally {
             if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
         }

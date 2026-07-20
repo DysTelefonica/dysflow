@@ -3261,9 +3261,20 @@ function Import-DocumentCodeBehind {
         # helper is text-only and idempotent; doing it here keeps the surface
         # auditable and avoids regressing the contract in any future caller
         # that bypasses the export-time normalization.
+        #
+        # issue #1020 (round-3) — pass the *resolved* component name (carrying
+        # the Form_/Report_ prefix when one exists in the live VBProject) rather
+        # than the bare basename `ModuleName`. The previous shape handed the
+        # basename to `Ensure-VbNameAttributeAtTop`, which then stripped the
+        # existing `Form_<base>` / `Report_<base>` header from the .cls (because
+        # the helper treats any mismatching VB_Name as stale and replaces it),
+        # breaking the .cls <-> form-instance link that `LoadFromText` had just
+        # established. `$componentName` is the same value `VbComponents.Item`
+        # resolves below; reusing it keeps the prefix contract coherent across
+        # the import path.
         $ansiEncoding = [System.Text.Encoding]::GetEncoding(1252)
         $normalizedText = [System.IO.File]::ReadAllText($tmpAnsi, $ansiEncoding)
-        $normalizedText = Ensure-VbNameAttributeAtTop -Text $normalizedText -ModuleName $ModuleName
+        $normalizedText = Ensure-VbNameAttributeAtTop -Text $normalizedText -ModuleName $componentName
         [System.IO.File]::WriteAllText($tmpAnsi, $normalizedText, $ansiEncoding)
         $component = $VbProject.VBComponents.Item($componentName)
         $codeModule = $component.CodeModule
