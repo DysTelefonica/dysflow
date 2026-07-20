@@ -1,5 +1,20 @@
 # Changelog
 
+## [v2.19.0] - 2026-07-20
+
+### Added
+
+- feat(vba-lint): cross-form `DoCmd.OpenForm` producer / `Me.OpenArgs` consumer contract mismatch detection — new `openargs-contract-mismatch` rule exposed via the existing `lint_module` MCP tool. Pure-function project-lint engine (`src/core/services/vba-project-openargs-lint-service.ts`) joins producer (extracted from `DoCmd.OpenForm` OpenArgs literal, supporting both paren-form and statement-form invocations plus intra-module assignment tracing for bare-identifier OpenArgs) with consumer (extracted from `Me.OpenArgs` parser branches: `InStr`, `Split`, fallback assignments). Emits `code: "OPENARGS_CONTRACT_MISMATCH"` with both producer and consumer paths/lines, conflicting grammar, and silent-fallback risk flag (#1006)
+
+### Fixed
+
+- fix(vba-sync): preserve `WithEvents` member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
+- fix(vba-sync): avoid false `IMPORT_TRUNCATED` for `WithEvents` member-level attributes — `Convert-VbaTextForCodeModuleString` now strips member-level metadata so the post-import truncation guard compares apples to apples and the `WithEvents` re-import path returns `status:"ok"` with all member-level attrs preserved on re-export (#1010, follow-up to #1007/#1008)
+
+### Notes
+
+- The full `C:\Proyectos\dysflow\E2E_testing` battery was not re-run for this release (per maintainer waiver, last full-battery pass is still valid for the new surface); a focused regression E2E for #1007 was authored in `E2E_testing/mcp-e2e-issue-1007-withevents-import.mjs` and shipped in the v2.18.1 commit (#1011).
+
 ## [v2.18.1] - 2026-07-20
 
 ### Fixed
