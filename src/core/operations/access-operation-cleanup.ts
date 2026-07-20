@@ -226,6 +226,30 @@ export class AccessOperationCleanupService {
     }
 
     await this.options.processKiller.kill(record.accessPid);
+    // Issue #1016 Part B — verify the kill actually took. A "kill" call that
+    // returns successfully but leaves the OS process alive is a false success:
+    // it lets the operation move to `cleaned` while the MSACCESS stays alive
+    // holding the lock. Re-inspect the process state right after the kill and
+    // surface CLEANUP_KILL_UNVERIFIED if the OS still reports the PID as alive.
+    let postKillProcess: OsProcessInfo | undefined;
+    try {
+      postKillProcess = await this.options.processInspector.getProcess(record.accessPid);
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "CLEANUP_INSPECTION_FAILED",
+          `Cleanup failed to re-inspect PID ${record.accessPid} after kill: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
+    if (postKillProcess !== undefined && postKillProcess.name.toUpperCase() === "MSACCESS.EXE") {
+      return failureResult(
+        createDysflowError(
+          "CLEANUP_KILL_UNVERIFIED",
+          `Cleanup refused to mark operation ${record.operationId} cleaned: PID ${record.accessPid} is still alive after kill (process name ${postKillProcess.name}). Re-run cleanup_access_operation with force:true once the OS releases the PID, or escalate to access_force_cleanup_orphaned({confirmPid: ${record.accessPid}}).`,
+        ),
+      );
+    }
     await this.options.registry.update(record.operationId, {
       status: "cleaned",
       updatedAt: new Date().toISOString(),

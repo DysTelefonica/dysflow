@@ -578,15 +578,23 @@ it("kills only the registered PID when every ownership check passes", async () =
     updatedAt: "2026-05-15T10:00:00.000Z",
   });
   const killed: number[] = [];
+  let inspectorCalls = 0;
   const service = new AccessOperationCleanupService({
     registry,
     processInspector: {
-      getProcess: async () => ({
-        pid: 1234,
-        name: "MSACCESS.EXE",
-        startTime: "2026-05-15T10:00:00.000Z",
-        commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
-      }),
+      getProcess: async () => {
+        inspectorCalls += 1;
+        // Issue #1016 Part B — the post-kill re-inspection returns `undefined`
+        // once the kill took. First call returns the alive process so the
+        // service decides to kill it.
+        if (inspectorCalls > 1) return undefined;
+        return {
+          pid: 1234,
+          name: "MSACCESS.EXE",
+          startTime: "2026-05-15T10:00:00.000Z",
+          commandLine: 'MSACCESS.EXE "C:/data/app.accdb"',
+        };
+      },
     },
     processKiller: {
       kill: async (pid) => {
@@ -617,15 +625,21 @@ it("accepts cleanup when accessPath differs only by case", async () => {
     updatedAt: "2026-05-15T10:00:00.000Z",
   });
   const killed: number[] = [];
+  let inspectorCalls = 0;
   const service = new AccessOperationCleanupService({
     registry,
     processInspector: {
-      getProcess: async () => ({
-        pid: 1234,
-        name: "MSACCESS.EXE",
-        startTime: "2026-05-15T10:00:00.000Z",
-        commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
-      }),
+      getProcess: async () => {
+        inspectorCalls += 1;
+        // Issue #1016 Part B — see above.
+        if (inspectorCalls > 1) return undefined;
+        return {
+          pid: 1234,
+          name: "MSACCESS.EXE",
+          startTime: "2026-05-15T10:00:00.000Z",
+          commandLine: 'MSACCESS.EXE "C:/DATA/APP.ACCDB"',
+        };
+      },
     },
     processKiller: {
       kill: async (pid) => {

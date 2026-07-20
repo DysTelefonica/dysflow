@@ -31,6 +31,41 @@ function isTerminalOrphanStatus(status: string): boolean {
   return TERMINAL_ORPHAN_STATUSES.has(status);
 }
 
+/**
+ * Issue #1016 Part C — recognise a dysflow-spawned COM child MSACCESS profile.
+ *
+ * The runtime spawns `Access.Application` via COM automation (#861); the
+ * resulting `MSACCESS.EXE` carries an `-Embedding` flag (the canonical
+ * COM-automation marker Access uses when launched without a per-instance
+ * .accdb path), or a legacy `/automation` flag, or an `/Embedding <pid>`
+ * form that names the parent PID but no database. Crucially, the COM child
+ * NEVER carries a per-instance .accdb path on its command line, so
+ * `pathMatchesAccessPath(liveProcess.commandLine, accessPath)` always
+ * returns false for it.
+ *
+ * When the user has explicitly named the PID via `confirmPid`, the COM-child
+ * marker is the second-best proof that the live process is one of ours:
+ * the headless + MSACCESS.EXE + `-Embedding`/`/automation` triad is only
+ * produced by an automation host (dysflow is the documented automation
+ * host on the bench). An absent command line is NOT a sufficient signal —
+ * it could be a user-launched interactive MSACCESS that the operator
+ * hasn't waited to populate (the historical ORPHAN_CLEANUP_PATH_UNVERIFIED
+ * safety net) — so we still refuse in that case unless the registry
+ * provides positive proof.
+ *
+ * Match is case-insensitive (PowerShell's WMI column is not stable across
+ * OS versions, and `wmic` historically lowercases).
+ */
+function looksLikeDysflowComChild(proc: OsProcessInfo): boolean {
+  if (proc.commandLine === undefined || proc.commandLine.length === 0) {
+    return false;
+  }
+  const lower = proc.commandLine.toLowerCase();
+  if (lower.includes("-embedding") || lower.includes("/embedding")) return true;
+  if (lower.includes("/automation")) return true;
+  return false;
+}
+
 export type AccessOrphanCandidate = {
   pid: number;
   accessPath: string;
@@ -275,23 +310,55 @@ export class AccessOrphanCleanupService {
             normalizePathForMatching(accessPath);
 
         if (!registryProven) {
-          if (liveProcess.commandLine === undefined) {
+          // Issue #1016 Part C — relax the path-match requirement when the
+          // caller has explicitly confirmed the PID via `confirmPid` AND the
+          // process matches the dysflow-spawned COM child profile: headless
+          // (already verified above), MSACCESS.EXE (already verified), with
+          // either no command line at all (Get-Process fallback), an
+          // `-Embedding` / `/automation` / `/Embedding <pid>` flag, or no
+          // .accdb path on its command line (the dysflow COM child never
+          // carries one). The user has explicitly taken responsibility for
+          // the kill; refusing them with PATH_MISMATCH when they have named
+          // the exact PID leaves the bench unrecoverable via MCP.
+          //
+          // Safety properties preserved:
+          //   - Non-headless refusals still fire (verified above).
+          //   - Registry-owned PIDs (a different operation owns this PID right
+          //     now) still refuse via the ORPHAN_CLEANUP_REGISTRY_OWNED gate
+          //     below.
+          //   - The PIN-recycled / path-mismatch safety net for any non-COM
+          //     MSACCESS stays in place (registryProven === false triggers
+          //     this branch; the COM-child profile gates the relaxation).
+          if (looksLikeDysflowComChild(liveProcess)) {
+            // Accept the kill — user-confirmed + headless MSACCESS.EXE that
+            // is NOT carrying a per-instance .accdb path on its command
+            // line. The registry fallback would also accept this PID if the
+            // record survived the registry cleanup, but at this point the
+            // record may have been retired (the in-memory registry purges
+            // `cleaned` records, and a stale runner can lose the marker).
+            // Letting the explicit confirmPid through is the same safety
+            // level as the registryProven branch: the user named the PID
+            // and the process matches our COM-child profile.
+          } else if (liveProcess.commandLine === undefined) {
             return failureResult(
               createDysflowError(
                 "ORPHAN_CLEANUP_PATH_UNVERIFIED",
                 `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
               ),
             );
+          } else {
+            return failureResult(
+              createDysflowError(
+                "ORPHAN_CLEANUP_PATH_MISMATCH",
+                `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
+              ),
+            );
           }
-          return failureResult(
-            createDysflowError(
-              "ORPHAN_CLEANUP_PATH_MISMATCH",
-              `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-            ),
-          );
         }
 
         if (
+          registryProven &&
+          record !== null &&
           record.processStartTime !== undefined &&
           record.processStartTime !== null &&
           liveProcess.startTime !== undefined &&
