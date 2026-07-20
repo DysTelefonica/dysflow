@@ -279,6 +279,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...FRONTEND_TARGET_OVERRIDE,
       backendPath: SCHEMA_PROPS.backendPath,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
     },
   },
   localize_backend_links: {
@@ -289,6 +291,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...FRONTEND_TARGET_OVERRIDE,
       backendPath: SCHEMA_PROPS.backendPath,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
     },
   },
   unlink_table: {
@@ -300,6 +304,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
     },
   },
   import_queries: {
@@ -315,6 +321,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       queryDefinitions: SCHEMA_PROPS.queryDefinitions,
       queries: SCHEMA_PROPS.queries,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
     },
   },
   compact_repair: {

@@ -20,25 +20,9 @@
  *      `commitFlag: "apply"` registry entries and schema-side
  *      `properties.apply` declarations.
  *
- * ## Scope (intentional)
- *
- * The vba-sync surface ONLY. The query-maintenance tools
- * (`relink_tables`, `unlink_table`, `import_queries`,
- * `localize_backend_links`) advertise `commitFlag: "apply"` in the
- * registry but their JSON Schemas currently only declare `dryRun`. That
- * gap is pre-existing (#1014 explicitly scopes to vba-sync) and out of
- * scope here. The test deliberately enumerates the vba-sync family
- * instead of the registry to avoid penalising those pre-existing
- * inconsistencies.
- *
- * Note: `fix_encoding`, `import_all`, `run_vba`, `vba_inline_execution`
- * are similarly vba-sync tools registered with `commitFlag: "apply"`
- * whose JSON Schemas do NOT currently declare `apply`. They are
- * siblings of `import_modules` and `delete_module` and were left out
- * of the #1014 fix scope by the issue author — they are tracked as a
- * separate, future convergence pass. This test does not penalise them
- * either; it uses the schema-side `apply` declaration as the source of
- * truth (the registry is aspirational).
+ * Issue #1031 extends the direct scope to `fix_encoding`, `import_all`,
+ * `run_vba`, and `vba_inline_execution`. Query-maintenance saturation
+ * lives in `apply-flag-query-maintenance-saturation.test.ts`.
  */
 import { describe, expect, it } from "vitest";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
@@ -77,6 +61,12 @@ describe("Issue #1014 — vba-sync apply:true family saturation", () => {
   it("the apply:true family covers the two tools the issue fixes (import_modules + delete_module)", () => {
     expect(applyFamily).toContain("import_modules");
     expect(applyFamily).toContain("delete_module");
+  });
+
+  it("the apply:true family covers the four vba-sync siblings #1031 fixes", () => {
+    for (const toolName of ["fix_encoding", "import_all", "run_vba", "vba_inline_execution"]) {
+      expect(applyFamily).toContain(toolName);
+    }
   });
 
   it("the apply:true family covers the vba-sync baseline (export_modules + export_all + form mutation + sync_binary)", () => {
