@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.18.1] - 2026-07-20
+
+### Fixed
+
+- fix(vba-sync): avoid false IMPORT_TRUNCATED for WithEvents member-level `Attribute <var>.VB_VarHelpID` lines — `Convert-VbaTextForCodeModuleString` now strips member-level metadata (matching what VBE strips from `CodeModule.AddFromString`), so the post-import truncation guard compares apples to apples and the WithEvents re-import path returns `status:"ok"` (#1010, follow-up to #1007/#1008)
+
+
 ## [v2.18.0] - 2026-07-20
 
 ### Fixed
