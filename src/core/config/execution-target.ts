@@ -39,7 +39,7 @@ export async function resolveExecutionTarget(
 
   const hasExplicitConfigOverride =
     stringValue(params.accessPath) !== undefined || stringValue(params.projectRoot) !== undefined;
-  const requestedProjectId = stringValue(params.projectId) ?? stringValue(params.contextId);
+  const requestedProjectId = stringValue(params.projectId);
   if (hasExplicitConfigOverride || requestedProjectId !== undefined) {
     const config = await loadDysflowConfigAsyncWith(
       {

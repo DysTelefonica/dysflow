@@ -49,6 +49,18 @@ describe("loadDysflowConfig — ConfigFileSystemPort (sync)", () => {
     }
   });
 
+  it("uses the configured project identity when contextId is supplied without projectId", () => {
+    const fs = makeFakeFs({
+      [CONFIG_PATH]: JSON.stringify({ id: "configured-project", accessPath: "db.accdb" }),
+    });
+
+    const result = loadDysflowConfigWith({ cwd: REPO, contextId: "request-trace", env: {} }, fs);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected repo config to load");
+    expect(result.data.projectId).toBe("configured-project");
+  });
+
   it("walks up the directory tree to find the repo config", () => {
     const fs = makeFakeFs({
       [CONFIG_PATH]: JSON.stringify({ id: "proj", accessPath: "db.accdb" }),
@@ -57,6 +69,13 @@ describe("loadDysflowConfig — ConfigFileSystemPort (sync)", () => {
     const result = loadDysflowConfigWith({ cwd: resolve(REPO, "src", "deep"), env: {} }, fs);
 
     expect(result.ok).toBe(true);
+  });
+
+  it("does not treat contextId as a registry project identity when repo config is absent", () => {
+    const fs = makeFakeFs({});
+    const result = loadDysflowConfigWith({ cwd: REPO, contextId: "request-trace", env: {} }, fs);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
   });
 
   it("returns CONFIG_MISSING_ACCESS_PATH when no repo config exists anywhere", () => {
@@ -84,6 +103,21 @@ describe("loadDysflowConfig — ConfigFileSystemPort (async)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.data.accessDbPath).toBe(resolve(REPO, "db.accdb"));
+  });
+
+  it("uses the configured project identity when contextId is supplied without projectId", async () => {
+    const fs = makeFakeFs({
+      [CONFIG_PATH]: JSON.stringify({ id: "configured-project", accessPath: "db.accdb" }),
+    });
+
+    const result = await loadDysflowConfigAsyncWith(
+      { cwd: REPO, contextId: "request-trace", env: {} },
+      fs,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected repo config to load");
+    expect(result.data.projectId).toBe("configured-project");
   });
 
   it("maps invalid JSON to CONFIG_PROJECT_FILE_INVALID", async () => {

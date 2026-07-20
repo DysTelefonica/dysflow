@@ -261,7 +261,7 @@ export function loadDysflowConfigShared<
     return buildExplicitConfig(input, env, cwd, explicitAccessDbPath) as T;
   }
 
-  const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+  const requestedProjectId = stringValue(input.projectId);
   if (repoConfig.found === "ambiguous") {
     const [pathA, pathB] = repoConfig.paths;
     return failureResult(
@@ -302,7 +302,7 @@ export function loadDysflowConfigWith(
   const repoConfig = findRepoProjectConfigPath(cwd, fileSystem);
 
   const env = input.env ?? process.env;
-  const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+  const requestedProjectId = stringValue(input.projectId);
 
   return loadDysflowConfigShared(input, repoConfig, (path) =>
     loadProjectConfigFromPath(path, input, env, cwd, "repo-config", requestedProjectId, fileSystem),
@@ -317,7 +317,7 @@ export async function loadDysflowConfigAsyncWith(
   const repoConfig = await findRepoProjectConfigPathAsync(cwd, fileSystem);
 
   const env = input.env ?? process.env;
-  const requestedProjectId = stringValue(input.projectId) ?? stringValue(input.contextId);
+  const requestedProjectId = stringValue(input.projectId);
 
   return loadDysflowConfigShared(input, repoConfig, (path) =>
     loadProjectConfigFromPathAsync(
@@ -375,7 +375,7 @@ function buildExplicitConfig(
     backendPath: stringValue(input.backendPath),
     destinationRoot: stringValue(input.destinationRoot) ?? cwd,
     projectRoot: stringValue(input.projectRoot) ?? cwd,
-    projectId: stringValue(input.projectId) ?? stringValue(input.contextId),
+    projectId: stringValue(input.projectId),
     timeoutMs,
     accessPassword: resolvePassword(
       input.accessPassword,
