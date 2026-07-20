@@ -272,12 +272,12 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // through the import_modules LoadFromText gate). Write-gated.
   form_set_properties:
     "Atomically write a map of properties (Caption, Left, Top, Width, Height, ...) against one named control in a version-controlled .form.txt. Collapses N form_set_property round trips into one IR mutation — the typical full-geometry case (Left+Top+Width+Height) drops from 4 calls to 1. LayoutCached* keys are silently dropped (Issue #872 F3 — Access IDE serialisation noise; never written, regenerated on next save). All other per-key guards carry over: 'Name' is refused (use form_rename_control), protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement with FORM_PROPERTY_NOT_SCALAR. The batch is atomic — any per-key throw aborts the whole operation before any IR mutation lands (no partial writes). Refuses unknown controls with FORM_CONTROL_NOT_FOUND. Routes through the applyGuardedFormWrite seam (defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate). Write-gated.",
-  // Issue #872 F2 — `form_duplicate_control` clones an existing control
-  // under a new name with optional property/geometry overrides. The
-  // source control's type, entries, children, event bindings
-  // ([Event Procedure]), tab order, GUID, and metadata are deep-cloned
-  // verbatim — a duplicated control comes pre-wired with the source's
-  // behaviour. The caller can override any scalar on top via the
+  // Issue #872 F2 / #1032 — `form_duplicate_control` clones an
+  // existing control under a new name with optional property/geometry
+  // overrides. Type, entries, children, event bindings
+  // ([Event Procedure]), tab order, and metadata are deep-cloned; an
+  // existing GUID is deterministically regenerated so source and clone
+  // never share identity. The caller can override any scalar on top via the
   // `overrides` map (Caption, Left, Top, Width, Height, ...). Same
   // per-key guards as form_set_properties apply to the overrides:
   // 'Name' is ignored (identity always wins via newName), protected /
@@ -291,7 +291,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   // apply:true writes the source and validates through the
   // import_modules LoadFromText gate). Write-gated.
   form_duplicate_control:
-    "Deep-clone an existing control under a new name in a version-controlled .form.txt. The source control's type, entries, children, event bindings (`[Event Procedure]`), tab order, GUID, and metadata are copied verbatim — a duplicated control is pre-wired with the source's behaviour. Caller can override any scalar on top via the `overrides` map (Caption, Left, Top, Width, Height, ...). 'Name' is always ignored in overrides (identity wins via newName); protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED; blob-kind entries refuse scalar replacement (FORM_PROPERTY_NOT_SCALAR); LayoutCached* keys are silently dropped (Issue #872 F3). Optional `targetSectionName` pushes the clone into a different section (mirrors form_add_control's section resolution). Refuses unknown source controls (FORM_DUPLICATE_SOURCE_MISSING) and name collisions (FORM_DUPLICATE_CONTROL) — both before any IR mutation lands. Routes through the applyGuardedFormWrite seam (defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate). Write-gated.",
+    "Deep-clone an existing control under a new name in a version-controlled .form.txt. The source control's type, entries, children, event bindings (`[Event Procedure]`), tab order, and metadata are copied verbatim, while any existing GUID blob is deterministically regenerated so source and clone never share identity (#1032). The duplicate remains pre-wired with the source's behaviour. Caller can override any scalar on top via the `overrides` map (Caption, Left, Top, Width, Height, ...). 'Name' is always ignored in overrides (identity wins via newName); protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED; blob-kind entries refuse scalar replacement (FORM_PROPERTY_NOT_SCALAR); LayoutCached* keys are silently dropped (Issue #872 F3). Optional `targetSectionName` pushes the clone into a different section (mirrors form_add_control's section resolution). Refuses unknown source controls (FORM_DUPLICATE_SOURCE_MISSING) and name collisions (FORM_DUPLICATE_CONTROL) — both before any IR mutation lands. Routes through the applyGuardedFormWrite seam (defaults to dry-run; apply:true writes the source and validates through the import_modules LoadFromText gate). Write-gated.",
   verify_form_ui:
     "Verify an applied form UI contract against the source behavior map and report actionable drift for missing controls, handlers, or bindings. Read-only.",
   // Issue #814 — pure, deterministic, read-only. The renderer is the

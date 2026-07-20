@@ -1418,11 +1418,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
-  // Issue #872 F2 — duplicate an existing control under a new name
-  // with optional property/geometry overrides. The source control's
-  // type, entries, children, event bindings ([Event Procedure]),
-  // tab order, GUID, and metadata are deep-cloned verbatim — the
-  // caller overrides scalars on top via the `overrides` map.
+  // Issue #872 F2 / #1032 — duplicate an existing control under a new
+  // name with optional property/geometry overrides. Type, entries,
+  // children, event bindings ([Event Procedure]), tab order, and metadata
+  // are deep-cloned; an existing GUID is deterministically regenerated so
+  // source and clone never share identity. Caller overrides scalars on top.
   // Event bindings carry over so a duplicated control is pre-wired
   // with the source's behaviour; that's the whole point of cloning
   // ("make this new control like that existing one") and matches the
@@ -1447,7 +1447,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         type: "string",
         minLength: 1,
         description:
-          "Name for the cloned control. Must NOT collide with any existing control (FORM_DUPLICATE_CONTROL otherwise).",
+          "Name for the cloned control. Must NOT collide with any existing control (FORM_DUPLICATE_CONTROL otherwise). When the source carries a GUID blob, the clone receives a fresh GUID deterministically derived from the form and source/new control identities; the source GUID is never copied verbatim (#1032).",
       },
       targetSectionName: {
         type: "string",
