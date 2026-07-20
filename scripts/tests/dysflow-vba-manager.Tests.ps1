@@ -3129,6 +3129,8 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
         $script:BatchCalled = $false
         $script:OpenCalled = $false
         $script:BatchResult = @()
+        $script:SandboxCalls = @()
+        $script:SandboxRemovals = @()
 
         function script:Open-AccessDatabase {
             param($AccessPath, $Password, $AllowStartupExecution)
@@ -3141,6 +3143,22 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
             $script:BatchCalled = $true
             $script:BatchProcedures = @($Procedures)
             return , @($script:BatchResult)
+        }
+
+        # Issue #1013 — sandbox sync. The legacy behavior was to open
+        # $AccessPath directly. The new behavior copies it via
+        # Get-TestSandboxPath; existing tests in this Describe do not care
+        # about the sandbox path itself, so the mock echoes the input path
+        # and tracks the cleanup call.
+        function script:Get-TestSandboxPath {
+            param([string]$AccessPath, [string]$TempRoot)
+            $script:SandboxCalls += [pscustomobject]@{ AccessPath = $AccessPath; TempRoot = $TempRoot }
+            return $AccessPath
+        }
+
+        function script:Remove-TestSandbox {
+            param([string]$SandboxPath)
+            $script:SandboxRemovals += [pscustomobject]@{ SandboxPath = $SandboxPath }
         }
     }
 

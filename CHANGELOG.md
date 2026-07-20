@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.19.1] - 2026-07-20
+
+### Fixed
+
+- fix(runner): `test_vba` runner now executes against a fresh snapshot of the configured `.accdb` taken at the moment the test run is prepared (`Get-TestSandboxPath` byte-exact copy under the OS temp tree, cleaned up by `Remove-TestSandbox` in the `finally` block). Previously the runner opened the source binary directly, which could surface stale compiled-bytecode or in-memory helper state and let the consumer observe helper output that did not match what `vba_inline_execution` produced against the same binary (#1013)
+
+### Notes
+
+- The full `C:\Proyectos\dysflow\E2E_testing` battery was not re-run for this release (per maintainer waiver, last full-battery pass is still valid for the new surface); a focused regression E2E for #1013 was authored in `E2E_testing/mcp-e2e-issue-1013-test-vba-sandbox-sync.mjs` and a focused RED→GREEN Pester suite in `scripts/tests/dysflow-vba-manager-issue1013.Tests.ps1`.
+
 ## [v2.19.0] - 2026-07-20
 
 ### Added

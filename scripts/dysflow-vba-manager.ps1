@@ -1988,6 +1988,85 @@ function Get-AccessDatabaseLockedOwner {
     return $result
 }
 
+# ===========================================================================
+# test_vba sandbox sync (issue #1013) — pure copy/cleanup helpers.
+# The Run-Tests path must open a FRESH snapshot of the configured .accdb so
+# that VBA helper code on disk at the moment the test run is prepared is
+# what gets executed. Without this, repeated test_vba calls can race
+# MSACCESS.EXE's compiled-bytecode cache or stale state inside the binary
+# itself, and a consumer can observe helper output that does not match
+# what the binary currently contains (verified against an EXPEDIENTES
+# reproducer where test_vba ran helper code that differed from the same
+# binary executed via vba_inline_execution).
+#
+# The fix is two pure helpers + an integration point in
+# Invoke-RunTestsAction. The helpers stay pure (no COM, no MSACCESS) so
+# Pester can drive them in any environment.
+# ===========================================================================
+
+function Get-TestSandboxPath {
+    [CmdletBinding()]
+    [OutputType([string])]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$AccessPath,
+        [Parameter(Mandatory = $false)][AllowEmptyString()][string]$TempRoot
+    )
+    if ([string]::IsNullOrWhiteSpace($AccessPath)) {
+        throw "Get-TestSandboxPath requires -AccessPath pointing at the configured .accdb."
+    }
+    if (-not (Test-Path -LiteralPath $AccessPath)) {
+        throw "Get-TestSandboxPath: source .accdb not found at '$AccessPath'."
+    }
+    if ([string]::IsNullOrWhiteSpace($TempRoot)) {
+        $TempRoot = [System.IO.Path]::GetTempPath()
+    }
+    $tempFull = [System.IO.Path]::GetFullPath($TempRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    [System.IO.Directory]::CreateDirectory($tempFull) | Out-Null
+
+    $sourceFull = [System.IO.Path]::GetFullPath($AccessPath)
+    $sourceName = [System.IO.Path]::GetFileNameWithoutExtension($sourceFull)
+    $sourceExt = [System.IO.Path]::GetExtension($sourceFull)
+    if ([string]::IsNullOrEmpty($sourceExt)) { $sourceExt = ".accdb" }
+
+    # Per-call unique path so concurrent test_vba invocations do not collide
+    # on the same sandbox file. We embed a GUID-suffixed identifier under
+    # the temp root; the lifetime is owned by Invoke-RunTestsAction via
+    # Remove-TestSandbox in the finally block.
+    $sandboxDir = Join-Path $tempFull ("dysflow-test-sandbox-" + [guid]::NewGuid().ToString("N"))
+    [System.IO.Directory]::CreateDirectory($sandboxDir) | Out-Null
+    $sandboxPath = Join-Path $sandboxDir ("${sourceName}-sandbox${sourceExt}")
+
+    # Byte-exact snapshot of the current binary at the moment of the call.
+    # Copy-Item preserves bytes; we do not transform encoding or line
+    # endings because the downstream OpenCurrentDatabase path expects the
+    # raw .accdb (and #1007/#1010 fix the import surface, not the open
+    # surface).
+    Copy-Item -LiteralPath $sourceFull -Destination $sandboxPath -ErrorAction Stop
+    return $sandboxPath
+}
+
+function Remove-TestSandbox {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $false)][AllowEmptyString()][string]$SandboxPath
+    )
+    if ([string]::IsNullOrWhiteSpace($SandboxPath)) { return }
+    try {
+        if (Test-Path -LiteralPath $SandboxPath) {
+            Remove-Item -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue
+        }
+        # Remove the per-call parent dir we created in Get-TestSandboxPath
+        # when it is now empty. Best-effort; never throws.
+        $parent = Split-Path -Path $SandboxPath -Parent
+        if ($parent -and (Test-Path -LiteralPath $parent)) {
+            $items = @(Get-ChildItem -LiteralPath $parent -Force -ErrorAction SilentlyContinue)
+            if ($items.Count -eq 0) {
+                Remove-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch { Write-Debug "Remove-TestSandbox: $_" }
+}
+
 function Open-AccessDatabase {
     [CmdletBinding()]
     Param(
@@ -4832,10 +4911,27 @@ function Invoke-RunTestsAction {
     }
 
     $procedures = ConvertFrom-Json -InputObject $ProceduresJson
-    $Session.Value = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-    $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
-    if ($Json) {
-        Write-DysflowResult -Result @($batchResults) -Depth 6
+
+    # Issue #1013 — Run-Tests must execute against a FRESH snapshot of the
+    # configured .accdb taken at the moment the test run is prepared. Without
+    # this copy, MSACCESS.EXE may reuse compiled-bytecode state or stale
+    # in-memory helpers from a prior open of the same binary, and the
+    # consumer observes helper output that differs from what
+    # vba_inline_execution produces against the same binary.
+    #
+    # The copy is opened in place of the source; Open-AccessDatabase
+    # therefore points at the sandbox path. The sandbox is removed in the
+    # finally block regardless of batch outcome so a throw from
+    # Invoke-AccessProcedureBatch never leaks the temp file.
+    $sandboxPath = Get-TestSandboxPath -AccessPath $AccessPath
+    try {
+        $Session.Value = Open-AccessDatabase -AccessPath $sandboxPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
+        if ($Json) {
+            Write-DysflowResult -Result @($batchResults) -Depth 6
+        }
+    } finally {
+        Remove-TestSandbox -SandboxPath $sandboxPath
     }
 }
 
