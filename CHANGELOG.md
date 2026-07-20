@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.18.0] - 2026-07-20
+
+### Fixed
+
+- fix(vba-sync): preserve WithEvents member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the existing post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
+
+
 ## [v2.17.1] - 2026-07-19
 
 - chore(quality): apply review round 2 fixes (#1005)

@@ -1153,12 +1153,43 @@ function Get-SourceFileSizeSnapshot {
 # updates, keep the existing component (no VBComponents.Remove; no VBE Save As
 # prompt) and fall back to CodeModule.AddFromString after clearing the module.
 # Pure function — no COM.
+# issue #1007 — detect class source containing WithEvents declarations.
+# VBE's CodeModule.AddFromString strips hidden attribute metadata, including
+# member-level `Attribute <var>.VB_VarHelpID = -1` lines that bind a WithEvents
+# declaration to its event source (see comment in Import-VbaModule:3388-3390).
+# When the import path lands on the AddFromString fallback for a .cls with
+# WithEvents, the binario loses those lines and VBE compilation fails with
+# "Error de sintaxis" on every attribute line. The downstream import flow
+# uses this helper to short-circuit the F16 fallback so AddFromFile carries
+# the import; if AddFromFile truncates instead, the existing post-import
+# check at Import-VbaModule:3455 throws IMPORT_TRUNCATED with a typed error
+# instead of silent corruption.
+function Test-SourceContainsWithEventsDeclaration {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$SourceText
+    )
+
+    if ([string]::IsNullOrEmpty($SourceText)) { return $false }
+    return ($SourceText -match '(?m)^\s*(?:Public|Private)\s+WithEvents\s+\w+')
+}
+
 function Test-ShouldUseCodeModuleStringFallback {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)][int]$SourceLines,
-        [Parameter(Mandatory = $true)][int]$ExistingLines
+        [Parameter(Mandatory = $true)][int]$ExistingLines,
+        [string]$SourceText = ""
     )
+
+    # issue #1007 — do NOT trigger the AddFromString F16 fallback for source
+    # that contains WithEvents declarations. See the comment on
+    # Test-SourceContainsWithEventsDeclaration for the VBE behavior that
+    # forces this short-circuit. AddFromFile carries the import and, if it
+    # also truncates, the post-import check surfaces IMPORT_TRUNCATED.
+    if (Test-SourceContainsWithEventsDeclaration -SourceText $SourceText) {
+        return $false
+    }
 
     return ($SourceLines -gt 0 -and $ExistingLines -gt 0 -and $SourceLines -gt $ExistingLines)
 }
@@ -3388,7 +3419,13 @@ function Import-VbaModule {
             # issue #752 / F16 — compare the visible source that CodeModule can
             # contain, not hidden Attribute metadata that AddFromString strips
             # and the VBE does not expose through CountOfLines.
-            $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text ([System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252)))
+            # issue #1007 — also capture the normalized source text BEFORE
+            # Convert-VbaTextForCodeModuleString strips `Attribute VB_*` lines,
+            # so the F16-fallback helper can detect WithEvents declarations
+            # and short-circuit the AddFromString path (which would otherwise
+            # strip member-level `Attribute <var>.VB_VarHelpID = -1` lines).
+            $normalizedSourceText = [System.IO.File]::ReadAllText($tmpAnsiSanitized, [System.Text.Encoding]::GetEncoding(1252))
+            $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text $normalizedSourceText
             $visibleSourceLines = Get-VbaTextLineCount -Text $codeTextForStringImport
             $importVerboseSource = $null
             if ($script:ImportVerbose) {
@@ -3396,7 +3433,7 @@ function Import-VbaModule {
             }
 
             $count = $codeModule.CountOfLines
-            $shouldAllowStringFallback = Test-ShouldUseCodeModuleStringFallback -SourceLines ([int]$visibleSourceLines) -ExistingLines ([int]$count)
+            $shouldAllowStringFallback = Test-ShouldUseCodeModuleStringFallback -SourceLines ([int]$visibleSourceLines) -ExistingLines ([int]$count) -SourceText $normalizedSourceText
             $mutationStarted = $false
             $fallbackUsed = $false
             $fallbackReason = $null
