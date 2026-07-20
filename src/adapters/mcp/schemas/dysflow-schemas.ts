@@ -322,8 +322,9 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
     rules: {
       type: "array",
       description:
-        "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name, logical-short-circuit, implicit-variant, missing-exit-handler, invalid-static-class-call. " +
+        "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name, logical-short-circuit, implicit-variant, missing-exit-handler, invalid-static-class-call, openargs-contract-mismatch. " +
         "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.). logical-short-circuit flags And/Or operations on the same object combining existence check and member access. implicit-variant flags multiple declarations on a single line missing explicit As clause. missing-exit-handler flags missing Exit Sub/Function/Property before error label. invalid-static-class-call flags static-style calls on non-predeclared class modules. " +
+        "openargs-contract-mismatch (#1006 slice 2) — project-level rule that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree (forms/, classes/, reports/). It walks every .cls file under the resolved destinationRoot, runs the project-lint engine, and emits one OPENARGS_CONTRACT_MISMATCH diagnostic per divergent producer/consumer pair (producerGrammar vs consumerGrammar differ, and a silent fallback is reachable in the consumer). When this rule is requested, the destinationRoot must resolve; the rule is silently skipped if the project source tree cannot be enumerated. " +
         "identifier-safety (issue #789) — non-ASCII VBA identifiers (Spanish, Portuguese, French, German, Italian, etc.) are valid VBA and emit `warning` by default; they do NOT block. The `._` dot-underscore and reserved-word findings stay at `error` always. To restore the historical strict (error) severity for non-ASCII, set `capabilities.lint.identifierSafety.strictNonAscii: true` in `.dysflow/project.json`.",
       items: {
         type: "string",
@@ -337,6 +338,7 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
           "implicit-variant",
           "missing-exit-handler",
           "invalid-static-class-call",
+          "openargs-contract-mismatch",
         ],
       },
     },
