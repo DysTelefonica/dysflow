@@ -22,6 +22,7 @@ Describe "dysflow-vba-manager.ps1 — F16 source-larger import fallback helpers"
             'Get-VbNameFromSourceFile',
             'Test-SourceFileHasDuplicateOptions',
             'Get-SourceFileSizeSnapshot',
+            'Test-SourceContainsWithEventsDeclaration',
             'Test-ShouldUseCodeModuleStringFallback',
             'Convert-VbaTextForCodeModuleString',
             'Get-VbaTextLineCount',
