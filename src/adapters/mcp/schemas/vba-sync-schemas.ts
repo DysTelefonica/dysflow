@@ -158,6 +158,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       moduleNames: SCHEMA_PROPS.moduleNames,
       importMode: SCHEMA_PROPS.importMode,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1014 — write-tool convention parity. The description
+      // template promises "apply:true or dryRun:false" as the commit
+      // signal; the schema must declare the `apply` flag so a caller
+      // using the canonical `apply:true` form is not rejected with
+      // `MCP_INPUT_INVALID: apply is not allowed.` Apply takes
+      // precedence over `dryRun` (resolver contract); the legacy
+      // `dryRun:false` form continues to work unchanged.
+      apply: SCHEMA_PROPS.apply,
       // issue #752 — opt-in verbose flag. Adds per-module {source,
       // destination, truncated, mismatchReason} to each result entry so an AI
       // caller can detect silent truncation instead of trusting `status:ok`.
@@ -524,6 +532,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // flag — `delete_module` without `dryRun` keeps the legacy execute
       // path so production deletes don't accidentally dry-run.
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1014 — write-tool convention parity. The description
+      // template promises "apply:true or dryRun:false" as the commit
+      // signal; the schema must declare the `apply` flag so a caller
+      // using the canonical `apply:true` form is not rejected with
+      // `MCP_INPUT_INVALID: apply is not allowed.` Apply takes
+      // precedence over `dryRun` (resolver contract); the legacy
+      // `dryRun:false` form continues to work unchanged.
+      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
