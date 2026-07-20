@@ -243,6 +243,27 @@ export const FIND_REFERENCES_SCHEMA: JsonObjectSchema = {
       enum: ["module", "binary", "source", "all"],
       description: "Search scope: module, binary, source, or all. Defaults to all.",
     },
+    // Issue #1019 — pagination for popular symbols. The walker walks the
+    // full corpus regardless of `limit`; `limit` only caps the references
+    // surfaced in the response so a popular symbol does not blow the MCP
+    // 30 s budget. `offset` lets the caller resume. Defaults: limit = 500
+    // (preserves the pre-fix behavior for the typical < 500 refs case),
+    // offset = 0. When the matched corpus exceeds `limit` the response
+    // surfaces `truncated: true` and `nextOffset: <next page start>`; the
+    // consumer follows the cursor to drain the rest.
+    limit: {
+      type: "number",
+      minimum: 1,
+      maximum: 1000,
+      description:
+        "Maximum references to return in a single response. Defaults to 500 when omitted. Hard ceiling is 1000.",
+    },
+    offset: {
+      type: "number",
+      minimum: 0,
+      description:
+        "Pagination offset (number of references to skip). Defaults to 0. Use `nextOffset` from the previous response to continue paging.",
+    },
     module: {
       type: "string",
       description: "Optional module name constraint. Restricts search to this module only.",

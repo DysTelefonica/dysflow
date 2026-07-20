@@ -60,6 +60,10 @@ describe("find_references — returns call sites of a symbol", () => {
         },
       ],
       totalCount: 2,
+      // Issue #1019 — pagination metadata. Small symbol (< default 500)
+      // returns a complete page with truncated=false + nextOffset=null.
+      truncated: false,
+      nextOffset: null,
     });
   });
 });
