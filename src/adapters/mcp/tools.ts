@@ -966,7 +966,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     },
     {
       name: "find_references",
-      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, and totalCount. ${MCP_TOOL_CONTRACTS.find_references.summary}`,
+      description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, totalCount, truncated (boolean), and nextOffset (number | null). Issue #1019 — supports pagination via \`limit\` (default 500, max 1000) and \`offset\` (default 0) to avoid MCP -32001 timeouts on popular symbols. ${MCP_TOOL_CONTRACTS.find_references.summary}`,
       inputSchema: FIND_REFERENCES_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, FIND_REFERENCES_SCHEMA);
@@ -976,6 +976,12 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         const symbol = params.symbol as string;
         const scope = (params.scope ?? "all") as "module" | "binary" | "source" | "all";
         const moduleConstraint = params.module as string | undefined;
+        // Issue #1019 — caller-supplied pagination. Both are optional in the
+        // schema; the walker applies sane defaults (limit=500, offset=0).
+        const pagination = {
+          limit: typeof params.limit === "number" ? params.limit : undefined,
+          offset: typeof params.offset === "number" ? params.offset : undefined,
+        };
 
         if (params.modules !== undefined) {
           const result = findVbaReferences(
@@ -983,6 +989,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
             symbol,
             scope,
             moduleConstraint,
+            pagination,
           );
           if (result === undefined) {
             return {
@@ -1093,7 +1100,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
 
         // Search in the resolved modules
         const searchModules = scope === "binary" ? binaryModules : sourceModules;
-        const result = findVbaReferences(searchModules, symbol, scope, moduleConstraint);
+        const result = findVbaReferences(
+          searchModules,
+          symbol,
+          scope,
+          moduleConstraint,
+          pagination,
+        );
         if (result === undefined) {
           return {
             content: [{ type: "text", text: `SYMBOL_NOT_FOUND: Symbol '${symbol}' not found.` }],
@@ -1103,7 +1116,17 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         }
 
         if (scope === "all") {
-          const binaryResult = findVbaReferences(binaryModules, symbol, "binary", moduleConstraint);
+          // Issue #1019 — apply the same pagination to the binary walker so
+          // the diff computation stays within the same page. The diff is
+          // approximate for popular symbols past page 1; the consumer
+          // paginates to drain the rest.
+          const binaryResult = findVbaReferences(
+            binaryModules,
+            symbol,
+            "binary",
+            moduleConstraint,
+            pagination,
+          );
           const binaryRefs = binaryResult ? binaryResult.references : [];
           const onlyInSource = result.references.filter(
             (sr) => !binaryRefs.some((br) => br.module === sr.module && br.context === sr.context),

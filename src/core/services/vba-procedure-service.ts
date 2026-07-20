@@ -180,6 +180,23 @@ export interface FindReferencesResult {
   scope: string;
   references: VbaReferenceEntry[];
   totalCount: number;
+  // Issue #1019 — pagination metadata. `truncated` is true when the matched
+  // corpus exceeds the page size; `nextOffset` is the offset the caller
+  // passes on the next call to continue paging, or `null` when the last
+  // page was returned. Both are always present in the envelope so the
+  // consumer can branch without checking field presence.
+  truncated: boolean;
+  nextOffset: number | null;
+}
+
+/**
+ * Pagination input for `findVbaReferences`. The walker still walks the full
+ * corpus — `limit` only caps the response payload so the MCP transport can
+ * deliver popular symbols within the 30 s timeout budget (#1019).
+ */
+export interface FindReferencesPagination {
+  limit?: number;
+  offset?: number;
 }
 
 export interface VbaProcedureRange {
@@ -614,14 +631,58 @@ export function getModuleProcedureRanges(source: string): VbaProcedureRange[] {
 }
 
 /**
+ * Default page size for `findVbaReferences` when the caller does not
+ * supply `limit`. Chosen so the typical < 500 references case matches the
+ * pre-fix behavior byte-for-byte while popular symbols can opt into
+ * paging. Matches the schema default in `FIND_REFERENCES_SCHEMA`.
+ */
+const DEFAULT_FIND_REFERENCES_LIMIT = 500;
+
+/**
+ * Hard ceiling for `limit`. The schema enforces it on input; the walker
+ * also clamps defensively in case a non-schema caller (e.g. unit tests)
+ * passes an out-of-range value.
+ */
+const MAX_FIND_REFERENCES_LIMIT = 1000;
+
+/** @internal */
+function clampFindReferencesLimit(rawLimit: number | undefined): number {
+  if (rawLimit === undefined || !Number.isFinite(rawLimit) || rawLimit < 1) {
+    return DEFAULT_FIND_REFERENCES_LIMIT;
+  }
+  if (rawLimit > MAX_FIND_REFERENCES_LIMIT) {
+    return MAX_FIND_REFERENCES_LIMIT;
+  }
+  return Math.floor(rawLimit);
+}
+
+/** @internal */
+function clampFindReferencesOffset(rawOffset: number | undefined): number {
+  if (rawOffset === undefined || !Number.isFinite(rawOffset) || rawOffset < 0) {
+    return 0;
+  }
+  return Math.floor(rawOffset);
+}
+
+/**
  * Find all references to a given symbol across a set of modules.
  * Returns undefined if the symbol is not defined anywhere in the modules.
+ *
+ * Issue #1019 — `pagination` slices the returned `references` array. The
+ * walker always walks the full corpus (the scan is what triggers the MCP
+ * -32001 timeout for popular symbols, not the response size), but the
+ * envelope only carries the requested page so the JSON payload stays
+ * bounded. `totalCount` reflects the full match count, `truncated` is
+ * true when more refs exist past the current page, and `nextOffset` is
+ * the offset the caller passes on the next call (or `null` when this was
+ * the last page).
  */
 export function findVbaReferences(
   modules: Record<string, string>,
   symbol: string,
   scope = "all",
   moduleConstraint?: string,
+  pagination?: FindReferencesPagination,
 ): FindReferencesResult | undefined {
   let isDefined = false;
   const references: VbaReferenceEntry[] = [];
@@ -690,10 +751,23 @@ export function findVbaReferences(
     }
   }
 
+  // Issue #1019 — slice the references array per the caller's pagination.
+  // The walker above already paid the cost of running the regex across every
+  // module's lines; the slice is O(1) and only bounds the JSON payload so
+  // the MCP transport can deliver popular symbols within its 30 s budget.
+  const limit = clampFindReferencesLimit(pagination?.limit);
+  const offset = clampFindReferencesOffset(pagination?.offset);
+  const totalCount = references.length;
+  const slicedReferences = references.slice(offset, offset + limit);
+  const truncated = offset + slicedReferences.length < totalCount;
+  const nextOffset = truncated ? offset + slicedReferences.length : null;
+
   return {
     symbol,
     scope,
-    references,
-    totalCount: references.length,
+    references: slicedReferences,
+    totalCount,
+    truncated,
+    nextOffset,
   };
 }
