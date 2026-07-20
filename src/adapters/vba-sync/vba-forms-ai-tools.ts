@@ -189,14 +189,13 @@ function generatePlan(params: Record<string, unknown>): OperationResult<unknown>
       createDysflowError("FORM_SPEC_MISSING", "generate_form_design_plan requires behaviorMap."),
     );
   }
-  return successResult(
-    generateFormUiDesignPlan(behaviorMap, {
-      operations: Array.isArray(plan?.operations)
-        ? (plan.operations as Parameters<typeof generateFormUiDesignPlan>[1]["operations"])
-        : [],
-      referencePattern: plan?.referencePattern,
-    }),
-  );
+  const generated = generateFormUiDesignPlan(behaviorMap, {
+    operations: Array.isArray(plan?.operations)
+      ? (plan.operations as Parameters<typeof generateFormUiDesignPlan>[1]["operations"])
+      : [],
+    referencePattern: plan?.referencePattern,
+  });
+  return successResult({ ...generated, mode: "dry-run" as const });
 }
 
 async function applyPlan(args: {
@@ -369,7 +368,8 @@ function copyPattern(params: Record<string, unknown>): OperationResult<unknown> 
       ),
     );
   }
-  return successResult(copyFormUiPattern(behaviorMap, referencePattern));
+  const copied = copyFormUiPattern(behaviorMap, referencePattern);
+  return successResult({ ...copied, mode: "dry-run" as const });
 }
 
 function verifyUi(params: Record<string, unknown>): OperationResult<unknown> {
@@ -383,7 +383,8 @@ function verifyUi(params: Record<string, unknown>): OperationResult<unknown> {
       ),
     );
   }
-  return successResult(verifyFormUi(sourceContract, appliedContract));
+  const report = verifyFormUi(sourceContract, appliedContract);
+  return successResult({ ...report, mode: "dry-run" as const });
 }
 
 function readEvidence(value: unknown): CodeGraphBehaviorEvidence[] {

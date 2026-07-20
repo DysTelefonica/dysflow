@@ -10,6 +10,225 @@ import {
 } from "../../../shared/validation/index.js";
 import type { VbaSyncToolName } from "../mcp-tool-registry.js";
 
+const CODEGRAPH_EVIDENCE_SCHEMA: JsonSchemaProperty = {
+  type: "object",
+  description:
+    "One CodeGraph-VBA behavior trace. handler and callPath are required; tables and effects are optional evidence metadata.",
+  required: ["handler", "callPath"],
+  additionalProperties: false,
+  properties: {
+    handler: {
+      type: "string",
+      minLength: 1,
+      description: "VBA event handler or procedure name represented by this trace.",
+    },
+    callPath: {
+      type: "array",
+      items: { type: "string", description: "One procedure name in call order." },
+      description: "Ordered procedure path starting at handler.",
+    },
+    tables: {
+      type: "array",
+      items: { type: "string", description: "One referenced table name." },
+      description: "Optional tables reached by the trace.",
+    },
+    effects: {
+      type: "array",
+      items: { type: "string", description: "One observable effect." },
+      description: "Optional side effects reached by the trace.",
+    },
+  },
+};
+
+const FORM_UI_BEHAVIOR_MAP_SCHEMA: JsonSchemaProperty = {
+  type: "object",
+  description:
+    "FormUiBehaviorMap produced by map_form_behavior. Required fields describe controls, form events, unmapped CodeGraph evidence, and warnings. Optional mapper metadata such as a nullable codegraphIndexPath is accepted for runtime parity.",
+  required: ["formName", "controls", "formEvents", "unmappedEvidence", "warnings"],
+  additionalProperties: true,
+  properties: {
+    formName: {
+      type: "string",
+      minLength: 1,
+      description: "Form name represented by this behavior contract.",
+    },
+    controls: {
+      type: "array",
+      description: "Semantic controls in the form behavior contract.",
+      items: {
+        type: "object",
+        description:
+          "One semantic control. name, type, role, events, bindings, and codegraphEvidence are required.",
+        required: ["name", "type", "role", "events", "bindings", "codegraphEvidence"],
+        additionalProperties: false,
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            description: "Access control name.",
+          },
+          type: {
+            type: "string",
+            minLength: 1,
+            description: "Access control type such as CommandButton or TextBox.",
+          },
+          role: {
+            type: "string",
+            enum: ["action", "container", "display", "input", "unknown"],
+            description: "Semantic role discriminator assigned by analyze_form_ui.",
+          },
+          events: {
+            type: "array",
+            items: { type: "string", description: "One Access event name." },
+            description: "Access event properties bound on the control.",
+          },
+          bindings: {
+            type: "array",
+            items: { type: "string", description: "One data binding." },
+            description: "ControlSource and RowSource bindings preserved by a design plan.",
+          },
+          codegraphEvidence: {
+            type: "array",
+            items: CODEGRAPH_EVIDENCE_SCHEMA,
+            description: "CodeGraph-VBA traces mapped to this control.",
+          },
+          properties: {
+            type: "object",
+            additionalProperties: {
+              type: "string",
+              description: "Serialized Access property value.",
+            },
+            description:
+              "Optional serialized Access properties, including Left, Top, Width, Height, TabIndex, and GUID.",
+          },
+        },
+      },
+    },
+    formEvents: {
+      type: "array",
+      items: { type: "string", description: "One form-level Access event name." },
+      description: "Access event properties bound at form level.",
+    },
+    unmappedEvidence: {
+      type: "array",
+      items: CODEGRAPH_EVIDENCE_SCHEMA,
+      description: "CodeGraph-VBA traces that could not be mapped to one control.",
+    },
+    warnings: {
+      type: "array",
+      items: { type: "string", description: "One behavior-map warning." },
+      description: "Non-fatal warnings produced while building the behavior map.",
+    },
+  },
+};
+
+const REFERENCE_PATTERN_SCHEMA: JsonSchemaProperty = {
+  type: "object",
+  description:
+    "Reference UI pattern. sourceForm, intent, and mappedControls are required; mappedControls maps reference control names to target control names.",
+  required: ["sourceForm", "intent", "mappedControls"],
+  additionalProperties: false,
+  properties: {
+    sourceForm: {
+      type: "string",
+      minLength: 1,
+      description: "Form whose UI pattern is being copied.",
+    },
+    intent: {
+      type: "string",
+      minLength: 1,
+      description: "Traceable design rationale applied to every generated note operation.",
+    },
+    mappedControls: {
+      type: "object",
+      additionalProperties: {
+        type: "string",
+        description: "Target control name receiving the reference control's intent.",
+      },
+      description: "Map of reference control names to target behavior-map control names.",
+    },
+  },
+};
+
+const REQUESTED_FORM_UI_OPERATION_SCHEMA: JsonSchemaProperty = {
+  type: "object",
+  description:
+    "Requested design operation discriminated by kind. kind, target, intent, and params are required; generate_form_design_plan derives preserves from behaviorMap.",
+  required: ["kind", "target", "intent", "params"],
+  additionalProperties: false,
+  properties: {
+    kind: {
+      type: "string",
+      enum: [
+        "add-control",
+        "delete-control",
+        "move-control",
+        "note",
+        "rename-control",
+        "set-property",
+      ],
+      description:
+        "Operation discriminator. Allowed values: add-control, delete-control, move-control, note, rename-control, set-property.",
+    },
+    target: {
+      type: "string",
+      minLength: 1,
+      description:
+        "Existing target control, new add-control name, or advisory anchor for note. Unknown non-add/non-note targets become warnings.",
+    },
+    intent: {
+      type: "string",
+      minLength: 1,
+      description: "Human-readable rationale retained on the generated operation.",
+    },
+    params: {
+      type: "object",
+      additionalProperties: true,
+      description:
+        "Parameters selected by kind: add-control {type,targetSectionName?,properties?}; move-control {left?,top?}; rename-control {newName}; set-property {property,value}; delete-control {}; note may carry advisory metadata such as sourceForm. The validator has no oneOf/anyOf/allOf support, so kind is the enum discriminator and the runtime enforces per-kind requirements.",
+      properties: {
+        type: { type: "string", description: "Control type for add-control." },
+        targetSectionName: {
+          type: "string",
+          description: "Optional target section for add-control.",
+        },
+        properties: {
+          type: "object",
+          additionalProperties: true,
+          description: "Optional initial Access property map for add-control.",
+        },
+        left: { type: "number", description: "Optional Left coordinate for move-control." },
+        top: { type: "number", description: "Optional Top coordinate for move-control." },
+        newName: { type: "string", description: "Required destination name for rename-control." },
+        property: {
+          type: "string",
+          description: "Required Access property name for set-property.",
+        },
+        sourceForm: {
+          type: "string",
+          description: "Optional reference source carried by note operations.",
+        },
+      },
+    },
+  },
+};
+
+const GENERATE_FORM_UI_PLAN_SCHEMA: JsonSchemaProperty = {
+  type: "object",
+  description:
+    "Requested plan input. operations is required and each item uses kind as its enum discriminator; referencePattern is optional.",
+  required: ["operations"],
+  additionalProperties: false,
+  properties: {
+    operations: {
+      type: "array",
+      items: REQUESTED_FORM_UI_OPERATION_SCHEMA,
+      description: "Ordered requested operations to validate against behaviorMap.",
+    },
+    referencePattern: REFERENCE_PATTERN_SCHEMA,
+  },
+};
+
 export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = {
   list_access_operations: { type: "object", additionalProperties: false, properties: {} },
   cleanup_access_operation: {
@@ -894,14 +1113,18 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #1033 — publish the nested input contract consumed by
+  // generateFormUiDesignPlan. The validator cannot express per-kind params with
+  // oneOf/anyOf/allOf, so operations[].kind is the enum discriminator and the
+  // params description documents each allowed shape (same strategy as #1022).
   generate_form_design_plan: {
     type: "object",
     required: ["behaviorMap", "plan"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      behaviorMap: { type: "object" },
-      plan: { type: "object" },
+      behaviorMap: FORM_UI_BEHAVIOR_MAP_SCHEMA,
+      plan: GENERATE_FORM_UI_PLAN_SCHEMA,
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
@@ -1018,25 +1241,38 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #1033 — copyFormUiPattern consumes the same FormUiBehaviorMap as
+  // generate_form_design_plan plus a closed ReferencePatternInput contract.
   copy_form_ui_pattern: {
     type: "object",
     required: ["behaviorMap", "referencePattern"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      behaviorMap: { type: "object" },
-      referencePattern: { type: "object" },
+      behaviorMap: FORM_UI_BEHAVIOR_MAP_SCHEMA,
+      referencePattern: REFERENCE_PATTERN_SCHEMA,
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #1033 — verifyUi accepts two FormUiBehaviorMap values. There is no
+  // checks[] input in the runtime handler; publishing one here would create a
+  // second, non-executable contract, so both real inputs reuse the map schema.
   verify_form_ui: {
     type: "object",
     required: ["sourceContract", "appliedContract"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      sourceContract: { type: "object" },
-      appliedContract: { type: "object" },
+      sourceContract: {
+        ...FORM_UI_BEHAVIOR_MAP_SCHEMA,
+        description:
+          "Source FormUiBehaviorMap whose controls, events, and bindings must survive the applied UI.",
+      },
+      appliedContract: {
+        ...FORM_UI_BEHAVIOR_MAP_SCHEMA,
+        description:
+          "Applied FormUiBehaviorMap compared with sourceContract for survival and looks-right findings.",
+      },
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
