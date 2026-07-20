@@ -13,6 +13,8 @@ import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.j
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import {
   lintVbaModule,
+  type VbaModuleLintDiagnostic,
+  type VbaModuleLintReport,
   type VbaModuleLintRule,
 } from "../../core/services/vba-module-lint-service.js";
 import {
@@ -21,6 +23,10 @@ import {
   getVbaProcedure,
   listVbaProcedures,
 } from "../../core/services/vba-procedure-service.js";
+import {
+  lintVbaProjectOpenArgs,
+  type OpenArgsContractMismatchDiagnostic,
+} from "../../core/services/vba-project-openargs-lint-service.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import {
   handleMcpAccessOrphanCleanup,
@@ -456,6 +462,140 @@ function getProjectClassModules(destinationRoot: string): string[] {
   } catch {
     return [];
   }
+}
+
+// #1006 slice 2 — gather every `.cls` source file under the configured
+// destinationRoot so the project-lint engine can scan them. Mirrors the
+// folder conventions used by the vba-sync adapter (`managedFolders`):
+//   classes/<Name>.cls
+//   forms/<Name>.cls
+//   reports/<Name>.cls
+// Files with `Attribute VB_PredeclaredId = True` are excluded — they're
+// predeclared class identity records that never carry `DoCmd.OpenForm` or
+// `Me.OpenArgs` and would only inflate the engine's source array without
+// producing any signal. Returns an empty array when the project tree is
+// missing or unreadable; the engine treats that as a clean (no-op) scan.
+async function collectProjectClassSources(
+  destinationRoot: string,
+): Promise<Array<{ readonly path: string; readonly text: string }>> {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+
+  const sources: Array<{ readonly path: string; readonly text: string }> = [];
+  const dirs = ["classes", "forms", "reports"];
+  for (const dirName of dirs) {
+    const dirPath = path.resolve(destinationRoot, dirName);
+    let entries: string[];
+    try {
+      entries = await readdir(dirPath);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.toLowerCase().endsWith(".cls")) continue;
+      const fullPath = path.join(dirPath, entry);
+      try {
+        const text = await readFile(fullPath, "utf-8");
+        if (/Attribute\s+VB_PredeclaredId\s*=\s*True/i.test(text)) continue;
+        sources.push({ path: fullPath, text });
+      } catch {
+        // Skip unreadable files — partial visibility is still better than
+        // failing the whole lint call on a transient read error.
+      }
+    }
+  }
+  return sources;
+}
+
+// #1006 slice 2 — translate the project-lint engine's
+// `OpenArgsContractMismatchDiagnostic` into the existing
+// `VbaModuleLintDiagnostic` shape so the merged report's per-rule key
+// (`diagnostics["openargs-contract-mismatch"]`) and `flatDiagnostics`
+// array stay homogeneous with the module-lint output. The full
+// producer/consumer context (paths, both line numbers, grammars,
+// fallback risk) is preserved in the message so consumers that parse
+// `parsed.diagnostics["openargs-contract-mismatch"][i].message` keep
+// the data they need without expanding the public shape.
+function translateOpenArgsDiagnostic(
+  diag: OpenArgsContractMismatchDiagnostic,
+): VbaModuleLintDiagnostic {
+  const consumerName = diag.consumerPath.split(/[\\/]/).pop() ?? diag.consumerPath;
+  const producerName = diag.producerPath.split(/[\\/]/).pop() ?? diag.producerPath;
+  const fallbackSuffix = diag.fallbackRiskReachable
+    ? " (silent fallback reachable in consumer)"
+    : "";
+  // The strict `VbaModuleLintRule` union in the core does not include
+  // the project-lint rule (that is the deliberate contract split between
+  // the two engines — see the comment on `mergeLintReports`). The MCP
+  // boundary is the single place that widens the rule string to slot the
+  // project-lint diagnostics into the existing `VbaModuleLintReport`
+  // envelope. The JSON shape is identical.
+  return {
+    rule: "openargs-contract-mismatch" as unknown as VbaModuleLintRule,
+    line: diag.producerLine,
+    severity: diag.severity,
+    code: diag.code,
+    message:
+      `Producer ${producerName}:${diag.producerLine} emits OpenArgs grammar ` +
+      `"${diag.producerGrammar}" but consumer ${consumerName}:${diag.consumerLine} ` +
+      `parses "${diag.consumerGrammar}"${fallbackSuffix}.`,
+  };
+}
+
+// #1006 slice 2 — merge the module-lint report with the project-lint
+// diagnostics into a single envelope. The shape mirrors
+// `VbaModuleLintReport` so existing consumers (the
+// `parsed.diagnostics[<rule>]` / `parsed.flatDiagnostics` access pattern)
+// keep working; the only widening is the project-lint rule key. `rules`
+// lists the module-lint rules that actually ran first, then the
+// project-lint rule last when it was requested — this matches the
+// "project-lint first, then module-lint" dispatch order called out in
+// the slice 2 spec while keeping the public array in the order the
+// caller asked for.
+function mergeLintReports(
+  moduleReport: VbaModuleLintReport,
+  projectDiagnostics: readonly VbaModuleLintDiagnostic[],
+  projectLintRequested: boolean,
+): VbaModuleLintReport {
+  // The `VbaModuleLintReport.diagnostics` key type is the strict
+  // `VbaModuleLintRule` union; the project-lint rule key widens the
+  // shape one slot. We accept the structural widening at the MCP
+  // boundary (the JSON shape is identical) instead of polluting the
+  // core `VBA_MODULE_LINT_RULES` array, which is the module-lint
+  // engine's contract.
+  const diagnostics = projectLintRequested
+    ? ({
+        ...moduleReport.diagnostics,
+        "openargs-contract-mismatch": [...projectDiagnostics],
+      } as VbaModuleLintReport["diagnostics"])
+    : moduleReport.diagnostics;
+
+  const flatDiagnostics = projectLintRequested
+    ? [...moduleReport.flatDiagnostics, ...projectDiagnostics]
+    : [...moduleReport.flatDiagnostics];
+
+  const projectErrors = projectLintRequested
+    ? projectDiagnostics.filter((d) => d.severity === "error").length
+    : 0;
+  const projectWarnings = projectLintRequested
+    ? projectDiagnostics.filter((d) => d.severity === "warning").length
+    : 0;
+
+  const rules = projectLintRequested
+    ? [...moduleReport.rules, "openargs-contract-mismatch" as VbaModuleLintRule]
+    : [...moduleReport.rules];
+
+  return {
+    module: moduleReport.module,
+    rules,
+    isClean: moduleReport.isClean && projectDiagnostics.length === 0,
+    diagnostics,
+    flatDiagnostics,
+    summary: {
+      errors: moduleReport.summary.errors + projectErrors,
+      warnings: moduleReport.summary.warnings + projectWarnings,
+    },
+  };
 }
 
 // ─── Modern tool names ─────────────────────────────────────────────────────────
@@ -1097,7 +1237,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     },
     {
       name: "lint_module",
-      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
+      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). The cross-form openargs-contract-mismatch rule (#1006) is a project-lint that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree and is dispatched when its rule id appears in the input rules list. Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
       inputSchema: LINT_MODULE_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, LINT_MODULE_SCHEMA);
@@ -1125,8 +1265,14 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           };
         }
 
-        const rules = Array.isArray(params.rules)
-          ? (params.rules as VbaModuleLintRule[])
+        // #1006 slice 2 — the rule list mixes module-lint rules with the
+        // project-lint rule `openargs-contract-mismatch`. The two engines
+        // have disjoint scopes (per-module vs cross-form project walk), so
+        // we split the input into the two sublists before dispatching.
+        const rulesArray = Array.isArray(params.rules) ? (params.rules as string[]) : undefined;
+        const projectLintRequested = rulesArray?.includes("openargs-contract-mismatch") ?? false;
+        const moduleLintRules = rulesArray
+          ? rulesArray.filter((r): r is VbaModuleLintRule => r !== "openargs-contract-mismatch")
           : undefined;
         // #731 — wire projectRoot + lint override + legacy auto-detection.
         // The detector walks the project's `src/` tree once per call and
@@ -1150,15 +1296,33 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
         const report = await lintVbaModule({
           module,
           source: resolvedSource,
-          rules,
+          rules: moduleLintRules,
           projectRoot,
           lintRulesOverride,
           hasNonAsciiIdentifierInProject: detection,
           strictNonAscii: lintIdentifierSafetyStrict,
           classModules,
         });
+
+        // #1006 slice 2 — when the caller asked for the project-lint rule,
+        // gather every .cls file under the resolved destinationRoot and run
+        // `lintVbaProjectOpenArgs`. The diagnostics are translated into the
+        // existing `VbaModuleLintDiagnostic` shape so they slot into the
+        // report's per-rule key and `flatDiagnostics` array without breaking
+        // the existing envelope contract. The dispatch is best-effort: when
+        // no `.cls` files are enumerable (no destinationRoot, no source
+        // tree on disk), the project-lint engine returns a clean report and
+        // the merged response reflects that.
+        let projectDiagnostics: VbaModuleLintDiagnostic[] = [];
+        if (projectLintRequested && destinationRoot !== undefined) {
+          const projectSources = await collectProjectClassSources(destinationRoot);
+          const projectResult = lintVbaProjectOpenArgs(projectSources);
+          projectDiagnostics = projectResult.diagnostics.map(translateOpenArgsDiagnostic);
+        }
+
+        const reportEnvelope = mergeLintReports(report, projectDiagnostics, projectLintRequested);
         return {
-          content: [{ type: "text", text: JSON.stringify(report) }],
+          content: [{ type: "text", text: JSON.stringify(reportEnvelope) }],
           isError: false,
           ok: true,
         };
