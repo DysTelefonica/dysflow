@@ -77,6 +77,16 @@ describe("resolveExecutionTarget", () => {
     }
   });
 
+  it("keeps contextId as metadata while using context defaults", async () => {
+    const result = await resolveExecutionTarget({ contextId: "request-trace" }, context);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected context defaults");
+    expect(result.data.accessDbPath).toBe("C:/my-project/db.accdb");
+    expect(result.data.destinationRoot).toBe("C:/my-project/dest");
+    expect(result.data.projectId).toBeUndefined();
+  });
+
   it("resolves timeoutMs override from params", async () => {
     const result = await resolveExecutionTarget({ timeoutMs: 45000 }, context);
     expect(result.ok).toBe(true);

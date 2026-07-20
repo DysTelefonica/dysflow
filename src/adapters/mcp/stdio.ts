@@ -674,8 +674,7 @@ async function resolveConfigForInput(
 
 export function inputTargetsConfig(input: unknown, config: DysflowConfig): boolean {
   const params = isRecord(input) ? input : {};
-  const requestedProjectId =
-    stringOrUndefined(params.projectId) ?? stringOrUndefined(params.contextId);
+  const requestedProjectId = stringOrUndefined(params.projectId);
   if (requestedProjectId !== undefined) return requestedProjectId === config.projectId;
 
   const accessPath = stringOrUndefined(params.accessPath);

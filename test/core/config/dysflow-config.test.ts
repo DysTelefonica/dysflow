@@ -411,19 +411,19 @@ describe("dysflow configuration", () => {
     }
   });
 
-  it("falls back to contextId only when no projectId exists", () => {
+  it("keeps contextId separate from project identity when no projectId exists", () => {
     const workspace = createTempWorkspace();
     try {
       const result = loadDysflowConfig({
         cwd: workspace.root,
         accessDbPath: "C:/data/app.accdb",
-        contextId: "context-fallback-project",
+        contextId: "request-trace",
         env: {},
       });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected config success");
-      expect(result.data.projectId).toBe("context-fallback-project");
+      expect(result.data.projectId).toBeUndefined();
     } finally {
       workspace.cleanup();
     }

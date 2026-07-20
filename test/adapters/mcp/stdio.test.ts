@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -52,7 +52,104 @@ class FakeDiagnosticsService {
   }
 }
 
+async function createProjectScopedMcpHarness() {
+  const root = await mkdtemp(join(tmpdir(), "dysflow-context-binding-"));
+  const project = join(root, "project");
+  mkdirSync(join(project, ".dysflow"), { recursive: true });
+  writeFileSync(join(project, "front.accdb"), "", "utf8");
+  writeFileSync(
+    join(project, ".dysflow", "project.json"),
+    JSON.stringify({ id: "configured-project", accessPath: "front.accdb" }),
+    "utf8",
+  );
+
+  const resolvedConfigs: DysflowConfig[] = [];
+  const calls: Array<{ toolName: string; input: unknown }> = [];
+  const services = createDynamicServices(undefined, undefined, {
+    cwd: project,
+    env: {},
+    serviceFactory: (config) => {
+      resolvedConfigs.push(config);
+      return {
+        vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+        queryService: new FakeQueryService(),
+        diagnosticsService: new FakeDiagnosticsService(),
+        vbaSyncToolService: {
+          execute: async (toolName, input) => {
+            calls.push({ toolName, input });
+            return successResult({ toolName });
+          },
+        },
+      };
+    },
+  });
+
+  return {
+    calls,
+    project,
+    resolvedConfigs,
+    tools: createDysflowMcpTools({ services }),
+    cleanup: async () => rm(root, { recursive: true, force: true }),
+  };
+}
+
 describe("stdio-services / createUnavailableServices / resolves path", () => {
+  it.each([
+    { toolName: "form_list_controls", toolInput: {} },
+    { toolName: "form_get_geometry", toolInput: { controlName: "cmdSave" } },
+  ])("$toolName keeps contextId independent when projectId is omitted", async ({
+    toolName,
+    toolInput,
+  }) => {
+    const harness = await createProjectScopedMcpHarness();
+    try {
+      const contextId = `trace-${toolName}`;
+      const sourcePath = join(harness.project, "src", "forms", "Form_Test.form.txt");
+      const tool = harness.tools.find((candidate) => candidate.name === toolName);
+      if (tool === undefined) throw new Error(`missing ${toolName} tool`);
+
+      const result = await tool.handler({ contextId, sourcePath, ...toolInput });
+
+      expect(result).toMatchObject({ isError: false });
+      expect(harness.resolvedConfigs.map((config) => config.projectId)).toEqual([
+        "configured-project",
+      ]);
+      expect(harness.calls).toEqual([
+        {
+          toolName,
+          input: expect.objectContaining({ contextId, sourcePath, ...toolInput }),
+        },
+      ]);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  it("still rejects an explicit mismatching projectId without replacing it with contextId", async () => {
+    const harness = await createProjectScopedMcpHarness();
+    try {
+      const tool = harness.tools.find((candidate) => candidate.name === "form_list_controls");
+      if (tool === undefined) throw new Error("missing form_list_controls tool");
+
+      const result = await tool.handler({
+        projectId: "wrong-project",
+        contextId: "trace-form-list",
+        sourcePath: join(harness.project, "src", "forms", "Form_Test.form.txt"),
+      });
+
+      expect(result).toMatchObject({
+        isError: true,
+        error: { code: "CONFIG_PROJECT_ID_MISMATCH" },
+      });
+      expect(result.content[0]?.text).toContain("wrong-project");
+      expect(result.content[0]?.text).not.toContain("trace-form-list");
+      expect(harness.resolvedConfigs).toEqual([]);
+      expect(harness.calls).toEqual([]);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
   it("re-resolves authorization and execution context for a matching startup projectId", async () => {
     const project = await mkdtemp(join(tmpdir(), "dysflow-mcp-refresh-"));
     mkdirSync(join(project, ".dysflow"));
@@ -190,7 +287,7 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
       { cwd: startup, env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath } },
     );
     const result = await services.vbaSyncToolService?.execute("import_all", {
-      contextId: "registered-project",
+      projectId: "registered-project",
       dryRun: true,
       importMode: "Code",
     });
@@ -201,7 +298,7 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     expect(result.error.message).toContain("deprecated");
 
     const result2 = await services.vbaSyncToolService?.execute("import_all", {
-      contextId: "registered-project",
+      projectId: "registered-project",
       dryRun: "true",
       importMode: "Code",
     });
@@ -1002,6 +1099,10 @@ describe("DELTA-003 — inputTargetsConfig rejects empty input targeting startup
 
   it("returns false when input has only undeclared fields (no projectId/accessPath/projectRoot)", () => {
     expect(inputTargetsConfig({ unknownField: "x" }, startupConfig)).toBe(false);
+  });
+
+  it("returns false when input has only contextId, even if it equals the startup projectId", () => {
+    expect(inputTargetsConfig({ contextId: "dysflow" }, startupConfig)).toBe(false);
   });
 
   it("returns true when input has projectId equal to startup config projectId", () => {
