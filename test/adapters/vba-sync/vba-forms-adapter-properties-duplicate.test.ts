@@ -1,9 +1,17 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas";
 import {
   VbaFormsAdapter,
   type VbaFormsOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-forms-adapter";
 import { failureResult, successResult } from "../../../src/core/contracts/index";
+import type { FormNode } from "../../../src/core/models/form-ir";
+import {
+  cloneFormFromTemplate,
+  parseFormTxt,
+  serializeFormTxt,
+} from "../../../src/core/services/form-ir-service";
 import type { FormFileSystemPort } from "../../../src/core/services/vba-form-service";
 
 // ---------------------------------------------------------------------------
@@ -44,6 +52,82 @@ Begin Form
 End
 `;
 
+const FORM_WITH_KPI_IMAGE_CONTROL = `Version =21
+Checksum =987654321
+Begin Form
+    Begin
+        Begin CommandButton
+            Left =4287
+            Top =6992
+            Width =448
+            Height =448
+            Name ="cmdTile5Excel"
+            Caption ="Calcular"
+            FontName ="Aptos"
+            FontSize =10
+            FontWeight =700
+            ForeColor =255
+            ControlTipText ="Calculate KPI"
+            OnClick ="[Event Procedure]"
+            Picture ="Excel_50x50.png"
+            TabIndex =8
+            TabStop =0
+            GUID = Begin
+                0x6efe25de7eddc44e992c942cfc8e983f
+            End
+            ImageData = Begin
+                0x89504e470d0a1a0a0000000d4948445200000020000000200806000000737a7a
+                0xf40000000467414d410000b18f0bfc6105000000097048597300000ec400000e
+                0xc401952b0e1b0000001a4944415478da6364f8cf800da660c409a30c46291865
+                0x306a30ca60d400000059f7013f2749be0000000049454e44ae426082
+            End
+        End
+    End
+End`;
+
+function findControlNode(source: string, controlName: string): FormNode {
+  const ir = parseFormTxt(source, { name: "Customer" });
+  const visit = (node: FormNode): FormNode | undefined => {
+    const name = node.entries.find((entry) => entry.kind === "scalar" && entry.key === "Name");
+    if (name?.kind === "scalar" && name.value.replace(/^"|"$/g, "") === controlName) {
+      return node;
+    }
+    for (const child of node.children) {
+      const found = visit(child);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  const found = visit(ir.root);
+  if (found === undefined) throw new Error(`Control not found in fixture: ${controlName}`);
+  return found;
+}
+
+function scalarValue(node: FormNode, key: string): string {
+  const entry = node.entries.find(
+    (candidate) => candidate.kind === "scalar" && candidate.key === key,
+  );
+  if (entry?.kind !== "scalar") throw new Error(`Missing scalar ${key}`);
+  return entry.value;
+}
+
+function blobHex(node: FormNode, key: string): string {
+  const entry = node.entries.find(
+    (candidate) => candidate.kind === "blob" && candidate.key === key,
+  );
+  if (entry?.kind !== "blob") throw new Error(`Missing blob ${key}`);
+  return entry.lines
+    .join("")
+    .replace(/0x/gi, "")
+    .replace(/[^0-9a-f]/gi, "");
+}
+
+function first32ByteHash(node: FormNode): string {
+  const first32Bytes = Buffer.from(blobHex(node, "ImageData").slice(0, 64), "hex");
+  if (first32Bytes.byteLength !== 32) throw new Error("ImageData fixture has fewer than 32 bytes");
+  return createHash("sha256").update(first32Bytes).digest("hex");
+}
+
 function makeOrchestrator(importResult = successResult({ imported: true })): VbaFormsOrchestrator {
   return {
     executor: vi.fn(),
@@ -72,6 +156,24 @@ function mockFs(overrides: Partial<FormFileSystemPort> = {}): FormFileSystemPort
     writeFile: vi.fn(),
     ...overrides,
   };
+}
+
+async function duplicateKpiControl(
+  overrides: Record<string, string | number | boolean> = {},
+): Promise<string> {
+  const adapter = new VbaFormsAdapter(
+    makeOrchestrator(),
+    mockFs({ readFile: vi.fn().mockResolvedValue(FORM_WITH_KPI_IMAGE_CONTROL) }),
+  );
+  const result = await adapter.execute("form_duplicate_control", {
+    sourcePath: "C:/repo/forms/Form_Indicador.form.txt",
+    sourceControlName: "cmdTile5Excel",
+    newName: "cmdTile6Excel",
+    overrides,
+    dryRun: true,
+  });
+  if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+  return String((result.data as { source: string }).source);
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +362,13 @@ describe("VbaFormsAdapter — form_duplicate_control (issue #872 F2)", () => {
       expect(source).toContain("Top =8888");
       // Original is still present.
       expect(source).toContain('Name ="txtName"');
+      // A source without a GUID remains without one: #1032 changes only an
+      // existing identity block and does not invent unrelated headers.
+      expect(
+        findControlNode(source, "txtCustomerName").entries.some(
+          (entry) => entry.kind === "blob" && entry.key === "GUID",
+        ),
+      ).toBe(false);
     }
     expect(writeFile).not.toHaveBeenCalled();
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
@@ -411,6 +520,181 @@ describe("VbaFormsAdapter — form_duplicate_control (issue #872 F2)", () => {
       expect(result.error.code).toBe("FORM_PROPERTY_PROTECTED");
     }
     expect(writeFile).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #1032 — control clone identity regeneration without preservation loss.
+// These six regression atoms mirror the consumer parity fixture from #1032.
+// ---------------------------------------------------------------------------
+
+describe("VbaFormsAdapter — form_duplicate_control GUID regeneration (#1032)", () => {
+  it("regenerates the cloned control GUID by default and publishes that contract in the schema", async () => {
+    const clonedSource = await duplicateKpiControl();
+    const repeatedCloneSource = await duplicateKpiControl();
+    const sourceGuid = blobHex(findControlNode(clonedSource, "cmdTile5Excel"), "GUID");
+    const clonedGuid = blobHex(findControlNode(clonedSource, "cmdTile6Excel"), "GUID");
+    const repeatedGuid = blobHex(findControlNode(repeatedCloneSource, "cmdTile6Excel"), "GUID");
+
+    expect(clonedGuid).toMatch(/^[0-9a-f]{32}$/i);
+    expect(clonedGuid.toLowerCase()).not.toBe(sourceGuid.toLowerCase());
+    expect(repeatedGuid).toBe(clonedGuid);
+    expect(VBA_SYNC_TOOL_SCHEMAS.form_duplicate_control.properties.newName).toMatchObject({
+      description: expect.stringMatching(/fresh GUID|regenerat(?:e|ed|es|ing).*GUID/i),
+    });
+  });
+
+  it("preserves type, geometry, fonts, copy, events, tab behavior, and ImageData bytes", async () => {
+    const clonedSource = await duplicateKpiControl();
+    const source = findControlNode(clonedSource, "cmdTile5Excel");
+    const clone = findControlNode(clonedSource, "cmdTile6Excel");
+    const preservedScalars = [
+      "Left",
+      "Top",
+      "Width",
+      "Height",
+      "FontSize",
+      "FontWeight",
+      "ForeColor",
+      "FontName",
+      "Caption",
+      "Picture",
+      "ControlTipText",
+      "OnClick",
+      "TabIndex",
+      "TabStop",
+    ];
+
+    expect(clone.blockType).toBe(source.blockType);
+    expect(
+      Object.fromEntries(preservedScalars.map((key) => [key, scalarValue(clone, key)])),
+    ).toEqual(Object.fromEntries(preservedScalars.map((key) => [key, scalarValue(source, key)])));
+    expect(first32ByteHash(clone)).toBe(first32ByteHash(source));
+  });
+
+  it("round-trips the cloned ImageData block byte-equal through form_serialize and compare_form", async () => {
+    const clonedSource = await duplicateKpiControl();
+    const sourceImageData = blobHex(findControlNode(clonedSource, "cmdTile5Excel"), "ImageData");
+    const clonedImageData = blobHex(findControlNode(clonedSource, "cmdTile6Excel"), "ImageData");
+    const roundTripped = serializeFormTxt(parseFormTxt(clonedSource, { name: "Indicador" }));
+    const readFile = vi.fn().mockResolvedValue(roundTripped);
+    const adapter = new VbaFormsAdapter(makeOrchestrator(), mockFs({ readFile }));
+
+    const serialized = await adapter.execute("form_serialize", {
+      sourcePath: "C:/repo/forms/Form_Indicador-clone.form.txt",
+      outputMode: "full",
+    });
+    const compared = await adapter.execute("compare_form", {
+      sourcePath: "C:/repo/forms/Form_Indicador-clone.form.txt",
+      targetPath: "C:/repo/forms/Form_Indicador-roundtrip.form.txt",
+    });
+
+    expect(clonedImageData).toBe(sourceImageData);
+    expect(roundTripped).toBe(clonedSource);
+    expect(serialized.ok).toBe(true);
+    if (serialized.ok) expect(serialized.data).toMatchObject({ byteEqual: true, byteDiff: 0 });
+    expect(compared.ok).toBe(true);
+    if (compared.ok) {
+      expect(compared.data).toMatchObject({ matched: true, driftDetected: false, drifts: [] });
+    }
+  });
+
+  it("applies overrides while every unspecified source property remains equal", async () => {
+    const clonedSource = await duplicateKpiControl({
+      Left: 9123,
+      Top: 7100,
+      Caption: '"Recalculate"',
+      TabIndex: 9,
+    });
+    const source = findControlNode(clonedSource, "cmdTile5Excel");
+    const clone = findControlNode(clonedSource, "cmdTile6Excel");
+
+    expect(scalarValue(clone, "Left")).toBe("9123");
+    expect(scalarValue(clone, "Top")).toBe("7100");
+    expect(scalarValue(clone, "Caption")).toBe('"Recalculate"');
+    expect(scalarValue(clone, "TabIndex")).toBe("9");
+    for (const key of [
+      "Width",
+      "Height",
+      "FontSize",
+      "FontWeight",
+      "ForeColor",
+      "FontName",
+      "Picture",
+      "ControlTipText",
+      "OnClick",
+      "TabStop",
+    ]) {
+      expect(scalarValue(clone, key), key).toBe(scalarValue(source, key));
+    }
+    expect(blobHex(clone, "ImageData")).toBe(blobHex(source, "ImageData"));
+  });
+
+  it("keeps #600 continuity by stripping the form GUID before create_form_from_template import", () => {
+    const sourceIr = parseFormTxt(
+      `Version =21
+Begin Form
+    GUID = Begin
+        0x00112233445566778899aabbccddeeff
+    End
+    Caption ="Template"
+End`,
+      { name: "Template" },
+    );
+
+    const cloned = cloneFormFromTemplate(sourceIr, {
+      tokenMap: {},
+      targetFormName: "TemplateClone",
+    });
+
+    expect(cloned.source).not.toContain("GUID = Begin");
+    expect(serializeFormTxt(sourceIr)).toContain("0x00112233445566778899aabbccddeeff");
+  });
+
+  it("rolls back apply:true byte-equal when the guarded import fails", async () => {
+    const sourcePath = "C:\\repo\\forms\\Form_Indicador.form.txt";
+    const originalBytes = Buffer.from(FORM_WITH_KPI_IMAGE_CONTROL, "utf8");
+    let currentBytes = Buffer.from(originalBytes);
+    const writeFile = vi.fn(async (_path: string, value: string) => {
+      currentBytes = Buffer.from(value, "utf8");
+    });
+    const writeBytes = vi.fn(async (_path: string, value: Uint8Array) => {
+      currentBytes = Buffer.from(value);
+    });
+    const fs = mockFs({
+      readFile: vi.fn(async () => currentBytes.toString("utf8")),
+      readBytes: vi.fn(async () => new Uint8Array(currentBytes)),
+      writeFile,
+      writeBytes,
+    });
+    const orchestrator = makeOrchestrator(
+      failureResult({
+        code: "VBA_IMPORT_FAILED",
+        message: "forced #1032 atomic rollback failure",
+        retryable: false,
+      }),
+    );
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_duplicate_control", {
+      sourcePath,
+      sourceControlName: "cmdTile5Excel",
+      newName: "cmdTile6Excel",
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatchObject({
+        code: "FORM_IMPORT_GATE_FAILED",
+        details: { rollback: { attempted: true, applied: true, targetExisted: true } },
+      });
+    }
+    expect(Buffer.compare(currentBytes, originalBytes)).toBe(0);
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(writeBytes).toHaveBeenCalledTimes(1);
+    expect(writeBytes).toHaveBeenCalledWith(sourcePath, expect.any(Uint8Array));
+    expect(orchestrator.executeMappedTool).toHaveBeenCalledTimes(1);
   });
 });
 

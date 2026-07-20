@@ -1,6 +1,7 @@
 // Pure domain service for parsing Access .form.txt (SaveAsText format) files into FormIR.
 // No I/O. All functions are synchronous and deterministic.
 
+import { createHash } from "node:crypto";
 import type {
   AddControlInput,
   ApplyTokenMapOptions,
@@ -525,6 +526,42 @@ function cloneNode(node: FormNode): FormNode {
   };
 }
 
+/**
+ * Issue #1032 — a cloned control must never retain the source GUID verbatim.
+ * Access serializes control identity as a 16-byte hex blob. Deriving the new
+ * value from the form + source/new control identities keeps this pure service
+ * deterministic while producing a stable, distinct Access-shaped GUID.
+ * Controls without a GUID stay unchanged: this mutation only replaces an
+ * identity header that already exists on the source control.
+ */
+function regenerateControlGuid(
+  node: FormNode,
+  identity: { formName: string; sourceControlName: string; newName: string },
+): void {
+  const guidEntry = node.entries.find(
+    (entry): entry is BlobEntry => entry.kind === "blob" && entry.key === "GUID",
+  );
+  if (guidEntry === undefined) return;
+
+  const sourceGuid = guidEntry.lines.join("\n");
+  let nextGuid = createHash("sha256")
+    .update(
+      `${identity.formName}\0${identity.sourceControlName}\0${identity.newName}\0${sourceGuid}`,
+    )
+    .digest("hex")
+    .slice(0, 32);
+  const sourceGuidHex = sourceGuid
+    .replace(/0x/gi, "")
+    .replace(/[^0-9a-f]/gi, "")
+    .toLowerCase();
+  if (nextGuid === sourceGuidHex) {
+    nextGuid = `${nextGuid[0] === "0" ? "1" : "0"}${nextGuid.slice(1)}`;
+  }
+
+  const indent = guidEntry.lines[0]?.match(/^\s*/)?.[0] ?? "";
+  guidEntry.lines = [`${indent}0x${nextGuid}`];
+}
+
 function stripPreservedMetadataFromEntries(entries: PropertyEntry[]): PropertyEntry[] {
   return entries.filter((entry) => entry.kind === "empty" || !isPreservedMetadataKey(entry.key));
 }
@@ -1011,7 +1048,8 @@ export function setProperties(ir: FormIR, input: SetPropertiesInput): FormMutati
  *
  *   1. Locate the source control by `sourceControlName` (`findControlNode`).
  *   2. Deep-clone the source's `entries[]` and `children[]` (`cloneNode`).
- *   3. Rewrite the cloned `Name` to `newName` (quoted Access form).
+ *   3. Rewrite the cloned `Name` to `newName` and deterministically regenerate
+ *      an existing `GUID` blob so source and clone never share identity.
  *   4. Apply caller `overrides` on top, in declaration order. Existing
  *      blob-kind entries conflict — `FORM_PROPERTY_NOT_SCALAR`.
  *   5. Push the clone into `findTargetContainer(ir, targetSectionName)`
@@ -1021,9 +1059,10 @@ export function setProperties(ir: FormIR, input: SetPropertiesInput): FormMutati
  *   6. Reject duplicates whose `newName` already exists
  *      (`FORM_DUPLICATE_CONTROL`) — preserves identity invariant.
  *
- * Properties carry over verbatim: type, geometry template, font, color,
- * special-effect, picture/image bytes, event bindings (`[Event Procedure]`),
- * tab order, GUID, etc. The caller can override any scalar on top.
+ * Properties carry over verbatim except identity: type, geometry template,
+ * font, color, special-effect, picture/image bytes, event bindings
+ * (`[Event Procedure]`), and tab order are preserved; the GUID is regenerated.
+ * The caller can override any scalar on top.
  *
  * Pure: no I/O. Returns the standard `FormMutationResult` envelope.
  */
@@ -1057,10 +1096,15 @@ export function duplicateControl(ir: FormIR, input: DuplicateControlInput): Form
 
   // Deep-clone the source subtree, then rewrite its identity.
   const clone: FormNode = cloneNode(source);
-  // Issue #872 R1-001 — per-control entries carry over verbatim
-  // (geometry, font, color, special-effect, event bindings, per-control
-  // Format/Checksum). Form-level metadata lives on `ir.root`/`ir.preamble`
-  // outside this clone; per-control preserved-metadata entries are real
+  regenerateControlGuid(clone, {
+    formName: ir.name,
+    sourceControlName,
+    newName,
+  });
+  // Issue #872 R1-001 — per-control entries carry over verbatim except
+  // for GUID identity (geometry, font, color, special-effect, event bindings,
+  // and per-control Format/Checksum remain byte-equivalent). Form-level
+  // metadata lives on `ir.root`/`ir.preamble` outside this clone; per-control preserved-metadata entries are real
   // per-control properties that Access DOES carry over on Copy/Paste.
   // Issue #872 R1-002 — strip preserved-metadata entries from nested
   // descendants so a nested Checksum/PrtDevMode doesn't double the
@@ -1322,13 +1366,14 @@ export function applyTokenMap(
  *   1. Validate the token map (FORM_TOKEN_MAP_INVALID on bad input).
  *   2. Run `applyTokenMap` — populates the cloned IR's scalars and non-
  *      preserved blob body lines with the mapped values.
- *   3. Set the cloned IR's `name` to `targetFormName`.
+ *   3. Strip the form-level `GUID` blob so Access regenerates identity on
+ *      LoadFromText (#600), then set `name` to `targetFormName`.
  *   4. Call `assertMetadataPreserved(sourceIr, clonedIr)` — rejects with
  *      FORM_METADATA_LOSS if a reserved metadata key was rewritten.
  *
- * Round-trip property (spec scenario 1): a manual clone-and-replace on
- * the source text using the same token map is byte-equivalent to
- * `result.source`. This is the spec's "byte-equivalence" guarantee.
+ * Round-trip property (spec scenario 1): apart from the intentionally stripped
+ * form GUID, a manual clone-and-replace on the source text using the same token
+ * map is byte-equivalent to `result.source`.
  *
  * @throws FormMutationError with code `FORM_TOKEN_MAP_INVALID`,
  *         `FORM_MUTATION_INVALID` (strict), or `FORM_METADATA_LOSS`.
@@ -1350,6 +1395,11 @@ export function cloneFormFromTemplate(
 
   const applied = applyTokenMap(sourceIr, tokenMap, { missingTokenPolicy });
 
+  // #600 continuity — form clones drop their source identity before import;
+  // Access assigns the target form a fresh GUID during LoadFromText.
+  applied.ir.root.entries = applied.ir.root.entries.filter(
+    (entry) => entry.kind === "empty" || entry.key !== "GUID",
+  );
   applied.ir.name = targetFormName;
   assertMetadataPreserved(sourceIr, applied.ir);
 

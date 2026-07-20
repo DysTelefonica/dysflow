@@ -105,12 +105,12 @@ export type SetPropertiesInput = {
  *
  * Issue #872 F2 — `form_duplicate_control` is the canonical "make this new
  * control like that existing one" verb: copy the entire IR subtree (type,
- * entries, children), regenerate the `Name`, push the clone into the same
- * target section, and apply caller-supplied property/position overrides on
- * top. Event bindings (`[Event Procedure]`) ARE preserved — Access reads
- * them from the cloned entries verbatim — so a duplicated control comes
- * pre-wired with the source's behaviour unless the caller explicitly
- * overrides the affected scalar.
+ * entries, children), regenerate the `Name` and any existing `GUID` identity,
+ * push the clone into the same target section, and apply caller-supplied
+ * property/position overrides on top. Event bindings (`[Event Procedure]`) ARE
+ * preserved — Access reads them from the cloned entries verbatim — so a
+ * duplicated control comes pre-wired with the source's behaviour unless the
+ * caller explicitly overrides the affected scalar.
  */
 export type DuplicateControlInput = {
   sourceControlName: string;
