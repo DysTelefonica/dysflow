@@ -883,20 +883,114 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
+  // Issue #1022 — publish the runtime `plan` shape so `schema({toolName:
+  // "apply_form_design_plan"})` and the consumer-facing docs stop advertising
+  // an opaque `{type:"object"}`. The runtime service (`applyFormUiDesignPlan`
+  // + `dispatchOperation`) accepts exactly six operation kinds, listed below
+  // as the `kind` enum on each `operations[]` item. The per-kind `params`
+  // shape is documented on `params.description` because this validator does
+  // NOT support `oneOf`/`anyOf`/`allOf` (see `src/shared/validation/validator
+  // .ts`); runtime enforcement lives in
+  // `src/core/services/form-ui-design-plan-service.ts:dispatchOperation` and
+  // `src/core/services/form-ui-plan-execution.ts`. Treat `plan` here as the
+  // single contract: schema, runtime, example markdown all agree.
   apply_form_design_plan: {
     type: "object",
-    required: ["plan"],
+    required: ["sourcePath", "plan"],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       sourcePath: SCHEMA_PROPS.sourcePath,
+      path: SCHEMA_PROPS.path,
       // Issue #813 phase 6 — `targetPath` removed. It was an unvalidated
       // alternate write destination that would bypass every containment
       // + formName check `sourcePath` already gets. sourcePath (or `path`)
       // is the single source-path surface; resolved by the #718 resolver.
-      plan: { type: "object" },
+      plan: {
+        type: "object",
+        required: ["formName", "sourceContract", "operations"],
+        additionalProperties: true, // accept `referencePattern`, generator-emitted metadata, future fields
+        properties: {
+          formName: {
+            type: "string",
+            minLength: 1,
+            description:
+              "Target form name. Must match the resolved moduleName from sourcePath after case-insensitive trim (validatePlanIdentity). Non-empty is enforced BEFORE the cross-check so two empty/undefined names can never vacuously satisfy the comparison.",
+          },
+          sourceContract: {
+            type: "object",
+            description:
+              "FormUiBehaviorMap describing the form's controls, events, bindings, and codegraphEvidence. Produced by analyze_form_ui + map_form_behavior; required for the apply path so the pre-flight guards (`validatePlanOperationsAgainstContract`, `validatePlanPreservesContract`) can check every non-add/note operation against a real target.",
+          },
+          operations: {
+            type: "array",
+            description:
+              "Discriminated list of form-UI mutations to apply in order. Each item carries a `kind` enum (the discriminator) and the universal scalar fields. Per-kind shape is documented on `params.description` — the runtime enforces per-kind requirements.",
+            items: {
+              type: "object",
+              required: ["kind", "target", "intent", "params"],
+              additionalProperties: true,
+              properties: {
+                kind: {
+                  type: "string",
+                  enum: [
+                    "add-control",
+                    "delete-control",
+                    "move-control",
+                    "note",
+                    "rename-control",
+                    "set-property",
+                  ],
+                  description:
+                    "Discriminator for the dispatcher. Values map 1:1 to the FormIR mutation primitives (addControl / moveControl / renameControl / setProperty / deleteControl) plus `note` (advisory-only). Any other value throws FORM_UI_UNSUPPORTED_OPERATION.",
+                },
+                target: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Existing control name (move-control / rename-control / set-property / delete-control), new control name (add-control), or advisory anchor for note. The runtime pre-flight rejects operations whose target is not in sourceContract.controls (except add-control + note).",
+                },
+                intent: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Human-readable rationale. Required on every operation. For `note` operations the intent is the only field the runtime reads; it surfaces verbatim in the dry-run `advisories[]` array.",
+                },
+                params: {
+                  type: "object",
+                  description:
+                    "Per-kind parameter map. Documented per `kind`:\n" +
+                    "  - add-control    -> { type:string, targetSectionName?:string, properties?:Record<string,scalar> }\n" +
+                    "  - move-control   -> { left?:number, top?:number } — at least one required by addControl/moveControl.\n" +
+                    "  - rename-control -> { newName:string } — rename of a control with [Event Procedure] bindings is refused.\n" +
+                    "  - set-property   -> { property:string, value:string|number|boolean } — property 'Name' refused; LayoutCached* silently dropped.\n" +
+                    "  - delete-control -> {} — target must not have preserved events/bindings; ref'd by validatePlanPreservesContract.\n" +
+                    "  - note           -> {} — ignored; intent goes to advisories.",
+                },
+                preserves: {
+                  type: "array",
+                  items: { type: "string" },
+                  description:
+                    "Optional list of event/binding/handler names this operation was generated to preserve. The generator (`generateFormUiDesignPlan`) auto-fills it from sourceContract. Pass-through on apply; consumers rarely set it directly.",
+                },
+              },
+            },
+          },
+          referencePattern: {
+            type: "object",
+            description:
+              "Optional. Identifies the sourceForm + mappedControls the plan was generated from. Consumed by downstream verify_form_ui / compare flows; not required by apply.",
+          },
+          warnings: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Optional. Pre-flight warnings surfaced by generate_form_design_plan. Pass-through on apply; the runtime does not mutate this field.",
+          },
+        },
+      },
       dryRun: SCHEMA_PROPS.dryRun,
       apply: SCHEMA_PROPS.apply,
       outputMode: SCHEMA_PROPS.outputMode,
