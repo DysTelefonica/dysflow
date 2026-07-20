@@ -37,6 +37,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // config does not declare `allowedProcedures`, the adapter refuses
       // execution unless the caller passes `dryRun: true`.
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
@@ -231,6 +233,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       importMode: SCHEMA_PROPS.importMode,
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
@@ -560,6 +564,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       location: SCHEMA_PROPS.location,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -1549,6 +1555,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       code: SCHEMA_PROPS.code,
+      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
+      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
