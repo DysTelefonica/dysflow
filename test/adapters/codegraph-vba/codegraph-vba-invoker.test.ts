@@ -101,6 +101,139 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it.runIf(process.platform === "win32")(
+    "resolves an extensionless Windows command to a .cmd shim in a path with spaces",
+    async () => {
+      const binDir = join(projectRoot, "CLI stubs with spaces");
+      mkdirSync(binDir);
+      const command = join(binDir, "codegraph-vba");
+      writeFileSync(
+        `${command}.cmd`,
+        "@node -e \"console.log(JSON.stringify({results:[{handler:'cmdSave_Click',callPath:['cmdSave_Click']}]}))\"\r\n",
+      );
+
+      try {
+        const result = await createDefaultCodeGraphVbaInvoker({ command }).fetchBehaviorEvidence({
+          formName: "Customer",
+          controlNames: ["cmdSave"],
+          projectPath: projectRoot,
+        });
+
+        expect(result.evidence, result.warning).toEqual([
+          { handler: "cmdSave_Click", callPath: ["cmdSave_Click"] },
+        ]);
+        expect(result.warning).toBeUndefined();
+      } finally {
+        rmSync(binDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("tries Windows executable extensions in order until one resolves", async () => {
+    const command = join(projectRoot, "CLI fallback order", "codegraph-vba");
+    const attempts: string[] = [];
+    const stdout = JSON.stringify({
+      results: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }],
+    });
+
+    const result = await createDefaultCodeGraphVbaInvoker({
+      command,
+      platform: "win32",
+      executeCommand: async (candidate: string) => {
+        attempts.push(candidate);
+        if (candidate === `${command}.exe`) return { stdout, stderr: "" };
+        throw Object.assign(new Error(`spawn ${candidate} ENOENT`), { code: "ENOENT" });
+      },
+    }).fetchBehaviorEvidence({
+      formName: "Customer",
+      controlNames: ["cmdSave"],
+      projectPath: projectRoot,
+    });
+
+    expect(attempts).toEqual([
+      command,
+      `${command}.cmd`,
+      `${command}.bat`,
+      `${command}.ps1`,
+      `${command}.exe`,
+    ]);
+    expect(result.evidence).toEqual([{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }]);
+    expect(result.warning).toBeUndefined();
+  });
+
+  it("surfaces the original ENOENT only after every Windows extension is exhausted", async () => {
+    const command = join(projectRoot, "missing CLI", "codegraph-vba");
+    const attempts: string[] = [];
+    const firstError = Object.assign(new Error("original extensionless spawn ENOENT"), {
+      code: "ENOENT",
+    });
+
+    const result = await createDefaultCodeGraphVbaInvoker({
+      command,
+      platform: "win32",
+      executeCommand: async (candidate: string) => {
+        attempts.push(candidate);
+        if (candidate === command) throw firstError;
+        throw Object.assign(new Error(`fallback failed: ${candidate}`), { code: "ENOENT" });
+      },
+    }).fetchBehaviorEvidence({
+      formName: "Customer",
+      controlNames: ["cmdSave"],
+      projectPath: projectRoot,
+    });
+
+    expect(attempts).toHaveLength(5);
+    expect(result.evidence).toEqual([]);
+    expect(result.warning).toContain(firstError.message);
+    expect(result.warning).not.toContain(`fallback failed: ${command}.exe`);
+  });
+
+  it("does not append fallback extensions to an explicit executable name", async () => {
+    const command = join(projectRoot, "codegraph-vba.exe");
+    const attempts: string[] = [];
+    const stdout = JSON.stringify({
+      results: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }],
+    });
+
+    const result = await createDefaultCodeGraphVbaInvoker({
+      command,
+      platform: "win32",
+      executeCommand: async (candidate: string) => {
+        attempts.push(candidate);
+        return { stdout, stderr: "" };
+      },
+    }).fetchBehaviorEvidence({
+      formName: "Customer",
+      controlNames: ["cmdSave"],
+      projectPath: projectRoot,
+    });
+
+    expect(attempts).toEqual([command]);
+    expect(result.evidence).toEqual([{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }]);
+  });
+
+  it("does not apply Windows extension fallback on non-Windows platforms", async () => {
+    const command = "codegraph-vba";
+    const attempts: string[] = [];
+
+    const result = await createDefaultCodeGraphVbaInvoker({
+      command,
+      platform: "linux",
+      executeCommand: async (candidate: string) => {
+        attempts.push(candidate);
+        throw Object.assign(new Error("spawn codegraph-vba ENOENT"), { code: "ENOENT" });
+      },
+    }).fetchBehaviorEvidence({
+      formName: "Customer",
+      controlNames: ["cmdSave"],
+      projectPath: projectRoot,
+    });
+
+    expect(attempts).toEqual([command]);
+    expect(result.evidence).toEqual([]);
+    expect(result.warning).toContain("spawn codegraph-vba ENOENT");
+  });
+
   it("returns empty evidence + warning when CLI command is not found (ENOENT)", async () => {
     // projectRoot has `.codegraph/` (set up at the describe level), so the
     // impl proceeds to the `execFile` step. The CLI path is guaranteed

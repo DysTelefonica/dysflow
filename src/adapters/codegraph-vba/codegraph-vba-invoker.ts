@@ -16,7 +16,7 @@
  * acceptance criteria.
  */
 
-import { execFile } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -24,6 +24,90 @@ import { promisify } from "node:util";
 import type { CodeGraphBehaviorEvidence } from "../../core/models/form-ui-builder.js";
 
 const execFileAsync = promisify(execFile);
+const WINDOWS_BATCH_EXTENSION_PATTERN = /\.(?:cmd|bat)$/i;
+const WINDOWS_POWERSHELL_EXTENSION_PATTERN = /\.ps1$/i;
+const WINDOWS_EXECUTABLE_EXTENSION_PATTERN = /\.(?:cmd|bat|ps1|exe)$/i;
+const WINDOWS_EXECUTABLE_EXTENSIONS = [".cmd", ".bat", ".ps1", ".exe"] as const;
+
+type CommandExecutionResult = { stdout: string; stderr: string };
+type CommandExecutor = (
+  command: string,
+  args: string[],
+  options: ExecFileOptions,
+) => Promise<CommandExecutionResult>;
+
+async function execFileWithWindowsFallback(
+  command: string,
+  args: string[],
+  options: ExecFileOptions,
+  platform: NodeJS.Platform,
+  executeCommand: CommandExecutor,
+): Promise<CommandExecutionResult> {
+  try {
+    return await executeCommand(command, args, options);
+  } catch (firstError) {
+    if (
+      platform !== "win32" ||
+      !isEnoent(firstError) ||
+      WINDOWS_EXECUTABLE_EXTENSION_PATTERN.test(command)
+    ) {
+      throw firstError;
+    }
+
+    for (const extension of WINDOWS_EXECUTABLE_EXTENSIONS) {
+      try {
+        return await executeCommand(`${command}${extension}`, args, options);
+      } catch (error) {
+        if (!isEnoent(error)) throw error;
+      }
+    }
+    throw firstError;
+  }
+}
+
+async function executeDefaultCommand(
+  command: string,
+  args: string[],
+  options: ExecFileOptions,
+  platform: NodeJS.Platform,
+): Promise<CommandExecutionResult> {
+  try {
+    return normalizeExecResult(await execFileAsync(command, args, options));
+  } catch (error) {
+    if (platform !== "win32" || !isInvalidWindowsApplication(error)) throw error;
+    if (WINDOWS_BATCH_EXTENSION_PATTERN.test(command)) {
+      return normalizeExecResult(await execWindowsBatchFile(command, args, options));
+    }
+    if (WINDOWS_POWERSHELL_EXTENSION_PATTERN.test(command)) {
+      return normalizeExecResult(await execWindowsPowerShellFile(command, args, options));
+    }
+    throw error;
+  }
+}
+
+function execWindowsBatchFile(command: string, args: string[], options: ExecFileOptions) {
+  const commandLine = `"${[command, ...args].map(quoteWindowsCommandArgument).join(" ")}"`;
+  return execFileAsync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", commandLine], {
+    ...options,
+    windowsVerbatimArguments: true,
+  });
+}
+
+function execWindowsPowerShellFile(command: string, args: string[], options: ExecFileOptions) {
+  return execFileAsync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", command, ...args],
+    options,
+  );
+}
+
+function quoteWindowsCommandArgument(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function normalizeExecResult(result: { stdout: string | Buffer; stderr: string | Buffer }) {
+  return { stdout: String(result.stdout), stderr: String(result.stderr) };
+}
 
 /**
  * Inputs to `fetchBehaviorEvidence`. The `projectPath` MUST be the project's
@@ -88,6 +172,10 @@ export type CreateDefaultCodeGraphVbaInvokerOptions = {
    * hangs; long enough for a small project.
    */
   timeoutMs?: number;
+  /** Override the host platform for deterministic command-resolution tests. */
+  platform?: NodeJS.Platform;
+  /** Override subprocess execution at the process boundary. */
+  executeCommand?: CommandExecutor;
 };
 
 /**
@@ -108,6 +196,11 @@ export function createDefaultCodeGraphVbaInvoker(
 ): CodeGraphVbaInvoker {
   const command = options.command ?? "codegraph-vba";
   const timeoutMs = options.timeoutMs ?? 10_000;
+  const platform = options.platform ?? process.platform;
+  const executeCommand: CommandExecutor =
+    options.executeCommand ??
+    ((candidate, args, execOptions) =>
+      executeDefaultCommand(candidate, args, execOptions, platform));
 
   return {
     async fetchBehaviorEvidence(request) {
@@ -146,10 +239,12 @@ export function createDefaultCodeGraphVbaInvoker(
       const query = queryParts.join(" ");
 
       try {
-        const { stdout } = await execFileAsync(
+        const { stdout } = await execFileWithWindowsFallback(
           command,
           ["explore", "--json", "--path", projectPath, "--max-files", "16", query],
           { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
+          platform,
+          executeCommand,
         );
         const evidence = parseCodeGraphJson(stdout, formName, controlNames);
         if (evidence.length === 0) {
@@ -250,4 +345,13 @@ function asStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   if (!value.every((entry) => typeof entry === "string")) return undefined;
   return value as string[];
+}
+
+function isEnoent(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isInvalidWindowsApplication(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  return error.code === "EINVAL" || error.code === "UNKNOWN";
 }
