@@ -19,6 +19,17 @@ const IMPORT_FAIL = failureResult({
   retryable: false,
 });
 
+const FORM_WITH_BOUND_COLUMN = `Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+        BoundColumn =1
+    End
+End
+`;
+
+const FORM_WITH_WRONG_BOUND_COLUMN = FORM_WITH_BOUND_COLUMN.replace("BoundColumn =1", "BoundColumn =2");
+
 function makeOrchestrator(importResult = successResult({ imported: true })): VbaFormsOrchestrator {
   return {
     executor: vi.fn(),
@@ -212,5 +223,102 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
         },
       });
     }
+  });
+
+  it("returns ok after verifying a newly-added control property", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs({ readFile: vi.fn().mockResolvedValue(FORM_WITH_BOUND_COLUMN) });
+    const input = {
+      orchestrator,
+      fileSystem: fs,
+      source: RESOLVED,
+      newSource: FORM_WITH_BOUND_COLUMN,
+      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      targetExisted: true,
+      forwardedParams: {},
+      pendingNewProperties: [
+        { controlName: "cmbStatus", propertyName: "BoundColumn", expectedValue: "1" },
+      ],
+    } as unknown as Parameters<typeof applyGuardedFormWrite>[0];
+
+    const result = await applyGuardedFormWrite(input);
+
+    expect(result.ok).toBe(true);
+    expect(fs.readFile).toHaveBeenCalledWith(RESOLVED.sourcePath);
+  });
+
+  it("returns property-not-applied when a newly-added property is missing after import", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs({
+      readFile: vi.fn().mockResolvedValue(FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', "")),
+    });
+    const input = {
+      orchestrator,
+      fileSystem: fs,
+      source: RESOLVED,
+      newSource: FORM_WITH_BOUND_COLUMN,
+      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      targetExisted: true,
+      forwardedParams: {},
+      pendingNewProperties: [
+        { controlName: "cmbStatus", propertyName: "BoundColumn", expectedValue: "1" },
+      ],
+    } as unknown as Parameters<typeof applyGuardedFormWrite>[0];
+
+    const result = await applyGuardedFormWrite(input);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("PROPERTY_NOT_APPLIED");
+      expect(result.error.details).toMatchObject({
+        missing: [{ control: "cmbStatus", property: "BoundColumn" }],
+      });
+    }
+  });
+
+  it("returns property-not-applied when a newly-added property has the wrong value", async () => {
+    const orchestrator = makeOrchestrator();
+    const fs = mockFs({ readFile: vi.fn().mockResolvedValue(FORM_WITH_WRONG_BOUND_COLUMN) });
+    const input = {
+      orchestrator,
+      fileSystem: fs,
+      source: RESOLVED,
+      newSource: FORM_WITH_WRONG_BOUND_COLUMN,
+      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      targetExisted: true,
+      forwardedParams: {},
+      pendingNewProperties: [
+        { controlName: "cmbStatus", propertyName: "BoundColumn", expectedValue: "1" },
+      ],
+    } as unknown as Parameters<typeof applyGuardedFormWrite>[0];
+
+    const result = await applyGuardedFormWrite(input);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("PROPERTY_NOT_APPLIED");
+      expect(result.error.details).toMatchObject({
+        missing: [{ control: "cmbStatus", property: "BoundColumn", actualValue: "2" }],
+      });
+    }
+  });
+
+  it("skips property verification when no new properties are pending", async () => {
+    const orchestrator = makeOrchestrator();
+    const readFile = vi.fn().mockRejectedValue(new Error("read-back should be skipped"));
+    const fs = mockFs({ readFile });
+
+    const result = await applyGuardedFormWrite({
+      orchestrator,
+      fileSystem: fs,
+      source: RESOLVED,
+      newSource: "new text",
+      originalSource: "old text",
+      targetExisted: true,
+      forwardedParams: {},
+    });
+
+    expect(result.ok).toBe(true);
+    expect(readFile).not.toHaveBeenCalled();
   });
 });
