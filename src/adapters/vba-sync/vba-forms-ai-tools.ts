@@ -30,6 +30,7 @@ import { verifyFormUi } from "../../core/services/form-ui-verification-service.j
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
 import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
+import { findNewControlProperties } from "./control-property-verifier.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
 import { deriveFormName } from "./vba-forms-paths.js";
 import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
@@ -311,6 +312,7 @@ async function applyPlan(args: {
     originalSource,
     targetExisted: true, // resolveManagedMutationSource + readFile both succeeded
     forwardedParams: params,
+    pendingNewProperties: findNewControlProperties(ir, folded.ir),
   });
   if (!write.ok) return write;
 

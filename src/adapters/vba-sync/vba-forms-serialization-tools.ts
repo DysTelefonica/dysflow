@@ -280,6 +280,7 @@ export async function deserializeForm(args: {
     // deserializeForm always operates on an existing source (readFile succeeded).
     targetExisted: true,
     forwardedParams: params,
+    pendingNewProperties: [],
   });
   if (!write.ok) return write;
 

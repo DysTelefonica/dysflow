@@ -8,6 +8,11 @@ import {
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { isRecord, stringValue } from "../../core/utils/index.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
+import {
+  type ExpectedProperty,
+  type MissingProperty,
+  verifyControlProperties,
+} from "./control-property-verifier.js";
 import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { ManagedFormSource, VbaFormsOrchestrator } from "./vba-forms-types.js";
@@ -62,6 +67,8 @@ export type ApplyGuardedFormWriteInput = {
   targetExisted: boolean;
   /** Caller-supplied params; merged under the seam's hardcoded fields. */
   forwardedParams: Record<string, unknown>;
+  /** New scalar properties that must be present after the import gate. */
+  pendingNewProperties?: ExpectedProperty[];
 };
 
 export type ApplyGuardedFormWriteSuccess = {
@@ -105,6 +112,7 @@ export async function applyGuardedFormWrite(
     originalSourceBytes,
     targetExisted,
     forwardedParams,
+    pendingNewProperties,
   } = input;
 
   // Shared gate-failure path (#951): best-effort restore of the pre-apply
@@ -138,7 +146,37 @@ export async function applyGuardedFormWrite(
     );
   };
 
-  // 1. Write the new source.
+  const failPropertyVerification = async (
+    missing: readonly MissingProperty[],
+    cause?: unknown,
+  ): Promise<OperationResult<ApplyGuardedFormWriteSuccess>> => {
+    const rollbackOutcome = await captureRollbackOutcome(
+      () =>
+        originalSourceBytes !== undefined && fileSystem.writeBytes !== undefined
+          ? fileSystem.writeBytes(source.sourcePath, originalSourceBytes)
+          : fileSystem.writeFile(source.sourcePath, originalSource, "utf8"),
+      targetExisted,
+    );
+    const details = {
+      missing: missing.map((entry) => ({
+        control: entry.controlName,
+        property: entry.propertyName,
+        ...(entry.expectedValue === undefined ? {} : { expectedValue: entry.expectedValue }),
+        ...(entry.actualValue === undefined ? {} : { actualValue: entry.actualValue }),
+      })),
+      rollback: rollbackOutcome,
+      rollbackApplied: rollbackOutcome.applied,
+      ...(cause === undefined ? {} : { cause }),
+    };
+    return failureResult(
+      createDysflowError(
+        "PROPERTY_NOT_APPLIED",
+        `import_modules completed but did not apply ${missing.length} requested control propert${missing.length === 1 ? "y" : "ies"} in "${source.sourcePath}".`,
+        { details },
+      ),
+    );
+  };
+
   try {
     await fileSystem.writeFile(source.sourcePath, newSource, "utf8");
   } catch (err) {
@@ -180,6 +218,22 @@ export async function applyGuardedFormWrite(
   const gatePayload = isRecord(importResult.data) ? importResult.data.result : undefined;
   if (importOutputReportsModuleFailure(gatePayload)) {
     return failGateWithRollback(deriveNestedGateCause(gatePayload));
+  }
+
+  // 4. New control-property additions require a source read-back. Existing
+  // property updates intentionally skip this verifier and retain the original
+  // guarded-write contract.
+  if (pendingNewProperties !== undefined && pendingNewProperties.length > 0) {
+    try {
+      const verification = await verifyControlProperties(
+        source.sourcePath,
+        pendingNewProperties,
+        (path) => fileSystem.readFile(path),
+      );
+      if (!verification.ok) return failPropertyVerification(verification.missing);
+    } catch (err) {
+      return failPropertyVerification(pendingNewProperties, err);
+    }
   }
 
   return successResult({ importResult: importResult.data });
