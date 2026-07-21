@@ -15,6 +15,8 @@ import {
 import { extractResultPayload } from "../runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, truthy } from "../utils/index.js";
 import { buildRuntimeDiagnostics, type RuntimeDiagnostics } from "../utils/runtime-info.js";
+import { compareForms } from "./form-ir-compare-service.js";
+import { parseFormTxt } from "./form-ir-service.js";
 import {
   classifyVbaPair,
   SEMANTIC_CLASSIFIER_RULES,
@@ -22,8 +24,6 @@ import {
   type VbaRecommendation,
   type VbaSemanticCategory,
 } from "./vba-semantic-classifier.js";
-import { compareForms } from "./form-ir-compare-service.js";
-import { parseFormTxt } from "./form-ir-service.js";
 
 /** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
 // DYSFLOW_VERSION is now embedded in RuntimeDiagnostics via buildRuntimeDiagnostics()
@@ -666,7 +666,11 @@ function controlPropertyMismatchFields(
     const mismatch = report.drifts.find(
       (drift) => drift.kind === "propertyChanged" && drift.actionable,
     );
-    if (mismatch?.kind !== "propertyChanged" || mismatch.controlName === undefined || mismatch.key === undefined) {
+    if (
+      mismatch?.kind !== "propertyChanged" ||
+      mismatch.controlName === undefined ||
+      mismatch.key === undefined
+    ) {
       return {};
     }
     return {

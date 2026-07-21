@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { collectControls, parseFormTxt } from "../../core/services/form-ir-service.js";
 import type { FormIR } from "../../core/models/form-ir.js";
+import { collectControls, parseFormTxt } from "../../core/services/form-ir-service.js";
 
 export type ExpectedProperty = {
   controlName: string;
@@ -28,7 +28,9 @@ const nodeFormSourceReader: FormSourceReader = async (formSourcePath) =>
  * updates do not require a second verification path.
  */
 export function findNewControlProperties(before: FormIR, after: FormIR): ExpectedProperty[] {
-  const beforeControls = new Map(collectControls(before.root).map((control) => [control.name, control]));
+  const beforeControls = new Map(
+    collectControls(before.root).map((control) => [control.name, control]),
+  );
   const expected: ExpectedProperty[] = [];
 
   for (const control of collectControls(after.root)) {

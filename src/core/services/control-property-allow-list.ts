@@ -20,7 +20,9 @@ export type ControlPropertyLookup = (
 ) => string | number | boolean | undefined;
 
 function controlNameOf(node: FormNode): string | undefined {
-  const entry = node.entries.find((candidate) => candidate.kind === "scalar" && candidate.key === "Name");
+  const entry = node.entries.find(
+    (candidate) => candidate.kind === "scalar" && candidate.key === "Name",
+  );
   if (entry === undefined || entry.kind !== "scalar") return undefined;
   const value = entry.value.trim();
   return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;

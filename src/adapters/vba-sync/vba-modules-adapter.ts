@@ -15,6 +15,10 @@ import {
   recordVerifyFail,
   recordVerifyOk,
 } from "../../core/runtime/human-compile-state.js";
+import {
+  type ControlPropertyLookup,
+  postprocessFormTxt,
+} from "../../core/services/control-property-allow-list.js";
 import { runBulkImportByDirectory } from "../../core/services/import-modules-bulk.js";
 import { runListVbaModules } from "../../core/services/list-vba-modules-service.js";
 import {
@@ -34,10 +38,6 @@ import {
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
-import {
-  postprocessFormTxt,
-  type ControlPropertyLookup,
-} from "../../core/services/control-property-allow-list.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 

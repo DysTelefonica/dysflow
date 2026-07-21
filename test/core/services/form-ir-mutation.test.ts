@@ -569,7 +569,8 @@ describe("setProperty — pre-validation (issue #941)", () => {
   });
 
   it("inserts new data-binding properties before display and event properties", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin ComboBox
         Name ="cmbStatus"
@@ -577,7 +578,9 @@ Begin Form
         OnClick ="[Event Procedure]"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
 
     const result = setProperty(ir, {
       controlName: "cmbStatus",
@@ -592,7 +595,8 @@ End
   });
 
   it("updates an existing property without moving it", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin ComboBox
         Name ="cmbStatus"
@@ -600,7 +604,9 @@ Begin Form
         Format ="General Number"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
     const before = serializeFormTxt(ir);
     const beforePosition = before.indexOf("BoundColumn =2");
 
@@ -616,13 +622,16 @@ End
   });
 
   it("keeps multiple data-binding properties in deterministic semantic order", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin ComboBox
         Name ="cmbStatus"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
 
     const first = setProperty(ir, {
       controlName: "cmbStatus",
@@ -641,13 +650,16 @@ End
   });
 
   it("inserts a new property into an otherwise empty control property list", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin TextBox
         Name ="txtValue"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
 
     const result = setProperty(ir, {
       controlName: "txtValue",
@@ -659,14 +671,17 @@ End
   });
 
   it("places geometry properties before display properties regardless of mutation order", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin TextBox
         Name ="txtValue"
         StatusBarText ="value"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
 
     const result = setProperty(ir, {
       controlName: "txtValue",
@@ -680,13 +695,16 @@ End
   });
 
   it("accepts ListRows as an addable ComboBox property", () => {
-    const ir = parseFormTxt(`Version =21
+    const ir = parseFormTxt(
+      `Version =21
 Begin Form
     Begin ComboBox
         Name ="cmbStatus"
     End
 End
-`, { name: "ControlPropertiesForm" });
+`,
+      { name: "ControlPropertiesForm" },
+    );
 
     const result = setProperty(ir, {
       controlName: "cmbStatus",

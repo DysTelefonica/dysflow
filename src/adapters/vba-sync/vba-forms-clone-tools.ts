@@ -11,10 +11,10 @@ import {
   parseFormTxt,
 } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
-import { findNewControlProperties, type ExpectedProperty } from "./control-property-verifier.js";
 import { stringValue } from "../../core/utils/index.js";
 import { isPathInside } from "../../core/utils/path-containment.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { type ExpectedProperty, findNewControlProperties } from "./control-property-verifier.js";
 import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import {
   deriveFormName,

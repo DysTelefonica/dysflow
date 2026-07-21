@@ -28,7 +28,10 @@ Begin Form
 End
 `;
 
-const FORM_WITH_WRONG_BOUND_COLUMN = FORM_WITH_BOUND_COLUMN.replace("BoundColumn =1", "BoundColumn =2");
+const FORM_WITH_WRONG_BOUND_COLUMN = FORM_WITH_BOUND_COLUMN.replace(
+  "BoundColumn =1",
+  "BoundColumn =2",
+);
 
 function makeOrchestrator(importResult = successResult({ imported: true })): VbaFormsOrchestrator {
   return {
@@ -233,7 +236,7 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
       fileSystem: fs,
       source: RESOLVED,
       newSource: FORM_WITH_BOUND_COLUMN,
-      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      originalSource: FORM_WITH_BOUND_COLUMN.replace("        BoundColumn =1\n", ""),
       targetExisted: true,
       forwardedParams: {},
       pendingNewProperties: [
@@ -250,14 +253,16 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
   it("returns property-not-applied when a newly-added property is missing after import", async () => {
     const orchestrator = makeOrchestrator();
     const fs = mockFs({
-      readFile: vi.fn().mockResolvedValue(FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', "")),
+      readFile: vi
+        .fn()
+        .mockResolvedValue(FORM_WITH_BOUND_COLUMN.replace("        BoundColumn =1\n", "")),
     });
     const input = {
       orchestrator,
       fileSystem: fs,
       source: RESOLVED,
       newSource: FORM_WITH_BOUND_COLUMN,
-      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      originalSource: FORM_WITH_BOUND_COLUMN.replace("        BoundColumn =1\n", ""),
       targetExisted: true,
       forwardedParams: {},
       pendingNewProperties: [
@@ -284,7 +289,7 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
       fileSystem: fs,
       source: RESOLVED,
       newSource: FORM_WITH_WRONG_BOUND_COLUMN,
-      originalSource: FORM_WITH_BOUND_COLUMN.replace('        BoundColumn =1\n', ""),
+      originalSource: FORM_WITH_BOUND_COLUMN.replace("        BoundColumn =1\n", ""),
       targetExisted: true,
       forwardedParams: {},
       pendingNewProperties: [

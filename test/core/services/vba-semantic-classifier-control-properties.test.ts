@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { compareVbaSourceTrees, type ComparisonFileSystemPort } from "../../../src/core/services/vba-source-comparison";
+import {
+  type ComparisonFileSystemPort,
+  compareVbaSourceTrees,
+} from "../../../src/core/services/vba-source-comparison";
 
 const SOURCE_WITH_BOUND_COLUMN = `Version =21
 Begin Form
@@ -23,15 +26,23 @@ const BINARY_WITH_DIFFERENT_BOUND_COLUMN = BINARY_WITHOUT_BOUND_COLUMN.replace(
   '        Name ="cmbStatus"\n        BoundColumn =3',
 );
 
-const SOURCE_WITH_CHECKSUM = SOURCE_WITH_BOUND_COLUMN.replace("Version =21", "Checksum =1\nVersion =21");
-const BINARY_WITH_CHECKSUM = SOURCE_WITH_BOUND_COLUMN.replace("Version =21", "Checksum =2\nVersion =21");
+const SOURCE_WITH_CHECKSUM = SOURCE_WITH_BOUND_COLUMN.replace(
+  "Version =21",
+  "Checksum =1\nVersion =21",
+);
+const BINARY_WITH_CHECKSUM = SOURCE_WITH_BOUND_COLUMN.replace(
+  "Version =21",
+  "Checksum =2\nVersion =21",
+);
 
 function fakeFileSystem(sourceText: string, binaryText: string): ComparisonFileSystemPort {
   return {
     mkdtemp: async (prefix) => prefix,
     readdir: async (path) => {
-      if (path === "source") return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
-      if (path === "binary") return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
+      if (path === "source")
+        return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
+      if (path === "binary")
+        return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
       return [];
     },
     readFile: async (path) => (path.includes("binary") ? binaryText : sourceText),

@@ -7,12 +7,12 @@ import {
 } from "../../core/contracts/index.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { isRecord, stringValue } from "../../core/utils/index.js";
-import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import {
   type ExpectedProperty,
   type MissingProperty,
   verifyControlProperties,
 } from "./control-property-verifier.js";
+import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import { captureRollbackOutcome } from "./vba-forms-rollback.js";
 import { FORMS_MAPPINGS } from "./vba-forms-tool-mappings.js";
 import type { ManagedFormSource, VbaFormsOrchestrator } from "./vba-forms-types.js";
