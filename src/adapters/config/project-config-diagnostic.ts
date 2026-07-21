@@ -391,8 +391,7 @@ export function diagnoseProjectConfig(
   // supplied so a request that names ONLY the backend still gets the same
   // outside-worktree / target-not-found treatment as before.
   const requestedTarget =
-    frontendAliases[0] ??
-    (request.backendPath !== undefined ? request.backendPath : undefined);
+    frontendAliases[0] ?? (request.backendPath !== undefined ? request.backendPath : undefined);
   // Issue #968 — `allowExternalAccessPath` opt-in flag. When the caller
   // supplies `allowExternalAccessPath: true` AND the operation is
   // explicitly declared non-binary-mutating (the dispatcher forwards

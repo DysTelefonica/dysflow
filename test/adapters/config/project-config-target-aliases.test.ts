@@ -18,8 +18,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
 import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic.js";
+import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
 import { projectConfigNotWriteReady } from "../../../src/adapters/mcp/dispatch-common.js";
 
 function worktreeFixture(prefix: string): string {
@@ -30,10 +30,7 @@ function worktreeFixture(prefix: string): string {
   return r;
 }
 
-function writeProjectConfig(
-  root: string,
-  body: Record<string, unknown>,
-): void {
+function writeProjectConfig(root: string, body: Record<string, unknown>): void {
   writeFileSync(join(root, ".dysflow", "project.json"), JSON.stringify(body));
 }
 
@@ -95,9 +92,7 @@ describe("alias resolution under run_vba (#1044)", () => {
       });
       expect(result.status).toBe("ambiguous");
       expect(result.writeReady).toBe(false);
-      expect(result.diagnostics[0]?.message).toContain(
-        "Conflicting Access target aliases",
-      );
+      expect(result.diagnostics[0]?.message).toContain("Conflicting Access target aliases");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
