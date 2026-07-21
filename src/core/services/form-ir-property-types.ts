@@ -81,6 +81,7 @@ export const KNOWN_ADDABLE_PROPERTY_NAMES: ReadonlySet<string> = new Set([
   "ColumnWidths",
   "BoundColumn",
   "ColumnHeads",
+  "ListRows",
   "ListWidth",
   // Behavior / metadata
   "DefaultValue",

@@ -678,4 +678,22 @@ End
       result.source.indexOf('StatusBarText ="value"'),
     );
   });
+
+  it("accepts ListRows as an addable ComboBox property", () => {
+    const ir = parseFormTxt(`Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+    End
+End
+`, { name: "ControlPropertiesForm" });
+
+    const result = setProperty(ir, {
+      controlName: "cmbStatus",
+      property: "ListRows",
+      value: 8,
+    });
+
+    expect(result.source).toContain("ListRows =8");
+  });
 });
