@@ -5,7 +5,15 @@ export type VbaTestManifestErrorCode =
   | "INVALID_TAG"
   | "PROCEDURE_NOT_FOUND"
   | "ARG_COUNT_MISMATCH"
-  | "ARG_TYPE_MISMATCH";
+  | "ARG_TYPE_MISMATCH"
+  // Issue #1046 (Bug D) — `validate_manifest` allowlist coherence. When the
+  // caller passes `validateManifestIncludesAllowlistCheck: true`, every
+  // atom whose procedure is not in the resolved allowlist is surfaced as
+  // an `invalid[]` entry with this code. The error code lives in the
+  // INVALID family (it is a structural drift the manifest declares) but
+  // is reported on the parallel `invalid[]` channel rather than `errors[]`
+  // so existing consumers that branch on `errors[].code` keep working.
+  | "PROCEDURE_NOT_IN_ALLOWLIST";
 
 export interface VbaTestManifestDiagnostic {
   code: VbaTestManifestErrorCode;
@@ -13,17 +21,53 @@ export interface VbaTestManifestDiagnostic {
   testIndex?: number;
   procedure?: string;
   index?: number;
+  /**
+   * Issue #1046 (Bug D) — `reason` is set on `invalid[]` entries when the
+   * allowlist check surfaces drift. Carries the human-readable cause that
+   * greps `/allowlist|allowedProcedures/i` so consumers can branch
+   * programmatically (e.g. "auto-add to allowedProcedures") without
+   * parsing the message body. Always populated alongside
+   * `code === "PROCEDURE_NOT_IN_ALLOWLIST"`.
+   */
+  reason?: string;
+}
+
+export interface VbaTestManifestInvalidAtom {
+  procedure: string;
+  /**
+   * Test index in the manifest (1-based for human consumption).
+   * Matches `testIndex` on the parallel `errors[]` entries so consumers
+   * can cross-reference.
+   */
+  testIndex: number;
+  /**
+   * Human-readable reason the atom is invalid. For allowlist drift the
+   * reason matches `/allowlist|allowedProcedures/i` per the #1046 contract.
+   */
+  reason: string;
 }
 
 export interface VbaTestManifestReport {
   valid: boolean;
   errors: VbaTestManifestDiagnostic[];
   warnings: VbaTestManifestDiagnostic[];
+  /**
+   * Issue #1046 (Bug D) — parallel channel to `errors[]`. Carries atoms
+   * the opt-in allowlist check rejects (`code:
+   * "PROCEDURE_NOT_IN_ALLOWLIST"`). Always empty when the opt-in flag
+   * is absent so the legacy shape is byte-compatible.
+   */
+  invalid: VbaTestManifestInvalidAtom[];
   summary: {
     totalTests: number;
     validTests: number;
     errorCount: number;
     warningCount: number;
+    /**
+     * Issue #1046 (Bug D) — count of allowlist-drift entries. Always 0
+     * when the opt-in flag is absent.
+     */
+    invalidCount: number;
   };
 }
 
@@ -40,13 +84,43 @@ interface VbaParameter {
   optional: boolean;
 }
 
+/**
+ * Validate a VBA test manifest. The legacy signature accepts only the
+ * manifest + module map. Issue #1046 (Bug D) extends the signature with
+ * `allowedProcedures` and an opt-in `includeAllowlistCheck` flag. The
+ * legacy shape is preserved when both new params are omitted/empty —
+ * every existing consumer keeps its byte-identical report.
+ *
+ * @param manifest — array or `{tests: [...]}` shape per the runner contract.
+ * @param modules — module-name → source-code map (parsed for procedure signatures).
+ * @param options.includeAllowlistCheck — when `true`, every atom whose
+ *   procedure is NOT in `options.allowedProcedures` is reported on
+ *   `report.invalid[]` with `reason: "allowlist_miss"`. Default `false`
+ *   preserves the legacy JSON-shape-only behavior (Bug D fix path).
+ * @param options.allowedProcedures — the allowlist to consult when
+ *   `includeAllowlistCheck` is true. Ignored otherwise. Pass `undefined`
+ *   or `[]` to mean "no allowlist declared" — the report's invalid
+ *   channel stays empty in that case (the consumer that wants to know
+ *   "no allowlist" can branch on `summary.invalidCount === 0` plus
+ *   `includeAllowlistCheck === true` and a separate config probe).
+ */
 export function validateVbaTestManifest(
   manifest: unknown,
   modules: Record<string, string>,
+  options: {
+    includeAllowlistCheck?: boolean;
+    allowedProcedures?: readonly string[];
+  } = {},
 ): VbaTestManifestReport {
   const errors: VbaTestManifestDiagnostic[] = [];
+  const invalid: VbaTestManifestInvalidAtom[] = [];
   const { tests, totalTests } = normalizeManifest(manifest, errors);
   const catalog = buildProcedureCatalog(modules);
+
+  const includeAllowlistCheck = options.includeAllowlistCheck === true;
+  const allowlist = options.allowedProcedures;
+  const allowSet =
+    includeAllowlistCheck && Array.isArray(allowlist) ? new Set(allowlist) : undefined;
 
   for (const test of tests) {
     for (let i = 0; i < test.tags.length; i += 1) {
@@ -74,17 +148,34 @@ export function validateVbaTestManifest(
     }
 
     validateArgs(test, procedure.parameters, errors);
+
+    // Issue #1046 (Bug D) — opt-in allowlist drift surfacing. Runs AFTER
+    // the JSON-shape checks so a malformed atom never blocks drift
+    // detection on its siblings. Only fires when the caller explicitly
+    // opted in via `includeAllowlistCheck: true` AND a non-empty allowlist
+    // was supplied; the empty/undefined allowlist case leaves `invalid[]`
+    // empty so consumers that use the opt-in to confirm drift are not
+    // surprised by a config-only absence.
+    if (allowSet !== undefined && !allowSet.has(test.procedure)) {
+      invalid.push({
+        procedure: test.procedure,
+        testIndex: test.index + 1,
+        reason: "allowlist_miss",
+      });
+    }
   }
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === 0 && invalid.length === 0,
     errors,
     warnings: [],
+    invalid,
     summary: {
       totalTests,
       validTests: Math.max(0, totalTests - new Set(errors.map((e) => e.testIndex)).size),
       errorCount: errors.length,
       warningCount: 0,
+      invalidCount: invalid.length,
     },
   };
 }

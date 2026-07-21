@@ -1517,7 +1517,15 @@ describe("VbaExecutionAdapter", () => {
     );
   });
 
-  it("PR1b — refuses test_vba when procedure is NOT in the configured allowedProcedures list (even with dryRun:true)", async () => {
+  it("PR1b — refuses test_vba when procedure is NOT in the configured allowedProcedures list on the COMMIT path (no dryRun)", async () => {
+    // Issue #1046 (Bug B) inverted this test: previously the test pinned
+    // "PR1b — refuses ... (even with dryRun:true)". The #1046 fix
+    // reorders checks so that `dryRun:true` short-circuits BEFORE the
+    // gate (per the docs at `assets/examples/test-vba.md:31-35` which
+    // promise the gate does NOT fire on dryRun). The gate still fires
+    // on the COMMIT path (no dryRun), which is what this test now pins.
+    // The dedicated dryRun-bypass regression lives in
+    // `vba-test-vba-coherence-1046.test.ts` (Issue #1046 / Test 2).
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
@@ -1526,13 +1534,13 @@ describe("VbaExecutionAdapter", () => {
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_NotInList", args: [] }]),
-      dryRun: true,
+      // explicit execute mode — the commit path the gate protects
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected refusal for procedure outside allowlist");
     // Issue #659 — split: case (b) (allowlist IS configured AND the
-    // procedure is not in it) now emits `PROCEDURE_NOT_ALLOWED` with the
+    // procedure is not in it) emits `PROCEDURE_NOT_ALLOWED` with the
     // current allowlist + a remediation line. Case (a) (no allowlist AND
     // no `dryRun:true`) keeps the legacy `MCP_INPUT_INVALID` code.
     expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");

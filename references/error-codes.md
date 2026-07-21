@@ -3,6 +3,18 @@
 Use `error.code` for programmatic branching and show `error.remediation` as the next action. Preserve
 the message and nested details as diagnostic evidence; do not parse localized Access text.
 
+## VBA test execution gate
+
+### `PROCEDURE_NOT_ALLOWED`
+
+**Trigger:** `test_vba` was called with a procedure that is not in the configured `allowedProcedures` allowlist. Emitted by `VbaExecutionAdapter.ensureTestProceduresAllowed` (Issue #659 split + #1046 re-synced). The error envelope carries `error.allowedProcedures` (the active allowlist) and `error.remediation` (the next action). Issue #1046 confirmed this code as the canonical test_vba-gate code; the previous `MCP_PROCEDURE_NOT_ALLOWED` heading (canonical-handler gate for `run_vba`) is a separate, intentional code that survives on the `run_vba` path.
+
+**Action:** Add the procedure to `allowedProcedures` in `.dysflow/project.json` (re-read per call — no restart needed) or pick a procedure that is already in the list. The allowlist gate does NOT fire on `dryRun:true` (Bug B fix #1046: dryRun short-circuits BEFORE the gate so plan-only callers see a plan-shaped success).
+
+| Code | Meaning | Remediation |
+| --- | --- | --- |
+| `PROCEDURE_NOT_ALLOWED` | `test_vba` was called with a procedure that is not in the configured `allowedProcedures` allowlist. Emitted by `VbaExecutionAdapter.ensureTestProceduresAllowed` (Issue #659 split + #1046 re-synced). The error envelope carries `error.allowedProcedures` (the active allowlist) and `error.remediation` (the next action). Issue #1046 confirmed this code as the canonical test_vba-gate code; the previous `MCP_PROCEDURE_NOT_ALLOWED` heading (canonical-handler gate for `run_vba`) is a separate, intentional code that survives on the `run_vba` path. | Add the procedure to `allowedProcedures` in `.dysflow/project.json` (re-read per call — no restart needed) or pick a procedure that is already in the list. The allowlist gate does NOT fire on `dryRun:true` (Bug B fix #1046: dryRun short-circuits BEFORE the gate so plan-only callers see a plan-shaped success). |
+
 ## Form and import failures
 
 | Code | Meaning | Remediation |
@@ -12,6 +24,7 @@ the message and nested details as diagnostic evidence; do not parse localized Ac
 | `FORM_NAME_RESOLUTION_FAILED` | A form/report module name resolves to an empty Access object name (e.g. a source named exactly `Form_.form.txt`), so `SaveAsText`/`LoadFromText` cannot address the document. No source mutation is performed. | Rename the source file so it carries a real form/report name, then retry. |
 | `FORM_SOURCE_MALFORMED` | The pre-import quality gate (#958) found a structurally broken `.form.txt`/`.report.txt` — unbalanced Begin/End layout tree, truncated blob, or a file that is not a SaveAsText export. The runner is never spawned and the Access binary is never touched; `details.defects` lists each file with its parser message. Metadata-only legacy defects (missing `AutoResize` marker, stale `VB_Name`) do NOT trigger this code — the import self-heals them. | Repair the listed files or re-export them from a healthy binary (`export_modules`/`export_all`), then retry. |
 | `FORM_VBNAME_PREFIX_MISMATCH` | Pre-import guard (#1040) rejected an Auto-mode `import_modules` on full-form source (`.cls` + `.form.txt` together) where the basename `ModuleName` lacks the `Form_`/`Report_` prefix AND the binary already carries a legacy `Form_<base>` / `Report_<base>` component from a prior `SaveAsText`. The import was NOT started, so no rollback is required and the binary is untouched. This is the regression guard for the #1020 round-3 fix — round-3 only covered `.cls`-only / `.form.txt`-only paths; the Auto path with both files together was unfixed because `LoadFromText` runs before `AddFromFile` and the pre-existing form would have been silently renamed to `Form_TempSccObjN`. | Rename the source files to use the prefixed form name (`Form_<base>` or `Report_<base>`) OR delete the legacy prefixed form from the binary before retrying. |
+| `PROCEDURE_NOT_FOUND` | The requested VBA procedure is verifiably absent from the project's source tree — the `AccessVbaService` preflight (#1045) scanned every `.bas` / `.cls` under `modules/`, `classes/`, `forms/`, and `reports/` for a public declaration matching `procedureName` (case-insensitive) and found none. The PowerShell runner was NOT spawned, so no Access side-effect occurred and the existing `RUNNER_FAILED` taxonomy for genuine runner failures is preserved. When the source resolver cannot resolve any module (no `destinationRoot` configured, or the resolver returned `undefined`), the preflight is a non-fatal no-op and the runner proceeds — this matches the legacy behaviour for projects that have not wired a `destinationRoot`. `details.procedure` echoes the request; `details.moduleName` is present when the caller supplied one; `details.scannedModules` reports the number of modules walked. | Verify the procedure name and module, import the procedure into the binary before retrying, or pass an inline `source` so the preflight has bytes to scan. |
 | `VBA_IMPORT_PHASE_FAILED` | Access rejected one module during the named import phase. | Validate the source and inspect the `phase`; see [form import-gate recovery](../docs/diagnostics/form-import-gate-failures.md). |
 
 ## Input, project, path, and schema failures
