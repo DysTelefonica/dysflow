@@ -461,31 +461,31 @@ End Function
       resolvedProcedureNames = extractProcedureNames(planResult.data);
     }
 
-    // PR1b (#621 F1) + #667 — default-deny gate. Fires AFTER plan resolution
-    // (so we know which procedures will execute) and BEFORE both compile_vba
-    // and the runner, so neither the binary write nor the test execution
-    // happen when the plan is rejected. The previous order ran compile_vba
-    // first, which wrote the .accdb even when the gate would later refuse —
-    // an unwanted side effect on the live binary.
-    const gateError = await this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
-    if (gateError !== undefined) return gateError;
-
-    // Round-3 Item 5 (P2) — explicit `dryRun: true` short-circuits BEFORE
-    // the test_vba runner call. The gate already ran (so an out-of-allowlist
-    // procedure still emits PROCEDURE_NOT_ALLOWED); dryRun:true only replaces
-    // the runner invocation with a plan-shaped result so consumers can review
-    // what would have run. The schema gates dryRun via
-    // `additionalProperties: false`, so the only way to reach this branch is
-    // with the flag explicitly set to `true`.
+    // Issue #1046 (Bug B) — `dryRun:true` short-circuits BEFORE the allowlist
+    // gate. The docs at `assets/examples/test-vba.md:31-35` (canonical,
+    // mirrored in dysflow-usage) promise that `dryRun:true` validates the
+    // manifest shape without executing the atoms and does NOT raise
+    // `PROCEDURE_NOT_ALLOWED` / `MCP_ALLOWLIST_NOT_CONFIGURED`. The
+    // previous order (gate → dryRun) violated that promise: a consumer
+    // passing `dryRun:true` on a procedure outside `allowedProcedures`
+    // got `PROCEDURE_NOT_ALLOWED` instead of a plan-shaped success.
     //
-    // Issue #785 (v2.1.1, capa 3) — the dispatch seam (capa 1) is the single
-    // source of truth for the policy-driven effective dryRun default. By the
-    // time the adapter is invoked through the MCP boundary, the helper has
-    // already injected the policy default. This adapter therefore observes
-    // a fully-decided `params.dryRun` — the implicit absence-default has been
-    // removed; only explicit `dryRun === true` short-circuits here. Direct
-    // adapter callers (no dispatch seam) bypass the policy default and
-    // reach the runner unless they pass `dryRun: true` explicitly.
+    // Why gate-behind-dryRun is safe: the gate exists to prevent UNSANCTIONED
+    // EXECUTION of compiled VBA. A plan-shaped result never spawns Access
+    // and never invokes a `Test_*` procedure — the only thing the gate
+    // could refuse is a hypothetical execution that the dryRun path
+    // explicitly opts out of. The gate is still consulted on the commit
+    // path (any caller that did NOT pass `dryRun:true`).
+    //
+    // Issue #785 (v2.1.1, capa 3) — the dispatch seam (capa 1) is the
+    // single source of truth for the policy-driven effective dryRun
+    // default. By the time the adapter is invoked through the MCP
+    // boundary, the helper has already injected the policy default. This
+    // adapter therefore observes a fully-decided `params.dryRun` — the
+    // implicit absence-default has been removed; only explicit
+    // `dryRun === true` short-circuits here. Direct adapter callers (no
+    // dispatch seam) bypass the policy default and reach the runner
+    // unless they pass `dryRun: true` explicitly.
     if (params.dryRun === true) {
       return successResult({
         dryRun: true,
@@ -499,6 +499,17 @@ End Function
         },
       });
     }
+
+    // PR1b (#621 F1) + #667 — default-deny gate. Fires AFTER plan resolution
+    // (so we know which procedures will execute) and AFTER the dryRun
+    // short-circuit (so a plan-only call does not consult the allowlist at
+    // all — Bug B fix #1046). On the commit path (no dryRun) the gate still
+    // runs BEFORE the runner, so neither the binary write nor the test
+    // execution happens when the plan is rejected. The previous order ran
+    // compile_vba first, which wrote the .accdb even when the gate would
+    // later refuse — an unwanted side effect on the live binary.
+    const gateError = await this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
+    if (gateError !== undefined) return gateError;
 
     return inspectTestResult(
       await this.orchestrator.executeMappedTool(

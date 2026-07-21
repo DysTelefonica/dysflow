@@ -98,6 +98,27 @@ class AdapterAwareFakeVbaService {
     const forwarded = input ?? name;
     this.requests.push(forwarded);
     if (name === "test_vba") {
+      // Issue #1046 (Bug B) — mirror the new gate-behind-dryRun order
+      // from VbaExecutionAdapter.executeTestVba. dryRun:true is the
+      // explicit escape hatch that short-circuits BEFORE the gate, so
+      // a plan-shaped success is the contract for plan-only callers.
+      // The gate still fires on the commit path (no dryRun) so a real
+      // execute attempt is still refused when no allowlist is configured.
+      const obj = forwarded as Record<string, unknown> | undefined;
+      const dryRun = obj?.dryRun === true;
+      if (dryRun) {
+        return successResult({
+          dryRun: true,
+          willExecute: false,
+          willModifyAccess: false,
+          plan: {
+            procedureName: extractProcedureNames(forwarded),
+            proceduresCount: extractProcedureNames(forwarded).length,
+            warnings: [],
+            errors: [],
+          },
+        });
+      }
       const resolved =
         this.allowedProceduresByInput !== undefined
           ? await this.allowedProceduresByInput(forwarded)
@@ -729,7 +750,16 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
     expect(result.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
   });
 
-  it("safe-by-default mode + test_vba without allowedProcedures → MCP_ALLOWLIST_NOT_CONFIGURED", async () => {
+  it("safe-by-default mode + test_vba without allowedProcedures → plan-shaped success (Bug B #1046 short-circuits before the gate)", async () => {
+    // Issue #1046 (Bug B) inverts the previous assertion: in
+    // safe-by-default mode the dispatch seam injects `dryRun:true` and the
+    // adapter's gate-behind-dryRun order short-circuits BEFORE the
+    // allowlist gate. The safe-by-default policy is precisely a
+    // plan-by-default contract — refusing the plan with
+    // MCP_ALLOWLIST_NOT_CONFIGURED would block the safe path
+    // (zero-friction review) for projects without a configured allowlist.
+    // The dedicated Bug B regression lives in
+    // `vba-test-vba-coherence-1046.test.ts` (Issue #1046 / Test 2).
     const services = makeAdapterAwareServices(undefined);
     const tools = buildTools(services, {
       writes: true,
@@ -742,8 +772,7 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
       proceduresJson: JSON.stringify([{ procedure: "Test_Beta", args: [] }]),
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
+    expect(result.isError).toBeFalsy();
   });
 
   it("developer mode + test_vba + allowedProcedures populated → runner engaged", async () => {
@@ -766,13 +795,19 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
     expect(services.vbaSyncToolService.requests.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("developer mode + test_vba + dryRun:true → still requires allowedProcedures (no policy bypass)", async () => {
-    // dryRun:true is the explicit escape hatch for run_vba (canonical
-    // handler) but for test_vba it must NOT bypass the allowlist gate
-    // even in developer mode — the gate is the real safety boundary.
-    // Note: the dispatch seam does NOT inject dryRun for test_vba when
-    // the caller explicitly passes dryRun:true (caller intent wins). The
-    // adapter gate still fires because allowedProcedures is missing.
+  it("developer mode + test_vba + dryRun:true → plan-shaped success (Bug B #1046 inverts the previous behavior)", async () => {
+    // Issue #1046 (Bug B) — dryRun:true is now an explicit escape hatch
+    // for `test_vba` (matching the docs promise at
+    // `assets/examples/test-vba.md:31-35`). The previous behavior (gate
+    // firing even with dryRun:true) was a regression against the
+    // documented contract and is fixed by reordering checks in
+    // `VbaExecutionAdapter.executeTestVba` so dryRun short-circuits
+    // BEFORE the gate.
+    //
+    // AC9 itself is preserved: the gate still fires on the COMMIT path
+    // (no dryRun). The dryRun escape hatch is its own dimension. The
+    // dedicated Bug B regression lives in
+    // `vba-test-vba-coherence-1046.test.ts` (Issue #1046 / Test 2).
     const services = makeAdapterAwareServices(undefined);
     const tools = buildTools(services, {
       writes: true,
@@ -786,8 +821,7 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
       dryRun: true,
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
+    expect(result.isError).toBeFalsy();
   });
 });
 

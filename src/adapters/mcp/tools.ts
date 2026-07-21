@@ -28,6 +28,11 @@ import {
   type OpenArgsContractMismatchDiagnostic,
 } from "../../core/services/vba-project-openargs-lint-service.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
+// Issue #1046 (Bug D) — opt-in allowlist resolver for validate_manifest.
+// `resolveAllowedProceduresFor` accepts either a frozen array (legacy)
+// or a per-input resolver function (#674) and returns the active
+// allowlist for the input the tool handler was given.
+import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
   handleMcpAccessOrphanCleanup,
   handleMcpCleanStaleMarkers,
@@ -1244,7 +1249,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     },
     {
       name: "validate_manifest",
-      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. ${MCP_TOOL_CONTRACTS.validate_manifest.summary}`,
+      description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. Issue #1046 (Bug D): pass validateManifestIncludesAllowlistCheck:true to also surface allowlist drift as invalid[] entries — keeps the legacy shape untouched when the flag is absent. ${MCP_TOOL_CONTRACTS.validate_manifest.summary}`,
       inputSchema: VALIDATE_MANIFEST_SCHEMA,
       handler: async (input) => {
         const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);
@@ -1271,7 +1276,23 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           };
         }
 
-        const report = validateVbaTestManifest(manifestResult.data, modules);
+        // Issue #1046 (Bug D) — opt-in allowlist coherence. When the caller
+        // passes `validateManifestIncludesAllowlistCheck: true`, resolve the
+        // active allowlist (per-input via the same resolver the test_vba
+        // gate uses) and forward it to `validateVbaTestManifest` so drift
+        // is reported on `report.invalid[]`. The legacy path (flag absent)
+        // is byte-identical to pre-fix consumers.
+        const includeAllowlistCheck = params.validateManifestIncludesAllowlistCheck === true;
+        let allowlistForReport: readonly string[] | undefined;
+        if (includeAllowlistCheck) {
+          const resolved = await resolveAllowedProceduresFor(allowedProcedures, input);
+          allowlistForReport = Array.isArray(resolved) ? resolved : undefined;
+        }
+
+        const report = validateVbaTestManifest(manifestResult.data, modules, {
+          includeAllowlistCheck,
+          allowedProcedures: allowlistForReport,
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(report) }],
           isError: !report.valid,
