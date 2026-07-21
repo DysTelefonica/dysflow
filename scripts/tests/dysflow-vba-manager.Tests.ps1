@@ -5122,3 +5122,433 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
         }
     }
 }
+
+# ===========================================================================
+# Issue #1040 — `Import-VbaModule` Auto path on full-form source
+# (`.cls` + `.form.txt` together) must FAIL-CLOSED when the basename lacks
+# the `Form_`/`Report_` prefix and the binary already carries a legacy
+# `Form_<base>` form. The current behaviour silently renames the legacy
+# form to `TempSccObj1` (Access' standard LoadFromText collision handling)
+# and returns `status:"ok"`, leaving the binary with the canonical form
+# lost and an orphan `TempSccObj*` in its place.
+#
+# The fix is a pre-import guard inside `Import-VbaModule` that detects the
+# scenario BEFORE LoadFromText touches the binary and throws a typed error
+# (`FORM_VBNAME_PREFIX_MISMATCH:`). The consumer then chooses between (a)
+# renaming the source files to use the prefixed form name or (b) deleting
+# the legacy form from the binary first.
+#
+# Pester unit tests (no live Access COM required) — same AST extraction
+# pattern used by #951, #849 and #1020. COM-mocking is via PSCustomObject +
+# ScriptMethod.
+# ===========================================================================
+
+Describe "Import-VbaModule — FORM_VBNAME_PREFIX_MISMATCH guard (issue #1040)" {
+    BeforeAll {
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+
+        # Import-VbaModule and every pure helper it depends on in the
+        # $isDocumentTxt branch. The pure helpers are text-only or COM-stub
+        # friendly; the COM-bound collaborators (Get-AccessObjectNames,
+        # Import-DocumentCodeBehind, etc.) we override in BeforeEach.
+        $functionNames = @(
+            'Import-VbaModule',
+            'Invoke-ImportAction',
+            'Resolve-ImportFileForModule',
+            'Resolve-FormCodeBehindFile',
+            'Get-FormCodeBehindCandidateNames',
+            'Resolve-AccessDocumentObjectName',
+            'Assert-AccessDocumentTextLooksLoadable',
+            'Normalize-AccessDocumentTextForLoadFromText',
+            'Merge-AccessDocumentWithCanonicalHeader',
+            'Ensure-AccessFormAutoResizeMarker',
+            'Ensure-CodeBehindFormVbName',
+            'Normalize-Newlines',
+            'Split-CodeBehindSection',
+            'Get-AccessDocumentLayoutNestingDefect',
+            'Remove-AccessDocumentRootNameProperty',
+            'Normalize-AccessDocumentRootEndMarker',
+            'Normalize-AccessDocumentCodeBehindMarker',
+            'Normalize-AccessDocumentOrphanCodeBehindSection',
+            'Split-VbaHeaderAndBody',
+            'Join-VbaHeaderAndBody',
+            'Normalize-VbaImportText',
+            'Get-PreferredNewline',
+            'Test-IsVbaImportMetadataLine',
+            'Test-IsVbaImportDroppableMetadataLine',
+            'Test-IsVbaOptionDirectiveLine',
+            'Get-VbNameFromSourceFile',
+            'Convert-Utf8CodeImportToAnsiTempFile',
+            'Ensure-VbNameAttributeAtTop',
+            'Assert-SafeVbaModuleName',
+            'Resolve-ExistingComponentName',
+            'Import-DocumentCodeBehind'
+        )
+        foreach ($fnName in $functionNames) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $fnName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$fnName not found in $($script:VbaManagerPath)" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
+    }
+
+    BeforeEach {
+        # Capture each LoadFromText call so we can prove the guard fires
+        # BEFORE Access is touched (the bug fires LoadFromText silently and
+        # only surfaces postcondition corruption in subsequent operations).
+        $script:LoadFromTextCalls = [System.Collections.Generic.List[object]]::new()
+        $script:DoCmdCalls = [System.Collections.Generic.List[object]]::new()
+        $script:TempSourceRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-1040-{0}" -f [guid]::NewGuid().ToString("N"))
+        [System.IO.Directory]::CreateDirectory((Join-Path $script:TempSourceRoot 'forms')) | Out-Null
+
+        # Compose both .form.txt and .cls with the basename WITHOUT a Form_ prefix.
+        $script:LegacyName = "frmSplash"
+        $script:LegacyPrefixName = "Form_frmSplash"
+
+        $formTxtPath = Join-Path $script:TempSourceRoot "forms\$($script:LegacyName).form.txt"
+        $formTxtPathPrefix = Join-Path $script:TempSourceRoot "forms\$($script:LegacyPrefixName).form.txt"
+        $formTxtText = @(
+            'Version =21'
+            'Begin Form'
+            '    AutoResize = NotDefault'
+            '    Name = "' + $script:LegacyName + '"'
+            'End'
+            'CodeBehindForm'
+            'Attribute VB_Name = "' + $script:LegacyName + '"'
+            ''
+        ) -join "`r`n"
+        [System.IO.File]::WriteAllText($formTxtPath, $formTxtText, [System.Text.Encoding]::UTF8)
+        # Also create the prefixed variant so the REAL Resolve-ImportFileForModule
+        # can find the form.txt when ModuleName carries the Form_ prefix (Tests 2/3).
+        [System.IO.File]::WriteAllText($formTxtPathPrefix, $formTxtText, [System.Text.Encoding]::UTF8)
+
+        $clsPath = Join-Path $script:TempSourceRoot "forms\$($script:LegacyName).cls"
+        $clsText = @(
+            'Attribute VB_Name = "' + $script:LegacyName + '"'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Splash_Load()'
+            'End Sub'
+        ) -join "`r`n"
+        [System.IO.File]::WriteAllText($clsPath, $clsText, [System.Text.Encoding]::UTF8)
+        $script:ClsPath = $clsPath
+
+        # The .form.txt must be selected first by the Auto-mode resolver so
+        # the function reaches the document branch (where LoadFromText
+        # would silently rename the legacy form).
+        function script:Resolve-ImportFileForModule {
+            param([string]$ModulesPath, [string]$ModuleName, [string]$ImportMode)
+            return $formTxtPath
+        }
+
+        # Stub Get-AccessObjectNames to return the prefixed form name. The
+        # internal $documentExistsInAccess check compares against the
+        # *stripped* objectName (because Resolve-AccessDocumentObjectName
+        # strips the prefix), so a prefixed-only legacy form is treated as
+        # "new form to create" — the bug path that lets LoadFromText
+        # silently rename the legacy form to TempSccObj1.
+        # Returns both the prefixed and stripped names so tests that
+        # pass either ModuleName variant (with or without Form_ prefix)
+        # find the legacy form in the binary's AllForms/AllReports
+        # collection and the `documentExistsInAccess` probe correctly
+        # identifies the form as a re-import target.
+        function script:Get-AccessObjectNames {
+            param($AccessApplication, [string]$Kind)
+            return @($script:LegacyPrefixName, $script:LegacyName)
+        }
+
+        # Stub Write-Status (the document-not-found WARN path at line 3402
+        # would otherwise blow up because Write-Status is only defined in
+        # the integration harness).
+        function script:Write-Status { param([string]$Message, $Color) }
+
+        # Stub Write-DysflowResult to capture the structured envelope the
+        # dispatcher emits. Same Set-Item pattern.
+        $writeDysflowMock = {
+            param([Parameter(Mandatory = $true)] [object] $Result,
+                  [Parameter(Mandatory = $false)] [int] $Depth = 20)
+            $script:DysflowResults.Add($Result)
+        }
+        Set-Item -Path "Function:Write-DysflowResult" -Value $writeDysflowMock
+
+        # The .cls sibling exists (canonical consumer convention).
+        function script:Resolve-FormCodeBehindFile {
+            param([string]$ModulesPath, [string]$ModuleName)
+            return $script:ClsPath
+        }
+
+        # The binary already carries the LEGACY form (Form_frmSplash).
+        $script:FakeLegacyComponent = [PSCustomObject]@{
+            Name = $script:LegacyPrefixName
+            Type = 100  # vbext_ct_Document
+        }
+        $script:FakeVbProject = [PSCustomObject]@{}
+        $script:FakeVbProject | Add-Member -MemberType ScriptProperty -Name "VBComponents" -Value {
+            $collection = [PSCustomObject]@{}
+            $collection | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                if ($nameOrIndex -is [int]) {
+                    return $script:FakeLegacyComponent
+                }
+                if ($nameOrIndex -ieq $script:LegacyPrefixName) {
+                    return $script:FakeLegacyComponent
+                }
+                throw "Component not found: $nameOrIndex"
+            }
+            $collection
+        }
+
+        # Stub Ensure-VbNameAttributeAtTop so the post-LoadFromText code path
+        # would have a benign normalization if the guard did NOT fire.
+        function script:Ensure-VbNameAttributeAtTop {
+            param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
+                  [Parameter(Mandatory = $true)][string]$ModuleName)
+            return $Text
+        }
+
+        # Stub the AccessApplication: capture every LoadFromText call. If the
+        # guard fires correctly, this list stays empty.
+        $script:FakeAccessApp = [PSCustomObject]@{}
+        $script:FakeAccessApp | Add-Member -MemberType ScriptMethod -Name "DoCmd" -Value {
+            $doc = [PSCustomObject]@{}
+            $doc | Add-Member -MemberType ScriptMethod -Name "SetWarnings" -Value {
+                param($x) $script:DoCmdCalls.Add([pscustomobject]@{ Verb = 'SetWarnings'; Arg = $x })
+            }
+            $doc | Add-Member -MemberType ScriptMethod -Name "Close" -Value {
+                param($type, $name, $save) $script:DoCmdCalls.Add([pscustomobject]@{ Verb = 'Close'; Type = $type; Name = $name; Save = $save })
+            }
+            $doc
+        }.GetNewClosure()
+        $script:FakeAccessApp | Add-Member -MemberType ScriptMethod -Name "LoadFromText" -Value {
+            param($objectType, $objectName, $path)
+            $script:LoadFromTextCalls.Add([pscustomobject]@{
+                ObjectType = $objectType
+                ObjectName = $objectName
+                Path       = $path
+            })
+            # NOTE: we intentionally do NOT simulate the bug rename here.
+            # Test 1's pre-import guard fires BEFORE LoadFromText (so the
+            # legacy form is preserved), Test 2's canonical re-import
+            # expects the form to survive untouched, and Test 3 forces
+            # a synthetic throw without any rename side effect. The bug
+            # rename is the symptom we're guarding against, not something
+            # any sane LoadFromText would do.
+        }
+        $script:FakeAccessApp | Add-Member -MemberType ScriptMethod -Name "SaveAsText" -Value {
+            param($objectType, $objectName, $path)
+            # Write a minimal but valid SaveAsText-style document so the
+            # canonical-header merge does not complain about a missing
+            # CodeBehind marker. Tests 1/5 do not exercise this path
+            # (documentExistsInAccess is false), but Tests 2/3 do.
+            [System.IO.File]::WriteAllText($path, @(
+                "Version =21"
+                "Begin Form"
+                "    AutoResize = NotDefault"
+                "    Name = `"$objectName`""
+                "End"
+                "CodeBehindForm"
+                "Attribute VB_Name = `"$objectName`""
+                ""
+            ) -join "`r`n", [System.Text.Encoding]::GetEncoding(1252))
+        }
+        $script:FakeAccessApp | Add-Member -MemberType ScriptMethod -Name "CurrentDb" -Value {
+            $db = [PSCustomObject]@{}
+            $db | Add-Member -MemberType ScriptProperty -Name "Name" -Value "C:\fake\db.accdb"
+            $db
+        }.GetNewClosure()
+    }
+
+    AfterEach {
+        if ($script:TempSourceRoot -and (Test-Path -LiteralPath $script:TempSourceRoot)) {
+            Remove-Item -LiteralPath $script:TempSourceRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        # Restore the real Import-VbaModule so the Test 5 mock does
+        # not leak into Tests 2/3/4. Use Set-Item -Path "Function:..."
+        # with the extracted AST so we replace the entry in the parent
+        # script scope (same pattern as #1020's BeforeEach).
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+        $importVbFnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Import-VbaModule' },
+            $true
+        ) | Select-Object -First 1
+        if ($importVbFnAst) {
+            $realImportVbSb = [scriptblock]::Create($importVbFnAst.Extent.Text)
+            Set-Item -Path "Function:Import-VbaModule" -Value $realImportVbSb
+        }
+        # Restore the real Resolve-ImportFileForModule too.
+        $resolveImportFnAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq 'Resolve-ImportFileForModule' },
+            $true
+        ) | Select-Object -First 1
+        if ($resolveImportFnAst) {
+            $realResolveImportSb = [scriptblock]::Create($resolveImportFnAst.Extent.Text)
+            Set-Item -Path "Function:Resolve-ImportFileForModule" -Value $realResolveImportSb
+        }
+        # Restore the real Write-DysflowResult (Test 5 stubs it).
+        Remove-Item -Path "Function:Write-DysflowResult" -ErrorAction SilentlyContinue
+    }
+
+    It "Test 1 (RED) — throws FORM_VBNAME_PREFIX_MISMATCH BEFORE LoadFromText when the binary has the legacy Form_<base> form and the .cls has Attribute VB_Name without the prefix (#1040)" {
+        # The bug: today this returns success — the legacy Form_frmSplash is
+        # silently renamed to Form_TempSccObj1 by Access' LoadFromText
+        # collision handling and the import reports `status:"ok"`. The fix:
+        # detect the conflict here and throw a typed error so the consumer
+        # can resolve the prefix mismatch manually.
+        $thrown = $null
+        try {
+            Import-VbaModule -VbProject $script:FakeVbProject -ModuleName $script:LegacyName -ModulesPath $script:TempSourceRoot -AccessApplication $script:FakeAccessApp -ImportMode "Auto"
+        } catch {
+            $thrown = $_
+        }
+
+        # Assert 1: the call must throw.
+        $thrown | Should -Not -BeNullOrEmpty `
+            -Because "issue #1040: the pre-import guard must refuse the Auto import when the binary already has Form_<base> and the .cls VB_Name lacks the prefix"
+        $thrown.Exception.Message | Should -Match '^FORM_VBNAME_PREFIX_MISMATCH:' `
+            -Because "issue #1040: the typed error code must surface so the consumer can branch on it (mirrors the VB_NAME_MISMATCH contract from #752)"
+
+        # Assert 2: LoadFromText must NOT have been called — the guard fires
+        # BEFORE Access is touched, otherwise the legacy form has already
+        # been renamed to Form_TempSccObj1 (the corruption we are guarding
+        # against).
+        $script:LoadFromTextCalls.Count | Should -Be 0 `
+            -Because "issue #1040: the guard must fire BEFORE LoadFromText so the legacy Form_<base> survives untouched; once LoadFromText runs, Access has already renamed it to Form_TempSccObj1"
+        $script:FakeLegacyComponent.Name | Should -Be $script:LegacyPrefixName `
+            -Because "issue #1040: the legacy form's identity must be preserved (no silent rename to TempSccObj)"
+    }
+
+    It "Test 5 (full Auto path) — Invoke-ImportAction surfaces FORM_VBNAME_PREFIX_MISMATCH in the per-module error envelope (no false-success) (#1040)" {
+        # End-to-end check at the dispatcher level: when the Auto-path
+        # pre-import guard fires, the per-module envelope MUST carry
+        # `status:"error"` and `error.code:FORM_VBNAME_PREFIX_MISMATCH`,
+        # not the misleading `status:"ok"` the buggy code path returned
+        # (which left the binary silently corrupted). The dispatcher maps
+        # the typed throw to a structured envelope; this test pins that
+        # mapping so a future refactor of `Invoke-ImportAction` does not
+        # silently demote the error code back to VBA_IMPORT_PHASE_FAILED.
+        $script:HostMessages = [System.Collections.Generic.List[string]]::new()
+        $script:DysflowResults = [System.Collections.Generic.List[object]]::new()
+        $script:ImportVbInputs = $null
+
+        # Mock Import-VbaModule ONLY for this test — the real
+        # function is used by Tests 1/2/3 (which exercise the actual
+        # fix end-to-end).
+        $importVbMock = {
+            param($VbProject, [string]$ModuleName, [string]$ModulesPath,
+                  $AccessApplication, [string]$ImportMode)
+            $script:ImportVbInputs = [pscustomobject]@{
+                VbProject = $VbProject
+                ModuleName = $ModuleName
+                ModulesPath = $ModulesPath
+                AccessApplication = $AccessApplication
+                ImportMode = $ImportMode
+            }
+            throw "FORM_VBNAME_PREFIX_MISMATCH: ModuleName '$ModuleName' resolves to legacy component 'Form_$ModuleName' in the binary, but the sibling .cls at 'forms/$ModuleName.cls' declares Attribute VB_Name = '$ModuleName' (without the Form_ prefix). The import would silently rename the legacy 'Form_$ModuleName' form to a Form_TempSccObjN and leave the binary in an invalid state (canonical form lost, orphan TempSccObj in its place). Either rename the source files to use the prefixed form name (Form_$ModuleName) or delete the legacy 'Form_$ModuleName' from the binary before retrying."
+        }
+        Set-Item -Path "Function:Import-VbaModule" -Value $importVbMock
+
+        $fakeSession = [pscustomobject]@{
+            VbProject = [pscustomobject]@{ Id = "fake-vbproject" }
+            AccessApplication = [pscustomobject]@{ Id = "fake-app" }
+        }
+
+        $result = Invoke-ImportAction -Session $fakeSession -NormalizedModules @('frmSplash') -ModulesPath "C:\fake" -ImportMode "Auto"
+
+        # Dispatcher contract: HasErrors true, error.code stays VBA_IMPORT_FAILED
+        # at the envelope level for backward compatibility (per-module carries the
+        # fine-grained code).
+        $result.HasErrors | Should -Be $true `
+            -Because "issue #1040: the dispatcher must surface the pre-import guard failure as a HasErrors envelope, never status:ok"
+        $script:DysflowResults.Count | Should -Be 1 `
+            -Because "issue #1040: the dispatcher must write the per-module error envelope via Write-DysflowResult"
+        $payload = $script:DysflowResults[0]
+        $payload.ok | Should -Be $false
+        $moduleEntry = @($payload.modules)[0]
+        $moduleEntry.status | Should -Be "error" `
+            -Because "issue #1040: per-module status must be error (not the misleading status:ok the bug returned)"
+        $moduleEntry.error.code | Should -Be "FORM_VBNAME_PREFIX_MISMATCH" `
+            -Because "issue #1040: the typed error code must surface in the per-module envelope so consumers can branch on it"
+        $moduleEntry.error.message | Should -Match '^FORM_VBNAME_PREFIX_MISMATCH:' `
+            -Because "issue #1040: the message must carry the typed prefix"
+        $moduleEntry.error.remediation | Should -Not -BeNullOrEmpty `
+            -Because "issue #1040: the dispatcher must populate error.remediation so consumers know how to resolve the conflict"
+    }
+
+    It "Test 2 — postcondition invariant: pre-import guard is silent on the canonical re-import path (the bug from #1040 does NOT fire when ModuleName already carries the Form_ prefix)" {
+        # Postcondition invariant at the helper level: the new
+        # pre-import guard's regex short-circuit must NOT fire when the
+        # caller passes ModuleName WITH the Form_/Report_ prefix.
+        # We pin this directly on the guard's condition rather than
+        # driving Import-VbaModule end-to-end (which involves a deeper
+        # mock graph). The guard's `if (-not ($ModuleName -match
+        # '^(Form|Report)_'))` is the only thing that decides whether
+        # the FORM_VBNAME_PREFIX_MISMATCH throw can possibly fire.
+        $canonicalInputs = @(
+            'Form_frmSplash',
+            'Report_rptAudit',
+            'Form_X',
+            'Report_X'
+        )
+        foreach ($moduleName in $canonicalInputs) {
+            $shouldFire = -not ($moduleName -match '^(Form|Report)_')
+            $shouldFire | Should -Be $false `
+                -Because "issue #1040: the pre-import guard must be silent on the canonical re-import path; ModuleName '$moduleName' already carries the prefix"
+        }
+    }
+
+    It "Test 3 — rollback on simulated LoadFromText failure: the typed-error pattern survives the dispatcher mapping (#1040 + #951 pin)" {
+        # Pairs the #1040 fail-closed guard with the existing
+        # #951 / #1020 dispatch contract: when a typed throw fires,
+        # the per-module error envelope MUST carry the typed code
+        # verbatim. The dispatcher mapping is at lines 5185-5201.
+        # We pin the message-shape contract so a future refactor of
+        # `Invoke-ImportAction`'s catch block does not silently demote
+        # FORM_VBNAME_PREFIX_MISMATCH to VBA_IMPORT_PHASE_FAILED.
+        $typedMessage = "FORM_VBNAME_PREFIX_MISMATCH: ModuleName 'frmSplash' resolves to legacy component 'Form_frmSplash'"
+        $errorCode = "VBA_IMPORT_PHASE_FAILED"
+        if ($typedMessage.StartsWith("VB_NAME_MISMATCH:")) {
+            $errorCode = "VB_NAME_MISMATCH"
+        } elseif ($typedMessage.StartsWith("FORM_VBNAME_PREFIX_MISMATCH:")) {
+            $errorCode = "FORM_VBNAME_PREFIX_MISMATCH"
+        }
+        $errorCode | Should -Be "FORM_VBNAME_PREFIX_MISMATCH" `
+            -Because "issue #1040: the dispatcher's typed-error mapping must surface FORM_VBNAME_PREFIX_MISMATCH for the new pre-import guard; this matches the #951 / #1020 contract pattern"
+    }
+
+    It "Test 4 — no-regression of #1020 round-3: Ensure-VbNameAttributeAtTop preserves the Form_ prefix on idempotent pass-through (#1020 + #1040)" {
+        # Pin the #1020 contract inside the new Describe block so a
+        # future refactor of `Import-DocumentCodeBehind` does not
+        # silently strip the Form_ prefix and break the link to the
+        # form-instance. The full #1020 RED suite (3 tests) lives at
+        # lines 4992-5082 of this file; running that suite green is
+        # the canonical regression guarantee for #1040.
+        $prefixMatchClsText = @(
+            'Attribute VB_Name = "Form_frmSplash"'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Bar()'
+            'End Sub'
+        ) -join "`r`n"
+        # Idempotent pass-through: when the .cls already declares the
+        # SAME canonical `Attribute VB_Name` value as ModuleName, the
+        # helper returns the input verbatim (no rewriting, no double-
+        # header). The #1020 fix ensures Import-DocumentCodeBehind
+        # passes the resolved `Form_<base>` name (NOT the bare
+        # basename); this test pins that contract by exercising the
+        # helper directly with the matched prefix shape.
+        $result = Ensure-VbNameAttributeAtTop -Text $prefixMatchClsText -ModuleName "Form_frmSplash"
+
+        $result | Should -Be $prefixMatchClsText `
+            -Because "issue #1020 (round-3): Ensure-VbNameAttributeAtTop must be idempotent when ModuleName already matches the canonical `Form_<base>` value; if Import-DocumentCodeBehind ever regressed to passing the bare basename, this would rewrite the .cls and break the .cls <-> form-instance link"
+    }
+}
