@@ -58,6 +58,12 @@ describe("dependency audit evidence", () => {
     expect(audit.report.freshness).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("trusts a valid clean report when pnpm exits nonzero for lower-severity advisories", () => {
+    const audit = runAudit("clean-nonzero", "fail");
+    expect(audit.result.status).toBe(0);
+    expect(audit.report).toMatchObject({ status: "clean", attempts: 1 });
+  });
+
   it("fails immediately when high-severity advisories are present", () => {
     const audit = runAudit("vulnerable");
     expect(audit.result.status).toBe(1);
