@@ -34,6 +34,10 @@ import {
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
+import {
+  postprocessFormTxt,
+  type ControlPropertyLookup,
+} from "../../core/services/control-property-allow-list.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
@@ -192,6 +196,13 @@ function managedFolders(destinationRoot: string): string[] {
     resolve(destinationRoot, "forms"),
     resolve(destinationRoot, "reports"),
   ];
+}
+
+export function postprocessExportedFormText(
+  formText: string,
+  lookup: ControlPropertyLookup,
+): string {
+  return postprocessFormTxt(formText, lookup);
 }
 
 export class VbaModulesAdapter {
