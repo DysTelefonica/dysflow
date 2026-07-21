@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- fix(mcp): propagate `capabilities.writeExecutionPolicy` from the resolved startup project config into `get_capabilities`, keeping its advertised `effectiveDryRunDefault` map aligned with dispatch behavior (#1037)
+
 ## [v2.20.0] - 2026-07-20
 
 ### Added
