@@ -386,3 +386,9 @@ callers do not have to re-filter `actionableDifferent` themselves.
       "dryRun": true
     }
     ```
+
+---
+
+### 7. Import Modules — Verify Functional Control Properties
+
+See [`assets/examples/import-modules.md`](../assets/examples/import-modules.md) for the post-import `verify_code` pattern and the curated ComboBox/ListBox property allow-list. `actionableDifferent` entries with `category: "control-property-mismatch"` identify a control-property value that was not preserved by the binary round-trip.
