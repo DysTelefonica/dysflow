@@ -567,4 +567,151 @@ describe("setProperty — pre-validation (issue #941)", () => {
     });
     expect(result.source).toContain("Left =500");
   });
+
+  it("inserts new data-binding properties before display and event properties", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+        Format ="General Number"
+        OnClick ="[Event Procedure]"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+
+    const result = setProperty(ir, {
+      controlName: "cmbStatus",
+      property: "BoundColumn",
+      value: 1,
+    });
+    const controlText = result.source.slice(result.source.indexOf("Begin ComboBox"));
+
+    expect(controlText.indexOf("BoundColumn =1")).toBeGreaterThan(-1);
+    expect(controlText.indexOf("BoundColumn =1")).toBeLessThan(controlText.indexOf("Format ="));
+    expect(controlText.indexOf("BoundColumn =1")).toBeLessThan(controlText.indexOf("OnClick ="));
+  });
+
+  it("updates an existing property without moving it", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+        BoundColumn =2
+        Format ="General Number"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+    const before = serializeFormTxt(ir);
+    const beforePosition = before.indexOf("BoundColumn =2");
+
+    const result = setProperty(ir, {
+      controlName: "cmbStatus",
+      property: "BoundColumn",
+      value: 3,
+    });
+    const afterPosition = result.source.indexOf("BoundColumn =3");
+
+    expect(afterPosition).toBe(beforePosition);
+    expect(result.source).toContain("BoundColumn =3");
+  });
+
+  it("keeps multiple data-binding properties in deterministic semantic order", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+
+    const first = setProperty(ir, {
+      controlName: "cmbStatus",
+      property: "RowSource",
+      value: "SELECT 1",
+    });
+    const result = setProperty(first.ir, {
+      controlName: "cmbStatus",
+      property: "BoundColumn",
+      value: 1,
+    });
+
+    expect(result.source.indexOf("BoundColumn =1")).toBeLessThan(
+      result.source.indexOf('RowSource ="SELECT 1"'),
+    );
+  });
+
+  it("inserts a new property into an otherwise empty control property list", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin TextBox
+        Name ="txtValue"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+
+    const result = setProperty(ir, {
+      controlName: "txtValue",
+      property: "ColumnCount",
+      value: 1,
+    });
+
+    expect(result.source).toContain('Name ="txtValue"\n        ColumnCount =1');
+  });
+
+  it("places geometry properties before display properties regardless of mutation order", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin TextBox
+        Name ="txtValue"
+        StatusBarText ="value"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+
+    const result = setProperty(ir, {
+      controlName: "txtValue",
+      property: "Width",
+      value: 100,
+    });
+
+    expect(result.source.indexOf("Width =100")).toBeLessThan(
+      result.source.indexOf('StatusBarText ="value"'),
+    );
+  });
+
+  it("accepts ListRows as an addable ComboBox property", () => {
+    const ir = parseFormTxt(
+      `Version =21
+Begin Form
+    Begin ComboBox
+        Name ="cmbStatus"
+    End
+End
+`,
+      { name: "ControlPropertiesForm" },
+    );
+
+    const result = setProperty(ir, {
+      controlName: "cmbStatus",
+      property: "ListRows",
+      value: 8,
+    });
+
+    expect(result.source).toContain("ListRows =8");
+  });
 });

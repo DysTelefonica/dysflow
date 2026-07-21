@@ -14,6 +14,7 @@ import type { FormFileSystemPort } from "../../core/services/vba-form-service.js
 import { stringValue } from "../../core/utils/index.js";
 import { isPathInside } from "../../core/utils/path-containment.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import { type ExpectedProperty, findNewControlProperties } from "./control-property-verifier.js";
 import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import {
   deriveFormName,
@@ -250,6 +251,19 @@ export async function cloneFormFromTemplate(args: {
     );
   }
 
+  let pendingNewProperties: ExpectedProperty[] = [];
+  if (targetExisted) {
+    try {
+      pendingNewProperties = findNewControlProperties(
+        parseFormTxt(originalTargetText, { name: targetForm }),
+        cloneResult.ir,
+      );
+    } catch {
+      // The import gate remains responsible for reporting malformed target text.
+      pendingNewProperties = [];
+    }
+  }
+
   if (!apply) {
     const outputMode = stringValue(params.outputMode) ?? "full";
     if (outputMode === "summary") {
@@ -301,6 +315,7 @@ export async function cloneFormFromTemplate(args: {
     originalSource: originalTargetText,
     targetExisted,
     forwardedParams: params,
+    pendingNewProperties,
   });
   if (!write.ok) return write;
   const importResultData = write.data.importResult;

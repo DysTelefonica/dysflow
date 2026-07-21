@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2.21.1] - 2026-07-21
+
+### Fixed
+
+- fix(form-bind): `import_modules` and `form_set_property` preserve ComboBox/ListBox control properties, verify newly-added properties after the guarded import, and annotate source/binary control-property mismatches in `verify_code` (#1053).
+
 ## [v2.21.0] - 2026-07-21
 
 ### Fixed

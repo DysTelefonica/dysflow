@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join, parse, resolve } from "node:path";
 import packageJson from "../../../package.json" with { type: "json" };
@@ -15,6 +15,11 @@ import {
   recordVerifyFail,
   recordVerifyOk,
 } from "../../core/runtime/human-compile-state.js";
+import {
+  type ControlPropertyLookup,
+  postprocessFormTxt,
+} from "../../core/services/control-property-allow-list.js";
+import { parseFormTxt } from "../../core/services/form-ir-service.js";
 import { runBulkImportByDirectory } from "../../core/services/import-modules-bulk.js";
 import { runListVbaModules } from "../../core/services/list-vba-modules-service.js";
 import {
@@ -33,6 +38,11 @@ import {
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
+import {
+  type ControlPropertyBatch,
+  type ControlPropertyReader,
+  NoopControlPropertyReader,
+} from "./control-property-reader.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
@@ -194,10 +204,125 @@ function managedFolders(destinationRoot: string): string[] {
   ];
 }
 
+export function postprocessExportedFormText(
+  formText: string,
+  lookup: ControlPropertyLookup,
+): string {
+  return postprocessFormTxt(formText, lookup);
+}
+
+/**
+ * Async wrapper around `postprocessFormTxt`. The pure seam takes a sync lookup;
+ * the wired export pipeline owns an async `ControlPropertyReader`, so this
+ * helper does a single async batch-read per (form, control) before handing
+ * the resulting lookup map back to the sync post-processor.
+ *
+ * The post-processor's own round-trip invariant
+ * (`serializeFormTxt(parseFormTxt(x)) === x` for clean forms) means the
+ * default `NoopControlPropertyReader` produces byte-identical output to
+ * raw SaveAsText — see `control-property-allow-list.ts:36`.
+ */
+async function postprocessFormTextWithReader(
+  formText: string,
+  formName: string,
+  reader: ControlPropertyReader,
+): Promise<string> {
+  // Parse once to learn which (control, missingProperty) pairs need a value.
+  // Then batch-read those pairs from the reader (parallel awaits) and feed a
+  // sync lookup map into the pure sync post-processor — avoiding per-property
+  // round-trips through the parser/serializer for empty lookups.
+  const form = parseFormTxt(formText);
+
+  type Pending = { controlName: string; missing: readonly string[] };
+  const pendingByControl: Pending[] = [];
+  const seen = new Set<string>();
+
+  const visit = (node: import("../../core/models/form-ir.js").FormNode): void => {
+    const entry = node.entries.find(
+      (candidate) => candidate.kind === "scalar" && candidate.key === "Name",
+    );
+    const controlName =
+      entry !== undefined && entry.kind === "scalar" ? extractControlName(entry.value) : undefined;
+    if (controlName !== undefined && /^(ComboBox|ListBox)$/i.test(node.blockType)) {
+      const missing: string[] = [];
+      for (const propertyName of COMBOBOX_LISTBOX_NAMES) {
+        const exists = node.entries.some(
+          (candidate) => candidate.kind === "scalar" && candidate.key === propertyName,
+        );
+        if (!exists) missing.push(propertyName);
+      }
+      if (missing.length > 0) {
+        const key = `${controlName}::${missing.join(",")}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          pendingByControl.push({ controlName, missing });
+        }
+      }
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(form.root);
+
+  const valueByControl = new Map<string, ControlPropertyBatch>();
+  await Promise.all(
+    pendingByControl.map(async ({ controlName, missing }) => {
+      const batch = await reader.readProperties(formName, controlName, missing);
+      valueByControl.set(controlName, batch);
+    }),
+  );
+
+  const lookup: ControlPropertyLookup = (controlName, propertyName) => {
+    const batch = valueByControl.get(controlName);
+    if (batch === undefined) return undefined;
+    return batch.get(propertyName);
+  };
+
+  return postprocessFormTxt(formText, lookup);
+}
+
+function extractControlName(rawValue: string): string | undefined {
+  const trimmed = rawValue.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Return the first path that resolves to an existing file, or `undefined` if
+ * none do. Used to locate an exported form file when the precise on-disk
+ * convention (under `forms/` vs flat in `destinationRoot`) is not externally
+ * knowable.
+ */
+async function firstExistingPath(candidates: readonly string[]): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    try {
+      const result = await stat(candidate);
+      if (result.isFile()) return candidate;
+    } catch {
+      // Missing or unreadable — try the next candidate.
+    }
+  }
+  return undefined;
+}
+
+const COMBOBOX_LISTBOX_NAMES: readonly string[] = [
+  "BoundColumn",
+  "ColumnCount",
+  "ColumnHeads",
+  "RowSource",
+  "ColumnWidths",
+  "Format",
+  "StatusBarText",
+  "ListRows",
+  "ListWidth",
+];
+
 export class VbaModulesAdapter {
   constructor(
     private readonly orchestrator: VbaModulesOrchestrator,
     private readonly fileSystem: ComparisonFileSystemPort = nodeComparisonFileSystem,
+    private readonly controlPropertyReader: ControlPropertyReader = new NoopControlPropertyReader(),
   ) {}
 
   /**
@@ -588,13 +713,59 @@ export class VbaModulesAdapter {
         : successResult({ applied: false, deleted: [] as string[] });
     if (!importPruneResult.ok) return importPruneResult;
 
-    const importResult = await this.executeMappedToolTransactional(
+    let importResult = await this.executeMappedToolTransactional(
       toolName,
       effectiveExportReadOnly === true ? { ...effectiveParams, readOnly: true } : effectiveParams,
       mapping,
       resolvedExportTarget?.ok ? resolvedExportTarget.data : undefined,
     );
     if (!importResult.ok) return importResult;
+
+    // REQ-003 (issue #1053) — wire the curated ComboBox/ListBox control-property
+    // allow-list into the export pipeline. After Access writes each `.form.txt`
+    // (its raw SaveAsText output), re-read the file, run `postprocessFormTxt`
+    // with the injected reader's batched value lookups, and overwrite with
+    // the post-processed text. With the default `NoopControlPropertyReader`
+    // this is observationally a no-op (the sync post-processor's round-trip
+    // invariant keeps the file byte-identical) — see
+    // `control-property-allow-list.ts:36`. Failure to read or rewrite a
+    // single form is contained: post-process errors on one form never
+    // abort the whole export, so a partial SaveAsText result remains on disk.
+    if (toolName === "export_all" || toolName === "export_modules") {
+      const postProcResult = await this.applyControlPropertyPostprocess(
+        importResult,
+        resolvedExportTarget?.ok ? resolvedExportTarget.data : undefined,
+        effectiveParams,
+      );
+      if (postProcResult.ok) {
+        // Mutate the data envelope in place so the deprecation-notice
+        // merge downstream still observes the full export shape.
+        importResult = {
+          ...importResult,
+          data: {
+            ...(importResult.data as Record<string, unknown>),
+            postprocess: postProcResult.summary,
+          },
+        };
+      } else {
+        // A post-process failure must NEVER mask the successful export.
+        // Surface it as a warning diagnostic instead and continue.
+        const existingDiagnostics = Array.isArray(importResult.diagnostics)
+          ? importResult.diagnostics
+          : [];
+        importResult = {
+          ...importResult,
+          diagnostics: [
+            ...existingDiagnostics,
+            {
+              level: "warning",
+              source: "export-all-postprocess",
+              message: `control-property postprocess skipped: ${postProcResult.error}`,
+            },
+          ],
+        };
+      }
+    }
 
     // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
     // human-compile state cache so `get_capabilities` and the result
@@ -647,6 +818,144 @@ export class VbaModulesAdapter {
     }
 
     return resultWithPrune;
+  }
+
+  /**
+   * REQ-003 (issue #1053) — wire the curated ComboBox/ListBox control-property
+   * allow-list into the export pipeline. After the orchestrator returns a
+   * successful `export_all` / `export_modules` result with its `exported`
+   * module-name list, walk the resolved `destinationRoot/forms/` folder for
+   * each form name in `exported`, run `postprocessFormTxt` with the injected
+   * `ControlPropertyReader`, and overwrite the on-disk `.form.txt` file with
+   * the post-processed text.
+   *
+   * Failure isolation: a read/parse/rewrite error on a single form is caught
+   * and recorded in the summary; it never aborts the export or rewinds the
+   * other forms. Errors that prevent the whole pipeline from running at all
+   * (e.g. destinationRoot missing, `exported` not an array) yield `ok: false`
+   * with a recoverable shape that the caller converts to a warning diagnostic.
+   */
+  private async applyControlPropertyPostprocess(
+    importResult: OperationResult<unknown>,
+    preResolvedTarget: VbaModulesExecutionTarget | undefined,
+    effectiveParams: Record<string, unknown>,
+  ): Promise<
+    | {
+        ok: true;
+        summary: {
+          formsScanned: number;
+          formsRewritten: number;
+          errors: Array<{ formName: string; message: string }>;
+        };
+      }
+    | { ok: false; error: string }
+  > {
+    if (!importResult.ok) {
+      return { ok: true, summary: { formsScanned: 0, formsRewritten: 0, errors: [] } };
+    }
+    const data = (importResult.data ?? {}) as Record<string, unknown>;
+    if (!Array.isArray(data.exported)) {
+      // Pre-#689 contract — the runtime returns an array of exported names;
+      // absent or non-array means the export payload was malformed/truncated.
+      // Skip postprocess in that case rather than risk scanning the wrong tree.
+      return {
+        ok: false,
+        error: "exported list missing or invalid; skipping control-property postprocess.",
+      };
+    }
+    if (this.controlPropertyReader === undefined) {
+      // Defensive: a missing reader keeps the noop contract (legacy callers
+      // that bypassed the new constructor default still observe byte-identical
+      // output rather than a no-op skip that nobody would notice).
+      return {
+        ok: true,
+        summary: { formsScanned: 0, formsRewritten: 0, errors: [] },
+      };
+    }
+    const target =
+      preResolvedTarget ??
+      (await this.orchestrator
+        .resolveExecutionTarget(effectiveParams)
+        .then((res) => (res.ok ? res.data : undefined)));
+    if (target === undefined) {
+      return {
+        ok: false,
+        error: "could not resolve destinationRoot for control-property postprocess; skipping.",
+      };
+    }
+    const destinationRoot = target.destinationRoot;
+    if (typeof destinationRoot !== "string" || destinationRoot.length === 0) {
+      return {
+        ok: false,
+        error: "destinationRoot is empty; cannot locate exported forms on disk.",
+      };
+    }
+
+    const formsScanned: string[] = [];
+    const formsRewritten: string[] = [];
+    const errors: Array<{ formName: string; message: string }> = [];
+
+    for (const exportedName of data.exported as unknown[]) {
+      if (typeof exportedName !== "string" || exportedName.length === 0) continue;
+      // Only `.form.txt` files participate — reports and code modules are
+      // outside the ComboBox/ListBox allow-list scope.
+      const candidates = [
+        join(destinationRoot, "forms", `${exportedName}.form.txt`),
+        join(destinationRoot, `${exportedName}.form.txt`),
+      ];
+      const formPath = await firstExistingPath(candidates);
+      if (formPath === undefined) {
+        // No `.form.txt` for this exported name — likely a code module or
+        // report. The postprocessor scope is forms only, so this is a no-op.
+        continue;
+      }
+      let rawText: string;
+      try {
+        rawText = await readFile(formPath, "utf8");
+      } catch (error) {
+        errors.push({
+          formName: exportedName,
+          message: `read failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        continue;
+      }
+      let postprocessed: string;
+      try {
+        postprocessed = await postprocessFormTextWithReader(
+          rawText,
+          exportedName,
+          this.controlPropertyReader,
+        );
+      } catch (error) {
+        errors.push({
+          formName: exportedName,
+          message: `postprocess failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        continue;
+      }
+      if (postprocessed !== rawText) {
+        try {
+          await writeFile(formPath, postprocessed, "utf8");
+          formsRewritten.push(exportedName);
+        } catch (error) {
+          errors.push({
+            formName: exportedName,
+            message: `write failed: ${error instanceof Error ? error.message : String(error)}`,
+          });
+          continue;
+        }
+      }
+      formsScanned.push(exportedName);
+    }
+
+    return {
+      ok: true,
+      summary: {
+        formsScanned: formsScanned.length,
+        formsRewritten: formsRewritten.length,
+        errors,
+      },
+    };
   }
 
   private async pruneBinaryModulesAbsentFromSource(
@@ -755,10 +1064,49 @@ export class VbaModulesAdapter {
     const warnings = Array.isArray(data.warnings) ? data.warnings : [];
     const meta = { diagnostics: exportResult.diagnostics, durationMs: exportResult.durationMs };
 
+    // REQ-003 (issue #1053) — wire the curated ComboBox/ListBox allow-list
+    // BEFORE prune runs. The post-process overwrites the same `.form.txt`
+    // files that prune later inspects for keepsets, so the order matters:
+    // postprocess first (preserves the on-disk form content with curated
+    // defaults), then prune (removes orphans). With the default
+    // `NoopControlPropertyReader` the postprocess is observationally a
+    // no-op (round-trip identity for clean forms), so this is backward-
+    // compatible at the public envelope level.
+    const postProc = await this.applyControlPropertyPostprocess(
+      exportResult,
+      preResolvedTarget?.ok ? preResolvedTarget.data : undefined,
+      params,
+    );
+    const exportResultWithPostprocess: OperationResult<unknown> = (() => {
+      if (!postProc.ok) {
+        // Wire a warning diagnostic instead of failing closed — the prune
+        // path below still needs the same shape.
+        const existing: Diagnostic[] = Array.isArray(exportResult.diagnostics)
+          ? [...exportResult.diagnostics]
+          : [];
+        return {
+          ...exportResult,
+          diagnostics: [
+            ...existing,
+            {
+              level: "warning",
+              source: "export-all-postprocess",
+              message: `control-property postprocess skipped: ${postProc.error}`,
+            },
+          ],
+        };
+      }
+      return exportResult;
+    })();
+
     if (warnings.length > 0) {
       return successResult(
-        { ...data, prune: { applied: false, reason: "export-had-warnings", deleted: [] } },
-        meta,
+        {
+          ...data,
+          postprocess: postProc.ok ? postProc.summary : undefined,
+          prune: { applied: false, reason: "export-had-warnings", deleted: [] },
+        },
+        { ...meta, diagnostics: exportResultWithPostprocess.diagnostics },
       );
     }
 
@@ -796,8 +1144,12 @@ export class VbaModulesAdapter {
       data.exported.some((name) => typeof name !== "string" || name.trim().length === 0)
     ) {
       return successResult(
-        { ...data, prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] } },
-        meta,
+        {
+          ...data,
+          postprocess: postProc.ok ? postProc.summary : undefined,
+          prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+        },
+        { ...meta, diagnostics: exportResultWithPostprocess.diagnostics },
       );
     }
 
@@ -822,7 +1174,14 @@ export class VbaModulesAdapter {
       }
     }
 
-    return successResult({ ...data, prune: { applied: true, deleted } }, meta);
+    return successResult(
+      {
+        ...data,
+        postprocess: postProc.ok ? postProc.summary : undefined,
+        prune: { applied: true, deleted },
+      },
+      { ...meta, diagnostics: exportResultWithPostprocess.diagnostics },
+    );
   }
 
   async auditOrphans(params: Record<string, unknown>): Promise<OperationResult<unknown>> {

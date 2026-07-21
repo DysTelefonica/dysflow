@@ -15,6 +15,8 @@ import {
 import { extractResultPayload } from "../runner/ps-result-channel.js";
 import { isRecord, sanitizeSecrets, truthy } from "../utils/index.js";
 import { buildRuntimeDiagnostics, type RuntimeDiagnostics } from "../utils/runtime-info.js";
+import { compareForms } from "./form-ir-compare-service.js";
+import { parseFormTxt } from "./form-ir-service.js";
 import {
   classifyVbaPair,
   SEMANTIC_CLASSIFIER_RULES,
@@ -44,6 +46,11 @@ export type VbaSourceComparisonEntry = {
   // missing-* entries leave these undefined.
   classification?: VbaSemanticCategory;
   reason?: string;
+  category?: "control-property-mismatch";
+  controlName?: string;
+  propertyName?: string;
+  sourceValue?: string;
+  binaryValue?: string;
 };
 
 export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
@@ -641,6 +648,43 @@ async function withPhaseTimeout<T>(
   }
 }
 
+function controlPropertyMismatchFields(
+  sourceText: string,
+  binaryText: string,
+  moduleName: string,
+): Pick<
+  VbaSourceComparisonEntry,
+  "category" | "controlName" | "propertyName" | "sourceValue" | "binaryValue"
+> {
+  try {
+    const report = compareForms({
+      left: parseFormTxt(sourceText, { name: moduleName }),
+      right: parseFormTxt(binaryText, { name: moduleName }),
+      leftName: moduleName,
+      rightName: moduleName,
+    });
+    const mismatch = report.drifts.find(
+      (drift) => drift.kind === "propertyChanged" && drift.actionable,
+    );
+    if (
+      mismatch?.kind !== "propertyChanged" ||
+      mismatch.controlName === undefined ||
+      mismatch.key === undefined
+    ) {
+      return {};
+    }
+    return {
+      category: "control-property-mismatch",
+      controlName: mismatch.controlName,
+      propertyName: mismatch.key,
+      sourceValue: mismatch.oldValue,
+      binaryValue: mismatch.newValue,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function compareVbaSourceTrees(
   sourceRoot: string,
   binaryExportRoot: string,
@@ -726,7 +770,11 @@ export async function compareVbaSourceTrees(
     }
 
     // Add to different[] for backward compat
-    different.push(entry);
+    const controlPropertyFields =
+      sourceFile.fileType === "form.txt" || sourceFile.fileType === "report.txt"
+        ? controlPropertyMismatchFields(sourceText, binaryText, sourceFile.moduleName)
+        : {};
+    different.push({ ...entry, ...controlPropertyFields });
 
     // Accumulate semantic summary
     const cat = classification.classification;
@@ -738,8 +786,12 @@ export async function compareVbaSourceTrees(
     // from `diffs[*]` (round 5 / PR5 additive ergonomics).
     const entryWithClassification: VbaSourceComparisonEntry = {
       ...entry,
+      ...controlPropertyFields,
       classification: classification.classification,
-      reason: classification.reason,
+      reason:
+        controlPropertyFields.category === "control-property-mismatch"
+          ? `${classification.reason}; control "${controlPropertyFields.controlName}" property "${controlPropertyFields.propertyName}" differs`
+          : classification.reason,
     };
     if (classification.actionable) {
       actionableDifferent.push(entryWithClassification);
@@ -750,6 +802,7 @@ export async function compareVbaSourceTrees(
     if (includeDiffs) {
       diffs.push({
         ...entry,
+        ...controlPropertyFields,
         sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
         binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
         // Additive semantic fields
