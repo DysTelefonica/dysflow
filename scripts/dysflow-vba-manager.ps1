@@ -3326,6 +3326,49 @@ function Import-VbaModule {
             # tipado FORM_NAME_RESOLUTION_FAILED identificando módulo y fuente.
             $objectName = Resolve-AccessDocumentObjectName -ModuleName $ModuleName -SourcePath $src
             $objectType = if ($isReportTxt -or $ModuleName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
+
+            # issue #1040 — pre-import guard for Auto mode on full-form source
+            # (`.cls` + `.form.txt` together) where the basename lacks the
+            # `Form_`/`Report_` prefix AND the binary already carries a legacy
+            # `Form_<base>` / `Report_<base>` component from a prior
+            # `SaveAsText`. The `$documentExistsInAccess` probe below uses
+            # the *stripped* `$objectName` against the prefixed names
+            # `CurrentProject.AllForms` returns, so the legacy form is
+            # treated as "new form to create" and `LoadFromText` silently
+            # renames it to `TempSccObjN` (Access' standard collision
+            # handling). The import then reports `status:"ok"`, leaving the
+            # binary with the canonical form lost and an orphan TempSccObj
+            # in its place. Detect the conflict BEFORE LoadFromText touches
+            # the binary and surface a typed error so the consumer can
+            # decide between (a) renaming the source files to use the
+            # prefixed form name, or (b) deleting the legacy form from the
+            # binary first. The post-import-DocumentCodeBehind path (lines
+            # 3445-3448) re-binds the .cls to whatever component remains,
+            # so the symptom is silent corruption — by the time the import
+            # "succeeds" the legacy form is already renamed.
+            if (-not ($ModuleName -match '^(Form|Report)_')) {
+                $clsSibling = Resolve-FormCodeBehindFile -ModulesPath $ModulesPath -ModuleName $ModuleName
+                if ($clsSibling -and (Test-Path -LiteralPath $clsSibling)) {
+                    $clsVbName = Get-VbNameFromSourceFile -Path $clsSibling
+                    if ($clsVbName) {
+                        $legacyPrefix = if ($isReportTxt) { 'Report_' } else { 'Form_' }
+                        $legacyComponentName = $legacyPrefix + ($ModuleName -replace '^(Form|Report)_', '')
+                        $existingLegacy = $null
+                        try {
+                            $existingLegacy = $VbProject.VBComponents.Item($legacyComponentName)
+                        } catch {
+                            Write-Debug "Diagnostics (legacy form probe for #1040): $_"
+                        }
+                        if ($existingLegacy -and ($clsVbName -ne $legacyComponentName)) {
+                            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($existingLegacy) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+                            throw ("FORM_VBNAME_PREFIX_MISMATCH: ModuleName '{0}' resolves to legacy component '{1}' in the binary, but the sibling .cls at '{2}' declares Attribute VB_Name = '{3}' (without the {4} prefix). The import would silently rename the legacy '{1}' form to a Form_TempSccObjN and leave the binary in an invalid state (canonical form lost, orphan TempSccObj in its place). Either rename the source files to use the prefixed form name ({4}{0}) or delete the legacy '{1}' from the binary before retrying." -f $ModuleName, $legacyComponentName, $clsSibling, $clsVbName, $legacyPrefix)
+                        }
+                        if ($existingLegacy) {
+                            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($existingLegacy) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+                        }
+                    }
+                }
+            }
             $script:ImportCurrentPhase = "remove-existing"
             $importDocumentText = [System.IO.File]::ReadAllText($src, [System.Text.Encoding]::UTF8)
 
@@ -5149,6 +5192,13 @@ function Invoke-ImportAction {
                     $errorCode = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED"
                 } elseif ($messageString.StartsWith("FORM_NAME_RESOLUTION_FAILED:")) {
                     $errorCode = "FORM_NAME_RESOLUTION_FAILED"
+                } elseif ($messageString.StartsWith("FORM_VBNAME_PREFIX_MISMATCH:")) {
+                    # issue #1040 — pre-import guard rejected the Auto-mode
+                    # full-form source because the binary already has
+                    # `Form_<base>` and the .cls declares VB_Name without
+                    # the prefix. The import was not started so no rollback
+                    # is required (binary is untouched).
+                    $errorCode = "FORM_VBNAME_PREFIX_MISMATCH"
                 } elseif (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
                     if (Test-IsAccessDatabaseLockedError -Message $messageString) {
                         $errorCode = "ACCESS_DATABASE_LOCKED"
@@ -5181,6 +5231,7 @@ function Invoke-ImportAction {
                             "IMPORT_TRUNCATED" { "Restore the complete module source and retry the import." }
                             "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED" { "Resolve the snapshot failure before retrying; the import was not started safely." }
                             "FORM_NAME_RESOLUTION_FAILED" { "Rename the form/report source so its module name resolves to a non-empty Access object name before retrying." }
+                            "FORM_VBNAME_PREFIX_MISMATCH" { "Rename the source files to use the prefixed form name (Form_<base> or Report_<base>) or delete the legacy prefixed form from the binary before retrying." }
                             "ACCESS_DATABASE_LOCKED" { "Close the verified lock owner or reconcile the tracked Access operation before retrying." }
                             default { "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding." }
                         }
