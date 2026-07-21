@@ -89,6 +89,13 @@ export const MCP_PROTOCOL_VERSION_REVIEW = {
 
 export { DEFAULT_MAX_REQUEST_BYTES };
 
+/** Resolve the write policy advertised by startup-scoped MCP tools. */
+export function resolveStartupWriteExecutionPolicy(
+  config?: DysflowConfig,
+): "safe-by-default" | "developer" {
+  return config?.writeExecutionPolicy ?? "safe-by-default";
+}
+
 export async function startMcpStdioAdapter(
   config?: DysflowConfig,
   options?: { writesEnabled?: boolean },
@@ -149,6 +156,7 @@ export async function startMcpStdioAdapter(
     // path so `get_capabilities` can surface the per-project
     // `humanCompilePending` flag from the process-local state cache.
     accessDbPath: startupConfig?.accessDbPath,
+    writeExecutionPolicy: resolveStartupWriteExecutionPolicy(startupConfig),
   });
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
