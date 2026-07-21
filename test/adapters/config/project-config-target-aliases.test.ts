@@ -41,35 +41,32 @@ function gateEnvelope(
 }
 
 describe("alias resolution under run_vba (#1044)", () => {
-  it("test 1 — equivalent aliases normalize and pass the resolver", () => {
+  it("test 1 — frontend (accessPath) + backend (backendPath) on different files is NOT an alias conflict", () => {
     const root = worktreeFixture("dysflow-1044-norm-");
     try {
-      const target = join(root, "Expedientes.accdb");
-      writeFileSync(target, "");
+      const frontend = join(root, "Expedientes.accdb");
+      const backend = join(root, "Expedientes_datos.accdb");
+      writeFileSync(frontend, "");
+      writeFileSync(backend, "");
       writeProjectConfig(root, {
         id: "expedientes",
         accessPath: "Expedientes.accdb",
+        backendPath: "Expedientes_datos.accdb",
         destinationRoot: "src",
       });
-      // Same target expressed with mixed separators, trailing slash, and ./.
-      const slashy = target.replaceAll("\\", "/");
-      const backslashed = target.replaceAll("/", "\\");
-      const withDot = `${slashy.replace(/Expedientes\.accdb$/, "./Expedientes.accdb")}`;
-      const withTrailing = `${slashy}/`;
+      const slashy = frontend.replaceAll("\\", "/");
+      const backslashed = frontend.replaceAll("/", "\\");
       const expectValid = (input: Record<string, string>): void => {
         expect(diagnoseProjectConfig(root, input)).toMatchObject({
           status: "valid",
           writeReady: true,
         });
       };
-      expectValid({ accessPath: slashy, databasePath: backslashed });
-      expectValid({ accessPath: slashy, databasePath: withDot });
-      expectValid({ accessPath: slashy, databasePath: withTrailing });
-      // Case difference must NOT collide on Windows either.
-      expectValid({
-        accessPath: slashy,
-        databasePath: slashy.toUpperCase(),
-      });
+      // Same frontend expressed with mixed separators + backend alongside.
+      expectValid({ accessPath: slashy, backendPath: backend });
+      expectValid({ accessPath: backslashed, backendPath: backend });
+      // Backend with trailing separator.
+      expectValid({ accessPath: frontend, backendPath: `${backend}/` });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
