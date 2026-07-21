@@ -18,6 +18,7 @@ import {
   WindowsProcessKiller,
 } from "../process/windows-processes.js";
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
+import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import type { DysflowHttpServices } from "./server.js";
 
@@ -63,7 +64,14 @@ export async function createHttpServices(
   return {
     diagnosticsService: new AccessDiagnosticsService({ runner, config: configResult.data }),
     queryService: new AccessQueryService({ runner, config: configResult.data }),
-    vbaService: new AccessVbaService({ runner, config: configResult.data }),
+    // #1045 — wire the procedure-existence preflight source resolver so a
+    // known-absent procedureName is surfaced as typed PROCEDURE_NOT_FOUND
+    // instead of flattening into RUNNER_FAILED on the HTTP surface too.
+    vbaService: new AccessVbaService({
+      runner,
+      config: configResult.data,
+      sourceResolver: createNodeVbaSourceResolver(configResult.data.destinationRoot),
+    }),
     operationRegistry,
     cleanupService: new AccessOperationCleanupService({
       registry: operationRegistry,

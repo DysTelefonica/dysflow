@@ -10,6 +10,37 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# ─── Early helpers block (#1045, mirrors dysflow-vba-manager.ps1 #585) ────────
+# Windows PowerShell 5.1 used to tolerate top-level calls to later-defined
+# functions; pwsh 7+ enforces script-load order strictly. Every helper invoked
+# at top level (NOT nested inside another function body) MUST be defined BEFORE
+# its call site. Set-ScriptOutputEncodingUtf8 is invoked at the top level right
+# after the helpers, so its definition lives here.
+
+function Set-ScriptOutputEncodingUtf8 {
+    <#
+    .SYNOPSIS
+        Force the script's stdout encoding to UTF-8 so non-ASCII characters
+        round-trip through Node.js JSON consumers without mojibake.
+    .DESCRIPTION
+        powershell.exe (5.1) writes stdout through the active console code
+        page (typically CP1252 on Western Windows). Node.js reads the child
+        process's stdout as UTF-8, so any non-ASCII character (e.g. ó, ñ, í)
+        would otherwise arrive as U+FFFD. Setting [Console]::OutputEncoding
+        to UTF-8 makes Write-Output and ConvertTo-Json emit valid UTF-8.
+        Mirrors the same helper in dysflow-vba-manager.ps1 (#585, #1045).
+    #>
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+}
+
+# powershell.exe (5.1) defaults stdout to the active console code page (e.g. CP1252).
+# Node.js reads the child's stdout as UTF-8, so non-ASCII chars (e.g. ó, ñ, Excepción)
+# arrive as U+FFFD replacement characters. Force UTF-8 output so Access-localized
+# error text and any user-supplied strings round-trip correctly through JSON. The
+# helper definition lives in the early helpers block above so pwsh 7+ finds it
+# before this top-level call (#1045).
+Set-ScriptOutputEncodingUtf8
+
 # Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
