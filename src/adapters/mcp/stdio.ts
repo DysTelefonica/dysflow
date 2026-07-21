@@ -39,6 +39,7 @@ import {
   WindowsProcessKiller,
 } from "../process/windows-processes.js";
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
+import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
@@ -339,7 +340,18 @@ export function createConfiguredServices(
     processKiller: new WindowsProcessKiller(),
   });
   return {
-    vbaService: new AccessVbaService({ runner, config }),
+    // #1045 — wire the procedure-existence preflight source resolver so a
+    // known-absent procedureName is surfaced as typed PROCEDURE_NOT_FOUND
+    // instead of flattening into RUNNER_FAILED. The resolver closes over
+    // the project's configured destinationRoot so it cannot escape the
+    // project tree. When destinationRoot is absent, the resolver returns
+    // empty results and the preflight is a no-op (defensive — runner
+    // still surfaces the real Access-side failure in that case).
+    vbaService: new AccessVbaService({
+      runner,
+      config,
+      sourceResolver: createNodeVbaSourceResolver(config.destinationRoot),
+    }),
     queryService: new AccessQueryService({ runner, config }),
     diagnosticsService: new AccessDiagnosticsService({ runner, config }),
     operationRegistry,
