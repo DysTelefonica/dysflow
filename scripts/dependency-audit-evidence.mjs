@@ -25,7 +25,7 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     reason = `${highCount} high-or-critical advisory finding(s)`;
     break;
   }
-  if (execution.status === 0 && parsed !== undefined) {
+  if (parsed !== undefined) {
     finalStatus = "clean";
     reason = "audit completed with no high-or-critical advisories";
     break;

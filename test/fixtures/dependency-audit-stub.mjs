@@ -6,9 +6,13 @@ const attempt =
   counterPath && existsSync(counterPath) ? Number(readFileSync(counterPath, "utf8")) + 1 : 1;
 if (counterPath) writeFileSync(counterPath, String(attempt));
 
-if (scenario === "clean" || (scenario === "retry-clean" && attempt >= 3)) {
+if (
+  scenario === "clean" ||
+  scenario === "clean-nonzero" ||
+  (scenario === "retry-clean" && attempt >= 3)
+) {
   console.log(JSON.stringify({ metadata: { vulnerabilities: { high: 0, critical: 0 } } }));
-  process.exit(0);
+  process.exit(scenario === "clean-nonzero" ? 1 : 0);
 }
 if (scenario === "vulnerable") {
   console.log(JSON.stringify({ metadata: { vulnerabilities: { high: 1, critical: 0 } } }));
