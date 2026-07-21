@@ -3,6 +3,18 @@
 Use `error.code` for programmatic branching and show `error.remediation` as the next action. Preserve
 the message and nested details as diagnostic evidence; do not parse localized Access text.
 
+## VBA test execution gate
+
+### `PROCEDURE_NOT_ALLOWED`
+
+**Trigger:** `test_vba` was called with a procedure that is not in the configured `allowedProcedures` allowlist. Emitted by `VbaExecutionAdapter.ensureTestProceduresAllowed` (Issue #659 split + #1046 re-synced). The error envelope carries `error.allowedProcedures` (the active allowlist) and `error.remediation` (the next action). Issue #1046 confirmed this code as the canonical test_vba-gate code; the previous `MCP_PROCEDURE_NOT_ALLOWED` heading (canonical-handler gate for `run_vba`) is a separate, intentional code that survives on the `run_vba` path.
+
+**Action:** Add the procedure to `allowedProcedures` in `.dysflow/project.json` (re-read per call — no restart needed) or pick a procedure that is already in the list. The allowlist gate does NOT fire on `dryRun:true` (Bug B fix #1046: dryRun short-circuits BEFORE the gate so plan-only callers see a plan-shaped success).
+
+| Code | Meaning | Remediation |
+| --- | --- | --- |
+| `PROCEDURE_NOT_ALLOWED` | `test_vba` was called with a procedure that is not in the configured `allowedProcedures` allowlist. Emitted by `VbaExecutionAdapter.ensureTestProceduresAllowed` (Issue #659 split + #1046 re-synced). The error envelope carries `error.allowedProcedures` (the active allowlist) and `error.remediation` (the next action). Issue #1046 confirmed this code as the canonical test_vba-gate code; the previous `MCP_PROCEDURE_NOT_ALLOWED` heading (canonical-handler gate for `run_vba`) is a separate, intentional code that survives on the `run_vba` path. | Add the procedure to `allowedProcedures` in `.dysflow/project.json` (re-read per call — no restart needed) or pick a procedure that is already in the list. The allowlist gate does NOT fire on `dryRun:true` (Bug B fix #1046: dryRun short-circuits BEFORE the gate so plan-only callers see a plan-shaped success). |
+
 ## Form and import failures
 
 | Code | Meaning | Remediation |

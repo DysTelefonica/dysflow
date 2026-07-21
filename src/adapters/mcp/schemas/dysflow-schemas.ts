@@ -310,6 +310,19 @@ export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
       description: "Optional in-memory mapping of module names to source code.",
       additionalProperties: { type: "string" },
     },
+    // Issue #1046 (Bug D) — opt-in flag. When `true`, validate_manifest
+    // surfaces allowlist drift (procedures in the manifest that are NOT
+    // in the resolved `allowedProcedures`) as `report.invalid[]` entries
+    // with `reason: "allowlist_miss"`. Default `false` preserves the
+    // legacy JSON-shape-only behavior. The same allowlist resolver the
+    // test_vba gate uses is consulted, so a manifest that passes
+    // validate_manifest with this flag on is guaranteed not to hit
+    // `PROCEDURE_NOT_ALLOWED` on the commit path.
+    validateManifestIncludesAllowlistCheck: {
+      type: "boolean",
+      description:
+        "Issue #1046 (Bug D) — opt-in flag. When true, validate_manifest consults the active `allowedProcedures` allowlist (same resolver as the test_vba gate) and surfaces drift as `report.invalid[]` entries. Default false (legacy shape preserved).",
+    },
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
   },

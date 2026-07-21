@@ -204,7 +204,17 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   form_get_geometry: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   form_list_controls: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   harvest_form_catalog: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
-  test_vba: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #1046 (Bug A) — `test_vba` is a `dryRun` family tool. The schema
+  // (`VBA_SYNC_TOOL_SCHEMAS.test_vba`) exposes `dryRun` only; `apply` is
+  // NOT declared and the runtime rejects `apply:true` with
+  // `MCP_INPUT_INVALID: apply is not allowed`. The commit path is
+  // `dryRun:false`. The legacy `commitFlag: "apply"` + `defaultBehavior:
+  // "noop"` advertised a flag the schema rejects and a no-op the dispatch
+  // does not honor. Realigned: commitFlag matches the schema-accepted
+  // flag; defaultBehavior is "plan" (the safe-by-default policy injects
+  // `dryRun:true`, the developer policy injects `dryRun:false` — both
+  // are explicit caller intent and the tool defaults to a plan).
+  test_vba: { commitFlag: "dryRun", noWriteAlias: null, defaultBehavior: "plan" },
   // Process-control tools — schema-rejection of `apply` lands here too.
   cleanup_access_operation: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   access_force_cleanup_orphaned: {
