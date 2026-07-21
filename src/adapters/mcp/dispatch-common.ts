@@ -96,6 +96,18 @@ export const OUTSIDE_PROJECT_ROOT = "OUTSIDE_PROJECT_ROOT" as const;
 export const WRITE_LOCKED_BY_RUNNING_OP = "WRITE_LOCKED_BY_RUNNING_OP" as const;
 export const CAPABILITIES_DISALLOW_WRITE = "CAPABILITIES_DISALLOW_WRITE" as const;
 export const PROJECT_ID_MISMATCH = "PROJECT_ID_MISMATCH" as const;
+/**
+ * Issue #1044 — alias-set conflict. Distinct from the legacy
+ * `PROJECT_CONFIG_NOT_WRITE_READY` fallback so a consumer can branch on
+ * `error.code === "CONFLICTING_TARGET_ALIASES"` instead of regex-parsing
+ * the legacy text body. Emitted when the request supplies more than one
+ * frontend Access alias (`accessPath` / `accessDbPath` / `databasePath` /
+ * `sourcePath`) and they do not normalize to the same Windows path. The
+ * legacy `[legacy: PROJECT_CONFIG_NOT_WRITE_READY]` substring is preserved
+ * in `error.message` for backward compat (#962 contract).
+ */
+export const CONFLICTING_TARGET_ALIASES = "CONFLICTING_TARGET_ALIASES" as const;
+export type ConflictingTargetAliasesCode = typeof CONFLICTING_TARGET_ALIASES;
 
 const writeGateCodes = new Set<string>([
   DESTINATION_ROOT_NOT_FOUND,
@@ -103,6 +115,7 @@ const writeGateCodes = new Set<string>([
   WRITE_LOCKED_BY_RUNNING_OP,
   CAPABILITIES_DISALLOW_WRITE,
   PROJECT_ID_MISMATCH,
+  CONFLICTING_TARGET_ALIASES,
 ]);
 
 const writeGateCodeByStatus: Partial<Record<ProjectConfigDiagnostic["status"], string>> = {

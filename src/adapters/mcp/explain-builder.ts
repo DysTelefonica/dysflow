@@ -82,6 +82,8 @@ export const RELATED_ISSUE_NUMBERS: Readonly<Record<string, readonly string[]>> 
   WRITE_LOCKED_BY_RUNNING_OP: ["#962"],
   CAPABILITIES_DISALLOW_WRITE: ["#962", "#659"],
   PROJECT_ID_MISMATCH: ["#962"],
+  // #1044 — Windows alias normalization + structured envelope
+  CONFLICTING_TARGET_ALIASES: ["#1044"],
   // #659 — gate envelope pattern
   MCP_WRITES_DISABLED: ["#659"],
   MCP_PROCEDURE_NOT_ALLOWED: ["#659"],

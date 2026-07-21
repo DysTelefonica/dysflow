@@ -346,15 +346,36 @@ export function diagnoseProjectConfig(
     (!request.operation.startsWith("form_") &&
       request.operation !== "apply_form_design_plan" &&
       request.operation !== "create_form_from_template");
-  const targetAliases = [
+  // Issue #1044 — alias set membership.
+  //
+  // The frontend Access database has FOUR aliases (`accessPath`,
+  // `accessDbPath`, `databasePath`, `sourcePath`). They all MUST resolve to
+  // the same file; if not, the caller is asking the dispatcher to act on
+  // two different targets at once and we fail closed with
+  // `CONFLICTING_TARGET_ALIASES`.
+  //
+  // `backendPath` is intentionally NOT in this set. The frontend and the
+  // data backend are legitimately DIFFERENT files (the whole point of the
+  // split-DB topology); a `run_vba` call can pass both, e.g. to verify
+  // context against both. Lumping `backendPath` into the alias set was the
+  // #1044 surface defect — `accessPath = Expedientes.accdb` together with
+  // `backendPath = Expedientes_datos.accdb` was rejected as a "conflicting
+  // alias" even though the two paths are independently valid.
+  //
+  // `backendPath` is NOT dropped from validation — it is added to the
+  // "requested target" list below so the outside-worktree / canonical
+  // ownership checks still cover it when it is the ONLY alias supplied
+  // (and when it is supplied alongside a frontend alias, the existing
+  // `namesConfiguredBackend` exception in the target validation block
+  // keeps the request consistent with the configured backend file).
+  const frontendAliases = [
     request.accessPath,
     request.accessDbPath,
     request.databasePath,
-    request.backendPath,
     ...(sourcePathTargetsDatabase ? [request.sourcePath] : []),
   ].filter((value): value is string => value !== undefined);
   const targets = new Set(
-    targetAliases.map((value) => identity(resolve(projectRootNative, value))),
+    frontendAliases.map((value) => identity(resolve(projectRootNative, value))),
   );
   if (targets.size > 1)
     return failWith(
@@ -362,8 +383,15 @@ export function diagnoseProjectConfig(
       "ambiguous",
       "Conflicting Access target aliases were supplied.",
       "Pass exactly one of accessPath, accessDbPath, databasePath, or sourcePath.",
+      "CONFLICTING_TARGET_ALIASES",
     );
-  const requestedTarget = targetAliases[0];
+  // `requestedTarget` is the alias that drives the per-call target
+  // validation block (existsSync + canonical ownership). Frontend aliases
+  // take priority; `backendPath` fills in only when no frontend alias was
+  // supplied so a request that names ONLY the backend still gets the same
+  // outside-worktree / target-not-found treatment as before.
+  const requestedTarget =
+    frontendAliases[0] ?? (request.backendPath !== undefined ? request.backendPath : undefined);
   // Issue #968 — `allowExternalAccessPath` opt-in flag. When the caller
   // supplies `allowExternalAccessPath: true` AND the operation is
   // explicitly declared non-binary-mutating (the dispatcher forwards
@@ -405,6 +433,25 @@ export function diagnoseProjectConfig(
         "target-not-found",
         `Configured backendPath does not exist: ${backendPath}.`,
         `Create or correct the backend target in ${base.configPath}.`,
+      );
+    }
+  }
+  // Issue #1044 — request-time `backendPath` override must match the
+  // configured `backendPath`. `backendPath` is intentionally NOT in the
+  // frontend alias set (a `run_vba` call legitimately names both the
+  // frontend and the data backend), but the request alias still has to
+  // resolve to the configured value: an unconfigured external backend
+  // would silently bypass the gate, which is exactly what the
+  // `allowExternalAccessPath` opt-in exists to prevent.
+  if (request.backendPath !== undefined) {
+    const requestedBackend = identity(resolve(projectRootNative, request.backendPath));
+    const configuredBackend = backendPath === null ? null : identity(backendPath);
+    if (configuredBackend !== null && requestedBackend !== configuredBackend) {
+      return failWith(
+        base,
+        "outside-project-root",
+        `Requested backendPath '${requestedBackend}' does not match configured backendPath '${configuredBackend}'.`,
+        `The backendPath override must resolve to the project's configured backendPath. Run \`dysflow doctor --cwd ${projectRoot}\` and retry with the configured path.`,
       );
     }
   }
