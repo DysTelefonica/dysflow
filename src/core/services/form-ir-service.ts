@@ -701,7 +701,68 @@ function findTargetContainer(node: FormNode, targetSectionName?: string): FormNo
   return undefined;
 }
 
-function upsertScalar(node: FormNode, key: string, value: string): void {
+type FormPropertySemanticGroup = 1 | 2 | 3 | 4 | 5 | 6;
+
+const IDENTITY_PROPERTY_NAMES = new Set(["Name"]);
+const DATA_BINDING_PROPERTY_NAMES = new Set([
+  "BoundColumn",
+  "ColumnCount",
+  "ColumnHeads",
+  "RowSource",
+  "ColumnWidths",
+  "ListRows",
+  "ListWidth",
+]);
+const DATA_BINDING_PROPERTY_ORDER = [
+  "BoundColumn",
+  "ColumnCount",
+  "ColumnHeads",
+  "RowSource",
+  "ColumnWidths",
+  "ListRows",
+  "ListWidth",
+];
+const GEOMETRY_PROPERTY_NAMES = new Set(["Left", "Top", "Width", "Height"]);
+const DISPLAY_PROPERTY_NAMES = new Set([
+  "Format",
+  "StatusBarText",
+  "BackColor",
+  "BackStyle",
+  "BorderColor",
+  "BorderStyle",
+  "BorderWidth",
+  "DecimalPlaces",
+  "ForeColor",
+  "FontName",
+  "FontSize",
+  "FontWeight",
+  "FontItalic",
+  "FontUnderline",
+]);
+
+/**
+ * Return the canonical ordering group for a scalar control property.
+ *
+ * Access accepts scalar properties before nested Begin...End blocks. Within
+ * that region, the stable ordering is identity, data binding, geometry,
+ * display, then event bindings. Unknown scalar properties use the display
+ * group so they remain before event handlers without inventing a new order.
+ */
+export function semanticGroupOf(key: string): FormPropertySemanticGroup {
+  if (IDENTITY_PROPERTY_NAMES.has(key)) return 1;
+  if (DATA_BINDING_PROPERTY_NAMES.has(key)) return 2;
+  if (GEOMETRY_PROPERTY_NAMES.has(key)) return 3;
+  if (DISPLAY_PROPERTY_NAMES.has(key)) return 4;
+  if (/^(?:On|Before|After)/i.test(key)) return 5;
+  return 4;
+}
+
+function semanticRankOf(key: string): number {
+  const index = DATA_BINDING_PROPERTY_ORDER.indexOf(key);
+  return index === -1 ? Number.POSITIVE_INFINITY : index;
+}
+
+export function upsertScalar(node: FormNode, key: string, value: string): void {
   const entry = node.entries.find(
     (candidate): candidate is ScalarEntry => candidate.kind === "scalar" && candidate.key === key,
   );
@@ -709,7 +770,24 @@ function upsertScalar(node: FormNode, key: string, value: string): void {
     entry.value = value;
     return;
   }
-  node.entries.push({ kind: "scalar", key, value });
+
+  const newGroup = semanticGroupOf(key);
+  const newRank = semanticRankOf(key);
+  const insertAt = node.entries.findIndex((candidate) => {
+    if (candidate.kind === "blob") return true;
+    if (candidate.kind !== "scalar") return false;
+    const candidateGroup = semanticGroupOf(candidate.key);
+    return (
+      candidateGroup > newGroup ||
+      (candidateGroup === newGroup && semanticRankOf(candidate.key) > newRank)
+    );
+  });
+  const newEntry: ScalarEntry = { kind: "scalar", key, value };
+  if (insertAt === -1) {
+    node.entries.push(newEntry);
+  } else {
+    node.entries.splice(insertAt, 0, newEntry);
+  }
 }
 
 function metadataSnapshot(ir: FormIR): string[] {
