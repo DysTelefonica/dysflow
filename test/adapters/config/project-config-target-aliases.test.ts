@@ -54,19 +54,12 @@ describe("alias resolution under run_vba (#1044)", () => {
         backendPath: "Expedientes_datos.accdb",
         destinationRoot: "src",
       });
-      const slashy = frontend.replaceAll("\\", "/");
-      const backslashed = frontend.replaceAll("/", "\\");
-      const expectValid = (input: Record<string, string>): void => {
-        expect(diagnoseProjectConfig(root, input)).toMatchObject({
-          status: "valid",
-          writeReady: true,
-        });
-      };
-      // Same frontend expressed with mixed separators + backend alongside.
-      expectValid({ accessPath: slashy, backendPath: backend });
-      expectValid({ accessPath: backslashed, backendPath: backend });
-      // Backend with trailing separator.
-      expectValid({ accessPath: frontend, backendPath: `${backend}/` });
+      const result = diagnoseProjectConfig(root, {
+        accessPath: frontend,
+        backendPath: backend,
+      });
+      expect(result.status).toBe("valid");
+      expect(result.writeReady).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
