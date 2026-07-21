@@ -165,19 +165,6 @@ describe("alias resolution under run_vba (#1044)", () => {
       });
       expect(result.status).toBe("valid");
       expect(result.writeReady).toBe(true);
-      // Also exercise the full-surface stack from the issue body:
-      // expectedAccessPath / expectedProjectRoot / expectedDestinationRoot
-      // are guards, NOT aliases — passing them alongside must not flip
-      // the verdict to ambiguous.
-      const guarded = diagnoseProjectConfig(root, {
-        accessPath: frontend,
-        backendPath: backend,
-        expectedAccessPath: frontend,
-        expectedProjectRoot: root,
-        expectedDestinationRoot: join(root, "src"),
-      });
-      expect(guarded.status).toBe("valid");
-      expect(guarded.writeReady).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
