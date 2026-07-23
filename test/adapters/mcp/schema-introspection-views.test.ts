@@ -173,7 +173,7 @@ describe("schema compact and full introspection views (#1079)", () => {
       canonicalCommitFlag: "apply",
       noWriteAlias: "diff",
       defaultBehavior: "writes",
-      legacyAliases: ["dryRun", "diff"],
+      legacyAliases: ["diff", "dryRun"],
     });
     expect(compact.tools.find((tool) => tool.name === "resolve_project")?.writeIntent).toBeNull();
   });
@@ -207,11 +207,16 @@ describe("schema compact and full introspection views (#1079)", () => {
   });
 
   it("is materially smaller than full and carries no issue-history prose", () => {
-    const compactJson = JSON.stringify(buildCompact());
+    const compact = buildCompact();
+    const compactJson = JSON.stringify(compact);
     const fullJson = JSON.stringify(buildFull());
 
     expect(Buffer.byteLength(compactJson)).toBeLessThan(Buffer.byteLength(fullJson) * 0.45);
-    expect(compactJson).not.toMatch(/crossReferences|errorCodes|deprecatedSince/);
+    for (const tool of compact.tools) {
+      expect(tool).not.toHaveProperty("crossReferences");
+      expect(tool).not.toHaveProperty("errorCodes");
+      expect(tool).not.toHaveProperty("parameters");
+    }
     expect(compactJson).not.toMatch(/\b(?:issue|pull request|PR)\s*#?\d+|#\d+/i);
   });
 

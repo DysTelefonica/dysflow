@@ -27,7 +27,10 @@
 
 import {
   commitFlagMetadataForOrNoop,
+  type CommitFlagName,
+  type DefaultBehavior,
   legacyAliasesFor,
+  type NoWriteAliasName,
 } from "../../core/runtime/commit-flag-registry.js";
 import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
@@ -72,9 +75,12 @@ import { STATE_TOOL_SCHEMA } from "./state-tool.js";
  * implementation returns the global catalog regardless of the supplied
  * `projectId`.
  */
+export type SchemaView = "compact" | "full";
+
 export type SchemaInput = {
   projectId?: string;
   toolName?: string;
+  view?: SchemaView;
 };
 
 /**
@@ -254,6 +260,8 @@ export type ToolResultContract =
 export type ToolSchema = {
   name: string;
   description: string;
+  access: McpToolAccess;
+  inputSchema: JsonObjectSchema;
   parameters: Record<string, ToolParameterSchema>;
   returns: {
     type: "object";
@@ -287,6 +295,44 @@ export type ToolSchema = {
    */
   resultContract: ToolResultContract;
 };
+
+export type CompactToolWriteIntent = {
+  canonicalCommitFlag: CommitFlagName;
+  noWriteAlias: NoWriteAliasName;
+  defaultBehavior: DefaultBehavior;
+  legacyAliases: string[];
+};
+
+export type CompactToolPrimaryResult = {
+  kind: ToolResultContract["kind"];
+  summary: string;
+  fields: string[];
+  requiredFields: string[];
+  modes: ToolResultMode[];
+  outputModes: ToolOutputMode[];
+};
+
+export type CompactToolSchema = {
+  name: string;
+  purpose: string;
+  access: McpToolAccess;
+  requiredParameters: string[];
+  requiredParameterGroups: SchemaCompositionConstraint[];
+  defaults: Record<string, unknown>;
+  writeIntent: CompactToolWriteIntent | null;
+  primaryResult: CompactToolPrimaryResult;
+  recommendations: {
+    deepView: "describe_tool";
+    useCases: string[];
+  };
+};
+
+export type CompactToolSchemaCatalog = {
+  projectId: string | null;
+  tools: CompactToolSchema[];
+};
+
+export type ToolSchemaCatalogView = ToolSchemaCatalog | CompactToolSchemaCatalog;
 
 /**
  * Top-level catalog shape. The `projectId` field echoes the input so a
@@ -455,8 +501,13 @@ const TOOL_USE_CASES: Record<string, readonly string[]> = {
     "Detect source ↔ binary drift and plan a sync from bulkImportable / bulkExportable.",
   ],
   delete_module: ["Remove a VBA module from the binary (plan first with apply:false)."],
-  describe_tool: ["Introspect one tool's params, defaults, and error codes before calling it."],
-  schema: ["Fetch the full static contract catalog for every advertised tool."],
+  describe_tool: [
+    "Use the preferred one-tool deep view after compact discovery identifies the tool to call.",
+  ],
+  schema: [
+    "Call with view:'compact' for low-context discovery across all tools; filter with toolName in either view.",
+    "Call with view:'full' only when complete JSON Schema, aliases, errors, use cases, and references are required.",
+  ],
 };
 
 // ─── Input-schema registry (modern tools) ─────────────────────────────────────
@@ -477,7 +528,14 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
     toolName: {
       type: "string",
       description:
-        "Optional tool name to filter the catalog to a single entry. Omit for the full catalog.",
+        "Optional tool name to filter the catalog to a single entry. Omit for every advertised tool.",
+    },
+    view: {
+      type: "string",
+      enum: ["compact", "full"],
+      default: "full",
+      description:
+        "Catalog detail level. Use compact for low-context discovery and full for complete JSON Schema, aliases, errors, use cases, and references. Defaults to full for backward compatibility.",
     },
   },
 } as const;
@@ -553,7 +611,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
  * `cleanup_access_operation`) is wired here because
  * `MCP_TOOL_SCHEMAS` already carries the schema under the dispatch name.
  */
-const ALIAS_INPUT_SCHEMA_OVERRIDES: Record<string, unknown> = {
+const ALIAS_INPUT_SCHEMA_OVERRIDES: Record<string, JsonObjectSchema> = {
   list_access_operations: NO_INPUT_SCHEMA,
 };
 
@@ -911,17 +969,12 @@ function safeByDefaultForTool(name: string, access: McpToolAccess): boolean {
   return contract.dryRunDefault !== false;
 }
 
-function inputSchemaForTool(name: string): unknown {
-  // Modern tools live in MODERN_TOOL_INPUT_SCHEMAS (dispatch registry
-  // doesn't carry them); everything else falls through to
-  // MCP_TOOL_SCHEMAS. Issue #1072 — every modern tool advertised via
-  // `createDysflowMcpTools` is registered above, so the lookup is total
-  // and the explicit `describe_tool` TDZ branch is no longer needed.
+function inputSchemaForTool(name: string): JsonObjectSchema {
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
   if (modern !== undefined) return modern;
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
   if (alias !== undefined) return alias;
-  const dispatch = (MCP_TOOL_SCHEMAS as Record<string, unknown>)[name];
+  const dispatch = (MCP_TOOL_SCHEMAS as Record<string, JsonObjectSchema>)[name];
   if (dispatch !== undefined) return dispatch;
   return NO_INPUT_SCHEMA;
 }
@@ -1272,12 +1325,16 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
   // ── Bootstrap / diagnostics (read-only) ──────────────────────────────────
   schema: {
     kind: "dataSchema",
-    description: "Static contract catalog for every advertised MCP tool.",
+    description:
+      "Static contract catalog in compact or full detail; omitted view preserves the full legacy shape.",
     dataSchema: {
       type: "object",
       properties: {
         projectId: { type: "string", description: "Echo of the request's projectId, or null." },
-        tools: { type: "array", description: "Per-tool ToolSchema records." },
+        tools: {
+          type: "array",
+          description: "CompactToolSchema or full ToolSchema records selected by view.",
+        },
       },
       required: ["tools"],
     },
@@ -2010,6 +2067,8 @@ function buildSchemaForTool(name: string): ToolSchema {
   return {
     name,
     description: descriptionForTool(name),
+    access,
+    inputSchema,
     parameters: parametersFromInputSchema(name, inputSchema),
     returns: {
       type: "object",
@@ -2079,7 +2138,76 @@ const TOOL_COMPOSITION_CANONICAL: Record<string, string> = {
  * Pure function — never touches Access, never spawns PowerShell, never
  * mutates state. Safe to call from read-only MCP contexts.
  */
-export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
+function primaryResultForTool(tool: ToolSchema): CompactToolPrimaryResult {
+  const contract = tool.resultContract;
+  if (contract.kind === "envelope-only") {
+    return {
+      kind: contract.kind,
+      summary: contract.justification,
+      fields: [],
+      requiredFields: [],
+      modes: [],
+      outputModes: [],
+    };
+  }
+
+  const fragments = [contract.dataSchema, ...(contract.dataSchema.oneOf ?? [])];
+  const fields = new Set<string>();
+  const requiredFields = new Set<string>();
+  for (const fragment of fragments) {
+    for (const field of Object.keys(fragment.properties ?? {})) fields.add(field);
+    for (const field of fragment.required ?? []) requiredFields.add(field);
+  }
+
+  return {
+    kind: contract.kind,
+    summary: contract.description ?? tool.description,
+    fields: [...fields].sort(),
+    requiredFields: [...requiredFields].sort(),
+    modes: [...(contract.modes ?? [])],
+    outputModes: [...(contract.outputModes ?? [])],
+  };
+}
+
+function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
+  const parameterEntries = Object.entries(tool.parameters);
+  const defaults = Object.fromEntries(
+    parameterEntries
+      .filter(([, parameter]) => Object.prototype.hasOwnProperty.call(parameter, "default"))
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([name, parameter]) => [name, parameter.default]),
+  );
+  const primaryResult = primaryResultForTool(tool);
+  const commitMetadata = commitFlagMetadataForOrNoop(tool.name);
+
+  return {
+    name: tool.name,
+    purpose: tool.useCases[0] ?? primaryResult.summary,
+    access: tool.access,
+    requiredParameters: parameterEntries
+      .filter(([, parameter]) => parameter.required)
+      .map(([name]) => name)
+      .sort(),
+    requiredParameterGroups: [...tool.compositionConstraints],
+    defaults,
+    writeIntent:
+      tool.access === "read-only"
+        ? null
+        : {
+            canonicalCommitFlag: commitMetadata.commitFlag,
+            noWriteAlias: commitMetadata.noWriteAlias,
+            defaultBehavior: commitMetadata.defaultBehavior,
+            legacyAliases: [...legacyAliasesFor(tool.name)],
+          },
+    primaryResult,
+    recommendations: {
+      deepView: "describe_tool",
+      useCases: [...tool.useCases],
+    },
+  };
+}
+
+function buildFullToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
   const filter = input.toolName?.trim();
   const advertised = advertisedToolNames();
   const selected =
@@ -2090,6 +2218,22 @@ export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
   return {
     projectId: input.projectId ?? null,
     tools: sorted.map(buildSchemaForTool),
+  };
+}
+
+export function buildToolSchemaCatalog(
+  input: SchemaInput & { view: "compact" },
+): CompactToolSchemaCatalog;
+export function buildToolSchemaCatalog(
+  input: SchemaInput & { view?: "full" },
+): ToolSchemaCatalog;
+export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView;
+export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView {
+  const full = buildFullToolSchemaCatalog(input);
+  if (input.view !== "compact") return full;
+  return {
+    projectId: full.projectId,
+    tools: full.tools.map(compactSchemaForTool),
   };
 }
 
@@ -2115,7 +2259,7 @@ export function createSchemaTool(): DysflowMcpTool {
   return {
     name: "schema",
     description:
-      "Return the runtime contract for every tool in the consumer's dysflow installation: parameters (typed + required + description + enumValues + default), returns (JSON Schema fragment), errorCodes (with recoverable flag), crossReferences (issue numbers), requiredCapabilities, safeByDefault. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pass { toolName: '<name>' } to filter to a single tool. " +
+      "Return static contracts for the consumer's dysflow installation. Call get_capabilities first for live adapter and write-gate state. Use { view: 'compact' } for low-context discovery across all tools, { view: 'full' } for complete JSON Schema, aliases, errors, use cases, and references, and { toolName: '<name>' } to filter either view. Omitted view defaults to full for backward compatibility. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.schema.summary,
     inputSchema: SCHEMA_TOOL_INPUT_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
@@ -2129,7 +2273,8 @@ export function createSchemaTool(): DysflowMcpTool {
         typeof params.toolName === "string" && params.toolName.length > 0
           ? params.toolName
           : undefined;
-      const catalog = buildToolSchemaCatalog({ projectId, toolName });
+      const view: SchemaView = params.view === "compact" ? "compact" : "full";
+      const catalog = buildToolSchemaCatalog({ projectId, toolName, view });
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(catalog) }];
       return { content, isError: false, ok: true };
     },
@@ -2148,7 +2293,7 @@ export function createDescribeToolTool(): DysflowMcpTool {
   return {
     name: "describe_tool",
     description:
-      "Describe ONE MCP tool on demand: description, params (typed + required + description + enumValues + default), returns, errorCodes, crossReferences, useCases (when to reach for it). Pass { name: '<tool>' } (alias: toolName). Read-only — never opens Access, never spawns PowerShell, never mutates state. Use the `schema` tool for the full catalog. " +
+      "Preferred one-tool deep introspection view: complete inputSchema, canonical params and aliases, defaults, returns, resultContract, errors, references, and useCases. Pass { name: '<tool>' } (alias: toolName). Call get_capabilities first for live state; use schema({ view: 'compact' }) only for catalog-wide discovery. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.describe_tool.summary,
     inputSchema: DESCRIBE_TOOL_INPUT_SCHEMA as unknown as DysflowMcpTool["inputSchema"],
     handler: async (input): Promise<McpToolResult> => {
