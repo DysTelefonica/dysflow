@@ -1,5 +1,56 @@
 # Changelog
 
+## [v2.23.0] - 2026-07-23
+
+### Highlights
+
+Homogeneous MCP contract epic (#1081) — Dysflow now exposes one coherent, machine-readable contract across MCP advertisement, `get_capabilities`, `schema`, `describe_tool`, dispatch and consumer skills. This release delivers nine slices that close the gap between advertised schema and runtime behavior, introduce one canonical write-intent surface, and publish tool-specific result contracts.
+
+### Closed issues
+
+- #1072 — `fix(mcp): make schema introspection match every advertised tool` (PR #1082)
+- #1073 — `fix(mcp): enforce one coherent write-intent contract` (PR #1083)
+- #1074 — `fix(schema): express required alias groups without handler-only rules` (PR #1084)
+- #1075 — `feat(schema): expose canonical aliases defaults and parameter constraints` (PR #1085)
+- #1076 — `refactor(schema): compose shared context target and write-intent schemas` (PR #1088)
+- #1077 — `feat(schema): publish tool-specific result contracts` (PR #1087)
+- #1078 — `fix(mcp): define one policy for contradictory write flags` (PR #1086)
+- #1079 — `feat(schema): add compact and full introspection views` (PR #1089)
+- #1080 — `feat(mcp): declare preferred agent workflows and specialized wrappers` (PR #1090)
+
+### Contract changes
+
+- **Schema introspection parity** — every advertised MCP tool is reflected in `schema` and `describe_tool`; introspection cannot drift from advertisement.
+- **One write-intent contract** — registry-driven, with a documented truth table across all write seams; contradictions fail uniformly with `MCP_INPUT_INVALID` and an envelope carrying `rejectedFlag`, `rejectedFlags[]`, `toolCommitFlag`, and `remediation`.
+- **Required alias groups declared in schema** — `anyOf` is a first-class validator input and `compositionConstraints` is surfaced in the catalog; handler-only rules are no longer authoritative.
+- **Canonical aliases, defaults, and constraints are machine-readable** — every tool advertises its canonical parameter names, default values, and constraint set; legacy aliases cannot invert canonical intent silently.
+- **Tool-specific result contracts** — every advertised tool now publishes its own result schema so consumers can render typed payloads.
+- **Compact and full introspection views** — compact view delivers ~89% byte reduction across the 90 tools for surface-scan use cases; full view remains the canonical reference.
+- **Preferred agent workflows** — derived from the same source of truth as the introspection views; no hand-maintained registry.
+
+### Migration notes
+
+- Consumers that read `serverInstructions` will see a smaller CONFLICT SURFACING block (1400 bytes vs. 2539 bytes on `main`) with all 10 required keywords preserved.
+- Consumers relying on prose-only alias resolution must switch to the structured `compositionConstraints` surface.
+- Consumers relying on `dryRun` semantics must respect the new truth table — contradictory flag combinations now fail loud with `MCP_INPUT_INVALID`.
+- Legacy aliases remain available but receive an explicit deprecation window; new code should target canonical parameter names.
+
+### Consumer impact
+
+- The runtime contract is the source of truth; downstream skills (`dysflow-usage`, `dysflow-arnes`, callable examples, and the canonical harness in AGENTS.md) are aligned in a follow-up cycle. After installing `v2.23.0`, run `dysflow-codegraph-update` from a context with a live runtime + consumer project, then `dysflow-examples-sync` to fill any per-tool example gaps.
+
+### Pre-existing failures noted at release time
+
+- `test/docs/write-tool-preflight.test.ts` — 3 stale exact-prose assertions; flagged in the P0/P1/P2 PR bodies as out-of-scope for this epic. Will be addressed in the follow-up docs cycle.
+- `test/integration/{form-ir-loadfromtext,vba-manager-export-import,vba-source-comparison-real-fixture}.test.ts` — missing `E2E_testing/NoConformidades.accdb` fixture; integration-environment gap, not a runtime regression.
+
+### Stats
+
+- 9 PRs merged, 0 blocked, 0 deferred to a follow-up issue.
+- Unit suite at release: 4515 tests passing; 3 pre-existing documentation failures documented above.
+- Integration suite at release: 51 tests passing; 3 pre-existing missing-fixture failures documented above.
+- CodeGraph index refreshed incrementally via `codegraph sync` (full rebuild blocked by EPERM on `.codegraph-vba/codegraph.db` held by the running MCP server).
+
 ## [v2.22.1] - 2026-07-23
 
 ### Added
