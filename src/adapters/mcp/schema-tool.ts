@@ -561,6 +561,87 @@ function aliasesFromComposition(
   return { canonical, aliases: [...new Set(aliases)] };
 }
 
+function defaultFromDescription(parameter: ToolParameterSchema): unknown {
+  if (!/\bdefault(?:s|ed)?\b/i.test(parameter.description)) return undefined;
+  const quoted = parameter.description.match(/[`'"]([^`'"]+)[`'"]\s*\(default\)/i)?.[1];
+  const stated = parameter.description.match(
+    /\bdefault(?:s|ed)?(?:\s+value)?(?:\s+is|\s+to)?\s+[`'"]?([^.;,`'"]+)/i,
+  )?.[1];
+  const raw = (quoted ?? stated)?.trim();
+  if (raw === undefined || raw.length === 0) return "runtime-defined";
+  if (parameter.type === "boolean") {
+    if (/^true\b/i.test(raw)) return true;
+    if (/^false\b/i.test(raw)) return false;
+  }
+  if (parameter.type === "number") {
+    const numeric = raw.match(/^-?\d+(?:\.\d+)?/)?.[0];
+    if (numeric !== undefined) return Number(numeric);
+  }
+  return raw;
+}
+
+function canonicalNameFromDescription(
+  name: string,
+  description: string,
+  parameters: Record<string, ToolParameterSchema>,
+): string | undefined {
+  const explicit =
+    description.match(/\balias\s+(?:of|for)\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1] ??
+    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1];
+  if (explicit !== undefined) return explicit;
+  const candidates: Record<string, readonly string[]> = {
+    path: ["sourcePath", "testsPath", "exportPath", "importPath", "directoryPath", "databasePath"],
+    table: ["tableName"],
+    query: ["sql"],
+    column: ["columnName"],
+    name: ["formName", "moduleName"],
+    type: ["controlType"],
+    fields: ["columns"],
+    target: ["targetPath"],
+    password: ["backendPassword", "passwordEnv"],
+    backendPassword: ["passwordEnv"],
+  };
+  return candidates[name]?.find((candidate) => parameters[candidate] !== undefined);
+}
+
+function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): void {
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (parameter.default === undefined) {
+      const inferredDefault = defaultFromDescription(parameter);
+      if (inferredDefault !== undefined) parameter.default = inferredDefault;
+    }
+    if (!/\balias(?:es)?\b/i.test(parameter.description) || parameter.canonicalName !== undefined) {
+      continue;
+    }
+    parameter.canonicalName =
+      canonicalNameFromDescription(name, parameter.description, parameters) ?? name;
+    parameter.precedence = parameter.canonicalName === name ? "canonical" : "deprecated";
+    if (parameter.canonicalName !== name) {
+      parameter.deprecated = true;
+      parameter.deprecatedSince = "2.23.0";
+    }
+  }
+
+  const groups = new Map<string, Set<string>>();
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (parameter.canonicalName === undefined) continue;
+    const group = groups.get(parameter.canonicalName) ?? new Set<string>();
+    group.add(parameter.canonicalName);
+    group.add(name);
+    groups.set(parameter.canonicalName, group);
+  }
+  for (const [canonicalName, aliases] of groups) {
+    const values = [...aliases];
+    for (const alias of values) {
+      const parameter = parameters[alias];
+      if (parameter === undefined) continue;
+      parameter.canonicalName = canonicalName;
+      parameter.aliases = values;
+      parameter.precedence ??= alias === canonicalName ? "canonical" : "deprecated";
+    }
+  }
+}
+
 function enrichParameterMetadata(
   toolName: string,
   schema: unknown,
@@ -580,6 +661,8 @@ function enrichParameterMetadata(
       }
     }
   }
+
+  enrichProseMetadata(parameters);
 
   for (const [name, parameter] of Object.entries(parameters)) {
     if (/password|secret|token/i.test(name)) parameter.sensitive = true;
