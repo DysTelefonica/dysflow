@@ -5,7 +5,10 @@
 import packageJson from "../../../package.json" with { type: "json" };
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
-import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
+import {
+  commitFlagMetadataForOrNoop,
+  legacyAliasesFor,
+} from "../../core/runtime/commit-flag-registry.js";
 import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
@@ -130,7 +133,23 @@ export type McpCapabilitySnapshot = {
    * `test/adapters/mcp/get-capabilities-commit-flags.test.ts`.
    */
   tools: Readonly<
-    Record<string, import("../../core/runtime/commit-flag-registry.js").CommitFlagMetadata>
+    Record<
+      string,
+      import("../../core/runtime/commit-flag-registry.js").CommitFlagMetadata & {
+        /**
+         * v2.22.0 (#1057 F7) — the ONE flag whose `true` value commits.
+         * Mirror of `commitFlag`, named for the homogenized single-flag
+         * design so consumers stop reasoning about per-tool polarity.
+         */
+        canonicalCommitFlag: import("../../core/runtime/commit-flag-registry.js").CommitFlagName;
+        /**
+         * v2.22.0 (#1057 F7) — deprecated aliases still honored and
+         * desugared by the adapter (`dryRun` ≡ `!apply`; export_* also
+         * keeps the historic `diff`). Empty for read-only tools.
+         */
+        legacyAliases: readonly string[];
+      }
+    >
   >;
 };
 
@@ -202,9 +221,17 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
   // v2.9.0 (#757 C2) — per-tool commit-flag metadata for the snapshot.
   // Sourced from `COMMIT_FLAG_REGISTRY` (the single source of truth) and
   // frozen so consumers can pass the snapshot around safely.
-  const tools: Record<string, ReturnType<typeof commitFlagMetadataForOrNoop>> = {};
+  const tools: McpCapabilitySnapshot["tools"] extends Readonly<Record<string, infer Entry>>
+    ? Record<string, Entry>
+    : never = {};
   for (const name of toolNames) {
-    tools[name] = commitFlagMetadataForOrNoop(name);
+    const metadata = commitFlagMetadataForOrNoop(name);
+    // #1057 (F7) — additive fields for the homogenized single-flag design.
+    tools[name] = {
+      ...metadata,
+      canonicalCommitFlag: metadata.commitFlag,
+      legacyAliases: legacyAliasesFor(name),
+    };
   }
 
   // v2.14.1 (#940) — documentation bundle status. When the caller wires a

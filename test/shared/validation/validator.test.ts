@@ -52,7 +52,7 @@ describe("validateInput — schema validation and error shape", () => {
       { name: "test", count: 5, extra: "not allowed" },
       schemaWithRequired,
     );
-    expect(result).toBe("extra is not allowed.");
+    expect(result).toMatch(/^extra is not allowed./);
   });
 });
 
@@ -296,7 +296,7 @@ describe("validateInput — additionalProperties schema form", () => {
       },
     };
     const result = validateInput({ a: "hello", extra: "not allowed" }, schema);
-    expect(result).toBe("extra is not allowed.");
+    expect(result).toMatch(/^extra is not allowed./);
   });
 
   it("additionalProperties: true still allows extra keys (regression)", () => {

@@ -177,6 +177,9 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // surface, but the handler never mutates state. Same family as
   // `verify_code` / `inspect_form` / `doctor` — `defaultBehavior: "noop"`.
   schema: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #1057 (F5) — `describe_tool` is the single-tool sibling of
+  // `schema`. Pure read-class; same noop semantics.
+  describe_tool: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Issue #965 — `diagnose` collapses the 4-5 round-trip pattern into
   // one read-only call. Same read-class family as `schema`,
   // `resolve_project`, `doctor`, `inspect_form` — `defaultBehavior: "noop"`.
@@ -298,6 +301,19 @@ export function commitFlagMetadataForOrNoop(toolName: string): CommitFlagMetadat
  */
 export function commitFlagFor(toolName: string): CommitFlagName {
   return commitFlagMetadataForOrNoop(toolName).commitFlag;
+}
+
+/**
+ * Issue #1057 (F7/F8) — deprecated aliases still honored for the given
+ * tool. `dryRun` is the universal alias of `!apply` on every write tool;
+ * export_* additionally keeps the historic `diff`. Read-only tools (no
+ * no-write alias) report an empty list.
+ */
+export function legacyAliasesFor(toolName: string): readonly string[] {
+  const { noWriteAlias } = commitFlagMetadataForOrNoop(toolName);
+  if (noWriteAlias === null) return [];
+  if (noWriteAlias === "diff") return ["diff", "dryRun"];
+  return [noWriteAlias];
 }
 
 /**

@@ -82,6 +82,16 @@ export type ListVbaModulesResult = {
     inBinaryOnly: number;
     inSourceOnly: number;
     inBoth: number;
+    /** #1057 (F3) — explicit-unit alias of `total`. */
+    totalModules: number;
+    /**
+     * #1057 (F3) — explicit-unit aliases. These count module PRESENCE
+     * (which side has the module), not content drift — a consumer that
+     * needs drift counts must read `verify_code.moduleCounts`.
+     */
+    modulesInBinaryOnly: number;
+    modulesInSourceOnly: number;
+    modulesInBoth: number;
   };
 };
 

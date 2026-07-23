@@ -101,6 +101,32 @@ export type SummaryStructured = {
   };
 };
 
+/**
+ * Issue #1057 (F3) — explicit module-unit counts for `verify_code`. Every
+ * field name carries the unit (`*Modules`) so the surface cannot be
+ * confused with `list_vba_modules.summary` presence counts or with the
+ * line-unit view in {@link VbaSummaryUnits}. Semantic mode only.
+ */
+export type VbaModuleCounts = {
+  matchedModules: number;
+  differentModules: number;
+  missingInSourceModules: number;
+  missingInBinaryModules: number;
+  sourceNewerModules: number;
+  binaryNewerModules: number;
+  bothChangedModules: number;
+};
+
+/**
+ * Issue #1057 (F3) — per-category `{ modulesCount, linesCount }` pairs.
+ * `modulesCount` mirrors the flat {@link VbaSemanticSummary} value;
+ * `linesCount` totals the classifier's unique functional lines across the
+ * category's diffs (0 when the category carries no line information).
+ */
+export type VbaSummaryUnits = Partial<
+  Record<VbaSemanticCategory, { modulesCount: number; linesCount: number }>
+>;
+
 /** Warning produced when a module fails to export (e.g. form open in design view). */
 export type ExportWarning = {
   module: string;
@@ -138,6 +164,10 @@ export type VbaVerifyResult = {
    * diffs (NOT including `missingIn*`). Strict mode leaves this undefined.
    */
   summaryStructured?: SummaryStructured;
+  /** #1057 (F3) — explicit module-unit counts. Semantic mode only. */
+  moduleCounts?: VbaModuleCounts;
+  /** #1057 (F3) — per-category { modulesCount, linesCount } pairs. Semantic mode only. */
+  summaryUnits?: VbaSummaryUnits;
   /**
    * Pre-computed list of module names that the source has and the binary is
    * missing or behind on, sorted lexicographically and deduped. Drop-in for
@@ -708,6 +738,10 @@ export async function compareVbaSourceTrees(
   const actionableDifferent: VbaSourceComparisonEntry[] = [];
   const nonActionableDifferent: VbaSourceComparisonEntry[] = [];
   const semanticSummary: Record<string, number> = {};
+  // #1057 (F3) — per-category unique-functional-line totals so consumers
+  // can tell "modules with drift" from "lines of drift" without
+  // re-walking `diffs`. Accumulated in the semantic loop below.
+  const semanticLineTotals: Record<string, number> = {};
 
   for (const [key, binaryFile] of binaryByKey) {
     const sourceFile = sourceByKey.get(key);
@@ -779,6 +813,11 @@ export async function compareVbaSourceTrees(
     // Accumulate semantic summary
     const cat = classification.classification;
     semanticSummary[cat] = (semanticSummary[cat] ?? 0) + 1;
+    // #1057 (F3) — line-unit companion to the module-unit summary.
+    semanticLineTotals[cat] =
+      (semanticLineTotals[cat] ?? 0) +
+      (classification.srcUniqueFunctionalLines ?? 0) +
+      (classification.binaryUniqueFunctionalLines ?? 0);
 
     // Bucket into actionable / nonActionable. Attach the classifier's
     // classification + reason to the entry so consumers can read the same
@@ -894,6 +933,25 @@ export async function compareVbaSourceTrees(
             hasFunctionalDifferences,
           ),
           summaryStructured,
+          // #1057 (F3) — explicit module-unit surface. Field names carry
+          // the unit so a consumer can no longer misread "0 modules
+          // missing" as "0 modules with content drift".
+          moduleCounts: {
+            matchedModules: matched.length,
+            differentModules: different.length,
+            missingInSourceModules: missingInSource.length,
+            missingInBinaryModules: missingInBinary.length,
+            sourceNewerModules: semanticSummary.sourceNewer ?? 0,
+            binaryNewerModules: semanticSummary.binaryNewer ?? 0,
+            bothChangedModules: semanticSummary.bothChanged ?? 0,
+          },
+          // #1057 (F3) — per-category { modulesCount, linesCount } pairs.
+          summaryUnits: Object.fromEntries(
+            Object.entries(semanticSummary).map(([category, modulesCount]) => [
+              category,
+              { modulesCount, linesCount: semanticLineTotals[category] ?? 0 },
+            ]),
+          ) as VbaSummaryUnits,
           ...deriveBulkLists(actionableDifferent, missingInBinary, missingInSource),
         }
       : {}),

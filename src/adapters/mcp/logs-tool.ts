@@ -31,6 +31,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { JsonObjectSchema } from "../../shared/validation/index.js";
+import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 
@@ -349,6 +350,8 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
       description:
         "Canonical project identity for traceability. The logs source is always <cwd>/.dysflow/runtime/; projectId is echoed back in the result envelope (for future per-project scoping).",
     },
+    // #1057 (F10) — optional per-call cwd override.
+    cwd: CWD_OVERRIDE_SCHEMA_PROP,
     options: {
       type: "object",
       additionalProperties: false,
@@ -421,7 +424,11 @@ export function createLogsTool(opts: { cwd: string }): DysflowMcpTool {
           ? (params.options as LogsOptions)
           : undefined;
 
-      const result = await tryReadLogs({ projectId, options }, opts.cwd);
+      // #1057 (F10) — honor a per-call cwd override; fall back to the
+      // factory cwd (backwards compatible).
+      const cwdResolution = resolveCwdOverride(input, opts.cwd);
+      if (!cwdResolution.ok) return cwdResolution.error;
+      const result = await tryReadLogs({ projectId, options }, cwdResolution.cwd);
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(result) }];
       return { content, isError: false, ok: true };
     },

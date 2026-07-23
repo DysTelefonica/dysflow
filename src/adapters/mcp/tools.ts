@@ -45,7 +45,7 @@ import { createGetCapabilitiesTool, readAdapterVersion } from "./get-capabilitie
 import { createLogsTool } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
-import { createSchemaTool } from "./schema-tool.js";
+import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
 import { createStateTool } from "./state-tool.js";
 
 export {
@@ -639,6 +639,10 @@ export const MODERN_TOOL_NAMES = [
   // get_capabilities (live state) and resolve_project (project
   // resolution).
   "schema",
+  // Issue #1057 (F5) — `describe_tool` is the single-tool sibling of
+  // `schema`: on-demand introspection of ONE tool's params, description,
+  // error codes, and useCases. Read-only.
+  "describe_tool",
   // Issue #965 — `dysflow.diagnose(projectId?, accessPath?, contextId?,
   // verbose?)` is the single-call aggregated project health surface
   // (projectConfig + filesystem + runtime). Read-only — never opens
@@ -1401,6 +1405,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // state. Pairs with get_capabilities (live state) and resolve_project
     // (project resolution).
     createSchemaTool(),
+    // Issue #1057 (F5) — single-tool introspection sibling of `schema`.
+    createDescribeToolTool(),
     // Issue #965 — `dysflow.diagnose` aggregates projectConfig + filesystem
     // + runtime health in a single call, replacing the 4-5 round-trip
     // pattern AI consumers hit today. Read-only by construction: never

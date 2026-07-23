@@ -40,6 +40,7 @@ import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
 } from "../config/project-config-diagnostic.js";
+import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 
@@ -303,6 +304,8 @@ export const DIAGNOSE_INPUT_SCHEMA = {
       description:
         "When true, the runtime block surfaces the active staleMarker threshold and an extended orphans enumeration. Reserved for v2.16.x; currently always reports the default.",
     },
+    // #1057 (F10) — optional per-call cwd override.
+    cwd: CWD_OVERRIDE_SCHEMA_PROP,
   },
 } as const;
 
@@ -353,8 +356,13 @@ export function createDiagnoseTool(options: CreateDiagnoseToolOptions): DysflowM
       void contextId;
       void verbose;
 
+      // #1057 (F10) — honor a per-call cwd override; fall back to the
+      // factory cwd (backwards compatible).
+      const cwdResolution = resolveCwdOverride(input, options.cwd);
+      if (!cwdResolution.ok) return cwdResolution.error;
+
       const result = await computeDiagnose({
-        cwd: options.cwd,
+        cwd: cwdResolution.cwd,
         snapshot: options.snapshot,
         ...(options.registry === undefined ? {} : { registry: options.registry }),
         ...(options.thresholdMs === undefined ? {} : { thresholdMs: options.thresholdMs }),

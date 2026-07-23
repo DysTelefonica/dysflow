@@ -212,6 +212,16 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Issue #1057 (F5) — `describe_tool` is the single-tool sibling of
+  // `schema`: on-demand introspection of ONE tool's params, description,
+  // error codes, and useCases. Read-only by construction: never opens
+  // Access, never spawns PowerShell, never mutates state, never
+  // write-gated.
+  describe_tool: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
   // Issue #965 — `diagnose` is the single-call aggregated project health
   // surface (projectConfig + filesystem + runtime). It replaces the
   // 4-5 round-trip pattern AI consumers hit today when bringing a

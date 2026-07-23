@@ -18,6 +18,15 @@ import {
   runSupplementDriftCheckFromEnv,
   type SupplementDriftDiagnostic,
 } from "./codegraph-supplement-drift-check.js";
+import { runExternalDepsChecks } from "./doctor/checks/external-deps.js";
+import { runProjectConfigChecks } from "./doctor/checks/project-config.js";
+import { runRuntimeConsumerChecks } from "./doctor/checks/runtime-consumer.js";
+import {
+  DOCTOR_CATEGORY_LABELS,
+  type DoctorCategoryCheck,
+  type DoctorCategoryId,
+} from "./doctor/checks/types.js";
+import { runVbaStructureChecks } from "./doctor/checks/vba-structure.js";
 import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
 import { ensureObject } from "./install/file-utils.js";
 import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
@@ -34,9 +43,42 @@ export async function handleDoctorCommand(
     return {
       exitCode: 0,
       stdout:
-        "Usage: dysflow doctor [--cwd <path>]\n\nCheck local Dysflow requirements without modifying the target worktree.",
+        "Usage: dysflow doctor [--cwd <path>] [--category A|B|C|D|all]\n\n" +
+        "Check local Dysflow requirements without modifying the target worktree.\n\n" +
+        "Categories (#1057 — read-only, no PowerShell, no Access):\n" +
+        "  A  .dysflow/project.json schema, path resolution, conventions\n" +
+        "  B  VBA source structure (Attribute VB_Name, Option Explicit)\n" +
+        "  C  runtime consumer contract (apply polarity, param naming)\n" +
+        "  D  external dependencies (.laccdb locks, .codegraph freshness)\n" +
+        "  all  run every category; exit code reflects critical findings only",
       stderr: "",
     };
+  }
+
+  // Issue #1057 (F9) — categorized read-only checks. When `--category` is
+  // present the doctor runs ONLY the requested category checks: no
+  // PowerShell, no Access COM, no config-load side effects.
+  const categoryIndex = args.indexOf("--category");
+  if (categoryIndex >= 0) {
+    const requested = args[categoryIndex + 1];
+    if (requested === undefined)
+      return { exitCode: 1, stdout: "", stderr: "Missing value for --category (A|B|C|D|all)." };
+    const normalized = requested.toUpperCase();
+    if (!["A", "B", "C", "D", "ALL"].includes(normalized))
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: `Unknown category '${requested}'. Expected A, B, C, D, or all.`,
+      };
+    const cwdIndex = args.indexOf("--cwd");
+    if (cwdIndex >= 0 && args[cwdIndex + 1] === undefined)
+      return { exitCode: 1, stdout: "", stderr: "Missing value for --cwd." };
+    const requestedCwd = cwdIndex >= 0 ? args[cwdIndex + 1] : undefined;
+    const effectiveCwd =
+      requestedCwd === undefined ? (context.cwd ?? process.cwd()) : path.resolve(requestedCwd);
+    const categories: DoctorCategoryId[] =
+      normalized === "ALL" ? ["A", "B", "C", "D"] : [normalized as DoctorCategoryId];
+    return runCategorizedDoctor(categories, effectiveCwd);
   }
 
   try {
@@ -65,6 +107,51 @@ export async function handleDoctorCommand(
     const message = error instanceof Error ? error.message : "Failed to run Dysflow diagnostics.";
     return { exitCode: 1, stdout: "", stderr: message };
   }
+}
+
+/**
+ * Issue #1057 (F9) — run the requested read-only check categories and
+ * render `✓ / ✗ / ⚠` lines under per-category headers. Best-effort: a
+ * category whose runner throws surfaces one failed entry instead of
+ * aborting the run. Exit code reflects CRITICAL findings only.
+ */
+function runCategorizedDoctor(categories: readonly DoctorCategoryId[], cwd: string): CliResult {
+  const runners: Record<DoctorCategoryId, () => DoctorCategoryCheck[]> = {
+    A: () => runProjectConfigChecks(cwd),
+    B: () => runVbaStructureChecks(cwd),
+    C: () => runRuntimeConsumerChecks(),
+    D: () => runExternalDepsChecks(cwd),
+  };
+
+  const lines: string[] = [];
+  let criticals = 0;
+  let warnings = 0;
+  for (const category of categories) {
+    lines.push(DOCTOR_CATEGORY_LABELS[category]);
+    let checks: DoctorCategoryCheck[];
+    try {
+      checks = runners[category]();
+    } catch (error) {
+      checks = [
+        {
+          ok: false,
+          name: `${DOCTOR_CATEGORY_LABELS[category]} runner`,
+          message: error instanceof Error ? error.message : String(error),
+          severity: "warning",
+        },
+      ];
+    }
+    for (const check of checks) {
+      const symbol = check.ok ? "✓" : check.severity === "critical" ? "✗" : "⚠";
+      if (!check.ok && check.severity === "critical") criticals += 1;
+      if (!check.ok && check.severity === "warning") warnings += 1;
+      lines.push(`${symbol} ${check.name}: ${check.message}`);
+    }
+  }
+  lines.push(
+    `${criticals} critical, ${warnings} warning${warnings === 1 ? "" : "s"} — exit ${criticals > 0 ? 1 : 0} (criticals only)`,
+  );
+  return { exitCode: criticals > 0 ? 1 : 0, stdout: lines.join("\n"), stderr: "" };
 }
 
 async function createDiagnosticsService(

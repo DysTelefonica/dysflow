@@ -195,7 +195,7 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
       expect(captured[0]?.input).toMatchObject({ apply: true, dryRun: false });
     });
 
-    it("delete_module({ apply: false, dryRun: false }) survives — both signals forwarded", async () => {
+    it("delete_module({ apply: false, dryRun: false }) is rejected as mutually exclusive (#1057 F8)", async () => {
       const { handler, captured } = buildHandlerForTool("delete_module");
 
       const result = await handler(
@@ -209,9 +209,13 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
         {} as any,
       );
 
-      expect(result.isError).toBe(false);
-      expect(captured).toHaveLength(1);
-      expect(captured[0]?.input).toMatchObject({ apply: false, dryRun: false });
+      // apply:false (plan) contradicts dryRun:false (commit); the caller's
+      // intent is ambiguous, so the dispatch rejects instead of letting one
+      // flag silently win. Consistent combos (apply:true + dryRun:false)
+      // keep the #977 precedence contract.
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("mutually exclusive");
+      expect(captured).toHaveLength(0);
     });
   });
 

@@ -111,18 +111,18 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // bypasses MCP_TOOL_ROUTES), modern 14 -> 16 (was 14, lost 3 aliases;
     // +1 for #976, +1 for #971 schema, +1 for #973 logs, +1 for #978
     // state — wait: 14 - 3 + 5 = 16 modern tools, dispatch unchanged at
-    // 73, visible = 73 - 0 + 16 = 89), visible 87 -> 89.
+    // 73, visible = 73 - 0 + 17 = 90), visible 89 -> 90 (#1057 describe_tool).
     //   Expected breakdown:
     //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
     // + 16 modern core tools (was 14, lost 3 aliases; +1 for #971 schema,
     // +1 for #965 diagnose, +1 for #976 clean_stale_markers, +1 for #978 state,
-    // +1 for #973 logs)
-    //     = 89 visible (was 64 before #795).
+    // +1 for #973 logs, +1 for #1057 describe_tool)
+    //     = 90 visible (was 64 before #795).
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(16);
-    expect(visibleCount).toBe(89);
+    expect(modernCount).toBe(17);
+    expect(visibleCount).toBe(90);
   });
 
   it("verifies split-mode coverage explicitly", () => {

@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**89 visible MCP tools · Windows / Node 20+**
+**90 visible MCP tools · Windows / Node 20+**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 89 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 90 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -676,6 +676,18 @@ When a Dysflow call returns an error envelope, the first 30 seconds should be sp
 
 See [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboarding.md) for the 5-minute guided tour of the same pitfalls with concrete fixes.
 
+### Read tools and the `.accdb` LSN (round-trip noise) — #1057 F2
+
+Read-class tools that open the binary through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, `list_objects`, …) may update the Jet/ACE internal LSN when Access closes the file. The observable effect: `git status` reports the `.accdb` as modified after every dysflow run even when zero project content changed (`git diff --stat` shows `Bin N -> N bytes` — identical size).
+
+Rules of thumb for a consumer:
+
+- **Never `git add` the `.accdb` blindly after a dysflow run.** An LSN-only change is noise; committing it churns the repository for nothing.
+- **Verify real changes before staging**: `git diff --stat <file>.accdb` with an identical byte size is almost always LSN-only; when in doubt, `verify_code` is the authoritative content-drift check (read its `moduleCounts` — module units, not presence counts).
+- **Distinguish the two summaries**: `list_vba_modules.summary.modulesInBinaryOnly` counts module *presence*; `verify_code.moduleCounts.sourceNewerModules` counts *content drift*. "All presence counts 0" does not mean "no drift".
+
+An LSN-free read path (opening without the COM lock) is a deeper Access-runner change and is intentionally not attempted here; this section is the documented contract.
+
 ---
 
 ## MCP (stdlib-style stdio)
@@ -847,6 +859,14 @@ Return the runtime contract for every tool in the consumer's dysflow installatio
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Optional tool name to filter the catalog to a single entry. Omit for the full catalog.
 * **Returns**: `{ projectId, tools: [{ name, description, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault }] }`.
+
+#### `describe_tool`
+Describe ONE MCP tool on demand: description, `params` (typed + required + description + enumValues + default), returns, errorCodes, crossReferences, and `useCases` (when to reach for the tool). Single-tool sibling of `schema` — introspect one tool without fetching the full catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state (#1057 F5).
+* **Parameters**:
+  - `name` (string): Tool name to describe (canonical param).
+  - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` tool's filter param.
+  - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
+* **Returns**: the single tool's contract entry — `{ name, description, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases }` (`params` mirrors `parameters`). Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
 
 #### `diagnose`
 Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Replaces the 4-5 round-trip pattern (`get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Pairs with `get_capabilities` (live adapter state) and `schema` (static contract): `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.

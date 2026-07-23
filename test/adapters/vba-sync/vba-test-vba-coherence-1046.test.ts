@@ -131,6 +131,9 @@ describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schem
       commitFlag: "dryRun",
       noWriteAlias: null,
       defaultBehavior: "plan",
+      // #1057 (F7) — additive homogenized-flag fields.
+      canonicalCommitFlag: "dryRun",
+      legacyAliases: [],
     });
   });
 });
