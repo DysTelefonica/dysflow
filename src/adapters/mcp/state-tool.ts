@@ -49,6 +49,7 @@ import {
   DEFAULT_RECENT_ACCESS_OPERATION_LIMIT,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
+import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
@@ -301,11 +302,10 @@ export const STATE_TOOL_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId. Reserved for a future per-project scoping extension (#966 follow-up). The current state snapshot is global.",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity block so the
+    // consumer-facing description matches every other tool that uses
+    // this atom.
+    ...PROJECT_IDENTITY_BLOCK,
     // #1057 (F10) — optional per-call cwd override.
     cwd: CWD_OVERRIDE_SCHEMA_PROP,
   },
