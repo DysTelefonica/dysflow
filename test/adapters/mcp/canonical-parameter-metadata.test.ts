@@ -157,6 +157,11 @@ const KNOWN_WRITE_FLAG_PAIRS: ReadonlyArray<{
   { tool: "import_all", flags: ["apply", "dryRun"] },
 ];
 
+function requiredParameter(parameter: ToolParameterSchema | undefined): ToolParameterSchema {
+  if (parameter === undefined) throw new Error("Expected catalog parameter to exist");
+  return parameter;
+}
+
 function getExtendedParam(schema: ToolParameterSchema): ToolParameterSchema & {
   default?: unknown;
   canonicalName?: string;
@@ -191,7 +196,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
         const entry = catalogEntry(tool.name);
         const param = entry.parameters[name];
         expect(param, `catalog missing parameter '${name}' for tool '${tool.name}'`).toBeDefined();
-        const ext = getExtendedParam(param!);
+        const ext = getExtendedParam(requiredParameter(param));
         expect(
           ext.default,
           `tool '${tool.name}' parameter '${name}' declares a default in JSON Schema but the catalog does not surface it as structured metadata`,
@@ -199,9 +204,10 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
       }
     }
     // Sanity guard: at least one parameter has a default today.
-    expect(checked, "no parameters with defaults found — the seed list is too narrow").toBeGreaterThan(
-      0,
-    );
+    expect(
+      checked,
+      "no parameters with defaults found — the seed list is too narrow",
+    ).toBeGreaterThan(0);
   });
 
   it("every known alias group declares canonicalName, aliases, and deprecated metadata", () => {
@@ -213,7 +219,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
           param,
           `alias '${alias}' missing from catalog of tool '${group.tool}'`,
         ).toBeDefined();
-        const ext = getExtendedParam(param!);
+        const ext = getExtendedParam(requiredParameter(param));
         expect(
           ext.canonicalName,
           `tool '${group.tool}' alias '${alias}' must declare canonicalName pointing at '${group.canonical}'`,
@@ -226,7 +232,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
       // The canonical parameter itself does NOT carry `deprecated`.
       const canonicalParam = entry.parameters[group.canonical];
       expect(canonicalParam, `canonical parameter '${group.canonical}' missing`).toBeDefined();
-      const canonicalExt = getExtendedParam(canonicalParam!);
+      const canonicalExt = getExtendedParam(requiredParameter(canonicalParam));
       expect(
         canonicalExt.canonicalName,
         `canonical '${group.canonical}' must declare canonicalName === '${group.canonical}'`,
@@ -235,7 +241,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
       for (const dep of group.deprecated ?? []) {
         const depParam = entry.parameters[dep];
         expect(depParam, `deprecated alias '${dep}' missing`).toBeDefined();
-        const depExt = getExtendedParam(depParam!);
+        const depExt = getExtendedParam(requiredParameter(depParam));
         expect(
           depExt.deprecated,
           `deprecated alias '${dep}' on tool '${group.tool}' must expose deprecated:true`,
@@ -256,7 +262,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
         param,
         `sensitive parameter '${seed.param}' missing from catalog of tool '${seed.tool}'`,
       ).toBeDefined();
-      const ext = getExtendedParam(param!);
+      const ext = getExtendedParam(requiredParameter(param));
       expect(
         ext.sensitive,
         `tool '${seed.tool}' parameter '${seed.param}' must be marked sensitive:true`,
@@ -291,10 +297,13 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
     // Pick a known alias group; describe_tool's single-tool response must
     // include the same canonicalName/aliases/deprecated fields.
     const target = KNOWN_ALIAS_GROUPS[0];
+    if (target === undefined) throw new Error("Known alias groups must not be empty");
     const entry = catalogEntry(target.tool);
     const targetParam = entry.parameters[target.canonical];
-    const targetExt = getExtendedParam(targetParam!);
-    expect(targetExt.canonicalName, "catalog must declare canonicalName first").toBe(target.canonical);
+    const targetExt = getExtendedParam(requiredParameter(targetParam));
+    expect(targetExt.canonicalName, "catalog must declare canonicalName first").toBe(
+      target.canonical,
+    );
   });
 
   it("the catalog stays in sync with describe_tool's view (no dual-source drift)", () => {

@@ -25,7 +25,10 @@
 //     safeByDefault,        // boolean
 //   }
 
-import { commitFlagMetadataForOrNoop, legacyAliasesFor } from "../../core/runtime/commit-flag-registry.js";
+import {
+  commitFlagMetadataForOrNoop,
+  legacyAliasesFor,
+} from "../../core/runtime/commit-flag-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
