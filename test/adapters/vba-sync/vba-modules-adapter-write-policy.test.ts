@@ -246,6 +246,66 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     expect(calls).toEqual([expect.objectContaining({ action: "Delete" })]);
   });
 
+  it("delete_module with apply:false → planDelete (no runner)", async () => {
+    const calls: unknown[] = [];
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        calls.push(request);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("delete_module", {
+      moduleName: "Module_Foo",
+      apply: false,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected plan success");
+    expect(result.data).toMatchObject({
+      operation: "delete_module",
+      dryRun: true,
+      willModifyAccess: false,
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("export_modules with apply:false → runner receives readOnly:true", async () => {
+    const calls: Array<{ readOnly?: boolean }> = [];
+    const service = new VbaSyncAdapter({
+      executor: async (request) => {
+        calls.push({ readOnly: (request.extra as Record<string, unknown> | undefined)?.readOnly === true });
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true, "exported":["Form_Foo"]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+      accessPath: "C:/db/front.accdb",
+      destinationRoot: "C:/repo/src",
+      env: {},
+    });
+
+    const result = await service.execute("export_modules", {
+      moduleNames: ["Form_Foo"],
+      apply: false,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual([{ readOnly: true }]);
+  });
+
   // ---------- apply:true precedence ----------
 
   it("apply:true && dryRun:true → dryRun:true wins (planImport)", async () => {

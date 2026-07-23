@@ -86,7 +86,10 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
     (input) => stringArray(input.moduleNames),
     // issue #752 — forward the opt-in verbose flag so the per-module export
     // result carries {source, destination, truncated, mismatchReason}.
-    (input) => ({ verbose: input.verbose === true }),
+    (input) => ({
+      verbose: input.verbose === true,
+      readOnly: input.readOnly === true ? true : undefined,
+    }),
   ),
   export_all: mapping(
     "Export",
@@ -95,7 +98,10 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
       const filter = stringValue(input.filter);
       return filter === undefined ? [] : [filter];
     },
-    (input) => ({ verbose: input.verbose === true }),
+    (input) => ({
+      verbose: input.verbose === true,
+      readOnly: input.readOnly === true ? true : undefined,
+    }),
   ),
   import_modules: mapping(
     "Import",
@@ -539,15 +545,11 @@ export class VbaModulesAdapter {
     //   - absent (caller omitted both) → execute.
     // Direct adapter callers (no dispatch seam) MUST pass an explicit flag
     // to plan; the seam is the policy authority.
-    const dryRun = params.dryRun === true;
+    const dryRun = params.dryRun === true || params.apply === false;
     if (dryRun && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
     }
-    // `dryRun && toolName === "delete_module"` was previously guarded by an
-    // extra `params.dryRun === true` check because delete_module lacked the
-    // implicit absence-default. With the new contract, `dryRun` is `true`
-    // iff the caller explicitly passed `dryRun: true`, so the extra guard
-    // is redundant. The branch mirrors the import_* shape.
+    // `dryRun && toolName === "delete_module"` handles dryRun:true or apply:false
     if (dryRun && toolName === "delete_module") {
       return this.planDelete(params);
     }
@@ -593,10 +595,17 @@ export class VbaModulesAdapter {
     // exportPath guard / target resolution so this branch never touches
     // the orchestrator.
     //
-    // The resolved `effectiveExportReadOnly` and `deprecationNotice` are
-    // carried into the orchestrator call below.
+    // Issue #1055: `apply:false` or `dryRun:true` on export_modules / export_all
+    // routes as no-write (readOnly:true) unless apply:true is also present.
     let effectiveExportReadOnly: boolean | undefined;
     let deprecationNotice: { metadata: OperationMetadata; diagnostic: Diagnostic } | undefined;
+    if (
+      (toolName === "export_all" || toolName === "export_modules") &&
+      (params.apply === false || params.dryRun === true) &&
+      params.apply !== true
+    ) {
+      effectiveExportReadOnly = true;
+    }
     const isExportWithDeprecationAlias =
       (toolName === "export_all" || toolName === "export_modules") && params.diff === true;
     if (isExportWithDeprecationAlias) {
