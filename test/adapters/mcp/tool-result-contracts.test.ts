@@ -70,10 +70,7 @@ describe("Tool-specific result contracts — #1077", () => {
     const catalog = buildToolSchemaCatalog({});
     for (const tool of catalog.tools) {
       const resultContract = (tool as Record<string, unknown>).resultContract;
-      expect(
-        resultContract,
-        `tool '${tool.name}' must publish a resultContract`,
-      ).toBeDefined();
+      expect(resultContract, `tool '${tool.name}' must publish a resultContract`).toBeDefined();
       expect(resultContract).not.toBeNull();
       if (typeof resultContract !== "object") {
         throw new Error(
@@ -201,19 +198,20 @@ describe("Tool-specific result contracts — #1077", () => {
       // envelope simplification can't silently drop the remediation
       // field that `describe_tool` consumers rely on.
       const errorEnvelope = (contract as { errorEnvelope?: unknown }).errorEnvelope;
-      expect(errorEnvelope, `${tool.name}: contract must declare errorEnvelope shape`).toBeDefined();
+      expect(
+        errorEnvelope,
+        `${tool.name}: contract must declare errorEnvelope shape`,
+      ).toBeDefined();
       const errorShape = (errorEnvelope as Record<string, unknown> | undefined)?.shape;
       expect(errorShape, `${tool.name}: errorEnvelope.shape is required`).toBeDefined();
       expect(
-        typeof errorShape === "object" &&
-          (errorShape as Record<string, unknown>).code === { type: "string" },
+        (errorShape as Record<string, unknown> | undefined)?.code,
         `${tool.name}: errorEnvelope.shape.code must declare a typed string field`,
-      ).toBe(true);
+      ).toMatchObject({ type: "string" });
       expect(
-        typeof errorShape === "object" &&
-          (errorShape as Record<string, unknown>).remediation === { type: "string", optional: true },
+        (errorShape as Record<string, unknown> | undefined)?.remediation,
         `${tool.name}: errorEnvelope.shape.remediation must be a typed string (optional)`,
-      ).toBe(true);
+      ).toMatchObject({ type: "string", optional: true });
     }
   });
 

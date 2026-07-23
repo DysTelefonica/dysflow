@@ -125,6 +125,13 @@ export type ToolFieldShape = {
   description?: string;
   /** Element type when `type === "array"`. */
   items?: ToolFieldShape;
+  /**
+   * Nested property map when `type === "object"`. Allows one level of
+   * inline nesting so a typed payload like `{ summary: { total,
+   * inSync } }` does not require a separate
+   * {@link ToolDataSchemaFragment} just for the nested object.
+   */
+  properties?: Record<string, ToolFieldShape>;
 };
 
 /**
@@ -193,6 +200,12 @@ export type ToolDataSchemaFragment = {
 export type ToolResultContract =
   | {
       kind: "dataSchema";
+      /**
+       * Human-readable description of what the payload contains.
+       * Optional — most entries use it to document the discriminator
+       * or the way to interpret the shape.
+       */
+      description?: string;
       dataSchema: ToolDataSchemaFragment;
       /**
        * Issue #1077 — discriminated result modes for write-class tools.
@@ -941,8 +954,7 @@ const QUERY_EXECUTE_RESULT: ToolResultContract = {
       },
       plan: {
         type: "boolean",
-        description:
-          "True when the call was a dry-run; the runtime did NOT mutate the database.",
+        description: "True when the call was a dry-run; the runtime did NOT mutate the database.",
       },
       columns: {
         type: "array",
@@ -972,7 +984,8 @@ const EXPORT_MODULES_RESULT: ToolResultContract = {
       },
       pruned: {
         type: "array",
-        description: "Files the runtime would have removed because prune=true and they no longer exist in the binary.",
+        description:
+          "Files the runtime would have removed because prune=true and they no longer exist in the binary.",
       },
       binaryMutated: {
         type: "boolean",
@@ -1055,8 +1068,7 @@ const QUERY_MAINTENANCE_WRITE_RESULT: ToolResultContract = {
 
 const READ_ONLY_GENERIC: ToolResultContract = {
   kind: "dataSchema",
-  description:
-    "Read-only payload; no plan/apply discriminator (the runtime never mutates).",
+  description: "Read-only payload; no plan/apply discriminator (the runtime never mutates).",
   dataSchema: {
     type: "object",
     properties: {
@@ -1455,7 +1467,8 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
   sync_binary: SYNC_BINARY_RESULT,
   vba_orphan_audit: {
     kind: "dataSchema",
-    description: "Orphan VBA procedure audit (procedures registered in binary but missing from source).",
+    description:
+      "Orphan VBA procedure audit (procedures registered in binary but missing from source).",
     dataSchema: {
       type: "object",
       properties: {
