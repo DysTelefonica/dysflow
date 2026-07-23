@@ -26,6 +26,7 @@
 //   }
 
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
+import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
   CAPABILITIES_DISALLOW_WRITE,
   DESTINATION_ROOT_NOT_FOUND,
@@ -52,8 +53,10 @@ import {
   QUERY_EXECUTE_SCHEMA,
   VALIDATE_MANIFEST_SCHEMA,
 } from "./schemas/dysflow-schemas.js";
+import { CLEAN_STALE_MARKERS_SCHEMA } from "./schemas/dysflow-schemas.js";
 import { MCP_TOOL_SCHEMAS, NO_INPUT_SCHEMA } from "./schemas/index.js";
 import type { JsonObjectSchema } from "./schemas.js";
+import { STATE_TOOL_SCHEMA } from "./state-tool.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -291,10 +294,60 @@ const TOOL_USE_CASES: Record<string, readonly string[]> = {
 
 // ─── Input-schema registry (modern tools) ─────────────────────────────────────
 
+// Schema for the `schema` MCP tool. Declared above the modern tool registry
+// (issue #1072) so the registry can include it by reference without a
+// module-init TDZ. The factory below uses the same constant — both the
+// MCP advertisement and the `schema`/`describe_tool` catalog agree by
+// construction.
+export const SCHEMA_TOOL_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    projectId: {
+      type: "string",
+      description:
+        "Optional projectId. Reserved for a future per-project scoping extension (#966 follow-up). The current catalog is global.",
+    },
+    toolName: {
+      type: "string",
+      description: "Optional tool name to filter the catalog to a single entry. Omit for the full catalog.",
+    },
+  },
+} as const;
+
+// Schema for the `describe_tool` MCP tool (issue #1057 F5). Single-tool
+// sibling of `schema`. Hoisted above the modern tool registry for the same
+// reason as `SCHEMA_TOOL_INPUT_SCHEMA` (issue #1072 — eliminate the
+// `describe_tool` TDZ branch in `inputSchemaForTool`).
+export const DESCRIBE_TOOL_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: {
+      type: "string",
+      description: "Tool name to describe (canonical param).",
+    },
+    toolName: {
+      type: "string",
+      description: "Alias of `name` for symmetry with the `schema` tool's filter param.",
+    },
+    projectId: {
+      type: "string",
+      description:
+        "Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.",
+    },
+  },
+} as const;
+
 /**
  * Per-modern-tool input schemas. Modern tools do not live in
  * `MCP_TOOL_SCHEMAS` (that registry is dispatch-only) so they are looked
  * up here by name. Missing entry → `NO_INPUT_SCHEMA` (no parameters).
+ *
+ * Issue #1072 — every modern tool advertised through `createDysflowMcpTools`
+ * MUST have an entry here pointing at the SAME JSON Schema the factory
+ * exposes via `tool.inputSchema`. The factory and the catalog become two
+ * readers of the same authoritative source so they cannot drift.
  */
 const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   query_execute: QUERY_EXECUTE_SCHEMA,
@@ -308,7 +361,15 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   validate_manifest: VALIDATE_MANIFEST_SCHEMA,
   lint_module: LINT_MODULE_SCHEMA,
   resolve_project: RESOLVE_PROJECT_SCHEMA,
-  schema: NO_INPUT_SCHEMA,
+  // Issue #1072 — every modern tool advertised through createDysflowMcpTools
+  // gets a real entry here. Previously these four fell through to
+  // NO_INPUT_SCHEMA and the catalog reported `parameters: {}` for tools
+  // that actually accept real parameters.
+  schema: SCHEMA_TOOL_INPUT_SCHEMA,
+  describe_tool: DESCRIBE_TOOL_INPUT_SCHEMA,
+  diagnose: DIAGNOSE_INPUT_SCHEMA,
+  state: STATE_TOOL_SCHEMA,
+  clean_stale_markers: CLEAN_STALE_MARKERS_SCHEMA,
   logs: LOGS_TOOL_SCHEMA,
 };
 
@@ -487,10 +548,9 @@ function safeByDefaultForTool(name: string, access: McpToolAccess): boolean {
 function inputSchemaForTool(name: string): unknown {
   // Modern tools live in MODERN_TOOL_INPUT_SCHEMAS (dispatch registry
   // doesn't carry them); everything else falls through to
-  // MCP_TOOL_SCHEMAS.
-  // `describe_tool` (#1057 F5) resolves lazily because its schema const
-  // is declared below the registry (module-init TDZ).
-  if (name === "describe_tool") return DESCRIBE_TOOL_INPUT_SCHEMA;
+  // MCP_TOOL_SCHEMAS. Issue #1072 — every modern tool advertised via
+  // `createDysflowMcpTools` is registered above, so the lookup is total
+  // and the explicit `describe_tool` TDZ branch is no longer needed.
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
   if (modern !== undefined) return modern;
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
@@ -581,23 +641,6 @@ export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
 
 // ─── MCP tool factory ─────────────────────────────────────────────────────────
 
-export const SCHEMA_TOOL_INPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId. Reserved for a future per-project scoping extension (#966 follow-up). The current catalog is global.",
-    },
-    toolName: {
-      type: "string",
-      description:
-        "Optional tool name to filter the catalog to a single entry. Omit for the full catalog.",
-    },
-  },
-} as const;
-
 /**
  * Factory for the `schema` MCP tool. Pure: `cwd` is unused today but
  * reserved for the per-project scoping extension. The handler never
@@ -632,26 +675,6 @@ export function createSchemaTool(): DysflowMcpTool {
     },
   };
 }
-
-const DESCRIBE_TOOL_INPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    name: {
-      type: "string",
-      description: "Tool name to describe (canonical param).",
-    },
-    toolName: {
-      type: "string",
-      description: "Alias of `name` for symmetry with the `schema` tool's filter param.",
-    },
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.",
-    },
-  },
-} as const;
 
 /**
  * Factory for the `describe_tool` MCP tool (#1057 F5). Returns ONE
