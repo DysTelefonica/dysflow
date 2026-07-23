@@ -162,6 +162,7 @@ const VBA_MANAGER_EXTRA_KEYS = new Set([
   "procedureName",
   "argsJson",
   "force",
+  "readOnly",
   // issue #752 — opt-in verbose contract. The script's switch is named
   // -VerboseContract (because [CmdletBinding()]$Verbose is the common
   // Write-Verbose parameter). The dispatch rewrites `verbose` → `-VerboseContract`
