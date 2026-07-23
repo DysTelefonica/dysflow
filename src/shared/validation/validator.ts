@@ -243,9 +243,20 @@ function levenshtein(a: string, b: string): number {
 
 /**
  * Issue #1057 (F8) — reject contradictory apply/dryRun combinations.
+ * Issue #1078 — surface the contradiction with the rejected-field shape
+ * the dispatcher recognizes (`apply:X contradicts dryRun:Y.`) so the
+ * structured `MCP_INPUT_INVALID` envelope can list BOTH rejected flags
+ * plus the canonical commit flag (`apply`) and an actionable
+ * remediation. The legacy text body is preserved verbatim for
+ * regex-grep consumers.
+ *
  * Applies only when the schema declares BOTH flags; otherwise the
- * standard unknown-key / type rules govern.
+ * standard unknown-key / type rules govern (e.g. `test_vba` declares
+ * `dryRun` only, so an `apply:true` for `test_vba` is rejected via the
+ * unknown-key path with a dedicated `apply is not allowed.` message).
  */
+export const APPLY_DRYRUN_CONTRADICTION_PREFIX = "apply and dryRun are mutually exclusive" as const;
+
 function validateApplyDryRunConsistency(
   params: Record<string, unknown>,
   schema: JsonObjectSchema,
@@ -257,8 +268,10 @@ function validateApplyDryRunConsistency(
   if (typeof apply !== "boolean" || typeof dryRun !== "boolean") return undefined;
   if (apply === dryRun) {
     return (
-      `apply and dryRun are mutually exclusive: apply:${apply} contradicts dryRun:${dryRun}. ` +
-      `Pass only one — apply is canonical (apply:true = commit, apply:false = plan); ` +
+      `${APPLY_DRYRUN_CONTRADICTION_PREFIX}: ` +
+      `apply:${apply} contradicts dryRun:${dryRun}. ` +
+      `Pass only one — apply is the canonical commit signal ` +
+      `(apply:true = commit, apply:false = plan); ` +
       `dryRun:true is a deprecated alias of apply:false.`
     );
   }

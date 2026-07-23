@@ -9,6 +9,7 @@ import {
 } from "../../core/operations/access-operation-registry.js";
 import {
   allowlistNotConfigured,
+  enrichmentForValidationMessage,
   invalidInput,
   isWriteAllowed,
   procedureNotAllowed,
@@ -84,7 +85,15 @@ export async function handleMcpVbaExecute(
   context?: McpToolContext,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every
+    // dispatch entry point. Use the shared helper so the apply/dryRun
+    // contradiction and the legacy `<flag> is not allowed.` shape both
+    // produce the structured rejection.
+    const enrichment = enrichmentForValidationMessage(validation, "run_vba");
+    if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    return invalidInput(validation);
+  }
 
   const request = buildRequest(input);
   if (isMcpToolResult(request)) return request;
@@ -118,7 +127,14 @@ export async function handleMcpQueryExecute(
   context?: McpToolContext,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every
+    // dispatch entry point. The tool name (`query_execute`) is what the
+    // structured enrichment binds to the registry's commit-flag metadata.
+    const enrichment = enrichmentForValidationMessage(validation, "query_execute");
+    if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    return invalidInput(validation);
+  }
 
   const request = buildRequest(input);
   if (
@@ -163,7 +179,12 @@ export async function handleMcpAccessCleanup(
   ) => RequestBuildResult<{ operationId: string; accessPath: string; force?: boolean }>,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
+    const enrichment = enrichmentForValidationMessage(validation, "cleanup_access_operation");
+    if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    return invalidInput(validation);
+  }
   if (services.cleanupService === undefined) {
     return {
       content: [
@@ -221,7 +242,12 @@ export async function handleMcpAccessOrphanCleanup(
     | McpToolResult,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
+    const enrichment = enrichmentForValidationMessage(validation, "access_force_cleanup_orphaned");
+    if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    return invalidInput(validation);
+  }
   if (services.orphanCleanupService === undefined) {
     return {
       content: [
@@ -285,7 +311,12 @@ export async function handleMcpCleanStaleMarkers(
   accessContextResolver: McpAccessContextResolver,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
+    const enrichment = enrichmentForValidationMessage(validation, "clean_stale_markers");
+    if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    return invalidInput(validation);
+  }
 
   if (services.cleanStaleMarkersService === undefined) {
     return {

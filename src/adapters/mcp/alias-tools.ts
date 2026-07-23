@@ -322,10 +322,19 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.exec_sql,
       inputSchema: execSqlSchema,
       handler: async (input) =>
-        handleValidatedMcpWrite(input, execSqlSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(
-            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.exec_sql, input),
-          ),
+        handleValidatedMcpWrite(
+          input,
+          execSqlSchema,
+          writesEnabled,
+          writeAccessResolver,
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.exec_sql, input),
+            ),
+          // Issue #1078 — pass the alias name so the structured
+          // `MCP_INPUT_INVALID` envelope can surface the canonical
+          // commit flag and remediation.
+          "exec_sql",
         ),
     },
     {
@@ -333,10 +342,16 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.run_script,
       inputSchema: runScriptSchema,
       handler: async (input) =>
-        handleValidatedMcpWrite(input, runScriptSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(
-            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.run_script, input),
-          ),
+        handleValidatedMcpWrite(
+          input,
+          runScriptSchema,
+          writesEnabled,
+          writeAccessResolver,
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.run_script, input),
+            ),
+          "run_script",
         ),
     },
     {
@@ -344,10 +359,16 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.create_table,
       inputSchema: createTableSchema,
       handler: async (input) =>
-        handleValidatedMcpWrite(input, createTableSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(
-            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.create_table, input),
-          ),
+        handleValidatedMcpWrite(
+          input,
+          createTableSchema,
+          writesEnabled,
+          writeAccessResolver,
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.create_table, input),
+            ),
+          "create_table",
         ),
     },
     {
@@ -355,10 +376,16 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.drop_table,
       inputSchema: dropTableSchema,
       handler: async (input) =>
-        handleValidatedMcpWrite(input, dropTableSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(
-            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.drop_table, input),
-          ),
+        handleValidatedMcpWrite(
+          input,
+          dropTableSchema,
+          writesEnabled,
+          writeAccessResolver,
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.drop_table, input),
+            ),
+          "drop_table",
         ),
     },
     {
@@ -366,10 +393,16 @@ export function buildAliasTools(
       description: TOOL_DESCRIPTIONS.seed_fixture,
       inputSchema: seedFixtureSchema,
       handler: async (input) =>
-        handleValidatedMcpWrite(input, seedFixtureSchema, writesEnabled, writeAccessResolver, () =>
-          services.queryService.execute(
-            buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.seed_fixture, input),
-          ),
+        handleValidatedMcpWrite(
+          input,
+          seedFixtureSchema,
+          writesEnabled,
+          writeAccessResolver,
+          () =>
+            services.queryService.execute(
+              buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.seed_fixture, input),
+            ),
+          "seed_fixture",
         ),
     },
     {
@@ -386,6 +419,7 @@ export function buildAliasTools(
             services.queryService.execute(
               buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.teardown_fixture, input),
             ),
+          "teardown_fixture",
         ),
     },
   ];
