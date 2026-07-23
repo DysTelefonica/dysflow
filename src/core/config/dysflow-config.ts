@@ -1,4 +1,4 @@
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -141,6 +141,15 @@ export type DysflowProjectConfig = {
   passwordEnv?: string;
   httpToken?: string;
   httpTokenEnv?: string;
+};
+
+export type DiscoveredProjectConfig = {
+  id: string | null;
+  projectRoot: string;
+  accessPath: string | null;
+  destinationRoot: string;
+  configPath: string;
+  active: boolean;
 };
 
 export type DysflowConfig = {

@@ -28,6 +28,7 @@ export type DiscoveredProjectDiagnostic = {
   id: string | null;
   projectRoot: string;
   accessPath: string | null;
+  destinationRoot: string;
   configPath: string;
   active: boolean;
 };
