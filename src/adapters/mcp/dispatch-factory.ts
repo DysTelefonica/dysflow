@@ -7,6 +7,7 @@ import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-po
 import { isRecord } from "../../core/utils/index.js";
 
 import {
+  enrichmentForValidationMessage,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
@@ -222,22 +223,15 @@ export function createDispatchTool(
       }
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
-        // #757 (C4) — when the validation message is the legacy
-        // `"<flag> is not allowed."` shape, enrich the rejection
-        // envelope with the rejected flag and the tool's actual
-        // commit flag. The legacy text body is preserved so regex
-        // consumers keep working; the structured `error` block is
-        // additive.
-        const flagMatch =
-          /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
-            validation,
-          );
-        const rejectedFlag = flagMatch?.[1] ?? flagMatch?.[2];
-        if (rejectedFlag !== undefined) {
-          return invalidInput(validation, undefined, {
-            rejectedFlag,
-            toolName: name,
-          });
+        // Issue #1078 / #757 (C4) — `enrichmentForValidationMessage`
+        // produces the structured enrichment (rejectedFlag /
+        // rejectedFlags / toolCommitFlag / remediation) for the two
+        // known shape variants of `validateInput` output. The legacy
+        // text body is preserved so regex consumers keep working;
+        // the structured `error` block is additive.
+        const enrichment = enrichmentForValidationMessage(validation, name);
+        if (enrichment !== undefined) {
+          return invalidInput(validation, undefined, enrichment);
         }
         return invalidInput(validation, undefined, { toolName: name });
       }

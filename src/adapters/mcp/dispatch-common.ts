@@ -4,7 +4,10 @@ import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
-import { validateInput } from "../../shared/validation/validator.js";
+import {
+  APPLY_DRYRUN_CONTRADICTION_PREFIX,
+  validateInput,
+} from "../../shared/validation/validator.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
@@ -663,6 +666,52 @@ export function writesDisabled(
 }
 
 /**
+ * Issue #1078 — derive the enrichment payload for a `validateInput`
+ * rejection message. When the message names the apply/dryRun
+ * contradiction (today the only multi-flag surface), populate BOTH
+ * `rejectedFlag` (primary) and `rejectedFlags` (full list) so the
+ * structured envelope can branch on either form. When the message is
+ * the legacy `"<flag> is not allowed."` shape (#757 C4), populate
+ * `rejectedFlag` with the literal flag name. Otherwise return
+ * `undefined` so the caller falls back to the plain `invalidInput`
+ * path.
+ *
+ * Centralizing the match here means every dispatch entry point
+ * (`createDispatchTool`, `handleMcpVbaExecute`, `handleMcpQueryExecute`,
+ * the `doctor` / `list_procedures` / etc. bespoke handlers in
+ * `tools.ts`) produces a uniform `MCP_INPUT_INVALID` envelope without
+ * each call site re-implementing the regex.
+ */
+export function enrichmentForValidationMessage(
+  validation: string,
+  toolName: string,
+):
+  | {
+      rejectedFlag?: string;
+      rejectedFlags?: readonly string[];
+      toolName: string;
+    }
+  | undefined {
+  // Apply/dryRun contradiction surface — both flags are rejected.
+  if (validation.startsWith(APPLY_DRYRUN_CONTRADICTION_PREFIX)) {
+    return {
+      rejectedFlag: "apply",
+      rejectedFlags: ["apply", "dryRun"],
+      toolName,
+    };
+  }
+  // Legacy single-flag rejection shape (#757 C4).
+  const flagMatch = /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
+    validation,
+  );
+  const rejectedFlag = flagMatch?.[1] ?? flagMatch?.[2];
+  if (rejectedFlag !== undefined) {
+    return { rejectedFlag, toolName };
+  }
+  return undefined;
+}
+
+/**
  * Surface a `MCP_INPUT_INVALID` envelope. The plain text body mirrors
  * the legacy prefix (`MCP_INPUT_INVALID: <message>`). When the
  * rejection is for a flag the caller passed that the tool doesn't
@@ -676,6 +725,14 @@ export function invalidInput(
   enrichment?: {
     /** Flag the caller passed that was rejected. Pinpoint for the consumer. */
     rejectedFlag?: string;
+    /**
+     * Issue #1078 — when the schema-rejection names MULTIPLE rejected
+     * fields (today: the apply/dryRun contradiction surface), every
+     * literal flag the caller passed. The dispatcher populates both
+     * `rejectedFlag` (the primary flag) and `rejectedFlags` (the full
+     * list) so consumers can branch on either form.
+     */
+    rejectedFlags?: readonly string[];
     /** Tool name — used to look up the tool's commit-flag metadata. */
     toolName?: string;
   },
@@ -690,6 +747,9 @@ export function invalidInput(
   };
   if (enrichment?.rejectedFlag !== undefined) {
     error.rejectedFlag = enrichment.rejectedFlag;
+    if (enrichment.rejectedFlags !== undefined && enrichment.rejectedFlags.length > 0) {
+      error.rejectedFlags = enrichment.rejectedFlags;
+    }
     // Auto-derive the tool's actual commit flag from the registry so
     // the structured envelope is always honest about what the tool
     // accepts. `none` means the registry has no entry for the tool
@@ -708,23 +768,32 @@ export function invalidInput(
       //      tool's noWriteAlias exists → the remediation mentions it.
       //   3. The registry has no record (anonymous tool) → fall back
       //      to the message verbatim.
+      const rejectedList = enrichment.rejectedFlags ?? [enrichment.rejectedFlag];
       const guidance =
         remediation ??
         (enrichment.toolName === "form_set_property" && enrichment.rejectedFlag === "propertyName"
           ? "Check the tool schema: form_set_property's schema requires `property` (single string token), not `propertyName`."
-          : `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`);
+          : rejectedList.length > 1
+            ? `${enrichment.toolName} does not accept conflicting write-intent flags "${rejectedList.join(", ")}" simultaneously.`
+            : commitFlag === "dryRun"
+              ? `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}". The canonical commit signal for this tool is "${commitFlag}".`
+              : `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`);
       if (noWriteAlias === null) {
         // No-write default: the tool never writes (or never accepts a
         // no-write knob). If the rejected flag IS the commit flag,
         // the caller is mis-using the API entirely.
-        if (enrichment.rejectedFlag === commitFlag) {
+        if (rejectedList.includes(commitFlag)) {
           error.remediation = `${guidance} ${enrichment.toolName} is a ${commitFlag === "apply" ? "read-only / no-write" : "no-write"} tool — passing ${commitFlag}:true cannot make it write. Run a write-class tool (export_*, import_*, delete_module, etc.) instead.`;
         } else {
           error.remediation = guidance;
         }
-      } else if (enrichment.rejectedFlag === commitFlag) {
-        // Same as above for write-class tools.
-        error.remediation = `${guidance} Pass ${commitFlag}:true to commit, ${noWriteAlias}:true to plan, or omit both to use the tool's default.`;
+      } else if (rejectedList.includes(commitFlag)) {
+        // Same as above for write-class tools. The contradiction
+        // branch (apply + dryRun) lands here too — both flags are in
+        // the rejected list, the canonical `apply` is the commit
+        // signal, and the no-write alias (`dryRun` / `diff`) carries
+        // the inverse intent.
+        error.remediation = `${guidance} Pass ${commitFlag}:true to commit, ${noWriteAlias}:true to plan, or omit both to use the tool's default. Do NOT pass ${rejectedList.join(" + ")} together — they map to opposite write intents.`;
       } else {
         // Caller passed something the tool doesn't accept. Suggest
         // the tool's actual flags.
@@ -913,9 +982,22 @@ export async function handleValidatedMcpWrite<TData>(
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
   execute: () => Promise<OperationResult<TData>>,
+  // Issue #1078 — the structured rejection envelope needs a tool name
+  // to look up the registry's commit-flag metadata and surface
+  // `rejectedFlag` / `toolCommitFlag` / `remediation`. Callers that
+  // have the tool name at hand pass it; legacy callers (the validator
+  // tests, etc.) can omit it and the envelope degrades to the plain
+  // `MCP_INPUT_INVALID` shape.
+  toolName?: string,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
-  if (validation !== undefined) return invalidInput(validation);
+  if (validation !== undefined) {
+    if (toolName !== undefined) {
+      const enrichment = enrichmentForValidationMessage(validation, toolName);
+      if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
+    }
+    return invalidInput(validation);
+  }
   const isDryRun = resolveIsDryRun(input);
   if (!isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver)))
     return writesDisabled();

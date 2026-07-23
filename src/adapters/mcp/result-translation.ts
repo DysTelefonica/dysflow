@@ -90,6 +90,17 @@ export type McpToolError = {
    */
   rejectedFlag?: string;
   /**
+   * Issue #1078 — when the schema-rejection is for multiple flags
+   * simultaneously (today: the apply/dryRun contradiction surface),
+   * the literal list of every rejected flag name. `rejectedFlag`
+   * carries the first entry of this list for single-flag rejections;
+   * multi-flag rejections populate both fields so consumers can branch
+   * on either `error.rejectedFlag === "apply" && error.rejectedFlags?.includes("dryRun")`
+   * or `error.rejectedFlags?.length > 1` without parsing the legacy
+   * text body.
+   */
+  rejectedFlags?: readonly string[];
+  /**
    * v2.9.0 (#757 C4) — the commit flag this tool actually accepts
    * (today: `"apply"`, `"dryRun"`, or `"diff"`). Together with
    * `rejectedFlag`, a consumer can write:
