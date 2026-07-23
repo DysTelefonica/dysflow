@@ -149,7 +149,12 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   unlink_table: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   import_queries: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   // Query alias tools (write mode).
-  query_sql: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  // Issue #1073 — `query_sql` is the read-only side of the query alias
+  // pair (the access contract in `mcp-tool-contracts.ts` is `read-only`).
+  // The previous `defaultBehavior:"plan"` + `noWriteAlias:"dryRun"` entry
+  // advertised a write signal the schema never accepted; align the
+  // registry with the read-only sentinel below.
+  query_sql: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   exec_sql: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   run_script: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   query_execute: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
