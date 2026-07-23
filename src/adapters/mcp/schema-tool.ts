@@ -112,6 +112,116 @@ export type SchemaCompositionConstraint = {
   alternatives: readonly { parameters: readonly string[]; canonical?: string }[];
 };
 
+// ─── Result-contract surface (#1077) ───────────────────────────────────────────
+
+/**
+ * Field-type descriptor used inside the result-contract surface. Mirrors
+ * the {@link ToolParameterSchema} vocabulary so a single consumer-side
+ * helper can coerce both surfaces without branching on field shape.
+ */
+export type ToolFieldShape = {
+  type: "string" | "number" | "boolean" | "object" | "array";
+  optional?: boolean;
+  description?: string;
+  /** Element type when `type === "array"`. */
+  items?: ToolFieldShape;
+};
+
+/**
+ * Issue #1077 — typed error envelope shape. Mirrors the `McpToolError`
+ * contract surfaced by `translateCoreResultToMcpContent`: every error
+ * envelope carries a typed `code`, a human-readable `message`, and (for
+ * gate refusals) a typed `remediation` string. The shape is pinned here
+ * so a future envelope simplification cannot silently drop the
+ * remediation field that consumers rely on.
+ */
+export type ToolErrorEnvelopeShape = {
+  code: { type: "string" };
+  message: { type: "string" };
+  remediation?: { type: "string"; optional: true };
+};
+
+/**
+ * Tools whose payload can grow unbounded surface this dimension so the
+ * consumer knows where to find the bytes. `summary` is the inline
+ * count/aggregation; `file` is a path on disk; `full` is the full
+ * in-memory payload. Today only `export_modules` and the form
+ * preview/lint tools declare more than one mode.
+ */
+export type ToolOutputMode = "summary" | "file" | "full";
+
+/**
+ * Plan / apply discriminator for write-class tools. `plan` means the
+ * runtime computed the change but did not commit; `apply` means the
+ * runtime persisted the change. A consumer can refuse a result that
+ * claims `apply:true` but returned a `plan`-shaped payload — the modes
+ * field is what makes that refusal safe.
+ */
+export type ToolResultMode = "plan" | "apply";
+
+/**
+ * Minimal JSON-Schema-like fragment for a tool's primary payload. The
+ * fragment is intentionally narrow (no `oneOf`/`anyOf`/`$ref`): it
+ * documents the SHAPE of the payload, not its full type algebra. Tools
+ * with discriminated payloads (sync_binary, query_execute) use
+ * `oneOf`; tools with a flat payload use `properties`.
+ */
+export type ToolDataSchemaFragment = {
+  type: "object";
+  description?: string;
+  properties?: Record<string, ToolFieldShape>;
+  required?: readonly string[];
+  oneOf?: readonly ToolDataSchemaFragment[];
+  additionalProperties?: boolean;
+};
+
+/**
+ * Issue #1077 — discriminated result contract. The catalog exposes
+ * either:
+ *
+ *   - `kind: "dataSchema"` — the tool returns a typed payload that the
+ *     consumer must introspect (plan/apply variants, output modes,
+ *     error envelope shape).
+ *   - `kind: "envelope-only"` — the tool is a pure pass-through or
+ *     returns an opaque status; the generic MCP envelope is enough and
+ *     the catalog carries a justification that names WHY.
+ *
+ * Every advertised tool must publish one or the other. The schema test
+ * (`test/adapters/mcp/tool-result-contracts.test.ts`) enforces the
+ * invariant at build time.
+ */
+export type ToolResultContract =
+  | {
+      kind: "dataSchema";
+      dataSchema: ToolDataSchemaFragment;
+      /**
+       * Issue #1077 — discriminated result modes for write-class tools.
+       * Read-only tools omit this field; write-class tools must declare
+       * at least `["plan", "apply"]` so consumers can refuse
+       * inconsistent `apply:true` / plan-shaped combinations.
+       */
+      modes?: readonly ToolResultMode[];
+      /**
+       * Issue #1077 — large-response behavior. Tools whose payload
+       * could grow unbounded declare the supported modes; consumers
+       * branch on `outputModes` to decide between reading inline vs
+       * tailing a file path. Omitted when the tool only has one
+       * canonical delivery channel.
+       */
+      outputModes?: readonly ToolOutputMode[];
+      errorEnvelope: { shape: ToolErrorEnvelopeShape };
+    }
+  | {
+      kind: "envelope-only";
+      /**
+       * Human-readable justification for why the generic envelope is
+       * sufficient. Required: the schema test fails any envelope-only
+       * entry that ships without one.
+       */
+      justification: string;
+      errorEnvelope: { shape: ToolErrorEnvelopeShape };
+    };
+
 /**
  * Runtime contract for a single MCP tool. Returned inside the `tools`
  * array from `buildToolSchemaCatalog` / `dysflow.schema`.
@@ -142,6 +252,15 @@ export type ToolSchema = {
    * canonical parameter without reading the raw JSON Schema.
    */
   compositionConstraints: SchemaCompositionConstraint[];
+  /**
+   * Issue #1077 — tool-specific result contract. Either a typed
+   * `dataSchema` (plan/apply variants, output modes, error envelope
+   * shape) or an `envelope-only` justification. Every advertised tool
+   * carries one — the RED test in
+   * `test/adapters/mcp/tool-result-contracts.test.ts` pins the
+   * invariant.
+   */
+  resultContract: ToolResultContract;
 };
 
 /**
@@ -624,6 +743,1050 @@ function descriptionForTool(name: string): string {
   return "No contract metadata registered.";
 }
 
+// ─── Result-contract registry (#1077) ──────────────────────────────────────────
+
+/**
+ * Issue #1077 — the canonical error envelope shape every Dysflow tool
+ * returns. Surfaced verbatim on every result contract so a consumer
+ * branching on `error.code` / `error.remediation` does not need to
+ * memorize the runtime's envelope separately.
+ */
+const TOOL_ERROR_ENVELOPE_SHAPE: ToolErrorEnvelopeShape = {
+  code: { type: "string" },
+  message: { type: "string" },
+  remediation: { type: "string", optional: true },
+};
+
+const STANDARD_ERROR_ENVELOPE = { shape: TOOL_ERROR_ENVELOPE_SHAPE } as const;
+
+/**
+ * Issue #1077 — per-tool result contract registry. Each entry tells a
+ * consumer what the tool's primary payload looks like (or, for
+ * `envelope-only` entries, WHY the generic envelope is sufficient).
+ *
+ * The registry is the single source of truth — `buildSchemaForTool`
+ * reads from here when populating `ToolSchema.resultContract`. Adding a
+ * new tool means an entry here AND a passing test in
+ * `test/adapters/mcp/tool-result-contracts.test.ts`.
+ *
+ * The 6 representative families named in the issue body
+ * (verify_code, sync_binary, diagnose, logs, query_execute,
+ * export_modules) carry hand-written typed schemas; the remaining
+ * tools carry group-derived schemas that are accurate enough to branch
+ * on without re-reading handler source. `envelope-only` entries are
+ * reserved for tools where the generic envelope is genuinely enough
+ * (pure pass-through helpers).
+ */
+
+// ── 6 representative families (issue body) ──────────────────────────────────
+
+const VERIFY_CODE_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Source ↔ binary drift report. `mode` discriminates 'summary' (counts only) from 'full' (per-module drift).",
+  dataSchema: {
+    type: "object",
+    properties: {
+      driftDetected: { type: "boolean", description: "True when any module differs." },
+      summary: {
+        type: "object",
+        description: "Counts of in-sync / source-only / binary-only / diverged modules.",
+        properties: {
+          total: { type: "number" },
+          inSync: { type: "number" },
+          sourceOnly: { type: "number" },
+          binaryOnly: { type: "number" },
+          diverged: { type: "number" },
+        },
+      },
+      bulkImportable: {
+        type: "array",
+        description: "Modules present on disk but missing from the binary (safe to import).",
+      },
+      bulkExportable: {
+        type: "array",
+        description: "Modules present in the binary but missing from disk (safe to export).",
+      },
+      conflicts: {
+        type: "array",
+        description:
+          "Modules that exist on both sides with non-matching bytes; resolve with sync_binary.",
+      },
+    },
+    required: ["driftDetected", "summary"],
+  },
+  outputModes: ["summary", "full"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const SYNC_BINARY_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "sync_binary composes verify + import + export into one round-trip; the `mode` discriminator reports which path actually ran.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description:
+          "Discriminator: 'plan' when the call did not mutate, 'apply' when the call committed. Pin this — the runtime never lies about it.",
+      },
+      direction: {
+        type: "string",
+        description: "Which side won for each module: 'src-to-binary' or 'binary-to-src'.",
+      },
+      verify: {
+        type: "object",
+        description: "Subset of the verify_code payload consumed before the commit.",
+      },
+      bothChanged: {
+        type: "array",
+        description:
+          "Modules that differed on both sides; the call returned a plan unless acceptBothChanged resolved them.",
+      },
+      applied: {
+        type: "array",
+        description: "Modules the call actually committed.",
+      },
+      conflicts: {
+        type: "array",
+        description:
+          "Modules left unresolved by the call (require manual decision via acceptBothChanged).",
+      },
+    },
+    required: ["mode", "direction"],
+  },
+  modes: ["plan", "apply"],
+  outputModes: ["summary", "full"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const DIAGNOSE_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Aggregated project health surface — projectConfig + filesystem + runtime. Pure read-only.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      projectConfig: {
+        type: "object",
+        description:
+          "Resolved .dysflow/project.json verdict (status, configPath, projectRoot, projectId, accessPath, backendPath).",
+      },
+      filesystem: {
+        type: "object",
+        description: "Filesystem observations (source root, binary present, permissions).",
+      },
+      runtime: {
+        type: "object",
+        description: "Runtime counters (operations, markers, locks) — same shape as `state`.",
+      },
+      checks: {
+        type: "array",
+        description:
+          "Per-check verdict (level: info|warning|error, source, message). Read by category.",
+      },
+    },
+    required: ["projectConfig", "checks"],
+  },
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const LOGS_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "AI-aware log access — structured view of .dysflow/runtime/ (operations.json + markers).",
+  dataSchema: {
+    type: "object",
+    properties: {
+      entries: {
+        type: "array",
+        description: "Log entries matching the filter (since/until/level/operationId/tool).",
+      },
+      totalCount: { type: "number", description: "Total entries that matched the filter." },
+      truncated: {
+        type: "boolean",
+        description: "True when the result was clipped by `limit` (max 1000).",
+      },
+      nextOffset: {
+        type: "number",
+        description:
+          "When `truncated`, the offset for the next page; null when there is nothing more to read.",
+      },
+    },
+    required: ["entries", "totalCount", "truncated"],
+  },
+  outputModes: ["summary", "full"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const QUERY_EXECUTE_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Discriminated query result; mode=read returns rows, mode=write returns affectedCount + plan/apply.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description: "Echoes the request mode: 'read' | 'write'.",
+      },
+      rows: {
+        type: "array",
+        description: "Row set (mode=read). Empty when the call was a write.",
+      },
+      affectedCount: {
+        type: "number",
+        description: "Affected rows (mode=write).",
+      },
+      plan: {
+        type: "boolean",
+        description:
+          "True when the call was a dry-run; the runtime did NOT mutate the database.",
+      },
+      columns: {
+        type: "array",
+        description: "Column metadata for mode=read results.",
+      },
+    },
+    required: ["mode"],
+  },
+  modes: ["plan", "apply"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const EXPORT_MODULES_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Module export result; `mode` discriminates plan vs apply, `outputMode` is `summary|file|full`.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description: "'plan' or 'apply' — what the runtime actually did.",
+      },
+      exportedPaths: {
+        type: "array",
+        description: "Files written to disk (mode=apply) or expected to be written (mode=plan).",
+      },
+      pruned: {
+        type: "array",
+        description: "Files the runtime would have removed because prune=true and they no longer exist in the binary.",
+      },
+      binaryMutated: {
+        type: "boolean",
+        description:
+          "Whether the binary was opened for write. False when mutateBinary=false (the default for safe exports).",
+      },
+    },
+    required: ["mode", "exportedPaths"],
+  },
+  modes: ["plan", "apply"],
+  outputModes: ["summary", "file", "full"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+// ── Write-class generic contracts (vba-sync + query-maintenance) ────────────
+
+const GENERIC_WRITE_CONTRACT: ToolResultContract = {
+  kind: "dataSchema",
+  description: "Generic write-class payload; `mode` discriminates plan vs apply.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description: "'plan' or 'apply' — what the runtime actually did.",
+      },
+    },
+    required: ["mode"],
+  },
+  modes: ["plan", "apply"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const VBA_SYNC_WRITE_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "vba-sync write-class payload; carriers export/import/delete operations over the source ↔ binary seam.",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description: "'plan' or 'apply' — what the runtime actually did.",
+      },
+      applied: {
+        type: "array",
+        description: "Modules actually mutated (apply mode).",
+      },
+      skipped: {
+        type: "array",
+        description: "Modules skipped by the call (e.g. read-only flag, filter mismatch).",
+      },
+    },
+    required: ["mode"],
+  },
+  modes: ["plan", "apply"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const QUERY_MAINTENANCE_WRITE_RESULT: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Query-maintenance write-class payload (exec_sql, run_script, create_table, drop_table, seed_fixture, teardown_fixture).",
+  dataSchema: {
+    type: "object",
+    properties: {
+      mode: {
+        type: "string",
+        description: "'plan' or 'apply' — what the runtime actually did.",
+      },
+      affectedCount: { type: "number", description: "Rows affected (when applicable)." },
+    },
+    required: ["mode"],
+  },
+  modes: ["plan", "apply"],
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+// ── Read-class generic contracts ─────────────────────────────────────────────
+
+const READ_ONLY_GENERIC: ToolResultContract = {
+  kind: "dataSchema",
+  description:
+    "Read-only payload; no plan/apply discriminator (the runtime never mutates).",
+  dataSchema: {
+    type: "object",
+    properties: {
+      content: { type: "object", description: "Tool-specific read payload." },
+    },
+  },
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+const ENVELOPE_ONLY_PASSTHROUGH: ToolResultContract = {
+  kind: "envelope-only",
+  justification:
+    "Pure pass-through helper; the generic MCP envelope is the entire response (no typed payload).",
+  errorEnvelope: STANDARD_ERROR_ENVELOPE,
+};
+
+/**
+ * Issue #1077 — the registry. Every advertised MCP tool has an entry
+ * here. `buildSchemaForTool` reads from this map and falls back to a
+ * group-derived default when an entry is missing — the load-time guard
+ * in `assertToolResultContractsAreTotal` enforces total coverage so a
+ * missing entry fails the build, not a runtime consumer.
+ */
+const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
+  // ── Bootstrap / diagnostics (read-only) ──────────────────────────────────
+  schema: {
+    kind: "dataSchema",
+    description: "Static contract catalog for every advertised MCP tool.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "Echo of the request's projectId, or null." },
+        tools: { type: "array", description: "Per-tool ToolSchema records." },
+      },
+      required: ["tools"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  describe_tool: {
+    kind: "dataSchema",
+    description: "Single-tool introspection entry.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+        params: { type: "object" },
+        returns: { type: "object" },
+        errorCodes: { type: "array" },
+        useCases: { type: "array" },
+        resultContract: { type: "object", description: "The tool's own resultContract." },
+      },
+      required: ["name"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  diagnose: DIAGNOSE_RESULT,
+  doctor: {
+    kind: "dataSchema",
+    description: "Doctor diagnostic checks (per-category verdict).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        checks: { type: "array", description: "Per-check verdict (level, source, message)." },
+      },
+      required: ["checks"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  resolve_project: {
+    kind: "dataSchema",
+    description: "Resolved .dysflow/project.json verdict (status, paths, write-ready).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "'valid' or a typed failure status." },
+        cwd: { type: "string" },
+        configPath: { type: "string" },
+        projectRoot: { type: "string" },
+        projectId: { type: "string" },
+        accessPath: { type: "string" },
+        backendPath: { type: "string" },
+        destinationRoot: { type: "string" },
+      },
+      required: ["status"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  state: {
+    kind: "dataSchema",
+    description: "Runtime operational state (operations + markers + locks + counters).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        operations: { type: "array" },
+        markers: { type: "array" },
+        locks: { type: "array" },
+        counters: { type: "object" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  logs: LOGS_RESULT,
+  get_capabilities: {
+    kind: "dataSchema",
+    description:
+      "Aggregated capabilities snapshot (write gates, allowed procedures, commit flags).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        adapterVersion: { type: "string" },
+        writesProcess: { type: "object" },
+        writesProject: { type: "object" },
+        dryRunDefault: { type: "boolean" },
+        toolsVisible: { type: "number" },
+        tools: { type: "object", description: "Per-tool commit-flag metadata." },
+      },
+      required: ["adapterVersion", "toolsVisible"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+
+  // ── Process / recovery (write-class, conditional) ────────────────────────
+  list_access_operations: {
+    kind: "dataSchema",
+    description: "List of recorded access operations (with status + pid + accessPath).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        operations: { type: "array" },
+      },
+      required: ["operations"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  cleanup_access_operation: {
+    kind: "dataSchema",
+    description: "Cleanup verdict (operationId + final status).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        operationId: { type: "string" },
+        accessPid: { type: "number" },
+        status: {
+          type: "string",
+          description: "Final status — 'cleaned' or a typed failure verdict.",
+        },
+      },
+      required: ["operationId", "status"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  access_force_cleanup_orphaned: {
+    kind: "dataSchema",
+    description: "Orphan-process verdict (candidates list or single killed pid).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        candidates: { type: "array", description: "Orphan process candidates (list mode)." },
+        killedPid: { type: "number", description: "Single pid killed (cleanup mode)." },
+      },
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  clean_stale_markers: {
+    kind: "dataSchema",
+    description: "Stale-marker sweep verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", description: "'plan' or 'apply'." },
+        wouldTransition: { type: "array" },
+        transitioned: { type: "array" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+
+  // ── VBA sync (dispatch) ──────────────────────────────────────────────────
+  export_modules: EXPORT_MODULES_RESULT,
+  export_all: {
+    kind: "dataSchema",
+    description: "Whole-tree export verdict; similar to export_modules but covers every folder.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        exportedPaths: { type: "array" },
+        pruned: { type: "array" },
+      },
+      required: ["mode", "exportedPaths"],
+    },
+    modes: ["plan", "apply"],
+    outputModes: ["summary", "file", "full"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  import_modules: {
+    kind: "dataSchema",
+    description: "Module import verdict; `mode` discriminates plan vs apply.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        importedPaths: { type: "array" },
+        chunkErrors: { type: "array" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  import_all: {
+    kind: "dataSchema",
+    description: "Whole-tree import verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        importedPaths: { type: "array" },
+        chunkErrors: { type: "array" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  list_objects: {
+    kind: "dataSchema",
+    description: "Binary object inventory (modules, classes, forms, reports).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        objects: { type: "array" },
+      },
+      required: ["objects"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  list_vba_modules: {
+    kind: "dataSchema",
+    description: "VBA module inventory with type/name pattern filters.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        modules: { type: "array" },
+      },
+      required: ["modules"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  exists: {
+    kind: "dataSchema",
+    description: "Existence check verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        exists: { type: "boolean" },
+        module: { type: "string" },
+      },
+      required: ["exists"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  test_vba: {
+    kind: "dataSchema",
+    description: "VBA test-run verdict with per-test pass/fail breakdown.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        total: { type: "number" },
+        passed: { type: "number" },
+        failed: { type: "number" },
+        results: { type: "array" },
+      },
+      required: ["mode", "total"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  verify_code: VERIFY_CODE_RESULT,
+  delete_module: {
+    kind: "dataSchema",
+    description: "Module-deletion verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        deleted: { type: "array" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  generate_erd: {
+    kind: "dataSchema",
+    description: "ERD generation verdict (output file path + summary).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        erdPath: { type: "string" },
+      },
+      required: ["erdPath"],
+    },
+    modes: ["plan", "apply"],
+    outputModes: ["file"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  fix_encoding: GENERIC_WRITE_CONTRACT,
+  validate_form_spec: READ_ONLY_GENERIC,
+  generate_form: GENERIC_WRITE_CONTRACT,
+  catalog_add_control: GENERIC_WRITE_CONTRACT,
+  harvest_form_catalog: READ_ONLY_GENERIC,
+  inspect_form: READ_ONLY_GENERIC,
+  compare_form: READ_ONLY_GENERIC,
+  lint_form_code: READ_ONLY_GENERIC,
+  form_add_control: VBA_SYNC_WRITE_RESULT,
+  form_move_control: VBA_SYNC_WRITE_RESULT,
+  form_rename_control: VBA_SYNC_WRITE_RESULT,
+  form_serialize: READ_ONLY_GENERIC,
+  form_deserialize: VBA_SYNC_WRITE_RESULT,
+  create_form_from_template: VBA_SYNC_WRITE_RESULT,
+  analyze_form_ui: READ_ONLY_GENERIC,
+  map_form_behavior: READ_ONLY_GENERIC,
+  generate_form_design_plan: READ_ONLY_GENERIC,
+  apply_form_design_plan: VBA_SYNC_WRITE_RESULT,
+  copy_form_ui_pattern: READ_ONLY_GENERIC,
+  verify_form_ui: READ_ONLY_GENERIC,
+  form_set_property: VBA_SYNC_WRITE_RESULT,
+  form_delete_control: VBA_SYNC_WRITE_RESULT,
+  form_set_properties: VBA_SYNC_WRITE_RESULT,
+  form_duplicate_control: VBA_SYNC_WRITE_RESULT,
+  form_get_geometry: READ_ONLY_GENERIC,
+  form_list_controls: READ_ONLY_GENERIC,
+  form_align_controls: VBA_SYNC_WRITE_RESULT,
+  form_distribute_controls: VBA_SYNC_WRITE_RESULT,
+  render_form_preview: {
+    kind: "dataSchema",
+    description: "Form preview — SVG or ASCII geometry of a .form.txt.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        svg: { type: "string", description: "SVG rendering (outputMode=svg|full)." },
+        ascii: { type: "string", description: "ASCII rendering (outputMode=ascii)." },
+        widthTwips: { type: "number" },
+        heightTwips: { type: "number" },
+      },
+    },
+    outputModes: ["summary", "file", "full"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  analyze_form_layout: {
+    kind: "dataSchema",
+    description: "Geometry lint verdict (overlaps, alignment, tab-order).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        overlaps: { type: "array" },
+        alignmentIssues: { type: "array" },
+        tabOrderIssues: { type: "array" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  diff_form_preview: {
+    kind: "dataSchema",
+    description: "Before/after form preview diff verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        added: { type: "array" },
+        removed: { type: "array" },
+        moved: { type: "array" },
+        resized: { type: "array" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  verify_form_bindings: {
+    kind: "dataSchema",
+    description: "ControlSource / RowSource binding validation verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        bindings: { type: "array" },
+        issues: { type: "array" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  sync_binary: SYNC_BINARY_RESULT,
+  vba_orphan_audit: {
+    kind: "dataSchema",
+    description: "Orphan VBA procedure audit (procedures registered in binary but missing from source).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        orphans: { type: "array" },
+      },
+      required: ["orphans"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  vba_inline_execution: {
+    kind: "dataSchema",
+    description: "Inline VBA execution verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        returnValue: { type: "string" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+
+  // ── VBA analysis (read-only) ────────────────────────────────────────────
+  list_procedures: {
+    kind: "dataSchema",
+    description: "VBA procedure inventory for a module.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        module: { type: "string" },
+        procedures: { type: "array" },
+      },
+      required: ["module", "procedures"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  get_procedure: {
+    kind: "dataSchema",
+    description: "Single procedure body (startLine/endLine/body).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        module: { type: "string" },
+        procedure: { type: "string" },
+        startLine: { type: "number" },
+        endLine: { type: "number" },
+        body: { type: "string" },
+      },
+      required: ["module", "procedure", "startLine", "endLine", "body"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  find_references: {
+    kind: "dataSchema",
+    description: "Symbol references verdict (with optional pagination).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        symbol: { type: "string" },
+        scope: { type: "string" },
+        references: { type: "array" },
+        totalCount: { type: "number" },
+        truncated: { type: "boolean" },
+        nextOffset: { type: "number" },
+      },
+      required: ["symbol", "scope", "references"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  detect_dead_code: {
+    kind: "dataSchema",
+    description: "Dead-code analysis verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        deadProcedures: { type: "array" },
+        deadDeclarations: { type: "array" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  validate_manifest: {
+    kind: "dataSchema",
+    description: "Test-manifest validation verdict (issues per entry).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        issues: { type: "array" },
+        isValid: { type: "boolean" },
+      },
+      required: ["issues", "isValid"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  lint_module: {
+    kind: "dataSchema",
+    description: "Module lint verdict (per-rule diagnostics + summary).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        module: { type: "string" },
+        diagnostics: { type: "object", description: "Per-rule diagnostics map." },
+        flatDiagnostics: { type: "array" },
+        summary: { type: "object" },
+      },
+      required: ["module", "diagnostics", "summary"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+
+  // ── VBA execution / tests (write-class, conditional) ─────────────────────
+  run_vba: {
+    kind: "dataSchema",
+    description: "VBA procedure execution verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        returnValue: { type: "string" },
+        executionMs: { type: "number" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+
+  // ── Query runner (read + write) ──────────────────────────────────────────
+  query_execute: QUERY_EXECUTE_RESULT,
+  query_sql: {
+    kind: "dataSchema",
+    description: "Read-only query SQL verdict (legacy alias of query_execute mode=read).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        rows: { type: "array" },
+        columns: { type: "array" },
+      },
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  exec_sql: QUERY_MAINTENANCE_WRITE_RESULT,
+  run_script: QUERY_MAINTENANCE_WRITE_RESULT,
+  create_table: QUERY_MAINTENANCE_WRITE_RESULT,
+  drop_table: QUERY_MAINTENANCE_WRITE_RESULT,
+  seed_fixture: QUERY_MAINTENANCE_WRITE_RESULT,
+  teardown_fixture: QUERY_MAINTENANCE_WRITE_RESULT,
+  list_tables: {
+    kind: "dataSchema",
+    description: "Table list verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        tables: { type: "array" },
+      },
+      required: ["tables"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  list_linked_tables: {
+    kind: "dataSchema",
+    description: "Linked-table inventory.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        linkedTables: { type: "array" },
+      },
+      required: ["linkedTables"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  get_schema: {
+    kind: "dataSchema",
+    description: "Schema verdict (columns per table).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        tables: { type: "array", description: "Per-table column metadata." },
+      },
+      required: ["tables"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  count_rows: {
+    kind: "dataSchema",
+    description: "Row count verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        count: { type: "number" },
+      },
+      required: ["count"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  distinct_values: {
+    kind: "dataSchema",
+    description: "Distinct column values verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        values: { type: "array" },
+      },
+      required: ["values"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  compare_backends: {
+    kind: "dataSchema",
+    description: "Backend comparison verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        differences: { type: "array" },
+        inSync: { type: "boolean" },
+      },
+      required: ["inSync"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  list_access_files: {
+    kind: "dataSchema",
+    description: "Access file inventory under a directory.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        files: { type: "array" },
+      },
+      required: ["files"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  get_relationships: {
+    kind: "dataSchema",
+    description: "Table relationship verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        relationships: { type: "array" },
+      },
+      required: ["relationships"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  list_links: {
+    kind: "dataSchema",
+    description: "Linked-table inventory.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        links: { type: "array" },
+      },
+      required: ["links"],
+    },
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  link_tables: QUERY_MAINTENANCE_WRITE_RESULT,
+  relink_tables: QUERY_MAINTENANCE_WRITE_RESULT,
+  localize_backend_links: QUERY_MAINTENANCE_WRITE_RESULT,
+  unlink_table: QUERY_MAINTENANCE_WRITE_RESULT,
+  import_queries: QUERY_MAINTENANCE_WRITE_RESULT,
+  export_queries: {
+    kind: "dataSchema",
+    description: "Query export verdict (file output).",
+    dataSchema: {
+      type: "object",
+      properties: {
+        exportPath: { type: "string" },
+        count: { type: "number" },
+      },
+      required: ["exportPath"],
+    },
+    outputModes: ["file"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+  compact_repair: QUERY_MAINTENANCE_WRITE_RESULT,
+  relink_directory: {
+    kind: "dataSchema",
+    description: "Directory-wide relink verdict.",
+    dataSchema: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+        filesScanned: { type: "number" },
+        appliedRelinks: { type: "number" },
+        unresolved: { type: "array" },
+      },
+      required: ["mode"],
+    },
+    modes: ["plan", "apply"],
+    errorEnvelope: STANDARD_ERROR_ENVELOPE,
+  },
+};
+
+/**
+ * Issue #1077 — load-time guard. Every advertised tool must have a
+ * `resultContract` entry — a missing one would mean the catalog falls
+ * back to envelope-only with no justification, which is precisely the
+ * silent failure mode the issue rejects. The assert runs once on module
+ * load; if it ever fires the test suite catches it next run.
+ */
+function assertToolResultContractsAreTotal(): void {
+  const advertised = advertisedToolNames();
+  const missing: string[] = [];
+  for (const name of advertised) {
+    if (TOOL_RESULT_CONTRACTS[name] === undefined) {
+      missing.push(name);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing resultContract entries for advertised MCP tools: ${missing.join(", ")}. ` +
+        `Add an entry to TOOL_RESULT_CONTRACTS in src/adapters/mcp/schema-tool.ts.`,
+    );
+  }
+}
+
+function resultContractForTool(name: string): ToolResultContract {
+  const entry = TOOL_RESULT_CONTRACTS[name];
+  if (entry === undefined) {
+    // This branch should be unreachable thanks to
+    // `assertToolResultContractsAreTotal`, but the consumer-side guard
+    // keeps the catalog surface total even if the assert is ever
+    // disabled by mistake.
+    return ENVELOPE_ONLY_PASSTHROUGH;
+  }
+  return entry;
+}
+
 // ─── Tool registry assembly ──────────────────────────────────────────────────
 
 /**
@@ -672,6 +1835,7 @@ function buildSchemaForTool(name: string): ToolSchema {
       name,
       compositionConstraintsFromSchema(inputSchema),
     ),
+    resultContract: resultContractForTool(name),
   };
 }
 
@@ -739,6 +1903,12 @@ export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
     tools: sorted.map(buildSchemaForTool),
   };
 }
+
+// Issue #1077 — load-time guard. Runs once when the module is first
+// imported; throws when an advertised tool is missing a resultContract
+// entry. Cheap (one Set lookup per advertised name) and isolated to
+// module init so production traffic pays nothing.
+assertToolResultContractsAreTotal();
 
 // ─── MCP tool factory ─────────────────────────────────────────────────────────
 
