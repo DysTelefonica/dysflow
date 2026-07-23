@@ -87,7 +87,10 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
     // are available without requiring the full source node_modules to be copied.
     // When the lockfile is present we pass --frozen-lockfile to fail closed if
     // the registry returns a different graph than what we signed.
-    const installArgs = ["install", "--ignore-scripts", "--prod"];
+    // A runtime refresh must relink the complete production graph. Plain
+    // `pnpm install` may trust a stale node_modules layout left by an older
+    // runtime and keep broken transitive links (for example AJV -> fast-uri).
+    const installArgs = ["install", "--ignore-scripts", "--prod", "--force"];
     if (lockfileAvailable) {
       installArgs.push("--frozen-lockfile");
     }

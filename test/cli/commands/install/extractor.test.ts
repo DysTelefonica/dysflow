@@ -105,6 +105,17 @@ describe("extractor — supply-chain guard (#666)", () => {
     expect(args).toContain("--frozen-lockfile");
   });
 
+  it("forces dependency relinking when refreshing an existing runtime", async () => {
+    const packageRoot = join(root, "pkg");
+    await seedLockfile(packageRoot, "lockfileVersion: '9.0'\n");
+
+    const { installRuntime } = await importExtractor();
+    await installRuntime(runtimePaths, packageRoot);
+
+    const args = pnpmInvocations()[0]?.[1] as readonly string[] | undefined;
+    expect(args).toContain("--force");
+  });
+
   it("falls back to non-frozen install when the lockfile is missing (no crash)", async () => {
     const packageRoot = join(root, "pkg");
     // Intentionally do NOT seed pnpm-lock.yaml.
