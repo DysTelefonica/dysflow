@@ -12,6 +12,7 @@ import { validateInput } from "../../../src/shared/validation/index.js";
 
 const COMPACT_TOOL_KEYS = [
   "access",
+  "agentWorkflow",
   "defaults",
   "name",
   "primaryResult",
@@ -54,6 +55,11 @@ type CompactTool = {
   name: string;
   purpose: string;
   access: "read-only" | "read-write" | "conditional-write";
+  agentWorkflow: {
+    status: "preferred" | "specialized" | "legacy";
+    supersededBy?: string;
+    preferFor: string[];
+  };
   requiredParameters: string[];
   requiredParameterGroups: unknown[];
   defaults: Record<string, unknown>;
@@ -150,6 +156,7 @@ describe("schema compact and full introspection views (#1079)", () => {
       if (source === undefined) continue;
 
       expect(tool.access).toBe(source.access);
+      expect(tool.agentWorkflow).toEqual(source.agentWorkflow);
       expect(tool.requiredParameters).toEqual(
         Object.entries(source.parameters)
           .filter(([, parameter]) => parameter.required)

@@ -13,6 +13,10 @@ import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import {
+  PREFERRED_AGENT_WORKFLOWS,
+  type PreferredAgentWorkflow,
+} from "./agent-workflow-registry.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
@@ -101,6 +105,7 @@ export type McpCapabilitySnapshot = {
    */
   effectiveDryRunDefault: Readonly<Record<string, boolean>>;
   toolsVisible: number;
+  preferredAgentWorkflows: readonly PreferredAgentWorkflow[];
   writeClassToolsPermitted: readonly string[];
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
   humanCompilePending: boolean;
@@ -270,6 +275,10 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     writeExecutionPolicy,
     effectiveDryRunDefault,
     toolsVisible: toolNames.length,
+    preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
+      phase: workflow.phase,
+      tools: [...workflow.tools],
+    })),
     writeClassToolsPermitted,
     humanCompilePending,
     documentationBundle,
