@@ -532,7 +532,15 @@ export function loadDysflowConfigWith(
   const env = input.env ?? process.env;
 
   const result = loadDysflowConfigShared(input, repoConfig, (path) =>
-    loadProjectConfigFromPath(path, input, env, targetCwd, "repo-config", requestedProjectId, fileSystem),
+    loadProjectConfigFromPath(
+      path,
+      input,
+      env,
+      targetCwd,
+      "repo-config",
+      requestedProjectId,
+      fileSystem,
+    ),
   );
 
   if (result.ok) {
@@ -933,10 +941,7 @@ export function loadProjectConfigCore(
 ): OperationResult<DysflowConfig> {
   const requestedProjectId = stringValue(projectId);
   const configuredProjectId = stringValue(raw.id);
-  if (
-    requestedProjectId !== undefined &&
-    requestedProjectId !== configuredProjectId
-  ) {
+  if (requestedProjectId !== undefined && requestedProjectId !== configuredProjectId) {
     return failureResult(
       createDysflowError(
         configuredProjectId !== undefined

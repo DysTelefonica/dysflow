@@ -2,10 +2,10 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic";
 import { nodeConfigFileSystem } from "../../../src/adapters/config/dysflow-config-node";
-import { resolveExecutionTarget } from "../../../src/core/config/execution-target";
+import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic";
 import { loadDysflowConfigAsyncWith } from "../../../src/core/config/dysflow-config";
+import { resolveExecutionTarget } from "../../../src/core/config/execution-target";
 
 describe("Multi-worktree project config resolution (#1058)", () => {
   let rootDir: string;
@@ -77,10 +77,7 @@ describe("Multi-worktree project config resolution (#1058)", () => {
       fileSystem: nodeConfigFileSystem,
     };
 
-    const result = await resolveExecutionTarget(
-      { projectId: "expedientes-staging" },
-      context,
-    );
+    const result = await resolveExecutionTarget({ projectId: "expedientes-staging" }, context);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Expected successful target resolution");
@@ -111,10 +108,7 @@ describe("Multi-worktree project config resolution (#1058)", () => {
   });
 
   it("loadDysflowConfigAsyncWith surfaces discovered projects list including active indicator", async () => {
-    const result = await loadDysflowConfigAsyncWith(
-      { cwd: mainDir },
-      nodeConfigFileSystem,
-    );
+    const result = await loadDysflowConfigAsyncWith({ cwd: mainDir }, nodeConfigFileSystem);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Expected config load success");

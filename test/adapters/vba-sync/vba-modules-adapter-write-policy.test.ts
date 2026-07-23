@@ -283,7 +283,9 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     const calls: Array<{ readOnly?: boolean }> = [];
     const service = new VbaSyncAdapter({
       executor: async (request) => {
-        calls.push({ readOnly: (request.extra as Record<string, unknown> | undefined)?.readOnly === true });
+        calls.push({
+          readOnly: (request.extra as Record<string, unknown> | undefined)?.readOnly === true,
+        });
         return {
           exitCode: 0,
           stdout: 'DYSFLOW_RESULT {"ok":true, "exported":["Form_Foo"]}',

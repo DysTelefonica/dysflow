@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
 import type { Remediation } from "../../core/contracts/remediation.js";
 import {
   remediationForCapabilitiesDisallowWrite,
@@ -9,7 +10,6 @@ import {
   remediationForWriteLockedByRunningOp,
 } from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
-import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
 import { nodeConfigFileSystem } from "./dysflow-config-node.js";
 
 export type ProjectConfigStatus =
@@ -121,7 +121,7 @@ export function diagnoseProjectConfig(
   const requestedAccessPath =
     request.accessPath ?? request.accessDbPath ?? request.databasePath ?? request.sourcePath;
 
-  let discoveredProjects: DiscoveredProjectDiagnostic[] | undefined = undefined;
+  let discoveredProjects: DiscoveredProjectDiagnostic[] | undefined;
   const cwdNative = worktreeRoot(cwdInput);
   let matchedInCwd = false;
   if (cwdNative !== null) {
@@ -130,15 +130,24 @@ export function diagnoseProjectConfig(
       try {
         const raw = JSON.parse(readFileSync(configCandidate, "utf8")) as Record<string, unknown>;
         const configuredId = typeof raw.id === "string" && raw.id ? raw.id : null;
-        const normAccess = requestedAccessPath ? normalize(resolve(cwdInput, requestedAccessPath)) : undefined;
+        const normAccess = requestedAccessPath
+          ? normalize(resolve(cwdInput, requestedAccessPath))
+          : undefined;
 
-        const idOk = requestedId === undefined || (configuredId !== null && configuredId === requestedId);
+        const idOk =
+          requestedId === undefined || (configuredId !== null && configuredId === requestedId);
         const pathOk = normAccess === undefined || within(normAccess, cwdNative);
 
         if (idOk && pathOk) {
           matchedInCwd = true;
-          const accessPath = typeof raw.accessPath === "string" && raw.accessPath ? normalize(resolve(cwdNative, raw.accessPath)) : null;
-          const destinationRoot = typeof raw.destinationRoot === "string" && raw.destinationRoot ? normalize(resolve(cwdNative, raw.destinationRoot)) : normalize(join(cwdNative, "src"));
+          const accessPath =
+            typeof raw.accessPath === "string" && raw.accessPath
+              ? normalize(resolve(cwdNative, raw.accessPath))
+              : null;
+          const destinationRoot =
+            typeof raw.destinationRoot === "string" && raw.destinationRoot
+              ? normalize(resolve(cwdNative, raw.destinationRoot))
+              : normalize(join(cwdNative, "src"));
           discoveredProjects = [
             {
               id: configuredId,
