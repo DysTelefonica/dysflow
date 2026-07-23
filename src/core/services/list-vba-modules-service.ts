@@ -327,6 +327,13 @@ export async function runListVbaModules(
       inBinaryOnly,
       inSourceOnly,
       inBoth,
+      // #1057 (F3) — explicit-unit aliases. Same values; the field name
+      // carries the unit (modules PRESENT, not content-drift counts —
+      // use verify_code for drift).
+      totalModules: modules.length,
+      modulesInBinaryOnly: inBinaryOnly,
+      modulesInSourceOnly: inSourceOnly,
+      modulesInBoth: inBoth,
     },
   });
 }

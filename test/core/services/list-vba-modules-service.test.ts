@@ -179,6 +179,11 @@ describe("runListVbaModules (#807 Feature 1)", () => {
       inBinaryOnly: 0,
       inSourceOnly: 0,
       inBoth: 0,
+      // #1057 (F3) — explicit-unit aliases.
+      totalModules: 0,
+      modulesInBinaryOnly: 0,
+      modulesInSourceOnly: 0,
+      modulesInBoth: 0,
     });
   });
 
@@ -211,6 +216,11 @@ describe("runListVbaModules (#807 Feature 1)", () => {
       inBinaryOnly: 0,
       inSourceOnly: 0,
       inBoth: 3,
+      // #1057 (F3) — explicit-unit aliases.
+      totalModules: 3,
+      modulesInBinaryOnly: 0,
+      modulesInSourceOnly: 0,
+      modulesInBoth: 3,
     });
   });
 
