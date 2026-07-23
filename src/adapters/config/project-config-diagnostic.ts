@@ -9,6 +9,8 @@ import {
   remediationForWriteLockedByRunningOp,
 } from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
+import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
+import { nodeConfigFileSystem } from "./dysflow-config-node.js";
 
 export type ProjectConfigStatus =
   | "valid"
@@ -22,6 +24,14 @@ export type ProjectConfigStatus =
   | "target-not-found"
   | "ambiguous";
 
+export type DiscoveredProjectDiagnostic = {
+  id: string | null;
+  projectRoot: string;
+  accessPath: string | null;
+  configPath: string;
+  active: boolean;
+};
+
 export type ProjectConfigDiagnostic = {
   status: ProjectConfigStatus;
   cwd: string;
@@ -32,24 +42,12 @@ export type ProjectConfigDiagnostic = {
   backendPath: string | null;
   destinationRoot: string | null;
   writeReady: boolean;
-  /**
-   * v2.12.0 (#873) — owning worktree identity. `"cwd"` when the configured
-   * target lives inside the active worktree (the historical happy path).
-   * `"sibling:<abs-canonical-sibling-root>"` when the target lives in a
-   * real sibling Git worktree (same parent + own `.git` + different
-   * identity, AND the accessPath is NOT a reparse point). Omitted on
-   * failure modes where `writeReady` is `false`.
-   */
+  discoveredProjects?: readonly DiscoveredProjectDiagnostic[];
   owningWorktree?: "cwd" | string;
   diagnostics: readonly {
     code: string;
     severity: "error" | "warning";
     message: string;
-    /**
-     * Issue #970 — structured remediation. Accepts either a legacy plain
-     * string (treated as `description` by `structureRemediation`) or the
-     * new structured shape (`{description, command, platform, ...}`).
-     */
     remediation?: Remediation | string;
   }[];
   remediation: string | null;
@@ -117,19 +115,80 @@ export function diagnoseProjectConfig(
   request: ProjectConfigRequest = {},
   candidateConfig?: Record<string, unknown>,
 ): ProjectConfigDiagnostic {
-  const cwd = normalize(cwdInput);
-  const projectRootNative = worktreeRoot(cwdInput);
+  let targetCwdInput = cwdInput;
+  const requestedId = request.projectId;
+  const requestedAccessPath =
+    request.accessPath ?? request.accessDbPath ?? request.databasePath ?? request.sourcePath;
+
+  let discoveredProjects: DiscoveredProjectDiagnostic[] | undefined = undefined;
+  const cwdNative = worktreeRoot(cwdInput);
+  let matchedInCwd = false;
+  if (cwdNative !== null) {
+    const configCandidate = join(cwdNative, ".dysflow", "project.json");
+    if (existsSync(configCandidate)) {
+      try {
+        const raw = JSON.parse(readFileSync(configCandidate, "utf8")) as Record<string, unknown>;
+        const configuredId = typeof raw.id === "string" && raw.id ? raw.id : null;
+        const normAccess = requestedAccessPath ? normalize(resolve(cwdInput, requestedAccessPath)) : undefined;
+
+        const idOk = requestedId === undefined || (configuredId !== null && configuredId === requestedId);
+        const pathOk = normAccess === undefined || within(normAccess, cwdNative);
+
+        if (idOk && pathOk) {
+          matchedInCwd = true;
+          const accessPath = typeof raw.accessPath === "string" && raw.accessPath ? normalize(resolve(cwdNative, raw.accessPath)) : null;
+          const destinationRoot = typeof raw.destinationRoot === "string" && raw.destinationRoot ? normalize(resolve(cwdNative, raw.destinationRoot)) : normalize(join(cwdNative, "src"));
+          discoveredProjects = [
+            {
+              id: configuredId,
+              projectRoot: normalize(cwdNative),
+              accessPath,
+              destinationRoot,
+              configPath: normalize(configCandidate),
+              active: true,
+            },
+          ];
+        }
+      } catch {}
+    }
+  }
+
+  if (!matchedInCwd) {
+    discoveredProjects = discoverWorktreeProjectConfigs(cwdInput, nodeConfigFileSystem);
+    if (requestedId !== undefined && requestedId !== null) {
+      const match = discoveredProjects.find((p) => p.id === requestedId);
+      if (match) {
+        targetCwdInput = match.projectRoot;
+      }
+    } else if (requestedAccessPath !== undefined && requestedAccessPath !== null) {
+      const normAccess = normalize(resolve(cwdInput, requestedAccessPath));
+      const match = discoveredProjects.find(
+        (p) =>
+          (p.accessPath !== null && identity(p.accessPath) === identity(normAccess)) ||
+          within(normAccess, p.projectRoot),
+      );
+      if (match) {
+        targetCwdInput = match.projectRoot;
+      }
+    }
+  }
+
+  discoveredProjects ??= discoverWorktreeProjectConfigs(targetCwdInput, nodeConfigFileSystem);
+
+  const cwd = normalize(targetCwdInput);
+  const projectRootNative = worktreeRoot(targetCwdInput);
   if (projectRootNative === null) {
     return {
       status: "outside-project-root",
       cwd,
-      configPath: normalize(join(cwdInput, ".dysflow", "project.json")),
+      configPath: normalize(join(targetCwdInput, ".dysflow", "project.json")),
       projectRoot: cwd,
       projectId: null,
       accessPath: null,
       backendPath: null,
       destinationRoot: null,
       writeReady: false,
+      discoveredProjects,
       diagnostics: [
         {
           code: "OUTSIDE_PROJECT_ROOT",
@@ -156,6 +215,7 @@ export function diagnoseProjectConfig(
     accessPath: null,
     backendPath: null,
     destinationRoot: null,
+    discoveredProjects,
   };
   const fail = (
     status: ProjectConfigStatus,
@@ -244,7 +304,8 @@ export function diagnoseProjectConfig(
     if (
       accessPath === null ||
       parsed.accessPath === undefined ||
-      typeof parsed.accessPath !== "string"
+      typeof parsed.accessPath !== "string" ||
+      within(accessPath, projectRootNative)
     )
       return null;
     let canonicalAccess: string;
@@ -265,7 +326,6 @@ export function diagnoseProjectConfig(
   };
   const siblingRoot = repoSiblingRoot();
   const effectiveOwning = siblingRoot !== null ? canonical(siblingRoot) : canonicalProjectRoot;
-  const requestedId = request.projectId;
   if (requestedId !== undefined && requestedId !== projectId)
     return failWith(
       base,
