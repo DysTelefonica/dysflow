@@ -301,6 +301,19 @@ export function commitFlagFor(toolName: string): CommitFlagName {
 }
 
 /**
+ * Issue #1057 (F7/F8) — deprecated aliases still honored for the given
+ * tool. `dryRun` is the universal alias of `!apply` on every write tool;
+ * export_* additionally keeps the historic `diff`. Read-only tools (no
+ * no-write alias) report an empty list.
+ */
+export function legacyAliasesFor(toolName: string): readonly string[] {
+  const { noWriteAlias } = commitFlagMetadataForOrNoop(toolName);
+  if (noWriteAlias === null) return [];
+  if (noWriteAlias === "diff") return ["diff", "dryRun"];
+  return [noWriteAlias];
+}
+
+/**
  * Stable no-write alias for the given tool (or `null`). Used by the
  * `apply is not allowed` remediation to tell the caller which
  * alternative flag they should be passing.

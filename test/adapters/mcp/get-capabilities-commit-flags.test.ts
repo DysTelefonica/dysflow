@@ -86,7 +86,10 @@ describe("getCapabilitiesAll() — per-tool commit metadata (#757 C2)", () => {
     for (const toolName of Object.keys(MCP_TOOL_CONTRACTS)) {
       const registryEntry = COMMIT_FLAG_REGISTRY[toolName];
       expect(registryEntry, `${toolName} must be in COMMIT_FLAG_REGISTRY`).toBeDefined();
-      expect(tools[toolName]).toEqual(registryEntry);
+      // #1057 (F7) adds additive fields (canonicalCommitFlag, legacyAliases)
+      // on top of the registry entry — the registry stays the source of
+      // truth for the base metadata.
+      expect(tools[toolName]).toMatchObject(registryEntry ?? {});
     }
   });
 
@@ -103,20 +106,27 @@ describe("getCapabilitiesAll() — per-tool commit metadata (#757 C2)", () => {
     const tools = snapshot.tools as Readonly<Record<string, CommitFlagMetadata>>;
 
     // Issue acceptance: export_all, import_modules, delete_module.
+    // #1057 (F7) — canonicalCommitFlag + legacyAliases are additive.
     expect(tools.export_all).toEqual({
       commitFlag: "apply",
       noWriteAlias: "diff",
       defaultBehavior: "writes",
+      canonicalCommitFlag: "apply",
+      legacyAliases: ["diff", "dryRun"],
     });
     expect(tools.import_modules).toEqual({
       commitFlag: "apply",
       noWriteAlias: "dryRun",
       defaultBehavior: "plan",
+      canonicalCommitFlag: "apply",
+      legacyAliases: ["dryRun"],
     });
     expect(tools.delete_module).toEqual({
       commitFlag: "apply",
       noWriteAlias: "dryRun",
       defaultBehavior: "noop",
+      canonicalCommitFlag: "apply",
+      legacyAliases: ["dryRun"],
     });
   });
 
