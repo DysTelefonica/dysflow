@@ -41,6 +41,7 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #971 — read-only runtime contract discovery. Pure catalog: never
     // opens Access, never spawns PowerShell, never mutates state.
     "schema",
+    "describe_tool",
     // #965 — read-only aggregated project health surface (projectConfig +
     // filesystem + runtime). Replaces the 4-5 round-trip pattern AI
     // consumers hit today. Never opens Access, never spawns PowerShell,

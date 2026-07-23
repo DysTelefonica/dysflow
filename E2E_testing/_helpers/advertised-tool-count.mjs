@@ -67,8 +67,12 @@
  * #978 adds `state` (Round-12 read-only runtime operational state —
  * surfaces `{ operations, markers, locks, counters }` aggregated from
  * the access operation registry and `.dysflow/runtime/markers/`; never
- * opens Access, never spawns PowerShell, never mutates state): 88 -> 89. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 89;
+ * opens Access, never spawns PowerShell, never mutates state): 88 -> 89.
+ * #1057 (F5) adds `describe_tool` (pure read-class single-tool
+ * introspection sibling of `schema` — returns ONE tool's params,
+ * description, error codes, and useCases on demand; never opens Access,
+ * never spawns PowerShell, never mutates state): 89 -> 90. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 90;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

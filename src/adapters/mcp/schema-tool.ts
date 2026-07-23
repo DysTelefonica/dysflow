@@ -109,6 +109,13 @@ export type ToolSchema = {
   crossReferences: string[];
   requiredCapabilities: string[];
   safeByDefault: boolean;
+  /**
+   * Issue #1057 (F6) — when to reach for this tool. Human-readable
+   * workflow hints so consumers discover capabilities from the runtime
+   * instead of out-of-band skill docs. Empty when no curated entry
+   * exists yet.
+   */
+  useCases: string[];
 };
 
 /**
@@ -204,6 +211,11 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   lint_module: ["#704", "#789"],
   resolve_project: ["#963", "#962"],
   schema: ["#971"],
+  // Issue #1057 (F5) — on-demand single-tool introspection. Sibling of
+  // `schema` (full catalog): `describe_tool` returns one entry with
+  // params + description + useCases so a consumer stops probing param
+  // names by trial and error.
+  describe_tool: ["#1057"],
   // #965 — `diagnose` collapses the 4-5 round-trip pattern into one
   // read-only call. Sibling of `schema` (static contract) and
   // `resolve_project` (config resolution) — pairs with them under the
@@ -241,6 +253,42 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   compare_backends: [],
   list_access_files: [],
   get_relationships: [],
+};
+
+/**
+ * Issue #1057 (F6) — curated "use this tool when..." hints. Sourced from
+ * the Round-15 consumer session: these are the tools the consumer only
+ * discovered after manual grep/codegraph work that a single documented
+ * hint would have avoided. Tools without an entry surface an empty list.
+ */
+const TOOL_USE_CASES: Record<string, readonly string[]> = {
+  vba_orphan_audit: [
+    "Find test procedures registered in the binary but missing from the source tree (orphaned tests).",
+    "Audit source ↔ binary module parity before a cleanup batch.",
+  ],
+  detect_dead_code: [
+    "Find procedures never referenced from any module before deleting them.",
+    "Reduce a legacy module surface prior to a migration.",
+  ],
+  compare_backends: [
+    "Diff schema/data between two backend .accdb files (e.g. production vs sandbox).",
+    "Verify a sandbox refresh actually mirrors production structure.",
+  ],
+  access_force_cleanup_orphaned: [
+    "List orphaned MSACCESS.EXE candidates (confirmPid omitted) after a timeout.",
+    "Kill ONE verified orphan by passing its confirmPid — never kill by process name.",
+  ],
+  validate_manifest: [
+    "Pre-flight a tests.vba.json manifest before test_vba — reports PROCEDURE_NOT_FOUND per entry.",
+  ],
+  verify_code: [
+    "Detect source ↔ binary drift and plan a sync from bulkImportable / bulkExportable.",
+  ],
+  delete_module: ["Remove a VBA module from the binary (plan first with apply:false)."],
+  describe_tool: [
+    "Introspect one tool's params, defaults, and error codes before calling it.",
+  ],
+  schema: ["Fetch the full static contract catalog for every advertised tool."],
 };
 
 // ─── Input-schema registry (modern tools) ─────────────────────────────────────
@@ -442,6 +490,9 @@ function inputSchemaForTool(name: string): unknown {
   // Modern tools live in MODERN_TOOL_INPUT_SCHEMAS (dispatch registry
   // doesn't carry them); everything else falls through to
   // MCP_TOOL_SCHEMAS.
+  // `describe_tool` (#1057 F5) resolves lazily because its schema const
+  // is declared below the registry (module-init TDZ).
+  if (name === "describe_tool") return DESCRIBE_TOOL_INPUT_SCHEMA;
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
   if (modern !== undefined) return modern;
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
@@ -500,6 +551,7 @@ function buildSchemaForTool(name: string): ToolSchema {
     crossReferences,
     requiredCapabilities: requiredCapabilitiesForTool(access),
     safeByDefault: safeByDefaultForTool(name, access),
+    useCases: [...(TOOL_USE_CASES[name] ?? [])],
   };
 }
 
@@ -578,6 +630,85 @@ export function createSchemaTool(): DysflowMcpTool {
           : undefined;
       const catalog = buildToolSchemaCatalog({ projectId, toolName });
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(catalog) }];
+      return { content, isError: false, ok: true };
+    },
+  };
+}
+
+const DESCRIBE_TOOL_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: {
+      type: "string",
+      description: "Tool name to describe (canonical param).",
+    },
+    toolName: {
+      type: "string",
+      description: "Alias of `name` for symmetry with the `schema` tool's filter param.",
+    },
+    projectId: {
+      type: "string",
+      description:
+        "Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.",
+    },
+  },
+} as const;
+
+/**
+ * Factory for the `describe_tool` MCP tool (#1057 F5). Returns ONE
+ * tool's full contract — description, params (typed + required +
+ * description), returns, errorCodes, crossReferences, useCases — so a
+ * consumer introspects a single tool without fetching the whole
+ * `schema` catalog. Pure read-class: never opens Access, never spawns
+ * PowerShell, never mutates state.
+ */
+export function createDescribeToolTool(): DysflowMcpTool {
+  return {
+    name: "describe_tool",
+    description:
+      "Describe ONE MCP tool on demand: description, params (typed + required + description + enumValues + default), returns, errorCodes, crossReferences, useCases (when to reach for it). Pass { name: '<tool>' } (alias: toolName). Read-only — never opens Access, never spawns PowerShell, never mutates state. Use the `schema` tool for the full catalog. " +
+      MCP_TOOL_CONTRACTS.describe_tool.summary,
+    inputSchema: DESCRIBE_TOOL_INPUT_SCHEMA as unknown as DysflowMcpTool["inputSchema"],
+    handler: async (input): Promise<McpToolResult> => {
+      const params =
+        typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+      const rawName =
+        typeof params.name === "string" && params.name.trim().length > 0
+          ? params.name.trim()
+          : typeof params.toolName === "string" && params.toolName.trim().length > 0
+            ? params.toolName.trim()
+            : undefined;
+      if (rawName === undefined) {
+        const message =
+          "name is required. Pass { name: '<tool>' } (alias: toolName) — e.g. { name: 'delete_module' }.";
+        return {
+          content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
+          isError: true,
+          ok: false,
+          error: { code: "MCP_INPUT_INVALID", message },
+        };
+      }
+      const catalog = buildToolSchemaCatalog({ toolName: rawName });
+      const entry = catalog.tools[0];
+      if (entry === undefined) {
+        const message = `Tool '${rawName}' not found. Call the 'schema' tool (no filter) to list every advertised tool name.`;
+        return {
+          content: [{ type: "text", text: `TOOL_NOT_FOUND: ${message}` }],
+          isError: true,
+          ok: false,
+          error: { code: "TOOL_NOT_FOUND", message },
+        };
+      }
+      // `params` mirrors `parameters` for consumers following the issue's
+      // sketch (`describe_tool(...).params`); `parameters` stays the
+      // catalog-consistent field name.
+      const payload = {
+        ...entry,
+        description: `${entry.name}: ${entry.description}`,
+        params: entry.parameters,
+      };
+      const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(payload) }];
       return { content, isError: false, ok: true };
     },
   };

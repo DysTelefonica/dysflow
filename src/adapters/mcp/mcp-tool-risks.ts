@@ -51,6 +51,8 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // Access, never spawns PowerShell, never mutates state. Same risk
   // family as `doctor` / `get_capabilities` / `resolve_project`.
   schema: "read-only",
+  // #1057 (F5) — single-tool introspection. Same risk family as `schema`.
+  describe_tool: "read-only",
   // #965 — aggregated project health (projectConfig + filesystem + runtime)
   // in a single call. Pure read-class: never opens Access, never spawns
   // PowerShell, never writes to disk. Same risk family as `schema` and
