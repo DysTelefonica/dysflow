@@ -235,4 +235,17 @@ describe("schema compact and full introspection views (#1079)", () => {
     expect(payload.tools).toHaveLength(1);
     expect(Object.keys(payload.tools[0] ?? {}).sort()).toEqual(COMPACT_TOOL_KEYS);
   });
+
+  it("advertises the recommended discovery path in runtime tool metadata", () => {
+    const capabilitiesTool = ADVERTISED_TOOLS.find((tool) => tool.name === "get_capabilities");
+    const schemaTool = ADVERTISED_TOOLS.find((tool) => tool.name === "schema");
+    const describeTool = ADVERTISED_TOOLS.find((tool) => tool.name === "describe_tool");
+
+    expect(capabilitiesTool?.description).toContain("schema({ view: 'compact' })");
+    expect(capabilitiesTool?.description).toContain("describe_tool");
+    expect(schemaTool?.description).toContain("get_capabilities");
+    expect(schemaTool?.description).toContain("view: 'compact'");
+    expect(schemaTool?.description).toContain("view: 'full'");
+    expect(describeTool?.description).toContain("Preferred one-tool deep introspection view");
+  });
 });
