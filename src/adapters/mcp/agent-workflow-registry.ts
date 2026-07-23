@@ -97,7 +97,9 @@ const LEGACY_METADATA: Readonly<
 };
 
 const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
-  get_capabilities: ["Bootstrap every agent session with live adapter, project, and write-gate state."],
+  get_capabilities: [
+    "Bootstrap every agent session with live adapter, project, and write-gate state.",
+  ],
   schema: [
     "Discover all tools with view:'compact'; request view:'full' only for catalog-wide contract analysis.",
   ],
@@ -106,8 +108,12 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
     "Run the preferred source-to-binary or binary-to-source verify, plan, apply, and re-verify workflow.",
   ],
   verify_code: ["Inspect source and binary drift without planning or applying a synchronization."],
-  import_modules: ["Apply a granular source-to-binary import when sync_binary orchestration is too broad."],
-  export_modules: ["Apply a granular binary-to-source export when sync_binary orchestration is too broad."],
+  import_modules: [
+    "Apply a granular source-to-binary import when sync_binary orchestration is too broad.",
+  ],
+  export_modules: [
+    "Apply a granular binary-to-source export when sync_binary orchestration is too broad.",
+  ],
   validate_manifest: ["Validate tests.vba.json procedure references before invoking test_vba."],
   test_vba: ["Execute the validated VBA test manifest after the human-compile gate is clear."],
   query_execute: ["Execute the preferred unified read or write SQL contract."],
@@ -121,12 +127,16 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
   form_set_property: ["Update exactly one property without constructing a batch property map."],
   form_align_controls: ["Align several controls in one geometry operation."],
   form_distribute_controls: ["Distribute several controls evenly in one geometry operation."],
-  form_move_control: ["Move one control to an exact coordinate that alignment or distribution cannot express."],
+  form_move_control: [
+    "Move one control to an exact coordinate that alignment or distribution cannot express.",
+  ],
   diagnose: ["Start recovery with one aggregated project health snapshot."],
   state: ["Inspect operation, marker, lock, and counter state during recovery."],
   logs: ["Inspect the filtered operation timeline after diagnose identifies a failure."],
   cleanup_access_operation: ["Retire one Dysflow-owned operation through ownership-safe cleanup."],
-  doctor: ["Run the narrower diagnostics service when aggregated project recovery context is unnecessary."],
+  doctor: [
+    "Run the narrower diagnostics service when aggregated project recovery context is unnecessary.",
+  ],
   access_force_cleanup_orphaned: [
     "List orphan candidates or retire one verified orphan PID when normal owned-operation cleanup cannot apply.",
   ],

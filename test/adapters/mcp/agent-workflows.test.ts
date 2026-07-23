@@ -52,9 +52,10 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
       expect(STATUSES, `${tool.name} must declare a valid status`).toContain(
         tool.agentWorkflow.status,
       );
-      expect(tool.agentWorkflow.preferFor.length, `${tool.name} must explain when to use it`).toBeGreaterThan(
-        0,
-      );
+      expect(
+        tool.agentWorkflow.preferFor.length,
+        `${tool.name} must explain when to use it`,
+      ).toBeGreaterThan(0);
       expect(tool.useCases).toEqual(tool.agentWorkflow.preferFor);
     }
   });
@@ -66,8 +67,14 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
 
     expect(legacy.length).toBeGreaterThan(0);
     for (const tool of legacy) {
-      expect(tool.agentWorkflow.supersededBy, `${tool.name} must name its replacement`).toBeTruthy();
-      expect(tool.agentWorkflow.migrationGuidance, `${tool.name} must explain migration`).toBeTruthy();
+      expect(
+        tool.agentWorkflow.supersededBy,
+        `${tool.name} must name its replacement`,
+      ).toBeTruthy();
+      expect(
+        tool.agentWorkflow.migrationGuidance,
+        `${tool.name} must explain migration`,
+      ).toBeTruthy();
       expect(tool.agentWorkflow.deprecationPolicy, `${tool.name} must declare policy`).toBeTruthy();
 
       const visited = new Set([tool.name]);
@@ -88,9 +95,7 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
   });
 
   it("states when every specialized tool is better than its preferred wrapper", () => {
-    const specialized = fullCatalog().filter(
-      (tool) => tool.agentWorkflow.status === "specialized",
-    );
+    const specialized = fullCatalog().filter((tool) => tool.agentWorkflow.status === "specialized");
 
     expect(specialized.length).toBeGreaterThan(0);
     for (const tool of specialized) {
@@ -152,9 +157,7 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
       "schema",
       "describe_tool",
     ]);
-    expect(workflows.find((workflow) => workflow.phase === "sync")?.tools).toContain(
-      "sync_binary",
-    );
+    expect(workflows.find((workflow) => workflow.phase === "sync")?.tools).toContain("sync_binary");
     expect(workflows.find((workflow) => workflow.phase === "tests")?.tools).toEqual([
       "validate_manifest",
       "test_vba",
