@@ -35,23 +35,53 @@ const BINARY_WITH_CHECKSUM = SOURCE_WITH_BOUND_COLUMN.replace(
   "Checksum =2\nVersion =21",
 );
 
-function fakeFileSystem(sourceText: string, binaryText: string): ComparisonFileSystemPort {
+function fakeFileSystem(
+  sourceText: string,
+  binaryText: string,
+  sourceRoot = "source",
+  binaryRoot = "binary",
+): ComparisonFileSystemPort {
+  const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+  const normalizedSourceRoot = normalize(sourceRoot);
+  const normalizedBinaryRoot = normalize(binaryRoot);
   return {
     mkdtemp: async (prefix) => prefix,
     readdir: async (path) => {
-      if (path === "source")
+      if (normalize(path) === normalizedSourceRoot)
         return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
-      if (path === "binary")
+      if (normalize(path) === normalizedBinaryRoot)
         return [{ name: "Form_Test.form.txt", isDirectory: () => false, isFile: () => true }];
       return [];
     },
-    readFile: async (path) => (path.includes("binary") ? binaryText : sourceText),
+    readFile: async (path) => {
+      const pathSegments = normalize(path).split("/");
+      const binaryRootName = normalizedBinaryRoot.split("/").at(-1);
+      return pathSegments.at(-2) === binaryRootName ? binaryText : sourceText;
+    },
     rm: async () => undefined,
     tmpdir: () => "tmp",
   };
 }
 
 describe("verify_code control-property mismatches", () => {
+  it("does not confuse a source root whose parent directory contains binary", async () => {
+    const sourceRoot = "C:/worktrees/fix-binary-safety/source";
+    const binaryRoot = "C:/worktrees/fix-binary-safety/exported";
+    const result = await compareVbaSourceTrees(
+      sourceRoot,
+      binaryRoot,
+      ["Form_Test"],
+      false,
+      fakeFileSystem(SOURCE_WITH_BOUND_COLUMN, BINARY_WITHOUT_BOUND_COLUMN, sourceRoot, binaryRoot),
+    );
+
+    expect(result.actionableDifferent?.[0]).toMatchObject({
+      category: "control-property-mismatch",
+      sourceValue: "1",
+      binaryValue: undefined,
+    });
+  });
+
   it("identifies a source-only BoundColumn as an actionable control-property mismatch", async () => {
     const result = await compareVbaSourceTrees(
       "source",
