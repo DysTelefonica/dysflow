@@ -26,8 +26,8 @@
 //   }
 
 import {
-  commitFlagMetadataForOrNoop,
   type CommitFlagName,
+  commitFlagMetadataForOrNoop,
   type DefaultBehavior,
   legacyAliasesFor,
   type NoWriteAliasName,
@@ -2128,16 +2128,6 @@ const TOOL_COMPOSITION_CANONICAL: Record<string, string> = {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-/**
- * Build the runtime contract catalog for one tool (when `toolName` is
- * supplied) or every advertised tool in the consumer's dysflow
- * installation. The result is sorted by tool name for deterministic
- * cross-process comparison; `toolName` filtering returns the matching
- * entry in the same shape or an empty list when nothing matches.
- *
- * Pure function — never touches Access, never spawns PowerShell, never
- * mutates state. Safe to call from read-only MCP contexts.
- */
 function primaryResultForTool(tool: ToolSchema): CompactToolPrimaryResult {
   const contract = tool.resultContract;
   if (contract.kind === "envelope-only") {
@@ -2173,7 +2163,7 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
   const parameterEntries = Object.entries(tool.parameters);
   const defaults = Object.fromEntries(
     parameterEntries
-      .filter(([, parameter]) => Object.prototype.hasOwnProperty.call(parameter, "default"))
+      .filter(([, parameter]) => Object.hasOwn(parameter, "default"))
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([name, parameter]) => [name, parameter.default]),
   );
@@ -2224,9 +2214,7 @@ function buildFullToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
 export function buildToolSchemaCatalog(
   input: SchemaInput & { view: "compact" },
 ): CompactToolSchemaCatalog;
-export function buildToolSchemaCatalog(
-  input: SchemaInput & { view?: "full" },
-): ToolSchemaCatalog;
+export function buildToolSchemaCatalog(input: SchemaInput & { view?: "full" }): ToolSchemaCatalog;
 export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView;
 export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView {
   const full = buildFullToolSchemaCatalog(input);

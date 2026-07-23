@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { EXPECTED_ADVERTISED_TOOL_COUNT } from "../../../E2E_testing/_helpers/advertised-tool-count.mjs";
 import {
   buildToolSchemaCatalog,
-  type SchemaInput,
   SCHEMA_TOOL_INPUT_SCHEMA,
+  type SchemaInput,
   type ToolSchema,
 } from "../../../src/adapters/mcp/schema-tool.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
@@ -22,14 +22,7 @@ const COMPACT_TOOL_KEYS = [
   "writeIntent",
 ];
 
-const PRIMARY_RESULT_KEYS = [
-  "fields",
-  "kind",
-  "modes",
-  "outputModes",
-  "requiredFields",
-  "summary",
-];
+const PRIMARY_RESULT_KEYS = ["fields", "kind", "modes", "outputModes", "requiredFields", "summary"];
 
 class FakeVbaService {
   async execute() {
@@ -118,7 +111,7 @@ function buildFull(toolName?: string): FullCatalog {
 function defaultsFrom(tool: ToolSchema): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(tool.parameters)
-      .filter(([, parameter]) => Object.prototype.hasOwnProperty.call(parameter, "default"))
+      .filter(([, parameter]) => Object.hasOwn(parameter, "default"))
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, parameter]) => [name, parameter.default]),
   );
@@ -132,14 +125,14 @@ describe("schema compact and full introspection views (#1079)", () => {
     expect(first).toEqual(second);
     expect(first.tools).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
     expect(first.tools.map((tool) => tool.name)).toEqual(
-      first.tools.map((tool) => tool.name).toSorted(),
+      first.tools.map((tool) => tool.name).sort(),
     );
 
     for (const tool of first.tools) {
-      expect(Object.keys(tool).toSorted()).toEqual(COMPACT_TOOL_KEYS);
+      expect(Object.keys(tool).sort()).toEqual(COMPACT_TOOL_KEYS);
       expect(tool.purpose.length, `${tool.name} must have a purpose`).toBeGreaterThan(0);
-      expect(Object.keys(tool.primaryResult).toSorted()).toEqual(PRIMARY_RESULT_KEYS);
-      expect(Object.keys(tool.recommendations).toSorted()).toEqual(["deepView", "useCases"]);
+      expect(Object.keys(tool.primaryResult).sort()).toEqual(PRIMARY_RESULT_KEYS);
+      expect(Object.keys(tool.recommendations).sort()).toEqual(["deepView", "useCases"]);
       expect(tool.recommendations.deepView).toBe("describe_tool");
     }
   });
@@ -161,7 +154,7 @@ describe("schema compact and full introspection views (#1079)", () => {
         Object.entries(source.parameters)
           .filter(([, parameter]) => parameter.required)
           .map(([name]) => name)
-          .toSorted(),
+          .sort(),
       );
       expect(tool.requiredParameterGroups).toEqual(source.compositionConstraints);
       expect(tool.defaults).toEqual(defaultsFrom(source));
@@ -180,7 +173,8 @@ describe("schema compact and full introspection views (#1079)", () => {
 
   it("filters both views without changing their respective shapes", () => {
     for (const view of ["compact", "full"] as const) {
-      const catalog = view === "compact" ? buildCompact("export_modules") : buildFull("export_modules");
+      const catalog =
+        view === "compact" ? buildCompact("export_modules") : buildFull("export_modules");
       expect(catalog.tools).toHaveLength(1);
       expect(catalog.tools[0]?.name).toBe("export_modules");
 
@@ -239,6 +233,6 @@ describe("schema compact and full introspection views (#1079)", () => {
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as CompactCatalog;
     expect(payload.tools).toHaveLength(1);
-    expect(Object.keys(payload.tools[0] ?? {}).toSorted()).toEqual(COMPACT_TOOL_KEYS);
+    expect(Object.keys(payload.tools[0] ?? {}).sort()).toEqual(COMPACT_TOOL_KEYS);
   });
 });
