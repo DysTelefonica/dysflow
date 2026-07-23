@@ -1092,6 +1092,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       path: SCHEMA_PROPS.path,
       outputMode: SCHEMA_PROPS.outputMode,
     },
+    // Issue #1074 — declarative alias-group requirement for the form
+    // file path. The handler previously rejected missing sourcePath/path
+    // with FORM_SPEC_MISSING; the constraint now lives in the schema so
+    // the validator and the `schema` catalog can surface it without
+    // re-parsing the handler.
+    anyOf: [{ required: ["sourcePath"] }, { required: ["path"] }],
   },
   map_form_behavior: {
     type: "object",

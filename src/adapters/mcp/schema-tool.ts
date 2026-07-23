@@ -97,6 +97,22 @@ export type ToolErrorCodeSchema = {
 };
 
 /**
+ * Composition constraint for alias groups and other "one of these is
+ * required" rules. The `kind` literal reserves room for future
+ * `oneOf` / `allOf` rollouts without breaking the catalog surface.
+ * `alternatives[*].canonical` is the parameter the handler prefers when
+ * callers pass both — absent when the group has no canonical choice.
+ *
+ * Issue #1074 — exposed under `ToolSchema.compositionConstraints` so a
+ * consumer introspects the alias-group requirement without hand-parsing
+ * the raw JSON Schema.
+ */
+export type SchemaCompositionConstraint = {
+  kind: "anyOf";
+  alternatives: readonly { parameters: readonly string[]; canonical?: string }[];
+};
+
+/**
  * Runtime contract for a single MCP tool. Returned inside the `tools`
  * array from `buildToolSchemaCatalog` / `dysflow.schema`.
  */
@@ -119,6 +135,13 @@ export type ToolSchema = {
    * exists yet.
    */
   useCases: string[];
+  /**
+   * Issue #1074 — declarative alias-group requirements lifted from the
+   * schema's `anyOf` clause. Empty when the tool does not declare
+   * `anyOf`. The catalog surfaces these so a consumer can pick the
+   * canonical parameter without reading the raw JSON Schema.
+   */
+  compositionConstraints: SchemaCompositionConstraint[];
 };
 
 /**
@@ -338,6 +361,13 @@ export const DESCRIBE_TOOL_INPUT_SCHEMA = {
         "Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.",
     },
   },
+  // Issue #1074 — declarative alias-group requirement. The handler
+  // historically rejected missing name/toolName with MCP_INPUT_INVALID;
+  // the constraint now lives in the schema so the validator and the
+  // `schema` catalog can surface it without re-parsing the handler.
+  // `name` is canonical — when both are supplied, the handler prefers
+  // `name` (see the resolver below).
+  anyOf: [{ required: ["name"] }, { required: ["toolName"] }],
 } as const;
 
 /**
@@ -519,6 +549,33 @@ function parametersFromInputSchema(schema: unknown): Record<string, ToolParamete
   return out;
 }
 
+/**
+ * Issue #1074 — lift the `anyOf` composition constraints from the raw
+ * input schema into a typed catalog surface. Only `required` is
+ * consulted today (the validator only enforces `required`); the rest of
+ * the partial schema (`properties`, `additionalProperties`, …) is
+ * reserved for future constraint kinds without breaking the catalog
+ * shape.
+ */
+function compositionConstraintsFromSchema(schema: unknown): SchemaCompositionConstraint[] {
+  if (typeof schema !== "object" || schema === null) return [];
+  const root = schema as { anyOf?: unknown };
+  if (!Array.isArray(root.anyOf)) return [];
+  const alternatives: { parameters: readonly string[]; canonical?: string }[] = [];
+  for (const alt of root.anyOf) {
+    if (typeof alt !== "object" || alt === null) continue;
+    const altObj = alt as { required?: unknown };
+    if (!Array.isArray(altObj.required)) continue;
+    const params = altObj.required.filter(
+      (key): key is string => typeof key === "string" && key.length > 0,
+    );
+    if (params.length === 0) continue;
+    alternatives.push({ parameters: params });
+  }
+  if (alternatives.length === 0) return [];
+  return [{ kind: "anyOf", alternatives }];
+}
+
 function isWriteClassAccess(access: McpToolAccess): boolean {
   return access === "read-write" || access === "conditional-write";
 }
@@ -611,8 +668,51 @@ function buildSchemaForTool(name: string): ToolSchema {
     requiredCapabilities: requiredCapabilitiesForTool(access),
     safeByDefault: safeByDefaultForTool(name, access),
     useCases: [...(TOOL_USE_CASES[name] ?? [])],
+    compositionConstraints: markCanonicalAlternatives(
+      name,
+      compositionConstraintsFromSchema(inputSchema),
+    ),
   };
 }
+
+/**
+ * Issue #1074 — annotate every `anyOf` alternative with its `canonical`
+ * flag using the per-tool `TOOL_COMPOSITION_CANONICAL` registry. The
+ * registry is the SINGLE place the catalog declares "this is the
+ * preferred parameter when callers pass both" — handlers may continue
+ * to resolve the alias but the catalog surface stays the source of
+ * truth for AI consumers.
+ */
+function markCanonicalAlternatives(
+  toolName: string,
+  constraints: SchemaCompositionConstraint[],
+): SchemaCompositionConstraint[] {
+  const canonicalByAlt = TOOL_COMPOSITION_CANONICAL[toolName];
+  if (canonicalByAlt === undefined) return constraints;
+  return constraints.map((constraint) => {
+    if (constraint.kind !== "anyOf") return constraint;
+    return {
+      kind: "anyOf" as const,
+      alternatives: constraint.alternatives.map((alt) => {
+        const isCanonical = alt.parameters.length === 1 && alt.parameters[0] === canonicalByAlt;
+        return isCanonical ? { ...alt, canonical: canonicalByAlt } : alt;
+      }),
+    };
+  });
+}
+
+/**
+ * Issue #1074 — the canonical parameter per tool that declares an
+ * alias-group `anyOf`. Sourced from the handler's documented
+ * "preferred when both are supplied" behavior; see the corresponding
+ * adapter for the runtime resolver.
+ */
+const TOOL_COMPOSITION_CANONICAL: Record<string, string> = {
+  describe_tool: "name",
+  analyze_form_ui: "sourcePath",
+  unlink_table: "tableName",
+  validate_manifest: "testsPath",
+};
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 

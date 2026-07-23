@@ -36,7 +36,40 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
     if (validation !== undefined) return validation;
   }
 
+  // Issue #1074 — declarative alias-group enforcement. When the schema
+  // declares `anyOf`, at least one alternative must be satisfied. An
+  // alternative is satisfied when every key in its `required` set is
+  // present in `params`. The error message lists the valid alternatives
+  // so a consumer can self-correct without reading the schema.
+  // Handler-only rules are no longer required.
+  const anyOfViolation = validateAnyOf(params, schema);
+  if (anyOfViolation !== undefined) return anyOfViolation;
+
   return undefined;
+}
+
+/**
+ * Issue #1074 — returns an error message when none of the `anyOf`
+ * alternatives are satisfied. The error message lists the valid
+ * alternatives (each alternative's `required` set) so a consumer can
+ * pick the preferred parameter without reverse-engineering the schema.
+ */
+function validateAnyOf(
+  params: Record<string, unknown>,
+  schema: JsonObjectSchema,
+): string | undefined {
+  if (!Array.isArray(schema.anyOf) || schema.anyOf.length === 0) return undefined;
+  const paramKeys = Object.keys(params);
+  for (const alt of schema.anyOf) {
+    const required = alt.required ?? [];
+    if (required.every((key: string) => paramKeys.includes(key))) return undefined;
+  }
+  const alternatives = schema.anyOf
+    .map((alt) => alt.required ?? [])
+    .filter((req) => req.length > 0)
+    .map((req) => `[${req.join(" | ")}]`);
+  if (alternatives.length === 0) return undefined;
+  return `one of these is required: ${alternatives.join(", ")}.`;
 }
 
 function validateJsonSchemaProperty(

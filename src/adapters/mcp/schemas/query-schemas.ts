@@ -310,6 +310,11 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
       apply: SCHEMA_PROPS.apply,
     },
+    // Issue #1074 — declarative alias-group requirement for the table
+    // identifier. The mapper previously read whichever key was present
+    // (`tableName`, fallback `table`); the constraint now lives in the
+    // schema so the validator and the `schema` catalog can surface it.
+    anyOf: [{ required: ["tableName"] }, { required: ["table"] }],
   },
   import_queries: {
     type: "object",

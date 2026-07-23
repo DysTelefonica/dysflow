@@ -33,4 +33,12 @@ export type JsonObjectSchema = {
   // string-valued map. The validator enforces both forms (#624 PR 5).
   additionalProperties: boolean | JsonSchemaProperty;
   properties: Record<string, JsonSchemaProperty>;
+  // Issue #1074 — declarative constraint for alias groups and other
+  // composition rules. The validator enforces that at least one
+  // alternative whose `required` set is a subset of the supplied keys
+  // is satisfied. Each alternative is a partial `JsonObjectSchema` —
+  // only `required` is consulted today; additional constraints
+  // (`properties`, `additionalProperties`, etc.) are reserved for
+  // future rolls without breaking the existing catalog surface.
+  anyOf?: readonly Partial<JsonObjectSchema>[];
 };
