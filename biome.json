@@ -15,7 +15,7 @@
       "!!**/coverage",
       "!!**/node_modules",
       "!!**/scratch",
-      "!!E2E_testing/.dysflow/**",
+      "!!E2E_testing/.dysflow",
       "!!E2E_testing/.mcp.json",
       "!!E2E_testing/forms/*.form.json"
     ]

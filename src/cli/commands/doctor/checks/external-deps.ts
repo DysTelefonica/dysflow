@@ -26,7 +26,9 @@ export function runExternalDepsChecks(cwd: string): DoctorCategoryCheck[] {
           name: ".laccdb locks",
           message: `${lockCandidates.length} .laccdb lock file(s) found (${lockCandidates
             .map((file) => path.basename(file))
-            .join(", ")}) — if no Access instance is open, cleanup via list_access_operations → access_force_cleanup_orphaned (never kill MSACCESS.EXE by name)`,
+            .join(
+              ", ",
+            )}) — if no Access instance is open, cleanup via list_access_operations → access_force_cleanup_orphaned (never kill MSACCESS.EXE by name)`,
           severity: "warning",
         },
   );

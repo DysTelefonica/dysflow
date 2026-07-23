@@ -70,7 +70,9 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
           name: "Attribute VB_Name",
           message: `Attribute VB_Name missing in ${missingVbName.length} files (${missingVbName
             .slice(0, MAX_LISTED_EXAMPLES)
-            .join(", ")}${missingVbName.length > MAX_LISTED_EXAMPLES ? ", …" : ""}) — see the vba-form-metadata-repair guidance`,
+            .join(
+              ", ",
+            )}${missingVbName.length > MAX_LISTED_EXAMPLES ? ", …" : ""}) — see the vba-form-metadata-repair guidance`,
           severity: "warning",
         },
   );

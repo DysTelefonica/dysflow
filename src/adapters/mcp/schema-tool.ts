@@ -285,9 +285,7 @@ const TOOL_USE_CASES: Record<string, readonly string[]> = {
     "Detect source ↔ binary drift and plan a sync from bulkImportable / bulkExportable.",
   ],
   delete_module: ["Remove a VBA module from the binary (plan first with apply:false)."],
-  describe_tool: [
-    "Introspect one tool's params, defaults, and error codes before calling it.",
-  ],
+  describe_tool: ["Introspect one tool's params, defaults, and error codes before calling it."],
   schema: ["Fetch the full static contract catalog for every advertised tool."],
 };
 

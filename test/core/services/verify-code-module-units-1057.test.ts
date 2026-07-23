@@ -95,11 +95,11 @@ describe("verify_code — explicit module-count units (#1057 F3)", () => {
     const result = (await run()) as Record<string, unknown>;
     const counts = result.moduleCounts as Record<string, number>;
     const actionableModules =
-      counts.sourceNewerModules +
-      counts.binaryNewerModules +
-      counts.bothChangedModules +
-      counts.missingInSourceModules +
-      counts.missingInBinaryModules;
+      (counts.sourceNewerModules ?? 0) +
+      (counts.binaryNewerModules ?? 0) +
+      (counts.bothChangedModules ?? 0) +
+      (counts.missingInSourceModules ?? 0) +
+      (counts.missingInBinaryModules ?? 0);
     expect(result.actionableOk).toBe(actionableModules === 0);
   });
 

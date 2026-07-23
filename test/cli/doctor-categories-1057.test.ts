@@ -13,7 +13,7 @@
  * code reflects critical findings only; warnings exit 0.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -38,7 +38,7 @@ function writeFixture(options: { missingVbName?: boolean; accessPathExists?: boo
     }),
   );
   const cls = options.missingVbName
-    ? 'Sub Foo()\nEnd Sub\n'
+    ? "Sub Foo()\nEnd Sub\n"
     : 'Attribute VB_Name = "Thing"\nOption Explicit\nSub Foo()\nEnd Sub\n';
   writeFileSync(path.join(src, "classes", "Thing.cls"), cls);
   return dir;

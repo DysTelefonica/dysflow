@@ -25,9 +25,7 @@ export const CWD_OVERRIDE_SCHEMA_PROP = {
     "Optional per-call override of the factory cwd (#1057 F10). Must be an existing directory containing a valid .dysflow/project.json — lets one MCP session target a sibling worktree without a restart. Omit to use the cwd the MCP was started from.",
 } as const;
 
-export type CwdOverrideResolution =
-  | { ok: true; cwd: string }
-  | { ok: false; error: McpToolResult };
+export type CwdOverrideResolution = { ok: true; cwd: string } | { ok: false; error: McpToolResult };
 
 /**
  * Resolve the effective cwd for a handler: the validated `input.cwd`
@@ -36,9 +34,8 @@ export type CwdOverrideResolution =
 export function resolveCwdOverride(input: unknown, factoryCwd: string): CwdOverrideResolution {
   const params =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
-  const override = typeof params.cwd === "string" && params.cwd.trim().length > 0
-    ? params.cwd.trim()
-    : undefined;
+  const override =
+    typeof params.cwd === "string" && params.cwd.trim().length > 0 ? params.cwd.trim() : undefined;
   if (override === undefined) return { ok: true, cwd: factoryCwd };
 
   const resolved = path.resolve(override);

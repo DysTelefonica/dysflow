@@ -1,5 +1,28 @@
 # Changelog
 
+## [v2.22.0] - 2026-07-23
+
+Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a long per-form cleanup session against a production `.accdb`. No runtime bugs; naming, output semantics, introspection, doctor potency, and one architectural gap.
+
+### Added
+
+- feat(mcp): `describe_tool` — single-tool on-demand introspection sibling of `schema`: returns ONE tool's description, `params` (typed + required + description), returns, errorCodes, crossReferences, and `useCases`. Advertised tool count 89 → 90 (#1057 F5)
+- feat(mcp): `useCases` metadata on the `schema` catalog and `describe_tool` — curated "use this tool when…" hints for discovery-relevant tools (`vba_orphan_audit`, `detect_dead_code`, `compare_backends`, `access_force_cleanup_orphaned`, `validate_manifest`, `verify_code`, `delete_module`) (#1057 F6)
+- feat(mcp): `get_capabilities.tools[]` now carries `canonicalCommitFlag` (the ONE flag whose `true` commits) and `legacyAliases` (deprecated aliases still desugared: `dryRun` ≡ `!apply` everywhere; export_* additionally keeps the historic `diff`). Additive to the pre-existing `commitFlag`/`noWriteAlias`/`defaultBehavior` (#1057 F7)
+- feat(core): explicit count units on the drift surfaces — `verify_code` gains `moduleCounts` (`matchedModules`, `sourceNewerModules`, `missingInBinaryModules`, …) and `summaryUnits` (per category `{ modulesCount, linesCount }`); `list_vba_modules.summary` gains `totalModules`/`modulesInBinaryOnly`/`modulesInSourceOnly`/`modulesInBoth` aliases. Prevents the round-14 "parity reconciled" misread where presence counts (all 0) were mistaken for content-drift counts (118 modules) (#1057 F3)
+- feat(cli): `dysflow doctor --category A|B|C|D|all` — four read-only check categories (A: `.dysflow/project.json` schema/paths/conventions; B: VBA source structure — `Attribute VB_Name`, `Option Explicit`; C: runtime consumer contract — apply polarity, param naming; D: external deps — `.laccdb` orphan locks, `.codegraph` freshness). Side-effect free (no PowerShell, no Access COM); exit code reflects critical findings only (#1057 F9)
+- feat(mcp): per-call `cwd` override on the project-scoped read tools (`resolve_project`, `diagnose`, `state`, `logs`) — one MCP session can target a sibling worktree without a restart. `cwd` must be an existing directory containing `.dysflow/project.json`, else `MCP_INPUT_INVALID` with a "not a dysflow project" hint; absent → factory cwd, fully backwards compatible (#1057 F10)
+
+### Fixed
+
+- fix(mcp): `MCP_INPUT_INVALID` unknown-key rejections now list the schema's valid params and suggest the nearest match — `delete_module({ module })` answers `module is not allowed. Valid params: … Did you mean 'moduleName'?` instead of the bare rejection. Covers the F1 naming friction (`module` vs `moduleName` vs `moduleNames`) at the validator, for every tool at once (#1057 F1 F4)
+- fix(mcp): contradictory `apply` + `dryRun` combinations (`apply === dryRun` as booleans, e.g. `apply:true, dryRun:true`) are rejected as mutually exclusive instead of one flag silently winning; consistent redundancy (`apply:true, dryRun:false`) keeps the #977 precedence contract. `export_modules`/`export_all` schemas now declare `dryRun` (and `diff` on `export_modules`) so the #1055 no-write routing is reachable through MCP: `dryRun:true` ≡ `apply:false` (plan) on every write tool (#1057 F8)
+
+### Documented
+
+- docs: read-class tools that open the `.accdb` through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, …) may update the Jet/ACE LSN on close — `git status` will report the binary modified with 0 content change. Verify real changes with `git diff --stat` (identical byte size ⇒ LSN-only) or `verify_code` before staging; never `git add` the `.accdb` blindly after a dysflow run (#1057 F2)
+
+
 ## [v2.21.1] - 2026-07-21
 
 ### Fixed

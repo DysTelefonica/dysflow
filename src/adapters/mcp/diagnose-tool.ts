@@ -40,8 +40,8 @@ import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
 } from "../config/project-config-diagnostic.js";
-import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
+import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────

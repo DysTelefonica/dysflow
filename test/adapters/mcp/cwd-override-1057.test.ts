@@ -12,14 +12,14 @@
  *   - the handler resolves every path against the override.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createResolveProjectTool } from "../../../src/adapters/mcp/resolve-project-tool";
-import { createStateTool, STATE_TOOL_SCHEMA } from "../../../src/adapters/mcp/state-tool";
 import { DIAGNOSE_INPUT_SCHEMA } from "../../../src/adapters/mcp/diagnose-tool";
 import { LOGS_TOOL_SCHEMA } from "../../../src/adapters/mcp/logs-tool";
+import { createResolveProjectTool } from "../../../src/adapters/mcp/resolve-project-tool";
+import { createStateTool, STATE_TOOL_SCHEMA } from "../../../src/adapters/mcp/state-tool";
 
 let projectA: string;
 let projectB: string;
@@ -118,7 +118,11 @@ describe("diagnose / state / logs cwd override (#1057 F10)", () => {
     mkdirSync(path.join(projectB, ".dysflow", "runtime", "markers"), { recursive: true });
     writeFileSync(
       path.join(projectB, ".dysflow", "runtime", "markers", "op-b.json"),
-      JSON.stringify({ operationId: "op-b", status: "completed", updatedAt: new Date().toISOString() }),
+      JSON.stringify({
+        operationId: "op-b",
+        status: "completed",
+        updatedAt: new Date().toISOString(),
+      }),
     );
     const registry = {
       create: async () => ({}) as never,

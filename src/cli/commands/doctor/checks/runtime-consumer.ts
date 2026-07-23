@@ -15,7 +15,11 @@ const DOCUMENTED_COMMIT_FLAG_EXCEPTIONS = new Set(["test_vba"]);
  * hint (#1057 F4) covers the runtime UX meanwhile.
  */
 const MODULE_PARAM_INCONSISTENCIES = [
-  { tool: "delete_module", param: "moduleName", family: "list_procedures/get_procedure use 'module'" },
+  {
+    tool: "delete_module",
+    param: "moduleName",
+    family: "list_procedures/get_procedure use 'module'",
+  },
 ];
 
 /**

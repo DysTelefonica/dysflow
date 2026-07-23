@@ -18,8 +18,6 @@ import {
   runSupplementDriftCheckFromEnv,
   type SupplementDriftDiagnostic,
 } from "./codegraph-supplement-drift-check.js";
-import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
-import { ensureObject } from "./install/file-utils.js";
 import { runExternalDepsChecks } from "./doctor/checks/external-deps.js";
 import { runProjectConfigChecks } from "./doctor/checks/project-config.js";
 import { runRuntimeConsumerChecks } from "./doctor/checks/runtime-consumer.js";
@@ -29,6 +27,8 @@ import {
   type DoctorCategoryId,
 } from "./doctor/checks/types.js";
 import { runVbaStructureChecks } from "./doctor/checks/vba-structure.js";
+import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
+import { ensureObject } from "./install/file-utils.js";
 import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 

@@ -41,9 +41,7 @@ describe("get_capabilities — canonicalCommitFlag + legacyAliases (#1057 F7)", 
       { canonicalCommitFlag?: string; legacyAliases?: readonly string[] }
     >;
     expect(tools.export_modules?.canonicalCommitFlag).toBe("apply");
-    expect(tools.export_modules?.legacyAliases).toEqual(
-      expect.arrayContaining(["diff", "dryRun"]),
-    );
+    expect(tools.export_modules?.legacyAliases).toEqual(expect.arrayContaining(["diff", "dryRun"]));
   });
 
   it("read-only tools report an empty legacyAliases list", () => {
