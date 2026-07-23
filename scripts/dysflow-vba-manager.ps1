@@ -70,6 +70,15 @@ Param(
     [Parameter()]
     [switch]$Force,
 
+    # Issue #1063 (follow-up to #1055) — export plan mode. The TS adapter
+    # routes export_modules / export_all plan calls (apply:false / dryRun:true)
+    # through the runner with the bare -ReadOnly switch. When set, the Export
+    # action resolves its targets exactly as a real export but writes NOTHING
+    # (no module files, no directories, no query export) and emits a
+    # DYSFLOW_RESULT with readOnly:true plus the planned module list.
+    [Parameter()]
+    [switch]$ReadOnly,
+
     # issue #752 — opt-in verbose contract. When set, per-module import/export
     # result objects carry a `verbose` field with source / destination line
     # counts, byte counts, sha256 hashes and a derived `truncated` bool, so an AI
@@ -4463,7 +4472,10 @@ function Invoke-ExportAction {
         [AllowEmptyCollection()]
         [string[]]$NormalizedModules,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
-        [switch]$Json
+        [switch]$Json,
+        # Issue #1063 — plan mode (apply:false / dryRun:true from the TS
+        # adapter): resolve targets, write nothing, report planned[].
+        [switch]$ReadOnly
     )
     $vbProject  = $Session.VbProject
     $components = $vbProject.VBComponents
@@ -4562,16 +4574,20 @@ function Invoke-ExportAction {
 
         $targets = $targets | Sort-Object -Unique
 
-        # Ensure directories exist
-        foreach ($sub in @("forms", "reports", "modules", "classes")) {
-            $p = Join-Path -Path $ModulesPath -ChildPath $sub
-            if (-not (Test-Path -Path $p)) {
-                New-Item -Path $p -ItemType Directory -Force | Out-Null
+        # Ensure directories exist — skipped in plan mode (#1063): readOnly
+        # must not touch the filesystem at all.
+        if (-not $ReadOnly) {
+            foreach ($sub in @("forms", "reports", "modules", "classes")) {
+                $p = Join-Path -Path $ModulesPath -ChildPath $sub
+                if (-not (Test-Path -Path $p)) {
+                    New-Item -Path $p -ItemType Directory -Force | Out-Null
+                }
             }
         }
     }
 
     $exported = @()
+    $planned = @()
     $total = $targets.Count
     $idx = 0
     foreach ($target in $targets) {
@@ -4579,6 +4595,12 @@ function Invoke-ExportAction {
         $accessObjectName = if ($target -is [string]) { $null } else { [string]$target.AccessObjectName }
         $vbComponentName = if ($target -is [string]) { $null } else { [string]$target.VbComponentName }
         $idx++
+        # Issue #1063 — plan mode: record the target, write nothing.
+        if ($ReadOnly) {
+            $planned += $name
+            Write-Status -Message ("[{0}/{1}] Plan (readOnly): {2}" -f $idx, $total, $name) -Color Cyan
+            continue
+        }
         Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
         try {
             Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -AccessObjectName $accessObjectName -VbComponentName $vbComponentName
@@ -4598,8 +4620,9 @@ function Invoke-ExportAction {
         }
     }
 
-    if ($NormalizedModules.Count -eq 0) {
-        # Export saved queries using open DAO session
+    if ($NormalizedModules.Count -eq 0 -and -not $ReadOnly) {
+        # Export saved queries using open DAO session — skipped in plan mode
+        # (#1063): readOnly must not write query files either.
         $db = $null
         $queryDefs = $null
         try {
@@ -4654,11 +4677,21 @@ function Invoke-ExportAction {
         ok = $true
         exported = $exported
     }
+    if ($ReadOnly) {
+        # Issue #1063 — plan-mode envelope: exported stays empty; planned[]
+        # carries the modules a committing call (apply:true) would write.
+        $exportResult["readOnly"] = $true
+        $exportResult["planned"] = $planned
+    }
     if ($warnings.Count -gt 0) {
         $exportResult["warnings"] = $warnings
     }
     Write-DysflowResult -Result $exportResult -Depth 4
-    Write-Status -Message ("OK Export completado ({0})" -f $exported.Count) -Color Green
+    if ($ReadOnly) {
+        Write-Status -Message ("OK Export plan (readOnly) completado ({0} planned)" -f $planned.Count) -Color Green
+    } else {
+        Write-Status -Message ("OK Export completado ({0})" -f $exported.Count) -Color Green
+    }
 }
 
 function Invoke-ListObjectsAction {
@@ -5387,7 +5420,8 @@ try {
 
     if ($Action -eq "Export") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        Invoke-ExportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -Json:$Json
+        # Issue #1063 — thread the plan-mode switch through to the action.
+        Invoke-ExportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -Json:$Json -ReadOnly:$ReadOnly
 
     } elseif ($Action -eq "Import") {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
