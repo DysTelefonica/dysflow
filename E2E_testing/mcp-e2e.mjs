@@ -340,6 +340,16 @@ await record("operations", "access_force_cleanup_orphaned", { projectId, accessP
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
 await record("capabilities", "get_capabilities", { projectId });
+// #1057 (F5/F6) — single-tool introspection sibling of `schema`. Read-only;
+// returns delete_module's params + description + useCases.
+await record("capabilities", "describe_tool", { name: "delete_module" });
+// #1057 (F1/F4) — unknown-key rejection lists valid params + suggests the
+// nearest match ("Did you mean 'moduleName'?"). Validation fires before any
+// write gate, so no Access mutation is possible on this row.
+await record("vba", "delete_module", { projectId, module: "DysflowE2ENoSuchModule" }, { expected: "error" });
+// #1057 (F8) — contradictory apply+dryRun is rejected as mutually exclusive
+// at validation, before the write gate.
+await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, dryRun: true }, { expected: "error" });
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
   // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.
