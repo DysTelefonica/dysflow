@@ -782,7 +782,7 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
 #### `get_capabilities`
-Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. The snapshot surfaces the running adapter version, MCP surface, process- and project-level write flags, projectId resolution outcome, the `allowedProcedures` allowlist, the global `dryRun` default, the count of tools visible in `tools/list`, and the list of write-class tools currently permitted.
+Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, and canonical commit flags. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
 
 #### `list_procedures`
@@ -854,19 +854,26 @@ Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transit
 * **Returns**: `{ ok, scanned, removed, kept, removedMarkerIds, keptMarkerIds, errors }`. `scanned` counts every `*.json` file inspected; `removed` + `kept` partition successful decisions; `errors[]` carries per-file failures that did not abort the sweep.
 
 #### `schema`
-Return the runtime contract for every tool in the consumer's dysflow installation: parameters (typed + required + description + enumValues + default), returns (JSON Schema fragment), errorCodes (with recoverable flag), crossReferences (issue numbers), requiredCapabilities, safeByDefault. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `get_capabilities` (which reports live state) and `diagnose` (which surfaces diagnostic verdicts): `schema` reports the static contract every other tool advertises.
+Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 90 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
-  - `toolName` (string, optional): Optional tool name to filter the catalog to a single entry. Omit for the full catalog.
-* **Returns**: `{ projectId, tools: [{ name, description, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault }] }`.
+  - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
+  - `view` (`"compact" | "full"`, optional, default `"full"`): Select low-context discovery or the complete backward-compatible contract.
+* **Compact returns**: `{ projectId, tools: [{ name, purpose, access, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
+* **Full returns**: `{ projectId, tools: [{ name, description, access, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
+* **Recommended discovery path**:
+  1. `get_capabilities({})` for live version, gates, policy, and canonical commit flags.
+  2. `schema({ "view": "compact" })` to choose a tool, optionally filtered with `toolName`.
+  3. `describe_tool({ "name": "<tool>" })` for the preferred one-tool deep view.
+  4. `schema({ "view": "full" })` only for bulk analysis that genuinely needs every complete contract.
 
 #### `describe_tool`
-Describe ONE MCP tool on demand: description, `params` (typed + required + description + enumValues + default), returns, errorCodes, crossReferences, and `useCases` (when to reach for the tool). Single-tool sibling of `schema` — introspect one tool without fetching the full catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state (#1057 F5).
+Preferred one-tool deep introspection view. It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`. Use it after compact discovery instead of fetching the full 90-tool catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `name` (string): Tool name to describe (canonical param).
-  - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` tool's filter param.
+  - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
-* **Returns**: the single tool's contract entry — `{ name, description, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases }` (`params` mirrors `parameters`). Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
+* **Returns**: the full single-tool contract — `{ name, description, access, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
 
 #### `diagnose`
 Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Replaces the 4-5 round-trip pattern (`get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Pairs with `get_capabilities` (live adapter state) and `schema` (static contract): `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.
