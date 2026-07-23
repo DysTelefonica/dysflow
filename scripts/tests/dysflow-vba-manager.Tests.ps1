@@ -2134,6 +2134,89 @@ Describe "Invoke-ExportAction — behavioral (decompose S1)" {
             $script:ExportedModules | Should -Not -Contain "GoodModule"
         }
     }
+
+    Context "readOnly plan mode (#1063) — no files written, planned list emitted" {
+        # Issue #1063 — the #1055 polarity fix routes export plan calls
+        # (apply:false / dryRun:true) through the runner as -ReadOnly. The
+        # switch must (a) be accepted, (b) suppress every write (no
+        # Export-VbaModule, no directory creation, no query export), and
+        # (c) emit a DYSFLOW_RESULT carrying readOnly:true + planned[].
+        BeforeEach {
+            $script:ExportedModules = [System.Collections.Generic.List[string]]::new()
+            function script:Export-VbaModule {
+                param($VbProject, [string]$ModuleName, $ModulesPath, $AccessApplication)
+                $script:ExportedModules.Add($ModuleName)
+            }
+            function script:Get-ComponentExtension { param($Component, $ModuleName) return ".bas" }
+            $script:CapturedResults = [System.Collections.Generic.List[object]]::new()
+            # Pester Mock (NOT a script-scoped function stub) so the real
+            # Write-DysflowResult is restored automatically after each test —
+            # downstream Describes parse its real stdout.
+            Mock Write-DysflowResult { $script:CapturedResults.Add($Result) }
+
+            $fakeComponents = [PSCustomObject]@{ Count = 2 }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($nameOrIndex)
+                if ($nameOrIndex -is [int]) {
+                    return [PSCustomObject]@{ Name = "Component$nameOrIndex"; Type = 1 }
+                }
+                return [PSCustomObject]@{ Name = $nameOrIndex }
+            } -Force
+            $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+            $fakeVbProject | Add-Member -MemberType NoteProperty -Name "VBComponents" -Value $fakeComponents -Force
+
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject          = $fakeVbProject
+                AccessApplication  = [PSCustomObject]@{ Id = "fake-app" }
+            }
+        }
+
+        It "accepts the -ReadOnly switch without a binding error" {
+            { Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @("ModuleA") `
+                -ModulesPath (Join-Path $TestDrive "ro-modules") `
+                -ReadOnly } | Should -Not -Throw
+        }
+
+        It "does NOT call Export-VbaModule in readOnly mode" {
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @("ModuleA", "ModuleB") `
+                -ModulesPath (Join-Path $TestDrive "ro-modules") `
+                -ReadOnly
+
+            $script:ExportedModules.Count | Should -Be 0
+        }
+
+        It "emits DYSFLOW_RESULT with readOnly:true and the planned module list" {
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @("ModuleA", "ModuleB") `
+                -ModulesPath (Join-Path $TestDrive "ro-modules") `
+                -ReadOnly
+
+            $script:CapturedResults.Count | Should -Be 1
+            $result = $script:CapturedResults[0]
+            $result.ok | Should -BeTrue
+            $result.readOnly | Should -BeTrue
+            @($result.planned) | Should -Contain "ModuleA"
+            @($result.planned) | Should -Contain "ModuleB"
+            @($result.exported).Count | Should -Be 0
+        }
+
+        It "creates NO directories in readOnly all-modules mode" {
+            $roRoot = Join-Path $TestDrive "ro-all-modules"
+            Invoke-ExportAction `
+                -Session $script:FakeSession `
+                -NormalizedModules @() `
+                -ModulesPath $roRoot `
+                -ReadOnly
+
+            Test-Path $roRoot | Should -BeFalse
+            $script:ExportedModules.Count | Should -Be 0
+        }
+    }
 }
 
 # ===========================================================================
