@@ -182,7 +182,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("blocks generate_form dryRun:true with apply:true when writes are disabled", async () => {
+  it("rejects generate_form dryRun:true with apply:true as mutually exclusive (#1057 F8) before the write gate", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_form", false);
 
     const result = await tool.handler({
@@ -193,7 +193,8 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    expect(result.content[0]?.text).toContain("mutually exclusive");
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
