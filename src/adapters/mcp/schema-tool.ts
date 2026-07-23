@@ -25,6 +25,7 @@
 //     safeByDefault,        // boolean
 //   }
 
+import { commitFlagMetadataForOrNoop, legacyAliasesFor } from "../../core/runtime/commit-flag-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
@@ -83,6 +84,13 @@ export type ToolParameterSchema = {
   description: string;
   enumValues?: string[];
   default?: unknown;
+  canonicalName?: string;
+  aliases?: string[];
+  deprecated?: boolean;
+  deprecatedSince?: string;
+  conflictsWith?: string[];
+  precedence?: "canonical" | "alias" | "deprecated";
+  sensitive?: boolean;
 };
 
 /**
@@ -530,7 +538,76 @@ function parameterFromJsonSchema(
   return result;
 }
 
-function parametersFromInputSchema(schema: unknown): Record<string, ToolParameterSchema> {
+function aliasesFromComposition(
+  toolName: string,
+  schema: unknown,
+): { canonical: string; aliases: string[] } | undefined {
+  const canonical = TOOL_COMPOSITION_CANONICAL[toolName];
+  if (canonical === undefined || typeof schema !== "object" || schema === null) return undefined;
+  const anyOf = (schema as { anyOf?: unknown }).anyOf;
+  if (!Array.isArray(anyOf)) return undefined;
+  const aliases = anyOf.flatMap((alternative) => {
+    if (typeof alternative !== "object" || alternative === null) return [];
+    const required = (alternative as { required?: unknown }).required;
+    if (!Array.isArray(required) || required.length !== 1 || typeof required[0] !== "string") {
+      return [];
+    }
+    return [required[0]];
+  });
+  if (!aliases.includes(canonical)) return undefined;
+  return { canonical, aliases: [...new Set(aliases)] };
+}
+
+function enrichParameterMetadata(
+  toolName: string,
+  schema: unknown,
+  parameters: Record<string, ToolParameterSchema>,
+): void {
+  const aliasGroup = aliasesFromComposition(toolName, schema);
+  if (aliasGroup !== undefined) {
+    for (const alias of aliasGroup.aliases) {
+      const parameter = parameters[alias];
+      if (parameter === undefined) continue;
+      parameter.canonicalName = aliasGroup.canonical;
+      parameter.aliases = [...aliasGroup.aliases];
+      parameter.precedence = alias === aliasGroup.canonical ? "canonical" : "deprecated";
+      if (alias !== aliasGroup.canonical) {
+        parameter.deprecated = true;
+        parameter.deprecatedSince = "2.23.0";
+      }
+    }
+  }
+
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (/password|secret|token/i.test(name)) parameter.sensitive = true;
+  }
+
+  const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
+  if (writeFlags.length < 2) return;
+  const metadata = commitFlagMetadataForOrNoop(toolName);
+  const legacyAliases = new Set(legacyAliasesFor(toolName));
+  for (const flag of writeFlags) {
+    const parameter = parameters[flag];
+    if (parameter === undefined) continue;
+    parameter.conflictsWith = writeFlags.filter((candidate) => candidate !== flag);
+    if (flag === metadata.commitFlag) {
+      parameter.precedence = "canonical";
+      continue;
+    }
+    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "alias";
+    if (legacyAliases.has(flag)) {
+      parameter.deprecated = true;
+      parameter.deprecatedSince = "2.23.0";
+      parameter.canonicalName = metadata.commitFlag;
+      parameter.aliases = [...writeFlags];
+    }
+  }
+}
+
+function parametersFromInputSchema(
+  toolName: string,
+  schema: unknown,
+): Record<string, ToolParameterSchema> {
   const out: Record<string, ToolParameterSchema> = {};
   if (typeof schema !== "object" || schema === null) return out;
   const root = schema as {
@@ -546,6 +623,7 @@ function parametersFromInputSchema(schema: unknown): Record<string, ToolParamete
       requiredSet.has(name),
     );
   }
+  enrichParameterMetadata(toolName, schema, out);
   return out;
 }
 
@@ -658,7 +736,7 @@ function buildSchemaForTool(name: string): ToolSchema {
   return {
     name,
     description: descriptionForTool(name),
-    parameters: parametersFromInputSchema(inputSchema),
+    parameters: parametersFromInputSchema(name, inputSchema),
     returns: {
       type: "object",
       schema: { ...MCP_TOOL_RESULT_JSON_SCHEMA },
