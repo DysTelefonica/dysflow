@@ -210,6 +210,37 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("rejects default and alias semantics that remain prose-only", () => {
+    let defaultDescriptions = 0;
+    let aliasDescriptions = 0;
+    for (const tool of TOOLS) {
+      const entry = catalogEntry(tool.name);
+      for (const [name, parameter] of Object.entries(entry.parameters)) {
+        const ext = getExtendedParam(parameter);
+        if (/\bdefault(?:s|ed)?\b/i.test(parameter.description)) {
+          defaultDescriptions += 1;
+          expect(
+            ext.default,
+            `tool '${tool.name}' parameter '${name}' describes a default without structured metadata`,
+          ).toBeDefined();
+        }
+        if (/\balias(?:es)?\b/i.test(parameter.description)) {
+          aliasDescriptions += 1;
+          expect(
+            ext.canonicalName,
+            `tool '${tool.name}' parameter '${name}' describes an alias without canonicalName`,
+          ).toBeDefined();
+          expect(
+            ext.aliases,
+            `tool '${tool.name}' parameter '${name}' describes an alias without aliases[]`,
+          ).toBeDefined();
+        }
+      }
+    }
+    expect(defaultDescriptions).toBeGreaterThan(100);
+    expect(aliasDescriptions).toBeGreaterThan(80);
+  });
+
   it("every known alias group declares canonicalName, aliases, and deprecated metadata", () => {
     for (const group of KNOWN_ALIAS_GROUPS) {
       const entry = catalogEntry(group.tool);
