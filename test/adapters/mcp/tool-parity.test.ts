@@ -456,7 +456,13 @@ describe("Dysflow MCP tool parity inventory", () => {
       });
       const tool = tools.find((entry) => entry.name === name);
       expect(tool, `${name} must be registered`).toBeDefined();
-      await tool?.handler({});
+      // Issue #1074 — `unlink_table` declares a `tableName | table`
+      // alias group on its input schema. The dispatch wiring assertion
+      // is about the `mode` discriminator, which is independent of the
+      // table identity; supplying `tableName` here keeps the wiring
+      // assertion focused without crossing the alias-group gate.
+      const identity = name === "unlink_table" ? { tableName: "TestTable" } : {};
+      await tool?.handler(identity);
       expect(query.requests, `${name} should reach the query service`).toHaveLength(1);
       expect(
         (query.requests[0] as { mode?: string }).mode,

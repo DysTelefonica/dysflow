@@ -326,6 +326,12 @@ export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
   },
+  // Issue #1074 — declarative alias-group requirement. The handler
+  // previously resolved whichever key was present (`testsPath`, `path`,
+  // or inline `manifest`); the constraint now lives in the schema so
+  // the validator and the `schema` catalog can surface it without
+  // re-parsing the handler.
+  anyOf: [{ required: ["testsPath"] }, { required: ["path"] }, { required: ["manifest"] }],
 };
 
 export const LINT_MODULE_SCHEMA: JsonObjectSchema = {

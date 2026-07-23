@@ -45,9 +45,21 @@ describe("DAO MCP target contracts", () => {
   ] as const)("%s declares an explicit frontend-only role", (toolName) => {
     const schema = QUERY_TOOL_SCHEMAS[toolName];
 
-    expect(validateInput({ projectId: "split", target: "frontend" }, schema)).toBeUndefined();
-    expect(validateInput({ projectId: "split", target: "backend" }, schema)).toContain("frontend");
-    expect(validateInput({ projectId: "split", target: "auto" }, schema)).toContain("frontend");
+    // Issue #1074 — `unlink_table` declares a `tableName | table` alias
+    // group on the input schema. The "frontend-only role" assertion
+    // covers the `target` discrimination, which is independent of the
+    // table identity; supplying `tableName` here keeps the assertion
+    // focused on the target role without crossing the alias-group gate.
+    const identity = toolName === "unlink_table" ? { tableName: "TestTable" } : {};
+    expect(
+      validateInput({ projectId: "split", target: "frontend", ...identity }, schema),
+    ).toBeUndefined();
+    expect(validateInput({ projectId: "split", target: "backend", ...identity }, schema)).toContain(
+      "frontend",
+    );
+    expect(validateInput({ projectId: "split", target: "auto", ...identity }, schema)).toContain(
+      "frontend",
+    );
   });
 
   it.each([
