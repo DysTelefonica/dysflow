@@ -311,6 +311,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // deprecated no-write mapping by VbaModulesAdapter; the schema
       // accepts both flags.
       apply: SCHEMA_PROPS.apply,
+      // Issue #1057 (F8) — `diff` and `dryRun` are declared so the
+      // adapter's no-write routing (#1055) is reachable through MCP:
+      // `dryRun:true` ≡ `apply:false` (plan) on every write tool.
+      diff: SCHEMA_PROPS.diff,
+      dryRun: SCHEMA_PROPS.dryRun,
       // issue #752 — opt-in verbose flag. Adds a top-level `verbose: [...]`
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
@@ -351,6 +356,10 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // alias (see vba-modules-adapter.ts). The schema accepts both
       // flags; the adapter picks the right one.
       apply: SCHEMA_PROPS.apply,
+      // Issue #1057 (F8) — `dryRun` declared so the adapter's no-write
+      // routing (#1055) is reachable through MCP: `dryRun:true` ≡
+      // `apply:false` (plan) on every write tool.
+      dryRun: SCHEMA_PROPS.dryRun,
       prune: SCHEMA_PROPS.prune,
       exportPath: SCHEMA_PROPS.exportPath,
       // issue #752 — opt-in verbose flag.
