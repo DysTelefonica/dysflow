@@ -1,0 +1,999 @@
+﻿tool,family,access,parameter,type,required,default,enum_values,parameter_class,description
+access_force_cleanup_orphaned,Procesos/recuperación,write-capable,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.
+access_force_cleanup_orphaned,Procesos/recuperación,write-capable,accessPath,string,False,,,common,Frontend .accdb path to scan. Defaults to the accessDbPath declared in .dysflow/project.json when omitted.
+access_force_cleanup_orphaned,Procesos/recuperación,write-capable,confirmPid,number,False,,,functional,"Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates (MSACCESS.EXE or pwsh.exe worker). When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath (MSACCESS) or owned by a Dysflow operation (pwsh worker)."
+analyze_form_layout,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+analyze_form_layout,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+analyze_form_layout,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+analyze_form_layout,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+analyze_form_layout,UI de formularios,read-only,alignmentThresholdTwips,number,False,,,functional,Maximum |topA − topB| (twips) for two controls to count as sharing a visual row. Defaults to 50. Smaller values tighten the alignment net.
+analyze_form_layout,UI de formularios,read-only,sectionBounds,object,False,,,functional,"Optional section bounds by section name (e.g. { Detail: { width: 20000, height: 10000 }, FormHeader: { width: 5000, height: 1000 } }). When supplied together with `controlSection`, the off-section check runs."
+analyze_form_layout,UI de formularios,read-only,controlSection,object,False,,,functional,"Optional control-name → section-name map (e.g. { txtHeader: 'FormHeader', txtDetail: 'Detail' }). Required alongside `sectionBounds` for the off-section check."
+analyze_form_layout,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+analyze_form_ui,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+analyze_form_ui,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+analyze_form_ui,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+analyze_form_ui,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+analyze_form_ui,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+apply_form_design_plan,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+apply_form_design_plan,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+apply_form_design_plan,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+apply_form_design_plan,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+apply_form_design_plan,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+apply_form_design_plan,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+apply_form_design_plan,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+apply_form_design_plan,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+apply_form_design_plan,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+apply_form_design_plan,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+apply_form_design_plan,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+apply_form_design_plan,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+apply_form_design_plan,UI de formularios,write-capable,plan,object,True,,,functional,
+apply_form_design_plan,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+apply_form_design_plan,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+apply_form_design_plan,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+catalog_add_control,Artefactos form/report,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+catalog_add_control,Artefactos form/report,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+catalog_add_control,Artefactos form/report,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+catalog_add_control,Artefactos form/report,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+catalog_add_control,Artefactos form/report,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+catalog_add_control,Artefactos form/report,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+catalog_add_control,Artefactos form/report,write-capable,catalogPath,string,False,,,functional,Form control catalog path.
+catalog_add_control,Artefactos form/report,write-capable,controlName,string,False,,,functional,Control name.
+catalog_add_control,Artefactos form/report,write-capable,controlType,string,False,,,functional,Control type.
+catalog_add_control,Artefactos form/report,write-capable,type,string,False,,,functional,Control type alias.
+catalog_add_control,Artefactos form/report,write-capable,spec,object,False,,,functional,Form/report specification object.
+catalog_add_control,Artefactos form/report,write-capable,specPath,string,False,,,functional,Form/report specification path.
+catalog_add_control,Artefactos form/report,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+catalog_add_control,Artefactos form/report,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+clean_stale_markers,Procesos/recuperación,write-capable,,,,,,none,Tool reports no parameters in schema({}).
+cleanup_access_operation,Procesos/recuperación,write-capable,operationId,string,True,,,functional,Dysflow operation id.
+cleanup_access_operation,Procesos/recuperación,write-capable,force,boolean,False,,,functional,Force operation when supported.
+cleanup_access_operation,Procesos/recuperación,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+cleanup_access_operation,Procesos/recuperación,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+cleanup_access_operation,Procesos/recuperación,write-capable,accessPath,string,True,,,common,Optional override for Access frontend database path.
+cleanup_access_operation,Procesos/recuperación,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+cleanup_access_operation,Procesos/recuperación,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+cleanup_access_operation,Procesos/recuperación,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+cleanup_access_operation,Procesos/recuperación,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+cleanup_access_operation,Procesos/recuperación,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+cleanup_access_operation,Procesos/recuperación,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+cleanup_access_operation,Procesos/recuperación,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+cleanup_access_operation,Procesos/recuperación,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+compact_repair,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+compact_repair,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+compact_repair,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+compact_repair,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+compact_repair,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+compact_repair,Escritura DB,write-capable,target,enum,False,,frontend | backend,functional,Database role to compact. Defaults to frontend. backend resolves to the configured backendPath. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.
+compact_repair,Escritura DB,write-capable,backupFirst,boolean,False,,,functional,Create a backup before compact/repair.
+compact_repair,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+compact_repair,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+compare_backends,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+compare_backends,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+compare_backends,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+compare_backends,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+compare_backends,Lectura DB/esquema,read-only,comparePath,string,False,,,functional,Backend comparison path alias for backendPath.
+compare_form,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+compare_form,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+compare_form,Artefactos form/report,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+compare_form,Artefactos form/report,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+compare_form,Artefactos form/report,read-only,targetPath,string,False,,,functional,Path to the right-side .form.txt (compared against sourcePath). Required unless 'target' alias is provided.
+compare_form,Artefactos form/report,read-only,target,string,False,,,functional,Alias for targetPath.
+compare_form,Artefactos form/report,read-only,formName,string,False,,,functional,Optional left form/report name.
+compare_form,Artefactos form/report,read-only,name,string,False,,,functional,Alias for formName.
+compare_form,Artefactos form/report,read-only,targetName,string,False,,,functional,Optional right form/report name.
+compare_form,Artefactos form/report,read-only,targetForm,string,False,,,functional,Alias for targetName.
+copy_form_ui_pattern,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+copy_form_ui_pattern,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+copy_form_ui_pattern,UI de formularios,read-only,behaviorMap,object,True,,,functional,"FormUiBehaviorMap produced by map_form_behavior. Required fields describe controls, form events, unmapped CodeGraph evidence, and warnings. Optional mapper metadata such as a nullable codegraphIndexPath is accepted for runtime parity."
+copy_form_ui_pattern,UI de formularios,read-only,referencePattern,object,True,,,functional,"Reference UI pattern. sourceForm, intent, and mappedControls are required; mappedControls maps reference control names to target control names."
+copy_form_ui_pattern,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+count_rows,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+count_rows,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+count_rows,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+count_rows,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+count_rows,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+count_rows,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+count_rows,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend | auto,functional,Semantic target role for table-aware reads. auto probes the configured backend and frontend using tableName; it fails when the table is missing or exists in both. Explicit databasePath/sourcePath wins.
+count_rows,Lectura DB/esquema,read-only,tableName,string,False,,,functional,Table name.
+count_rows,Lectura DB/esquema,read-only,table,string,False,,,functional,Table name alias.
+count_rows,Lectura DB/esquema,read-only,sql,string,False,,,functional,SQL text.
+count_rows,Lectura DB/esquema,read-only,query,string,False,,,functional,SQL query alias.
+create_form_from_template,Artefactos form/report,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+create_form_from_template,Artefactos form/report,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+create_form_from_template,Artefactos form/report,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+create_form_from_template,Artefactos form/report,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+create_form_from_template,Artefactos form/report,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+create_form_from_template,Artefactos form/report,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+create_form_from_template,Artefactos form/report,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+create_form_from_template,Artefactos form/report,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+create_form_from_template,Artefactos form/report,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+create_form_from_template,Artefactos form/report,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+create_form_from_template,Artefactos form/report,write-capable,sourceForm,string,True,,,functional,Source form name (e.g. 'Form_FormRiesgosGestionRiesgo'). Resolved bench-cache first then projectRoot.
+create_form_from_template,Artefactos form/report,write-capable,targetForm,string,True,,,functional,Target form name (e.g. 'Form_FormNuevaAuditoria'). The new form being created. Rejected if the file already exists and overwrite is false.
+create_form_from_template,Artefactos form/report,write-capable,tokenMap,object,True,,,functional,Token replacement map: '{{Token}}' placeholder -> replacement string. Keys must be non-empty strings; values must be strings.
+create_form_from_template,Artefactos form/report,write-capable,missingTokenPolicy,enum,False,,warn-pass-through | strict,functional,How to handle a token present in the source but absent from tokenMap. 'warn-pass-through' (default) leaves the token verbatim and emits a warning; 'strict' throws FORM_MUTATION_INVALID.
+create_form_from_template,Artefactos form/report,write-capable,strictMissingTokens,boolean,False,,,functional,"Convenience flag equivalent to missingTokenPolicy:'strict'. When true, any unmapped source token is a typed error and no target is written."
+create_form_from_template,Artefactos form/report,write-capable,overwrite,boolean,False,,,functional,"When true, an existing target .form.txt is replaced via the gated restore path so a failed load restores prior state. Default false."
+create_form_from_template,Artefactos form/report,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+create_form_from_template,Artefactos form/report,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+create_form_from_template,Artefactos form/report,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+create_form_from_template,Artefactos form/report,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+create_table,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+create_table,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+create_table,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+create_table,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+create_table,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+create_table,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+create_table,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+create_table,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+create_table,Escritura DB,write-capable,tableName,string,False,,,functional,Table name.
+create_table,Escritura DB,write-capable,table,string,False,,,functional,Table name alias.
+create_table,Escritura DB,write-capable,definition,string,False,,,functional,Table definition or fields.
+create_table,Escritura DB,write-capable,fields,string,False,,,functional,Table definition alias.
+create_table,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+create_table,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+delete_module,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+delete_module,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+delete_module,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+delete_module,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+delete_module,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+delete_module,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+delete_module,Sync VBA,write-capable,moduleName,string,False,,,functional,VBA module name.
+delete_module,Sync VBA,write-capable,moduleNames,array,False,,,functional,VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.
+delete_module,Sync VBA,write-capable,force,boolean,False,,,functional,Force operation when supported.
+delete_module,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+delete_module,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+delete_module,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+describe_tool,Bootstrap/diagnóstico,read-only,name,string,False,,,functional,Tool name to describe (canonical param).
+describe_tool,Bootstrap/diagnóstico,read-only,toolName,string,False,,,functional,Alias of `name` for symmetry with the `schema` tool's filter param.
+describe_tool,Bootstrap/diagnóstico,read-only,projectId,string,False,,,common,Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.
+detect_dead_code,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+detect_dead_code,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+detect_dead_code,Análisis VBA,read-only,scope,enum,True,,binary | source | module,functional,Search scope for the dead-code analysis. The handler treats the caller-supplied modules map as the source of truth regardless of scope; `scope` and `module` are echoed back on the report for caller introspection.
+detect_dead_code,Análisis VBA,read-only,module,string,False,,,functional,"Optional module-name constraint. When set, only procedures and declarations in that module are considered; risk is elevated to `Med` for surviving private-procedure findings because a narrowed scan may hide references that live outside the chosen module."
+detect_dead_code,Análisis VBA,read-only,modules,object,False,,,functional,In-memory mapping of module name to VBA source code. The handler operates exclusively on this map and never opens Access or reads from disk. Omit to defer to the project-source-tree fallback resolved via the Access context.
+detect_dead_code,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+detect_dead_code,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+detect_dead_code,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+detect_dead_code,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+detect_dead_code,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+detect_dead_code,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+detect_dead_code,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+detect_dead_code,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+diagnose,Bootstrap/diagnóstico,read-only,,,,,,none,Tool reports no parameters in schema({}).
+diff_form_preview,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+diff_form_preview,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+diff_form_preview,UI de formularios,read-only,beforePath,string,False,,,functional,Path to the LEFT .form.txt file (the baseline). Required unless projectId+beforeName resolves it via the project resolver.
+diff_form_preview,UI de formularios,read-only,before,string,False,,,functional,Alias for beforePath.
+diff_form_preview,UI de formularios,read-only,afterPath,string,False,,,functional,Path to the RIGHT .form.txt file (the modified). Required unless projectId+afterName resolves it via the project resolver.
+diff_form_preview,UI de formularios,read-only,after,string,False,,,functional,Alias for afterPath.
+diff_form_preview,UI de formularios,read-only,beforeName,string,False,,,functional,Optional form name used together with projectId to resolve beforePath via the project resolver.
+diff_form_preview,UI de formularios,read-only,beforeForm,string,False,,,functional,Alias for beforeName.
+diff_form_preview,UI de formularios,read-only,afterName,string,False,,,functional,Optional form name used together with projectId to resolve afterPath via the project resolver.
+diff_form_preview,UI de formularios,read-only,afterForm,string,False,,,functional,Alias for afterName.
+diff_form_preview,UI de formularios,read-only,output,enum,False,,svg | ascii | both,functional,"Payload to return in `data`. `svg` is the primary browser-friendly format (with data-diff='added|removed|moved|resized|same' on each rect); `ascii` is the terminal/agent fallback (with a diff-marker legend); `both` surfaces both. The structured envelope (changes, warnings) is always returned alongside."
+diff_form_preview,UI de formularios,read-only,viewportScale,number,False,,,functional,Optional twips -> pixels multiplier. Defaults to 0.05. Passed through to both renderings.
+diff_form_preview,UI de formularios,read-only,ascii,object,False,,,functional,Optional ASCII grid dimensions. Defaults to 80x24. Passed through to both renderings.
+diff_form_preview,UI de formularios,read-only,epsilon,number,False,,,functional,Tolerance (twips) for the moved/resized classification. Defaults to 0. Any non-zero integer delta on the relevant axis is treated as a real change.
+diff_form_preview,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+distinct_values,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+distinct_values,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+distinct_values,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+distinct_values,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+distinct_values,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+distinct_values,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+distinct_values,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend | auto,functional,Semantic target role for table-aware reads. auto probes the configured backend and frontend using tableName; it fails when the table is missing or exists in both. Explicit databasePath/sourcePath wins.
+distinct_values,Lectura DB/esquema,read-only,tableName,string,False,,,functional,Table name.
+distinct_values,Lectura DB/esquema,read-only,table,string,False,,,functional,Table name alias.
+distinct_values,Lectura DB/esquema,read-only,columnName,string,False,,,functional,Column name.
+distinct_values,Lectura DB/esquema,read-only,column,string,False,,,functional,Column name alias.
+distinct_values,Lectura DB/esquema,read-only,sql,string,False,,,functional,SQL text.
+distinct_values,Lectura DB/esquema,read-only,query,string,False,,,functional,SQL query alias.
+doctor,Bootstrap/diagnóstico,read-only,projectId,string,False,,,common,canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.
+doctor,Bootstrap/diagnóstico,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+doctor,Bootstrap/diagnóstico,read-only,includeEnvironment,boolean,False,,,functional,Include environment diagnostics when supported.
+doctor,Bootstrap/diagnóstico,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+doctor,Bootstrap/diagnóstico,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+doctor,Bootstrap/diagnóstico,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+doctor,Bootstrap/diagnóstico,read-only,projectRoot,string,False,,,common,Optional override for project root.
+doctor,Bootstrap/diagnóstico,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+doctor,Bootstrap/diagnóstico,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+doctor,Bootstrap/diagnóstico,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+doctor,Bootstrap/diagnóstico,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+doctor,Bootstrap/diagnóstico,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+drop_table,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+drop_table,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+drop_table,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+drop_table,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+drop_table,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+drop_table,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+drop_table,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+drop_table,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+drop_table,Escritura DB,write-capable,tableName,string,False,,,functional,Table name.
+drop_table,Escritura DB,write-capable,table,string,False,,,functional,Table name alias.
+drop_table,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+drop_table,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+exec_sql,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+exec_sql,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+exec_sql,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+exec_sql,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+exec_sql,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+exec_sql,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+exec_sql,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+exec_sql,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+exec_sql,Escritura DB,write-capable,sql,string,False,,,functional,SQL text.
+exec_sql,Escritura DB,write-capable,query,string,False,,,functional,SQL query alias.
+exec_sql,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+exec_sql,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+exec_sql,Escritura DB,write-capable,allowTables,array,False,,,functional,Allowed tables.
+exec_sql,Escritura DB,write-capable,allowTable,string,False,,,functional,Single allowed table.
+exec_sql,Escritura DB,write-capable,denyTables,array,False,,,functional,Denied tables.
+exec_sql,Escritura DB,write-capable,denyTable,string,False,,,functional,Single denied table.
+exists,Sync VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+exists,Sync VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+exists,Sync VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+exists,Sync VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+exists,Sync VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+exists,Sync VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+exists,Sync VBA,read-only,name,string,False,,,functional,Object or generated form name.
+exists,Sync VBA,read-only,moduleName,string,False,,,functional,VBA module name.
+exists,Sync VBA,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+export_all,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+export_all,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+export_all,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+export_all,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+export_all,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+export_all,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+export_all,Sync VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+export_all,Sync VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+export_all,Sync VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+export_all,Sync VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+export_all,Sync VBA,write-capable,filter,string,False,,,functional,Test or object filter.
+export_all,Sync VBA,write-capable,diff,boolean,False,,,common,Include a diff when supported.
+export_all,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+export_all,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+export_all,Sync VBA,write-capable,prune,boolean,False,,,functional,"Mirror mode. For export_all: after a fully clean export, delete on-disk source files (.bas/.cls/.form.txt/.report.txt) whose module no longer exists in the binary, so the destination mirrors the binary. NEVER prunes if the export reported any warning. For import_all: before importing, delete binary modules absent from managed source so the binary mirrors source. Saved queries are never pruned. Default false."
+export_all,Sync VBA,write-capable,exportPath,string,False,,,functional,Export path.
+export_all,Sync VBA,write-capable,verbose,boolean,False,,,functional,"When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content."
+export_all,Sync VBA,write-capable,confirmOverwriteSource,boolean,False,,,functional,Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path; ignored otherwise.
+export_all,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+export_modules,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+export_modules,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+export_modules,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+export_modules,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+export_modules,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+export_modules,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+export_modules,Sync VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+export_modules,Sync VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+export_modules,Sync VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+export_modules,Sync VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+export_modules,Sync VBA,write-capable,moduleNames,array,False,,,functional,VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.
+export_modules,Sync VBA,write-capable,filter,string,False,,,functional,Test or object filter.
+export_modules,Sync VBA,write-capable,exportPath,string,False,,,functional,Export path.
+export_modules,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+export_modules,Sync VBA,write-capable,diff,boolean,False,,,common,Include a diff when supported.
+export_modules,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+export_modules,Sync VBA,write-capable,mutateBinary,boolean,False,,,functional,Issue #1065 - defaults to false. Export runs against a disposable copy so Access cannot mutate the original .accdb. Set true only to preserve the legacy direct-binary behavior. The response always reports binaryMutated.
+export_modules,Sync VBA,write-capable,verbose,boolean,False,,,functional,"When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content."
+export_modules,Sync VBA,write-capable,confirmOverwriteSource,boolean,False,,,functional,Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path; ignored otherwise.
+export_modules,Sync VBA,write-capable,allowExternalAccessPath,boolean,False,,,functional,"Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior."
+export_modules,Sync VBA,write-capable,transactional,boolean,False,,,functional,"Issue #975 — transactional mode. Copies the binary to a staging directory, runs the write against the copy, runs post-write verification (when applicable), and atomically renames the copy back to the original on success. On any failure the copy is deleted and the original is untouched. Default false."
+export_modules,Sync VBA,write-capable,dryRunWithPreflight,boolean,False,,,functional,"Issue #977 — run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with `dryRun` and `apply`. A failed preflight returns the specific errorCode from the taxonomy (#962); a successful preflight returns ok:true with a preflight summary. Default false."
+export_modules,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+export_queries,Queries guardadas,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+export_queries,Queries guardadas,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+export_queries,Queries guardadas,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+export_queries,Queries guardadas,read-only,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+export_queries,Queries guardadas,read-only,exportPath,string,False,,,functional,Export path.
+export_queries,Queries guardadas,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+find_references,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+find_references,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+find_references,Análisis VBA,read-only,symbol,string,True,,,functional,The name of the symbol to search references for.
+find_references,Análisis VBA,read-only,scope,enum,False,,module | binary | source | all,functional,"Search scope: module, binary, source, or all. Defaults to all."
+find_references,Análisis VBA,read-only,limit,number,False,,,functional,Maximum references to return in a single response. Defaults to 500 when omitted. Hard ceiling is 1000.
+find_references,Análisis VBA,read-only,offset,number,False,,,functional,Pagination offset (number of references to skip). Defaults to 0. Use `nextOffset` from the previous response to continue paging.
+find_references,Análisis VBA,read-only,module,string,False,,,functional,Optional module name constraint. Restricts search to this module only.
+find_references,Análisis VBA,read-only,modules,object,False,,,functional,Optional in-memory mapping of module names to source code.
+find_references,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+find_references,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+find_references,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+find_references,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+find_references,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+find_references,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+find_references,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+find_references,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+fix_encoding,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+fix_encoding,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+fix_encoding,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+fix_encoding,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+fix_encoding,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+fix_encoding,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+fix_encoding,Sync VBA,write-capable,location,string,False,,,functional,Encoding fix location.
+fix_encoding,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+fix_encoding,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_add_control,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_add_control,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_add_control,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_add_control,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_add_control,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_add_control,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_add_control,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_add_control,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_add_control,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_add_control,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_add_control,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_add_control,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_add_control,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_add_control,UI de formularios,write-capable,controlType,string,True,,,functional,Control type.
+form_add_control,UI de formularios,write-capable,type,string,False,,,functional,Control type alias.
+form_add_control,UI de formularios,write-capable,targetSectionName,string,False,,,functional,Optional target section/container name for a new form control.
+form_add_control,UI de formularios,write-capable,properties,object,False,,,functional,Control properties to write to the form source.
+form_add_control,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_add_control,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_add_control,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_add_control,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_align_controls,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_align_controls,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_align_controls,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_align_controls,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_align_controls,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_align_controls,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_align_controls,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_align_controls,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_align_controls,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_align_controls,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_align_controls,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_align_controls,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_align_controls,UI de formularios,write-capable,controlNames,array,True,,,functional,List of control names to align. Order is ignored; the median of the selection is used. The adapter also accepts a comma-separated string and normalizes it to an array.
+form_align_controls,UI de formularios,write-capable,edge,enum,True,,left | right | top | bottom | center-horizontal | center-vertical,functional,Which edge / center to align on. 'left'/'right'/'center-horizontal' move Left; 'top'/'bottom'/'center-vertical' move Top.
+form_align_controls,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_align_controls,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_align_controls,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_align_controls,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_delete_control,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_delete_control,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_delete_control,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_delete_control,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_delete_control,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_delete_control,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_delete_control,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_delete_control,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_delete_control,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_delete_control,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_delete_control,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_delete_control,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_delete_control,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_delete_control,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_delete_control,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_delete_control,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_delete_control,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_deserialize,Artefactos form/report,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_deserialize,Artefactos form/report,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_deserialize,Artefactos form/report,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_deserialize,Artefactos form/report,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_deserialize,Artefactos form/report,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_deserialize,Artefactos form/report,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_deserialize,Artefactos form/report,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_deserialize,Artefactos form/report,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_deserialize,Artefactos form/report,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_deserialize,Artefactos form/report,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_deserialize,Artefactos form/report,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_deserialize,Artefactos form/report,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_deserialize,Artefactos form/report,write-capable,formName,string,False,,,functional,Optional form name; derived from the sourcePath filename when omitted.
+form_deserialize,Artefactos form/report,write-capable,ir,object,True,,,functional,FormIR (parsed by parseFormTxt). Pass an existing FormIR; the tool re-serializes it with serializeFormTxt and writes the result. The IR contract is the slice-1 FormIR model (name/kind/preamble/root/codeBehind).
+form_deserialize,Artefactos form/report,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_deserialize,Artefactos form/report,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_deserialize,Artefactos form/report,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_deserialize,Artefactos form/report,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_distribute_controls,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_distribute_controls,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_distribute_controls,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_distribute_controls,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_distribute_controls,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_distribute_controls,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_distribute_controls,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_distribute_controls,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_distribute_controls,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_distribute_controls,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_distribute_controls,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_distribute_controls,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_distribute_controls,UI de formularios,write-capable,controlNames,array,True,,,functional,List of control names to distribute. Order is ignored; controls are sorted by their axis position internally. The adapter also accepts a comma-separated string and normalizes it to an array.
+form_distribute_controls,UI de formularios,write-capable,axis,enum,True,,horizontal | vertical,functional,Which axis to distribute along. 'horizontal' moves Left; 'vertical' moves Top.
+form_distribute_controls,UI de formularios,write-capable,spacing,number,False,,,functional,"Optional exact gap (twips) between consecutive control edges. When omitted, distributes across the bounding box of the selection."
+form_distribute_controls,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_distribute_controls,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_distribute_controls,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_distribute_controls,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_duplicate_control,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_duplicate_control,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_duplicate_control,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_duplicate_control,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_duplicate_control,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_duplicate_control,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_duplicate_control,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_duplicate_control,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_duplicate_control,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_duplicate_control,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_duplicate_control,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_duplicate_control,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_duplicate_control,UI de formularios,write-capable,sourceControlName,string,True,,,functional,Name of the control to clone. Must exist in the parsed FormIR (FORM_DUPLICATE_SOURCE_MISSING otherwise).
+form_duplicate_control,UI de formularios,write-capable,newName,string,True,,,functional,"Name for the cloned control. Must NOT collide with any existing control (FORM_DUPLICATE_CONTROL otherwise). When the source carries a GUID blob, the clone receives a fresh GUID deterministically derived from the form and source/new control identities; the source GUID is never copied verbatim (#1032)."
+form_duplicate_control,UI de formularios,write-capable,targetSectionName,string,False,,,functional,"Optional Access section name (e.g. 'Detalle', 'FormHeader') to push the clone into. Defaults to the form root's default control container when omitted."
+form_duplicate_control,UI de formularios,write-capable,overrides,object,False,,,functional,"Optional map of property name → scalar value applied AFTER the deep-clone. Same per-key guards as form_set_properties: 'Name' is ignored (identity is always `newName`), protected/metadata keys throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement, LayoutCached* keys are silently dropped (#872 F3)."
+form_duplicate_control,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_duplicate_control,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_duplicate_control,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_duplicate_control,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_get_geometry,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+form_get_geometry,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+form_get_geometry,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+form_get_geometry,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_get_geometry,UI de formularios,read-only,formName,string,False,,,functional,Optional form/report name (e.g. 'Form_Customer'). Used with projectId.
+form_get_geometry,UI de formularios,read-only,name,string,False,,,functional,Alias for formName.
+form_get_geometry,UI de formularios,read-only,controlName,string,True,,,functional,Name of the control whose geometry to read. Returns FORM_CONTROL_NOT_FOUND if the control does not exist in the parsed FormIR.
+form_list_controls,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+form_list_controls,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+form_list_controls,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+form_list_controls,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_list_controls,UI de formularios,read-only,formName,string,False,,,functional,Optional form/report name (e.g. 'Form_Customer'). Used with projectId.
+form_list_controls,UI de formularios,read-only,name,string,False,,,functional,Alias for formName.
+form_list_controls,UI de formularios,read-only,section,string,False,,,functional,"Optional section name to scope the listing (e.g. 'Detail', 'FormHeader'). When omitted, every named control in the form is returned."
+form_list_controls,UI de formularios,read-only,limit,number,False,1000,,functional,"Maximum controls to return. Hard ceiling is 5000; default is 1000. When the matched inventory exceeds the limit, the response sets `truncated: true` and includes `totalCount` with the full match count so the caller can paginate."
+form_move_control,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_move_control,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_move_control,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_move_control,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_move_control,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_move_control,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_move_control,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_move_control,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_move_control,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_move_control,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_move_control,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_move_control,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_move_control,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_move_control,UI de formularios,write-capable,left,number,False,,,functional,Control Left coordinate in Access twips.
+form_move_control,UI de formularios,write-capable,top,number,False,,,functional,Control Top coordinate in Access twips.
+form_move_control,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_move_control,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_move_control,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_move_control,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_rename_control,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_rename_control,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_rename_control,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_rename_control,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_rename_control,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_rename_control,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_rename_control,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_rename_control,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_rename_control,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_rename_control,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_rename_control,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_rename_control,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_rename_control,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_rename_control,UI de formularios,write-capable,newName,string,True,,,functional,New control name.
+form_rename_control,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_rename_control,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_rename_control,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_rename_control,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_serialize,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+form_serialize,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+form_serialize,Artefactos form/report,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_serialize,Artefactos form/report,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_serialize,Artefactos form/report,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_serialize,Artefactos form/report,read-only,projectRoot,string,False,,,common,Optional override for project root.
+form_serialize,Artefactos form/report,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_serialize,Artefactos form/report,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_serialize,Artefactos form/report,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_serialize,Artefactos form/report,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_serialize,Artefactos form/report,read-only,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_serialize,Artefactos form/report,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_serialize,Artefactos form/report,read-only,formName,string,False,,,functional,Optional form name (e.g. 'Form_Customer'). Derived from the sourcePath filename when omitted; reported back in the response.
+form_serialize,Artefactos form/report,read-only,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_serialize,Artefactos form/report,read-only,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_serialize,Artefactos form/report,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_serialize,Artefactos form/report,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_serialize,Artefactos form/report,read-only,includeSerialized,boolean,False,,,functional,Deprecated fallback for form_serialize to include the full serialized text.
+form_set_properties,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_set_properties,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_set_properties,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_set_properties,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_set_properties,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_set_properties,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_set_properties,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_set_properties,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_set_properties,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_set_properties,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_set_properties,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_set_properties,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_set_properties,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_set_properties,UI de formularios,write-capable,properties,object,True,,,functional,"Map of property name → scalar value. Typical use: `{ Left: 100, Top: 200, Width: 4536, Height: 500, Caption: '""Tile 1""' }`. All per-key guards from form_set_property carry over: 'Name' is refused (use form_rename_control), protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement. LayoutCached* keys are silently dropped (Issue #872 F3 — they're Access IDE serialisation noise)."
+form_set_properties,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_set_properties,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_set_properties,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_set_properties,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+form_set_property,UI de formularios,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+form_set_property,UI de formularios,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+form_set_property,UI de formularios,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+form_set_property,UI de formularios,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+form_set_property,UI de formularios,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+form_set_property,UI de formularios,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+form_set_property,UI de formularios,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+form_set_property,UI de formularios,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+form_set_property,UI de formularios,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+form_set_property,UI de formularios,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+form_set_property,UI de formularios,write-capable,sourcePath,string,True,,,functional,Source path alias for databasePath.
+form_set_property,UI de formularios,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+form_set_property,UI de formularios,write-capable,controlName,string,True,,,functional,Control name.
+form_set_property,UI de formularios,write-capable,property,string,False,,,functional,"Compatibility alias for propertyName. Layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width')."
+form_set_property,UI de formularios,write-capable,propertyName,string,False,,,functional,"Canonical layout/property key to set on the control (e.g. 'Caption', 'Left', 'Top', 'Width'). Refused for protected/metadata keys (Checksum, PrtDevMode*, Format) and for 'Name' (use form_rename_control)."
+form_set_property,UI de formularios,write-capable,value,string,False,,,functional,"New scalar value for the property. Accepts string/number/boolean (JSON-shape). Blob-kind entries (PrtMip, PrtDevNamesW, FormatConditions, etc.) are refused at the service level, not at the schema."
+form_set_property,UI de formularios,write-capable,commitScope,enum,False,,source | source-and-binary,functional,"Persistence boundary. Defaults to 'source-and-binary' (write source, then run the guarded Access import). Use 'source' to persist only the .form.txt mutation and explicitly skip the binary import gate; reconcile the Access binary separately."
+form_set_property,UI de formularios,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+form_set_property,UI de formularios,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+form_set_property,UI de formularios,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+form_set_property,UI de formularios,write-capable,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+generate_erd,Lectura DB/esquema,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+generate_erd,Lectura DB/esquema,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+generate_erd,Lectura DB/esquema,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+generate_erd,Lectura DB/esquema,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+generate_erd,Lectura DB/esquema,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+generate_erd,Lectura DB/esquema,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+generate_erd,Lectura DB/esquema,write-capable,erdPath,string,False,,,functional,ERD output path.
+generate_erd,Lectura DB/esquema,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+generate_form,Artefactos form/report,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+generate_form,Artefactos form/report,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+generate_form,Artefactos form/report,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+generate_form,Artefactos form/report,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+generate_form,Artefactos form/report,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+generate_form,Artefactos form/report,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+generate_form,Artefactos form/report,write-capable,specPath,string,False,,,functional,Form/report specification path.
+generate_form,Artefactos form/report,write-capable,spec,object,False,,,functional,Form/report specification object.
+generate_form,Artefactos form/report,write-capable,kind,string,False,,,functional,Form/report kind.
+generate_form,Artefactos form/report,write-capable,name,string,False,,,functional,Object or generated form name.
+generate_form,Artefactos form/report,write-capable,replace,boolean,False,,,functional,Replace existing resources.
+generate_form,Artefactos form/report,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+generate_form,Artefactos form/report,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+generate_form_design_plan,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+generate_form_design_plan,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+generate_form_design_plan,UI de formularios,read-only,behaviorMap,object,True,,,functional,"FormUiBehaviorMap produced by map_form_behavior. Required fields describe controls, form events, unmapped CodeGraph evidence, and warnings. Optional mapper metadata such as a nullable codegraphIndexPath is accepted for runtime parity."
+generate_form_design_plan,UI de formularios,read-only,plan,object,True,,,functional,Requested plan input. operations is required and each item uses kind as its enum discriminator; referencePattern is optional.
+generate_form_design_plan,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+get_capabilities,Bootstrap/diagnóstico,read-only,,,,,,none,Tool reports no parameters in schema({}).
+get_procedure,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+get_procedure,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+get_procedure,Análisis VBA,read-only,module,string,True,,,functional,VBA module name (without extension).
+get_procedure,Análisis VBA,read-only,procedure,string,True,,,functional,Name of the procedure to retrieve.
+get_procedure,Análisis VBA,read-only,source,string,False,,,functional,"VBA module source code. When provided, the procedure is located by parsing this text. When omitted, the module is resolved via the project's source root."
+get_procedure,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+get_procedure,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+get_procedure,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+get_procedure,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+get_procedure,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+get_procedure,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+get_procedure,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+get_procedure,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+get_relationships,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+get_relationships,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+get_relationships,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+get_relationships,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+get_relationships,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+get_relationships,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+get_relationships,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend,functional,"Semantic target role for database-wide reads. With projectId/contextId, frontend resolves to accessPath and backend resolves to backendPath. Explicit databasePath/sourcePath wins over the semantic role."
+get_schema,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+get_schema,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+get_schema,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+get_schema,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+get_schema,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+get_schema,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+get_schema,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend | auto,functional,Semantic target role for table-aware reads. auto probes the configured backend and frontend using tableName; it fails when the table is missing or exists in both. Explicit databasePath/sourcePath wins.
+get_schema,Lectura DB/esquema,read-only,tableName,string,False,,,functional,Table name.
+get_schema,Lectura DB/esquema,read-only,table,string,False,,,functional,Table name alias.
+harvest_form_catalog,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+harvest_form_catalog,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+harvest_form_catalog,Artefactos form/report,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+harvest_form_catalog,Artefactos form/report,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+harvest_form_catalog,Artefactos form/report,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+harvest_form_catalog,Artefactos form/report,read-only,projectRoot,string,False,,,common,Optional override for project root.
+harvest_form_catalog,Artefactos form/report,read-only,catalogPath,string,False,,,functional,Form control catalog path.
+harvest_form_catalog,Artefactos form/report,read-only,filter,string,False,,,functional,Test or object filter.
+import_all,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+import_all,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+import_all,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+import_all,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+import_all,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+import_all,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+import_all,Sync VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+import_all,Sync VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+import_all,Sync VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+import_all,Sync VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+import_all,Sync VBA,write-capable,importMode,enum,False,,Auto | Form | Code | auto | form | code | replace,functional,VBA import mode. Auto (default) imports a form/report's UI from its .form.txt and its canonical code from the sibling .cls. Code imports only code-behind/.bas. Form is a deprecated alias for Auto (there is no layout-only import). Lowercase variants and replace are normalized before invoking the runner.
+import_all,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+import_all,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+import_all,Sync VBA,write-capable,verbose,boolean,False,,,functional,"When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content."
+import_all,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+import_modules,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+import_modules,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+import_modules,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+import_modules,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+import_modules,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+import_modules,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+import_modules,Sync VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+import_modules,Sync VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+import_modules,Sync VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+import_modules,Sync VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+import_modules,Sync VBA,write-capable,moduleNames,array,False,,,functional,VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.
+import_modules,Sync VBA,write-capable,importMode,enum,False,,Auto | Form | Code | auto | form | code | replace,functional,VBA import mode. Auto (default) imports a form/report's UI from its .form.txt and its canonical code from the sibling .cls. Code imports only code-behind/.bas. Form is a deprecated alias for Auto (there is no layout-only import). Lowercase variants and replace are normalized before invoking the runner.
+import_modules,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+import_modules,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+import_modules,Sync VBA,write-capable,verbose,boolean,False,,,functional,"When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content."
+import_modules,Sync VBA,write-capable,sourceDir,string,False,,,functional,"Issue #807 (Feature 2) — source directory root to bulk-import. Default: project's destinationRoot from .dysflow/project.json. When set AND moduleNames is empty/omitted, the adapter walks this directory. Mutually exclusive with explicit moduleNames — passing a non-empty moduleNames array forces the legacy single-call path."
+import_modules,Sync VBA,write-capable,recursive,boolean,False,,,functional,"Issue #807 (Feature 2) — walk subdirectories of sourceDir. Default true. When false, only the top-level of sourceDir is scanned."
+import_modules,Sync VBA,write-capable,filePattern,string,False,,,functional,Issue #807 (Feature 2) — glob-style filename pattern (e.g. 'Test_*' to limit to test modules). Single `*` wildcard at either end. Default '*' (every managed extension).
+import_modules,Sync VBA,write-capable,includeTests,boolean,False,,,functional,Issue #807 (Feature 2) — include Test_*.bas files in the bulk walk. Default true. Set false when you want to ship a release without re-importing the test suite.
+import_modules,Sync VBA,write-capable,includeForms,boolean,False,,,functional,Issue #807 (Feature 2) — include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt files. Default true. Set false for code-only bulk imports.
+import_modules,Sync VBA,write-capable,chunkSize,number,False,,,functional,"Issue #807 (Feature 2) — modules per chunk when sourceDir is set. Default 10. The bulk path NEVER forwards more than this many modules per sub-call to the runner, so a single chunk failure (e.g. a corrupt .bas) cannot abort the entire batch."
+import_modules,Sync VBA,write-capable,onChunkError,enum,False,,continue | abort,functional,Issue #807 (Feature 2) — behavior when a chunk fails. continue (default) records chunk-level errors in chunkFailures[] and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.
+import_modules,Sync VBA,write-capable,transactional,boolean,False,,,functional,"Issue #975 — transactional mode. Copies the binary to a staging directory, runs the write against the copy, runs post-write verification (when applicable), and atomically renames the copy back to the original on success. On any failure the copy is deleted and the original is untouched. Default false."
+import_modules,Sync VBA,write-capable,dryRunWithPreflight,boolean,False,,,functional,"Issue #977 — run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with `dryRun` and `apply`. A failed preflight returns the specific errorCode from the taxonomy (#962); a successful preflight returns ok:true with a preflight summary. Default false."
+import_modules,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+import_queries,Queries guardadas,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+import_queries,Queries guardadas,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+import_queries,Queries guardadas,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+import_queries,Queries guardadas,write-capable,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+import_queries,Queries guardadas,write-capable,importPath,string,False,,,functional,Import path.
+import_queries,Queries guardadas,write-capable,queryDefinitions,array,False,,,functional,Query definitions.
+import_queries,Queries guardadas,write-capable,queries,array,False,,,functional,Query definitions alias.
+import_queries,Queries guardadas,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+import_queries,Queries guardadas,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+inspect_form,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+inspect_form,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+inspect_form,Artefactos form/report,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+inspect_form,Artefactos form/report,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+inspect_form,Artefactos form/report,read-only,formName,string,False,,,functional,Optional form/report name (e.g. 'Form_Customer').
+inspect_form,Artefactos form/report,read-only,name,string,False,,,functional,Alias for formName.
+link_tables,Backends/enlaces,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+link_tables,Backends/enlaces,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+link_tables,Backends/enlaces,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+link_tables,Backends/enlaces,write-capable,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+link_tables,Backends/enlaces,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+link_tables,Backends/enlaces,write-capable,mode,enum,False,,relink-only | create-or-relink,functional,relink-only (default): refresh/re-point existing links only. create-or-relink: also create a linked TableDef for each requested backend table missing from the frontend.
+link_tables,Backends/enlaces,write-capable,tableNames,array,False,,,functional,Scope the link/relink/create operation to these backend table names. Omit to target all existing frontend links (relink-only) or all backend tables (create-or-relink).
+link_tables,Backends/enlaces,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+lint_form_code,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+lint_form_code,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+lint_form_code,Artefactos form/report,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+lint_form_code,Artefactos form/report,read-only,sourceRoot,string,False,,,functional,Optional override for the source root (path that contains forms/ and reports/). Mirrors destinationRoot semantics for read-only tools.
+lint_form_code,Artefactos form/report,read-only,formName,string,False,,,functional,Single form/report name to lint (e.g. 'Form_FormExpedientesGestion' or 'Form_MyForm'). Mutually exclusive with moduleNames.
+lint_form_code,Artefactos form/report,read-only,moduleNames,array,False,,,functional,List of form/report names to lint. Each must start with 'Form_' or 'Report_'. Mutually exclusive with formName.
+lint_form_code,Artefactos form/report,read-only,rules,array,False,,,functional,Subset of lint rule IDs to run; defaults to all six. Use this to scope CI on the slow rules only.
+lint_form_code,Artefactos form/report,read-only,strict,boolean,False,,,functional,"When true, lint warnings are elevated to errors (CI hardening)."
+lint_module,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+lint_module,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+lint_module,Análisis VBA,read-only,module,string,True,,,functional,VBA module name (without extension) to lint.
+lint_module,Análisis VBA,read-only,source,string,False,,,functional,"Inline VBA module source code. When omitted, the module is resolved via the project's source root."
+lint_module,Análisis VBA,read-only,rules,array,False,,,functional,"Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name, logical-short-circuit, implicit-variant, missing-exit-handler, invalid-static-class-call, openargs-contract-mismatch. Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.). logical-short-circuit flags And/Or operations on the same object combining existence check and member access. implicit-variant flags multiple declarations on a single line missing explicit As clause. missing-exit-handler flags missing Exit Sub/Function/Property before error label. invalid-static-class-call flags static-style calls on non-predeclared class modules. openargs-contract-mismatch (#1006 slice 2) — project-level rule that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree (forms/, classes/, reports/). It walks every .cls file under the resolved destinationRoot, runs the project-lint engine, and emits one OPENARGS_CONTRACT_MISMATCH diagnostic per divergent producer/consumer pair (producerGrammar vs consumerGrammar differ, and a silent fallback is reachable in the consumer). When this rule is requested, the destinationRoot must resolve; the rule is silently skipped if the project source tree cannot be enumerated. identifier-safety (issue #789) — non-ASCII VBA identifiers (Spanish, Portuguese, French, German, Italian, etc.) are valid VBA and emit `warning` by default; they do NOT block. The `._` dot-underscore and reserved-word findings stay at `error` always. To restore the historical strict (error) severity for non-ASCII, set `capabilities.lint.identifierSafety.strictNonAscii: true` in `.dysflow/project.json`."
+lint_module,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+lint_module,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+lint_module,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+lint_module,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+lint_module,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+lint_module,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+lint_module,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+lint_module,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+list_access_files,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_access_files,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_access_files,Lectura DB/esquema,read-only,rootPath,string,False,,,functional,Optional override for root directory.
+list_access_files,Lectura DB/esquema,read-only,directory,string,False,,,functional,Directory path alias for rootPath.
+list_access_operations,Procesos/recuperación,read-only,,,,,,none,Tool reports no parameters in schema({}).
+list_linked_tables,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_linked_tables,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_linked_tables,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_linked_tables,Lectura DB/esquema,read-only,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+list_links,Backends/enlaces,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_links,Backends/enlaces,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_links,Backends/enlaces,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_links,Backends/enlaces,read-only,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+list_objects,Sync VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_objects,Sync VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_objects,Sync VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_objects,Sync VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+list_objects,Sync VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+list_objects,Sync VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+list_objects,Sync VBA,read-only,filter,string,False,,,functional,Test or object filter.
+list_objects,Sync VBA,read-only,allowExternalAccessPath,boolean,False,,,functional,"Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior."
+list_objects,Sync VBA,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+list_procedures,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+list_procedures,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+list_procedures,Análisis VBA,read-only,module,string,True,,,functional,VBA module name (without extension).
+list_procedures,Análisis VBA,read-only,filter,string,False,,,functional,Optional substring filter; only procedures whose name contains this value are returned.
+list_procedures,Análisis VBA,read-only,kind,enum,False,,Sub | Function | Property | both,functional,Optional procedure kind filter. Use 'both' or omit to include every procedure kind.
+list_procedures,Análisis VBA,read-only,source,string,False,,,functional,"VBA module source code. When provided, the procedure catalog is built by parsing this text. When omitted, the module is resolved via the project's source root."
+list_procedures,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_procedures,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+list_procedures,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+list_procedures,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+list_procedures,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+list_procedures,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+list_procedures,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+list_procedures,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+list_tables,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_tables,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_tables,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_tables,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+list_tables,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+list_tables,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+list_tables,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend,functional,"Semantic target role for database-wide reads. With projectId/contextId, frontend resolves to accessPath and backend resolves to backendPath. Explicit databasePath/sourcePath wins over the semantic role."
+list_vba_modules,Sync VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+list_vba_modules,Sync VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+list_vba_modules,Sync VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+list_vba_modules,Sync VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+list_vba_modules,Sync VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+list_vba_modules,Sync VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+list_vba_modules,Sync VBA,read-only,typeFilter,enum,False,,standard | class | form | report | document,functional,"Filter by VBComponent.Type. standard=1 (modules), class=2 (classes), form=3 (forms), report=3 (reports — same VBComponent type, distinguished by CurrentProject.AllReports), document=100 (ThisDocument-style document modules)."
+list_vba_modules,Sync VBA,read-only,namePattern,string,False,,,functional,Glob-style name filter (e.g. 'Test_*' matches any name starting with Test_; '*Issue*' matches any name containing Issue). The single '*' wildcard is supported on either end; non-*` patterns match as substrings. Empty string matches nothing.
+list_vba_modules,Sync VBA,read-only,allowExternalAccessPath,boolean,False,,,functional,"Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior."
+list_vba_modules,Sync VBA,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+localize_backend_links,Backends/enlaces,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+localize_backend_links,Backends/enlaces,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+localize_backend_links,Backends/enlaces,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+localize_backend_links,Backends/enlaces,write-capable,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+localize_backend_links,Backends/enlaces,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+localize_backend_links,Backends/enlaces,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+localize_backend_links,Backends/enlaces,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+logs,Bootstrap/diagnóstico,read-only,projectId,string,False,,,common,Canonical project identity for traceability. The logs source is always <cwd>/.dysflow/runtime/; projectId is echoed back in the result envelope (for future per-project scoping).
+logs,Bootstrap/diagnóstico,read-only,cwd,string,False,,,functional,Optional per-call override of the factory cwd (#1057 F10). Must be an existing directory containing a valid .dysflow/project.json — lets one MCP session target a sibling worktree without a restart. Omit to use the cwd the MCP was started from.
+logs,Bootstrap/diagnóstico,read-only,options,object,False,,,functional,
+map_form_behavior,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+map_form_behavior,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+map_form_behavior,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+map_form_behavior,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+map_form_behavior,UI de formularios,read-only,codegraphEvidence,array,False,,,functional,
+map_form_behavior,UI de formularios,read-only,autoFetchCodeGraph,boolean,False,,,functional,
+map_form_behavior,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+query_execute,Escritura DB,write-capable,projectId,string,False,,,common,canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.
+query_execute,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+query_execute,Escritura DB,write-capable,sql,string,True,,,functional,Access SQL to execute.
+query_execute,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+query_execute,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+query_execute,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+query_execute,Escritura DB,write-capable,mode,enum,True,,read | write,functional,Execution mode: read or write.
+query_execute,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+query_execute,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+query_execute,Escritura DB,write-capable,allowTables,array,False,,,functional,Allowed tables.
+query_execute,Escritura DB,write-capable,denyTables,array,False,,,functional,Denied tables.
+query_sql,Lectura DB/esquema,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+query_sql,Lectura DB/esquema,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+query_sql,Lectura DB/esquema,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+query_sql,Lectura DB/esquema,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+query_sql,Lectura DB/esquema,read-only,databasePath,string,False,,,functional,Database path.
+query_sql,Lectura DB/esquema,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+query_sql,Lectura DB/esquema,read-only,target,enum,False,,frontend | backend,functional,"Semantic target role for database-wide reads. With projectId/contextId, frontend resolves to accessPath and backend resolves to backendPath. Explicit databasePath/sourcePath wins over the semantic role."
+query_sql,Lectura DB/esquema,read-only,sql,string,True,,,functional,SQL text.
+query_sql,Lectura DB/esquema,read-only,query,string,False,,,functional,SQL query alias.
+relink_directory,Backends/enlaces,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+relink_directory,Backends/enlaces,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+relink_directory,Backends/enlaces,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+relink_directory,Backends/enlaces,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+relink_directory,Backends/enlaces,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+relink_directory,Backends/enlaces,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+relink_directory,Backends/enlaces,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+relink_directory,Backends/enlaces,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+relink_directory,Backends/enlaces,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+relink_directory,Backends/enlaces,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+relink_directory,Backends/enlaces,write-capable,rootPath,string,False,,,functional,Optional override for root directory.
+relink_directory,Backends/enlaces,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+relink_directory,Backends/enlaces,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+relink_directory,Backends/enlaces,write-capable,backup,boolean,False,,,functional,Create a backup before destructive changes.
+relink_directory,Backends/enlaces,write-capable,recursive,boolean,False,,,functional,Recursively scan subdirectories under root.
+relink_directory,Backends/enlaces,write-capable,maps,array,False,,,functional,Alias map entries (OldName.accdb=NewName.accdb).
+relink_directory,Backends/enlaces,write-capable,denyPrefixes,array,False,,,functional,UNC prefixes to flag during verify.
+relink_directory,Backends/enlaces,write-capable,strictLocal,boolean,False,,,functional,Fail verify if externalLinkCount > 0.
+relink_directory,Backends/enlaces,write-capable,removeUnresolved,boolean,False,,,functional,Delete TableDef if no local target found.
+relink_directory,Backends/enlaces,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+relink_directory,Backends/enlaces,write-capable,passwordEnv,string,False,,,functional,PREFERRED: name of an environment variable holding the backend database password. Use this instead of passing the password inline so the secret never appears in the tool-call arguments.
+relink_directory,Backends/enlaces,write-capable,backendPassword,string,False,,,functional,Raw backend database password. DISCOURAGED — prefer passwordEnv; an inline secret can be captured in tool-call transcripts. When set it is forwarded to PowerShell via the environment (never argv) and redacted from error output.
+relink_directory,Backends/enlaces,write-capable,password,string,False,,,functional,Alias for backendPassword. DISCOURAGED — prefer passwordEnv.
+relink_tables,Backends/enlaces,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+relink_tables,Backends/enlaces,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+relink_tables,Backends/enlaces,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+relink_tables,Backends/enlaces,write-capable,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+relink_tables,Backends/enlaces,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+relink_tables,Backends/enlaces,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+relink_tables,Backends/enlaces,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+render_form_preview,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+render_form_preview,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+render_form_preview,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+render_form_preview,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+render_form_preview,UI de formularios,read-only,output,enum,False,,svg | ascii | both,functional,"Payload to return in `data`. `svg` is the primary browser-friendly format; `ascii` is the terminal/agent fallback; `both` surfaces both. The structured envelope (viewport, warnings) is always returned alongside."
+render_form_preview,UI de formularios,read-only,viewportScale,number,False,,,functional,"Optional twips -> pixels multiplier. Defaults to 0.05 (~21"" form => ~1500px wide viewport). Pass 1.0 for twip-equivalent pixel rendering."
+render_form_preview,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+resolve_project,Bootstrap/diagnóstico,read-only,projectId,string,False,,,common,"Optional projectId to verify against .dysflow/project.json. When omitted, the resolver only checks whether a project.json is readable."
+resolve_project,Bootstrap/diagnóstico,read-only,cwd,string,False,,,functional,Optional per-call override of the factory cwd (#1057 F10). Must be an existing directory containing a valid .dysflow/project.json — lets one MCP session target a sibling worktree without a restart. Omit to use the cwd the MCP was started from.
+run_script,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+run_script,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+run_script,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+run_script,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+run_script,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+run_script,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+run_script,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+run_script,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+run_script,Escritura DB,write-capable,scriptPath,string,False,,,functional,SQL script path.
+run_script,Escritura DB,write-capable,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+run_script,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+run_script,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+run_script,Escritura DB,write-capable,allowTables,array,False,,,functional,Allowed tables.
+run_script,Escritura DB,write-capable,allowTable,string,False,,,functional,Single allowed table.
+run_script,Escritura DB,write-capable,denyTables,array,False,,,functional,Denied tables.
+run_script,Escritura DB,write-capable,denyTable,string,False,,,functional,Single denied table.
+run_vba,Ejecución/tests VBA,write-capable,procedureName,string,True,,,functional,Public VBA procedure name.
+run_vba,Ejecución/tests VBA,write-capable,argsJson,string,False,,,functional,JSON encoded argument array. Non-arrays will be wrapped in a single-element array [value].
+run_vba,Ejecución/tests VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+run_vba,Ejecución/tests VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+run_vba,Ejecución/tests VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+run_vba,Ejecución/tests VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+run_vba,Ejecución/tests VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+run_vba,Ejecución/tests VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+run_vba,Ejecución/tests VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+run_vba,Ejecución/tests VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+run_vba,Ejecución/tests VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+run_vba,Ejecución/tests VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+run_vba,Ejecución/tests VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+run_vba,Ejecución/tests VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+run_vba,Ejecución/tests VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+schema,Bootstrap/diagnóstico,read-only,,,,,,none,Tool reports no parameters in schema({}).
+seed_fixture,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+seed_fixture,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+seed_fixture,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+seed_fixture,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+seed_fixture,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+seed_fixture,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+seed_fixture,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+seed_fixture,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+seed_fixture,Escritura DB,write-capable,tableName,string,False,,,functional,Table name.
+seed_fixture,Escritura DB,write-capable,table,string,False,,,functional,Table name alias.
+seed_fixture,Escritura DB,write-capable,rows,array,False,,,functional,Fixture rows.
+seed_fixture,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+seed_fixture,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+seed_fixture,Escritura DB,write-capable,allowTables,array,False,,,functional,Allowed tables.
+seed_fixture,Escritura DB,write-capable,allowTable,string,False,,,functional,Single allowed table.
+seed_fixture,Escritura DB,write-capable,denyTables,array,False,,,functional,Denied tables.
+seed_fixture,Escritura DB,write-capable,denyTable,string,False,,,functional,Single denied table.
+state,Bootstrap/diagnóstico,read-only,,,,,,none,Tool reports no parameters in schema({}).
+sync_binary,Sync VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+sync_binary,Sync VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+sync_binary,Sync VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+sync_binary,Sync VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+sync_binary,Sync VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+sync_binary,Sync VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+sync_binary,Sync VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+sync_binary,Sync VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+sync_binary,Sync VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+sync_binary,Sync VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+sync_binary,Sync VBA,write-capable,moduleNames,array,False,,,functional,VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.
+sync_binary,Sync VBA,write-capable,directoryPath,string,False,,,functional,"Issue #809 - when provided AND moduleNames is empty/omitted, sync_binary narrows the pre-verify + post-verify scope to a single directory. Mirrors import_modules.sourceDir (#807). Mutually exclusive with explicit moduleNames."
+sync_binary,Sync VBA,write-capable,recursive,boolean,False,,,functional,"Issue #809 - when true (default), sync_binary walks subdirectories of directoryPath. Mirrors import_modules.recursive (#807)."
+sync_binary,Sync VBA,write-capable,includeTests,boolean,False,,,functional,Issue #809 - include Test_*.bas files when resolving the scope from directoryPath. Default true.
+sync_binary,Sync VBA,write-capable,includeForms,boolean,False,,,functional,Issue #809 - include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt when resolving the scope from directoryPath. Default true.
+sync_binary,Sync VBA,write-capable,strict,boolean,False,,,functional,Use strict comparison or validation.
+sync_binary,Sync VBA,write-capable,direction,enum,False,,src-to-binary | binary-to-src | both,functional,Issue #809 - sync direction. src-to-binary maps to import_modules on the listed names. binary-to-src maps to export_modules on the listed names. both (default) is the union and emits a single recommendation.
+sync_binary,Sync VBA,write-capable,acceptBothChanged,boolean,False,,,functional,"Issue #1065 - explicit escape valve for a bothChanged conflict. With a one-way direction and apply:true, routes each conflict through that direction. Default false; direction:'both' never auto-resolves conflicts."
+sync_binary,Sync VBA,write-capable,scope,object,False,,,functional,
+sync_binary,Sync VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+sync_binary,Sync VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+sync_binary,Sync VBA,write-capable,batchSize,number,False,,,functional,Issue #809 - modules per chunk during execute. Default 10. toImport and toExport are both sliced into chunks of at most batchSize modules; each chunk is one import_modules / export_modules sub-call. A single chunk failure never crosses the runner boundary twice with overlapping modules.
+sync_binary,Sync VBA,write-capable,onChunkError,enum,False,,continue | abort,functional,Issue #809 - chunk failure behavior. continue (default) records chunk-level errors and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.
+sync_binary,Sync VBA,write-capable,parallelChunks,number,False,,,functional,Issue #809 - reserved for future parallel chunk fan-out. Default 1 (sequential). Range 1..8; values >1 are accepted but currently run sequentially - the inner primitives share a single Access COM session per project.
+sync_binary,Sync VBA,write-capable,returnFullDiff,boolean,False,,,functional,"Issue #809 - when true, preSync and postSync include the full verify_code `diffs` array. Default false (only the actionable / missing counts are surfaced, matching the sync_binary workflow payload contract)."
+sync_binary,Sync VBA,write-capable,transactional,boolean,False,,,functional,"Issue #975 — transactional mode. Copies the binary to a staging directory, runs the write against the copy, runs post-write verification (when applicable), and atomically renames the copy back to the original on success. On any failure the copy is deleted and the original is untouched. Default false."
+sync_binary,Sync VBA,write-capable,dryRunWithPreflight,boolean,False,,,functional,"Issue #977 — run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with `dryRun` and `apply`. A failed preflight returns the specific errorCode from the taxonomy (#962); a successful preflight returns ok:true with a preflight summary. Default false."
+sync_binary,Sync VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+teardown_fixture,Escritura DB,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+teardown_fixture,Escritura DB,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+teardown_fixture,Escritura DB,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+teardown_fixture,Escritura DB,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+teardown_fixture,Escritura DB,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+teardown_fixture,Escritura DB,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+teardown_fixture,Escritura DB,write-capable,databasePath,string,False,,,functional,Database path.
+teardown_fixture,Escritura DB,write-capable,sourcePath,string,False,,,functional,Source path alias for databasePath.
+teardown_fixture,Escritura DB,write-capable,tableName,string,False,,,functional,Table name.
+teardown_fixture,Escritura DB,write-capable,table,string,False,,,functional,Table name alias.
+teardown_fixture,Escritura DB,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+teardown_fixture,Escritura DB,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+teardown_fixture,Escritura DB,write-capable,allowTables,array,False,,,functional,Allowed tables.
+teardown_fixture,Escritura DB,write-capable,allowTable,string,False,,,functional,Single allowed table.
+teardown_fixture,Escritura DB,write-capable,denyTables,array,False,,,functional,Denied tables.
+teardown_fixture,Escritura DB,write-capable,denyTable,string,False,,,functional,Single denied table.
+test_vba,Ejecución/tests VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+test_vba,Ejecución/tests VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+test_vba,Ejecución/tests VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+test_vba,Ejecución/tests VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+test_vba,Ejecución/tests VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+test_vba,Ejecución/tests VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+test_vba,Ejecución/tests VBA,write-capable,proceduresJson,string,False,,,functional,"JSON-encoded VBA test plan: a string that parses to an array of tests, or an object with a ""tests"" array. Each test is either a procedure-name string (shorthand, no args) or an object {""procedure"":""Test_Name"",""args"":[...],""tags"":[...]} (""proc"" is accepted as an alias for ""procedure""). Examples: [""Test_A"",""Test_B""] or [{""procedure"":""Test_A"",""args"":[""fixture"",1]}]."
+test_vba,Ejecución/tests VBA,write-capable,filter,string,False,,,functional,Test or object filter.
+test_vba,Ejecución/tests VBA,write-capable,testsPath,string,False,,,functional,VBA test plan path.
+test_vba,Ejecución/tests VBA,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+test_vba,Ejecución/tests VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+unlink_table,Backends/enlaces,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+unlink_table,Backends/enlaces,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+unlink_table,Backends/enlaces,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+unlink_table,Backends/enlaces,write-capable,target,enum,False,,frontend,functional,"This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid."
+unlink_table,Backends/enlaces,write-capable,tableName,string,False,,,functional,Table name.
+unlink_table,Backends/enlaces,write-capable,table,string,False,,,functional,Table name alias.
+unlink_table,Backends/enlaces,write-capable,dryRun,boolean,False,,,common,"Plan the write without applying it. Writes DEFAULT to dry-run: a write tool only commits when apply:true or dryRun:false is passed, so omitting both flags is safe. dryRun:true is the explicit form of that default."
+unlink_table,Backends/enlaces,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+validate_form_spec,Artefactos form/report,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+validate_form_spec,Artefactos form/report,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+validate_form_spec,Artefactos form/report,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+validate_form_spec,Artefactos form/report,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+validate_form_spec,Artefactos form/report,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+validate_form_spec,Artefactos form/report,read-only,projectRoot,string,False,,,common,Optional override for project root.
+validate_form_spec,Artefactos form/report,read-only,specPath,string,False,,,functional,Form/report specification path.
+validate_form_spec,Artefactos form/report,read-only,spec,object,False,,,functional,Form/report specification object.
+validate_manifest,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.
+validate_manifest,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.
+validate_manifest,Análisis VBA,read-only,testsPath,string,False,,,functional,VBA test manifest path. Relative paths resolve against the project root.
+validate_manifest,Análisis VBA,read-only,path,string,False,,,functional,Alias for testsPath.
+validate_manifest,Análisis VBA,read-only,manifest,string,False,,,functional,Inline test manifest object or array. Use testsPath/path for normal project validation.
+validate_manifest,Análisis VBA,read-only,modules,object,False,,,functional,Optional in-memory mapping of module names to source code.
+validate_manifest,Análisis VBA,read-only,validateManifestIncludesAllowlistCheck,boolean,False,,,functional,"Issue #1046 (Bug D) — opt-in flag. When true, validate_manifest consults the active `allowedProcedures` allowlist (same resolver as the test_vba gate) and surfaces drift as `report.invalid[]` entries. Default false (legacy shape preserved)."
+validate_manifest,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+validate_manifest,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+validate_manifest,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+validate_manifest,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+validate_manifest,Análisis VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+validate_manifest,Análisis VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+validate_manifest,Análisis VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+validate_manifest,Análisis VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+vba_inline_execution,Ejecución/tests VBA,write-capable,projectId,string,False,,,common,Canonical project identity for traceability.
+vba_inline_execution,Ejecución/tests VBA,write-capable,contextId,string,False,,,common,Optional run/context id for this call.
+vba_inline_execution,Ejecución/tests VBA,write-capable,accessPath,string,False,,,common,Optional override for Access frontend database path.
+vba_inline_execution,Ejecución/tests VBA,write-capable,backendPath,string,False,,,common,Optional override for Access backend database path.
+vba_inline_execution,Ejecución/tests VBA,write-capable,destinationRoot,string,False,,,common,Optional override for source/export root.
+vba_inline_execution,Ejecución/tests VBA,write-capable,projectRoot,string,False,,,common,Optional override for project root.
+vba_inline_execution,Ejecución/tests VBA,write-capable,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+vba_inline_execution,Ejecución/tests VBA,write-capable,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+vba_inline_execution,Ejecución/tests VBA,write-capable,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+vba_inline_execution,Ejecución/tests VBA,write-capable,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+vba_inline_execution,Ejecución/tests VBA,write-capable,code,string,True,,,functional,"VBA procedure-body snippet to execute inline. To return a value, assign it explicitly, for example: result = ""OK"". The adapter result uses data.returnValue; MCP carries returnValue in the JSON object encoded by content[0].text."
+vba_inline_execution,Ejecución/tests VBA,write-capable,apply,boolean,False,,,common,"Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default)."
+vba_inline_execution,Ejecución/tests VBA,write-capable,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+vba_orphan_audit,Análisis VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+vba_orphan_audit,Análisis VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+vba_orphan_audit,Análisis VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+vba_orphan_audit,Análisis VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+vba_orphan_audit,Análisis VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+vba_orphan_audit,Análisis VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+verify_code,Sync VBA,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+verify_code,Sync VBA,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+verify_code,Sync VBA,read-only,accessPath,string,False,,,common,Optional override for Access frontend database path.
+verify_code,Sync VBA,read-only,backendPath,string,False,,,common,Optional override for Access backend database path.
+verify_code,Sync VBA,read-only,destinationRoot,string,False,,,common,Optional override for source/export root.
+verify_code,Sync VBA,read-only,projectRoot,string,False,,,common,Optional override for project root.
+verify_code,Sync VBA,read-only,strictContext,boolean,False,,,common,Abort before opening Access if resolved target does not match expected paths.
+verify_code,Sync VBA,read-only,expectedAccessPath,string,False,,,common,Expected resolved Access database path for strictContext.
+verify_code,Sync VBA,read-only,expectedProjectRoot,string,False,,,common,Expected resolved project root for strictContext.
+verify_code,Sync VBA,read-only,expectedDestinationRoot,string,False,,,common,Expected resolved destination root for strictContext.
+verify_code,Sync VBA,read-only,strict,boolean,False,,,functional,Use strict comparison or validation.
+verify_code,Sync VBA,read-only,moduleNames,array,False,,,functional,VBA module names. No hard length cap — long lists (20-30+) are accepted; the import path emits one per-module entry in the structured report so consumers can pinpoint which entry failed and why. An empty array is a valid explicit no-op plan and is NOT silently expanded to import-all.
+verify_code,Sync VBA,read-only,diff,boolean,False,,,common,Include a diff when supported.
+verify_code,Sync VBA,read-only,chunkSize,number,False,,,functional,"Issue #807 (Feature 3) — modules per internal chunk. Default 25. When moduleNames.length <= chunkSize (or chunkSize is omitted), the call falls back to the legacy single round-trip; otherwise the list is sliced into chunks, each chunk is a fresh verify sub-call, and the merged result includes every chunk's matched / different / missing entries plus chunkFailures[]."
+verify_code,Sync VBA,read-only,parallelChunks,number,False,,,functional,Issue #807 (Feature 3) — concurrent chunks. Default 2 (bounded). Range 1..8 — higher values risk Access COM contention on a single .accdb. The chunked path uses this to drive Promise.all-of-chunks; the legacy path ignores it.
+verify_code,Sync VBA,read-only,onChunkTimeout,enum,False,,retry | skip | fail,functional,Issue #807 (Feature 3) - per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.
+verify_code,Sync VBA,read-only,allowExternalAccessPath,boolean,False,,,functional,"Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior."
+verify_code,Sync VBA,read-only,timeoutMs,number,False,,,common,Operation timeout in milliseconds. Overrides project config timeout.
+verify_form_bindings,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+verify_form_bindings,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+verify_form_bindings,UI de formularios,read-only,sourcePath,string,False,,,functional,Source path alias for databasePath.
+verify_form_bindings,UI de formularios,read-only,path,string,False,,,functional,Path alias (used as exportPath or importPath depending on tool).
+verify_form_bindings,UI de formularios,read-only,schema,object,False,,,functional,"Schema aggregate to validate bindings against. Either a `Record<tableName, ColumnSchema[]>` (multiple tables, fan out one `get_schema` per table upstream) or a single-table `get_schema` payload `{schema:[{name,type,nullable}], tableName:""...""}`. The adapter accepts both shapes; the latter requires `tableName` so the columns land under the correct key."
+verify_form_bindings,UI de formularios,read-only,formName,string,False,,,functional,Optional form/report name (e.g. 'Form_Customer').
+verify_form_bindings,UI de formularios,read-only,name,string,False,,,functional,Alias for formName.
+verify_form_bindings,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
+verify_form_ui,UI de formularios,read-only,projectId,string,False,,,common,Canonical project identity for traceability.
+verify_form_ui,UI de formularios,read-only,contextId,string,False,,,common,Optional run/context id for this call.
+verify_form_ui,UI de formularios,read-only,sourceContract,object,True,,,functional,"Source FormUiBehaviorMap whose controls, events, and bindings must survive the applied UI."
+verify_form_ui,UI de formularios,read-only,appliedContract,object,True,,,functional,Applied FormUiBehaviorMap compared with sourceContract for survival and looks-right findings.
+verify_form_ui,UI de formularios,read-only,outputMode,enum,False,,summary | file | full,common,"Response output mode determining payload content: 'summary', 'file', or 'full'."
