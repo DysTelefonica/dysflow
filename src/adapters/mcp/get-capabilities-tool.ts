@@ -13,6 +13,10 @@ import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import {
+  PREFERRED_AGENT_WORKFLOWS,
+  type PreferredAgentWorkflow,
+} from "./agent-workflow-registry.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
@@ -101,6 +105,7 @@ export type McpCapabilitySnapshot = {
    */
   effectiveDryRunDefault: Readonly<Record<string, boolean>>;
   toolsVisible: number;
+  preferredAgentWorkflows: readonly PreferredAgentWorkflow[];
   writeClassToolsPermitted: readonly string[];
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
   humanCompilePending: boolean;
@@ -270,6 +275,10 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     writeExecutionPolicy,
     effectiveDryRunDefault,
     toolsVisible: toolNames.length,
+    preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
+      phase: workflow.phase,
+      tools: [...workflow.tools],
+    })),
     writeClassToolsPermitted,
     humanCompilePending,
     documentationBundle,
@@ -389,7 +398,7 @@ export function createGetCapabilitiesTool(opts: {
 
   return {
     name: "get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const projectConfig = await opts.projectConfigResolver?.();

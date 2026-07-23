@@ -33,6 +33,10 @@ import {
   type NoWriteAliasName,
 } from "../../core/runtime/commit-flag-registry.js";
 import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
+import {
+  type AgentWorkflowMetadata,
+  buildAgentWorkflowMetadata,
+} from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
@@ -271,6 +275,7 @@ export type ToolSchema = {
   crossReferences: string[];
   requiredCapabilities: string[];
   safeByDefault: boolean;
+  agentWorkflow: AgentWorkflowMetadata;
   /**
    * Issue #1057 (F6) — when to reach for this tool. Human-readable
    * workflow hints so consumers discover capabilities from the runtime
@@ -316,6 +321,7 @@ export type CompactToolSchema = {
   name: string;
   purpose: string;
   access: McpToolAccess;
+  agentWorkflow: AgentWorkflowMetadata;
   requiredParameters: string[];
   requiredParameterGroups: SchemaCompositionConstraint[];
   defaults: Record<string, unknown>;
@@ -469,45 +475,6 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   compare_backends: [],
   list_access_files: [],
   get_relationships: [],
-};
-
-/**
- * Issue #1057 (F6) — curated "use this tool when..." hints. Sourced from
- * the Round-15 consumer session: these are the tools the consumer only
- * discovered after manual grep/codegraph work that a single documented
- * hint would have avoided. Tools without an entry surface an empty list.
- */
-const TOOL_USE_CASES: Record<string, readonly string[]> = {
-  vba_orphan_audit: [
-    "Find test procedures registered in the binary but missing from the source tree (orphaned tests).",
-    "Audit source ↔ binary module parity before a cleanup batch.",
-  ],
-  detect_dead_code: [
-    "Find procedures never referenced from any module before deleting them.",
-    "Reduce a legacy module surface prior to a migration.",
-  ],
-  compare_backends: [
-    "Diff schema/data between two backend .accdb files (e.g. production vs sandbox).",
-    "Verify a sandbox refresh actually mirrors production structure.",
-  ],
-  access_force_cleanup_orphaned: [
-    "List orphaned MSACCESS.EXE candidates (confirmPid omitted) after a timeout.",
-    "Kill ONE verified orphan by passing its confirmPid — never kill by process name.",
-  ],
-  validate_manifest: [
-    "Pre-flight a tests.vba.json manifest before test_vba — reports PROCEDURE_NOT_FOUND per entry.",
-  ],
-  verify_code: [
-    "Detect source ↔ binary drift and plan a sync from bulkImportable / bulkExportable.",
-  ],
-  delete_module: ["Remove a VBA module from the binary (plan first with apply:false)."],
-  describe_tool: [
-    "Use the preferred one-tool deep view after compact discovery identifies the tool to call.",
-  ],
-  schema: [
-    "Call with view:'compact' for low-context discovery across all tools; filter with toolName in either view.",
-    "Call with view:'full' only when complete JSON Schema, aliases, errors, use cases, and references are required.",
-  ],
 };
 
 // ─── Input-schema registry (modern tools) ─────────────────────────────────────
@@ -1408,7 +1375,7 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
   get_capabilities: {
     kind: "dataSchema",
     description:
-      "Aggregated capabilities snapshot (write gates, allowed procedures, commit flags).",
+      "Aggregated capabilities snapshot (write gates, allowed procedures, commit flags, preferred agent workflows).",
     dataSchema: {
       type: "object",
       properties: {
@@ -1417,9 +1384,13 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
         writesProject: { type: "object" },
         dryRunDefault: { type: "boolean" },
         toolsVisible: { type: "number" },
+        preferredAgentWorkflows: {
+          type: "array",
+          description: "Preferred bootstrap, sync, tests, SQL, forms, and recovery tool paths.",
+        },
         tools: { type: "object", description: "Per-tool commit-flag metadata." },
       },
-      required: ["adapterVersion", "toolsVisible"],
+      required: ["adapterVersion", "toolsVisible", "preferredAgentWorkflows"],
     },
     errorEnvelope: STANDARD_ERROR_ENVELOPE,
   },
@@ -2064,9 +2035,11 @@ function buildSchemaForTool(name: string): ToolSchema {
   const access: McpToolAccess = contract?.access ?? "read-only";
   const inputSchema = inputSchemaForTool(name);
   const crossReferences = [...(TOOL_CROSS_REFERENCES[name] ?? [])];
+  const description = descriptionForTool(name);
+  const agentWorkflow = buildAgentWorkflowMetadata(name);
   return {
     name,
-    description: descriptionForTool(name),
+    description,
     access,
     inputSchema,
     parameters: parametersFromInputSchema(name, inputSchema),
@@ -2078,7 +2051,8 @@ function buildSchemaForTool(name: string): ToolSchema {
     crossReferences,
     requiredCapabilities: requiredCapabilitiesForTool(access),
     safeByDefault: safeByDefaultForTool(name, access),
-    useCases: [...(TOOL_USE_CASES[name] ?? [])],
+    agentWorkflow,
+    useCases: [...agentWorkflow.preferFor],
     compositionConstraints: markCanonicalAlternatives(
       name,
       compositionConstraintsFromSchema(inputSchema),
@@ -2174,6 +2148,10 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
     name: tool.name,
     purpose: tool.useCases[0] ?? primaryResult.summary,
     access: tool.access,
+    agentWorkflow: {
+      ...tool.agentWorkflow,
+      preferFor: [...tool.agentWorkflow.preferFor],
+    },
     requiredParameters: parameterEntries
       .filter(([, parameter]) => parameter.required)
       .map(([name]) => name)
