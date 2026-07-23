@@ -1029,8 +1029,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Optional form name (e.g. 'Form_Customer'). Derived from the sourcePath filename when omitted; reported back in the response.",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
       includeSerialized: SCHEMA_PROPS.includeSerialized,

@@ -117,15 +117,20 @@ describe("public form serialize/deserialize MCP tools — registration", () => {
 // ---------------------------------------------------------------------------
 
 describe("public form serialize/deserialize MCP tools — schemas", () => {
-  it("form_serialize exposes sourcePath, controlName/ir, dryRun, apply", () => {
-    expect(VBA_SYNC_TOOL_SCHEMAS.form_serialize.properties).toEqual(
+  it("form_serialize exposes sourcePath and formName only (no write-intent flags)", () => {
+    // Issue #1073 — form_serialize is read-only by dispatch classification
+    // (mutatesBinary:false, mutatesFilesystem:false) and must NOT expose
+    // write-intent parameters that the handler ignores. Pin the absence
+    // of apply/dryRun so future drift cannot silently bring them back.
+    const properties = VBA_SYNC_TOOL_SCHEMAS.form_serialize.properties ?? {};
+    expect(properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         formName: expect.any(Object),
-        dryRun: expect.any(Object),
-        apply: expect.any(Object),
       }),
     );
+    expect(properties).not.toHaveProperty("apply");
+    expect(properties).not.toHaveProperty("dryRun");
   });
 
   it("form_deserialize exposes sourcePath, ir, dryRun, apply", () => {
