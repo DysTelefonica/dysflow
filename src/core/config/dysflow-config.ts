@@ -26,6 +26,9 @@ export interface ConfigFileSystemPort {
   existsAsync(path: string): Promise<boolean>;
   readJsonSync<T>(path: string): T;
   readJsonAsync<T>(path: string): Promise<T>;
+  readdirSync?(path: string): string[];
+  readdirAsync?(path: string): Promise<string[]>;
+  tmpdir?(): string;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -189,6 +192,7 @@ export type DysflowConfig = {
    *    overlaps the active source root.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  discoveredProjects?: readonly DiscoveredProjectConfig[];
 };
 
 export type RedactedDysflowConfig = Omit<
@@ -294,19 +298,251 @@ export function loadDysflowConfigShared<
   ) as T;
 }
 
+export function discoverWorktreeProjectConfigs(
+  cwd: string,
+  fileSystem: ConfigFileSystemPort,
+  activeProjectId?: string | null,
+  activeProjectRoot?: string | null,
+): DiscoveredProjectConfig[] {
+  const resolvedCwd = resolve(cwd);
+  const activeRootInfo = findRepoProjectConfigPath(resolvedCwd, fileSystem);
+  const activeConfigPath =
+    activeRootInfo.found === "standard" || activeRootInfo.found === "compat"
+      ? activeRootInfo.path
+      : null;
+  const activeConfigDir = activeConfigPath ? dirname(activeConfigPath) : resolvedCwd;
+  const activeRoot =
+    basename(activeConfigDir).toLowerCase() === ".dysflow"
+      ? dirname(activeConfigDir)
+      : activeConfigDir;
+
+  const parentDir = dirname(activeRoot);
+  const candidateDirs: string[] = [activeRoot];
+  const systemTmp = fileSystem.tmpdir ? resolve(fileSystem.tmpdir()) : null;
+  const isOsTmp = systemTmp !== null && resolve(parentDir) === systemTmp;
+
+  if (!isOsTmp) {
+    try {
+      if (typeof fileSystem.readdirSync === "function" && fileSystem.existsSync(parentDir)) {
+        const entries = fileSystem.readdirSync(parentDir);
+        for (const entry of entries) {
+          const fullPath = resolve(parentDir, entry);
+          if (
+            fullPath !== activeRoot &&
+            fileSystem.existsSync(resolve(fullPath, ".git")) &&
+            (fileSystem.existsSync(resolve(fullPath, ".dysflow")) ||
+              fileSystem.existsSync(resolve(fullPath, "dysflow.project.json")))
+          ) {
+            candidateDirs.push(fullPath);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const discovered: DiscoveredProjectConfig[] = [];
+  const seenRoots = new Set<string>();
+
+  for (const candidate of candidateDirs) {
+    const info = findRepoProjectConfigPath(candidate, fileSystem);
+    if (info.found === "standard" || info.found === "compat") {
+      const candidateConfigDir = dirname(
+        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+      );
+      if (seenRoots.has(candidateConfigDir)) continue;
+      seenRoots.add(candidateConfigDir);
+
+      try {
+        const raw = fileSystem.readJsonSync<DysflowProjectConfig>(info.path);
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          const id = typeof raw.id === "string" && raw.id ? raw.id : null;
+          const projRoot = resolveProjectRoot(raw, candidateConfigDir, undefined);
+          const accPath = resolveProjectPath(raw.accessPath, projRoot) ?? null;
+          const destRoot = resolveProjectPath(raw.destinationRoot ?? "src", projRoot) ?? projRoot;
+          const isActive =
+            (activeProjectId !== undefined && activeProjectId !== null && id === activeProjectId) ||
+            (activeProjectRoot !== undefined && activeProjectRoot !== null
+              ? projRoot === activeProjectRoot
+              : projRoot === activeRoot);
+
+          discovered.push({
+            id,
+            projectRoot: projRoot,
+            accessPath: accPath,
+            destinationRoot: destRoot,
+            configPath: info.path,
+            active: isActive,
+          });
+        }
+      } catch {}
+    }
+  }
+
+  discovered.sort((a, b) => a.projectRoot.localeCompare(b.projectRoot));
+  return discovered;
+}
+
+export async function discoverWorktreeProjectConfigsAsync(
+  cwd: string,
+  fileSystem: ConfigFileSystemPort,
+  activeProjectId?: string | null,
+  activeProjectRoot?: string | null,
+): Promise<DiscoveredProjectConfig[]> {
+  const resolvedCwd = resolve(cwd);
+  const activeRootInfo = await findRepoProjectConfigPathAsync(resolvedCwd, fileSystem);
+  const activeConfigPath =
+    activeRootInfo.found === "standard" || activeRootInfo.found === "compat"
+      ? activeRootInfo.path
+      : null;
+  const activeConfigDir = activeConfigPath ? dirname(activeConfigPath) : resolvedCwd;
+  const activeRoot =
+    basename(activeConfigDir).toLowerCase() === ".dysflow"
+      ? dirname(activeConfigDir)
+      : activeConfigDir;
+
+  const parentDir = dirname(activeRoot);
+  const candidateDirs: string[] = [activeRoot];
+  const systemTmp = fileSystem.tmpdir ? resolve(fileSystem.tmpdir()) : null;
+  const isOsTmp = systemTmp !== null && resolve(parentDir) === systemTmp;
+
+  if (!isOsTmp) {
+    try {
+      if (
+        typeof fileSystem.readdirAsync === "function" &&
+        (await fileSystem.existsAsync(parentDir))
+      ) {
+        const entries = await fileSystem.readdirAsync(parentDir);
+        for (const entry of entries) {
+          const fullPath = resolve(parentDir, entry);
+          if (
+            fullPath !== activeRoot &&
+            (await fileSystem.existsAsync(resolve(fullPath, ".git"))) &&
+            ((await fileSystem.existsAsync(resolve(fullPath, ".dysflow"))) ||
+              (await fileSystem.existsAsync(resolve(fullPath, "dysflow.project.json"))))
+          ) {
+            candidateDirs.push(fullPath);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const discovered: DiscoveredProjectConfig[] = [];
+  const seenRoots = new Set<string>();
+
+  for (const candidate of candidateDirs) {
+    const info = await findRepoProjectConfigPathAsync(candidate, fileSystem);
+    if (info.found === "standard" || info.found === "compat") {
+      const candidateConfigDir = dirname(
+        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+      );
+      if (seenRoots.has(candidateConfigDir)) continue;
+      seenRoots.add(candidateConfigDir);
+
+      try {
+        const raw = await fileSystem.readJsonAsync<DysflowProjectConfig>(info.path);
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          const id = typeof raw.id === "string" && raw.id ? raw.id : null;
+          const projRoot = resolveProjectRoot(raw, candidateConfigDir, undefined);
+          const accPath = resolveProjectPath(raw.accessPath, projRoot) ?? null;
+          const destRoot = resolveProjectPath(raw.destinationRoot ?? "src", projRoot) ?? projRoot;
+          const isActive =
+            (activeProjectId !== undefined && activeProjectId !== null && id === activeProjectId) ||
+            (activeProjectRoot !== undefined && activeProjectRoot !== null
+              ? projRoot === activeProjectRoot
+              : projRoot === activeRoot);
+
+          discovered.push({
+            id,
+            projectRoot: projRoot,
+            accessPath: accPath,
+            destinationRoot: destRoot,
+            configPath: info.path,
+            active: isActive,
+          });
+        }
+      } catch {}
+    }
+  }
+
+  discovered.sort((a, b) => a.projectRoot.localeCompare(b.projectRoot));
+  return discovered;
+}
+
+function withinPath(child: string, root: string): boolean {
+  const rel = relative(root, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
 export function loadDysflowConfigWith(
   input: DysflowConfigInput,
   fileSystem: ConfigFileSystemPort,
 ): OperationResult<DysflowConfig> {
   const cwd = resolve(input.cwd ?? process.cwd());
-  const repoConfig = findRepoProjectConfigPath(cwd, fileSystem);
-
-  const env = input.env ?? process.env;
   const requestedProjectId = stringValue(input.projectId);
+  const explicitAccessDbPath = stringValue(input.accessDbPath);
 
-  return loadDysflowConfigShared(input, repoConfig, (path) =>
-    loadProjectConfigFromPath(path, input, env, cwd, "repo-config", requestedProjectId, fileSystem),
+  let targetCwd = cwd;
+  const cwdConfig = findRepoProjectConfigPath(cwd, fileSystem);
+  let matchedInCwd = false;
+
+  if (cwdConfig.found === "standard" || cwdConfig.found === "compat") {
+    try {
+      const raw = fileSystem.readJsonSync<DysflowProjectConfig>(cwdConfig.path);
+      const configuredId = stringValue(raw.id);
+      const projRoot = resolveProjectRoot(raw, dirname(cwdConfig.path), undefined);
+      const normAccess = explicitAccessDbPath ? resolve(cwd, explicitAccessDbPath) : undefined;
+      const idOk =
+        requestedProjectId === undefined ||
+        (configuredId !== undefined && configuredId === requestedProjectId);
+      const pathOk = normAccess === undefined || withinPath(normAccess, projRoot);
+
+      if (idOk && pathOk) {
+        matchedInCwd = true;
+      }
+    } catch {}
+  }
+
+  if (!matchedInCwd) {
+    if (explicitAccessDbPath !== undefined) {
+      const targetDir = dirname(resolve(cwd, explicitAccessDbPath));
+      const targetConfig = findRepoProjectConfigPath(targetDir, fileSystem);
+      if (targetConfig.found === "standard" || targetConfig.found === "compat") {
+        targetCwd = targetDir;
+      }
+    } else if (requestedProjectId !== undefined) {
+      const discovered = discoverWorktreeProjectConfigs(cwd, fileSystem);
+      const match = discovered.find((p) => p.id === requestedProjectId);
+      if (match) {
+        targetCwd = match.projectRoot;
+      }
+    }
+  }
+
+  const repoConfig = findRepoProjectConfigPath(targetCwd, fileSystem);
+  const env = input.env ?? process.env;
+
+  const result = loadDysflowConfigShared(input, repoConfig, (path) =>
+    loadProjectConfigFromPath(path, input, env, targetCwd, "repo-config", requestedProjectId, fileSystem),
   );
+
+  if (result.ok) {
+    const discoveredProjects =
+      repoConfig.found === "none"
+        ? []
+        : discoverWorktreeProjectConfigs(
+            cwd,
+            fileSystem,
+            result.data.projectId,
+            result.data.projectRoot,
+          );
+    return successResult({
+      ...result.data,
+      ...(discoveredProjects.length > 0 ? { discoveredProjects } : {}),
+    });
+  }
+
+  return result;
 }
 
 export async function loadDysflowConfigAsyncWith(
@@ -314,22 +550,78 @@ export async function loadDysflowConfigAsyncWith(
   fileSystem: ConfigFileSystemPort,
 ): Promise<OperationResult<DysflowConfig>> {
   const cwd = resolve(input.cwd ?? process.cwd());
-  const repoConfig = await findRepoProjectConfigPathAsync(cwd, fileSystem);
-
-  const env = input.env ?? process.env;
   const requestedProjectId = stringValue(input.projectId);
+  const explicitAccessDbPath = stringValue(input.accessDbPath);
 
-  return loadDysflowConfigShared(input, repoConfig, (path) =>
+  let targetCwd = cwd;
+  const cwdConfig = await findRepoProjectConfigPathAsync(cwd, fileSystem);
+  let matchedInCwd = false;
+
+  if (cwdConfig.found === "standard" || cwdConfig.found === "compat") {
+    try {
+      const raw = await fileSystem.readJsonAsync<DysflowProjectConfig>(cwdConfig.path);
+      const configuredId = stringValue(raw.id);
+      const projRoot = resolveProjectRoot(raw, dirname(cwdConfig.path), undefined);
+      const normAccess = explicitAccessDbPath ? resolve(cwd, explicitAccessDbPath) : undefined;
+      const idOk =
+        requestedProjectId === undefined ||
+        (configuredId !== undefined && configuredId === requestedProjectId);
+      const pathOk = normAccess === undefined || withinPath(normAccess, projRoot);
+
+      if (idOk && pathOk) {
+        matchedInCwd = true;
+      }
+    } catch {}
+  }
+
+  if (!matchedInCwd) {
+    if (explicitAccessDbPath !== undefined) {
+      const targetDir = dirname(resolve(cwd, explicitAccessDbPath));
+      const targetConfig = await findRepoProjectConfigPathAsync(targetDir, fileSystem);
+      if (targetConfig.found === "standard" || targetConfig.found === "compat") {
+        targetCwd = targetDir;
+      }
+    } else if (requestedProjectId !== undefined) {
+      const discovered = await discoverWorktreeProjectConfigsAsync(cwd, fileSystem);
+      const match = discovered.find((p) => p.id === requestedProjectId);
+      if (match) {
+        targetCwd = match.projectRoot;
+      }
+    }
+  }
+
+  const repoConfig = await findRepoProjectConfigPathAsync(targetCwd, fileSystem);
+  const env = input.env ?? process.env;
+
+  const result = await loadDysflowConfigShared(input, repoConfig, (path) =>
     loadProjectConfigFromPathAsync(
       path,
       input,
       env,
-      cwd,
+      targetCwd,
       "repo-config",
       requestedProjectId,
       fileSystem,
     ),
   );
+
+  if (result.ok) {
+    const discoveredProjects =
+      repoConfig.found === "none"
+        ? []
+        : await discoverWorktreeProjectConfigsAsync(
+            cwd,
+            fileSystem,
+            result.data.projectId,
+            result.data.projectRoot,
+          );
+    return successResult({
+      ...result.data,
+      ...(discoveredProjects.length > 0 ? { discoveredProjects } : {}),
+    });
+  }
+
+  return result;
 }
 
 export function redactDysflowConfig(config: DysflowConfig): RedactedDysflowConfig {
@@ -634,13 +926,14 @@ export function loadProjectConfigCore(
   const configuredProjectId = stringValue(raw.id);
   if (
     requestedProjectId !== undefined &&
-    configuredProjectId !== undefined &&
     requestedProjectId !== configuredProjectId
   ) {
     return failureResult(
       createDysflowError(
-        "CONFIG_PROJECT_ID_MISMATCH",
-        `Requested projectId '${requestedProjectId}' does not match repo config id '${configuredProjectId}' in ${resolvedPath}.`,
+        configuredProjectId !== undefined
+          ? "CONFIG_PROJECT_ID_MISMATCH"
+          : "CONFIG_PROJECT_NOT_REGISTERED",
+        `Requested projectId '${requestedProjectId}' does not match repo config id '${configuredProjectId ?? "(none)"}' in ${resolvedPath}.`,
         { retryable: false },
       ),
     );

@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
-import { access } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
+import { access, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import {
   type ConfigFileSystemPort,
   type DysflowConfig,
@@ -27,6 +28,21 @@ export const nodeConfigFileSystem: ConfigFileSystemPort = {
   },
   readJsonSync: <T>(path: string): T => readJsonFileSync<T>(path),
   readJsonAsync: <T>(path: string): Promise<T> => readJsonFileAsync<T>(path),
+  readdirSync: (path) => {
+    try {
+      return readdirSync(path);
+    } catch {
+      return [];
+    }
+  },
+  readdirAsync: async (path) => {
+    try {
+      return await readdir(path);
+    } catch {
+      return [];
+    }
+  },
+  tmpdir: () => tmpdir(),
 };
 
 /**
