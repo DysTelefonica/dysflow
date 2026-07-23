@@ -42,7 +42,7 @@ for **how to behave** when calling those tools.
 
 - **HR-1 — The HUMAN compiles.** You NEVER call `compile_vba`, NEVER pass
   `compile:true`. Required loop for any slice ending in `test_vba`:
-  (1) write source → (2) `import_modules({moduleNames:[...], dryRun:true})` →
+  (1) write source → (2) `import_modules({moduleNames:[...], apply:false})` →
   (3) ASK the user to compile manually (Debug → Compile VBA Project) →
   (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`. Failures from
   `test_vba` are test failures, never compile errors.
@@ -91,13 +91,20 @@ for **how to behave** when calling those tools.
   calls in parallel from one agent context. One call → wait → audit → next.
   To batch related ops, use List-shape arguments in ONE call.
 
+- **HR-9 — Select worktrees per call, never by restarting the MCP.** Each worktree
+  owns a unique `.dysflow/project.json`. For a sibling worktree, call
+  `resolve_project({cwd:"<worktree>",projectId:"<id>"})`. Project-scoped read
+  tools may accept that `cwd`; write tools select the discovered sibling with
+  `projectId` or its configured `accessPath`. Confirm each shape with
+  `describe_tool({name:"<tool>"})`. Never weaken the guard or edit configs.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
 
 - **Step 0** — `get_capabilities({})`. Capture `adapterVersion`,
   `writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
-  `toolsVisible`, `projectConfig.status`.
+  `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
 - **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
   `src/modules/` + entry in `tests/tests.vba.json`. Change → identify the
   failing test or write one.
@@ -105,8 +112,8 @@ For any feature that touches dysflow-managed artifacts:
 - **Step 3** — Pre-compile audit. Declarations at top, no VBA landmines,
   signature consistency, binary in sync (`verify_code`).
 - **Step 4** — Sync forms if applicable. `verify_code`.
-- **Step 5** — Import. `import_modules({moduleNames:[...], dryRun:true})` →
-  review the plan → `import_modules({moduleNames:[...], dryRun:false})`.
+- **Step 5** — Import. `import_modules({moduleNames:[...], apply:false})` →
+  review the plan → `import_modules({moduleNames:[...], apply:true})`.
   ALL with `compile:false` per HR-1.
 - **Step 6** — Notify the user to compile manually. Block. Wait for "ya está".
 - **Step 7** — Run tests. `test_vba({testsPath:"tests/tests.vba.json"})`. On
@@ -138,13 +145,16 @@ load `access-vba-e2e-methodology`.
 
 - **AP-1** — `Stop-Process -Name MSACCESS` (any variant). See HR-2.
 - **AP-2** — `compile_vba` or `compile:true` on `import_modules` / `import_all`. See HR-1.
-- **AP-3** — Inventing a `dryRun` flag for `export_modules` / `export_all`. The
-  live registry reports `commitFlag:"apply"`, `noWriteAlias:"diff"`,
-  `defaultBehavior:"writes"`. Use `apply:true` to commit, `apply:false` (or legacy
-  `diff:true`) to preview; `dryRun:true` is NOT a valid alias for these tools.
+- **AP-3** — Using a legacy flag as the primary export contract. The live
+  registry reports `canonicalCommitFlag:"apply"` for `export_modules` /
+  `export_all`. Use `apply:true` to export and `apply:false` to preview.
+  `diff` and `dryRun` are compatibility aliases only when the live
+  `legacyAliases[]` reports them; never hard-code an alias as canonical.
 - **AP-4** — Forgetting that `export_*` defaults to WRITE behavior. When no flag
   is passed, `defaultBehavior:"writes"` means the call writes. Explicit intent
-  (`apply:true`/`apply:false`) is the preferred contract on every call.
+  (`apply:true`/`apply:false`) is required in agent-authored calls.
+  `export_modules` uses a disposable binary copy by default;
+  `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
 - **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
 - **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
@@ -198,7 +208,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.1.7 · last_verified 2026-07-21 · requires
+dysflow harness v0.1.9 · last_verified 2026-07-23 · requires
 dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
@@ -210,7 +220,7 @@ runtime, **runtime wins**; surface the drift and update via
 
 - `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
 - `Variables Globales.bas` path — TODO: locate in this worktree's `src/` before any test.
-- Drift window: any update to `dysflow-arnes/SKILL.md` lines 19–215 must propagate here via `dysflow-codegraph-update` ARN-1 → ARN-2 → re-embed.
+- Drift window: any update to the marker-delimited block in `dysflow-arnes/SKILL.md` must propagate here via `dysflow-codegraph-update` ARN-1 → ARN-2 → re-embed.
 
 ## What this is
 
