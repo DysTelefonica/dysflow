@@ -589,6 +589,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       adapter,
       input: {
         direction: readDirection(params.direction),
+        acceptBothChanged: params.acceptBothChanged === true,
         scope: readScope(params.scope),
         moduleNames: readStringArray(params.moduleNames),
         directoryPath: stringValue(params.directoryPath),

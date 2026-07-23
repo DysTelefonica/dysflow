@@ -289,6 +289,60 @@ describe("runSyncBinary — apply path chunked export (AC3)", () => {
     expect(fake.exportCalls[2]?.moduleNames).toEqual(["E5"]);
     expect(fake.importCalls).toEqual([]);
   });
+
+  it("executes a one-way binary-to-src conflict when acceptBothChanged:true", async () => {
+    const fake = makeFakeAdapter({
+      preVerify: {
+        ok: true,
+        summary: makeVerifyResult({
+          actionable: { total: 1, sourceNewer: 0, binaryNewer: 0, bothChanged: 1 },
+          bothChangedEntries: [{ moduleName: "Form_X" }],
+          hasFunctionalDifferences: true,
+          recommendedAction: "manual_merge",
+        }),
+      },
+      postVerify: { ok: true, summary: makeVerifyResult() },
+    });
+
+    const result = await runSyncBinary({
+      adapter: fake.adapter,
+      input: {
+        direction: "binary-to-src",
+        apply: true,
+        acceptBothChanged: true,
+      },
+    });
+
+    expectSuccess(result);
+    expect(result.execution).not.toBeNull();
+    expect(result.plan.toExport).toEqual(["Form_X"]);
+    expect(result.plan.totalActionable).toBe(1);
+    expect(fake.exportCalls).toEqual([{ moduleNames: ["Form_X"] }]);
+  });
+
+  it("preserves manual_merge refusal without acceptBothChanged", async () => {
+    const conflict = makeVerifyResult({
+      actionable: { total: 1, sourceNewer: 0, binaryNewer: 0, bothChanged: 1 },
+      bothChangedEntries: [{ moduleName: "Form_X" }],
+      hasFunctionalDifferences: true,
+      recommendedAction: "manual_merge",
+    });
+    const fake = makeFakeAdapter({
+      preVerify: { ok: true, summary: conflict },
+      postVerify: { ok: true, summary: conflict },
+    });
+
+    const result = await runSyncBinary({
+      adapter: fake.adapter,
+      input: { direction: "binary-to-src", apply: true },
+    });
+
+    expectSuccess(result);
+    expect(result.execution).toBeNull();
+    expect(result.plan.totalActionable).toBe(0);
+    expect(result.recommendation).toBe("manual_merge");
+    expect(fake.exportCalls).toEqual([]);
+  });
 });
 
 // ─── 4. OK after a clean sync (AC4) ─────────────────────────────────────────

@@ -316,6 +316,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // `dryRun:true` ≡ `apply:false` (plan) on every write tool.
       diff: SCHEMA_PROPS.diff,
       dryRun: SCHEMA_PROPS.dryRun,
+      mutateBinary: {
+        type: "boolean",
+        description:
+          "Issue #1065 - defaults to false. Export runs against a disposable copy so Access cannot mutate the original .accdb. Set true only to preserve the legacy direct-binary behavior. The response always reports binaryMutated.",
+      },
       // issue #752 — opt-in verbose flag. Adds a top-level `verbose: [...]`
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
@@ -663,6 +668,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         enum: ["src-to-binary", "binary-to-src", "both"],
         description:
           "Issue #809 - sync direction. src-to-binary maps to import_modules on the listed names. binary-to-src maps to export_modules on the listed names. both (default) is the union and emits a single recommendation.",
+      },
+      acceptBothChanged: {
+        type: "boolean",
+        description:
+          "Issue #1065 - explicit escape valve for a bothChanged conflict. With a one-way direction and apply:true, routes each conflict through that direction. Default false; direction:'both' never auto-resolves conflicts.",
       },
       // Scope - the sync_binary-specific knob. actionableOnly:true
       // (default) excludes nonActionable diffs from the plan (the same
