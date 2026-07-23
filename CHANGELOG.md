@@ -1,5 +1,16 @@
 # Changelog
 
+## [v2.22.1] - 2026-07-23
+
+### Added
+
+- feat(sync-binary): ship the `acceptBothChanged:true` one-way conflict-resolution escape valve and disposable-copy export isolation that were documented in v2.22.0 but landed after its tag (#1065).
+
+### Fixed
+
+- fix(installer): runtime refreshes force dependency relinking, preventing missing transitive packages such as `fast-uri` after an in-place update (#1069).
+- test(vba-diff): make semantic-classifier fixtures independent of checkout directory names (#1066).
+
 ## [v2.22.0] - 2026-07-23
 
 Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a long per-form cleanup session against a production `.accdb`. No runtime bugs; naming, output semantics, introspection, doctor potency, and one architectural gap.
