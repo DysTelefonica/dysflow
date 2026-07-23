@@ -43,6 +43,7 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 import {
+  CLEAN_STALE_MARKERS_SCHEMA,
   DETECT_DEAD_CODE_SCHEMA,
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
@@ -53,7 +54,6 @@ import {
   QUERY_EXECUTE_SCHEMA,
   VALIDATE_MANIFEST_SCHEMA,
 } from "./schemas/dysflow-schemas.js";
-import { CLEAN_STALE_MARKERS_SCHEMA } from "./schemas/dysflow-schemas.js";
 import { MCP_TOOL_SCHEMAS, NO_INPUT_SCHEMA } from "./schemas/index.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import { STATE_TOOL_SCHEMA } from "./state-tool.js";
@@ -310,7 +310,8 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
     },
     toolName: {
       type: "string",
-      description: "Optional tool name to filter the catalog to a single entry. Omit for the full catalog.",
+      description:
+        "Optional tool name to filter the catalog to a single entry. Omit for the full catalog.",
     },
   },
 } as const;

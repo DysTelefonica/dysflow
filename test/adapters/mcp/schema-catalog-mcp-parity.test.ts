@@ -20,11 +20,8 @@
  * authority the MCP advertisement uses so the two agree by construction.
  */
 import { describe, expect, it } from "vitest";
+import { buildToolSchemaCatalog, type ToolSchema } from "../../../src/adapters/mcp/schema-tool.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
-import {
-  buildToolSchemaCatalog,
-  type ToolSchema,
-} from "../../../src/adapters/mcp/schema-tool.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 
 class FakeVbaService {
@@ -84,10 +81,9 @@ describe("schema/describe_tool catalog matches MCP input schemas (#1072)", () =>
       // Before the fix `catalog` is empty for these tools; after the fix it
       // mirrors every advertised property. Pin equality so future regressions
       // surface here rather than silently in production.
-      expect(
-        catalog,
-        `catalog parameters for '${name}' must mirror advertised properties`,
-      ).toEqual(advertised);
+      expect(catalog, `catalog parameters for '${name}' must mirror advertised properties`).toEqual(
+        advertised,
+      );
       expect(advertised.length, `'${name}' must advertise at least one parameter`).toBeGreaterThan(
         0,
       );
