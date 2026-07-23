@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join, parse, resolve } from "node:path";
 import packageJson from "../../../package.json" with { type: "json" };
@@ -437,6 +437,79 @@ export class VbaModulesAdapter {
     });
   }
 
+  /**
+   * Export from a disposable binary copy unless the caller explicitly opts
+   * into the legacy side effect. Access may rewrite database metadata merely
+   * by opening/exporting a project, so Quit(acQuitSaveNone) is not a sufficient
+   * non-mutation guarantee for the original file.
+   */
+  private async executeExportWithBinaryIsolation(
+    toolName: string,
+    effectiveParams: Record<string, unknown>,
+    mapping: DirectMapping,
+    target: VbaModulesExecutionTarget | undefined,
+  ): Promise<OperationResult<unknown>> {
+    if (
+      (toolName !== "export_modules" && toolName !== "export_all") ||
+      effectiveParams.mutateBinary === true ||
+      effectiveParams.transactional === true
+    ) {
+      const result = await this.executeMappedToolTransactional(
+        toolName,
+        effectiveParams,
+        mapping,
+        target,
+      );
+      if (!result.ok || (toolName !== "export_modules" && toolName !== "export_all")) return result;
+      return {
+        ...result,
+        data: { ...(result.data as Record<string, unknown>), binaryMutated: true },
+      };
+    }
+
+    const binaryPath = target?.accessPath ?? target?.accessDbPath;
+    if (binaryPath === undefined) {
+      const result = await this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+      if (!result.ok) return result;
+      return {
+        ...result,
+        data: { ...(result.data as Record<string, unknown>), binaryMutated: false },
+      };
+    }
+
+    // Several port-level tests use a synthetic accessPath and a fake runner.
+    // Preserve that seam: the real runner will report a missing database,
+    // while a fake can still verify mapping behavior without disk fixtures.
+    try {
+      await stat(binaryPath);
+    } catch {
+      const result = await this.orchestrator.executeMappedTool(toolName, effectiveParams, mapping);
+      if (!result.ok) return result;
+      return {
+        ...result,
+        data: { ...(result.data as Record<string, unknown>), binaryMutated: false },
+      };
+    }
+
+    const stagingDirectory = await mkdtemp(join(tmpdir(), "dysflow-export-"));
+    const stagingPath = join(stagingDirectory, parse(binaryPath).base);
+    try {
+      await copyFile(binaryPath, stagingPath);
+      const result = await this.orchestrator.executeMappedTool(
+        toolName,
+        { ...effectiveParams, accessPath: stagingPath, transactional: false },
+        mapping,
+      );
+      if (!result.ok) return result;
+      return {
+        ...result,
+        data: { ...(result.data as Record<string, unknown>), binaryMutated: false },
+      };
+    } finally {
+      await rm(stagingDirectory, { recursive: true, force: true });
+    }
+  }
+
   static handles(toolName: string): boolean {
     return (
       toolName === "export_modules" ||
@@ -722,7 +795,7 @@ export class VbaModulesAdapter {
         : successResult({ applied: false, deleted: [] as string[] });
     if (!importPruneResult.ok) return importPruneResult;
 
-    let importResult = await this.executeMappedToolTransactional(
+    let importResult = await this.executeExportWithBinaryIsolation(
       toolName,
       effectiveExportReadOnly === true ? { ...effectiveParams, readOnly: true } : effectiveParams,
       mapping,

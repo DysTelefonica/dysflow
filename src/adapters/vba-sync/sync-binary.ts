@@ -128,6 +128,12 @@ export interface SyncBinaryAdapterLike {
  */
 export type SyncBinaryInput = {
   direction?: SyncBinaryDirection;
+  /**
+   * Explicit conflict-resolution escape valve. When true, a one-way
+   * direction treats bothChanged entries as owned by that direction.
+   * The default remains false; direction:"both" never auto-resolves.
+   */
+  acceptBothChanged?: boolean;
   scope?: SyncBinaryScope;
   moduleNames?: readonly string[];
   directoryPath?: string;
@@ -280,8 +286,9 @@ export function buildSyncBinaryPlan(args: {
   summary: SyncVerifySummary;
   direction: SyncBinaryDirection;
   scope: Required<SyncBinaryScope>;
+  acceptBothChanged?: boolean;
 }): SyncBinaryPlan {
-  const { summary, direction, scope } = args;
+  const { summary, direction, scope, acceptBothChanged = false } = args;
   const importSet = new Set<string>();
   const exportSet = new Set<string>();
   const skipped: SyncBinarySkippedEntry[] = [];
@@ -299,12 +306,16 @@ export function buildSyncBinaryPlan(args: {
     for (const entry of summary.missingInSource) exportSet.add(entry.moduleName);
   }
 
-  // bothChanged entries are surfaced in `skipped[]` when the caller opts
-  // in via `scope.includeBothChanged`. They are NEVER auto-merged because
-  // both sides diverged - a real merge needs human review.
-  if (scope.includeBothChanged) {
-    const entries = summary.bothChangedEntries ?? [];
-    for (const entry of entries) {
+  const bothChangedEntries = summary.bothChangedEntries ?? [];
+  const acceptsConflictDirection =
+    acceptBothChanged && (direction === "src-to-binary" || direction === "binary-to-src");
+  if (acceptsConflictDirection) {
+    const target = direction === "src-to-binary" ? importSet : exportSet;
+    for (const entry of bothChangedEntries) {
+      target.add(entry.moduleName);
+    }
+  } else if (scope.includeBothChanged) {
+    for (const entry of bothChangedEntries) {
       skipped.push({ moduleName: entry.moduleName, reason: "bothChanged_acknowledged" });
     }
   }
@@ -399,7 +410,12 @@ export async function runSyncBinary(args: {
   const preSync = preOutcome.summary;
 
   // Step 2: plan
-  const plan = buildSyncBinaryPlan({ summary: preSync, direction, scope });
+  const plan = buildSyncBinaryPlan({
+    summary: preSync,
+    direction,
+    scope,
+    acceptBothChanged: input.acceptBothChanged,
+  });
 
   // Step 3: execute (only when willExecute AND there is something to dispatch)
   let execution: SyncBinaryExecution | null = null;

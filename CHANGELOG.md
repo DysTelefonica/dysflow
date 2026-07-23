@@ -6,6 +6,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Added
 
+- feat(sync-binary): `acceptBothChanged:true` lets a caller resolve `bothChanged` entries through an explicit one-way `direction`; the safe default remains `manual_merge`, and `direction:"both"` never auto-resolves conflicts (#1065)
+- feat(export): `export_modules`/`export_all` isolate Access in a disposable `.accdb` copy by default and return `binaryMutated:false`; `mutateBinary:true` preserves the legacy direct-binary path and reports `binaryMutated:true` (#1065)
 - feat(mcp): `describe_tool` — single-tool on-demand introspection sibling of `schema`: returns ONE tool's description, `params` (typed + required + description), returns, errorCodes, crossReferences, and `useCases`. Advertised tool count 89 → 90 (#1057 F5)
 - feat(mcp): `useCases` metadata on the `schema` catalog and `describe_tool` — curated "use this tool when…" hints for discovery-relevant tools (`vba_orphan_audit`, `detect_dead_code`, `compare_backends`, `access_force_cleanup_orphaned`, `validate_manifest`, `verify_code`, `delete_module`) (#1057 F6)
 - feat(mcp): `get_capabilities.tools[]` now carries `canonicalCommitFlag` (the ONE flag whose `true` commits) and `legacyAliases` (deprecated aliases still desugared: `dryRun` ≡ `!apply` everywhere; export_* additionally keeps the historic `diff`). Additive to the pre-existing `commitFlag`/`noWriteAlias`/`defaultBehavior` (#1057 F7)
@@ -22,7 +24,7 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Documented
 
-- docs: read-class tools that open the `.accdb` through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, …) may update the Jet/ACE LSN on close — `git status` will report the binary modified with 0 content change. Verify real changes with `git diff --stat` (identical byte size ⇒ LSN-only) or `verify_code` before staging; never `git add` the `.accdb` blindly after a dysflow run (#1057 F2)
+- docs: read-class tools that open the `.accdb` through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, …) may update the Jet/ACE LSN on close — `git status` will report the binary modified with 0 content change. Export tools now avoid that side effect by opening a disposable copy unless `mutateBinary:true`; for other read tools, verify real changes with `git diff --stat` or `verify_code` before staging (#1057 F2, #1065)
 
 
 ## [v2.21.1] - 2026-07-21

@@ -24,6 +24,9 @@
  * `vba-modules-adapter-diff-flag.test.ts`.
  */
 
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
@@ -210,6 +213,66 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
     // C1 invariant: no deprecation metadata without the legacy flag.
     const metadata = result.metadata as { deprecated?: unknown } | undefined;
     expect(metadata?.deprecated).toBeUndefined();
+  });
+});
+
+describe("VbaModulesAdapter — binary isolation (#1065)", () => {
+  it("exports from a disposable copy by default and reports binaryMutated:false", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dysflow-1065-test-"));
+    const accessPath = join(directory, "front.accdb");
+    await writeFile(accessPath, "original");
+    const seenPaths: string[] = [];
+    const orchestrator = buildAdapterWithSpy();
+    const base = (orchestrator.adapter as unknown as { orchestrator: VbaModulesOrchestrator })
+      .orchestrator;
+    base.resolveExecutionTarget = async () => ({
+      ok: true,
+      data: {
+        configSource: "explicit-request",
+        accessDbPath: accessPath,
+        accessPath,
+        destinationRoot: directory,
+        projectRoot: directory,
+      },
+      diagnostics: [],
+      durationMs: 0,
+    });
+    base.executeMappedTool = async (_toolName, params) => {
+      const executedPath = String(params.accessPath ?? accessPath);
+      seenPaths.push(executedPath);
+      await writeFile(executedPath, "mutated-by-access");
+      return {
+        ok: true,
+        data: { ok: true, exported: [] },
+        diagnostics: [],
+        durationMs: 0,
+      };
+    };
+
+    try {
+      const result = await orchestrator.adapter.execute("export_modules", {
+        moduleNames: ["Form_X"],
+        apply: true,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.data).toMatchObject({ binaryMutated: false });
+      expect(seenPaths[0]).not.toBe(accessPath);
+      expect(await readFile(accessPath, "utf8")).toBe("original");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("mutateBinary:true preserves the legacy direct-binary path", async () => {
+    const { adapter, executeCalls } = buildAdapterWithSpy();
+    const result = await adapter.execute("export_modules", {
+      moduleNames: ["Form_X"],
+      apply: true,
+      mutateBinary: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.data).toMatchObject({ binaryMutated: true });
+    expect(executeCalls[0]?.params.accessPath).toBeUndefined();
   });
 });
 
