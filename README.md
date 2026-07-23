@@ -782,8 +782,9 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
 #### `get_capabilities`
-Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, and canonical commit flags. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, canonical commit flags, and six machine-readable `preferredAgentWorkflows`. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
+* **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog.
 
 #### `list_procedures`
 List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
@@ -859,8 +860,13 @@ Return static tool contracts in one of two views. Use `compact` for low-context 
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
   - `view` (`"compact" | "full"`, optional, default `"full"`): Select low-context discovery or the complete backward-compatible contract.
-* **Compact returns**: `{ projectId, tools: [{ name, purpose, access, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
-* **Full returns**: `{ projectId, tools: [{ name, description, access, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
+* **Compact returns**: `{ projectId, tools: [{ name, purpose, access, agentWorkflow, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
+* **Full returns**: `{ projectId, tools: [{ name, description, access, agentWorkflow, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
+* **Workflow classification**:
+  - `preferred`: belongs to a declared golden path or is the preferred batch wrapper.
+  - `specialized`: `specializedWhen` states when its focused contract is better than a broader preferred wrapper.
+  - `legacy`: `supersededBy`, `migrationGuidance`, and `deprecationPolicy` provide a terminal migration path. `query_sql` and `exec_sql` remain callable compatibility tools; new SQL consumers use `query_execute`.
+  - `useCases` is copied from `agentWorkflow.preferFor`, so compact, full, and one-tool discovery cannot drift.
 * **Recommended discovery path**:
   1. `get_capabilities({})` for live version, gates, policy, and canonical commit flags.
   2. `schema({ "view": "compact" })` to choose a tool, optionally filtered with `toolName`.
@@ -873,7 +879,7 @@ Preferred one-tool deep introspection view. It returns the same complete entry g
   - `name` (string): Tool name to describe (canonical param).
   - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
-* **Returns**: the full single-tool contract — `{ name, description, access, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
+* **Returns**: the full single-tool contract — `{ name, description, access, agentWorkflow, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
 
 #### `diagnose`
 Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Replaces the 4-5 round-trip pattern (`get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Pairs with `get_capabilities` (live adapter state) and `schema` (static contract): `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.
@@ -992,11 +998,11 @@ A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt
 The result adds a flat `summary` (count per category), `summaryStructured` (nested actionable/non-actionable counts), `actionableDifferent` / `nonActionableDifferent` lists, `bulkImportable[]` and `bulkExportable[]` module-name lists, and a `hasFunctionalDifferences` / `actionableOk` signal so an automated consumer can decide what to act on without re-exporting and diffing the binary by hand. Agents should build sync calls from the bulk lists (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`) instead of parsing raw `different[]`; reserve `manual_merge` / `bothChanged` entries for human conflict resolution. It also carries `dysflowVersion` (the runtime package version that produced the result) and `classifierRules` (a fingerprint of the active rule set) so a consumer can tell *which* version classified a diff — distinguishing "fix not loaded into the running MCP" from "fix loaded but does not cover this case". When `diff: true`, each per-module entry in both `actionableDifferent[]` and `nonActionableDifferent[]` carries `classification`, `reason`, `isActionable`, `recommendedAction` (mirrors `recommendation`), and the unique-line counts. Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
 
 #### 2. SQL Maintenance
-* **`query_sql`**: Read-only SQL query execution.
+* **`query_sql`**: Legacy read-only SQL compatibility wrapper. New consumers use `query_execute({ mode: "read" })`; it remains callable throughout the v2.x line and cannot be removed without a documented deprecation window and migration release note.
   - Parameters: `sql` (string, optional), `query` (string, optional), `projectId`, `contextId`, `accessPath`, `databasePath`, `sourcePath`, `target` (`frontend | backend`)
   - Resolution priority: an explicit `accessPath` is executed as the query database; otherwise an explicit `databasePath`/`sourcePath` wins, then `target` resolves through project config, and calls without an override keep the configured default. Raw SQL is not parsed to infer a table or database. Successful responses include `resolvedAccessPath` so callers can audit the selected database.
   - For a conservative simple `SELECT` against one table, Dysflow verifies the resolved database schema and returns `TABLE_NOT_IN_DATABASE` or `COLUMN_NOT_IN_TABLE` with `resolvedAccessPath` in `error.details`. Joins, subqueries, expressions, wildcards, and other complex SQL retain the database engine's existing generic error classification rather than guessing.
-* **`exec_sql`**: Modify-capable SQL execution.
+* **`exec_sql`**: Legacy write SQL compatibility wrapper. New consumers use `query_execute({ mode: "write", apply: false | true })`; it remains callable throughout the v2.x line under the same documented deprecation policy.
   - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (array, optional), `accessPath`/`backendPath` (optional)
 * **`run_script`**: Execute SQL statements from a disk script file.
   - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (optional)

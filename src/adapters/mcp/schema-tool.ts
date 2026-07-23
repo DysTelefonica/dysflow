@@ -1375,7 +1375,7 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
   get_capabilities: {
     kind: "dataSchema",
     description:
-      "Aggregated capabilities snapshot (write gates, allowed procedures, commit flags).",
+      "Aggregated capabilities snapshot (write gates, allowed procedures, commit flags, preferred agent workflows).",
     dataSchema: {
       type: "object",
       properties: {
@@ -1384,9 +1384,13 @@ const TOOL_RESULT_CONTRACTS: Record<string, ToolResultContract> = {
         writesProject: { type: "object" },
         dryRunDefault: { type: "boolean" },
         toolsVisible: { type: "number" },
+        preferredAgentWorkflows: {
+          type: "array",
+          description: "Preferred bootstrap, sync, tests, SQL, forms, and recovery tool paths.",
+        },
         tools: { type: "object", description: "Per-tool commit-flag metadata." },
       },
-      required: ["adapterVersion", "toolsVisible"],
+      required: ["adapterVersion", "toolsVisible", "preferredAgentWorkflows"],
     },
     errorEnvelope: STANDARD_ERROR_ENVELOPE,
   },
