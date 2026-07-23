@@ -23,6 +23,7 @@ import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
 } from "../config/project-config-diagnostic.js";
+import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -181,6 +182,8 @@ export const RESOLVE_PROJECT_SCHEMA = {
       description:
         "Optional projectId to verify against .dysflow/project.json. When omitted, the resolver only checks whether a project.json is readable.",
     },
+    // #1057 (F10) — optional per-call cwd override.
+    cwd: CWD_OVERRIDE_SCHEMA_PROP,
   },
 } as const;
 
@@ -220,8 +223,14 @@ export function createResolveProjectTool(opts: { cwd: string }): DysflowMcpTool 
         typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
       const projectId = typeof params.projectId === "string" ? params.projectId : undefined;
 
-      const result = await tryResolveProject({ projectId }, opts.cwd);
-      const projectConfig = diagnoseProjectConfig(opts.cwd, { projectId });
+      // #1057 (F10) — honor a per-call cwd override; fall back to the
+      // factory cwd (backwards compatible).
+      const cwdResolution = resolveCwdOverride(input, opts.cwd);
+      if (!cwdResolution.ok) return cwdResolution.error;
+      const effectiveCwd = cwdResolution.cwd;
+
+      const result = await tryResolveProject({ projectId }, effectiveCwd);
+      const projectConfig = diagnoseProjectConfig(effectiveCwd, { projectId });
       const opResult: OperationResult<
         ResolvedProjectResult & { projectConfig: ProjectConfigDiagnostic }
       > = successResult({ ...result, projectConfig });

@@ -50,6 +50,7 @@ import {
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 import type { JsonObjectSchema } from "./schemas.js";
 
@@ -305,6 +306,8 @@ export const STATE_TOOL_SCHEMA: JsonObjectSchema = {
       description:
         "Optional projectId. Reserved for a future per-project scoping extension (#966 follow-up). The current state snapshot is global.",
     },
+    // #1057 (F10) — optional per-call cwd override.
+    cwd: CWD_OVERRIDE_SCHEMA_PROP,
   },
 };
 
@@ -339,7 +342,15 @@ export function createStateTool(opts: BuildStateOptions): DysflowMcpTool {
         typeof params.projectId === "string" && params.projectId.length > 0
           ? params.projectId
           : undefined;
-      const result = await buildStateResult({ cwd: opts.cwd, registry, nowMs: opts.nowMs });
+      // #1057 (F10) — honor a per-call cwd override; fall back to the
+      // factory cwd (backwards compatible).
+      const cwdResolution = resolveCwdOverride(input, opts.cwd);
+      if (!cwdResolution.ok) return cwdResolution.error;
+      const result = await buildStateResult({
+        cwd: cwdResolution.cwd,
+        registry,
+        nowMs: opts.nowMs,
+      });
       // Echo projectId for symmetry with `schema` and `resolve_project` —
       // the global state is unaffected by `projectId` today but the
       // envelope stays stable for a future per-project extension.
