@@ -25,6 +25,10 @@
 //     safeByDefault,        // boolean
 //   }
 
+import {
+  commitFlagMetadataForOrNoop,
+  legacyAliasesFor,
+} from "../../core/runtime/commit-flag-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
@@ -83,6 +87,13 @@ export type ToolParameterSchema = {
   description: string;
   enumValues?: string[];
   default?: unknown;
+  canonicalName?: string;
+  aliases?: string[];
+  deprecated?: boolean;
+  deprecatedSince?: string;
+  conflictsWith?: string[];
+  precedence?: "canonical" | "alias" | "deprecated";
+  sensitive?: boolean;
 };
 
 /**
@@ -530,7 +541,172 @@ function parameterFromJsonSchema(
   return result;
 }
 
-function parametersFromInputSchema(schema: unknown): Record<string, ToolParameterSchema> {
+function aliasesFromComposition(
+  toolName: string,
+  schema: unknown,
+): { canonical: string; aliases: string[] } | undefined {
+  const canonical = TOOL_COMPOSITION_CANONICAL[toolName];
+  if (canonical === undefined || typeof schema !== "object" || schema === null) return undefined;
+  const anyOf = (schema as { anyOf?: unknown }).anyOf;
+  if (!Array.isArray(anyOf)) return undefined;
+  const aliases = anyOf.flatMap((alternative) => {
+    if (typeof alternative !== "object" || alternative === null) return [];
+    const required = (alternative as { required?: unknown }).required;
+    if (!Array.isArray(required) || required.length !== 1 || typeof required[0] !== "string") {
+      return [];
+    }
+    return [required[0]];
+  });
+  if (!aliases.includes(canonical)) return undefined;
+  return { canonical, aliases: [...new Set(aliases)] };
+}
+
+function defaultFromDescription(parameter: ToolParameterSchema): unknown {
+  if (!/\bdefault(?:s|ed)?\b/i.test(parameter.description)) return undefined;
+  const quoted = parameter.description.match(/[`'"]([^`'"]+)[`'"]\s*\(default\)/i)?.[1];
+  const stated = parameter.description.match(
+    /\bdefault(?:s|ed)?(?:\s+value)?(?:\s+is|\s+to)?\s+[`'"]?([^.;,`'"]+)/i,
+  )?.[1];
+  const raw = (quoted ?? stated)?.trim();
+  if (raw === undefined || raw.length === 0) return "runtime-defined";
+  if (parameter.type === "boolean") {
+    if (/^true\b/i.test(raw)) return true;
+    if (/^false\b/i.test(raw)) return false;
+  }
+  if (parameter.type === "number") {
+    const numeric = raw.match(/^-?\d+(?:\.\d+)?/)?.[0];
+    if (numeric !== undefined) return Number(numeric);
+  }
+  return raw;
+}
+
+function canonicalNameFromDescription(
+  name: string,
+  description: string,
+  parameters: Record<string, ToolParameterSchema>,
+): string | undefined {
+  const explicit =
+    description.match(/\balias\s+(?:of|for)\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1] ??
+    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1];
+  if (explicit !== undefined) return explicit;
+  const candidates: Record<string, readonly string[]> = {
+    path: ["sourcePath", "testsPath", "exportPath", "importPath", "directoryPath", "databasePath"],
+    table: ["tableName"],
+    query: ["sql"],
+    column: ["columnName"],
+    name: ["formName", "moduleName"],
+    type: ["controlType"],
+    fields: ["columns"],
+    target: ["targetPath"],
+    password: ["backendPassword", "passwordEnv"],
+    backendPassword: ["passwordEnv"],
+  };
+  return candidates[name]?.find((candidate) => parameters[candidate] !== undefined);
+}
+
+function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): void {
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (parameter.default === undefined) {
+      const inferredDefault = defaultFromDescription(parameter);
+      if (inferredDefault !== undefined) parameter.default = inferredDefault;
+    }
+    if (!/\balias(?:es)?\b/i.test(parameter.description) || parameter.canonicalName !== undefined) {
+      continue;
+    }
+    parameter.canonicalName =
+      canonicalNameFromDescription(name, parameter.description, parameters) ?? name;
+    parameter.precedence = parameter.canonicalName === name ? "canonical" : "deprecated";
+    if (parameter.canonicalName !== name) {
+      parameter.deprecated = true;
+      parameter.deprecatedSince = "2.23.0";
+    }
+  }
+
+  const groups = new Map<string, Set<string>>();
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (parameter.canonicalName === undefined) continue;
+    const group = groups.get(parameter.canonicalName) ?? new Set<string>();
+    group.add(parameter.canonicalName);
+    group.add(name);
+    groups.set(parameter.canonicalName, group);
+  }
+  for (const [canonicalName, aliases] of groups) {
+    const values = [...aliases];
+    for (const alias of values) {
+      const parameter = parameters[alias];
+      if (parameter === undefined) continue;
+      parameter.canonicalName = canonicalName;
+      parameter.aliases = values;
+      parameter.precedence ??= alias === canonicalName ? "canonical" : "deprecated";
+    }
+  }
+}
+
+function enrichParameterMetadata(
+  toolName: string,
+  schema: unknown,
+  parameters: Record<string, ToolParameterSchema>,
+): void {
+  const aliasGroup = aliasesFromComposition(toolName, schema);
+  if (aliasGroup !== undefined) {
+    for (const alias of aliasGroup.aliases) {
+      const parameter = parameters[alias];
+      if (parameter === undefined) continue;
+      parameter.canonicalName = aliasGroup.canonical;
+      parameter.aliases = [...aliasGroup.aliases];
+      parameter.precedence = alias === aliasGroup.canonical ? "canonical" : "deprecated";
+      if (alias !== aliasGroup.canonical) {
+        parameter.deprecated = true;
+        parameter.deprecatedSince = "2.23.0";
+      }
+    }
+  }
+
+  const commitMetadata = commitFlagMetadataForOrNoop(toolName);
+  const applyParameter = parameters.apply;
+  if (applyParameter !== undefined && applyParameter.default === undefined) {
+    applyParameter.default = commitMetadata.defaultBehavior === "writes";
+  }
+  const dryRunParameter = parameters.dryRun;
+  if (dryRunParameter !== undefined && dryRunParameter.default === undefined) {
+    dryRunParameter.default = commitMetadata.defaultBehavior !== "writes";
+  }
+  const diffParameter = parameters.diff;
+  if (diffParameter !== undefined && diffParameter.default === undefined) {
+    diffParameter.default = false;
+  }
+
+  enrichProseMetadata(parameters);
+
+  for (const [name, parameter] of Object.entries(parameters)) {
+    if (/password|secret|token/i.test(name)) parameter.sensitive = true;
+  }
+
+  const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
+  if (writeFlags.length < 2) return;
+  const legacyAliases = new Set(legacyAliasesFor(toolName));
+  for (const flag of writeFlags) {
+    const parameter = parameters[flag];
+    if (parameter === undefined) continue;
+    parameter.conflictsWith = writeFlags.filter((candidate) => candidate !== flag);
+    if (flag === commitMetadata.commitFlag) {
+      parameter.precedence = "canonical";
+      continue;
+    }
+    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "alias";
+    if (legacyAliases.has(flag)) {
+      parameter.deprecated = true;
+      parameter.deprecatedSince = "2.23.0";
+      parameter.canonicalName = commitMetadata.commitFlag;
+      parameter.aliases = [...writeFlags];
+    }
+  }
+}
+
+function parametersFromInputSchema(
+  toolName: string,
+  schema: unknown,
+): Record<string, ToolParameterSchema> {
   const out: Record<string, ToolParameterSchema> = {};
   if (typeof schema !== "object" || schema === null) return out;
   const root = schema as {
@@ -546,6 +722,7 @@ function parametersFromInputSchema(schema: unknown): Record<string, ToolParamete
       requiredSet.has(name),
     );
   }
+  enrichParameterMetadata(toolName, schema, out);
   return out;
 }
 
@@ -658,7 +835,7 @@ function buildSchemaForTool(name: string): ToolSchema {
   return {
     name,
     description: descriptionForTool(name),
-    parameters: parametersFromInputSchema(inputSchema),
+    parameters: parametersFromInputSchema(name, inputSchema),
     returns: {
       type: "object",
       schema: { ...MCP_TOOL_RESULT_JSON_SCHEMA },
