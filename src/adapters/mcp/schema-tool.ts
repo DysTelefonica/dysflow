@@ -662,6 +662,20 @@ function enrichParameterMetadata(
     }
   }
 
+  const commitMetadata = commitFlagMetadataForOrNoop(toolName);
+  const applyParameter = parameters.apply;
+  if (applyParameter !== undefined && applyParameter.default === undefined) {
+    applyParameter.default = commitMetadata.defaultBehavior === "writes";
+  }
+  const dryRunParameter = parameters.dryRun;
+  if (dryRunParameter !== undefined && dryRunParameter.default === undefined) {
+    dryRunParameter.default = commitMetadata.defaultBehavior !== "writes";
+  }
+  const diffParameter = parameters.diff;
+  if (diffParameter !== undefined && diffParameter.default === undefined) {
+    diffParameter.default = false;
+  }
+
   enrichProseMetadata(parameters);
 
   for (const [name, parameter] of Object.entries(parameters)) {
@@ -670,13 +684,12 @@ function enrichParameterMetadata(
 
   const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
   if (writeFlags.length < 2) return;
-  const metadata = commitFlagMetadataForOrNoop(toolName);
   const legacyAliases = new Set(legacyAliasesFor(toolName));
   for (const flag of writeFlags) {
     const parameter = parameters[flag];
     if (parameter === undefined) continue;
     parameter.conflictsWith = writeFlags.filter((candidate) => candidate !== flag);
-    if (flag === metadata.commitFlag) {
+    if (flag === commitMetadata.commitFlag) {
       parameter.precedence = "canonical";
       continue;
     }
@@ -684,7 +697,7 @@ function enrichParameterMetadata(
     if (legacyAliases.has(flag)) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
-      parameter.canonicalName = metadata.commitFlag;
+      parameter.canonicalName = commitMetadata.commitFlag;
       parameter.aliases = [...writeFlags];
     }
   }
