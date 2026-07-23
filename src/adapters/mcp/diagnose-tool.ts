@@ -36,6 +36,7 @@ import {
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import { composeIdentityAndCorrelation, SCHEMA_PROPS } from "../../shared/validation/index.js";
 import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
@@ -284,21 +285,11 @@ export const DIAGNOSE_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId to verify against .dysflow/project.json. When omitted, the resolver uses whichever single project.json is in scope.",
-    },
-    accessPath: {
-      type: "string",
-      description:
-        "Optional explicit Access target override. Mirrors the convention used by `doctor` — explicit per-call overrides win over `.dysflow/project.json` when diagnosing context skew.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional contextId for cross-project correlation. Reserved for a future per-context scoping extension (#966 follow-up).",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity +
+    // OperationCorrelation + AccessTarget blocks so the consumer-facing
+    // description matches every other tool that uses these atoms.
+    ...composeIdentityAndCorrelation(),
+    accessPath: SCHEMA_PROPS.accessPath,
     verbose: {
       type: "boolean",
       description:

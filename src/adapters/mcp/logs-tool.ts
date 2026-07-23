@@ -30,7 +30,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { JsonObjectSchema } from "../../shared/validation/index.js";
+import { type JsonObjectSchema, PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
@@ -345,11 +345,10 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. The logs source is always <cwd>/.dysflow/runtime/; projectId is echoed back in the result envelope (for future per-project scoping).",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity block so the
+    // consumer-facing description matches every other tool that uses
+    // this atom.
+    ...PROJECT_IDENTITY_BLOCK,
     // #1057 (F10) — optional per-call cwd override.
     cwd: CWD_OVERRIDE_SCHEMA_PROP,
     options: {

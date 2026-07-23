@@ -11,7 +11,9 @@
 
 import {
   ACCESS_OVERRIDE,
+  composeIdentityAndCorrelation,
   type JsonObjectSchema,
+  PROJECT_IDENTITY_BLOCK,
   SCHEMA_PROPS,
   STRICT_CTX,
 } from "../../../shared/validation/index.js";
@@ -47,16 +49,7 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
   required: ["procedureName"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     moduleName: { type: "string", description: "Optional VBA module name." },
     procedureName: {
       type: "string",
@@ -79,26 +72,11 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   required: ["sql", "mode"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     sql: { type: "string", minLength: 1, description: "Access SQL to execute." },
-    backendPath: {
-      type: "string",
-      description: "Optional override for Access backend database path.",
-    },
-    databasePath: { type: "string", description: "Database path." },
-    sourcePath: {
-      type: "string",
-      description: "Source path alias for databasePath.",
-    },
+    backendPath: SCHEMA_PROPS.backendPath,
+    databasePath: SCHEMA_PROPS.databasePath,
+    sourcePath: SCHEMA_PROPS.sourcePath,
     mode: {
       type: "string",
       enum: ["read", "write"],
@@ -124,16 +102,7 @@ export const DOCTOR_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     includeEnvironment: {
       type: "boolean",
       description: "Include environment diagnostics when supported.",
@@ -149,16 +118,7 @@ export const LIST_PROCEDURES_SCHEMA: JsonObjectSchema = {
   required: ["module"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     module: {
       type: "string",
       description: "VBA module name (without extension).",
@@ -189,16 +149,7 @@ export const GET_PROCEDURE_SCHEMA: JsonObjectSchema = {
   required: ["module", "procedure"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     module: {
       type: "string",
       description: "VBA module name (without extension).",
@@ -223,16 +174,7 @@ export const FIND_REFERENCES_SCHEMA: JsonObjectSchema = {
   required: ["symbol"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     symbol: {
       type: "string",
       minLength: 1,
@@ -282,16 +224,7 @@ export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     testsPath: {
       type: "string",
       description: "VBA test manifest path. Relative paths resolve against the project root.",
@@ -339,16 +272,7 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
   required: ["module"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     module: {
       type: "string",
       minLength: 1,
@@ -392,16 +316,13 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
   required: [],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden by a tool that supports overrides.",
-    },
-    accessPath: {
-      type: "string",
-      description:
-        "Frontend .accdb path to scan. Defaults to the accessDbPath declared in .dysflow/project.json when omitted.",
-    },
+    // Issue #1076 — this tool only needs the project identity (not
+    // call correlation) and only the access path (not the full target
+    // stack). Compose the ProjectIdentity + AccessTarget blocks
+    // directly so the consumer-facing description is the same as every
+    // other tool that uses these atoms.
+    ...PROJECT_IDENTITY_BLOCK,
+    accessPath: SCHEMA_PROPS.accessPath,
     confirmPid: {
       type: "number",
       minimum: 1,
@@ -428,11 +349,11 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
   required: [],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
+    // Issue #1076 — this tool only needs the project identity (not
+    // call correlation). Compose the ProjectIdentity block directly so
+    // the consumer-facing description is the same as every other tool
+    // that uses this atom.
+    ...PROJECT_IDENTITY_BLOCK,
     options: {
       type: "object",
       additionalProperties: false,
@@ -480,16 +401,7 @@ export const DETECT_DEAD_CODE_SCHEMA: JsonObjectSchema = {
   required: ["scope"],
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Canonical project identity for traceability. Prefer the Engram project name when available. Paths and roots still come from .dysflow/project.json unless explicitly overridden.",
-    },
-    contextId: {
-      type: "string",
-      description:
-        "Optional run/context id for this call. Do not duplicate projectId when it has the same value; use this only for a distinct execution context or as a fallback when no projectId is known.",
-    },
+    ...composeIdentityAndCorrelation(),
     scope: {
       type: "string",
       enum: ["binary", "source", "module"],

@@ -19,6 +19,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
@@ -177,11 +178,10 @@ export const RESOLVE_PROJECT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId to verify against .dysflow/project.json. When omitted, the resolver only checks whether a project.json is readable.",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity block so the
+    // consumer-facing description matches every other tool that uses
+    // this atom.
+    ...PROJECT_IDENTITY_BLOCK,
     // #1057 (F10) — optional per-call cwd override.
     cwd: CWD_OVERRIDE_SCHEMA_PROP,
   },

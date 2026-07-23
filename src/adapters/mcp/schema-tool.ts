@@ -29,6 +29,7 @@ import {
   commitFlagMetadataForOrNoop,
   legacyAliasesFor,
 } from "../../core/runtime/commit-flag-registry.js";
+import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
@@ -469,11 +470,10 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId. Reserved for a future per-project scoping extension (#966 follow-up). The current catalog is global.",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity block so the
+    // consumer-facing description matches every other tool that uses
+    // this atom.
+    ...PROJECT_IDENTITY_BLOCK,
     toolName: {
       type: "string",
       description:
@@ -498,11 +498,10 @@ export const DESCRIBE_TOOL_INPUT_SCHEMA = {
       type: "string",
       description: "Alias of `name` for symmetry with the `schema` tool's filter param.",
     },
-    projectId: {
-      type: "string",
-      description:
-        "Optional projectId. Reserved for a future per-project scoping extension. The current catalog is global.",
-    },
+    // Issue #1076 — compose the shared ProjectIdentity block so the
+    // consumer-facing description matches every other tool that uses
+    // this atom.
+    ...PROJECT_IDENTITY_BLOCK,
   },
   // Issue #1074 — declarative alias-group requirement. The handler
   // historically rejected missing name/toolName with MCP_INPUT_INVALID;
