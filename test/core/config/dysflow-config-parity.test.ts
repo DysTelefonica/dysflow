@@ -151,7 +151,8 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
     }
   });
 
-  it("project.json with projectRoot override — both variants apply override identically", async () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("projectRoot stored in config is ignored in favor of the config-owning worktree", async () => {
     const ws = createTempWorkspace();
     try {
       const projectRoot = join(ws.root, "sub");
@@ -171,14 +172,15 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       expect(syncResult).toEqual(asyncResult);
       expect(syncResult.ok).toBe(true);
       if (!syncResult.ok) throw new Error("expected success");
-      expect(syncResult.data.projectRoot).toBe(resolve(projectRoot));
-      expect(syncResult.data.accessDbPath).toBe(resolve(projectRoot, "data.accdb"));
+      expect(syncResult.data.projectRoot).toBe(resolve(ws.root));
+      expect(syncResult.data.accessDbPath).toBe(resolve(ws.root, "data.accdb"));
     } finally {
       ws.cleanup();
     }
   });
 
-  it("missing accessPath — both variants return CONFIG_MISSING_ACCESS_PATH", async () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("missing frontend returns FRONTEND_TARGET_MISSING", async () => {
     const ws = createTempWorkspace();
     try {
       writeProjectConfig(ws.root, { id: "no-access-path" });
@@ -191,7 +193,7 @@ describe("loadDysflowConfig / loadDysflowConfigAsync parity (#195)", () => {
       expect(syncResult).toEqual(asyncResult);
       expect(syncResult.ok).toBe(false);
       if (syncResult.ok) throw new Error("expected failure");
-      expect(syncResult.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+      expect(syncResult.error.code).toBe("FRONTEND_TARGET_MISSING");
     } finally {
       ws.cleanup();
     }
@@ -318,7 +320,8 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
     }
   });
 
-  it("returns CONFIG_MISSING_ACCESS_PATH when raw config has no accessPath", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("returns FRONTEND_TARGET_MISSING when raw config has no frontend and no candidate", () => {
     const ws = createTempWorkspace();
     try {
       const resolvedPath = join(ws.root, ".dysflow", "project.json");
@@ -337,7 +340,7 @@ describe("loadProjectConfigCore — shared validation and build (#295)", () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("expected failure");
-      expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+      expect(result.error.code).toBe("FRONTEND_TARGET_MISSING");
     } finally {
       ws.cleanup();
     }

@@ -329,7 +329,7 @@ describe("dysflow command modules", () => {
     const workspace = mkdtempSync(join(tmpdir(), "dysflow-setup-"));
     const projectPath = join(workspace, ".dysflow", "project.json");
     const dataDir = join(workspace, "E2E_testing");
-    const accessPath = join(dataDir, "front.accdb");
+    const accessPath = join(workspace, "front.accdb");
     const backendPath = join(dataDir, "backend.accdb");
 
     try {
@@ -349,7 +349,7 @@ describe("dysflow command modules", () => {
       const written = JSON.parse(readFileSync(projectPath, "utf8"));
       expect(written).toMatchObject({
         id: basename(workspace),
-        accessPath: "E2E_testing/front.accdb",
+        frontendFile: "front.accdb",
         backendPath: "E2E_testing/backend.accdb",
         destinationRoot: "src",
       });

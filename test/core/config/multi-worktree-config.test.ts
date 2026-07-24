@@ -25,9 +25,8 @@ describe("Multi-worktree project config resolution (#1058)", () => {
       join(mainDir, ".dysflow", "project.json"),
       JSON.stringify({
         id: "expedientes-main",
-        projectRoot: mainDir,
-        accessPath: join(mainDir, "Main.accdb"),
-        destinationRoot: join(mainDir, "src"),
+        frontendFile: "Main.accdb",
+        destinationRoot: "src",
         capabilities: { allowWrites: true },
       }),
     );
@@ -40,9 +39,8 @@ describe("Multi-worktree project config resolution (#1058)", () => {
       join(stagingDir, ".dysflow", "project.json"),
       JSON.stringify({
         id: "expedientes-staging",
-        projectRoot: stagingDir,
-        accessPath: join(stagingDir, "Staging.accdb"),
-        destinationRoot: join(stagingDir, "src"),
+        frontendFile: "Staging.accdb",
+        destinationRoot: "src",
         capabilities: { allowWrites: true },
       }),
     );
@@ -52,7 +50,8 @@ describe("Multi-worktree project config resolution (#1058)", () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
-  it("resolveExecutionTarget auto-discovers config when accessPath points to a sibling worktree binary", async () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("resolveExecutionTarget selects a sibling only when accessPath is explicit", async () => {
     const context = {
       env: {},
       cwd: mainDir,
@@ -85,14 +84,15 @@ describe("Multi-worktree project config resolution (#1058)", () => {
     expect(result.data.projectRoot).toBe(stagingDir);
   });
 
-  it("diagnoseProjectConfig validates sibling worktree target when explicit accessPath is passed", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("diagnoseProjectConfig validates sibling worktree target only when accessPath is explicit", () => {
     const result = diagnoseProjectConfig(mainDir, {
       accessPath: join(stagingDir, "Staging.accdb"),
     });
 
-    expect(result.status).toBe("valid");
-    expect(result.writeReady).toBe(true);
-    expect(result.projectId).toBe("expedientes-staging");
+    expect(result.status).toBe("outside-project-root");
+    expect(result.writeReady).toBe(false);
+    expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
   });
 
   it("project-root guard remains active when accessPath belongs to no known config", () => {

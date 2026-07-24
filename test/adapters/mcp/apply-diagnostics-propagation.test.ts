@@ -139,14 +139,12 @@ describe("apply diagnostics propagation (Round-12 #964)", () => {
 
   it("import_modules apply:true with DESTINATION_ROOT_NOT_FOUND propagates diagnostics[] from resolve_project", async () => {
     makeWorkdirAWorktree();
-    const accessDir = join(workdir, "access");
-    mkdirSync(accessDir, { recursive: true });
-    writeFileSync(join(accessDir, "app.accdb"), "");
-    const accessPath = join(accessDir, "app.accdb").replaceAll("\\", "/");
+    // migrated to #1092 contract on 2026-07-24
+    writeFileSync(join(workdir, "app.accdb"), "");
     writeProjectConfig({
       id: "app",
-      accessPath,
-      destinationRoot: join(workdir, "missing-src").replaceAll("\\", "/"),
+      frontendFile: "app.accdb",
+      destinationRoot: "missing-src",
     });
 
     const projectConfigResolver = liveResolver(workdir);
@@ -167,17 +165,14 @@ describe("apply diagnostics propagation (Round-12 #964)", () => {
 
   it("sync_binary apply:true with WRITE_LOCKED_BY_RUNNING_OP propagates diagnostics[] from resolve_project", async () => {
     makeWorkdirAWorktree();
-    const accessDir = join(workdir, "access");
-    mkdirSync(accessDir, { recursive: true });
-    writeFileSync(join(accessDir, "app.accdb"), "");
-    const accessPath = join(accessDir, "app.accdb").replaceAll("\\", "/");
-    const srcDir = join(workdir, "src");
-    mkdirSync(srcDir, { recursive: true });
-    const destinationRoot = srcDir.replaceAll("\\", "/");
+    // migrated to #1092 contract on 2026-07-24
+    const accessPath = join(workdir, "app.accdb").replaceAll("\\", "/");
+    writeFileSync(accessPath, "");
+    mkdirSync(join(workdir, "src"), { recursive: true });
     writeProjectConfig({
       id: "app",
-      accessPath,
-      destinationRoot,
+      frontendFile: "app.accdb",
+      destinationRoot: "src",
     });
 
     mkdirSync(join(workdir, ".dysflow", "runtime", "markers"), { recursive: true });
@@ -211,14 +206,12 @@ describe("apply diagnostics propagation (Round-12 #964)", () => {
 
   it("diagnostics[] schema is identical between resolve_project and write-tools — every entry has { code, severity, message, remediation? }", async () => {
     makeWorkdirAWorktree();
-    const accessDir = join(workdir, "access");
-    mkdirSync(accessDir, { recursive: true });
-    writeFileSync(join(accessDir, "app.accdb"), "");
-    const accessPath = join(accessDir, "app.accdb").replaceAll("\\", "/");
+    // migrated to #1092 contract on 2026-07-24
+    writeFileSync(join(workdir, "app.accdb"), "");
     writeProjectConfig({
       id: "app",
-      accessPath,
-      destinationRoot: join(workdir, "missing-src").replaceAll("\\", "/"),
+      frontendFile: "app.accdb",
+      destinationRoot: "missing-src",
     });
 
     const projectConfigResolver = liveResolver(workdir);

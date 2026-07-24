@@ -370,7 +370,7 @@ Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` o
 ```json
 {
   "id": "my-access-project",
-  "accessPath": "Frontend.accdb",
+  "frontendFile": "Frontend.accdb",
   "backendPath": "Backend.accdb",
   "destinationRoot": "src",
   "passwordEnv": "DYSFLOW_ACCESS_PASSWORD",
@@ -378,7 +378,19 @@ Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` o
 }
 ```
 
-Use repo-relative paths whenever possible so the same config works for `adm`, `adm.DEFENSA`, and teammates with different Windows profile names.
+Use a filename-only `frontendFile`; Dysflow joins it to the worktree that physically owns the
+config. `destinationRoot` must remain relative/local. An absolute shared `backendPath` is supported
+and is never rebased. Git creates worktrees; Dysflow resolves targets safely: the current worktree
+is the default, and another worktree requires an explicit per-call `projectId`, absolute
+`accessPath`, `backendPath`, or supported `cwd`. Explicit target provenance is call-local and never
+persisted.
+
+A basename-only legacy `accessPath` migrates losslessly. Absolute or separator-containing legacy
+values fail with `FRONTEND_PATH_NOT_BASENAME`; zero/multiple root frontends fail with
+`FRONTEND_TARGET_MISSING` / `FRONTEND_TARGET_AMBIGUOUS`; duplicate sibling ids fail with
+`PROJECT_ID_COLLISION`.
+
+Use portable paths whenever possible so the same config works for `adm`, `adm.DEFENSA`, and teammates with different Windows profile names.
 
 #### Cleanup before retrying
 
@@ -449,12 +461,12 @@ dysflow setup --write-project --project-id 00-no-conformidades-staging-clean `
   --backend-path .\NoConformidades_Datos.accdb
 ```
 
-This writes `.dysflow/project.json` with repo-relative paths and default `destinationRoot: "src"`:
+This writes `.dysflow/project.json` with a filename-only frontend and default `destinationRoot: "src"`:
 
 ```json
 {
   "id": "00-no-conformidades-staging-clean",
-  "accessPath": "NoConformidades.accdb",
+  "frontendFile": "NoConformidades.accdb",
   "backendPath": "NoConformidades_Datos.accdb",
   "destinationRoot": "src"
 }
@@ -476,10 +488,10 @@ Do not inject these on every call when they are already in `.dysflow/project.jso
 
 | Repeated call field       | Put it in                                                                                           |
 | ------------------------- | --------------------------------------------------------------------------------------------------- |
-| `accessPath`              | `.dysflow/project.json` → `accessPath`                                                              |
-| `backendPath`             | `.dysflow/project.json` → `backendPath`                                                             |
-| `destinationRoot`         | `.dysflow/project.json` → `destinationRoot` (usually `src`)                                         |
-| `projectRoot`             | active repo/worktree; optional `.dysflow/project.json` → `projectRoot` only for non-standard layout |
+| `accessPath`              | Explicit call-level frontend override only; persistent config uses `frontendFile`                 |
+| `backendPath`             | `.dysflow/project.json` → `backendPath` (absolute/shared is allowed)                               |
+| `destinationRoot`         | `.dysflow/project.json` → relative/local `destinationRoot` (usually `src`)                          |
+| `projectRoot`             | Derived from the worktree that physically owns `.dysflow/project.json`; normally omit              |
 | `projectId`               | `.dysflow/project.json` → `id`; should match the Engram project name when available                 |
 | `contextId`               | call-level run/context id only; omit it when it would duplicate `projectId`                         |
 | password                  | environment secret named by `passwordEnv`, or `DYSFLOW_ACCESS_PASSWORD`                             |

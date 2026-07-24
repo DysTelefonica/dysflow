@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
 import type { Remediation } from "../../core/contracts/remediation.js";
 import {
@@ -118,6 +118,13 @@ export function diagnoseProjectConfig(
 ): ProjectConfigDiagnostic {
   let targetCwdInput = cwdInput;
   const requestedId = request.projectId;
+  const explicitTargetSupplied =
+    requestedId !== undefined ||
+    request.accessPath !== undefined ||
+    request.accessDbPath !== undefined ||
+    request.databasePath !== undefined ||
+    request.sourcePath !== undefined ||
+    request.backendPath !== undefined;
   const requestedAccessPath =
     request.accessPath ?? request.accessDbPath ?? request.databasePath ?? request.sourcePath;
 
@@ -140,9 +147,17 @@ export function diagnoseProjectConfig(
 
         if (idOk && pathOk) {
           matchedInCwd = true;
+          const configuredFrontend =
+            typeof raw.frontendFile === "string" && raw.frontendFile
+              ? raw.frontendFile
+              : typeof raw.accessPath === "string" && raw.accessPath
+                ? raw.accessPath
+                : null;
           const accessPath =
-            typeof raw.accessPath === "string" && raw.accessPath
-              ? normalize(resolve(cwdNative, raw.accessPath))
+            configuredFrontend !== null &&
+            !isAbsolute(configuredFrontend) &&
+            configuredFrontend === basename(configuredFrontend)
+              ? normalize(resolve(cwdNative, configuredFrontend))
               : null;
           const destinationRoot =
             typeof raw.destinationRoot === "string" && raw.destinationRoot
@@ -293,7 +308,45 @@ export function diagnoseProjectConfig(
       ? normalize(resolve(projectRootNative, parsed[key] as string))
       : null;
   const projectId = typeof parsed.id === "string" && parsed.id ? parsed.id : null;
-  const accessPath = pathValue("accessPath");
+  const configuredFrontend =
+    typeof parsed.frontendFile === "string" && parsed.frontendFile
+      ? parsed.frontendFile
+      : typeof parsed.accessPath === "string" && parsed.accessPath
+        ? parsed.accessPath
+        : null;
+  if (
+    configuredFrontend !== null &&
+    (isAbsolute(configuredFrontend) || basename(configuredFrontend) !== configuredFrontend)
+  )
+    return failWith(
+      base,
+      "path-mismatch",
+      `Legacy accessPath '${configuredFrontend}' is not a basename.`,
+      `Replace it with frontendFile: '${basename(configuredFrontend)}'.`,
+      explicitTargetSupplied ? "INHERITED_WORKTREE_MISMATCH" : "FRONTEND_PATH_NOT_BASENAME",
+    );
+  const localCandidates = readdirSync(projectRootNative)
+    .filter((entry) => entry.toLowerCase().endsWith(".accdb"))
+    .sort();
+  if (configuredFrontend === null && localCandidates.length === 0)
+    return failWith(
+      base,
+      "target-not-found",
+      `No eligible frontend exists at worktree root '${projectRoot}'.`,
+      "Configure frontendFile with the local .accdb filename.",
+      "FRONTEND_TARGET_MISSING",
+    );
+  if (configuredFrontend === null && localCandidates.length > 1)
+    return failWith(
+      base,
+      "ambiguous",
+      `Multiple eligible frontends exist: ${localCandidates.join(", ")}.`,
+      "Configure frontendFile explicitly.",
+      "FRONTEND_TARGET_AMBIGUOUS",
+    );
+  const accessPath = normalize(
+    resolve(projectRootNative, configuredFrontend ?? (localCandidates[0] as string)),
+  );
   const backendPath = pathValue("backendPath");
   const destinationRoot = pathValue("destinationRoot") ?? normalize(join(projectRootNative, "src"));
   Object.assign(base, {

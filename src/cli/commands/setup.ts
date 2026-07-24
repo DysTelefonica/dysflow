@@ -194,9 +194,16 @@ export async function writeRelativeProjectConfig(
   const projectRoot = cwd ?? process.cwd();
   const projectPath = join(projectRoot, ".dysflow", "project.json");
   const projectId = config.projectId ?? basename(projectRoot);
+  const frontendFile = basename(config.accessDbPath);
+  const frontendRelative = toPortableProjectPath(config.accessDbPath, projectRoot);
+  if (frontendRelative !== frontendFile) {
+    throw new Error(
+      `Frontend must be at the worktree root before writing portable config. Move it to ${join(projectRoot, frontendFile)} or pass a root frontend.`,
+    );
+  }
   const projectJson = {
     id: projectId,
-    accessPath: toPortableProjectPath(config.accessDbPath, projectRoot),
+    frontendFile,
     ...(config.backendPath === undefined
       ? {}
       : {

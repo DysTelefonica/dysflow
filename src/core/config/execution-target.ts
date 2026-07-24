@@ -15,6 +15,13 @@ export type ExecutionTargetContext = {
   fileSystem: ConfigFileSystemPort;
 };
 
+export type TargetProvenance =
+  | "implicit-cwd"
+  | "explicit-project-id"
+  | "explicit-access-path"
+  | "explicit-cwd"
+  | "explicit-backend-path";
+
 export type ExecutionTarget = Pick<
   DysflowConfig,
   | "accessDbPath"
@@ -24,7 +31,7 @@ export type ExecutionTarget = Pick<
   | "projectId"
   | "configSource"
   | "timeoutMs"
-> & { accessPath?: string; destinationRoot: string };
+> & { accessPath?: string; destinationRoot: string; targetProvenance: TargetProvenance };
 
 export async function resolveExecutionTarget(
   params: Record<string, unknown>,
@@ -64,6 +71,12 @@ export async function resolveExecutionTarget(
         config.data.destinationRoot ??
         config.data.projectRoot ??
         context.cwd,
+      targetProvenance:
+        stringValue(params.accessPath) !== undefined
+          ? "explicit-access-path"
+          : requestedProjectId !== undefined
+            ? "explicit-project-id"
+            : "explicit-cwd",
     });
   }
 
@@ -85,6 +98,7 @@ export async function resolveExecutionTarget(
           repoConfig.data.destinationRoot ??
           repoConfig.data.projectRoot ??
           context.cwd,
+        targetProvenance: "implicit-cwd",
       });
     }
     return repoConfig;
@@ -104,5 +118,6 @@ export async function resolveExecutionTarget(
     projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
     projectId: undefined,
     timeoutMs: explicitTimeoutMs ?? context.timeoutMs ?? 30000,
+    targetProvenance: stringValue(params.backendPath) ? "explicit-backend-path" : "implicit-cwd",
   });
 }

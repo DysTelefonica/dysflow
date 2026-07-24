@@ -1078,11 +1078,12 @@ describe("VbaSyncAdapter Orchestrator", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-adapter-config-"));
     try {
       await mkdir(join(root, ".dysflow"), { recursive: true });
+      await writeFile(join(root, "project.accdb"), "");
       await writeFile(
         join(root, ".dysflow", "project.json"),
         JSON.stringify({
           id: "myproject",
-          accessPath: "C:/db/project.accdb",
+          frontendFile: "project.accdb",
           destinationRoot: "src",
         }),
         "utf8",
@@ -1107,7 +1108,10 @@ describe("VbaSyncAdapter Orchestrator", () => {
       const result = await service.execute("verify_code", {});
       expect(result.ok).toBe(true);
       expect(capturedRequest).toBeDefined();
-      expect(capturedRequest?.accessPath?.replace(/\\/g, "/")).toBe("C:/db/project.accdb");
+      // migrated to #1092 contract on 2026-07-24
+      expect(capturedRequest?.accessPath?.replace(/\\/g, "/")).toBe(
+        `${root.replace(/\\/g, "/")}/project.accdb`,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
