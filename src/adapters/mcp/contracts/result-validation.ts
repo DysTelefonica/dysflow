@@ -20,7 +20,7 @@ export type ResultValidationOutcome =
 export function resolveResultValidationPolicy(
   policy?: ResultValidationPolicy,
 ): ResultValidationPolicy {
-  return policy ?? "report";
+  return policy ?? "enforce";
 }
 
 export function validateToolResult(input: {

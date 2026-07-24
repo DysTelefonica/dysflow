@@ -97,9 +97,10 @@ describe("validateToolResult", () => {
 });
 
 describe("result validation policy", () => {
-  it("is explicit and defaults production runtime to report, never enforce", () => {
-    expect(resolveResultValidationPolicy()).toBe("report");
+  it("defaults tests and development to enforce while allowing explicit production report", () => {
+    expect(resolveResultValidationPolicy()).toBe("enforce");
     expect(resolveResultValidationPolicy("off")).toBe("off");
+    expect(resolveResultValidationPolicy("report")).toBe("report");
     expect(resolveResultValidationPolicy("enforce")).toBe("enforce");
   });
 
@@ -111,9 +112,9 @@ describe("result validation policy", () => {
       projectId: undefined,
       allowWrites: false,
     };
-    expect(getCapabilitiesAll(common).resultValidationPolicy).toBe("report");
+    expect(getCapabilitiesAll(common).resultValidationPolicy).toBe("enforce");
     expect(
-      getCapabilitiesAll({ ...common, resultValidationPolicy: "enforce" }).resultValidationPolicy,
-    ).toBe("enforce");
+      getCapabilitiesAll({ ...common, resultValidationPolicy: "report" }).resultValidationPolicy,
+    ).toBe("report");
   });
 });
