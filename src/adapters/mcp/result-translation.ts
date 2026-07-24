@@ -22,6 +22,7 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
 import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
+import type { AnyExecutableResultContract } from "./contracts/result-contract.js";
 import type { ExplainObject } from "./explain-builder.js";
 import { relatedIssueNumbersForCode } from "./explain-builder.js";
 import type { JsonObjectSchema } from "./schemas.js";
@@ -176,6 +177,8 @@ export type DysflowMcpTool = {
    * future pending/stub tool would use, derived from the parity registry (#433).
    */
   hidden?: boolean;
+  /** Executable output contract. Optional only during the staged migration. */
+  resultContract?: AnyExecutableResultContract;
   handler(input: unknown, context?: McpToolContext): Promise<McpToolResult>;
 };
 
