@@ -38,11 +38,8 @@ describe("get_capabilities projectConfig", () => {
     }
   });
 
-  // ADD-873-5 — when the accessPath resolves into a real sibling worktree,
-  // get_capabilities surfaces `projectConfig.owningWorktree` with the
-  // "sibling:<abs>" prefix so consumers can read it without a second
-  // resolve_project round-trip.
-  it("surfaces owningWorktree with sibling prefix when the accessPath lives in a sibling worktree (#873)", async () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("surfaces a blocking error for an inherited absolute sibling frontend (#873 → #1092)", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "dysflow-caps-cwd-"));
     const other = mkdtempSync(join(tmpdir(), "dysflow-caps-sib-"));
     writeFileSync(join(cwd, ".git"), "gitdir: fixture");
@@ -69,9 +66,9 @@ describe("get_capabilities projectConfig", () => {
         projectConfigResolver: () => diagnoseProjectConfig(cwd),
       });
       const result = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
-      expect(result.projectConfig).toMatchObject({ status: "valid", writeReady: true });
-      expect(result.projectConfig.owningWorktree).toMatch(/^sibling:/);
-      expect(result.writeClassToolsPermitted).toContain("import_modules");
+      expect(result.projectConfig).toMatchObject({ status: "path-mismatch", writeReady: false });
+      expect(result.projectConfig.diagnostics[0]?.code).toBe("FRONTEND_PATH_NOT_BASENAME");
+      expect(result.projectConfig.writeReady).toBe(false);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       rmSync(other, { recursive: true, force: true });

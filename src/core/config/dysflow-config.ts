@@ -131,6 +131,7 @@ export type DysflowProjectConfig = {
   allowedProcedures?: string[];
   capabilities?: DysflowProjectCapabilities;
   accessPath?: string;
+  frontendFile?: string;
   backendPath?: string;
   destinationRoot?: string;
   projectRoot?: string;
@@ -157,6 +158,7 @@ export type DysflowConfig = {
   allowWrites: boolean;
   allowedProcedures?: readonly string[];
   accessDbPath: string;
+  frontendFile?: string;
   backendPath?: string;
   destinationRoot?: string;
   projectRoot?: string;
@@ -355,8 +357,16 @@ export function discoverWorktreeProjectConfigs(
   for (const candidate of candidateDirs) {
     const info = findRepoProjectConfigPath(candidate, fileSystem);
     if (info.found === "standard" || info.found === "compat") {
+      // `info.path` arrives with platform-native separators (e.g. `\` on
+      // Windows). `DEFAULT_PROJECT_CONFIG_PATH` is authored with `/`, so a
+      // raw `endsWith` fails on Windows and the resolver would treat every
+      // `.dysflow/project.json` as if it lived at the worktree root, losing
+      // one `dirname` and returning the `.dysflow/` folder instead of the
+      // worktree that owns it. Normalize before comparing so the resolver
+      // strips one directory when the path matches the canonical config.
+      const infoPathPosix = info.path.replaceAll("\\", "/");
       const candidateConfigDir = dirname(
-        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+        infoPathPosix.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
       );
       if (seenRoots.has(candidateConfigDir)) continue;
       seenRoots.add(candidateConfigDir);
@@ -365,8 +375,12 @@ export function discoverWorktreeProjectConfigs(
         const raw = fileSystem.readJsonSync<DysflowProjectConfig>(info.path);
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
           const id = typeof raw.id === "string" && raw.id ? raw.id : null;
-          const projRoot = resolveProjectRoot(raw, candidateConfigDir, undefined);
-          const accPath = resolveProjectPath(raw.accessPath, projRoot) ?? null;
+          const projRoot = candidateConfigDir;
+          const frontendFile = resolveConfiguredFrontendFilename(raw);
+          const accPath =
+            frontendFile.ok && frontendFile.value !== undefined
+              ? resolve(projRoot, frontendFile.value)
+              : null;
           const destRoot = resolveProjectPath(raw.destinationRoot ?? "src", projRoot) ?? projRoot;
           const isActive =
             (activeProjectId !== undefined && activeProjectId !== null && id === activeProjectId) ||
@@ -442,8 +456,13 @@ export async function discoverWorktreeProjectConfigsAsync(
   for (const candidate of candidateDirs) {
     const info = await findRepoProjectConfigPathAsync(candidate, fileSystem);
     if (info.found === "standard" || info.found === "compat") {
+      // See the sync sibling above — Windows-native `\` separators defeat
+      // `endsWith(DEFAULT_PROJECT_CONFIG_PATH)` because the constant is
+      // authored with `/`. Normalize before comparing so `dirname` strips
+      // one directory and returns the worktree that owns the config.
+      const infoPathPosix = info.path.replaceAll("\\", "/");
       const candidateConfigDir = dirname(
-        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+        infoPathPosix.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
       );
       if (seenRoots.has(candidateConfigDir)) continue;
       seenRoots.add(candidateConfigDir);
@@ -452,8 +471,12 @@ export async function discoverWorktreeProjectConfigsAsync(
         const raw = await fileSystem.readJsonAsync<DysflowProjectConfig>(info.path);
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
           const id = typeof raw.id === "string" && raw.id ? raw.id : null;
-          const projRoot = resolveProjectRoot(raw, candidateConfigDir, undefined);
-          const accPath = resolveProjectPath(raw.accessPath, projRoot) ?? null;
+          const projRoot = candidateConfigDir;
+          const frontendFile = resolveConfiguredFrontendFilename(raw);
+          const accPath =
+            frontendFile.ok && frontendFile.value !== undefined
+              ? resolve(projRoot, frontendFile.value)
+              : null;
           const destRoot = resolveProjectPath(raw.destinationRoot ?? "src", projRoot) ?? projRoot;
           const isActive =
             (activeProjectId !== undefined && activeProjectId !== null && id === activeProjectId) ||
@@ -491,6 +514,21 @@ export function loadDysflowConfigWith(
   const requestedProjectId = stringValue(input.projectId);
   const explicitAccessDbPath = stringValue(input.accessDbPath);
 
+  if (requestedProjectId !== undefined) {
+    const duplicateMatches = discoverWorktreeProjectConfigs(cwd, fileSystem).filter(
+      (project) => project.id === requestedProjectId,
+    );
+    if (duplicateMatches.length > 1) {
+      return failureResult(
+        createDysflowError(
+          "PROJECT_ID_COLLISION",
+          `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${duplicateMatches.map((project) => project.configPath).join(", ")}.`,
+          { retryable: false },
+        ),
+      );
+    }
+  }
+
   let targetCwd = cwd;
   const cwdConfig = findRepoProjectConfigPath(cwd, fileSystem);
   let matchedInCwd = false;
@@ -521,7 +559,17 @@ export function loadDysflowConfigWith(
       }
     } else if (requestedProjectId !== undefined) {
       const discovered = discoverWorktreeProjectConfigs(cwd, fileSystem);
-      const match = discovered.find((p) => p.id === requestedProjectId);
+      const matches = discovered.filter((p) => p.id === requestedProjectId);
+      if (matches.length > 1) {
+        return failureResult(
+          createDysflowError(
+            "PROJECT_ID_COLLISION",
+            `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${matches.map((p) => p.configPath).join(", ")}.`,
+            { retryable: false },
+          ),
+        );
+      }
+      const match = matches[0];
       if (match) {
         targetCwd = match.projectRoot;
       }
@@ -534,7 +582,7 @@ export function loadDysflowConfigWith(
   const result = loadDysflowConfigShared(input, repoConfig, (path) =>
     loadProjectConfigFromPath(
       path,
-      input,
+      { ...input, fileSystem } as DysflowConfigInput,
       env,
       targetCwd,
       "repo-config",
@@ -570,6 +618,21 @@ export async function loadDysflowConfigAsyncWith(
   const requestedProjectId = stringValue(input.projectId);
   const explicitAccessDbPath = stringValue(input.accessDbPath);
 
+  if (requestedProjectId !== undefined) {
+    const duplicateMatches = (await discoverWorktreeProjectConfigsAsync(cwd, fileSystem)).filter(
+      (project) => project.id === requestedProjectId,
+    );
+    if (duplicateMatches.length > 1) {
+      return failureResult(
+        createDysflowError(
+          "PROJECT_ID_COLLISION",
+          `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${duplicateMatches.map((project) => project.configPath).join(", ")}.`,
+          { retryable: false },
+        ),
+      );
+    }
+  }
+
   let targetCwd = cwd;
   const cwdConfig = await findRepoProjectConfigPathAsync(cwd, fileSystem);
   let matchedInCwd = false;
@@ -600,7 +663,17 @@ export async function loadDysflowConfigAsyncWith(
       }
     } else if (requestedProjectId !== undefined) {
       const discovered = await discoverWorktreeProjectConfigsAsync(cwd, fileSystem);
-      const match = discovered.find((p) => p.id === requestedProjectId);
+      const matches = discovered.filter((p) => p.id === requestedProjectId);
+      if (matches.length > 1) {
+        return failureResult(
+          createDysflowError(
+            "PROJECT_ID_COLLISION",
+            `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${matches.map((p) => p.configPath).join(", ")}.`,
+            { retryable: false },
+          ),
+        );
+      }
+      const match = matches[0];
       if (match) {
         targetCwd = match.projectRoot;
       }
@@ -613,7 +686,7 @@ export async function loadDysflowConfigAsyncWith(
   const result = await loadDysflowConfigShared(input, repoConfig, (path) =>
     loadProjectConfigFromPathAsync(
       path,
-      input,
+      { ...input, fileSystem } as DysflowConfigInput,
       env,
       targetCwd,
       "repo-config",
@@ -722,7 +795,11 @@ function buildProjectConfig(
 ): OperationResult<DysflowConfig> {
   const { resolvedPath, configSource, projectIdOverride, input, env } = opts;
   const configDir = dirname(resolvedPath);
-  const projectRoot = resolveProjectRoot(raw, configDir, stringValue(input.projectRoot));
+  const configOwningRoot =
+    basename(configDir).toLowerCase() === ".dysflow" ? dirname(configDir) : configDir;
+  const projectRoot = stringValue(input.projectRoot)
+    ? resolveProjectRoot(raw, configDir, stringValue(input.projectRoot))
+    : configOwningRoot;
 
   // T18 — the top-level `allowWrites` / `allowedProcedures` aliases were
   // marked deprecated and slated for removal in v1.15.0. v1.22.0 is the
@@ -748,20 +825,51 @@ function buildProjectConfig(
   }
 
   const timeoutMs = resolveTimeout(input.timeoutMs ?? raw.timeoutMs);
-  // Explicit request paths are caller intent and must win over repo config defaults.
-  // This mirrors backendPath/destinationRoot and lets MCP callers override a stale
-  // project config by passing an absolute accessPath together with projectId.
-  // #619 — wrap empty/whitespace caller overrides in stringValue() so they normalize
-  // to undefined and fall through to the repo-config default, mirroring buildExplicitConfig.
-  const accessDbPath = resolveProjectPath(
-    stringValue(input.accessDbPath) ?? raw.accessPath,
-    projectRoot,
-  );
+  const explicitFrontend = stringValue(input.accessDbPath);
+  const configuredFrontend = resolveConfiguredFrontendFilename(raw);
+  if (!configuredFrontend.ok && explicitFrontend === undefined) {
+    return failureResult(
+      createDysflowError(
+        "FRONTEND_PATH_NOT_BASENAME",
+        `Legacy accessPath '${configuredFrontend.offending}' is not a basename. Replace it with frontendFile: '${basename(configuredFrontend.offending)}'; absolute and separator-containing frontend paths cannot authorize cross-worktree access.`,
+        { retryable: false },
+      ),
+    );
+  }
+  let frontendFile = configuredFrontend.ok ? configuredFrontend.value : undefined;
+  if (explicitFrontend === undefined && frontendFile === undefined) {
+    const candidates = listRootFrontendCandidates(projectRoot, opts.input, resolvedPath);
+    if (candidates.length === 0) {
+      return failureResult(
+        createDysflowError(
+          "FRONTEND_TARGET_MISSING",
+          `No eligible root frontend exists for cwd '${projectRoot}' and config '${resolvedPath}'. Candidates: [].`,
+          { retryable: false },
+        ),
+      );
+    }
+    if (candidates.length > 1) {
+      return failureResult(
+        createDysflowError(
+          "FRONTEND_TARGET_AMBIGUOUS",
+          `Multiple eligible root frontends exist for cwd '${projectRoot}' and config '${resolvedPath}': ${candidates.join(", ")}. Configure frontendFile explicitly.`,
+          { retryable: false },
+        ),
+      );
+    }
+    frontendFile = candidates[0];
+  }
+  const accessDbPath =
+    explicitFrontend !== undefined
+      ? resolveProjectPath(explicitFrontend, projectRoot)
+      : frontendFile === undefined
+        ? undefined
+        : resolve(projectRoot, frontendFile);
   if (accessDbPath === undefined) {
     return failureResult(
       createDysflowError(
-        "CONFIG_MISSING_ACCESS_PATH",
-        `Project config ${resolvedPath} is missing accessPath.`,
+        "FRONTEND_TARGET_MISSING",
+        `No frontend target could be resolved from ${resolvedPath}.`,
       ),
     );
   }
@@ -838,6 +946,7 @@ function buildProjectConfig(
       discoveryResult,
     ),
     accessDbPath,
+    frontendFile,
     backendPath,
     destinationRoot,
     projectRoot,
@@ -960,6 +1069,30 @@ export function loadProjectConfigCore(
     input,
     env,
   });
+}
+
+function resolveConfiguredFrontendFilename(
+  config: DysflowProjectConfig,
+): { ok: true; value: string | undefined } | { ok: false; offending: string } {
+  const frontendFile = stringValue(config.frontendFile);
+  const legacyAccessPath = stringValue(config.accessPath);
+  const value = frontendFile ?? legacyAccessPath;
+  if (value === undefined) return { ok: true, value: undefined };
+  if (basename(value) !== value || isAbsolutePath(value) || value === "." || value === "..") {
+    return { ok: false, offending: value };
+  }
+  return { ok: true, value };
+}
+
+function listRootFrontendCandidates(
+  projectRoot: string,
+  input: DysflowConfigInput,
+  _configPath: string,
+): string[] {
+  const fileSystem = (input as DysflowConfigInput & { fileSystem?: ConfigFileSystemPort })
+    .fileSystem;
+  const entries = fileSystem?.readdirSync?.(projectRoot);
+  return (entries ?? []).filter((entry) => entry.toLowerCase().endsWith(".accdb")).sort();
 }
 
 function resolveProjectRoot(

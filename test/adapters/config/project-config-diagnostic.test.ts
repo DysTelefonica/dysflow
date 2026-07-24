@@ -85,7 +85,8 @@ describe("per-worktree project config contract", () => {
       "outside-project-root",
     );
   });
-  it("rejects an existing target owned by a nested worktree", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("rejects legacy accessPath values with separators before nested-worktree ownership checks", () => {
     const root = worktree();
     mkdirSync(join(root, ".dysflow"));
     mkdirSync(join(root, "src"));
@@ -96,7 +97,9 @@ describe("per-worktree project config contract", () => {
       join(root, ".dysflow", "project.json"),
       JSON.stringify({ id: "app", accessPath: "nested/app.accdb", destinationRoot: "src" }),
     );
-    expect(diagnoseProjectConfig(root).status).toBe("outside-project-root");
+    const result = diagnoseProjectConfig(root);
+    expect(result.status).toBe("path-mismatch");
+    expect(result.diagnostics[0]?.code).toBe("FRONTEND_PATH_NOT_BASENAME");
   });
   it.each([
     "databasePath",
@@ -247,7 +250,7 @@ describe("per-worktree project config contract", () => {
   });
 });
 
-describe("sibling worktree (#873)", () => {
+describe("legacy sibling worktree config migration (#873 → #1092)", () => {
   // Two tempdirs at the SAME parent, each with its own stub `.git`, so the
   // three-way AND criterion (same parent + own .git + different identity) is
   // satisfied and the accessPath's canonical realpath lands in the sibling.
@@ -257,8 +260,8 @@ describe("sibling worktree (#873)", () => {
     return r;
   };
 
-  // ADD-873-1 — valid real sibling worktree is accepted.
-  it("accepts a valid real sibling worktree as the binary's owning tree", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("rejects an inherited absolute sibling frontend instead of authorizing it", () => {
     const cwd = siblingWorktree("dysflow-cwd-sib-");
     const other = siblingWorktree("dysflow-sibling-");
     mkdirSync(join(cwd, ".dysflow"));
@@ -275,15 +278,16 @@ describe("sibling worktree (#873)", () => {
     );
     try {
       const result = diagnoseProjectConfig(cwd, { projectId: "expedientes" });
-      expect(result).toMatchObject({ status: "valid", writeReady: true });
-      expect(result.owningWorktree).toMatch(/^sibling:/);
+      expect(result).toMatchObject({ status: "path-mismatch", writeReady: false });
+      expect(result.diagnostics[0]?.code).toBe("INHERITED_WORKTREE_MISMATCH");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       rmSync(other, { recursive: true, force: true });
     }
   });
 
-  it("accepts destinationRoot inside the sibling that owns the configured binary", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("rejects sibling-owned destinationRoot when inherited through an absolute frontend", () => {
     const cwd = siblingWorktree("dysflow-cwd-dest-sib-");
     const sibling = siblingWorktree("dysflow-dest-sibling-");
     mkdirSync(join(cwd, ".dysflow"));
@@ -299,18 +303,17 @@ describe("sibling worktree (#873)", () => {
       }),
     );
     try {
-      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
-        status: "valid",
-        writeReady: true,
-        owningWorktree: `sibling:${sibling.replaceAll("\\", "/")}`,
-      });
+      const result = diagnoseProjectConfig(cwd, { projectId: "expedientes" });
+      expect(result).toMatchObject({ status: "path-mismatch", writeReady: false });
+      expect(result.diagnostics[0]?.code).toBe("INHERITED_WORKTREE_MISMATCH");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       rmSync(sibling, { recursive: true, force: true });
     }
   });
 
-  it("rejects destinationRoot outside the sibling that owns the configured binary", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("rejects foreign destinationRoot after rejecting inherited absolute frontend", () => {
     const cwd = siblingWorktree("dysflow-cwd-dest-foreign-");
     const sibling = siblingWorktree("dysflow-dest-owner-");
     const foreign = mkdtempSync(join(tmpdir(), "dysflow-dest-foreign-"));
@@ -327,10 +330,12 @@ describe("sibling worktree (#873)", () => {
       }),
     );
     try {
-      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
-        status: "outside-project-root",
+      const result = diagnoseProjectConfig(cwd, { projectId: "expedientes" });
+      expect(result).toMatchObject({
+        status: "path-mismatch",
         writeReady: false,
       });
+      expect(result.diagnostics[0]?.code).toBe("INHERITED_WORKTREE_MISMATCH");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       rmSync(sibling, { recursive: true, force: true });
@@ -338,40 +343,45 @@ describe("sibling worktree (#873)", () => {
     }
   });
 
-  // ADD-873-2 — call-level overrides targeting the sibling are accepted.
-  it("accepts call-level overrides that target the sibling worktree", () => {
+  // migrated to #1092 contract on 2026-07-24
+  it("rejects a sibling accessPath when diagnostic targeting lacks an explicit matching projectId", () => {
     const cwd = siblingWorktree("dysflow-cwd-sib2-");
     const other = siblingWorktree("dysflow-sibling2-");
     mkdirSync(join(cwd, ".dysflow"));
     mkdirSync(join(cwd, "src"));
+    mkdirSync(join(other, ".dysflow"));
+    mkdirSync(join(other, "src"));
     const access = join(other, "Expedientes.accdb");
     writeFileSync(access, "");
+    writeFileSync(join(cwd, "Local.accdb"), "");
     writeFileSync(
       join(cwd, ".dysflow", "project.json"),
+      JSON.stringify({ id: "cwd", frontendFile: "Local.accdb", destinationRoot: "src" }),
+    );
+    writeFileSync(
+      join(other, ".dysflow", "project.json"),
       JSON.stringify({
         id: "expedientes",
-        accessPath: access,
+        frontendFile: "Expedientes.accdb",
         destinationRoot: "src",
       }),
     );
     try {
-      expect(
-        diagnoseProjectConfig(cwd, {
-          projectId: "expedientes",
-          accessPath: access,
-          destinationRoot: join(cwd, "src"),
-        }),
-      ).toMatchObject({ status: "valid", writeReady: true });
+      const result = diagnoseProjectConfig(cwd, {
+        accessPath: access,
+        destinationRoot: join(other, "src"),
+      });
+      expect(result).toMatchObject({ status: "outside-project-root", writeReady: false });
+      expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
       rmSync(other, { recursive: true, force: true });
     }
   });
 
-  // ADD-873-3 — junction (Windows reparse point) stays REJECTED even though
-  // the sibling is real. Platform-gated; on Linux CI this is a no-op.
+  // migrated to #1092 contract on 2026-07-24
   const itJunction = process.platform === "win32" ? it : it.skip;
-  itJunction("rejects a junction inside cwd that points at the sibling", () => {
+  itJunction("rejects a junction target even when supplied explicitly", () => {
     const cwd = siblingWorktree("dysflow-cwd-junc-");
     const other = siblingWorktree("dysflow-sibling-junc-");
     mkdirSync(join(cwd, ".dysflow"));
@@ -386,13 +396,11 @@ describe("sibling worktree (#873)", () => {
       writeFileSync(access, "");
       writeFileSync(
         join(cwd, ".dysflow", "project.json"),
-        JSON.stringify({
-          id: "expedientes",
-          accessPath: access,
-          destinationRoot: "src",
-        }),
+        JSON.stringify({ id: "cwd", frontendFile: "Local.accdb", destinationRoot: "src" }),
       );
-      expect(diagnoseProjectConfig(cwd, { projectId: "expedientes" })).toMatchObject({
+      writeFileSync(join(cwd, "Local.accdb"), "");
+      const result = diagnoseProjectConfig(cwd, { accessPath: access });
+      expect(result).toMatchObject({
         status: "outside-project-root",
         writeReady: false,
       });

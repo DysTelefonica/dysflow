@@ -156,7 +156,8 @@ describe("handleSetupCommand — successful display", () => {
         env: {},
       });
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain("Project config is not write-ready");
+      // migrated to #1092 contract on 2026-07-24
+      expect(result.stderr).toContain("Frontend must be at the worktree root");
     } finally {
       workspace.cleanup();
       rmSync(external, { recursive: true, force: true });
