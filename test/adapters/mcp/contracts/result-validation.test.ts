@@ -97,7 +97,7 @@ describe("validateToolResult", () => {
 });
 
 describe("result validation policy", () => {
-  it("defaults tests and development to enforce while allowing explicit production report", () => {
+  it("defaults every runtime to enforce while retaining explicit diagnostic modes", () => {
     expect(resolveResultValidationPolicy()).toBe("enforce");
     expect(resolveResultValidationPolicy("off")).toBe("off");
     expect(resolveResultValidationPolicy("report")).toBe("report");

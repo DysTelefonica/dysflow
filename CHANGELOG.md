@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Result-contract release validation
+
+- The stdio MCP runtime now enforces executable result contracts before serialization. Invalid handler payloads fail closed with the redacted `RESULT_CONTRACT_VIOLATION` envelope; valid payloads and compatibility aliases preserve their existing public shapes.
+- The complete real MCP battery obtains each representative contract through `describe_tool` and validates actual bootstrap/recovery, SQL, VBA sync, forms, alias, plan/apply, file-backed, and typed-error payloads.
+- Consumer guidance now treats `get_capabilities.resultValidationPolicy` and `describe_tool.resultContract` as the runtime source of truth. No consumer-side result registry is required.
+
+### Verification
+
+- Unit, build, lint, integration, Pester, and `pnpm test:e2e:mcp:release` are release gates. Runtime version, advertised/migrated tool count, validation policy, consumer-skills commit, pointer hashes, and the generated MCP E2E report must be recorded before publication.
+- Resolved the three previously documented `write-tool-preflight` drift cases for `export_modules`, `import_modules`, and `sync_binary`; recovery guidance consistently requires an existing `destinationRoot` and explicitly covers the `git rm -r` footgun.
+
+> SemVer and publication are intentionally deferred until all post-merge release gates and consumer rollout evidence are complete.
+
 ## [v2.23.1] - 2026-07-24
 
 ### Closed issues
