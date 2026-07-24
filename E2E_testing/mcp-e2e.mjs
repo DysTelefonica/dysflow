@@ -25,6 +25,7 @@ import {
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
   ISSUE_713_REQUIRED_TOOLS,
 } from "./_helpers/advertised-tool-count.mjs";
+import { validateMcpResultAgainstDescription } from "./_helpers/result-contract-validator.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -159,6 +160,7 @@ const runIdentity = await hashRunIdentity([
   join(scriptDir, "_helpers", "mcp-e2e-sandbox.mjs"),
   join(scriptDir, "_helpers", "mcp-e2e-record.mjs"),
   join(scriptDir, "_helpers", "mcp-harness.mjs"),
+  join(scriptDir, "_helpers", "result-contract-validator.mjs"),
   sandboxPlan.source.accessPath,
   sandboxPlan.source.backendPath,
   sandboxPlan.source.destinationRoot,
@@ -284,6 +286,32 @@ async function record(area, tool, args = {}, options = {}) {
   }
 }
 
+const resultContractCoverage = new Set();
+
+async function recordContract(area, tool, args = {}, options = {}, coverage = []) {
+  const descriptionResult = await callMcp("tools/call", {
+    name: "describe_tool",
+    arguments: { name: tool },
+  });
+  const executionResult = await record(area, tool, args, options);
+  validateMcpResultAgainstDescription({
+    tool,
+    descriptionResult,
+    executionResult,
+    expectError: options.expected === "error",
+  });
+  for (const category of coverage) resultContractCoverage.add(category);
+  addFailFastResult({
+    area: "result-contract",
+    tool,
+    pass: true,
+    expected: "actual MCP payload matches describe_tool.resultContract",
+    ms: 0,
+    summary: coverage.join(","),
+  });
+  return executionResult;
+}
+
 let abortedDueToFailure = false;
 try {
   await runBattery();
@@ -325,15 +353,15 @@ addFailFastResult({
     : `missing=${missingIssue713Tools.join(",")}`,
 });
 
-await record("diagnostics", "doctor", { projectId, includeEnvironment: true });
-await record("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath });
-await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" });
+await recordContract("diagnostics", "doctor", { projectId, includeEnvironment: true }, {}, ["bootstrap", "success"]);
+await recordContract("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath }, {}, ["sql"]);
+await recordContract("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" }, ["alias", "typed-error"]);
 // #786 regression — inline execution must run a snippet and return its `result`.
 // (record() asserts the transport did not error; the deep inner-ok + returnValue
 // assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
 await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"', timeoutMs: 120000 }, { timeoutMs: 120000 });
 await record("operations", "list_access_operations", {});
-await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
+await recordContract("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" }, ["recovery"]);
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
 // Same harness shape as every other tool — record() runs the call through the suite-owned
@@ -363,12 +391,14 @@ await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchM
     try { parsed = JSON.parse(cross.text); } catch { return { pass: false, summary: "non-JSON response" }; }
     const snapshot = parsed?.snapshot ?? parsed;
     if (!snapshot || typeof snapshot.toolsVisible !== "number") return { pass: false, summary: "missing snapshot.toolsVisible" };
-    const matches = snapshot.toolsVisible === advertised.length;
+    const matches =
+      snapshot.toolsVisible === advertised.length &&
+      snapshot.resultValidationPolicy === "enforce";
     return {
       pass: matches,
       summary: matches
-        ? `toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length} writesProject.allowWrites=${snapshot.writesProject?.allowWrites}`
-        : `drift: snapshot.toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length}`,
+        ? `toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length} resultValidationPolicy=enforce writesProject.allowWrites=${snapshot.writesProject?.allowWrites}`
+        : `drift: toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length} resultValidationPolicy=${snapshot.resultValidationPolicy}`,
     };
   })();
   addFailFastResult({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
@@ -419,7 +449,7 @@ await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableNa
 
 await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });
-await record("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName] });
+await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName] }, {}, ["vba-sync", "file-backed", "plan"]);
 await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, diff: false });
 // export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
@@ -567,7 +597,7 @@ await record("vba-sync", "fix_encoding", { ...ctx, location: "Src" });
 await record("vba-sync", "generate_erd", { ...ctx, backendPath, erdPath: join(tempRoot, "ERD"), timeoutMs: 120000 });
 
 await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
-await record("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", dryRun: true, replace: true });
+await recordContract("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", dryRun: true, replace: true }, {}, ["forms", "plan"]);
 await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
 await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
 const missingFormUiTools = [
@@ -754,7 +784,7 @@ console.log(`${generatePass ? "PASS" : "FAIL"}\tgenerate_form_design_plan:shape\
 // names in the source file (CPV/ComandoRegistrar/Etiqueta232/Etiqueta240/
 // lblTitulo). The plan is deep-cloned via JSON to keep designPlan immutable
 // for the copy_form_ui_pattern assertion below.
-const applyPlanResult = await record("form-ui", "apply_form_design_plan", {
+const applyPlanResult = await recordContract("form-ui", "apply_form_design_plan", {
   ...ctx,
   sourcePath: join(destinationRoot, "forms", "Form_FormCPV.form.txt"),
   plan: JSON.parse(JSON.stringify(designPlan)
@@ -764,7 +794,7 @@ const applyPlanResult = await record("form-ui", "apply_form_design_plan", {
     .replaceAll('"txtSet"', '"Etiqueta240"')
     .replaceAll('"txtDelete"', '"lblTitulo"')),
   apply: true,
-});
+}, {}, ["apply"]);
 const applyPlan = safeJsonParse(applyPlanResult.text);
 const appliedFormText = await readFile(join(destinationRoot, "forms", "Form_FormCPV.form.txt"), "utf8");
 const applyPass = Boolean(
@@ -1114,6 +1144,33 @@ await record("vba-manifest", "validate_manifest", {
   });
   console.log(`${pathScrubbedPass ? "PASS" : "FAIL"}\tinspect_form:miss-remediation-no-path-scrub\t0ms\t${rows.at(-1).summary}`);
 }
+const requiredContractCoverage = [
+  "bootstrap",
+  "recovery",
+  "sql",
+  "vba-sync",
+  "forms",
+  "alias",
+  "typed-error",
+  "success",
+  "plan",
+  "apply",
+  "file-backed",
+];
+const missingContractCoverage = requiredContractCoverage.filter(
+  (category) => !resultContractCoverage.has(category),
+);
+addFailFastResult({
+  area: "result-contract",
+  tool: "coverage-matrix",
+  pass: missingContractCoverage.length === 0,
+  expected: requiredContractCoverage.join(","),
+  ms: 0,
+  summary:
+    missingContractCoverage.length === 0
+      ? "all representative result-contract families validated through describe_tool"
+      : `missing=${missingContractCoverage.join(",")}`,
+});
 }
 
 // isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,

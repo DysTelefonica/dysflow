@@ -166,11 +166,11 @@ export async function startMcpStdioAdapter(
     // `humanCompilePending` flag from the process-local state cache.
     accessDbPath: startupConfig?.accessDbPath,
     writeExecutionPolicy: resolveStartupWriteExecutionPolicy(startupConfig),
-    resultValidationPolicy: "report",
+    resultValidationPolicy: "enforce",
   });
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
-  await startWithSdkServer(tools, undefined, { resultValidationPolicy: "report" });
+  await startWithSdkServer(tools, undefined, { resultValidationPolicy: "enforce" });
 }
 
 /**

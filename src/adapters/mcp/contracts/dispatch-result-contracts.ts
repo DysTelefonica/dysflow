@@ -29,6 +29,84 @@ const RUN_VBA_CONTRACT = defineResultContract({
   ]),
 });
 
+const VBA_INLINE_EXECUTION_CONTRACT = defineResultContract({
+  description: "Inline VBA execution result returned by the temporary run_vba procedure.",
+  schema: z.object({ returnValue: z.json() }).loose(),
+});
+
+const IMPORT_QUERIES_CONTRACT = defineResultContract({
+  description: "Query-definition import plan/apply result.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      dryRun: z.boolean(),
+      imported: z.number().int().nonnegative(),
+      queries: z.array(z.object({ name: z.string(), sql: z.string() }).loose()),
+    })
+    .loose(),
+});
+
+const COMPACT_REPAIR_CONTRACT = defineResultContract({
+  description: "Compact/repair plan or applied database replacement.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      dryRun: z.boolean(),
+      sourcePath: z.string(),
+      targetPath: z.string(),
+      backupFirst: z.boolean().optional(),
+      wouldReplaceSource: z.boolean().optional(),
+      backupPath: z.string().nullable().optional(),
+      compacted: z.boolean().optional(),
+    })
+    .loose(),
+});
+
+const RELINK_TABLES_CONTRACT = defineResultContract({
+  description: "Existing linked-table refresh result.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      backendPath: z.string(),
+      linkedTables: z.array(z.object({ name: z.string(), backendPath: z.string() }).loose()),
+    })
+    .loose(),
+});
+
+const RELINK_DIRECTORY_CONTRACT = defineResultContract({
+  description: "Directory-wide linked-table relink plan/apply report.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      relinkDirectory: z
+        .object({
+          mode: z.enum(["dry-run", "apply"]),
+          root: z.string(),
+          filesScanned: z.number().int().nonnegative(),
+          linkedTablesFound: z.number().int().nonnegative(),
+          plannedRelinks: z.number().int().nonnegative(),
+          appliedRelinks: z.number().int().nonnegative(),
+          fileResults: z.array(z.unknown()),
+        })
+        .loose(),
+    })
+    .loose(),
+});
+
+const APPLY_FORM_DESIGN_PLAN_CONTRACT = defineResultContract({
+  description: "Form design-plan preview or applied filesystem/import-gate result.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      mode: z.enum(["dry-run", "apply"]),
+      formName: z.string(),
+      operationsApplied: z.array(z.unknown()),
+      filesystemApplied: z.boolean(),
+      importGate: z.enum(["not-run", "passed", "failed"]),
+    })
+    .loose(),
+});
+
 const CONTRACTS = {
   "query-read": defineResultContract({
     description: "Read-only SQL/query payload.",
@@ -37,9 +115,12 @@ const CONTRACTS = {
   "query-write": defineResultContract({
     description: "SQL/query maintenance result discriminated by plan or apply.",
     modes: ["plan", "apply"],
-    schema: z.discriminatedUnion("mode", [
-      z.object({ mode: z.literal("plan"), affectedCount: z.number().optional() }).loose(),
-      z.object({ mode: z.literal("apply"), affectedCount: z.number().optional() }).loose(),
+    schema: z.union([
+      z.discriminatedUnion("mode", [
+        z.object({ mode: z.literal("plan"), affectedCount: z.number().optional() }).loose(),
+        z.object({ mode: z.literal("apply"), affectedCount: z.number().optional() }).loose(),
+      ]),
+      z.object({ dryRun: z.boolean() }).loose(),
     ]),
   }),
   "vba-read": defineResultContract({
@@ -50,18 +131,31 @@ const CONTRACTS = {
   "vba-write": defineResultContract({
     description: "VBA mutation result discriminated by plan or apply.",
     modes: ["plan", "apply"],
-    schema: z.discriminatedUnion("mode", [
-      z.object({ mode: z.literal("plan"), applied: stringArray.optional() }).loose(),
-      z.object({ mode: z.literal("apply"), applied: stringArray.optional() }).loose(),
+    schema: z.union([
+      z.discriminatedUnion("mode", [
+        z.object({ mode: z.literal("plan"), applied: stringArray.optional() }).loose(),
+        z.object({ mode: z.literal("apply"), applied: stringArray.optional() }).loose(),
+      ]),
+      z.object({ ok: z.boolean() }).loose(),
+      z.object({ dryRun: z.boolean() }).loose(),
     ]),
   }),
   "vba-export": defineResultContract({
     description: "VBA export result with executable plan/apply variants.",
     modes: ["plan", "apply"],
     outputModes: ["summary", "file", "full"],
-    schema: z.discriminatedUnion("mode", [
-      z.object({ mode: z.literal("plan"), exportedPaths: stringArray }).loose(),
-      z.object({ mode: z.literal("apply"), exportedPaths: stringArray }).loose(),
+    schema: z.union([
+      z.discriminatedUnion("mode", [
+        z.object({ mode: z.literal("plan"), exportedPaths: stringArray }).loose(),
+        z.object({ mode: z.literal("apply"), exportedPaths: stringArray }).loose(),
+      ]),
+      z
+        .object({
+          ok: z.boolean(),
+          exported: stringArray.optional(),
+          binaryMutated: z.boolean().optional(),
+        })
+        .loose(),
     ]),
   }),
   "vba-test": defineResultContract({
@@ -81,19 +175,22 @@ const CONTRACTS = {
     outputModes: ["summary", "full"],
     schema: z
       .object({
-        driftDetected: z.boolean(),
-        summary: z
-          .object({
-            total: z.number(),
-            inSync: z.number(),
-            sourceOnly: z.number(),
-            binaryOnly: z.number(),
-            diverged: z.number(),
-          })
-          .loose(),
+        operation: z.literal("verify_code"),
+        ok: z.boolean(),
+        dryRun: z.literal(true),
+        willModifyAccess: z.literal(false),
+        sourceRoot: z.string(),
+        matched: z.array(z.unknown()),
+        different: z.array(z.unknown()),
+        missingInSource: z.array(z.unknown()),
+        missingInBinary: z.array(z.unknown()),
+        summary: passthroughObject.optional(),
+        hasFunctionalDifferences: z.boolean().optional(),
+        actionableOk: z.boolean().optional(),
+        recommendedAction: z.string().optional(),
         bulkImportable: stringArray.optional(),
         bulkExportable: stringArray.optional(),
-        conflicts: stringArray.optional(),
+        vbeCacheNote: z.string(),
       })
       .loose(),
   }),
@@ -130,6 +227,12 @@ export function deriveDispatchResultContract(
 export function resultContractForDispatchTool(
   name: GeneratedDispatchToolName,
 ): AnyExecutableResultContract {
+  if (name === "vba_inline_execution") return VBA_INLINE_EXECUTION_CONTRACT;
+  if (name === "import_queries") return IMPORT_QUERIES_CONTRACT;
+  if (name === "compact_repair") return COMPACT_REPAIR_CONTRACT;
+  if (name === "relink_tables" || name === "localize_backend_links") return RELINK_TABLES_CONTRACT;
+  if (name === "relink_directory") return RELINK_DIRECTORY_CONTRACT;
+  if (name === "apply_form_design_plan") return APPLY_FORM_DESIGN_PLAN_CONTRACT;
   return deriveDispatchResultContract(MCP_TOOL_ROUTES[name].resultFamily);
 }
 
