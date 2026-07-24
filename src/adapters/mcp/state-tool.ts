@@ -1,3 +1,4 @@
+import { stateResultContract } from "./contracts/bootstrap-result-contracts.js";
 // `state` — Issue #978 runtime operational state.
 //
 // Read-only MCP tool that surfaces the runtime operational state of a
@@ -331,6 +332,7 @@ export function createStateTool(opts: BuildStateOptions): DysflowMcpTool {
   const registry = resolveAccessOperationRegistry(opts.registry);
   return {
     name: "state",
+    resultContract: stateResultContract,
     description:
       "Return the runtime operational state of a dysflow project: `{ operations, markers, locks, counters }`. `operations` lists every record from the access operation registry (cross-ref `list_access_operations`) normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`. `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock. `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices. `locks` is reserved for a future lock-registry split (#967 follow-up); today it is empty. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `resolve_project` (config), `diagnose` (health), `logs` (event timeline). " +
       MCP_TOOL_CONTRACTS.state.summary,
