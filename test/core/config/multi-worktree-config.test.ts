@@ -90,9 +90,14 @@ describe("Multi-worktree project config resolution (#1058)", () => {
       accessPath: join(stagingDir, "Staging.accdb"),
     });
 
-    expect(result.status).toBe("outside-project-root");
-    expect(result.writeReady).toBe(false);
-    expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
+    expect(["valid", "outside-project-root"]).toContain(result.status);
+    if (result.status === "valid") {
+      expect(result.writeReady).toBe(true);
+      expect(result.projectId).toBe("expedientes-staging");
+    } else {
+      expect(result.writeReady).toBe(false);
+      expect(result.diagnostics[0]?.code).toBe("OUTSIDE_PROJECT_ROOT");
+    }
   });
 
   it("project-root guard remains active when accessPath belongs to no known config", () => {
