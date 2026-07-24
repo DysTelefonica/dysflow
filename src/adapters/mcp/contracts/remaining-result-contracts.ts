@@ -30,6 +30,23 @@ const diagnosticSchema = z
   })
   .passthrough();
 
+export const queryExecuteResultContract = defineResultContract({
+  description: "Access SQL read rows or write outcome.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      rows: z.array(z.record(z.string(), z.unknown())).optional(),
+      affectedRows: z.number().int().nonnegative().optional(),
+      resolvedAccessPath: z.string().optional(),
+    })
+    .passthrough(),
+});
+
+export const doctorResultContract = defineResultContract({
+  description: "Core project and environment diagnostic checks.",
+  schema: z.object({ checks: z.array(z.unknown()) }).passthrough(),
+});
+
 export const listProceduresResultContract = defineResultContract({
   description: "VBA procedure catalog for one module.",
   schema: z.object({ module: z.string(), procedures: z.array(procedureEntrySchema) }).passthrough(),
