@@ -51,12 +51,7 @@ export function defineResultContract<TSchema extends z.ZodType>(
     unrepresentable: "throw",
   }) as Record<string, unknown>;
 
-  if (
-    introspectionSchema.type !== "object" &&
-    introspectionSchema.type !== "array" &&
-    !Array.isArray(introspectionSchema.anyOf) &&
-    !Array.isArray(introspectionSchema.oneOf)
-  ) {
+  if (!isStructuredSchema(introspectionSchema)) {
     throw new TypeError("A result contract requires a structured object payload schema.");
   }
 
@@ -118,4 +113,23 @@ export function toToolResultContract(contract: AnyExecutableResultContract): Too
 function stripSchemaDialect(schema: Record<string, unknown>): ToolDataSchemaFragment {
   const { $schema: _dialect, ...fragment } = schema;
   return fragment as ToolDataSchemaFragment;
+}
+
+function schemaVariants(
+  schema: Record<string, unknown>,
+  keyword: "anyOf" | "oneOf",
+): Record<string, unknown>[] {
+  const value = schema[keyword];
+  return Array.isArray(value)
+    ? value.filter(
+        (variant): variant is Record<string, unknown> =>
+          typeof variant === "object" && variant !== null,
+      )
+    : [];
+}
+
+function isStructuredSchema(schema: Record<string, unknown>): boolean {
+  if (schema.type === "object" || schema.type === "array") return true;
+  const variants = [...schemaVariants(schema, "anyOf"), ...schemaVariants(schema, "oneOf")];
+  return variants.length > 0 && variants.every(isStructuredSchema);
 }

@@ -44,6 +44,7 @@ import {
   buildAgentWorkflowMetadata,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
+import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
   CAPABILITIES_DISALLOW_WRITE,
@@ -2003,6 +2004,11 @@ function resultContractForTool(name: string): ToolResultContract {
   const executable =
     bootstrapRecoveryResultContracts[name as keyof typeof bootstrapRecoveryResultContracts];
   if (executable !== undefined) return toToolResultContract(executable);
+  if (Object.hasOwn(MCP_TOOL_ROUTES, name)) {
+    return toToolResultContract(
+      resultContractForDispatchTool(name as keyof typeof MCP_TOOL_ROUTES),
+    );
+  }
   const entry = TOOL_RESULT_CONTRACTS[name];
   if (entry === undefined) {
     // This branch should be unreachable thanks to
