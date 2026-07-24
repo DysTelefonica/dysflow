@@ -41,14 +41,26 @@ import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
  * (`cleanup_access_operation`, `access_force_cleanup_orphaned`), NOT in
  * `MCP_TOOL_ROUTES`.
  */
-export type McpToolRoute =
+type McpToolRouteBase =
   | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean; risk: ToolRisk }
   | { kind: "query-read"; risk: ToolRisk }
   | { kind: "query-maintenance"; queryMode: "read" | "write"; risk: ToolRisk };
 
+export type DispatchResultFamily =
+  | "query-read"
+  | "query-write"
+  | "vba-read"
+  | "vba-write"
+  | "vba-export"
+  | "vba-test"
+  | "verify-code"
+  | "sync-binary";
+
+export type McpToolRoute = McpToolRouteBase & { resultFamily: DispatchResultFamily };
+
 export type GeneratedDispatchToolName = Exclude<DysflowMcpToolName, AliasToolName>;
 
-export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = {
+const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> = {
   // VBA sync — mutatesBinary:true tools always pass the write-gate (they mutate the .accdb).
   export_modules: {
     kind: "vba-sync",
@@ -459,6 +471,33 @@ export const MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRoute> = 
   list_access_files: { kind: "query-read", risk: "read-only" },
   get_relationships: { kind: "query-read", risk: "read-only" },
 };
+
+const SPECIAL_RESULT_FAMILIES: Partial<Record<GeneratedDispatchToolName, DispatchResultFamily>> = {
+  export_modules: "vba-export",
+  export_all: "vba-export",
+  test_vba: "vba-test",
+  verify_code: "verify-code",
+  sync_binary: "sync-binary",
+};
+
+function resultFamilyForRoute(
+  name: GeneratedDispatchToolName,
+  route: McpToolRouteBase,
+): DispatchResultFamily {
+  const special = SPECIAL_RESULT_FAMILIES[name];
+  if (special !== undefined) return special;
+  if (route.kind === "query-read") return "query-read";
+  if (route.kind === "query-maintenance") {
+    return route.queryMode === "write" ? "query-write" : "query-read";
+  }
+  return route.mutatesBinary || route.mutatesFilesystem ? "vba-write" : "vba-read";
+}
+
+export const MCP_TOOL_ROUTES = Object.fromEntries(
+  (Object.entries(BASE_MCP_TOOL_ROUTES) as [GeneratedDispatchToolName, McpToolRouteBase][]).map(
+    ([name, route]) => [name, { ...route, resultFamily: resultFamilyForRoute(name, route) }],
+  ),
+) as Record<GeneratedDispatchToolName, McpToolRoute>;
 
 /**
  * Typed binding of MCP query tool names to their domain `AccessQueryRequest`

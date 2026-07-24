@@ -38,6 +38,11 @@ import {
   handleMcpCleanStaleMarkers,
   handleMcpQueryExecute,
 } from "./canonical-handlers.js";
+import {
+  cleanStaleMarkersResultContract,
+  orphanCleanupResultContract,
+} from "./contracts/bootstrap-result-contracts.js";
+import type { ResultValidationPolicy } from "./contracts/result-validation.js";
 import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
@@ -66,6 +71,14 @@ export {
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import {
+  detectDeadCodeResultContract,
+  findReferencesResultContract,
+  getProcedureResultContract,
+  lintModuleResultContract,
+  listProceduresResultContract,
+  validateManifestResultContract,
+} from "./contracts/remaining-result-contracts.js";
 import {
   invalidInput,
   projectConfigNotWriteReady,
@@ -611,6 +624,16 @@ function mergeLintReports(
  * for the modern tool identifiers advertised via tools/list.
  * Exported for contract testing and regression guards.
  */
+/** Bespoke source-analysis tools whose handlers live in this module. */
+export const MODERN_ANALYSIS_TOOL_NAMES = [
+  "list_procedures",
+  "get_procedure",
+  "find_references",
+  "detect_dead_code",
+  "validate_manifest",
+  "lint_module",
+] as const;
+
 export const MODERN_TOOL_NAMES = [
   "query_execute",
   "doctor",
@@ -621,15 +644,7 @@ export const MODERN_TOOL_NAMES = [
   "access_force_cleanup_orphaned",
   "get_capabilities",
   // issue #701 — read-only VBA procedure introspection
-  "list_procedures",
-  "get_procedure",
-  "find_references",
-  // #705 — read-only dead-code analysis over the supplied modules map.
-  "detect_dead_code",
-  // #703 — read-only VBA test manifest validation before `test_vba`.
-  "validate_manifest",
-  // #704 — read-only VBA module pre-import linting.
-  "lint_module",
+  ...MODERN_ANALYSIS_TOOL_NAMES,
   // Round-3 Item 1 — project config re-resolution companion tool
   "resolve_project",
   // Issue #971 — runtime contract discovery. Read-only catalog that
@@ -720,6 +735,7 @@ export type CreateDysflowMcpToolsOptions = {
   // layer default to `"safe-by-default"` so legacy call sites keep their
   // existing behavior.
   writeExecutionPolicy?: WriteExecutionPolicy;
+  resultValidationPolicy?: ResultValidationPolicy;
   // Issue #789 — opt-in to the historical strict (error) severity for the
   // `identifier-safety` non-ASCII check. Resolved from
   // `.dysflow/project.json` `capabilities.lint.identifierSafety.strictNonAscii`
@@ -751,6 +767,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     lintOverrides: lintRulesOverride = {},
     accessDbPath,
     writeExecutionPolicy,
+    resultValidationPolicy,
     lintIdentifierSafetyStrict = false,
     projectConfigResolver,
     documentationBundleResolver,
@@ -806,6 +823,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // `dysflow_access_operations_list` / `dysflow_access_cleanup`
       // names) are REMOVED entirely; the alias is the sole source.
       name: "access_force_cleanup_orphaned",
+      resultContract: orphanCleanupResultContract,
       description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
@@ -835,6 +853,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // and the access context is resolved directly via the resolver.
     {
       name: "clean_stale_markers",
+      resultContract: cleanStaleMarkersResultContract,
       description: `Sweep <projectRoot>/.dysflow/runtime/markers/ and either plan or apply transitions of stale \`status: "running"\` markers (and, when keepFailed is false, stale \`status: "failed"\` markers) to \`status: "abandoned"\`. Dry-run is the default; any apply call requires \`options.confirm: true\` and is write-gated (returns MCP_WRITES_DISABLED when writes are off). ${MCP_TOOL_CONTRACTS.clean_stale_markers.summary}`,
       inputSchema: CLEAN_STALE_MARKERS_SCHEMA,
       handler: async (input) =>
@@ -861,6 +880,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
       writeExecutionPolicy,
+      resultValidationPolicy,
       projectConfigResolver:
         projectConfigResolver === undefined ? undefined : () => projectConfigResolver({}),
       // Issue #940 — forward the documentation bundle resolver so the
@@ -872,6 +892,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "list_procedures",
       description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.list_procedures.summary}`,
       inputSchema: LIST_PROCEDURES_SCHEMA,
+      resultContract: listProceduresResultContract,
       handler: async (input) => {
         const validation = validateInput(input, LIST_PROCEDURES_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
@@ -914,6 +935,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "get_procedure",
       description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.get_procedure.summary}`,
       inputSchema: GET_PROCEDURE_SCHEMA,
+      resultContract: getProcedureResultContract,
       handler: async (input) => {
         const validation = validateInput(input, GET_PROCEDURE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
@@ -977,6 +999,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "find_references",
       description: `Find all references to a given symbol. Scope: module, binary, source, or all (default). Returns symbol, scope, references array, totalCount, truncated (boolean), and nextOffset (number | null). Issue #1019 — supports pagination via \`limit\` (default 500, max 1000) and \`offset\` (default 0) to avoid MCP -32001 timeouts on popular symbols. ${MCP_TOOL_CONTRACTS.find_references.summary}`,
       inputSchema: FIND_REFERENCES_SCHEMA,
+      resultContract: findReferencesResultContract,
       handler: async (input) => {
         const validation = validateInput(input, FIND_REFERENCES_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
@@ -1180,6 +1203,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "detect_dead_code",
       description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`find_references\` (#701). ${MCP_TOOL_CONTRACTS.detect_dead_code.summary}`,
       inputSchema: DETECT_DEAD_CODE_SCHEMA,
+      resultContract: detectDeadCodeResultContract,
       handler: async (input) => {
         const validation = validateInput(input, DETECT_DEAD_CODE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
@@ -1255,6 +1279,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "validate_manifest",
       description: `Validate a VBA test manifest before running test_vba. Checks manifest parseability, procedure existence in the resolved source modules, argument count/type compatibility, and tag shape. Read-only. Issue #1046 (Bug D): pass validateManifestIncludesAllowlistCheck:true to also surface allowlist drift as invalid[] entries — keeps the legacy shape untouched when the flag is absent. ${MCP_TOOL_CONTRACTS.validate_manifest.summary}`,
       inputSchema: VALIDATE_MANIFEST_SCHEMA,
+      resultContract: validateManifestResultContract,
       handler: async (input) => {
         const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);
@@ -1308,6 +1333,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       name: "lint_module",
       description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). The cross-form openargs-contract-mismatch rule (#1006) is a project-lint that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree and is dispatched when its rule id appears in the input rules list. Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
       inputSchema: LINT_MODULE_SCHEMA,
+      resultContract: lintModuleResultContract,
       handler: async (input) => {
         const validation = validateInput(input, LINT_MODULE_SCHEMA);
         if (validation !== undefined) return invalidInput(validation);

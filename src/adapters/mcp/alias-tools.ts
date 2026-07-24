@@ -8,6 +8,10 @@ import {
   handleMcpVbaExecute,
 } from "./canonical-handlers.js";
 import {
+  cleanupAccessOperationResultContract,
+  listAccessOperationsResultContract,
+} from "./contracts/bootstrap-result-contracts.js";
+import {
   handleValidatedMcpWrite,
   invalidInput,
   mcpSchemaFor,
@@ -237,12 +241,14 @@ export function buildAliasTools(
   return [
     {
       name: "list_access_operations",
+      resultContract: listAccessOperationsResultContract,
       description: TOOL_DESCRIPTIONS.list_access_operations,
       inputSchema: NO_INPUT_SCHEMA,
       handler: async () => handleMcpAccessOperationsList(services),
     },
     {
       name: "cleanup_access_operation",
+      resultContract: cleanupAccessOperationResultContract,
       description: TOOL_DESCRIPTIONS.cleanup_access_operation,
       inputSchema: cleanupSchema,
       handler: async (input) =>

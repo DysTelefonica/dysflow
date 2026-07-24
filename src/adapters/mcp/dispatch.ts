@@ -1,6 +1,7 @@
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
-import { ALIAS_TOOL_NAMES, buildAliasTools } from "./alias-tools.js";
+import { ALIAS_TOOL_NAMES, type AliasToolName, buildAliasTools } from "./alias-tools.js";
 import type { AllowedProcedures } from "./allowed-procedures-resolver.js";
+import { resultContractForToolAlias } from "./contracts/dispatch-result-contracts.js";
 import { createDispatchTool } from "./dispatch-factory.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
@@ -75,6 +76,10 @@ export function registerMcpTools(
     writeAccessResolver,
     allowedProcedures,
   );
+  const aliasToolsWithContracts = aliasTools.map((tool) => ({
+    ...tool,
+    resultContract: resultContractForToolAlias(tool.name as AliasToolName).contract,
+  }));
 
   // Dispatch loop skips alias names — each DysflowMcpToolName is owned by exactly one path (#405).
   const dispatchToolNames = DYSFLOW_MCP_TOOL_NAMES.filter(
@@ -92,5 +97,5 @@ export function registerMcpTools(
     ),
   );
 
-  return registerMcpToolList([...currentTools, ...aliasTools, ...dispatchTools]);
+  return registerMcpToolList([...currentTools, ...aliasToolsWithContracts, ...dispatchTools]);
 }

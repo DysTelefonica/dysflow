@@ -1,3 +1,9 @@
+import {
+  bootstrapRecoveryResultContracts,
+  describeToolResultContract,
+  schemaResultContract,
+} from "./contracts/bootstrap-result-contracts.js";
+import { toToolResultContract } from "./contracts/result-contract.js";
 // `schema` — Issue #971 runtime contract discovery.
 //
 // Read-only MCP tool. Returns the documented schema for every tool in the
@@ -38,6 +44,8 @@ import {
   buildAgentWorkflowMetadata,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
+import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
+import { remainingResultContractForTool } from "./contracts/remaining-result-contracts.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
   CAPABILITIES_DISALLOW_WRITE,
@@ -142,9 +150,10 @@ export type SchemaCompositionConstraint = {
  * helper can coerce both surfaces without branching on field shape.
  */
 export type ToolFieldShape = {
-  type: "string" | "number" | "boolean" | "object" | "array";
+  type: "string" | "number" | "integer" | "boolean" | "object" | "array" | "null";
   optional?: boolean;
   description?: string;
+  enum?: readonly (string | number | boolean | null)[];
   /** Element type when `type === "array"`. */
   items?: ToolFieldShape;
   /**
@@ -1993,6 +2002,16 @@ function assertToolResultContractsAreTotal(): void {
 }
 
 function resultContractForTool(name: string): ToolResultContract {
+  const executable =
+    bootstrapRecoveryResultContracts[name as keyof typeof bootstrapRecoveryResultContracts];
+  if (executable !== undefined) return toToolResultContract(executable);
+  if (Object.hasOwn(MCP_TOOL_ROUTES, name)) {
+    return toToolResultContract(
+      resultContractForDispatchTool(name as keyof typeof MCP_TOOL_ROUTES),
+    );
+  }
+  const remainingExecutable = remainingResultContractForTool(name);
+  if (remainingExecutable !== undefined) return toToolResultContract(remainingExecutable);
   const entry = TOOL_RESULT_CONTRACTS[name];
   if (entry === undefined) {
     // This branch should be unreachable thanks to
@@ -2224,6 +2243,7 @@ assertToolResultContractsAreTotal();
 export function createSchemaTool(): DysflowMcpTool {
   return {
     name: "schema",
+    resultContract: schemaResultContract,
     description:
       "Return static contracts for the consumer's dysflow installation. Call get_capabilities first for live adapter and write-gate state. Use { view: 'compact' } for low-context discovery across all tools, { view: 'full' } for complete JSON Schema, aliases, errors, use cases, and references, and { toolName: '<name>' } to filter either view. Omitted view defaults to full for backward compatibility. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.schema.summary,
@@ -2258,6 +2278,7 @@ export function createSchemaTool(): DysflowMcpTool {
 export function createDescribeToolTool(): DysflowMcpTool {
   return {
     name: "describe_tool",
+    resultContract: describeToolResultContract,
     description:
       "Preferred one-tool deep introspection view: complete inputSchema, canonical params and aliases, defaults, returns, resultContract, errors, references, and useCases. Pass { name: '<tool>' } (alias: toolName). Call get_capabilities first for live state; use schema({ view: 'compact' }) only for catalog-wide discovery. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.describe_tool.summary,

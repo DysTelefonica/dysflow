@@ -41,6 +41,14 @@ import {
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
+import {
+  RESULT_CONTRACT_VIOLATION,
+  type ResultContractViolationDiagnostic,
+  type ResultValidationPolicy,
+  resolveResultValidationPolicy,
+  validateToolResult,
+} from "./contracts/result-validation.js";
+import type { McpToolResult } from "./result-translation.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
   buildHiddenToolRegistry,
@@ -158,10 +166,11 @@ export async function startMcpStdioAdapter(
     // `humanCompilePending` flag from the process-local state cache.
     accessDbPath: startupConfig?.accessDbPath,
     writeExecutionPolicy: resolveStartupWriteExecutionPolicy(startupConfig),
+    resultValidationPolicy: "report",
   });
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
-  await startWithSdkServer(tools);
+  await startWithSdkServer(tools, undefined, { resultValidationPolicy: "report" });
 }
 
 /**
@@ -223,6 +232,10 @@ export function createProgressNotifier(
 export async function startWithSdkServer(
   tools: DysflowMcpTool[],
   transport?: import("@modelcontextprotocol/sdk/shared/transport.js").Transport,
+  options: {
+    resultValidationPolicy?: ResultValidationPolicy;
+    reportResultContractViolation?: (diagnostic: ResultContractViolationDiagnostic) => void;
+  } = {},
 ): Promise<void> {
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const hiddenRegistry = buildHiddenToolRegistry(tools);
@@ -267,8 +280,9 @@ export async function startWithSdkServer(
     const context: McpToolContext = { progressToken, sendProgress };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
     const result = await wrappedHandler(args, context);
+    const validatedResult = validateMcpResultBeforeSerialization(tool, result, options);
     // Spread readonly content[] into mutable array as required by the SDK's CallToolResult type.
-    return { ...result, content: [...result.content] };
+    return { ...validatedResult, content: [...validatedResult.content] };
   });
 
   if (transport !== undefined) {
@@ -281,6 +295,68 @@ export async function startWithSdkServer(
 
   const stdioTransport = new StdioServerTransport(sizeGuard, process.stdout);
   await server.connect(stdioTransport);
+}
+
+function validateMcpResultBeforeSerialization(
+  tool: DysflowMcpTool,
+  result: McpToolResult,
+  options: {
+    resultValidationPolicy?: ResultValidationPolicy;
+    reportResultContractViolation?: (diagnostic: ResultContractViolationDiagnostic) => void;
+  },
+): McpToolResult {
+  if (result.isError || tool.resultContract === undefined) return result;
+
+  const policy = resolveResultValidationPolicy(options.resultValidationPolicy);
+  if (policy === "off") return result;
+
+  let payload: unknown;
+  try {
+    const text = result.content.length === 1 ? result.content[0]?.text : undefined;
+    payload = text === undefined ? undefined : JSON.parse(text);
+  } catch {
+    payload = undefined;
+  }
+
+  const validation = validateToolResult({
+    toolName: tool.name,
+    contract: tool.resultContract,
+    payload,
+    policy,
+    report: options.reportResultContractViolation ?? reportResultContractViolationToStderr,
+  });
+  if (validation.ok || policy === "report") return result;
+
+  const message = `Result from ${tool.name} did not satisfy its executable result contract.`;
+  return {
+    content: [{ type: "text", text: `${RESULT_CONTRACT_VIOLATION}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: {
+      code: RESULT_CONTRACT_VIOLATION,
+      errorCode: RESULT_CONTRACT_VIOLATION,
+      message,
+      errorMessage: message,
+      details: {
+        toolName: validation.diagnostic.toolName,
+        schemaPaths: validation.diagnostic.issues.map((issue) => issue.path),
+      },
+      diagnostics: [
+        {
+          code: RESULT_CONTRACT_VIOLATION,
+          severity: "error",
+          message,
+        },
+      ],
+      relatedIssueNumbers: ["#1096"],
+    },
+  };
+}
+
+function reportResultContractViolationToStderr(
+  diagnostic: ResultContractViolationDiagnostic,
+): void {
+  process.stderr.write(`[dysflow] ${JSON.stringify(diagnostic)}\n`);
 }
 
 export async function resolveMcpWriteAccessForInput(

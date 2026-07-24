@@ -1,3 +1,4 @@
+import { logsResultContract } from "./contracts/bootstrap-result-contracts.js";
 // `logs` — Issue #973 AI-aware log access.
 //
 // Read-only MCP tool that surfaces runtime telemetry from `.dysflow/runtime/`
@@ -405,6 +406,7 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
 export function createLogsTool(opts: { cwd: string }): DysflowMcpTool {
   return {
     name: "logs",
+    resultContract: logsResultContract,
     description:
       "Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Sources: operations.json (recorded operations) + markers/*.json (per-operation markers). Filter by since/until/level/operationId/tool; limit defaults to 100, capped at 1000; orderBy defaults to desc (most recent first). Response: { entries: LogEntry[], totalCount, truncated }. Each LogEntry carries { timestamp, level, operationId, tool, message, context }. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.logs.summary,
