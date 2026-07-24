@@ -5,7 +5,7 @@ import {
 } from "../../core/mapping/access-query-request-mapper.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { isRecord } from "../../core/utils/index.js";
-
+import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import {
   enrichmentForValidationMessage,
   exportSourceGuardRefused,
@@ -203,6 +203,7 @@ export function createDispatchTool(
     name,
     description: definition.description,
     inputSchema: schema,
+    resultContract: resultContractForDispatchTool(name),
     hidden: isHiddenStubTool(name) ? true : undefined,
     handler: async (input) => {
       // F13 — strip the v1.18-and-earlier `compile` / `rollbackOnCompileFail`
