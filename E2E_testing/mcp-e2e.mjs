@@ -331,7 +331,7 @@ await record("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissing
 // #786 regression — inline execution must run a snippet and return its `result`.
 // (record() asserts the transport did not error; the deep inner-ok + returnValue
 // assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
-await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"' }, { timeoutMs: 120000 });
+await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"', timeoutMs: 120000 }, { timeoutMs: 120000 });
 await record("operations", "list_access_operations", {});
 await record("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
