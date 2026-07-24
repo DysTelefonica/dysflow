@@ -357,8 +357,16 @@ export function discoverWorktreeProjectConfigs(
   for (const candidate of candidateDirs) {
     const info = findRepoProjectConfigPath(candidate, fileSystem);
     if (info.found === "standard" || info.found === "compat") {
+      // `info.path` arrives with platform-native separators (e.g. `\` on
+      // Windows). `DEFAULT_PROJECT_CONFIG_PATH` is authored with `/`, so a
+      // raw `endsWith` fails on Windows and the resolver would treat every
+      // `.dysflow/project.json` as if it lived at the worktree root, losing
+      // one `dirname` and returning the `.dysflow/` folder instead of the
+      // worktree that owns it. Normalize before comparing so the resolver
+      // strips one directory when the path matches the canonical config.
+      const infoPathPosix = info.path.replaceAll("\\", "/");
       const candidateConfigDir = dirname(
-        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+        infoPathPosix.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
       );
       if (seenRoots.has(candidateConfigDir)) continue;
       seenRoots.add(candidateConfigDir);
@@ -448,8 +456,13 @@ export async function discoverWorktreeProjectConfigsAsync(
   for (const candidate of candidateDirs) {
     const info = await findRepoProjectConfigPathAsync(candidate, fileSystem);
     if (info.found === "standard" || info.found === "compat") {
+      // See the sync sibling above — Windows-native `\` separators defeat
+      // `endsWith(DEFAULT_PROJECT_CONFIG_PATH)` because the constant is
+      // authored with `/`. Normalize before comparing so `dirname` strips
+      // one directory and returns the worktree that owns the config.
+      const infoPathPosix = info.path.replaceAll("\\", "/");
       const candidateConfigDir = dirname(
-        info.path.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
+        infoPathPosix.endsWith(DEFAULT_PROJECT_CONFIG_PATH) ? dirname(info.path) : info.path,
       );
       if (seenRoots.has(candidateConfigDir)) continue;
       seenRoots.add(candidateConfigDir);

@@ -5,7 +5,10 @@ import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { nodeConfigFileSystem } from "../../../src/adapters/config/dysflow-config-node.js";
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
-import { loadDysflowConfigAsyncWith } from "../../../src/core/config/dysflow-config.js";
+import {
+  discoverWorktreeProjectConfigs,
+  loadDysflowConfigAsyncWith,
+} from "../../../src/core/config/dysflow-config.js";
 import { resolveExecutionTarget } from "../../../src/core/config/execution-target.js";
 
 const hash = async (path: string): Promise<string> =>
@@ -191,5 +194,32 @@ describe("active-worktree frontend resolution (#1092)", () => {
     diagnoseProjectConfig(worktreeB);
     const after = await Promise.all(paths.map(hash));
     expect(after).toEqual(before);
+  });
+
+  // Regression for the platform-specific bug surfaced while running
+  // `dysflow doctor` against the E2E_testing fixture: on Windows the path
+  // produced by `join(worktreeRoot, ".dysflow", "project.json")` carries
+  // native `\` separators, so a literal `endsWith(".dysflow/project.json")`
+  // never matched and the resolver returned the `.dysflow/` folder as the
+  // project root, breaking `export_all` and the active `projectConfig`.
+  it("13 discoverWorktreeProjectConfigs anchors projectRoot to the worktree on Windows-native paths", async () => {
+    await writeConfig(worktreeB, {
+      id: "b",
+      frontendFile: "App.accdb",
+      destinationRoot: "src",
+    });
+    const discovered = discoverWorktreeProjectConfigs(worktreeB, nodeConfigFileSystem);
+    const match = discovered.find((p) => p.id === "b");
+    expect(match).toBeDefined();
+    // The project root must be the directory that physically owns the
+    // `.dysflow/project.json`, NOT the `.dysflow/` subfolder. Compare via
+    // forward slashes so the assertion is stable on both Windows and POSIX.
+    expect(match?.projectRoot.replaceAll("\\", "/")).toBe(worktreeB.replaceAll("\\", "/"));
+    expect(match?.accessPath?.replaceAll("\\", "/")).toBe(
+      join(worktreeB, "App.accdb").replaceAll("\\", "/"),
+    );
+    expect(match?.destinationRoot.replaceAll("\\", "/")).toBe(
+      join(worktreeB, "src").replaceAll("\\", "/"),
+    );
   });
 });
