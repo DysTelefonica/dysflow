@@ -829,6 +829,8 @@ function Convert-Utf8ToAnsiTempFile {
 # always carry `Attribute VB_Name = "<FormName>"` as their first non-blank line.
 # Without it, Access interprets the module as a placeholder and produces
 # `Form_TempSccObj1`, `Form_TempSccObj2`, ... when the file is re-imported.
+# Issue #1107: Access can also leak `Version` and `CodeBehind*` serialization
+# markers into document-module code; strip those only from the generated prelude.
 # Pure text helper: no COM, no filesystem side effects.
 function Ensure-VbNameAttributeAtTop {
     [CmdletBinding()]
@@ -842,6 +844,7 @@ function Ensure-VbNameAttributeAtTop {
     }
 
     $expected = "Attribute VB_Name = `"$ModuleName`""
+    $newline = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $normalized = $Text -replace "`r`n", "`n" -replace "`r", "`n"
 
     if ([string]::IsNullOrEmpty($normalized)) {
@@ -850,6 +853,25 @@ function Ensure-VbNameAttributeAtTop {
     }
 
     $lines = @($normalized -split "`n")
+    $cleanedLines = [System.Collections.Generic.List[string]]::new()
+    $inPrelude = $true
+    $removedDocumentMetadata = $false
+
+    foreach ($line in $lines) {
+        $trim = $line.Trim()
+        if ($inPrelude) {
+            if ($trim -match '^Version\s*=\s*\d+\s*$' -or
+                $trim -match '^CodeBehind(?:Form|Report)?\s*$') {
+                $removedDocumentMetadata = $true
+                continue
+            }
+            if ($trim -ne '' -and $trim -notmatch '^Attribute\s+VB_') {
+                $inPrelude = $false
+            }
+        }
+        $cleanedLines.Add($line)
+    }
+    $lines = @($cleanedLines)
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $trim = $lines[$i].Trim()
@@ -860,17 +882,20 @@ function Ensure-VbNameAttributeAtTop {
         #   3) Anything else -> prepend the canonical line and re-join
         if ($trim -match '^Attribute\s+VB_Name\s*=\s*"([^"]*)"\s*$') {
             if ($matches[1] -eq $ModuleName) {
+                if ($removedDocumentMetadata) {
+                    return ($lines -join $newline)
+                }
                 return $Text
             }
             $lines[$i] = $expected
-            return ($lines -join "`n")
+            return ($lines -join $newline)
         }
         $lines = @($expected) + $lines
-        return ($lines -join "`n")
+        return ($lines -join $newline)
     }
 
     # No non-blank line at all -> append
-    return ($expected + "`n" + $Text)
+    return ($expected + $newline + ($lines -join $newline))
 }
 
 # issue #743: ensure that the `CodeBehindForm` block of an Access `.form.txt`
