@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defineEnvelopeOnlyResultContract } from "../../../src/adapters/mcp/contracts/result-contract.js";
 import {
   createDysflowMcpTools,
   type DysflowMcpServices,
@@ -1954,10 +1955,15 @@ describe("cleanup_access_operation — full-field pass-through (PR2 #621 F2 / #6
 
 // #405: registration invariants — duplicate names throw
 describe("registration invariants — duplicate names throw (#405)", () => {
+  const resultContract = defineEnvelopeOnlyResultContract({
+    justification: "Synthetic registration invariant fixture.",
+  });
+
   function makeTool(name: string) {
     return {
       name,
       description: `fake tool ${name}`,
+      resultContract,
       handler: async () => ({ content: [{ type: "text" as const, text: "ok" }], isError: false }),
     };
   }

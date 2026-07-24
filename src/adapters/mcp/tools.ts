@@ -73,10 +73,12 @@ export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import {
   detectDeadCodeResultContract,
+  doctorResultContract,
   findReferencesResultContract,
   getProcedureResultContract,
   lintModuleResultContract,
   listProceduresResultContract,
+  queryExecuteResultContract,
   validateManifestResultContract,
 } from "./contracts/remaining-result-contracts.js";
 import {
@@ -786,6 +788,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
   const currentTools: DysflowMcpTool[] = [
     {
       name: "query_execute",
+      resultContract: queryExecuteResultContract,
       description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
@@ -805,6 +808,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     },
     {
       name: "doctor",
+      resultContract: doctorResultContract,
       description: `Run core diagnostic checks for projectId or explicit accessPath/backendPath overrides; includeEnvironment adds environment diagnostics when supported. ${MCP_TOOL_CONTRACTS.doctor.summary}`,
       inputSchema: DOCTOR_SCHEMA,
       handler: async (input) => {

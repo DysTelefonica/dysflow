@@ -43,6 +43,11 @@ export function registerMcpToolList(entries: readonly DysflowMcpTool[]): Dysflow
   const names = new Set<string>();
   const out: DysflowMcpTool[] = [];
   for (const tool of entries) {
+    if (tool.resultContract === undefined) {
+      throw new Error(
+        `MCP tool '${tool.name}' cannot register without an executable result contract.`,
+      );
+    }
     if (names.has(tool.name)) {
       throw new Error(`Duplicate MCP tool registration: ${tool.name}`);
     }
