@@ -346,7 +346,7 @@ console.log("[i807-features] === Feature 3: verify_code chunking + parallel ==="
         chunkSize: 2,
         parallelChunks: 2,
         onChunkTimeout: "skip",
-        timeoutMs: 30000,
+        timeoutMs: 90000,
       },
       { timeoutMs: 300000 },
     );

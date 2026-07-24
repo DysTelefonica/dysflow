@@ -254,7 +254,11 @@ describe("VbaExecutionAdapter", () => {
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("clamps the inline timeout to the 30s ceiling (#533)", async () => {
+  it("forwards the caller-supplied timeoutMs to import_modules and run_vba (no #533 ceiling)", async () => {
+    // The 30s ceiling added for #533 was too tight for real Access projects
+    // (14MB frontend + VBE warm-up routinely exceeded 30s end-to-end).
+    // Trust the caller's `timeoutMs`; the orchestrator's own default still
+    // applies when the caller does not specify one.
     const { adapter, executeMappedTool } = makeInlineAdapter();
     await adapter.execute("vba_inline_execution", {
       code: 'Debug.Print "ok"',
@@ -263,7 +267,7 @@ describe("VbaExecutionAdapter", () => {
     for (const toolName of ["import_modules", "run_vba"]) {
       const call = executeMappedTool.mock.calls.find((c) => c[0] === toolName);
       expect(call, `expected a ${toolName} call`).toBeDefined();
-      expect((call?.[1] as { timeoutMs?: number }).timeoutMs).toBe(30_000);
+      expect((call?.[1] as { timeoutMs?: number }).timeoutMs).toBe(120_000);
     }
   });
 

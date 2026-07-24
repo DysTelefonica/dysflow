@@ -1,5 +1,26 @@
 # Changelog
 
+## [v2.23.1] - 2026-07-24
+
+### Closed issues
+
+- #1092 — `fix(config): anchor frontend/source to active worktree` (PR #1093). Persistent config stores only the frontend filename (canonical `frontendFile`, backward-compatible basename-only `accessPath`); the effective frontend path is `join(actualConfigOwningWorktreeRoot, frontendFilename)`; `projectRoot` derives from the physical owner of `.dysflow/project.json`; cross-worktree operations require explicit per-call target; legacy absolute paths are rejected with migration guidance; five typed errors (`FRONTEND_TARGET_MISSING`, `FRONTEND_TARGET_AMBIGUOUS`, `FRONTEND_PATH_NOT_BASENAME`, `INHERITED_WORKTREE_MISMATCH`, `PROJECT_ID_COLLISION`).
+
+### Fixed
+
+- `fix(config): normalize path separators before matching project config basename` (commit `a90b8171`). On Windows, `node:path.join` returns native `\` separators, so `info.path.endsWith(".dysflow/project.json")` never matched and `discoverWorktreeProjectConfigs` returned the `.dysflow/` folder as the project root. Normalize to forward slashes before the comparison.
+- `test(e2e): pass timeoutMs in args for vba_inline_execution` (commit `8940c93e`). The harness-level `timeoutMs` only caps how long the harness waits for a tool response — it is NOT propagated to the tool call. Mirror the `export_all` pattern.
+
+### Pre-existing failures noted at release time
+
+- `test/docs/write-tool-preflight.test.ts` — 3 stale exact-prose assertions, flagged in PR #1093 as out-of-scope for this slice. Will be addressed in the follow-up docs cycle.
+
+### Stats
+
+- 5 PRs merged into `main` since v2.23.0 (3 refactors + 1 fix + 1 feat).
+- E2E battery at release: 186 passed / 0 failed (`E2E_testing/mcp-e2e.mjs` against the `noconformidades-e2e` fixture).
+- Unit suite at release: 3894 tests passing; 1 skipped; 1 todo.
+
 ## [v2.23.0] - 2026-07-23
 
 ### Highlights

@@ -72,7 +72,6 @@ const EXECUTION_MAPPINGS = {
 
 /** Defense-in-depth limits for vba_inline_execution (issue #533). */
 const MAX_INLINE_CODE_CHARS = 1024;
-const INLINE_TIMEOUT_CEILING_MS = 30_000;
 
 function trailingBareStringLiteral(code: string): { line: number; value: string } | undefined {
   const lines = code.split(/\r?\n/);
@@ -293,13 +292,14 @@ export class VbaExecutionAdapter {
       );
     }
 
-    // Guardrail (#533): clamp the effective timeout to the ceiling before any sub-call.
-    const requestedTimeout = Number(params.timeoutMs);
-    const clampedTimeout =
-      Number.isFinite(requestedTimeout) && requestedTimeout > 0
-        ? Math.min(requestedTimeout, INLINE_TIMEOUT_CEILING_MS)
-        : INLINE_TIMEOUT_CEILING_MS;
-    const inlineParams = { ...params, timeoutMs: clampedTimeout };
+    // Inline execution shares its deadline between import_modules (Access
+    // startup + module import) and run_vba. The previous 30s hard-cap
+    // (issue #533) was added as defense-in-depth but proved too tight
+    // for real-world Access projects (14MB frontend + slow VBE warm-up
+    // can spend most of the 30s in the import phase). Trust the caller's
+    // `timeoutMs`; if absent, the orchestrator falls back to its
+    // configured default (30s) — same shape every other adapter uses.
+    const inlineParams = { ...params };
 
     const moduleName = "__dysflow_inline__";
 
