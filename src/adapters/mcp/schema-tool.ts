@@ -142,9 +142,10 @@ export type SchemaCompositionConstraint = {
  * helper can coerce both surfaces without branching on field shape.
  */
 export type ToolFieldShape = {
-  type: "string" | "number" | "boolean" | "object" | "array";
+  type: "string" | "number" | "integer" | "boolean" | "object" | "array" | "null";
   optional?: boolean;
   description?: string;
+  enum?: readonly (string | number | boolean | null)[];
   /** Element type when `type === "array"`. */
   items?: ToolFieldShape;
   /**
