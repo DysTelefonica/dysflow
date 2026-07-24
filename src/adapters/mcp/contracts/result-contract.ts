@@ -21,7 +21,7 @@ export type ResultContractMetadata = {
   errorEnvelope?: { shape: ToolErrorEnvelopeShape };
 };
 
-export type ExecutableResultContract<TSchema extends z.ZodType<object> = z.ZodType<object>> = {
+export type ExecutableResultContract<TSchema extends z.ZodType = z.ZodType> = {
   kind: "dataSchema";
   schema: TSchema;
   introspectionSchema: ToolDataSchemaFragment;
@@ -38,14 +38,12 @@ export type EnvelopeOnlyResultContract = {
   };
 };
 
-export type AnyExecutableResultContract =
-  | ExecutableResultContract<z.ZodType<object>>
-  | EnvelopeOnlyResultContract;
+export type AnyExecutableResultContract = ExecutableResultContract | EnvelopeOnlyResultContract;
 
 export type InferResultPayload<TContract extends AnyExecutableResultContract> =
   TContract extends ExecutableResultContract<infer TSchema> ? z.output<TSchema> : never;
 
-export function defineResultContract<TSchema extends z.ZodType<object>>(
+export function defineResultContract<TSchema extends z.ZodType>(
   definition: ResultContractMetadata & { schema: TSchema },
 ): ExecutableResultContract<TSchema> {
   const introspectionSchema = z.toJSONSchema(definition.schema, {
@@ -53,7 +51,12 @@ export function defineResultContract<TSchema extends z.ZodType<object>>(
     unrepresentable: "throw",
   }) as Record<string, unknown>;
 
-  if (introspectionSchema.type !== "object") {
+  if (
+    introspectionSchema.type !== "object" &&
+    introspectionSchema.type !== "array" &&
+    !Array.isArray(introspectionSchema.anyOf) &&
+    !Array.isArray(introspectionSchema.oneOf)
+  ) {
     throw new TypeError("A result contract requires a structured object payload schema.");
   }
 

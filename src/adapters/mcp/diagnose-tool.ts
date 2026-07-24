@@ -1,3 +1,4 @@
+import { diagnoseResultContract } from "./contracts/bootstrap-result-contracts.js";
 // `dysflow.diagnose` — aggregated project health in one call.
 //
 // Issue #965. Replaces the 4-5 round-trip pattern AI consumers (and humans)
@@ -320,6 +321,7 @@ export type CreateDiagnoseToolOptions = {
 export function createDiagnoseTool(options: CreateDiagnoseToolOptions): DysflowMcpTool {
   return {
     name: "diagnose",
+    resultContract: diagnoseResultContract,
     description:
       "Return aggregated project health (projectConfig + filesystem + runtime) in a single call. Replaces the 4-5 round-trip pattern (get_capabilities + resolve_project + list_access_operations + access_force_cleanup_orphaned listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Returns { projectConfig: { status, writeReady, diagnostics[], owningWorktree }, filesystem: { accessPath, backendPath, destinationRoot, projectRoot }, runtime: { staleMarkers, activeOps, orphans, dysflowVersion, writeExecutionPolicy } }. " +
       MCP_TOOL_CONTRACTS.diagnose.summary,

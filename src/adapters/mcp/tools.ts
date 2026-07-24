@@ -38,6 +38,10 @@ import {
   handleMcpCleanStaleMarkers,
   handleMcpQueryExecute,
 } from "./canonical-handlers.js";
+import {
+  cleanStaleMarkersResultContract,
+  orphanCleanupResultContract,
+} from "./contracts/bootstrap-result-contracts.js";
 import type { ResultValidationPolicy } from "./contracts/result-validation.js";
 import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
@@ -809,6 +813,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // `dysflow_access_operations_list` / `dysflow_access_cleanup`
       // names) are REMOVED entirely; the alias is the sole source.
       name: "access_force_cleanup_orphaned",
+      resultContract: orphanCleanupResultContract,
       description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
@@ -838,6 +843,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // and the access context is resolved directly via the resolver.
     {
       name: "clean_stale_markers",
+      resultContract: cleanStaleMarkersResultContract,
       description: `Sweep <projectRoot>/.dysflow/runtime/markers/ and either plan or apply transitions of stale \`status: "running"\` markers (and, when keepFailed is false, stale \`status: "failed"\` markers) to \`status: "abandoned"\`. Dry-run is the default; any apply call requires \`options.confirm: true\` and is write-gated (returns MCP_WRITES_DISABLED when writes are off). ${MCP_TOOL_CONTRACTS.clean_stale_markers.summary}`,
       inputSchema: CLEAN_STALE_MARKERS_SCHEMA,
       handler: async (input) =>

@@ -1,3 +1,4 @@
+import { resolveProjectResultContract } from "./contracts/bootstrap-result-contracts.js";
 // `resolve_project` — round-3 Item 1 companion to
 // `get_capabilities`. The snapshot tool reports the projectId that
 // was captured at factory construction; this tool re-resolves
@@ -214,6 +215,7 @@ export const RESOLVE_PROJECT_SCHEMA = {
 export function createResolveProjectTool(opts: { cwd: string }): DysflowMcpTool {
   return {
     name: "resolve_project",
+    resultContract: resolveProjectResultContract,
     description:
       "Read .dysflow/project.json from the supplied cwd and return a structured diagnosis of how a hypothetical projectId would resolve. Companion to get_capabilities: the snapshot tool reports the projectId captured at factory construction; this tool re-checks the project.json on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Returns { projectId, outcome, reason, accessPath, projectRoot, sourceRoot } with reason one of: explicit id match | single project config found | project.json not found | id mismatch | unknown. Use outcome === 'resolved' to confirm a projectId is wired; use outcome === 'unresolved' + reason to diagnose a missing or mismatched config. " +
       MCP_TOOL_CONTRACTS.resolve_project.summary,

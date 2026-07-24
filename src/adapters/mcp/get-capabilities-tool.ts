@@ -17,6 +17,7 @@ import {
   PREFERRED_AGENT_WORKFLOWS,
   type PreferredAgentWorkflow,
 } from "./agent-workflow-registry.js";
+import { getCapabilitiesResultContract } from "./contracts/bootstrap-result-contracts.js";
 import {
   type ResultValidationPolicy,
   resolveResultValidationPolicy,
@@ -408,6 +409,7 @@ export function createGetCapabilitiesTool(opts: {
 
   return {
     name: "get_capabilities",
+    resultContract: getCapabilitiesResultContract,
     description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
