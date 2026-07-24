@@ -38,6 +38,7 @@ import {
   handleMcpCleanStaleMarkers,
   handleMcpQueryExecute,
 } from "./canonical-handlers.js";
+import type { ResultValidationPolicy } from "./contracts/result-validation.js";
 import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
@@ -720,6 +721,7 @@ export type CreateDysflowMcpToolsOptions = {
   // layer default to `"safe-by-default"` so legacy call sites keep their
   // existing behavior.
   writeExecutionPolicy?: WriteExecutionPolicy;
+  resultValidationPolicy?: ResultValidationPolicy;
   // Issue #789 — opt-in to the historical strict (error) severity for the
   // `identifier-safety` non-ASCII check. Resolved from
   // `.dysflow/project.json` `capabilities.lint.identifierSafety.strictNonAscii`
@@ -751,6 +753,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     lintOverrides: lintRulesOverride = {},
     accessDbPath,
     writeExecutionPolicy,
+    resultValidationPolicy,
     lintIdentifierSafetyStrict = false,
     projectConfigResolver,
     documentationBundleResolver,
@@ -861,6 +864,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
       writeExecutionPolicy,
+      resultValidationPolicy,
       projectConfigResolver:
         projectConfigResolver === undefined ? undefined : () => projectConfigResolver({}),
       // Issue #940 — forward the documentation bundle resolver so the

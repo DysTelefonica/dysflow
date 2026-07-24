@@ -17,6 +17,10 @@ import {
   PREFERRED_AGENT_WORKFLOWS,
   type PreferredAgentWorkflow,
 } from "./agent-workflow-registry.js";
+import {
+  type ResultValidationPolicy,
+  resolveResultValidationPolicy,
+} from "./contracts/result-validation.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
@@ -93,6 +97,8 @@ export type McpCapabilitySnapshot = {
    * plan or commit by default.
    */
   writeExecutionPolicy: WriteExecutionPolicy;
+  /** Active pre-serialization handler-result validation policy. */
+  resultValidationPolicy: ResultValidationPolicy;
   /**
    * v2.1.0 (#779) — per-tool effective `dryRun` default under the active
    * policy. Keys are the same set as `MCP_TOOL_CONTRACTS`. A consumer
@@ -180,6 +186,7 @@ export type GetCapabilitiesAllInput = {
    * so legacy callers continue to work.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  resultValidationPolicy?: ResultValidationPolicy;
   /**
    * v2.14.1 (#940) — optional resolver for the runtime documentation
    * bundle status. When omitted, the snapshot falls back to a fail-closed
@@ -273,6 +280,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     allowedProcedures: input.allowedProcedures,
     dryRunDefault: deriveGlobalDryRunDefault(),
     writeExecutionPolicy,
+    resultValidationPolicy: resolveResultValidationPolicy(input.resultValidationPolicy),
     effectiveDryRunDefault,
     toolsVisible: toolNames.length,
     preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
@@ -371,6 +379,7 @@ export function createGetCapabilitiesTool(opts: {
    * consult.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  resultValidationPolicy?: ResultValidationPolicy;
   projectConfigResolver?: () => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
   /**
    * v2.14.1 (#940) — optional resolver for the runtime documentation
@@ -393,12 +402,13 @@ export function createGetCapabilitiesTool(opts: {
     allowWrites: opts.allowWrites,
     accessDbPath: opts.accessDbPath,
     writeExecutionPolicy: opts.writeExecutionPolicy,
+    resultValidationPolicy: opts.resultValidationPolicy,
     documentationBundleResolver: opts.documentationBundleResolver,
   });
 
   return {
     name: "get_capabilities",
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: NO_INPUT_SCHEMA,
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const projectConfig = await opts.projectConfigResolver?.();
