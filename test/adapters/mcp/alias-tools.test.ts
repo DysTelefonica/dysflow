@@ -188,15 +188,49 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
       "../../../src/adapters/mcp/alias-tools.js"
     );
 
-    const explicitPath = buildQuerySqlRequest({
+    // When the caller passes only `accessPath`, it projects onto
+    // `databasePath` (the alias contract from #882: "accessPath means
+    // 'execute against this database'").
+    const accessPathOnly = buildQuerySqlRequest({
       sql: "SELECT * FROM FrontendOnlyTable",
       accessPath: "C:/repo/frontend.accdb",
       backendPath: "C:/repo/backend.accdb",
     });
-    expect(isMcpToolResult(explicitPath)).toBe(false);
-    if (!isMcpToolResult(explicitPath)) {
-      expect(explicitPath.databasePath).toBe("C:/repo/frontend.accdb");
-      expect(explicitPath.backendPath).toBe("C:/repo/backend.accdb");
+    expect(isMcpToolResult(accessPathOnly)).toBe(false);
+    if (!isMcpToolResult(accessPathOnly)) {
+      expect(accessPathOnly.databasePath).toBe("C:/repo/frontend.accdb");
+      expect(accessPathOnly.backendPath).toBe("C:/repo/backend.accdb");
+    }
+
+    // When the caller passes BOTH `accessPath` (as a config target) AND
+    // an explicit `databasePath` (as a per-call override), the
+    // explicit override MUST win. The E2E harness exercises this shape
+    // to read backend-only tables without losing the configured
+    // accessPath. (The pre-#882 contract — which #882 broke — also
+    // honored the explicit override; the alias contract only kicks in
+    // when the caller did NOT pass an explicit databasePath.)
+    const explicitOverrideWins = buildQuerySqlRequest({
+      sql: "SELECT COUNT(*) FROM BackendOnlyTable",
+      accessPath: "C:/repo/frontend.accdb",
+      backendPath: "C:/repo/backend.accdb",
+      databasePath: "C:/repo/backend.accdb",
+    });
+    expect(isMcpToolResult(explicitOverrideWins)).toBe(false);
+    if (!isMcpToolResult(explicitOverrideWins)) {
+      expect(explicitOverrideWins.databasePath).toBe("C:/repo/backend.accdb");
+      expect(explicitOverrideWins.backendPath).toBe("C:/repo/backend.accdb");
+      expect(explicitOverrideWins.accessPath).toBe("C:/repo/frontend.accdb");
+    }
+
+    // Same precedence rule applies to `sourcePath` as a databasePath alias.
+    const sourcePathOverrideWins = buildQuerySqlRequest({
+      sql: "SELECT 1",
+      accessPath: "C:/repo/frontend.accdb",
+      sourcePath: "C:/repo/backend.accdb",
+    });
+    expect(isMcpToolResult(sourcePathOverrideWins)).toBe(false);
+    if (!isMcpToolResult(sourcePathOverrideWins)) {
+      expect(sourcePathOverrideWins.databasePath).toBe("C:/repo/backend.accdb");
     }
 
     const semanticTarget = buildQuerySqlRequest({

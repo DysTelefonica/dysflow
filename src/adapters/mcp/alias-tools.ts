@@ -168,20 +168,31 @@ export function buildQuerySqlRequest(input: unknown): AccessQueryRequest | McpTo
     input.target === "frontend" || input.target === "backend" || input.target === "auto"
       ? input.target
       : undefined;
-  const databasePath =
-    accessPath ??
-    (typeof input.databasePath === "string"
+  // Explicit `databasePath` / `sourcePath` from the caller is the strongest
+  // signal — when the caller passes BOTH `accessPath` (as a config target)
+  // and `databasePath` (as a per-call override), the override MUST win.
+  // Falling back to `accessPath` only when the caller did not pass an
+  // explicit `databasePath`/`sourcePath` preserves the alias contract
+  // (#882, "accessPath means 'execute against this database'") while
+  // restoring the pre-#882 behavior for the explicit-override case
+  // (the E2E harness sends both to run read-only SQL against the backend
+  // without losing the configured accessPath).
+  const explicitDatabasePath =
+    typeof input.databasePath === "string"
       ? input.databasePath
       : typeof input.sourcePath === "string"
         ? input.sourcePath
-        : undefined);
+        : undefined;
+  const databasePath = explicitDatabasePath ?? accessPath;
 
   return {
     sql,
     mode: "read",
     // query_sql is an alias whose accessPath means "execute against this
-    // database", not merely a config override. Project it onto the runner's
-    // explicit databasePath so the configured backend cannot win later.
+    // database" when the caller did not pass an explicit `databasePath`.
+    // Project it onto the runner's databasePath so the configured backend
+    // cannot win later — UNLESS the caller passed an explicit `databasePath`,
+    // in which case the override (set above) wins.
     backendPath: typeof input.backendPath === "string" ? input.backendPath : undefined,
     databasePath,
     ...(target === undefined ? {} : { target }),
