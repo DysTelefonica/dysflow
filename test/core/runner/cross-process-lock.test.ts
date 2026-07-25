@@ -456,6 +456,105 @@ describe("cross-process-lock module API", () => {
         evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, nodeLockFileSystem),
       ).resolves.toBe(false);
     });
+
+    it("returns false when the lock is refreshed after the eviction claim", async () => {
+      const lockPath = "/locks/refreshed.lock";
+      const staleMtimeMs = Date.now() - CROSS_PROCESS_LOCK_STALE_MS - 1;
+      let statCalls = 0;
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => path,
+        rm: async () => {},
+        stat: async () => {
+          statCalls += 1;
+          return { mtimeMs: statCalls === 1 ? staleMtimeMs : Date.now() };
+        },
+        utimes: async () => {},
+        writeFile: async () => {},
+        tmpdir: () => tmpdir(),
+      };
+
+      await expect(evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)).resolves.toBe(
+        false,
+      );
+    });
+
+    it("returns false when removing the stale lock fails", async () => {
+      const lockPath = "/locks/removal-fails.lock";
+      const staleMtimeMs = Date.now() - CROSS_PROCESS_LOCK_STALE_MS - 1;
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => path,
+        rm: async (path) => {
+          if (path === lockPath) throw new Error("synthetic EPERM");
+        },
+        stat: async () => ({ mtimeMs: staleMtimeMs }),
+        utimes: async () => {},
+        writeFile: async () => {},
+        tmpdir: () => tmpdir(),
+      };
+
+      await expect(evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)).resolves.toBe(
+        false,
+      );
+    });
+  });
+
+  describe("acquireCrossProcessAccessLock — stale-eviction backoff", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each([
+      "refreshed",
+      "removal-failed",
+    ] as const)("waits before retrying when stale eviction reports %s", async (outcome) => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      const lockPath = "/locks/backoff.lock";
+      const claimPath = `${lockPath}.evicting`;
+      const staleMtimeMs = Date.now() - CROSS_PROCESS_LOCK_STALE_MS - 1;
+      const sleepMs = 25;
+      let lockMkdirCalls = 0;
+      let statCalls = 0;
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => {
+          if (path === lockPath) {
+            lockMkdirCalls += 1;
+            if (lockMkdirCalls === 1) {
+              const error: NodeJS.ErrnoException = new Error("lock exists");
+              error.code = "EEXIST";
+              throw error;
+            }
+          }
+          return path;
+        },
+        rm: async (path) => {
+          if (path === lockPath && outcome === "removal-failed") {
+            throw new Error("synthetic EPERM");
+          }
+          expect(path === lockPath || path === claimPath).toBe(true);
+        },
+        stat: async () => {
+          statCalls += 1;
+          if (outcome === "refreshed" && statCalls === 2) {
+            return { mtimeMs: Date.now() };
+          }
+          return { mtimeMs: staleMtimeMs };
+        },
+        utimes: async () => {},
+        writeFile: async () => {},
+        tmpdir: () => tmpdir(),
+      };
+
+      const acquisition = acquireCrossProcessAccessLock(lockPath, 1_000, sleepMs, fileSystem);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(lockMkdirCalls).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(sleepMs);
+      const release = await acquisition;
+      expect(lockMkdirCalls).toBe(2);
+      await release();
+    });
   });
 
   describe("RunnerLockTimeoutError", () => {
