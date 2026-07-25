@@ -662,6 +662,61 @@ Describe "dysflow-vba-manager.ps1 — pure helper functions" {
             $trimmed | Should -Be 'Attribute VB_Name = "Form_Blanks"' `
                 -Because "whitespace at the start of the .cls text is not a valid first non-blank VB_Name"
         }
+
+        It "strips leaked Access document metadata from a form code-behind prelude" {
+            $input = @(
+                'Attribute VB_Name = "Form_Orders"'
+                'Version = 21'
+                'CodeBehindForm'
+                'Option Compare Database'
+                'Option Explicit'
+                'Public Sub SaveOrder()'
+                'End Sub'
+            ) -join "`r`n"
+
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_Orders'
+
+            $result | Should -Not -Match '(?m)^\s*Version\s*=' `
+                -Because "issue #1107: Version is Access serialization metadata, not valid standalone VBA"
+            $result | Should -Not -Match '(?m)^\s*CodeBehindForm\s*$' `
+                -Because "issue #1107: CodeBehindForm belongs in .form.txt, not the sibling .cls"
+            $result | Should -Match '(?m)^Option Compare Database\r?$'
+            $result | Should -Match '(?m)^Public Sub SaveOrder\(\)\r?$'
+        }
+
+        It "strips leaked report metadata and is idempotent" {
+            $input = @(
+                'Attribute VB_Name = "Report_Sales"'
+                'Version = 21'
+                'CodeBehindReport'
+                'Option Compare Database'
+                'Private Sub Report_Open(Cancel As Integer)'
+                'End Sub'
+            ) -join "`r`n"
+
+            $once = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Report_Sales'
+            $twice = Ensure-VbNameAttributeAtTop -Text $once -ModuleName 'Report_Sales'
+
+            $once | Should -Be $twice
+            $once | Should -Not -Match '(?m)^\s*(?:Version\s*=|CodeBehindReport\s*$)'
+            @($once -split "`r?`n" | Where-Object { $_ -match '^Attribute\s+VB_Name\b' }).Count | Should -Be 1
+        }
+
+        It "does not strip metadata-like lines after executable VBA begins" {
+            $input = @(
+                'Attribute VB_Name = "Form_MetadataWords"'
+                'Option Compare Database'
+                'Public Sub Example()'
+                'Version = 21'
+                'CodeBehindForm'
+                'End Sub'
+            ) -join "`r`n"
+
+            $result = Ensure-VbNameAttributeAtTop -Text $input -ModuleName 'Form_MetadataWords'
+
+            $result | Should -Be $input `
+                -Because "the repair must be limited to the Access-generated file prelude"
+        }
     }
 
     Context "Ensure-CodeBehindFormVbName (.form.txt CodeBehindForm injection, issue #743)" {
@@ -5069,6 +5124,33 @@ Describe "Import-DocumentCodeBehind — VB_Name normalization guard (issue #849)
             # VB_Name header. That is the observable behavior the fix delivers.
         } finally {
             if (Test-Path -LiteralPath $tmpSrc) { Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It "self-heals leaked Access document metadata before AddFromFile (issue #1107)" {
+        $clsText = @(
+            'Attribute VB_Name = "Form_Legacy"'
+            'Version = 21'
+            'CodeBehindForm'
+            'Option Compare Database'
+            'Option Explicit'
+            'Public Sub Foo()'
+            'End Sub'
+        ) -join "`r`n"
+        $tmpSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("idc_1107_{0}.cls" -f [guid]::NewGuid().ToString("N"))
+        try {
+            [System.IO.File]::WriteAllText($tmpSrc, $clsText, [System.Text.Encoding]::UTF8)
+            $script:EnsureVbNameOverride = $null
+
+            Import-DocumentCodeBehind -VbProject $script:FakeVbProject -ModuleName "Legacy" -SourcePath $tmpSrc
+
+            $script:AddFromFileCalls.Count | Should -Be 1
+            $script:AddFromFileCalls[0].Content | Should -Match 'Attribute VB_Name = "Form_Legacy"'
+            $script:AddFromFileCalls[0].Content | Should -Not -Match '(?m)^\s*Version\s*='
+            $script:AddFromFileCalls[0].Content | Should -Not -Match '(?m)^\s*CodeBehindForm\s*$'
+            $script:AddFromFileCalls[0].Content | Should -Match 'Public Sub Foo\(\)'
+        } finally {
+            Remove-Item -LiteralPath $tmpSrc -Force -ErrorAction SilentlyContinue
         }
     }
 
