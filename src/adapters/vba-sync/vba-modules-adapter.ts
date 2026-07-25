@@ -1146,6 +1146,20 @@ export class VbaModulesAdapter {
     const warnings = Array.isArray(data.warnings) ? data.warnings : [];
     const meta = { diagnostics: exportResult.diagnostics, durationMs: exportResult.durationMs };
 
+    // A preview still performs the read-only export inventory, but it must not
+    // postprocess or prune source files. `apply:true` remains the explicit
+    // commit override when callers also supply a preview flag.
+    if (params.apply !== true && (params.apply === false || params.dryRun === true)) {
+      return successResult(
+        {
+          ...data,
+          postprocess: undefined,
+          prune: { applied: false, reason: "preview", deleted: [] },
+        },
+        meta,
+      );
+    }
+
     // REQ-003 (issue #1053) — wire the curated ComboBox/ListBox allow-list
     // BEFORE prune runs. The post-process overwrites the same `.form.txt`
     // files that prune later inspects for keepsets, so the order matters:
