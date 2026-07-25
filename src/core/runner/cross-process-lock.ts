@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { isLockAlreadyExistsError, isTransientLockContentionError } from "../utils/lock-errors.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
@@ -25,8 +25,35 @@ export interface LockFileSystemPort {
   tmpdir(): string;
 }
 
+/**
+ * Produce one host-independent identity for an Access database path.
+ *
+ * Windows drive and UNC paths always use win32 semantics, even on Linux CI.
+ * POSIX paths are normalized lexically. Relative inputs are deliberately kept
+ * in their own namespace instead of being resolved against an implicit CWD;
+ * callers that need filesystem equivalence must supply an absolute path.
+ */
+export function canonicalizeAccessLockIdentity(accessPath: string): string {
+  const isUncPath = /^[\\/]{2}[^\\/]/.test(accessPath);
+  if (isUncPath) {
+    return `unc:${win32.normalize(accessPath).replace(/\\/g, "/").toLowerCase()}`;
+  }
+
+  const isWindowsDrivePath = /^[A-Za-z]:[\\/]/.test(accessPath);
+  if (isWindowsDrivePath) {
+    return `windows:${win32.normalize(accessPath).replace(/\\/g, "/").toLowerCase()}`;
+  }
+
+  const normalizedSeparators = accessPath.replace(/\\/g, "/");
+  const namespace = normalizedSeparators.startsWith("/") ? "posix" : "relative";
+  return `${namespace}:${posix.normalize(normalizedSeparators).toLowerCase()}`;
+}
+
 export function getCrossProcessLockPath(accessPath: string): string {
-  const hash = createHash("sha256").update(accessPath.toLowerCase()).digest("hex").slice(0, 16);
+  const hash = createHash("sha256")
+    .update(canonicalizeAccessLockIdentity(accessPath))
+    .digest("hex")
+    .slice(0, 16);
   return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
@@ -193,7 +220,7 @@ export const defaultAccessExecutionLocks = new Map<string, Promise<void>>();
  * Wraps `work` with both an in-process serialized queue (via `lockState`) and a
  * cross-process file-system lock.
  *
- * @param key           - The access path to lock on (normalized to lowercase).
+ * @param key           - The access path to lock on (canonicalized independently of host OS).
  * @param work          - The async unit of work to execute while holding the lock.
  * @param timeoutMs     - Max time to wait for the cross-process lock.
  * @param fileSystem    - Injected filesystem port. Production injects `nodeLockFileSystem`
@@ -223,7 +250,7 @@ export async function runWithAccessExecutionReadLock<T>(
   work: () => T | Promise<T>,
   lockState: Map<string, Promise<void>> = defaultAccessExecutionLocks,
 ): Promise<T> {
-  const normalizedKey = key.toLowerCase();
+  const normalizedKey = canonicalizeAccessLockIdentity(key);
   const previous = lockState.get(normalizedKey) ?? Promise.resolve();
   let releaseCurrent!: () => void;
   const current = previous.then(
@@ -256,7 +283,7 @@ export async function runWithAccessExecutionLock<T>(
     /* F3b: silent no-op — see startLockHeartbeat default */
   },
 ): Promise<T> {
-  const normalizedKey = key.toLowerCase();
+  const normalizedKey = canonicalizeAccessLockIdentity(key);
   const previous = lockState.get(normalizedKey) ?? Promise.resolve();
   let releaseCurrent!: () => void;
   const current = previous.then(
