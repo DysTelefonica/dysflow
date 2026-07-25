@@ -232,4 +232,40 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
     expect(sawRunning).toBe(false);
     expect(sawCompleted).toBe(true);
   });
+
+  it("records explicit cancellation as failed and never reports timeout diagnostics", async () => {
+    const destinationRoot = "C:/marker-test/aborted";
+    await cleanMarkerDir(destinationRoot);
+    const { registry, updates } = createRecordingRegistry(
+      destinationRoot,
+      8811,
+      "2026-07-25T12:00:00.000Z",
+    );
+    const executor: VbaManagerExecutor = async () => ({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      durationMs: 25,
+      timedOut: false,
+      aborted: true,
+    });
+    const service = new VbaSyncAdapter({
+      operationRegistry: registry,
+      accessPath: "C:/db/front.accdb",
+      destinationRoot,
+      env: {},
+      executor,
+    });
+
+    const result = await service.execute("delete_module", { moduleName: "TempModule" });
+    await cleanMarkerDir(destinationRoot);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VBA_MANAGER_ABORTED");
+      expect(result.error.message).not.toContain("timed out");
+    }
+    expect(updates.some((entry) => entry.status === "timed_out")).toBe(false);
+    expect(updates.at(-1)?.status).toBe("failed");
+  });
 });

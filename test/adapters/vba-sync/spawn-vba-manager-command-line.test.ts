@@ -117,6 +117,7 @@ describe("spawnVbaManager — child env derivation (issue #869)", () => {
     stderr: "",
     durationMs: 0,
     timedOut: false,
+    aborted: false,
   };
 
   beforeEach(() => {

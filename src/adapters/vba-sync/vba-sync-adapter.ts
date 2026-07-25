@@ -90,6 +90,8 @@ export type VbaManagerExecutionResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  /** True only when an explicit AbortSignal cancellation terminated the worker. */
+  aborted?: boolean;
   /**
    * #781 P2 — propagated from `spawnPowerShellProcess` when the underlying
    * `child_process.spawn` itself failed (e.g. ENOENT, EACCES). Distinct from
@@ -819,6 +821,17 @@ export class VbaSyncAdapter implements VbaSyncPort {
             },
           },
         ),
+        { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
+      );
+    }
+    if (result.aborted === true) {
+      return failureResult(
+        createDysflowError("VBA_MANAGER_ABORTED", `${toolName} was cancelled before completion.`, {
+          details: {
+            toolName,
+            durationMs: result.durationMs,
+          },
+        }),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       );
     }

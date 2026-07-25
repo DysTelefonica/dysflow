@@ -145,6 +145,7 @@ describe("spawnPowerShellProcess — bounded timeout settlement", () => {
     await expect(resultPromise).resolves.toMatchObject({
       exitCode: null,
       timedOut: true,
+      aborted: false,
       durationMs: 250,
     });
   });
@@ -179,8 +180,95 @@ describe("spawnPowerShellProcess — bounded timeout settlement", () => {
     expect(settled).toBe(true);
     await expect(resultPromise).resolves.toMatchObject({
       exitCode: null,
-      timedOut: true,
+      timedOut: false,
+      aborted: true,
       durationMs: 125,
+    });
+  });
+
+  it("treats an already-aborted signal as immediate cancellation", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+    const controller = new AbortController();
+    controller.abort();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 1_000,
+      signal: controller.signal,
+    });
+    await Promise.resolve();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    await expect(resultPromise).resolves.toMatchObject({
+      exitCode: null,
+      timedOut: false,
+      aborted: true,
+      durationMs: 0,
+    });
+  });
+
+  it("keeps the first termination cause when abort wins a race with the timeout", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+    const controller = new AbortController();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 100,
+      signal: controller.signal,
+    });
+    await vi.advanceTimersByTimeAsync(99);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: false,
+      aborted: true,
+      durationMs: 99,
+    });
+  });
+
+  it("keeps the first termination cause when timeout wins a race with abort", async () => {
+    vi.useFakeTimers();
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      pid: undefined,
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+    const controller = new AbortController();
+
+    const resultPromise = spawnPowerShellProcess({
+      args: ["-Command", "Start-Sleep 60"],
+      timeoutMs: 100,
+      signal: controller.signal,
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+
+    expect(kill).toHaveBeenCalledTimes(1);
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: true,
+      aborted: false,
+      durationMs: 100,
     });
   });
 });
@@ -233,7 +321,11 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
       expect(kill).toHaveBeenCalledTimes(1);
     }
 
-    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: true,
+      aborted: false,
+      exitCode: null,
+    });
   });
 
   it("spawns taskkill /T /F /PID when child has a pid on abort", async () => {
@@ -282,7 +374,11 @@ describe("spawnPowerShellProcess — tree-kill on Windows", () => {
       expect(kill).toHaveBeenCalledTimes(1);
     }
 
-    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: false,
+      aborted: true,
+      exitCode: null,
+    });
   });
 
   it("falls back to child.kill() when child has no pid", async () => {
@@ -373,7 +469,11 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     }
 
     expect(settled).toBe(true);
-    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: true,
+      aborted: false,
+      exitCode: null,
+    });
   });
 
   it("result settles only after taskkill close event fires on abort", async () => {
@@ -431,7 +531,11 @@ describe("spawnPowerShellProcess — awaited kill settlement (Goal C)", () => {
     }
 
     expect(settled).toBe(true);
-    await expect(resultPromise).resolves.toMatchObject({ timedOut: true, exitCode: null });
+    await expect(resultPromise).resolves.toMatchObject({
+      timedOut: false,
+      aborted: true,
+      exitCode: null,
+    });
   });
 
   it("settles within kill-bound even if taskkill never closes (stuck taskkill guard)", async () => {
@@ -752,6 +856,7 @@ describe("spawnPowerShellProcess — spawn failure distinct from timeout (#781 P
     expect(result.spawnError).toBe("spawn pwsh ENOENT");
     // Spawn error is distinct from timeout — exitCode is null but timedOut is false
     expect(result.timedOut).toBe(false);
+    expect(result.aborted).toBe(false);
     expect(result.exitCode).toBeNull();
     expect(result.stderr).toContain("spawn pwsh ENOENT");
   });
