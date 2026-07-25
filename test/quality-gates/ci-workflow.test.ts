@@ -113,7 +113,7 @@ describe("repository quality gates", () => {
 
     expect(packageJson.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.lint).toBe(
-      "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ tests/ scripts/ E2E_testing/_helpers/",
+      "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && node scripts/report-ts-import-cycles.mjs --check scripts/baselines/ts-import-cycles.json && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ tests/ scripts/ E2E_testing/_helpers/",
     );
     expect(packageJson.scripts).toHaveProperty("format");
     expect(packageJson.scripts).toHaveProperty("format:check");
