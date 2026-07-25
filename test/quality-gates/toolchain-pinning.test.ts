@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
 const PACKAGE_JSON = path.join(REPO_ROOT, "package.json");
+const BIOME_JSON = path.join(REPO_ROOT, "biome.json");
 
 /** The one documented exception: `@types/node` may use a tilde range. */
 const TILDE_EXEMPT = new Set(["@types/node"]);
@@ -33,8 +34,16 @@ type PackageJson = {
   devDependencies?: Record<string, string>;
 };
 
+type BiomeConfig = {
+  $schema?: string;
+};
+
 function readPackageJson(): PackageJson {
   return JSON.parse(readFileSync(PACKAGE_JSON, "utf8")) as PackageJson;
+}
+
+function readBiomeConfig(): BiomeConfig {
+  return JSON.parse(readFileSync(BIOME_JSON, "utf8")) as BiomeConfig;
 }
 
 function collectViolations(deps: Record<string, string> | undefined): string[] {
@@ -84,5 +93,13 @@ describe("toolchain exact-pinning guard (CI required)", () => {
       unexpected,
       `Only ${[...TILDE_EXEMPT].join(", ")} may use a tilde range. Unexpected tilde users:\n  ${unexpected.join("\n  ")}`,
     ).toEqual([]);
+  });
+
+  it("keeps the Biome config schema on the exact pinned CLI version", () => {
+    const biomeVersion = readPackageJson().devDependencies?.["@biomejs/biome"];
+    expect(biomeVersion, "@biomejs/biome must remain a pinned devDependency").toBeDefined();
+    expect(readBiomeConfig().$schema).toBe(
+      `https://biomejs.dev/schemas/${biomeVersion}/schema.json`,
+    );
   });
 });
