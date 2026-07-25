@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.24.0] - 2026-07-25
+
+- fix(vba-sync): strip document metadata from code-behind (#1113) - test(mcp): prove result contracts end to end (#1112) - chore(main): merge fix/1092 anchor frontend to active worktree + release prep (#1111) - refactor(schema): remove manual result contract registry (#1110) - refactor(mcp): add remaining executable result contracts (#1104) - fix(deps): patch PostCSS advisory (#1109) - refactor(mcp): derive dispatch result contracts by family (#1105) - refactor(mcp): migrate bootstrap result contracts (#1106) - fix(config): anchor frontend/source to active worktree (#1092) (#1093) - feat(mcp): validate handler results before serialization (#1103) - refactor(mcp): add executable result contract primitives (#1102)
+
+
 ## Unreleased
 
 ### Result-contract release validation
