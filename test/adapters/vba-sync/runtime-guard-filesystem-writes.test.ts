@@ -19,6 +19,8 @@
  * CLOSED (refuse) for any caller that points these paths at production.
  */
 
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { nodeFormFileSystem } from "../../../src/adapters/services/node-form-file-system";
@@ -394,19 +396,26 @@ describe("Issue #574 — runtime guard for VbaFormService.generateForm", () => {
     // resolver) but failing on Linux CI (because the runtime resolves the
     // segments as a POSIX-relative path, leaving the win32 branch in
     // isPathInside to compare across mismatched separators). Using
-    // `path.resolve` makes the destinationRoot match the platform-native
-    // resolver the service uses, so the runtime-guard contract is verified
-    // independently of any incidental cross-platform path behavior.
-    const outsideRuntimeRoot = path.resolve("dysflow-rg-test", "projects", "myapp");
-    const result = await service.generateForm({
-      spec: { name: "Form_Normal", kind: "Form", controls: [] },
-      destinationRoot: outsideRuntimeRoot,
-      apply: true,
-    });
-    // The guard did NOT block. Whether the spec validation/writing succeeds is
-    // unrelated to the runtime guard, so we only assert the guard's effect.
-    if (!result.ok) {
-      expect(result.error.code).not.toBe("INVALID_INPUT");
+    // A unique OS temp directory keeps destinationRoot platform-native while
+    // isolating repeated and parallel runs from both the repository and each other.
+    const repositoryResidualRoot = path.resolve("dysflow-rg-test");
+    const testRoot = mkdtempSync(path.join(tmpdir(), "dysflow-runtime-guard-"));
+    const outsideRuntimeRoot = path.join(testRoot, "projects", "myapp");
+    try {
+      const result = await service.generateForm({
+        spec: { name: "Form_Normal", kind: "Form", controls: [] },
+        destinationRoot: outsideRuntimeRoot,
+        apply: true,
+      });
+      // The guard did NOT block. Whether the spec validation/writing succeeds is
+      // unrelated to the runtime guard, so we only assert the guard's effect.
+      if (!result.ok) {
+        expect(result.error.code).not.toBe("INVALID_INPUT");
+      }
+    } finally {
+      rmSync(testRoot, { recursive: true, force: true });
     }
+    expect(existsSync(testRoot)).toBe(false);
+    expect(existsSync(repositoryResidualRoot)).toBe(false);
   });
 });
