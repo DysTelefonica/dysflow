@@ -36,9 +36,11 @@ import type { AccessOperationPreflightCleanupResult } from "../../../src/core/op
 function buildAdapterWithSpy(): {
   adapter: VbaModulesAdapter;
   executeCalls: Array<{ toolName: string; params: Record<string, unknown> }>;
+  rmCalls: string[];
   resolveCalls: number;
 } {
   const executeCalls: Array<{ toolName: string; params: Record<string, unknown> }> = [];
+  const rmCalls: string[] = [];
   let resolveCalls = 0;
 
   const orchestrator: VbaModulesOrchestrator = {
@@ -93,14 +95,16 @@ function buildAdapterWithSpy(): {
 
   const adapter = new VbaModulesAdapter(orchestrator, {
     mkdtemp: async () => "C:/repo",
-    readdir: async () => [],
+    readdir: async () => [{ name: "Orphan.bas", isDirectory: () => false, isFile: () => true }],
     readFile: async () => "",
     readFileBytes: async () => new Uint8Array(),
-    rm: async () => undefined,
+    rm: async (path) => {
+      rmCalls.push(path);
+    },
     tmpdir: () => "/tmp",
   });
 
-  return { adapter, executeCalls, resolveCalls };
+  return { adapter, executeCalls, rmCalls, resolveCalls };
 }
 
 describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", () => {
@@ -133,6 +137,63 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
     // The runner call must NOT carry a readOnly marker — apply:true
     // means "commit".
     expect(executeCalls[0]?.params.readOnly).toBeUndefined();
+  });
+
+  it("export_all({ apply:false, prune:true }) previews without pruning or export writes (#1138)", async () => {
+    const { adapter, executeCalls, rmCalls } = buildAdapterWithSpy();
+
+    const result = await adapter.execute("export_all", {
+      apply: false,
+      prune: true,
+      destinationRoot: "C:/repo/src",
+      projectId: "test",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(executeCalls).toHaveLength(1);
+    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    expect(rmCalls).toEqual([]);
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "preview", deleted: [] },
+    });
+  });
+
+  it("export_all({ dryRun:true, prune:true }) previews without pruning or export writes (#1138)", async () => {
+    const { adapter, executeCalls, rmCalls } = buildAdapterWithSpy();
+
+    const result = await adapter.execute("export_all", {
+      dryRun: true,
+      prune: true,
+      destinationRoot: "C:/repo/src",
+      projectId: "test",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(executeCalls).toHaveLength(1);
+    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    expect(rmCalls).toEqual([]);
+    expect(result.data).toMatchObject({
+      prune: { applied: false, reason: "preview", deleted: [] },
+    });
+  });
+
+  it("export_all({ apply:true, prune:true }) commits the prune (#1138)", async () => {
+    const { adapter, executeCalls, rmCalls } = buildAdapterWithSpy();
+
+    const result = await adapter.execute("export_all", {
+      apply: true,
+      prune: true,
+      destinationRoot: "C:/repo/src",
+      projectId: "test",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(executeCalls).toHaveLength(1);
+    expect(rmCalls).not.toEqual([]);
+    expect(result.data).toMatchObject({ prune: { applied: true } });
   });
 
   it("export_all({diff:true}) no longer errors with DIFF_MODE_REQUIRES_VERIFY_CODE (#757 unification)", async () => {
