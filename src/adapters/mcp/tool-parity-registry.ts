@@ -14,96 +14,6 @@ export type ParityToolDefinition = {
   description: string;
 };
 
-const implementedToolNames = new Set<DysflowMcpToolName>([
-  // alias tools (direct handler routes)
-  "list_access_operations",
-  "cleanup_access_operation",
-  "run_vba",
-  "query_sql",
-  "exec_sql",
-  "run_script",
-  "create_table",
-  "drop_table",
-  "seed_fixture",
-  "teardown_fixture",
-  // VBA sync tools — routed to vbaSyncToolService when configured
-  "export_modules",
-  "export_all",
-  "import_modules",
-  "import_all",
-  "list_objects",
-  "list_vba_modules",
-  "exists",
-  "test_vba",
-  "verify_code",
-  "delete_module",
-  "generate_erd",
-  "fix_encoding",
-  "validate_form_spec",
-  "generate_form",
-  "catalog_add_control",
-  "harvest_form_catalog",
-  "inspect_form",
-  "compare_form",
-  "lint_form_code",
-  "form_add_control",
-  "form_move_control",
-  "form_rename_control",
-  "form_serialize",
-  "form_deserialize",
-  "create_form_from_template",
-  "analyze_form_ui",
-  "map_form_behavior",
-  "generate_form_design_plan",
-  "apply_form_design_plan",
-  "copy_form_ui_pattern",
-  "verify_form_ui",
-  // Phase 6 (#813) — atomic exposure of the form mutation family.
-  "form_set_property",
-  "form_delete_control",
-  // Issue #872 F1 + F2 — batch property updates + control duplication;
-  // F5 — read-only geometry + control-list helpers. See the route table
-  // for the mutates flags + risk classification.
-  "form_set_properties",
-  "form_duplicate_control",
-  "form_get_geometry",
-  "form_list_controls",
-  // Phase 3 (#816) — batch geometry ergonomics. Align + distribute verbs.
-  "form_align_controls",
-  "form_distribute_controls",
-  // Phase 2 — Perception (#814). Read-only geometric renderer.
-  "render_form_preview",
-  // Phase 2 — Perception (#815). Read-only geometry lint.
-  "analyze_form_layout",
-  // Issue #817 — before/after visual diff composer.
-  "diff_form_preview",
-  // Issue #818 — schema-binding validator.
-  "verify_form_bindings",
-  // Issue #809 — sync_binary workflow tool. Composes verify_code +
-  // import_modules + export_modules into a single round-trip.
-  "sync_binary",
-  "vba_orphan_audit",
-  "vba_inline_execution",
-  // query slice tools — routed to queryService
-  "list_tables",
-  "list_linked_tables",
-  "get_schema",
-  "count_rows",
-  "distinct_values",
-  "compare_backends",
-  "list_access_files",
-  "get_relationships",
-  "list_links",
-  "link_tables",
-  "relink_tables",
-  "localize_backend_links",
-  "unlink_table",
-  "export_queries",
-  "import_queries",
-  "compact_repair",
-  "relink_directory",
-]);
-
 function buildDescription(
   name: DysflowMcpToolName,
   slice: ParitySlice,
@@ -443,7 +353,10 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
 export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP_TOOL_NAMES.map(
   (name) => {
     const slice = classifyToolName(name);
-    const status = implementedToolNames.has(name) ? "implemented" : "pending";
+    // Zero-hidden-tools is repository policy (#510): canonical advertised
+    // names are implemented by definition. Parity therefore derives from the
+    // canonical registry instead of requiring a second full name list.
+    const status: ParityStatus = "implemented";
     return {
       name,
       slice,
@@ -470,10 +383,8 @@ export function getToolDefinitionsBySlice(slice: ParitySlice): readonly DysflowM
 }
 
 /**
- * Returns the set of tool names whose status is "pending" in the parity registry.
- * This is the single source of truth for which tools are hidden stubs — derived
- * from the registry rather than maintained as a separate hand-authored literal.
- * Exported for contract testing (closes #433).
+ * Compatibility API for callers that still inspect hidden/pending tools.
+ * Zero-hidden-tools policy keeps this empty while deriving it from parity output.
  */
 export function pendingToolNames(): ReadonlySet<DysflowMcpToolName> {
   return new Set(
@@ -482,8 +393,7 @@ export function pendingToolNames(): ReadonlySet<DysflowMcpToolName> {
 }
 
 /**
- * Returns true when the named tool is a hidden stub (status "pending" in the
- * parity registry). Use this instead of the removed HIDDEN_STUB_TOOL_NAMES set.
+ * Compatibility predicate for the former hidden-stub contract.
  */
 export function isHiddenStubTool(name: DysflowMcpToolName): boolean {
   return getToolDefinition(name).status === "pending";

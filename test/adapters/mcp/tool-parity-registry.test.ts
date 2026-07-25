@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { GeneratedDispatchToolName } from "../../../src/adapters/mcp/dispatch-routes";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
@@ -15,7 +17,16 @@ import { ALIAS_TOOL_NAMES, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/too
  * "Real handler route" means the tool is NOT a hidden stub
  * (i.e., isHiddenStubTool(name) is false — those always return TOOL_NOT_IMPLEMENTED).
  */
-describe("tool-parity-registry implementedToolNames contract", () => {
+describe("tool-parity-registry implementation-state contract", () => {
+  it("derives implementation status without a second hand-authored tool-name set", () => {
+    const sourcePath = fileURLToPath(
+      new URL("../../../src/adapters/mcp/tool-parity-registry.ts", import.meta.url),
+    );
+    const source = readFileSync(sourcePath, "utf8");
+
+    expect(source).not.toMatch(/new Set<DysflowMcpToolName>\(\s*\[/);
+  });
+
   it("marks every non-stub tool as implemented in the registry", () => {
     const registryByName = new Map(TOOL_PARITY_REGISTRY.map((entry) => [entry.name, entry]));
 
