@@ -12,6 +12,7 @@ export type PowerShellProcessResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  aborted: boolean;
   powershellWorkerPid?: number;
   /**
    * #781 P2 — non-empty when `child_process.spawn` itself failed (e.g. ENOENT
@@ -106,23 +107,26 @@ export function spawnPowerShellProcess(
     });
     let stdout = "";
     let stderr = "";
-    let timedOut = false;
+    let terminationCause: "timeout" | "abort" | undefined;
     let settled = false;
     const finish = (exitCode: number | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortChild);
       resolve({
         exitCode,
         stdout,
         stderr,
         durationMs: Date.now() - startedAt,
-        timedOut,
+        timedOut: terminationCause === "timeout",
+        aborted: terminationCause === "abort",
         powershellWorkerPid: child.pid,
       });
     };
-    const abortChild = () => {
-      timedOut = true;
+    const terminateChild = (cause: "timeout" | "abort"): void => {
+      if (settled || terminationCause !== undefined) return;
+      terminationCause = cause;
       if (child.pid !== undefined && process.platform === "win32") {
         void killProcessTree(child.pid).then(() => finish(null));
       } else {
@@ -130,9 +134,14 @@ export function spawnPowerShellProcess(
         finish(null);
       }
     };
-    const timer = setTimeout(abortChild, options.timeoutMs);
+    const abortChild = (): void => terminateChild("abort");
+    const timer = setTimeout(() => terminateChild("timeout"), options.timeoutMs);
 
-    options.signal?.addEventListener("abort", abortChild, { once: true });
+    if (options.signal?.aborted === true) {
+      abortChild();
+    } else {
+      options.signal?.addEventListener("abort", abortChild, { once: true });
+    }
     child.stdout.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       stdout += text;
@@ -151,15 +160,17 @@ export function spawnPowerShellProcess(
       // consumers can branch on it and surface a specific diagnostic code
       // (e.g. POWERSHELL_SPAWN_FAILED) instead of a generic exit-code failure.
       const spawnError = error.message;
-      if (settled) return;
+      if (settled || terminationCause !== undefined) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abortChild);
       resolve({
         exitCode: null,
         stdout,
         stderr,
         durationMs: Date.now() - startedAt,
         timedOut: false,
+        aborted: false,
         powershellWorkerPid: child.pid,
         spawnError,
       });

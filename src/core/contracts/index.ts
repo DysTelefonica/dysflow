@@ -131,6 +131,8 @@ export type PowerShellExecutionResult = {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  /** True only when an explicit AbortSignal cancellation terminated the worker. */
+  aborted?: boolean;
   accessProcess?: AccessProcessOwnership;
   powershellWorkerPid?: number;
   /**
