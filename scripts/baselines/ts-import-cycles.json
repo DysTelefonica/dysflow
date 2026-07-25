@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-07-25",
+  "cycles": [
+    [
+      "src/adapters/http/http-services-factory.ts",
+      "src/adapters/http/server.ts"
+    ],
+    [
+      "src/adapters/mcp/alias-tools.ts",
+      "src/adapters/mcp/canonical-handlers.ts",
+      "src/adapters/mcp/contracts/bootstrap-result-contracts.ts",
+      "src/adapters/mcp/contracts/dispatch-result-contracts.ts",
+      "src/adapters/mcp/contracts/executable-result-contract-registry.ts",
+      "src/adapters/mcp/contracts/remaining-result-contracts.ts",
+      "src/adapters/mcp/contracts/result-contract.ts",
+      "src/adapters/mcp/contracts/result-validation.ts",
+      "src/adapters/mcp/cwd-override.ts",
+      "src/adapters/mcp/diagnose-tool.ts",
+      "src/adapters/mcp/dispatch-common.ts",
+      "src/adapters/mcp/dispatch-factory.ts",
+      "src/adapters/mcp/dispatch-routes.ts",
+      "src/adapters/mcp/dispatch.ts",
+      "src/adapters/mcp/get-capabilities-tool.ts",
+      "src/adapters/mcp/logs-tool.ts",
+      "src/adapters/mcp/mcp-tool-contracts.ts",
+      "src/adapters/mcp/mcp-tool-risks.ts",
+      "src/adapters/mcp/resolve-project-tool.ts",
+      "src/adapters/mcp/result-translation.ts",
+      "src/adapters/mcp/schema-tool.ts",
+      "src/adapters/mcp/state-tool.ts",
+      "src/adapters/mcp/tools.ts",
+      "src/adapters/mcp/write-execution-dispatch.ts"
+    ],
+    [
+      "src/adapters/vba-sync/vba-forms-adapter.ts",
+      "src/adapters/vba-sync/vba-forms-ai-tools.ts",
+      "src/adapters/vba-sync/vba-forms-clone-tools.ts",
+      "src/adapters/vba-sync/vba-forms-guarded-write.ts",
+      "src/adapters/vba-sync/vba-forms-inspection-tools.ts",
+      "src/adapters/vba-sync/vba-forms-lint-adapter.ts",
+      "src/adapters/vba-sync/vba-forms-lint-tools.ts",
+      "src/adapters/vba-sync/vba-forms-managed-source.ts",
+      "src/adapters/vba-sync/vba-forms-mutation-tools.ts",
+      "src/adapters/vba-sync/vba-forms-rollback.ts",
+      "src/adapters/vba-sync/vba-forms-serialization-tools.ts",
+      "src/adapters/vba-sync/vba-forms-types.ts",
+      "src/adapters/vba-sync/vba-modules-adapter.ts",
+      "src/adapters/vba-sync/vba-sync-adapter.ts"
+    ],
+    [
+      "src/cli/commands/serve.ts",
+      "src/cli/commands/types.ts"
+    ],
+    [
+      "src/core/services/vba-source-comparison-chunking.ts",
+      "src/core/services/vba-source-comparison.ts"
+    ]
+  ]
+}

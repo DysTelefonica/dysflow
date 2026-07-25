@@ -13,10 +13,13 @@ function compareUtf16CodeUnits(left, right) {
 function parseArgs(argv) {
   let root = process.cwd();
   let files;
+  let baseline;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--root") {
       root = resolve(argv[++index]);
+    } else if (argument === "--check") {
+      baseline = argv[++index];
     } else if (argument === "--files") {
       files = [];
       while (index + 1 < argv.length && !argv[index + 1].startsWith("--")) {
@@ -26,7 +29,7 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
-  return { root, files };
+  return { root, files, baseline };
 }
 
 function walk(directory) {
@@ -131,7 +134,78 @@ function stronglyConnectedComponents(graph) {
   return components;
 }
 
-const { root, files } = parseArgs(process.argv.slice(2));
+function readBaseline(root, baselinePath) {
+  const path = resolve(root, baselinePath);
+  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  if (
+    parsed?.version !== 1 ||
+    !Array.isArray(parsed.cycles) ||
+    !parsed.cycles.every(
+      (cycle) => Array.isArray(cycle) && cycle.every((member) => typeof member === "string"),
+    )
+  ) {
+    throw new Error(`Invalid TypeScript import cycle baseline: ${reportPath(root, path)}`);
+  }
+  return parsed.cycles;
+}
+
+function baselineViolations(root, graph, cycles, baselineCycles) {
+  const baselineSets = baselineCycles.map((cycle) => new Set(cycle));
+  const reviewedMembers = new Set(baselineCycles.flat());
+  const graphByReportPath = new Map(
+    [...graph.entries()].map(([source, targets]) => [
+      reportPath(root, source),
+      targets.map((target) => reportPath(root, target)),
+    ]),
+  );
+
+  return cycles.flatMap((cycle) => {
+    if (baselineSets.some((baseline) => cycle.every((member) => baseline.has(member)))) return [];
+
+    const cycleMembers = new Set(cycle);
+    const newMembers = cycle.filter((member) => !reviewedMembers.has(member));
+    const overlappingBaselines = baselineSets.filter((baseline) =>
+      cycle.some((member) => baseline.has(member)),
+    );
+    const edges = cycle.flatMap((source) =>
+      (graphByReportPath.get(source) ?? [])
+        .filter((target) => cycleMembers.has(target))
+        .map((target) => `${source} -> ${target}`),
+    );
+    return [
+      {
+        cycle,
+        newMembers,
+        merged: newMembers.length === 0 && overlappingBaselines.length > 1,
+        edges,
+      },
+    ];
+  });
+}
+
+function checkBaseline(root, graph, cycles, baselinePath) {
+  const violations = baselineViolations(root, graph, cycles, readBaseline(root, baselinePath));
+  if (violations.length === 0) return;
+
+  process.stderr.write("TypeScript import cycle baseline failed.\n");
+  for (const violation of violations) {
+    process.stderr.write(`Unexpected cyclic SCC: ${violation.cycle.join(", ")}\n`);
+    if (violation.newMembers.length > 0) {
+      process.stderr.write(`Unapproved cyclic members: ${violation.newMembers.join(", ")}\n`);
+    } else if (violation.merged) {
+      process.stderr.write("Reason: baseline SCCs were merged.\n");
+    } else {
+      process.stderr.write(
+        "Reason: cyclic members are not covered by one reviewed baseline SCC.\n",
+      );
+    }
+    process.stderr.write("Import edges:\n");
+    for (const edge of violation.edges) process.stderr.write(`  ${edge}\n`);
+  }
+  process.exitCode = 1;
+}
+
+const { root, files, baseline } = parseArgs(process.argv.slice(2));
 const graph = buildGraph(root, files);
 const components = stronglyConnectedComponents(graph);
 const cycles = components
@@ -148,4 +222,8 @@ const result = {
   cyclicSizes: cycles.map((cycle) => cycle.length).sort((a, b) => b - a),
   cycles,
 };
-process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+if (baseline === undefined) {
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+} else {
+  checkBaseline(root, graph, cycles, baseline);
+}
