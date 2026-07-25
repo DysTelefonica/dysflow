@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.24.1] - 2026-07-25
+
+- fix(gitignore): stop hiding canonical Access form sources (#1114) - fix(core): preserve lock-acquisition backoff when stale eviction fails (#1115) - fix(core): canonicalize Access lock identity across Windows path aliases (#1116) - fix(powershell): distinguish AbortSignal cancellation from timeout (#1117) - test(architecture): enforce a non-growing TypeScript import-cycle baseline (#1118) - refactor(mcp): restore tools.ts as an acyclic composition facade (#1119) - refactor(mcp): derive parity state without duplicating every tool name (#1120) - chore(tooling): align Biome schema with the pinned CLI version (#1121) - test(vba-sync): isolate runtime-guard fixture from the repository workspace (#1130)
+
+
 ## [v2.24.0] - 2026-07-25
 
 - fix(vba-sync): strip document metadata from code-behind (#1113) - test(mcp): prove result contracts end to end (#1112) - chore(main): merge fix/1092 anchor frontend to active worktree + release prep (#1111) - refactor(schema): remove manual result contract registry (#1110) - refactor(mcp): add remaining executable result contracts (#1104) - fix(deps): patch PostCSS advisory (#1109) - refactor(mcp): derive dispatch result contracts by family (#1105) - refactor(mcp): migrate bootstrap result contracts (#1106) - fix(config): anchor frontend/source to active worktree (#1092) (#1093) - feat(mcp): validate handler results before serialization (#1103) - refactor(mcp): add executable result contract primitives (#1102)
