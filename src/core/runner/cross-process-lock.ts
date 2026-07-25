@@ -67,12 +67,17 @@ export async function evictStaleLock(
     // Re-check under the claim: the lock may have been refreshed since the first stat.
     const current = await fileSystem.stat(lockPath);
     if (current !== null && Date.now() - current.mtimeMs > staleMs) {
-      await fileSystem.rm(lockPath, { recursive: true, force: true }).catch(() => {});
+      try {
+        await fileSystem.rm(lockPath, { recursive: true, force: true });
+        return true;
+      } catch {
+        return false;
+      }
     }
+    return false;
   } finally {
     await fileSystem.rm(claimPath, { recursive: true, force: true }).catch(() => {});
   }
-  return true;
 }
 
 /**
