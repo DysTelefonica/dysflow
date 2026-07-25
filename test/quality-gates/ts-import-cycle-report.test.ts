@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,6 +15,61 @@ function run(root: string, files?: string[]): Record<string, unknown> {
 function runRaw(root: string): string {
   return execFileSync(process.execPath, [script, "--root", root], { encoding: "utf8" });
 }
+
+function project(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), "dysflow-cycle-gate-"));
+  mkdirSync(join(root, "src"));
+  for (const [name, source] of Object.entries(files)) {
+    writeFileSync(join(root, "src", name), source);
+  }
+  return root;
+}
+
+function check(
+  root: string,
+  cycles: readonly (readonly string[])[],
+): { status: number | null; stderr: string } {
+  const baseline = join(root, "cycle-baseline.json");
+  writeFileSync(baseline, JSON.stringify({ version: 1, cycles }));
+  const result = spawnSync(process.execPath, [script, "--root", root, "--check", baseline], {
+    encoding: "utf8",
+  });
+  return { status: result.status, stderr: result.stderr };
+}
+
+const monotonicImprovementFixtures: Array<{
+  scenario: string;
+  baseline: string[][];
+  files: Record<string, string>;
+}> = [
+  {
+    scenario: "shrinks an existing SCC",
+    baseline: [["src/a.ts", "src/b.ts", "src/c.ts"]],
+    files: {
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\n',
+      "c.ts": "export const c = true;\n",
+    },
+  },
+  {
+    scenario: "splits an existing SCC",
+    baseline: [["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]],
+    files: {
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\n',
+      "c.ts": 'import "./d.js";\n',
+      "d.ts": 'import "./c.js";\n',
+    },
+  },
+  {
+    scenario: "eliminates an existing SCC",
+    baseline: [["src/a.ts", "src/b.ts"]],
+    files: {
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": "export const b = true;\n",
+    },
+  },
+];
 
 describe("TypeScript import cycle report", () => {
   it("reports deterministic SCC evidence from relative imports and re-exports", () => {
@@ -70,5 +125,63 @@ describe("TypeScript import cycle report", () => {
         ["src/Z.ts", "src/_q.ts"],
       ],
     });
+  });
+
+  it("rejects a new cyclic SCC and reports its members and internal import edges", () => {
+    const root = project({
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\n',
+    });
+
+    const result = check(root, []);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("src/a.ts");
+    expect(result.stderr).toContain("src/b.ts");
+    expect(result.stderr).toContain("src/a.ts -> src/b.ts");
+    expect(result.stderr).toContain("src/b.ts -> src/a.ts");
+  });
+
+  it("rejects growth of a reviewed SCC", () => {
+    const root = project({
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\nimport "./c.js";\n',
+      "c.ts": 'import "./b.js";\n',
+    });
+
+    const result = check(root, [["src/a.ts", "src/b.ts"]]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Unapproved cyclic members: src/c.ts");
+    expect(result.stderr).toContain("src/b.ts -> src/c.ts");
+  });
+
+  it("rejects a merge of two independently reviewed SCCs", () => {
+    const root = project({
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\nimport "./c.js";\n',
+      "c.ts": 'import "./d.js";\n',
+      "d.ts": 'import "./c.js";\nimport "./a.js";\n',
+    });
+
+    const result = check(root, [
+      ["src/a.ts", "src/b.ts"],
+      ["src/c.ts", "src/d.ts"],
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("baseline SCCs were merged");
+    expect(result.stderr).toContain("src/b.ts -> src/c.ts");
+    expect(result.stderr).toContain("src/d.ts -> src/a.ts");
+  });
+
+  it.each(monotonicImprovementFixtures)("allows monotonic improvement when it $scenario", ({
+    baseline,
+    files,
+  }) => {
+    const result = check(project(files), baseline);
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
   });
 });
