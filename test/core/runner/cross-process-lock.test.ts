@@ -11,11 +11,13 @@ import { nodeLockFileSystem } from "../../../src/adapters/runner/node-lock-file-
 import {
   acquireCrossProcessAccessLock,
   CROSS_PROCESS_LOCK_STALE_MS,
+  canonicalizeAccessLockIdentity,
   evictStaleLock,
   getCrossProcessLockPath,
   type LockFileSystemPort,
   RunnerLockTimeoutError,
   runWithAccessExecutionLock,
+  runWithAccessExecutionReadLock,
   startLockHeartbeat,
 } from "../../../src/core/runner/cross-process-lock.js";
 
@@ -37,6 +39,36 @@ describe("cross-process-lock module API", () => {
       const path1 = getCrossProcessLockPath("C:/data/a.accdb");
       const path2 = getCrossProcessLockPath("C:/data/b.accdb");
       expect(path1).not.toBe(path2);
+    });
+
+    it("uses one identity and lock directory for Windows separator and dot-segment aliases", () => {
+      const aliases = [
+        "C:\\data\\finance.accdb",
+        "C:/data/finance.accdb",
+        "c:/data/./finance.accdb",
+      ];
+
+      expect(new Set(aliases.map(canonicalizeAccessLockIdentity))).toHaveLength(1);
+      expect(new Set(aliases.map(getCrossProcessLockPath))).toHaveLength(1);
+    });
+
+    it("normalizes UNC aliases without collapsing them into POSIX identity", () => {
+      const backslashAlias = "\\\\Server\\Share\\archive\\..\\finance.accdb";
+      const slashAlias = "//server/share/finance.accdb";
+      const identity = canonicalizeAccessLockIdentity(backslashAlias);
+
+      expect(identity).toBe(canonicalizeAccessLockIdentity(slashAlias));
+      expect(identity).toBe("unc://server/share/finance.accdb");
+      expect(identity).not.toBe(canonicalizeAccessLockIdentity("/server/share/finance.accdb"));
+    });
+
+    it("keeps relative paths in an explicit identity namespace", () => {
+      expect(canonicalizeAccessLockIdentity("./data/../finance.accdb")).toBe(
+        "relative:finance.accdb",
+      );
+      expect(canonicalizeAccessLockIdentity("finance.accdb")).not.toBe(
+        canonicalizeAccessLockIdentity("/finance.accdb"),
+      );
     });
   });
 
@@ -109,6 +141,61 @@ describe("cross-process-lock module API", () => {
       expect(startSecond).toBeLessThan(endFirst);
     });
 
+    it.each([
+      {
+        style: "Windows",
+        readAlias: "C:\\data\\finance.accdb",
+        writeAlias: "c:/data/archive/../finance.accdb",
+      },
+      {
+        style: "POSIX",
+        readAlias: "/data/finance.accdb",
+        writeAlias: "/data/archive/../finance.accdb",
+      },
+    ])("shares one read/write in-memory queue for $style aliases", async ({
+      readAlias,
+      writeAlias,
+    }) => {
+      const events: string[] = [];
+      const lockState = new Map<string, Promise<void>>();
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => path,
+        rm: async () => {},
+        stat: async () => null,
+        utimes: async () => {},
+        writeFile: async () => {},
+        tmpdir: () => tmpdir(),
+      };
+
+      const [readResult, writeResult] = await Promise.all([
+        runWithAccessExecutionReadLock(
+          readAlias,
+          async () => {
+            events.push("start:read");
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            events.push("end:read");
+            return "read";
+          },
+          lockState,
+        ),
+        runWithAccessExecutionLock(
+          writeAlias,
+          async () => {
+            events.push("start:write");
+            events.push("end:write");
+            return "write";
+          },
+          5_000,
+          fileSystem,
+          lockState,
+        ),
+      ]);
+
+      expect(readResult).toBe("read");
+      expect(writeResult).toBe("write");
+      expect(events).toEqual(["start:read", "end:read", "start:write", "end:write"]);
+    });
+
     it("accepts work that returns a non-promise value", async () => {
       const lockState = new Map<string, Promise<void>>();
       const dbPath = join(tmpdir(), "sync-result-deterministic.accdb");
@@ -154,7 +241,7 @@ describe("cross-process-lock module API", () => {
         nodeLockFileSystem,
         lockState,
       );
-      const key = dbPath.toLowerCase();
+      const key = canonicalizeAccessLockIdentity(dbPath);
       expect(lockState.has(key)).toBe(false);
     });
 
@@ -189,7 +276,7 @@ describe("cross-process-lock module API", () => {
       const lockState = new Map<string, Promise<void>>();
       const dbPath = join(tmpdir(), "poison-test-deterministic.accdb");
       const lockPath = getCrossProcessLockPath(dbPath);
-      const key = dbPath.toLowerCase();
+      const key = canonicalizeAccessLockIdentity(dbPath);
       // Pre-create the lock dir so acquireCrossProcessAccessLock sees EEXIST, enters the
       // wait loop, and (with a 1ms timeout) throws RunnerLockTimeoutError. That throw
       // happens BEFORE the try/finally that releases the in-process lock — so a regression
