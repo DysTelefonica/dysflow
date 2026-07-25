@@ -184,4 +184,19 @@ describe("TypeScript import cycle report", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
   });
+
+  it("keeps the MCP tools facade outside cyclic SCCs while accepting baseline reduction", () => {
+    const report = run(process.cwd()) as { cycles: string[][] };
+    const cycleMembers = report.cycles.flat();
+
+    expect(cycleMembers).not.toContain("src/adapters/mcp/tools.ts");
+
+    const baselineResult = spawnSync(
+      process.execPath,
+      [script, "--check", resolve("scripts/baselines/ts-import-cycles.json")],
+      { encoding: "utf8" },
+    );
+    expect(baselineResult.status).toBe(0);
+    expect(baselineResult.stderr).toBe("");
+  });
 });

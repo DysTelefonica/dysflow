@@ -1,7 +1,7 @@
 import { ALIAS_TOOL_NAME_LIST, type AliasToolName } from "./alias-tools.js";
 import { type GeneratedDispatchToolName, MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import type { DysflowMcpToolName } from "./mcp-tool-registry.js";
-import type { ModernDysflowMcpToolName } from "./tools.js";
+import type { ModernDysflowMcpToolName } from "./modern-tool-registry.js";
 
 export type McpToolAccess = "read-only" | "read-write" | "conditional-write";
 export type McpToolWriteGate = "none" | "conditional";
