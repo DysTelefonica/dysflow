@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.24.2] - 2026-07-26
+
+- fix(vba-sync): prevent export_all preview intent from running prune or postprocess side effects (#1138), with regression tests
+
+
 ## [v2.24.1] - 2026-07-25
 
 - fix(gitignore): stop hiding canonical Access form sources (#1114) - fix(core): preserve lock-acquisition backoff when stale eviction fails (#1115) - fix(core): canonicalize Access lock identity across Windows path aliases (#1116) - fix(powershell): distinguish AbortSignal cancellation from timeout (#1117) - test(architecture): enforce a non-growing TypeScript import-cycle baseline (#1118) - refactor(mcp): restore tools.ts as an acyclic composition facade (#1119) - refactor(mcp): derive parity state without duplicating every tool name (#1120) - chore(tooling): align Biome schema with the pinned CLI version (#1121) - test(vba-sync): isolate runtime-guard fixture from the repository workspace (#1130)
