@@ -2,8 +2,32 @@
 
 ## [v2.24.3] - 2026-07-26
 
-- fix(ci): resolve the audit tool to a spelling Windows can actually launch (#1151) - fix(ci): make the dependency audit runnable on Windows and honest about failures (#1150) - fix(core): make a leaked eviction claim recoverable instead of permanent (#1148) - ci: run the full quality gates on the supported Windows platform (#1145) - Merge pull request #1144 from DysTelefonica/test/1136-parity-assertions - test(mcp): replace vacuous parity assertions - Merge pull request #1143 from DysTelefonica/chore/1137-update-cycle-baseline - Merge pull request #1142 from DysTelefonica/docs/1135-abort-timeout-changelog - chore(tooling): add guarded cycle baseline update - docs(changelog): document abort timeout migration
+### Closed issues
 
+- #1134 — `fix(core): leaked .evicting claim permanently disables stale-lock eviction` (PR #1148)
+- #1149 — `fix(ci): dependency audit cannot spawn pnpm on Windows and misreports it as a registry fault` (PRs #1150, #1151)
+- #1146 — `fix(e2e): E2E restore containment rejects Windows 8.3 short paths` (PR #1145)
+- #1147 — `test(vba-sync): Windows-only spawn test times out below its own spawn budget` (PR #1145)
+- #1136 — `test(mcp): remove vacuous parity assertions that cannot fail` (PR #1144)
+- #1137 — `chore(tooling): add a guarded --update-baseline flag to the import-cycle reporter` (PR #1143)
+- #1135 — `docs(changelog): document the abort/timeout semantics change in v2.24.1` (PR #1142)
+
+### Fixed
+
+- Stale-lock eviction recovers from a leaked eviction claim instead of being disabled for good. Previously, a single failed cleanup of the `<lockPath>.evicting` marker — the documented trigger is a concurrent release leaving the directory in Windows `DELETE_PENDING`, surfacing as `EACCES`/`EPERM` — permanently and silently stopped that lock from ever being evicted again. Every later acquirer burned its full timeout and threw `RunnerLockTimeoutError` with nothing in the logs to explain it. Recovery is now three-part: the claim carries an owner record; a claim older than the stale window whose owner process is gone (or that carries no readable owner record) is treated as leaked, removed, and re-taken once; and a claim older than the recovery ceiling is reclaimed even when its pid still resolves, because recycled pids make liveness alone insufficient. A claim younger than the stale window is still a genuine concurrent eviction and still backs off, so contended-lock behavior is unchanged.
+- Eviction no longer trusts the claim alone. The lock's owner record is re-read under the claim and removal is refused unless it still matches the instance observed as stale, so a lock already replaced by a new acquirer survives even if claim exclusivity is defeated. Locks written before owner records existed remain evictable.
+- Both previously swallowed claim-removal failures now emit a diagnostic, so a claim that resists removal is visible rather than silent.
+
+### CI and tooling (no change to the shipped runtime)
+
+- The quality gates (lint, tests, build, coverage) run on `windows-latest`, the only platform Dysflow supports; release publication keeps its platform-neutral packaging step but now depends on a Windows validation job. Checkouts are pinned to LF working-tree bytes, with Access/VBA sources excluded from normalization so byte-for-byte binary comparison is unaffected.
+- The dependency-audit gate can actually run on Windows. It resolves the audit command on disk honoring `PATH`/`PATHEXT`, prefers a launchable spelling over an extensionless script of the same name, and uses a shell only for targets that require an interpreter. A command that cannot be launched is reported as `audit-command-not-executable` instead of being misattributed to the npm registry as `malformed-response`.
+- The MCP tool-parity suite asserts real parity instead of tautologies, and the TypeScript import-cycle reporter gained a guarded `--update-baseline` flag so the baseline is revised deliberately rather than by hand.
+
+### Migration notes
+
+- No API or contract changes in this release. Consumers upgrading from v2.24.2 need no code changes.
+- If a project has been hitting `RunnerLockTimeoutError` on every Access operation against one database, that lock may be carrying a leaked eviction claim from a previous version. Upgrading is sufficient — the claim is now aged out automatically; no manual deletion of `<lockPath>.evicting` is required.
 
 ## [v2.24.2] - 2026-07-26
 
