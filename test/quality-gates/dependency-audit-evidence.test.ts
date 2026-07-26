@@ -152,6 +152,33 @@ describe("dependency audit evidence", () => {
     },
   );
 
+  it.skipIf(process.platform !== "win32")(
+    "resolves a PATH tool that ships an extensionless script beside its .cmd (#1149)",
+    () => {
+      // Exactly the runner layout: PNPM_HOME holds an extensionless Node script,
+      // `pnpm.CMD`, and `pnpm.ps1` for the same tool. Preferring the extensionless
+      // spelling resolves a path Windows then refuses to launch, which is how the
+      // first fix produced an honest `audit-command-not-executable` for a tool that
+      // was in fact present and runnable.
+      const binDir = mkdtempSync(join(tmpdir(), "dysflow-audit-bin-"));
+      tempRoots.push(binDir);
+      writeFileSync(join(binDir, "fakeaudit"), "#!/usr/bin/env node\n", "utf8");
+      writeFileSync(
+        join(binDir, "fakeaudit.cmd"),
+        ["@echo off", `"${process.execPath}" "${STUB}" %*`, ""].join("\r\n"),
+        "utf8",
+      );
+
+      const audit = runAudit("clean", "fail", {
+        DYSFLOW_AUDIT_COMMAND_JSON: JSON.stringify(["fakeaudit"]),
+        PATH: `${binDir};${process.env.PATH ?? ""}`,
+      });
+
+      expect(audit.report.reason).not.toBe("audit-command-not-executable");
+      expect(audit.report.status).toBe("clean");
+    },
+  );
+
   it("pins CI to the wrapper without registry-error masking", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
     expect(workflow).toContain("node scripts/dependency-audit-evidence.mjs");

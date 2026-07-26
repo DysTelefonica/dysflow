@@ -82,7 +82,11 @@ function runAuditCommand(parts) {
     windowsHide: true,
     env: process.env,
   };
-  const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(resolved);
+  // Only a real Windows image is a valid direct spawn target. Everything else on
+  // PATH there — `.cmd`, `.bat`, `.ps1`, and the extensionless Node scripts that
+  // package managers ship alongside them — needs an interpreter, so it goes
+  // through the shell rather than failing as EINVAL/ENOEXEC.
+  const needsShell = process.platform === "win32" && !/\.(exe|com)$/i.test(resolved);
   return spawnSync(
     needsShell ? quoteForShell(resolved) : resolved,
     needsShell ? parts.slice(1).map(quoteForShell) : parts.slice(1),
@@ -94,12 +98,20 @@ function quoteForShell(part) {
   return /[\s&|<>^"]/.test(part) ? `"${part.replace(/"/g, '""')}"` : part;
 }
 
-/** Locate `name` on disk, honoring PATH and (on Windows) PATHEXT. */
+/**
+ * Locate `name` on disk, honoring PATH and (on Windows) PATHEXT.
+ *
+ * On Windows the PATHEXT candidates are tried BEFORE the extensionless one. A
+ * package manager directory holds several spellings of the same tool — pnpm ships
+ * an extensionless Node script next to `pnpm.CMD` and `pnpm.ps1` — and the
+ * extensionless script is the one spelling Windows cannot launch. Preferring it
+ * is how the previous attempt resolved a path it then could not run.
+ */
 function resolveExecutable(name) {
   if (name.includes("/") || name.includes("\\")) return existsSync(name) ? name : undefined;
   const extensions =
     process.platform === "win32"
-      ? ["", ...(process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)]
+      ? [...(process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean), ""]
       : [""];
   for (const directory of (process.env.PATH ?? "").split(delimiter).filter(Boolean)) {
     for (const extension of extensions) {
