@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 
 const MAX_ATTEMPTS = Math.min(3, Math.max(1, Number(process.env.AUDIT_MAX_ATTEMPTS ?? 3)));
 const RETRY_DELAY_MS = Math.max(0, Number(process.env.AUDIT_RETRY_DELAY_MS ?? 2_000));
@@ -12,12 +13,17 @@ let attempts = 0;
 
 for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   attempts = attempt;
-  const execution = spawnSync(command[0], command.slice(1), {
-    encoding: "utf8",
-    timeout: 60_000,
-    windowsHide: true,
-    env: process.env,
-  });
+  const execution = runAuditCommand(command);
+  if (execution.error !== undefined) {
+    // The process never started, so there is no audit evidence and no registry
+    // involvement to report. Saying so explicitly matters: with both streams
+    // undefined the classifier below would otherwise settle on
+    // "malformed-response" and accuse the registry of returning bad data for a
+    // command that never ran. Retrying cannot make a command executable.
+    finalStatus = "unavailable";
+    reason = "audit-command-not-executable";
+    break;
+  }
   const parsed = parseAuditJson(execution.stdout);
   const highCount = vulnerabilityCount(parsed, "high") + vulnerabilityCount(parsed, "critical");
   if (parsed !== undefined && highCount > 0) {
@@ -50,6 +56,59 @@ if (finalStatus === "unavailable") {
   process.exit(unavailablePolicy === "fail" ? 2 : 0);
 }
 process.exit(finalStatus === "vulnerable" ? 1 : 0);
+
+/**
+ * Run the audit command, tolerating how package managers are exposed on Windows.
+ *
+ * `pnpm` reaches CI as `pnpm.CMD` (actions/setup-pnpm publishes no `.exe`), and
+ * since the CVE-2024-27980 fix Node refuses to spawn `.cmd`/`.bat` without a
+ * shell — `spawnSync` returns `EINVAL` with both streams undefined.
+ *
+ * The command is resolved on disk first rather than handed to a shell blind. A
+ * shell reports a missing command by exiting nonzero with a message of its own,
+ * which is localized ("no se reconoce como un comando interno o externo" on a
+ * Spanish Windows), so recognizing it by text would make the gate depend on the
+ * machine's display language. Resolving first keeps "not found" a structural
+ * fact, and the shell is then used only where it is actually required.
+ */
+function runAuditCommand(parts) {
+  const resolved = resolveExecutable(parts[0]);
+  if (resolved === undefined) {
+    return { error: new Error(`audit command not found on PATH: ${parts[0]}`) };
+  }
+  const options = {
+    encoding: "utf8",
+    timeout: 60_000,
+    windowsHide: true,
+    env: process.env,
+  };
+  const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(resolved);
+  return spawnSync(
+    needsShell ? quoteForShell(resolved) : resolved,
+    needsShell ? parts.slice(1).map(quoteForShell) : parts.slice(1),
+    needsShell ? { ...options, shell: true } : options,
+  );
+}
+
+function quoteForShell(part) {
+  return /[\s&|<>^"]/.test(part) ? `"${part.replace(/"/g, '""')}"` : part;
+}
+
+/** Locate `name` on disk, honoring PATH and (on Windows) PATHEXT. */
+function resolveExecutable(name) {
+  if (name.includes("/") || name.includes("\\")) return existsSync(name) ? name : undefined;
+  const extensions =
+    process.platform === "win32"
+      ? ["", ...(process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)]
+      : [""];
+  for (const directory of (process.env.PATH ?? "").split(delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = join(directory, `${name}${extension}`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
 
 function readCommand(registrySource) {
   const configured = process.env.DYSFLOW_AUDIT_COMMAND_JSON;

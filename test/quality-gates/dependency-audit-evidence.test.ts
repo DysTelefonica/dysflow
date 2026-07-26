@@ -1,14 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = resolve("scripts/dependency-audit-evidence.mjs");
 const STUB = resolve("test/fixtures/dependency-audit-stub.mjs");
 const tempRoots: string[] = [];
 
-function runAudit(scenario: string, policy = "warn") {
+function runAudit(scenario: string, policy = "warn", overrides: Record<string, string> = {}) {
   const root = mkdtempSync(join(tmpdir(), "dysflow-audit-"));
   tempRoots.push(root);
   const summaryPath = join(root, "summary.md");
@@ -26,6 +26,7 @@ function runAudit(scenario: string, policy = "warn") {
       AUDIT_SOURCE: "https://token:super-secret@registry.example.test/audit?auth=hidden",
       GITHUB_STEP_SUMMARY: summaryPath,
       GITHUB_OUTPUT: outputPath,
+      ...overrides,
     },
   });
   const machineLine = result.stdout
@@ -36,6 +37,7 @@ function runAudit(scenario: string, policy = "warn") {
     attempts: number;
     source: string;
     freshness: string;
+    reason: string;
   };
   return {
     result,
@@ -111,6 +113,44 @@ describe("dependency audit evidence", () => {
     expect(visible).not.toContain("token:");
     expect(audit.report.source).toBe("https://registry.example.test/audit");
   });
+
+  it("names a spawn failure instead of blaming the registry (#1149)", () => {
+    // When the audit command cannot launch, both stdout and stderr are undefined.
+    // The classifier used to fall through to "malformed-response", which accuses
+    // registry.npmjs.org of returning bad data for a process that never ran and
+    // sends the investigation at the wrong subsystem.
+    const audit = runAudit("clean", "fail", {
+      DYSFLOW_AUDIT_COMMAND_JSON: JSON.stringify([
+        resolve("test/fixtures/definitely-not-an-executable"),
+      ]),
+    });
+
+    expect(audit.report.status).toBe("unavailable");
+    expect(audit.report.reason).toBe("audit-command-not-executable");
+    expect(audit.summary).not.toContain("malformed-response");
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "runs an audit command exposed only as a Windows .cmd shim (#1149)",
+    () => {
+      // `actions/setup-pnpm` puts `pnpm.CMD` on PATH with no `.exe` sibling, and
+      // since the CVE-2024-27980 fix Node refuses to spawn `.cmd` without a shell.
+      // The real gate therefore could never run on Windows.
+      const shim = join(mkdtempSync(join(tmpdir(), "dysflow-audit-shim-")), "fake-audit.cmd");
+      tempRoots.push(dirname(shim));
+      writeFileSync(
+        shim,
+        ["@echo off", `"${process.execPath}" "${STUB}" %*`, ""].join("\r\n"),
+        "utf8",
+      );
+
+      const audit = runAudit("clean", "fail", {
+        DYSFLOW_AUDIT_COMMAND_JSON: JSON.stringify([shim]),
+      });
+
+      expect(audit.report.status).toBe("clean");
+    },
+  );
 
   it("pins CI to the wrapper without registry-error masking", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
