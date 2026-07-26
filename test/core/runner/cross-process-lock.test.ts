@@ -164,6 +164,8 @@ describe("cross-process-lock module API", () => {
         stat: async () => null,
         utimes: async () => {},
         writeFile: async () => {},
+        readFile: async () => null,
+        isProcessAlive: () => false,
         tmpdir: () => tmpdir(),
       };
 
@@ -330,6 +332,8 @@ describe("cross-process-lock module API", () => {
       stat: async () => null,
       utimes: async () => {},
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
       ...overrides,
     });
@@ -397,6 +401,8 @@ describe("cross-process-lock module API", () => {
       stat: async () => null,
       utimes: async () => {},
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
       ...overrides,
     });
@@ -557,6 +563,8 @@ describe("cross-process-lock module API", () => {
         },
         utimes: async () => {},
         writeFile: async () => {},
+        readFile: async () => null,
+        isProcessAlive: () => false,
         tmpdir: () => tmpdir(),
       };
 
@@ -576,12 +584,214 @@ describe("cross-process-lock module API", () => {
         stat: async () => ({ mtimeMs: staleMtimeMs }),
         utimes: async () => {},
         writeFile: async () => {},
+        readFile: async () => null,
+        isProcessAlive: () => false,
         tmpdir: () => tmpdir(),
       };
 
       await expect(evictStaleLock(lockPath, CROSS_PROCESS_LOCK_STALE_MS, fileSystem)).resolves.toBe(
         false,
       );
+    });
+  });
+
+  /**
+   * Issue #1134 — a leaked `${lockPath}.evicting` claim used to disable stale-lock
+   * eviction permanently and silently. The claim was released only by an `rm` whose
+   * rejection was swallowed, and nothing ever aged it out, so a single failed cleanup
+   * (Windows DELETE_PENDING surfacing as EACCES/EPERM is the documented case) meant
+   * every later acquirer burned its full timeout and threw `RunnerLockTimeoutError`.
+   *
+   * The claim now carries an owner record and is recoverable: a claim past the stale
+   * window whose owner process is gone is reclaimed, and a claim past the recovery
+   * ceiling is reclaimed even when its pid appears alive, so a recycled pid cannot
+   * wedge eviction forever.
+   */
+  describe("evictStaleLock — leaked eviction claim recovery (#1134)", () => {
+    const STALE_MS = CROSS_PROCESS_LOCK_STALE_MS;
+
+    /**
+     * Keys are stored separator-normalized: production joins owner-record paths with
+     * `node:path`, which emits backslashes on Windows, so a fake that keys on the raw
+     * string silently misses every read there and passes for the wrong reason.
+     */
+    const normalize = (path: string): string => path.replace(/\\/g, "/");
+
+    /** Mutable in-memory filesystem good enough to model the claim protocol. */
+    const makeMemoryFs = (options: {
+      entries: Map<string, { mtimeMs: number }>;
+      files?: Map<string, string>;
+      alivePids?: Set<number>;
+      onRm?: (path: string) => void;
+    }): LockFileSystemPort => {
+      const files = options.files ?? new Map<string, string>();
+      const alivePids = options.alivePids ?? new Set<number>();
+      return {
+        mkdir: async (path, mkdirOptions) => {
+          const key = normalize(path);
+          if (options.entries.has(key) && mkdirOptions?.recursive !== true) {
+            const error = new Error(`EEXIST: ${key}`) as NodeJS.ErrnoException;
+            error.code = "EEXIST";
+            throw error;
+          }
+          options.entries.set(key, { mtimeMs: Date.now() });
+          return path;
+        },
+        rm: async (path) => {
+          const key = normalize(path);
+          options.onRm?.(key);
+          options.entries.delete(key);
+          for (const fileKey of [...files.keys()]) {
+            if (fileKey.startsWith(key)) files.delete(fileKey);
+          }
+        },
+        stat: async (path) => options.entries.get(normalize(path)) ?? null,
+        utimes: async () => {},
+        writeFile: async (path, data) => {
+          files.set(normalize(path), data);
+        },
+        readFile: async (path) => files.get(normalize(path)) ?? null,
+        isProcessAlive: (pid) => alivePids.has(pid),
+        tmpdir: () => tmpdir(),
+      };
+    };
+
+    const ownerRecord = (pid: number): string =>
+      JSON.stringify({ pid, startedAt: new Date(Date.now() - 120_000).toISOString() });
+
+    it("recovers a leaked claim whose owner process is gone and evicts the stale lock", async () => {
+      const lockPath = "/locks/leaked-dead-owner.lock";
+      const claimPath = `${lockPath}.evicting`;
+      const longAgo = Date.now() - STALE_MS - 60_000;
+      const entries = new Map([
+        [lockPath, { mtimeMs: longAgo }],
+        [claimPath, { mtimeMs: longAgo }],
+      ]);
+      const files = new Map([[`${claimPath}/owner.json`, ownerRecord(424242)]]);
+      // 424242 is deliberately absent from alivePids: the evictor that created the
+      // claim died without releasing it.
+      const fileSystem = makeMemoryFs({ entries, files, alivePids: new Set([process.pid]) });
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(true);
+      expect(entries.has(lockPath)).toBe(false);
+      expect(entries.has(claimPath)).toBe(false);
+    });
+
+    it("backs off when the claim is young, even if its owner is unknown", async () => {
+      const lockPath = "/locks/claim-in-flight.lock";
+      const claimPath = `${lockPath}.evicting`;
+      const entries = new Map([
+        [lockPath, { mtimeMs: Date.now() - STALE_MS - 60_000 }],
+        // A claim created moments ago is a genuine concurrent eviction in flight.
+        [claimPath, { mtimeMs: Date.now() - 10 }],
+      ]);
+      const fileSystem = makeMemoryFs({ entries });
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(false);
+      // The other evictor's claim and its target must both survive.
+      expect(entries.has(claimPath)).toBe(true);
+      expect(entries.has(lockPath)).toBe(true);
+    });
+
+    it("backs off when an aged claim is still owned by a live process", async () => {
+      const lockPath = "/locks/claim-live-owner.lock";
+      const claimPath = `${lockPath}.evicting`;
+      const aged = Date.now() - STALE_MS - 1_000;
+      const entries = new Map([
+        [lockPath, { mtimeMs: Date.now() - STALE_MS - 60_000 }],
+        [claimPath, { mtimeMs: aged }],
+      ]);
+      const files = new Map([[`${claimPath}/owner.json`, ownerRecord(process.pid)]]);
+      const fileSystem = makeMemoryFs({ entries, files, alivePids: new Set([process.pid]) });
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(false);
+      expect(entries.has(claimPath)).toBe(true);
+    });
+
+    it("recovers a claim past the recovery ceiling even when its pid appears alive", async () => {
+      const lockPath = "/locks/claim-recycled-pid.lock";
+      const claimPath = `${lockPath}.evicting`;
+      // Older than the ceiling: no legitimate eviction runs this long, so the pid
+      // must have been recycled. Without this rule a recycled pid wedges eviction.
+      const ancient = Date.now() - STALE_MS * 4;
+      const entries = new Map([
+        [lockPath, { mtimeMs: ancient }],
+        [claimPath, { mtimeMs: ancient }],
+      ]);
+      const files = new Map([[`${claimPath}/owner.json`, ownerRecord(process.pid)]]);
+      const fileSystem = makeMemoryFs({ entries, files, alivePids: new Set([process.pid]) });
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(true);
+      expect(entries.has(lockPath)).toBe(false);
+    });
+
+    it("recovers a leaked claim that carries no owner record at all", async () => {
+      const lockPath = "/locks/claim-unattributable.lock";
+      const claimPath = `${lockPath}.evicting`;
+      const longAgo = Date.now() - STALE_MS - 60_000;
+      const entries = new Map([
+        [lockPath, { mtimeMs: longAgo }],
+        [claimPath, { mtimeMs: longAgo }],
+      ]);
+      const fileSystem = makeMemoryFs({ entries });
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(true);
+      expect(entries.has(lockPath)).toBe(false);
+    });
+
+    it("refuses to delete a lock that was replaced after being observed as stale", async () => {
+      // Defence in depth for the claim mutex: eviction is conditional on the lock
+      // still being the same instance that was observed as stale. A different owner
+      // record means a new acquirer already took the lock, so it must not be removed.
+      const lockPath = "/locks/replaced-under-claim.lock";
+      const staleMtimeMs = Date.now() - STALE_MS - 1_000;
+      const removed: string[] = [];
+      let ownerReads = 0;
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => path,
+        rm: async (path) => {
+          removed.push(path);
+        },
+        stat: async () => ({ mtimeMs: staleMtimeMs }),
+        utimes: async () => {},
+        writeFile: async () => {},
+        readFile: async (path) => {
+          if (!path.replace(/\\/g, "/").startsWith(lockPath)) return null;
+          ownerReads += 1;
+          // First read: the stale owner we based the decision on. Second read: a
+          // different process has since taken the lock.
+          return JSON.stringify({
+            pid: ownerReads === 1 ? 111 : 222,
+            startedAt: new Date(staleMtimeMs).toISOString(),
+          });
+        },
+        isProcessAlive: () => false,
+        tmpdir: () => tmpdir(),
+      };
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(false);
+      expect(removed).not.toContain(lockPath);
+    });
+
+    it("still evicts legacy locks that carry no owner record on either read", async () => {
+      const lockPath = "/locks/legacy-no-owner.lock";
+      const staleMtimeMs = Date.now() - STALE_MS - 1_000;
+      const removed: string[] = [];
+      const fileSystem: LockFileSystemPort = {
+        mkdir: async (path) => path,
+        rm: async (path) => {
+          removed.push(path);
+        },
+        stat: async () => ({ mtimeMs: staleMtimeMs }),
+        utimes: async () => {},
+        writeFile: async () => {},
+        readFile: async () => null,
+        isProcessAlive: () => false,
+        tmpdir: () => tmpdir(),
+      };
+
+      await expect(evictStaleLock(lockPath, STALE_MS, fileSystem)).resolves.toBe(true);
+      expect(removed).toContain(lockPath);
     });
   });
 
@@ -629,6 +839,8 @@ describe("cross-process-lock module API", () => {
         },
         utimes: async () => {},
         writeFile: async () => {},
+        readFile: async () => null,
+        isProcessAlive: () => false,
         tmpdir: () => tmpdir(),
       };
 
@@ -675,6 +887,8 @@ describe("cross-process-lock module API", () => {
       stat: async () => null,
       utimes: async () => {},
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
     };
     const lockPath = join(tmpdir(), "dysflow-transient-test", `eacces-${process.pid}.lock`);
@@ -708,6 +922,8 @@ describe("cross-process-lock module API", () => {
       writeFile: async (path, data) => {
         virtualFiles.set(path, { mtimeMs: Date.now(), data, isDir: false });
       },
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => "vtmp",
     };
 

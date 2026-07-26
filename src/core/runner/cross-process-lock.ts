@@ -6,6 +6,23 @@ import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 
 export const CROSS_PROCESS_LOCK_STALE_MS = 30_000;
 
+/**
+ * Age past which an eviction claim is reclaimed even when its recorded owner pid
+ * still resolves to a live process (#1134).
+ *
+ * Liveness alone cannot decide the question, because pids are recycled: an unrelated
+ * process can inherit the pid of the evictor that died holding the claim, making a
+ * leaked claim look permanently legitimate. A real eviction is a handful of filesystem
+ * calls, so any claim that outlives twice the stale window is leaked by definition.
+ * This ceiling is what guarantees eviction can never be disabled permanently.
+ */
+export const EVICTION_CLAIM_RECOVERY_CEILING_MS = CROSS_PROCESS_LOCK_STALE_MS * 2;
+
+/** Identity of the process that created a lock or an eviction claim. */
+type LockOwner = { pid: number; startedAt: string };
+
+const OWNER_RECORD_FILE = "owner.json";
+
 export class RunnerLockTimeoutError extends Error {
   constructor(
     public readonly lockPath: string,
@@ -22,6 +39,13 @@ export interface LockFileSystemPort {
   stat(path: string): Promise<{ mtimeMs: number } | null>;
   utimes(path: string, atime: Date, mtime: Date): Promise<void>;
   writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
+  /** Reads an owner record; resolves `null` when the file is absent or unreadable. */
+  readFile(path: string): Promise<string | null>;
+  /**
+   * Reports whether `pid` currently resolves to a live process. Production uses
+   * `process.kill(pid, 0)`, which signals nothing and only probes existence.
+   */
+  isProcessAlive(pid: number): boolean;
   tmpdir(): string;
 }
 
@@ -57,23 +81,128 @@ export function getCrossProcessLockPath(accessPath: string): string {
   return join(tmpdir(), "dysflow-locks", `${hash}.lock`);
 }
 
+/** Serialize this process's identity for a lock or eviction-claim owner record. */
+function currentOwnerRecord(): string {
+  return JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
+}
+
+/**
+ * Read the owner record of a lock or claim directory.
+ *
+ * Resolves `null` when the record is absent, unreadable, or malformed. Callers must
+ * treat `null` as "identity unknown", never as "no owner" — the record write is
+ * best-effort, so a legitimate lock can exist without one.
+ */
+async function readOwnerRecord(
+  directoryPath: string,
+  fileSystem: LockFileSystemPort,
+): Promise<LockOwner | null> {
+  const raw = await fileSystem.readFile(join(directoryPath, OWNER_RECORD_FILE)).catch(() => null);
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { pid, startedAt } = parsed as { pid?: unknown; startedAt?: unknown };
+    if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return null;
+    return { pid, startedAt: typeof startedAt === "string" ? startedAt : "" };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decide whether an existing eviction claim is a leaked one this caller may reclaim.
+ *
+ * Ordered cheapest-first so the common case (a genuine concurrent eviction) costs a
+ * single `stat`:
+ *
+ * 1. Claim vanished — the owner released it; retrying the claim is safe.
+ * 2. Claim younger than the stale window — a real eviction in flight. Back off.
+ * 3. Owner unknown or provably dead — leaked. Reclaim.
+ * 4. Owner appears alive but the claim outlived {@link EVICTION_CLAIM_RECOVERY_CEILING_MS} —
+ *    the pid was recycled. Reclaim anyway, so eviction cannot wedge forever.
+ */
+async function isEvictionClaimRecoverable(
+  claimPath: string,
+  staleMs: number,
+  fileSystem: LockFileSystemPort,
+): Promise<boolean> {
+  const claimInfo = await fileSystem.stat(claimPath);
+  if (claimInfo === null) return true;
+
+  const claimAgeMs = Date.now() - claimInfo.mtimeMs;
+  if (claimAgeMs <= staleMs) return false;
+
+  const owner = await readOwnerRecord(claimPath, fileSystem);
+  if (owner === null) return true;
+  if (!fileSystem.isProcessAlive(owner.pid)) return true;
+  return claimAgeMs > EVICTION_CLAIM_RECOVERY_CEILING_MS;
+}
+
+/**
+ * Take the sibling eviction claim, reclaiming it first when a previous evictor leaked it.
+ *
+ * `mkdir` is the only directory operation that is reliably atomic-exclusive on Windows
+ * (`rename` is not: two concurrent renames of the same source can BOTH succeed, verified
+ * empirically), so it stays the exclusion primitive. The addition for #1134 is that
+ * `EEXIST` is no longer an unconditional "someone else owns this": a claim whose owner
+ * died is removed and re-taken. Losing the re-take race is correct — the winner is
+ * another live evictor, so backing off preserves single-evictor semantics.
+ */
+async function takeEvictionClaim(
+  claimPath: string,
+  staleMs: number,
+  fileSystem: LockFileSystemPort,
+): Promise<boolean> {
+  try {
+    await fileSystem.mkdir(claimPath, { recursive: false });
+    await fileSystem
+      .writeFile(join(claimPath, OWNER_RECORD_FILE), currentOwnerRecord(), "utf8")
+      .catch(() => {});
+    return true;
+  } catch (err) {
+    if (!isLockAlreadyExistsError(err)) return false;
+  }
+
+  if (!(await isEvictionClaimRecoverable(claimPath, staleMs, fileSystem))) return false;
+
+  try {
+    await fileSystem.rm(claimPath, { recursive: true, force: true });
+  } catch (err) {
+    // The leaked claim is still undeletable (typically Windows DELETE_PENDING). Report it
+    // instead of swallowing: a claim that never becomes reclaimable is the failure this
+    // recovery path exists to make visible.
+    logSwallowedIoError("cross-process-lock:claim-recovery-failed", err);
+    return false;
+  }
+
+  try {
+    await fileSystem.mkdir(claimPath, { recursive: false });
+    await fileSystem
+      .writeFile(join(claimPath, OWNER_RECORD_FILE), currentOwnerRecord(), "utf8")
+      .catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Atomically claim and remove a stale lock directory.
  *
  * A naive `stat`-then-`rm` is a TOCTOU race: two acquirers can both see the lock as
  * stale and both `rm` it, with the second deletion wiping out a *fresh* lock the first
- * acquirer just created — breaking mutual exclusion. `rename` is not a usable exclusion
- * primitive here either: on Windows two concurrent directory renames of the same source
- * can BOTH succeed (verified empirically). The only directory operation that is reliably
- * atomic-exclusive on Windows is `mkdir` — which is exactly what lock acquisition uses.
+ * acquirer just created — breaking mutual exclusion. Eviction therefore takes a sibling
+ * claim directory (see {@link takeEvictionClaim}) so exactly one caller proceeds.
  *
- * So eviction takes a sibling claim directory via `mkdir`: exactly one concurrent caller
- * wins (the rest get `EEXIST`), and only the winner removes the stale lock and then its
- * own claim. This guarantees a single evictor, so no one can delete a fresh lock created
- * by a different acquirer.
+ * The claim alone is not trusted with correctness. Before removing the lock this
+ * re-reads the lock's owner record and refuses when it no longer matches the instance
+ * observed as stale: a lock replaced under the claim belongs to a new acquirer and must
+ * survive. Both reads returning `null` (legacy locks, or a best-effort owner write that
+ * failed) is treated as "unchanged" so pre-existing locks stay evictable.
  *
  * @returns `true` when this call evicted the stale lock, `false` otherwise (lock missing,
- *          not stale, or already being evicted by another acquirer).
+ *          not stale, replaced under the claim, or being evicted by another acquirer).
  */
 export async function evictStaleLock(
   lockPath: string,
@@ -82,29 +211,40 @@ export async function evictStaleLock(
 ): Promise<boolean> {
   const info = await fileSystem.stat(lockPath);
   if (info === null || Date.now() - info.mtimeMs <= staleMs) return false;
+  const observedOwner = await readOwnerRecord(lockPath, fileSystem);
 
   const claimPath = `${lockPath}.evicting`;
-  try {
-    await fileSystem.mkdir(claimPath, { recursive: false });
-  } catch {
-    // EEXIST (or any failure): another acquirer already owns the eviction. Back off.
-    return false;
-  }
+  if (!(await takeEvictionClaim(claimPath, staleMs, fileSystem))) return false;
+
   try {
     // Re-check under the claim: the lock may have been refreshed since the first stat.
     const current = await fileSystem.stat(lockPath);
-    if (current !== null && Date.now() - current.mtimeMs > staleMs) {
-      try {
-        await fileSystem.rm(lockPath, { recursive: true, force: true });
-        return true;
-      } catch {
-        return false;
-      }
+    if (current === null || Date.now() - current.mtimeMs <= staleMs) return false;
+
+    const currentOwner = await readOwnerRecord(lockPath, fileSystem);
+    if (!isSameLockInstance(observedOwner, currentOwner)) return false;
+
+    try {
+      await fileSystem.rm(lockPath, { recursive: true, force: true });
+      return true;
+    } catch {
+      return false;
     }
-    return false;
   } finally {
-    await fileSystem.rm(claimPath, { recursive: true, force: true }).catch(() => {});
+    await fileSystem.rm(claimPath, { recursive: true, force: true }).catch((err: unknown) => {
+      // The claim survives this failure. It is no longer permanent — the next acquirer
+      // reclaims it once it ages past the stale window — but it does cost that acquirer
+      // one wasted eviction round, so it is worth a diagnostic.
+      logSwallowedIoError("cross-process-lock:claim-release-failed", err);
+    });
   }
+}
+
+/** Compare two owner records; two unknown identities count as unchanged. */
+function isSameLockInstance(observed: LockOwner | null, current: LockOwner | null): boolean {
+  if (observed === null && current === null) return true;
+  if (observed === null || current === null) return false;
+  return observed.pid === current.pid && observed.startedAt === current.startedAt;
 }
 
 /**
@@ -124,9 +264,11 @@ export async function acquireCrossProcessAccessLock(
   while (Date.now() < deadline) {
     try {
       await fileSystem.mkdir(lockPath, { recursive: false });
-      // Write owner identity so a future acquirer can log who held the lock.
-      const owner = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
-      await fileSystem.writeFile(join(lockPath, "owner.json"), owner, "utf8").catch(() => {});
+      // Write owner identity so a future acquirer can log who held the lock, and so
+      // `evictStaleLock` can tell this lock instance apart from a replacement (#1134).
+      await fileSystem
+        .writeFile(join(lockPath, OWNER_RECORD_FILE), currentOwnerRecord(), "utf8")
+        .catch(() => {});
       return async () => {
         await releaseCrossProcessAccessLock(lockPath, fileSystem);
       };

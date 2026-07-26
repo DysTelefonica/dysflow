@@ -43,6 +43,8 @@ describe("AccessPowerShellRunner — read-only path (#750)", () => {
       rm: async () => {},
       stat: async () => null,
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
     };
     return { lockFileSystem, mkdir, utimes };
@@ -140,6 +142,8 @@ describe("AccessPowerShellRunner — read-only path (#750)", () => {
       rm: async () => {},
       stat: async () => null,
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
     };
     const runner = new AccessPowerShellRunner({

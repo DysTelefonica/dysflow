@@ -239,6 +239,8 @@ describe("Cross-process lock heartbeat (issue #414)", () => {
         throw err;
       },
       writeFile: async () => {},
+      readFile: async () => null,
+      isProcessAlive: () => false,
       tmpdir: () => tmpdir(),
     };
 

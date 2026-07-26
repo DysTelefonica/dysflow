@@ -1,5 +1,6 @@
 import {
   mkdir as nodeMkdir,
+  readFile as nodeReadFile,
   rm as nodeRm,
   stat as nodeStat,
   utimes as nodeUtimes,
@@ -28,5 +29,26 @@ export const nodeLockFileSystem: LockFileSystemPort = {
   },
   utimes: (path, atime, mtime) => nodeUtimes(path, atime, mtime),
   writeFile: (path, data, encoding) => nodeWriteFile(path, data, encoding),
+  readFile: async (path) => {
+    try {
+      return await nodeReadFile(path, "utf8");
+    } catch {
+      return null;
+    }
+  },
+  /**
+   * Signal 0 performs the permission and existence checks without delivering a signal,
+   * so this probes liveness without touching the target process. `EPERM` means the
+   * process exists under a different account — still alive for our purposes; any other
+   * error (`ESRCH`) means it is gone.
+   */
+  isProcessAlive: (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException | undefined)?.code === "EPERM";
+    }
+  },
   tmpdir: () => nodeTmpdir(),
 };
