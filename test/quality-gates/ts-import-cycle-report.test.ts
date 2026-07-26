@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -34,6 +34,19 @@ function check(
   const result = spawnSync(process.execPath, [script, "--root", root, "--check", baseline], {
     encoding: "utf8",
   });
+  return { status: result.status, stderr: result.stderr };
+}
+
+function updateBaseline(
+  root: string,
+  baseline: string,
+  extraArgs: readonly string[] = [],
+): { status: number | null; stderr: string } {
+  const result = spawnSync(
+    process.execPath,
+    [script, "--root", root, "--update-baseline", baseline, ...extraArgs],
+    { encoding: "utf8" },
+  );
   return { status: result.status, stderr: result.stderr };
 }
 
@@ -156,6 +169,18 @@ describe("TypeScript import cycle report", () => {
     expect(result.stderr).toContain("src/b.ts -> src/c.ts");
   });
 
+  it("rejects a renamed member whose SCC is otherwise unchanged", () => {
+    const root = project({
+      "a.ts": 'import "./renamed-b.js";\n',
+      "renamed-b.ts": 'import "./a.js";\n',
+    });
+
+    const result = check(root, [["src/a.ts", "src/b.ts"]]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Unapproved cyclic members: src/renamed-b.ts");
+  });
+
   it("rejects a merge of two independently reviewed SCCs", () => {
     const root = project({
       "a.ts": 'import "./b.js";\n',
@@ -183,6 +208,57 @@ describe("TypeScript import cycle report", () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
+  });
+
+  it("updates the baseline deliberately and the resulting baseline passes check", () => {
+    const root = project({
+      "a.ts": 'import "./b.js";\n',
+      "b.ts": 'import "./a.js";\n',
+    });
+    const baseline = join(root, "cycle-baseline.json");
+    writeFileSync(baseline, JSON.stringify({ version: 1, reviewedAt: "2000-01-01", cycles: [] }));
+
+    const updated = updateBaseline(root, baseline);
+    const parsed = JSON.parse(readFileSync(baseline, "utf8"));
+    const checked = spawnSync(process.execPath, [script, "--root", root, "--check", baseline], {
+      encoding: "utf8",
+    });
+
+    expect(updated.status).toBe(0);
+    expect(updated.stderr).toBe("");
+    expect(parsed).toEqual({
+      version: 1,
+      reviewedAt: new Date().toISOString().slice(0, 10),
+      cycles: [["src/a.ts", "src/b.ts"]],
+    });
+    expect(checked.status).toBe(0);
+    expect(checked.stderr).toBe("");
+  });
+
+  it("rejects using --update-baseline with --check", () => {
+    const root = project({
+      "a.ts": "export const a = true;\n",
+    });
+    const baseline = join(root, "cycle-baseline.json");
+    writeFileSync(baseline, JSON.stringify({ version: 1, reviewedAt: "2000-01-01", cycles: [] }));
+
+    const result = updateBaseline(root, baseline, ["--check", baseline]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--update-baseline and --check are mutually exclusive");
+  });
+
+  it("rejects using --update-baseline with --files", () => {
+    const root = project({
+      "a.ts": "export const a = true;\n",
+    });
+    const baseline = join(root, "cycle-baseline.json");
+    writeFileSync(baseline, JSON.stringify({ version: 1, reviewedAt: "2000-01-01", cycles: [] }));
+
+    const result = updateBaseline(root, baseline, ["--files", "src/a.ts"]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--update-baseline and --files are mutually exclusive");
   });
 
   it("keeps the MCP tools facade outside cyclic SCCs while accepting baseline reduction", () => {
