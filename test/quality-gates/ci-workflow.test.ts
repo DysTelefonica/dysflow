@@ -55,9 +55,12 @@ describe("repository quality gates", () => {
     expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm build"));
   });
 
-  it("runs Windows PowerShell smoke coverage for Access-facing paths (#182)", async () => {
+  it("runs the complete quality-gate suite on the supported Windows platform", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
 
+    expect(workflow).toMatch(
+      /quality:\s*\r?\n\s*name: Quality gates\s*\r?\n\s*runs-on: windows-latest/,
+    );
     expect(workflow).toContain("windows-integration-smoke:");
     expect(workflow).toContain("runs-on: windows-latest");
     expect(workflow).toContain("Get-Command powershell.exe");
@@ -103,6 +106,30 @@ describe("repository quality gates", () => {
     expect(workflow).toContain("uses: pnpm/action-setup@v6");
     expect(workflow).toContain("node-version: 20");
     expect(packageJson.engines?.node).toBe(">=20.0.0");
+  });
+
+  it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
+    const workflow = await readText(".github/workflows/release.yml");
+
+    expect(workflow).toMatch(
+      /release-validation:\s*\r?\n\s*name: Windows release validation\s*\r?\n\s*runs-on: windows-latest/,
+    );
+    expect(workflow).toMatch(
+      /release:\s*\r?\n\s*name: Build & Release Artifacts\s*\r?\n\s*needs: release-validation\s*\r?\n\s*runs-on: ubuntu-latest/,
+    );
+  });
+
+  it("pins LF checkouts so the Windows quality gate is not defeated by CRLF", async () => {
+    // Git on Windows defaults to core.autocrlf=true, so without this attribute the
+    // windows-latest checkout arrives as CRLF and Biome's LF-only formatter fails
+    // every file it checks. Access/VBA sources stay unnormalized because they are
+    // compared byte-for-byte against the Access binary.
+    const attributes = await readText(".gitattributes");
+
+    expect(attributes).toMatch(/^\* text=auto eol=lf$/m);
+    for (const pattern of ["*.bas", "*.cls", "*.form.txt", "*.form.json"]) {
+      expect(attributes).toContain(`${pattern} -text`);
+    }
   });
 
   it("exposes package scripts for lint and coverage gates", async () => {
