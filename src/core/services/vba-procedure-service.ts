@@ -210,7 +210,8 @@ export interface VbaProcedureRange {
 
 /**
  * Kind of a dead-code finding. Lowercase identifiers to match the consumer
- * contract documented in `openspec/changes/detect-dead-code/tasks.md` (the
+ * contract documented in
+ * `openspec/changes/archive/2026-07-26-detect-dead-code/tasks.md` (the
  * tasks surface `kind: "sub"`, `kind: "function"`, `kind: "property"`,
  * `kind: "declaration"` — Capitalised forms are reserved for the existing
  * `VbaProcedureEntry.kind` to keep internal naming consistent).
