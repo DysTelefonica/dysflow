@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.24.3] - 2026-07-26
+
+- fix(ci): resolve the audit tool to a spelling Windows can actually launch (#1151) - fix(ci): make the dependency audit runnable on Windows and honest about failures (#1150) - fix(core): make a leaked eviction claim recoverable instead of permanent (#1148) - ci: run the full quality gates on the supported Windows platform (#1145) - Merge pull request #1144 from DysTelefonica/test/1136-parity-assertions - test(mcp): replace vacuous parity assertions - Merge pull request #1143 from DysTelefonica/chore/1137-update-cycle-baseline - Merge pull request #1142 from DysTelefonica/docs/1135-abort-timeout-changelog - chore(tooling): add guarded cycle baseline update - docs(changelog): document abort timeout migration
+
+
 ## [v2.24.2] - 2026-07-26
 
 - fix(vba-sync): prevent export_all preview intent from running prune or postprocess side effects (#1138), with regression tests
