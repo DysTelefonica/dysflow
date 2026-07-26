@@ -24,6 +24,15 @@
 
 > CI fact (verified): `runs a real diagnostics check` (access-runner.test.ts:860) NEVER runs in CI — Quality gates is ubuntu (test early-returns on non-win32); Windows smoke runs only the integration config, not `pnpm test`. Its local Windows failure is a dev-box live-Access issue, NOT a CI/release blocker.
 
+> **Correction — 2026-07-26.** The "CI fact" note above is a historical record of the CI arrangement
+> as of 2026-06-12; [#1145](https://github.com/DysTelefonica/dysflow/pull/1145) made it stale. There
+> is no Linux runner in CI any more: `.github/workflows/ci.yml` runs the `Quality gates` job on
+> `windows-latest` (lint, `pnpm test`, `pnpm test:public`, build, coverage) alongside the
+> `Windows PowerShell/Access smoke` job. The non-`win32` early return the note relies on therefore no
+> longer triggers. `runs a real diagnostics check` still does not run in CI, but for a different
+> reason: it is `it.skip`-ped in `test/core/runner/access-runner.test.ts` and its read-only contract
+> is covered by the static, unit, and E2E tests listed at that skip.
+
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
