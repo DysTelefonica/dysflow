@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
+const GATE_NOT_EXECUTABLE = "audit-command-not-executable";
 const MAX_ATTEMPTS = Math.min(3, Math.max(1, Number(process.env.AUDIT_MAX_ATTEMPTS ?? 3)));
 const RETRY_DELAY_MS = Math.max(0, Number(process.env.AUDIT_RETRY_DELAY_MS ?? 2_000));
 const unavailablePolicy = process.env.AUDIT_UNAVAILABLE_POLICY === "fail" ? "fail" : "warn";
@@ -21,7 +22,7 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     // "malformed-response" and accuse the registry of returning bad data for a
     // command that never ran. Retrying cannot make a command executable.
     finalStatus = "unavailable";
-    reason = "audit-command-not-executable";
+    reason = GATE_NOT_EXECUTABLE;
     break;
   }
   const parsed = parseAuditJson(execution.stdout);
@@ -52,6 +53,16 @@ console.log(`DYSFLOW_AUDIT_RESULT=${JSON.stringify(report)}`);
 writeGitHubOutput(report);
 writeSummary(report);
 if (finalStatus === "unavailable") {
+  // `AUDIT_UNAVAILABLE_POLICY` decides how much *registry* unavailability a run
+  // tolerates — a fork pull request has no guaranteed registry access, so `warn`
+  // is deliberate there. A command that never started is a different fact: the
+  // gate itself is broken, no registry access can change that, and a broken gate
+  // reported as a warning is how three consecutive red pushes to `main` were the
+  // discovery channel instead of the pull request (#1152).
+  if (reason === GATE_NOT_EXECUTABLE) {
+    console.error(`::error::Dependency audit gate could not run: ${reason}.`);
+    process.exit(2);
+  }
   console.warn(`::warning::Dependency audit evidence unavailable after ${attempts} attempt(s).`);
   process.exit(unavailablePolicy === "fail" ? 2 : 0);
 }
