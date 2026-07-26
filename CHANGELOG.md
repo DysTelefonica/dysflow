@@ -7,7 +7,26 @@
 
 ## [v2.24.1] - 2026-07-25
 
-- fix(gitignore): stop hiding canonical Access form sources (#1114) - fix(core): preserve lock-acquisition backoff when stale eviction fails (#1115) - fix(core): canonicalize Access lock identity across Windows path aliases (#1116) - fix(powershell): distinguish AbortSignal cancellation from timeout (#1117) - test(architecture): enforce a non-growing TypeScript import-cycle baseline (#1118) - refactor(mcp): restore tools.ts as an acyclic composition facade (#1119) - refactor(mcp): derive parity state without duplicating every tool name (#1120) - chore(tooling): align Biome schema with the pinned CLI version (#1121) - test(vba-sync): isolate runtime-guard fixture from the repository workspace (#1130)
+### Closed issues
+
+- #1114 — `fix(gitignore): stop hiding canonical Access form sources`
+- #1115 — `fix(core): preserve lock-acquisition backoff when stale eviction fails`
+- #1116 — `fix(core): canonicalize Access lock identity across Windows path aliases`
+- #1117 — `fix(powershell): distinguish AbortSignal cancellation from timeout`
+- #1118 — `test(architecture): enforce a non-growing TypeScript import-cycle baseline`
+- #1119 — `refactor(mcp): restore tools.ts as an acyclic composition facade`
+- #1120 — `refactor(mcp): derive parity state without duplicating every tool name`
+- #1121 — `chore(tooling): align Biome schema with the pinned CLI version`
+- #1130 — `test(vba-sync): isolate runtime-guard fixture from the repository workspace`
+
+### Fixed
+
+- Explicit `AbortSignal` cancellation and execution timeout are now reported separately. An aborted run reports `aborted: true` and `timedOut: false`; before this release, the same aborted run reported `timedOut: true`.
+
+### Migration notes
+
+- Consumers that used `timedOut: true` to mean “the run did not complete” must also check `aborted === true` to handle explicit cancellation.
+- `PowerShellExecutionResult` and `VbaManagerExecutionResult` now expose the optional field `aborted?: boolean`. These boundary types remain optional so existing injected `PowerShellExecutor` implementations, adapters, and test doubles do not become source-incompatible. The concrete producer type, `PowerShellProcessResult`, requires `aborted: boolean` because `spawnPowerShellProcess` always sets it. For boundary implementations that do not provide the field, `undefined` means “not aborted.”
 
 
 ## [v2.24.0] - 2026-07-25
