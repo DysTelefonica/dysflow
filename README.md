@@ -7,7 +7,7 @@
     <img src="https://img.shields.io/github/v/release/DysTelefonica/dysflow" alt="Release" />
   </a>
   <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform: Windows" />
-  <img src="https://img.shields.io/badge/Node-20%2B-339933?logo=node.js&logoColor=white" alt="Node 20+" />
+  <img src="https://img.shields.io/badge/Node-20--26-339933?logo=node.js&logoColor=white" alt="Node 20-26" />
 </p>
 
 Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**90 visible MCP tools · Windows / Node 20+**
+**90 visible MCP tools · Windows / Node 20-26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
