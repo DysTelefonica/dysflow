@@ -119,6 +119,19 @@ describe("repository quality gates", () => {
     );
   });
 
+  it("pins LF checkouts so the Windows quality gate is not defeated by CRLF", async () => {
+    // Git on Windows defaults to core.autocrlf=true, so without this attribute the
+    // windows-latest checkout arrives as CRLF and Biome's LF-only formatter fails
+    // every file it checks. Access/VBA sources stay unnormalized because they are
+    // compared byte-for-byte against the Access binary.
+    const attributes = await readText(".gitattributes");
+
+    expect(attributes).toMatch(/^\* text=auto eol=lf$/m);
+    for (const pattern of ["*.bas", "*.cls", "*.form.txt", "*.form.json"]) {
+      expect(attributes).toContain(`${pattern} -text`);
+    }
+  });
+
   it("exposes package scripts for lint and coverage gates", async () => {
     const packageJson = JSON.parse(await readText("package.json")) as {
       packageManager?: string;
