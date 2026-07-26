@@ -55,9 +55,12 @@ describe("repository quality gates", () => {
     expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm build"));
   });
 
-  it("runs Windows PowerShell smoke coverage for Access-facing paths (#182)", async () => {
+  it("runs the complete quality-gate suite on the supported Windows platform", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
 
+    expect(workflow).toMatch(
+      /quality:\s*\r?\n\s*name: Quality gates\s*\r?\n\s*runs-on: windows-latest/,
+    );
     expect(workflow).toContain("windows-integration-smoke:");
     expect(workflow).toContain("runs-on: windows-latest");
     expect(workflow).toContain("Get-Command powershell.exe");
@@ -103,6 +106,17 @@ describe("repository quality gates", () => {
     expect(workflow).toContain("uses: pnpm/action-setup@v6");
     expect(workflow).toContain("node-version: 20");
     expect(packageJson.engines?.node).toBe(">=20.0.0");
+  });
+
+  it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
+    const workflow = await readText(".github/workflows/release.yml");
+
+    expect(workflow).toMatch(
+      /release-validation:\s*\r?\n\s*name: Windows release validation\s*\r?\n\s*runs-on: windows-latest/,
+    );
+    expect(workflow).toMatch(
+      /release:\s*\r?\n\s*name: Build & Release Artifacts\s*\r?\n\s*needs: release-validation\s*\r?\n\s*runs-on: ubuntu-latest/,
+    );
   });
 
   it("exposes package scripts for lint and coverage gates", async () => {

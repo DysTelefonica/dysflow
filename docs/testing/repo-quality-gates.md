@@ -42,9 +42,8 @@ Thresholds are set at measured baseline minus a safety margin (ADR-6). Current f
 | lines      | 84%     |
 
 > **CI is the authoritative gate.** The unit suite is serialized with `maxWorkers: 1` for
-> Windows spawn stability, but Linux v8 coverage still measures slightly lower than local
-> Windows for the same source (~79.7% Linux vs ~80.3% local). The branch floor of 78%
-> absorbs this environment variance and prevents false-gate flakes on every push.
+> Windows spawn stability. The authoritative coverage measurement now runs on the same
+> Windows platform that hosts Microsoft Access and PowerShell in production.
 
 > Raise thresholds only after sustained coverage improvements and CI validation.
 
