@@ -86,7 +86,13 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
         moduleNames: [],
         json: true,
         extra: { proceduresJson: hugePlan },
-        timeoutMs: 30_000,
+        // Generous on purpose. What this test pins is that a huge proceduresJson
+        // is handed over by file instead of inlined on the command line — not how
+        // fast PowerShell starts. A GitHub Windows runner needs far longer than a
+        // developer machine for the same spawn (this exact call finishes in about
+        // a second locally and exceeded 30s on CI), and a latency bound here would
+        // be testing the runner rather than the product.
+        timeoutMs: 120_000,
         cwd: workDir,
       });
 
@@ -94,11 +100,12 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
       expect(result.timedOut).toBe(false);
       expect(result.exitCode).toBe(0);
     },
-    // Must exceed the 30s budget granted to the spawn above. This test is
+    // Must stay above the spawn budget granted above, so a spawn that finishes
+    // inside its own allowance is never killed by the harness instead. This test is
     // Windows-only, so it never ran while the quality gate lived on Linux and the
-    // mismatch stayed hidden: vitest's 15s default killed the harness at half the
-    // time the spawn itself was allowed, which no cold CI runner can meet (#1147).
-    60_000,
+    // inversion stayed hidden: vitest's 15s default was killing the harness at half
+    // the time the spawn itself was allowed (#1147).
+    180_000,
   );
 });
 
