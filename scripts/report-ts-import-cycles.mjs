@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import ts from "typescript";
 
@@ -14,12 +14,15 @@ function parseArgs(argv) {
   let root = process.cwd();
   let files;
   let baseline;
+  let updateBaseline;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--root") {
       root = resolve(argv[++index]);
     } else if (argument === "--check") {
       baseline = argv[++index];
+    } else if (argument === "--update-baseline") {
+      updateBaseline = argv[++index];
     } else if (argument === "--files") {
       files = [];
       while (index + 1 < argv.length && !argv[index + 1].startsWith("--")) {
@@ -29,7 +32,13 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
-  return { root, files, baseline };
+  if (baseline !== undefined && updateBaseline !== undefined) {
+    throw new Error("--update-baseline and --check are mutually exclusive");
+  }
+  if (updateBaseline !== undefined && files !== undefined) {
+    throw new Error("--update-baseline and --files are mutually exclusive");
+  }
+  return { root, files, baseline, updateBaseline };
 }
 
 function walk(directory) {
@@ -205,7 +214,7 @@ function checkBaseline(root, graph, cycles, baselinePath) {
   process.exitCode = 1;
 }
 
-const { root, files, baseline } = parseArgs(process.argv.slice(2));
+const { root, files, baseline, updateBaseline } = parseArgs(process.argv.slice(2));
 const graph = buildGraph(root, files);
 const components = stronglyConnectedComponents(graph);
 const cycles = components
@@ -222,7 +231,21 @@ const result = {
   cyclicSizes: cycles.map((cycle) => cycle.length).sort((a, b) => b - a),
   cycles,
 };
-if (baseline === undefined) {
+if (updateBaseline !== undefined) {
+  const path = resolve(root, updateBaseline);
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        version: 1,
+        reviewedAt: new Date().toISOString().slice(0, 10),
+        cycles,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+} else if (baseline === undefined) {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } else {
   checkBaseline(root, graph, cycles, baseline);
