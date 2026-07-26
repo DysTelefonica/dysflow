@@ -187,11 +187,46 @@ async function copyExisting(source, destination) {
     if (error?.code !== "ENOENT") throw error;
   }
 }
+/**
+ * Resolve `target` through `realpath`, tolerating a tail that does not exist yet.
+ *
+ * Walks up to the deepest existing ancestor, resolves that, and re-appends the
+ * missing segments. Needed because the restore destination is routinely absent
+ * (that is the point of restoring it), yet the containment check still has to
+ * compare it against a realpath-normalized root.
+ */
+async function realpathDeepest(target) {
+  const resolved = resolve(target);
+  const missing = [];
+  let current = resolved;
+  for (;;) {
+    try {
+      const real = await realpath(current);
+      return missing.length === 0 ? real : join(real, ...missing);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      const parent = dirname(current);
+      if (parent === current) return resolved;
+      missing.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
 async function assertContainedPlainPath(path, root, { allowMissing = false } = {}) {
   if ((await lstat(root)).isSymbolicLink())
     throw new Error(`Unsafe MCP E2E restore reparse root: ${root}`);
   const rootReal = await realpath(root);
-  const resolvedPath = resolve(path);
+  // Both sides must share a spelling before they can be compared. The root is
+  // realpath-normalized, so the candidate has to be too: on Windows runners
+  // `os.tmpdir()` can hand back an 8.3 short name (C:\Users\RUNNER~1\...), and a
+  // literally-resolved candidate then shares no prefix with the normalized root,
+  // so `relative()` reports an escape for a path that is plainly inside (#1146).
+  //
+  // Normalizing the candidate also strengthens the guard: a symlink that leaves
+  // the root is now collapsed before the comparison, so it fails containment
+  // outright instead of depending on the per-segment reparse walk below.
+  const resolvedPath = await realpathDeepest(path);
   const rel = relative(rootReal, resolvedPath);
   if (rel.startsWith("..") || isAbsolute(rel)) {
     throw new Error(`Unsafe MCP E2E restore path: ${path}`);

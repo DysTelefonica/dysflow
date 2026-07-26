@@ -1,4 +1,5 @@
 // @ts-nocheck -- plain ESM helper is exercised as a behavioral port.
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -163,6 +164,41 @@ describe("MCP E2E resumable cursor", () => {
       /Unsafe/,
     );
   });
+  it.skipIf(process.platform !== "win32")(
+    "restores through an 8.3 short-name sandbox root (#1146)",
+    async () => {
+      // GitHub's Windows runners hand back an 8.3 short temp path
+      // (C:\Users\RUNNER~1\...), so the root arrives spelled differently from its
+      // realpath. The containment guard normalized only the root and compared it
+      // against a non-normalized candidate, so `relative()` produced a `..`-leading
+      // path and a contained file was refused as an escape.
+      const sandbox = join(root, "sandbox");
+      await mkdir(sandbox);
+      const source = join(sandbox, "fixture.txt");
+      await writeFile(source, "fixture");
+
+      const shortSandbox = execFileSync(
+        "powershell",
+        [
+          "-NoProfile",
+          "-Command",
+          `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('${sandbox}').ShortPath`,
+        ],
+        { encoding: "utf8" },
+      ).trim();
+      // Volumes can have 8.3 generation disabled; without a distinct spelling there
+      // is nothing to reproduce, so the guard is only meaningful when they differ.
+      if (shortSandbox.toLowerCase() === sandbox.toLowerCase()) return;
+
+      const snapshots = createPhaseSnapshots(shortSandbox, [join(shortSandbox, "fixture.txt")]);
+      await snapshots.snapshot("write");
+      await writeFile(source, "modified");
+      await snapshots.restore("write");
+
+      expect(await readFile(source, "utf8")).toBe("fixture");
+    },
+  );
+
   it("retries restore when interruption already removed the destination", async () => {
     const sandbox = join(root, "sandbox");
     const source = join(sandbox, "fixture.txt");

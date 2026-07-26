@@ -94,6 +94,11 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
       expect(result.timedOut).toBe(false);
       expect(result.exitCode).toBe(0);
     },
+    // Must exceed the 30s budget granted to the spawn above. This test is
+    // Windows-only, so it never ran while the quality gate lived on Linux and the
+    // mismatch stayed hidden: vitest's 15s default killed the harness at half the
+    // time the spawn itself was allowed, which no cold CI runner can meet (#1147).
+    60_000,
   );
 });
 
