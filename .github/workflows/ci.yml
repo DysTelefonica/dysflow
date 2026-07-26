@@ -10,6 +10,14 @@ jobs:
   quality:
     name: Quality gates
     runs-on: windows-latest
+    # The boundaries of the `engines.node` range declared in package.json. A
+    # claimed Node major that CI never runs is supported on paper only, so
+    # test/quality-gates/ci-workflow.test.ts derives both sides and fails when
+    # they disagree.
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 26]
 
     steps:
       - name: Checkout
@@ -23,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: pnpm
 
       - name: Install dependencies

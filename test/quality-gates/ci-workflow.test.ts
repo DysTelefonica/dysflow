@@ -39,6 +39,54 @@ function workflowRunTestPaths(workflow: string): string[] {
   return out;
 }
 
+/** The body of one top-level job in a workflow, without the neighbouring jobs. */
+function workflowJobBlock(workflow: string, job: string): string {
+  const lines = workflow.split(/\r?\n/);
+  const start = lines.indexOf(`  ${job}:`);
+  if (start < 0) throw new Error(`.github/workflows/ci.yml declares no "${job}" job`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+}
+
+/** Every Node major listed in a job's `strategy.matrix.node-version`. */
+function matrixNodeMajors(jobBlock: string): number[] {
+  const inline = /node-version:[ \t]*\[([^\]]*)\]/.exec(jobBlock);
+  const listed = /node-version:[ \t]*\n((?:[ \t]*-[ \t]*\S+\n?)+)/.exec(jobBlock);
+  const entries =
+    inline?.[1] !== undefined
+      ? inline[1].split(",")
+      : [...(listed?.[1] ?? "").matchAll(/-[ \t]*(\S+)/g)].map((match) => match[1] ?? "");
+  return entries
+    .map((entry) => Number.parseInt(entry.trim().replace(/^["']|["']$/g, ""), 10))
+    .filter((major) => Number.isInteger(major));
+}
+
+/**
+ * The Node majors at the boundaries of an `engines.node` range.
+ *
+ * An open-ended range has no ceiling, so no finite CI matrix can ever cover it —
+ * that is a declaration defect, not a missing matrix entry, and it is reported
+ * as such rather than silently assuming a ceiling the package never claimed.
+ */
+function enginesNodeBoundaries(declared: string): { floor: number; ceiling: number } {
+  const floor = /(?:^|\s)>=\s*(\d+)\.\d+\.\d+/.exec(declared);
+  const ceiling = /(?:^|\s)<(?!=)\s*(\d+)\.(\d+)\.(\d+)/.exec(declared);
+  if (!floor) throw new Error(`engines.node "${declared}" declares no lower bound`);
+  if (!ceiling) {
+    throw new Error(
+      `engines.node "${declared}" is open-ended: it claims every Node major above the floor, which no CI matrix can verify`,
+    );
+  }
+  // `<25.0.0` supports Node 24; `<25.1.0` supports Node 25.
+  const exclusiveMajor = Number(ceiling[1]);
+  const atMajorBoundary = ceiling[2] === "0" && ceiling[3] === "0";
+  return {
+    floor: Number(floor[1]),
+    ceiling: atMajorBoundary ? exclusiveMajor - 1 : exclusiveMajor,
+  };
+}
+
 describe("repository quality gates", () => {
   it("runs install, lint, test, build, and coverage in CI", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
@@ -105,7 +153,40 @@ describe("repository quality gates", () => {
     expect(workflow).toContain("uses: actions/setup-node@v5");
     expect(workflow).toContain("uses: pnpm/action-setup@v6");
     expect(workflow).toContain("node-version: 20");
-    expect(packageJson.engines?.node).toBe(">=20.0.0");
+    // Only the floor is pinned here; the ceiling belongs to the matrix-coverage
+    // test below, which derives it rather than restating a literal.
+    expect(packageJson.engines?.node).toMatch(/^>=20\.0\.0(\s|$)/);
+  });
+
+  it("runs the quality gates on every Node major the package claims to support (#1153)", async () => {
+    // Both halves are derived, never restated: widening `engines.node` without a
+    // matching matrix entry — or matrixing a Node the package never claimed —
+    // fails here instead of shipping an unverified support claim.
+    const workflow = await readText(".github/workflows/ci.yml");
+    const declared =
+      (JSON.parse(await readText("package.json")) as { engines?: Record<string, string> }).engines
+        ?.node ?? "";
+    const supported = enginesNodeBoundaries(declared);
+    const quality = workflowJobBlock(workflow, "quality");
+    const matrix = matrixNodeMajors(quality);
+
+    expect(quality, "the Quality gates job must take its Node version from the matrix").toMatch(
+      /node-version:\s*\$\{\{\s*matrix\.node-version\s*\}\}/,
+    );
+    expect(
+      matrix,
+      `engines.node "${declared}" claims Node ${supported.floor}, which the Quality gates matrix never runs`,
+    ).toContain(supported.floor);
+    expect(
+      matrix,
+      `engines.node "${declared}" claims Node up to ${supported.ceiling}, which the Quality gates matrix never runs`,
+    ).toContain(supported.ceiling);
+    for (const major of matrix) {
+      expect(
+        major >= supported.floor && major <= supported.ceiling,
+        `the Quality gates matrix runs Node ${major}, which engines.node "${declared}" does not claim to support`,
+      ).toBe(true);
+    }
   });
 
   it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
