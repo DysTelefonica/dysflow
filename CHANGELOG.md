@@ -1,5 +1,28 @@
 # Changelog
 
+## [v2.25.0] - 2026-07-26
+
+### Closed issues
+
+- #1152 — `fix(ci): a broken audit gate must fail on pull requests too` (PR #1158)
+- #1153 — `ci: verify the Node versions the package claims to support` (PR #1162)
+- #1154 — `docs: correct CI platform claims left stale by the Windows move` (PR #1157)
+- #1155 — `chore(changelog): restore curated release notes and guard the format` (PR #1159)
+- #1156 — `chore(openspec): archive the two verified completed changes` (PR #1160)
+
+### Fixed
+
+- Pull-request dependency audits now fail when the audit command cannot be executed, while genuine registry unavailability retains its warning policy.
+- The declared Node.js support range is bounded by versions exercised in CI, preventing unverified future major versions from being advertised as supported.
+- Documentation now identifies Windows as the authoritative quality-gate platform instead of preserving stale Linux CI claims.
+- Released changelog entries are curated for consumers and protected by a quality gate that rejects merge noise and collapsed bullets.
+- Completed OpenSpec changes for dead-code detection and form output modes are archived with their specifications preserved.
+
+### Migration notes
+
+- The supported Node.js range changed from `>=20.0.0` to `>=20.0.0 <27.0.0`; CI verifies Node.js 20 and 26.
+- No API or runtime contract changes are required for consumers upgrading from v2.24.3.
+
 ## [v2.24.3] - 2026-07-26
 
 ### Closed issues
