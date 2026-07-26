@@ -383,8 +383,9 @@ export function getToolDefinitionsBySlice(slice: ParitySlice): readonly DysflowM
 }
 
 /**
- * Compatibility API for callers that still inspect hidden/pending tools.
- * Zero-hidden-tools policy keeps this empty while deriving it from parity output.
+ * Permanently empty compatibility shim for callers that still inspect
+ * hidden/pending tools. Policy #510 makes every canonical advertised name
+ * implemented; retaining the API avoids breaking existing consumers.
  */
 export function pendingToolNames(): ReadonlySet<DysflowMcpToolName> {
   return new Set(
@@ -393,7 +394,9 @@ export function pendingToolNames(): ReadonlySet<DysflowMcpToolName> {
 }
 
 /**
- * Compatibility predicate for the former hidden-stub contract.
+ * Permanently false compatibility shim for the former hidden-stub contract.
+ * Policy #510 forbids pending canonical names; retaining the predicate avoids
+ * breaking existing consumers.
  */
 export function isHiddenStubTool(name: DysflowMcpToolName): boolean {
   return getToolDefinition(name).status === "pending";
