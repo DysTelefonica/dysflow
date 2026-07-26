@@ -130,6 +130,33 @@ describe("dependency audit evidence", () => {
     expect(audit.summary).not.toContain("malformed-response");
   });
 
+  it.each(["warn", "fail"])("fails a gate that never ran under the %s policy (#1152)", (policy) => {
+    // `AUDIT_UNAVAILABLE_POLICY=warn` exists so a pull request without
+    // guaranteed registry access is not blocked by the registry. A command
+    // that never started is a different fact: the gate itself is broken, and
+    // no amount of registry access can change that, so the policy has no say.
+    const audit = runAudit("clean", policy, {
+      DYSFLOW_AUDIT_COMMAND_JSON: JSON.stringify([
+        resolve("test/fixtures/definitely-not-an-executable"),
+      ]),
+    });
+
+    expect(audit.result.status).not.toBe(0);
+    expect(audit.report).toMatchObject({
+      status: "unavailable",
+      reason: "audit-command-not-executable",
+    });
+  });
+
+  it("keeps tolerating genuine registry unavailability on pull requests (#1152)", () => {
+    const audit = runAudit("network", "warn");
+    expect(audit.result.status).toBe(0);
+    expect(audit.report).toMatchObject({
+      status: "unavailable",
+      reason: "registry-or-network-error",
+    });
+  });
+
   it.skipIf(process.platform !== "win32")(
     "runs an audit command exposed only as a Windows .cmd shim (#1149)",
     () => {
