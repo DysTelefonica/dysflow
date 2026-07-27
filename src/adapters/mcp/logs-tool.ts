@@ -354,6 +354,8 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
     cwd: CWD_OVERRIDE_SCHEMA_PROP,
     options: {
       type: "object",
+      description:
+        "Optional log query controls: since, until, level, operationId, tool, limit, and orderBy. Defaults to limit 100 and newest-first order; limit is capped at 1000. Unknown keys or invalid enum values are rejected by the schema.",
       additionalProperties: false,
       properties: {
         since: {

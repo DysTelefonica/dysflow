@@ -356,6 +356,8 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
     ...PROJECT_IDENTITY_BLOCK,
     options: {
       type: "object",
+      description:
+        "Cleanup controls: olderThanMinutes (default 30), dryRun (default true), keepFailed (default true), and confirm. Unknown keys are rejected; a non-dry-run request without confirm:true is refused before any filesystem transition.",
       additionalProperties: false,
       properties: {
         olderThanMinutes: {

@@ -104,6 +104,22 @@ describe("schema/describe_tool catalog matches MCP input schemas (#1072)", () =>
     expect(failures, failures.join("\n")).toEqual([]);
   });
 
+  it("every advertised parameter has a non-empty description (#1194)", () => {
+    const undocumented: string[] = [];
+    for (const tool of TOOLS) {
+      const schema = tool.inputSchema as {
+        properties?: Record<string, { description?: unknown }>;
+      };
+      for (const [parameter, property] of Object.entries(schema.properties ?? {})) {
+        if (typeof property.description !== "string" || property.description.trim().length === 0) {
+          undocumented.push(`${tool.name}.${parameter}`);
+        }
+      }
+    }
+
+    expect(undocumented, undocumented.join("\n")).toEqual([]);
+  });
+
   it("filtering the catalog by toolName preserves the same parameter contract as the full catalog", () => {
     for (const tool of TOOLS) {
       const full = buildToolSchemaCatalog({}).tools.find((t) => t.name === tool.name);
