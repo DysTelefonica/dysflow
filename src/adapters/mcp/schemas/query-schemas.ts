@@ -5,6 +5,8 @@ import {
   CTX_PROPS,
   type JsonObjectSchema,
   type JsonSchemaProperty,
+  OUTPUT_MODE_BLOCK,
+  PROCESS_TIMEOUT_BLOCK,
   SCHEMA_PROPS,
   STRICT_CTX,
   WRITE_INTENT_BLOCK,
@@ -15,6 +17,8 @@ const WRITE_TARGET_OVERRIDE = {
   ...ACCESS_OVERRIDE,
   databasePath: SCHEMA_PROPS.databasePath,
   sourcePath: SCHEMA_PROPS.sourcePath,
+  ...STRICT_CTX,
+  ...PROCESS_TIMEOUT_BLOCK,
 };
 
 export const EXPLICIT_READ_TARGET_OVERRIDE = {
@@ -28,6 +32,7 @@ export const EXPLICIT_READ_TARGET_OVERRIDE = {
     description:
       "Semantic target role for database-wide reads. With projectId/contextId, frontend resolves to accessPath and backend resolves to backendPath. Explicit databasePath/sourcePath wins over the semantic role.",
   } as JsonSchemaProperty,
+  ...PROCESS_TIMEOUT_BLOCK,
 };
 
 const TABLE_READ_TARGET_OVERRIDE = {
@@ -48,6 +53,7 @@ const FRONTEND_TARGET_OVERRIDE = {
     description:
       "This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid.",
   } as JsonSchemaProperty,
+  ...PROCESS_TIMEOUT_BLOCK,
 };
 
 const TABLE_NAME_ALIAS_REQUIREMENT: Pick<JsonObjectSchema, "anyOf"> = {
@@ -62,6 +68,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...EXPLICIT_READ_TARGET_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
       sql: SCHEMA_PROPS.sql,
       query: SCHEMA_PROPS.query,
     },
@@ -161,6 +168,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...EXPLICIT_READ_TARGET_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
     },
   },
   list_linked_tables: {
@@ -178,6 +186,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...TABLE_READ_TARGET_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
     },
@@ -218,6 +227,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       accessPath: SCHEMA_PROPS.accessPath,
       backendPath: SCHEMA_PROPS.backendPath,
       comparePath: SCHEMA_PROPS.comparePath,
+      ...PROCESS_TIMEOUT_BLOCK,
     },
   },
   list_access_files: {
@@ -245,6 +255,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
       exportPath: SCHEMA_PROPS.exportPath,
       path: SCHEMA_PROPS.path,
     },
@@ -257,6 +268,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...STRICT_CTX,
       backendPath: SCHEMA_PROPS.backendPath,
       // Issue #851 — opt-in create capability. Omitted / "relink-only" keeps the
       // backward-compatible default (never creates a missing link).
@@ -285,6 +297,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...STRICT_CTX,
       backendPath: SCHEMA_PROPS.backendPath,
       ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
@@ -296,6 +309,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...STRICT_CTX,
       backendPath: SCHEMA_PROPS.backendPath,
       ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
@@ -308,6 +322,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...STRICT_CTX,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       ...WRITE_INTENT_BLOCK,
@@ -320,6 +335,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
+      ...STRICT_CTX,
       // #672 — schema now exposes importPath (already supported by the
       // runner and the request mapper). Lets callers point at a file of
       // query definitions without inlining the array.
@@ -346,6 +362,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       } as JsonSchemaProperty,
       backupFirst: SCHEMA_PROPS.backupFirst,
       ...WRITE_INTENT_BLOCK,
+      ...STRICT_CTX,
+      ...PROCESS_TIMEOUT_BLOCK,
     },
   },
   relink_directory: {

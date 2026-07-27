@@ -70,6 +70,11 @@ export const STRICT_CONTEXT_BLOCK = {
   expectedDestinationRoot: SCHEMA_PROPS.expectedDestinationRoot,
 } as const satisfies Record<string, JsonSchemaProperty>;
 
+/** Issue #1192 — child-process timeout control for Access/PowerShell-backed tools. */
+export const PROCESS_TIMEOUT_BLOCK = {
+  timeoutMs: SCHEMA_PROPS.timeoutMs,
+} as const satisfies Record<string, JsonSchemaProperty>;
+
 /** Issue #1076 — write-intent flags. `apply` is the canonical commit signal; `dryRun` and `diff` are aliases / opt-ins. */
 export const WRITE_INTENT_BLOCK = {
   dryRun: SCHEMA_PROPS.dryRun,
@@ -81,6 +86,20 @@ export const WRITE_INTENT_BLOCK = {
 export const OUTPUT_MODE_BLOCK = {
   outputMode: SCHEMA_PROPS.outputMode,
 } as const satisfies Record<string, JsonSchemaProperty>;
+
+const SHARED_OUTPUT_MODE_TOOLS = new Set([
+  "export_queries",
+  "get_schema",
+  "list_objects",
+  "list_tables",
+  "list_vba_modules",
+  "query_sql",
+]);
+
+/** Tools whose handlers are wrapped with executable summary/file/full projections. */
+export function supportsSharedOutputMode(name: string): boolean {
+  return SHARED_OUTPUT_MODE_TOOLS.has(name);
+}
 
 /** Compose ProjectIdentity + OperationCorrelation — the common case (most tools use both). */
 export const composeIdentityAndCorrelation = (): Record<string, JsonSchemaProperty> => ({

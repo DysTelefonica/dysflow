@@ -23,6 +23,7 @@
 import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
 import type { ToolRisk, WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { DEFAULT_DRY_RUN_TABLE } from "../../core/runtime/write-execution-policy.js";
+import { supportsSharedOutputMode } from "../../shared/validation/schema-blocks.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 
@@ -178,6 +179,121 @@ export function isWriteIntentTool(name: string): boolean {
     resolveRiskForTool(name) !== undefined &&
     (metadata.defaultBehavior !== "noop" || metadata.noWriteAlias !== null)
   );
+}
+
+export type SharedBlockRequirement = "required" | "not-applicable";
+
+export type SharedBlockPolicy = {
+  strictContext: SharedBlockRequirement;
+  timeoutMs: SharedBlockRequirement;
+  transactional: boolean;
+  dryRunWithPreflight: boolean;
+  outputMode: SharedBlockRequirement;
+};
+
+/**
+ * Issue #1192 — explicit exceptions to the write-class strict-context rule.
+ *
+ * These tools do not resolve an Access, project-source, or destination target
+ * through the shared execution-target pipeline. Advertising the four pins
+ * would therefore be a dangerous no-op rather than a safety rail.
+ */
+export const STRICT_CONTEXT_EXCEPTIONS = {
+  catalog_add_control:
+    "Offline catalog-file mutation; it resolves no Access or managed-source execution target.",
+  generate_form:
+    "Offline form-spec generation; it resolves no Access or managed-source execution target.",
+  migrate_project_config:
+    "Project-config migration validates its explicit cwd-bound config path and resolves no Access target.",
+} as const satisfies Readonly<Record<string, string>>;
+
+/**
+ * Tools routed through MCP_TOOL_ROUTES are Access/PowerShell-backed by
+ * default. This allowlist records the offline routes for which a timeout
+ * parameter would be a no-op. Modern and alias exceptions are included here
+ * for the same reason.
+ */
+export const TIMEOUT_EXCEPTIONS = {
+  analyze_form_layout: "Pure offline FormIR/layout analysis; no child process is spawned.",
+  analyze_form_ui: "Pure offline FormIR analysis; no child process is spawned.",
+  catalog_add_control: "Updates the offline form catalog; no child process is spawned.",
+  clean_stale_markers: "Synchronous marker-file maintenance; no child process is spawned.",
+  compare_form: "Pure offline form-source comparison; no child process is spawned.",
+  copy_form_ui_pattern: "Pure offline FormIR planning; no child process is spawned.",
+  detect_dead_code: "Pure source analysis; no child process is spawned.",
+  diff_form_preview: "Pure offline preview comparison; no child process is spawned.",
+  find_references: "Pure source analysis; no child process is spawned.",
+  form_get_geometry: "Pure offline form-source read; no child process is spawned.",
+  form_list_controls: "Pure offline form-source read; no child process is spawned.",
+  generate_form: "Generates an offline form-spec file; no child process is spawned.",
+  generate_form_design_plan: "Pure offline plan generation; no child process is spawned.",
+  get_procedure: "Pure source analysis; no child process is spawned.",
+  harvest_form_catalog: "Reads offline form sources; no child process is spawned.",
+  inspect_form: "Reads one offline form source; no child process is spawned.",
+  lint_form_code: "Pure source linting; no child process is spawned.",
+  lint_module: "Pure source linting; no child process is spawned.",
+  list_access_files: "Uses the filesystem adapter directly; no child process is spawned.",
+  list_procedures: "Pure source analysis; no child process is spawned.",
+  map_form_behavior:
+    "FormIR mapping does not spawn Access or PowerShell; optional CodeGraph enrichment is outside this timeout class.",
+  migrate_project_config: "Synchronous project-config migration; no child process is spawned.",
+  render_form_preview: "Pure offline preview rendering; no child process is spawned.",
+  validate_form_spec: "Pure JSON/form-spec validation; no child process is spawned.",
+  validate_manifest: "Pure manifest validation; no child process is spawned.",
+  vba_orphan_audit: "Pure source-tree audit; no child process is spawned.",
+  verify_form_bindings: "Pure offline binding validation; no child process is spawned.",
+  verify_form_ui: "Pure offline contract comparison; no child process is spawned.",
+} as const satisfies Readonly<Record<string, string>>;
+
+const PROCESS_BACKED_MODERN_OR_ALIAS_TOOLS = new Set([
+  "cleanup_access_operation",
+  "doctor",
+  "exec_sql",
+  "query_execute",
+  "query_sql",
+  "run_script",
+  "run_vba",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+]);
+
+const TRANSACTIONAL_TOOLS = new Set(["export_modules", "import_modules", "sync_binary"]);
+const PREFLIGHT_TOOLS = new Set(["export_modules", "import_modules", "sync_binary"]);
+
+/**
+ * Class-derived shared-block policy. The completeness gate consumes this
+ * function, and get_capabilities exposes the same verdict per tool.
+ */
+export function sharedBlockPolicyForTool(name: string): SharedBlockPolicy {
+  const strictContextRequired = isWriteIntentTool(name) && !(name in STRICT_CONTEXT_EXCEPTIONS);
+  const routeBacked = name in MCP_TOOL_ROUTES;
+  const timeoutRequired =
+    (routeBacked || PROCESS_BACKED_MODERN_OR_ALIAS_TOOLS.has(name)) &&
+    !(name in TIMEOUT_EXCEPTIONS);
+  return {
+    strictContext: strictContextRequired ? "required" : "not-applicable",
+    timeoutMs: timeoutRequired ? "required" : "not-applicable",
+    transactional: TRANSACTIONAL_TOOLS.has(name),
+    dryRunWithPreflight: PREFLIGHT_TOOLS.has(name),
+    outputMode: supportsSharedOutputMode(name) ? "required" : "not-applicable",
+  };
+}
+
+export function sharedBlockExceptionsForTool(
+  name: string,
+): Readonly<Partial<Record<"strictContext" | "timeoutMs", string>>> {
+  return {
+    ...(name in STRICT_CONTEXT_EXCEPTIONS
+      ? {
+          strictContext: STRICT_CONTEXT_EXCEPTIONS[name as keyof typeof STRICT_CONTEXT_EXCEPTIONS],
+        }
+      : {}),
+    ...(name in TIMEOUT_EXCEPTIONS
+      ? { timeoutMs: TIMEOUT_EXCEPTIONS[name as keyof typeof TIMEOUT_EXCEPTIONS] }
+      : {}),
+  };
 }
 
 /**
