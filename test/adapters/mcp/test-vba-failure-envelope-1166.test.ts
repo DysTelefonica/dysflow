@@ -41,6 +41,7 @@
 import { describe, expect, it } from "vitest";
 import { translateCoreResultToMcpContent } from "../../../src/adapters/mcp/result-translation";
 import { createDysflowError, failureResult, successResult } from "../../../src/core/contracts/index";
+import type { OperationResult } from "../../../src/core/contracts/index";
 
 type TestFailureDetail = {
   procedure?: string;
@@ -56,54 +57,91 @@ type TestFailureDetails = {
   results: unknown[];
 };
 
-function makeFailingResult() {
-  // Mirror the production shape produced by `inspectTestResult` when one or
-  // more per-procedure reports come back with `ok: false`. The fixture is
-  // intentionally a thin factory so each atom owns its data — no global
-  // mutable state across atoms.
+/**
+ * Builder: collapse per-procedure failures into the `VBA_TESTS_FAILED`
+ * envelope that `inspectTestResult` produces. Mirrors the production shape
+ * so atoms assert the OBSERVABLE envelope end-to-end.
+ */
+function makeVbaTestsFailedResult(
+  failures: readonly TestFailureDetail[],
+  results: readonly unknown[],
+  message?: string,
+): OperationResult<unknown> {
+  const TESTS_FAILED_SUMMARY_LIMIT = 5;
+  const named = failures.slice(0, TESTS_FAILED_SUMMARY_LIMIT).map((f) => {
+    const procedure = f.procedure ?? "(unknown procedure)";
+    return f.error ? `${procedure} — ${f.error}` : procedure;
+  });
+  const overflow = failures.length - named.length;
+  const suffix = overflow > 0 ? `; +${overflow} more` : "";
+  const defaultMessage = `${failures.length} VBA test(s) failed: ${named.join("; ")}${suffix}`;
   return failureResult(
-    createDysflowError("VBA_TESTS_FAILED", "2 VBA test(s) failed: Test_B — Assert failed; Test_D — Timeout", {
+    createDysflowError("VBA_TESTS_FAILED", message ?? defaultMessage, {
       details: {
-        failedCount: 2,
-        failures: [
-          {
-            procedure: "Test_B",
-            error: "Assert failed",
-            logs: ["expected 1", "got 2"],
-            durationMs: 123,
-            payload: { ok: false, error: "Assert failed" },
-          },
-          {
-            procedure: "Test_D",
-            error: "Timeout",
-            logs: ["slow start"],
-            durationMs: 999,
-            payload: { ok: false, error: "Timeout" },
-          },
-        ],
-        results: [
-          { ok: true, procedure: "Test_A", durationMs: 4 },
-          {
-            ok: false,
-            procedure: "Test_B",
-            error: "Assert failed",
-            logs: ["expected 1", "got 2"],
-            durationMs: 123,
-            payload: { ok: false, error: "Assert failed" },
-          },
-          { ok: true, procedure: "Test_C", durationMs: 6 },
-          {
-            ok: false,
-            procedure: "Test_D",
-            error: "Timeout",
-            logs: ["slow start"],
-            durationMs: 999,
-            payload: { ok: false, error: "Timeout" },
-          },
-        ],
+        failedCount: failures.length,
+        failures,
+        results,
       },
     }),
   );
+}
+
+/**
+ * Strict per-procedure shape assertion. Locks the contract that every
+ * entry of `error.details.failures[]` carries `procedure`, `error`, `logs`,
+ * `durationMs`, and `payload` reachable WITHOUT regex-parsing
+ * `error.message`. Optional fields (`durationMs`, `payload`) must equal
+ * `undefined` exactly when the runner omitted them.
+ */
+function assertFullFailureDetail(
+  detail: TestFailureDetail | undefined,
+  expected: TestFailureDetail,
+): void {
+  expect(detail?.procedure).toBe(expected.procedure);
+  expect(detail?.error).toBe(expected.error);
+  expect(detail?.logs).toEqual(expected.logs ?? []);
+  expect(detail?.durationMs).toBe(expected.durationMs);
+  expect(detail?.payload).toEqual(expected.payload);
+}
+
+function makeFailingResult(): OperationResult<unknown> {
+  const failures: TestFailureDetail[] = [
+    {
+      procedure: "Test_B",
+      error: "Assert failed",
+      logs: ["expected 1", "got 2"],
+      durationMs: 123,
+      payload: { ok: false, error: "Assert failed" },
+    },
+    {
+      procedure: "Test_D",
+      error: "Timeout",
+      logs: ["slow start"],
+      durationMs: 999,
+      payload: { ok: false, error: "Timeout" },
+    },
+  ];
+  const results: unknown[] = [
+    { ok: true, procedure: "Test_A", durationMs: 4 },
+    {
+      ok: false,
+      procedure: "Test_B",
+      error: "Assert failed",
+      logs: ["expected 1", "got 2"],
+      durationMs: 123,
+      payload: { ok: false, error: "Assert failed" },
+    },
+    { ok: true, procedure: "Test_C", durationMs: 6 },
+    {
+      ok: false,
+      procedure: "Test_D",
+      error: "Timeout",
+      logs: ["slow start"],
+      durationMs: 999,
+      payload: { ok: false, error: "Timeout" },
+    },
+  ];
+  return makeVbaTestsFailedResult(failures, results);
 }
 
 describe("#1166 — test_vba failure envelope is reachable without parsing error.message", () => {
@@ -115,7 +153,7 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
       expect(translated.error?.code).toBe("VBA_TESTS_FAILED");
     });
 
-    it("preserves the structured error.details.failures[] array with per-procedure entries", () => {
+    it("preserves the structured error.details.failures[] array with full per-procedure shape", () => {
       const translated = translateCoreResultToMcpContent(makeFailingResult());
       const details = translated.error?.details as TestFailureDetails | undefined;
       expect(details).toBeDefined();
@@ -123,21 +161,23 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
       const failures = details?.failures ?? [];
       expect(failures).toHaveLength(2);
 
-      // Per-procedure entries carry every field the docs promise without
-      // requiring regex parsing of error.message.
-      const first = failures[0] as TestFailureDetail;
-      expect(first.procedure).toBe("Test_B");
-      expect(first.error).toBe("Assert failed");
-      expect(first.logs).toEqual(["expected 1", "got 2"]);
-      expect(first.durationMs).toBe(123);
-      expect(first.payload).toEqual({ ok: false, error: "Assert failed" });
-
-      const second = failures[1] as TestFailureDetail;
-      expect(second.procedure).toBe("Test_D");
-      expect(second.error).toBe("Timeout");
-      expect(second.logs).toEqual(["slow start"]);
-      expect(second.durationMs).toBe(999);
-      expect(second.payload).toEqual({ ok: false, error: "Timeout" });
+      // Per-procedure entries carry every field the docs promise — procedure,
+      // error, logs, durationMs, payload — all reachable WITHOUT regex-parsing
+      // error.message.
+      assertFullFailureDetail(failures[0], {
+        procedure: "Test_B",
+        error: "Assert failed",
+        logs: ["expected 1", "got 2"],
+        durationMs: 123,
+        payload: { ok: false, error: "Assert failed" },
+      });
+      assertFullFailureDetail(failures[1], {
+        procedure: "Test_D",
+        error: "Timeout",
+        logs: ["slow start"],
+        durationMs: 999,
+        payload: { ok: false, error: "Timeout" },
+      });
     });
 
     it("surfaces the full per-procedure report in error.details.results[] (passing + failing)", () => {
@@ -203,80 +243,72 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
 
   describe("single-procedure failure path", () => {
     it("preserves the single failing procedure's structured payload", () => {
-      const result = failureResult(
-        createDysflowError("VBA_TESTS_FAILED", "1 VBA test(s) failed: Test_Only — boom", {
-          details: {
-            failedCount: 1,
-            failures: [
-              {
-                procedure: "Test_Only",
-                error: "boom",
-                logs: [],
-                durationMs: 7,
-                payload: { ok: false, error: "boom" },
-              },
-            ],
-            results: [
-              { ok: true, procedure: "Test_Other", durationMs: 1 },
-              {
-                ok: false,
-                procedure: "Test_Only",
-                error: "boom",
-                logs: [],
-                durationMs: 7,
-                payload: { ok: false, error: "boom" },
-              },
-            ],
-          },
-        }),
-      );
-      const translated = translateCoreResultToMcpContent(result);
+      const failures: TestFailureDetail[] = [
+        {
+          procedure: "Test_Only",
+          error: "boom",
+          logs: [],
+          durationMs: 7,
+          payload: { ok: false, error: "boom" },
+        },
+      ];
+      const results: unknown[] = [
+        { ok: true, procedure: "Test_Other", durationMs: 1 },
+        {
+          ok: false,
+          procedure: "Test_Only",
+          error: "boom",
+          logs: [],
+          durationMs: 7,
+          payload: { ok: false, error: "boom" },
+        },
+      ];
+      const translated = translateCoreResultToMcpContent(makeVbaTestsFailedResult(failures, results));
       const details = translated.error?.details as TestFailureDetails | undefined;
       expect(details?.failedCount).toBe(1);
       expect(details?.failures).toHaveLength(1);
-      expect(details?.failures[0]?.procedure).toBe("Test_Only");
-      expect(details?.failures[0]?.error).toBe("boom");
+      assertFullFailureDetail(details?.failures[0], {
+        procedure: "Test_Only",
+        error: "boom",
+        logs: [],
+        durationMs: 7,
+        payload: { ok: false, error: "boom" },
+      });
       expect(details?.results).toHaveLength(2);
     });
   });
 
   describe("edge cases — payload can be undefined / logs empty / durationMs missing", () => {
     it("accepts failures with undefined payload, empty logs, and missing durationMs", () => {
-      const result = failureResult(
-        createDysflowError("VBA_TESTS_FAILED", "1 VBA test(s) failed: Test_Edge", {
-          details: {
-            failedCount: 1,
-            failures: [
-              {
-                procedure: "Test_Edge",
-                error: "edge",
-                logs: [],
-                // durationMs intentionally omitted
-                payload: undefined,
-              },
-            ],
-            results: [
-              {
-                ok: false,
-                procedure: "Test_Edge",
-                error: "edge",
-                logs: [],
-                payload: undefined,
-              },
-            ],
-          },
-        }),
-      );
-      const translated = translateCoreResultToMcpContent(result);
+      const failures: TestFailureDetail[] = [
+        {
+          procedure: "Test_Edge",
+          error: "edge",
+          logs: [],
+          payload: undefined,
+        },
+      ];
+      const results: unknown[] = [
+        {
+          ok: false,
+          procedure: "Test_Edge",
+          error: "edge",
+          logs: [],
+          payload: undefined,
+        },
+      ];
+      const translated = translateCoreResultToMcpContent(makeVbaTestsFailedResult(failures, results));
       const details = translated.error?.details as TestFailureDetails | undefined;
-      expect(details?.failures[0]?.procedure).toBe("Test_Edge");
-      expect(details?.failures[0]?.durationMs).toBeUndefined();
-      expect(details?.failures[0]?.logs).toEqual([]);
-      expect(details?.failures[0]?.payload).toBeUndefined();
+      assertFullFailureDetail(details?.failures[0], {
+        procedure: "Test_Edge",
+        error: "edge",
+        logs: [],
+        payload: undefined,
+      });
     });
   });
 
-  describe("success path is unchanged (#1166 AC #6 — no regression)", () => {
+  describe("success path is unchanged (#1166 AC #4 — no regression)", () => {
     it("a fully-passing manifest returns isError:false / ok:true with the per-procedure data", () => {
       const ok = successResult([
         { ok: true, procedure: "Test_A", durationMs: 4 },
