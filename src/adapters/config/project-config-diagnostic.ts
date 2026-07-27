@@ -129,7 +129,12 @@ export function diagnoseProjectConfig(
   // Issue #1179 — typed warnings accumulate here. They are appended to the
   // diagnostic array on every exit path (success, failure, mismatch) so the
   // consumer can flag the gap without parsing the legacy error code.
-  const warnings: ProjectConfigDiagnostic["diagnostics"] = [];
+  const warnings: {
+    code: string;
+    severity: "error" | "warning";
+    message: string;
+    remediation?: DiagnosticRemediation;
+  }[] = [];
   if (detectedWorktreeRoot === null) {
     warnings.push({
       code: "CWD_NOT_IN_WORKTREE",

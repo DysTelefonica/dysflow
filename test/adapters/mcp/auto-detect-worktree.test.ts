@@ -91,9 +91,7 @@ describe("auto-detect worktree from cwd (#1179)", () => {
     // The "cwd not in a worktree" warning must surface so the consumer can
     // show a sensible message instead of an opaque failure.
     expect(
-      result.diagnostics.some(
-        (d) => d.code === "CWD_NOT_IN_WORKTREE" && d.severity === "warning",
-      ),
+      result.diagnostics.some((d) => d.code === "CWD_NOT_IN_WORKTREE" && d.severity === "warning"),
     ).toBe(true);
   });
 
