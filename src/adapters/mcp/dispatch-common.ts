@@ -1,5 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
-import type { Remediation } from "../../core/contracts/remediation.js";
+import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
@@ -63,7 +63,7 @@ function ensureDiagnostics(error: McpToolError): ReadonlyArray<{
   code: string;
   severity: "error" | "warning" | "info";
   message: string;
-  remediation?: Remediation | string;
+  remediation?: DiagnosticRemediation;
 }> {
   const existing = error.diagnostics;
   if (existing && existing.length > 0) {

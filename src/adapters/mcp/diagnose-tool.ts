@@ -27,6 +27,7 @@ import { diagnoseResultContract } from "./contracts/bootstrap-result-contracts.j
 
 import { existsSync, statSync } from "node:fs";
 import { join, normalize } from "node:path";
+import { remediationText } from "../../core/contracts/remediation.js";
 import {
   type AccessOperationListEntry,
   type AccessOperationRecord,
@@ -410,10 +411,7 @@ function shapeProjectConfig(raw: ProjectConfigDiagnostic): DiagnoseProjectConfig
       // exposes a flat string for consumers that do not parse JSON-typed
       // remediation objects; full structured shape is reachable via the
       // MCP error envelope and `get_capabilities` instead.
-      remediation:
-        typeof d.remediation === "object" && d.remediation !== null
-          ? d.remediation.description
-          : (d.remediation ?? ""),
+      remediation: d.remediation === undefined ? "" : remediationText(d.remediation),
     })),
     owningWorktree: raw.owningWorktree ?? null,
   };

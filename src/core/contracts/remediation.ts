@@ -47,6 +47,42 @@ export type Remediation = {
   safeToAutoExecute?: boolean;
 };
 
+export type MigrationRemediation = {
+  kind: "config-migration";
+  field: string;
+  replaceWith: string;
+  suggestedValue?: string;
+  rationale: string;
+};
+
+export type StructuredRemediation = Remediation | MigrationRemediation;
+export type DiagnosticRemediation = string | StructuredRemediation;
+
+export function remediationForConfigMigration(input: {
+  field: string;
+  replaceWith: string;
+  suggestedValue?: string;
+  rationale: string;
+}): MigrationRemediation {
+  return {
+    kind: "config-migration",
+    ...input,
+  };
+}
+
+function isMigrationRemediation(input: StructuredRemediation): input is MigrationRemediation {
+  return (input as Partial<MigrationRemediation>).kind === "config-migration";
+}
+
+export function remediationText(input: DiagnosticRemediation): string {
+  if (typeof input === "string") return input;
+  if (isMigrationRemediation(input)) {
+    const suggestedValue = input.suggestedValue === undefined ? "" : `: '${input.suggestedValue}'`;
+    return `Replace it with ${input.replaceWith}${suggestedValue}.`;
+  }
+  return input.description;
+}
+
 /**
  * Backward-compat shim — when a caller or legacy code passes a plain string,
  * normalize it into a `Remediation` shape so downstream consumers always see
@@ -55,7 +91,11 @@ export type Remediation = {
  * is set to the original text (treated as a generic hint); callers that need
  * a richer structure should emit one directly.
  */
-export function structureRemediation(input: string | Remediation): Remediation {
+export function structureRemediation(input: string): Remediation;
+export function structureRemediation(input: Remediation): Remediation;
+export function structureRemediation(input: MigrationRemediation): MigrationRemediation;
+export function structureRemediation(input: DiagnosticRemediation): StructuredRemediation;
+export function structureRemediation(input: DiagnosticRemediation): StructuredRemediation {
   if (typeof input === "object" && input !== null) return input;
   return {
     description: input,

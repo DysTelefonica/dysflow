@@ -68,6 +68,17 @@ describe("get_capabilities projectConfig", () => {
       const result = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
       expect(result.projectConfig).toMatchObject({ status: "path-mismatch", writeReady: false });
       expect(result.projectConfig.diagnostics[0]?.code).toBe("FRONTEND_PATH_NOT_BASENAME");
+      expect(result.projectConfig.diagnostics[0]?.remediation).toEqual({
+        kind: "config-migration",
+        field: "accessPath",
+        replaceWith: "frontendFile",
+        suggestedValue: "Expedientes.accdb",
+        rationale:
+          "absolute and separator-containing frontend paths cannot authorize cross-worktree access",
+      });
+      expect(result.projectConfig.remediation).toBe(
+        "Replace it with frontendFile: 'Expedientes.accdb'.",
+      );
       expect(result.projectConfig.writeReady).toBe(false);
     } finally {
       rmSync(cwd, { recursive: true, force: true });

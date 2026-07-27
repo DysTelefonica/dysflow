@@ -20,7 +20,11 @@ import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/proje
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic";
 import { projectConfigNotWriteReady } from "../../../src/adapters/mcp/dispatch-common";
 import type { Remediation } from "../../../src/core/contracts/remediation";
-import { structureRemediation } from "../../../src/core/contracts/remediation";
+import {
+  remediationForConfigMigration,
+  remediationText,
+  structureRemediation,
+} from "../../../src/core/contracts/remediation";
 
 function worktree(): string {
   const r = mkdtempSync(join(tmpdir(), "dysflow-remediation-"));
@@ -234,5 +238,14 @@ describe("structureRemediation backward-compat shim (#970)", () => {
       safeToAutoExecute: false,
     };
     expect(structureRemediation(r)).toEqual(r);
+  });
+
+  it("derives a legacy migration string without a suggested value", () => {
+    const migration = remediationForConfigMigration({
+      field: "accessPath",
+      replaceWith: "frontendFile",
+      rationale: "Use the local frontend filename.",
+    });
+    expect(remediationText(migration)).toBe("Replace it with frontendFile.");
   });
 });
