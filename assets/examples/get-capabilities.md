@@ -99,3 +99,33 @@ Branch on `remediation.kind === "config-migration"` only after confirming the
 entry remediation is an object. `suggestedValue` is omitted when no value can
 be inferred. The top-level `projectConfig.remediation` string remains populated
 from the structured fields for backward-compatible consumers.
+
+### Auto-detected worktree and typed warnings (issue #1179)
+
+`projectConfig.cwd` is auto-derived from the active git worktree toplevel
+(default port runs `git rev-parse --show-toplevel` with a filesystem-walk
+fallback), not from the process spawn cwd. When the process cwd is inside a
+worktree, `cwd` is the worktree root. When the process cwd is not inside a
+worktree, `cwd` is the process cwd verbatim and a typed
+`CWD_NOT_IN_WORKTREE` warning surfaces in `diagnostics[]`:
+
+```json
+{
+  "projectConfig": {
+    "cwd": "C:/Users/agent/Documents",
+    "diagnostics": [
+      {
+        "code": "CWD_NOT_IN_WORKTREE",
+        "severity": "warning",
+        "message": "The process cwd is not inside a git worktree; projectConfig.cwd uses the process cwd as a fallback."
+      }
+    ]
+  }
+}
+```
+
+When the auto-detected worktree's configured `projectId` differs from the
+request's `projectId`, a typed `TARGET_MISMATCH_WARNING` is appended to
+the existing `PROJECT_ID_MISMATCH` error diagnostic so the consumer can flag
+the gap explicitly. Branch on `severity === "warning"` to surface the soft
+signal regardless of the verdict.
