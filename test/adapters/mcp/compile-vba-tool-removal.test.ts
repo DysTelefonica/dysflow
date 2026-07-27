@@ -122,9 +122,13 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // 88 -> 89.
     // #1057 (F5) adds `describe_tool` (read-only single-tool
     // introspection sibling of `schema`): 89 -> 90.
+    // #1177 adds `migrate_project_config` (one-shot legacy config
+    // migration tool — default `{}` is a pure read-class diff preview,
+    // `apply:true` rewrites `.dysflow/project.json` atomically and is
+    // write-gated through MCP_WRITES_DISABLED): 90 -> 91.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(90);
+    expect(advertisedToolCount()).toBe(91);
   });
 });

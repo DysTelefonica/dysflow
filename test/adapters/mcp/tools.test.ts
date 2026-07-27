@@ -279,6 +279,7 @@ describe("MCP tool registration over core services", () => {
       "clean_stale_markers",
       "state",
       "logs",
+      "migrate_project_config",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

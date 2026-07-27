@@ -237,6 +237,17 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // `confirm: true` paired with `dryRun: false`). Listing it here keeps
   // the snapshot uniform with `access_force_cleanup_orphaned`.
   clean_stale_markers: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #1177 — `migrate_project_config` rewrites
+  // `.dysflow/project.json` on apply. Default empty call is a pure
+  // read-class diff preview; `apply: true` (or `dryRun: false`) commits.
+  // Same write-class family as `clean_stale_markers` / `sync_binary` /
+  // `apply_form_design_plan` (filesystem control under an explicit
+  // commit signal).
+  migrate_project_config: {
+    commitFlag: "apply",
+    noWriteAlias: "dryRun",
+    defaultBehavior: "plan",
+  },
   // Round-12 (#978) — `state` is pure read-only. The schema defensively
   // accepts `apply` for symmetry with every other advertised tool, but
   // `state` never writes — the handler ignores any commit signal and

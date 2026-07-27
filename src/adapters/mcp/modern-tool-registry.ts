@@ -22,6 +22,12 @@ export const MODERN_TOOL_NAMES = [
   "clean_stale_markers",
   "state",
   "logs",
+  // Issue #1177 — `migrate_project_config` drives legacy config
+  // migrations (absolute accessPath → basename frontendFile,
+  // top-level allowWrites → capabilities.allowWrites). Conditional-write
+  // because `apply:true` rewrites `.dysflow/project.json`; the
+  // default `{}` invocation is a pure read-class diff preview.
+  "migrate_project_config",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "reviewedAt": "2026-07-25",
+  "reviewedAt": "2026-07-27",
   "cycles": [
     [
       "src/adapters/http/http-services-factory.ts",
@@ -20,6 +20,7 @@
       "src/adapters/mcp/dispatch-routes.ts",
       "src/adapters/mcp/logs-tool.ts",
       "src/adapters/mcp/mcp-tool-contracts.ts",
+      "src/adapters/mcp/migrate-project-config-tool.ts",
       "src/adapters/mcp/resolve-project-tool.ts",
       "src/adapters/mcp/result-translation.ts",
       "src/adapters/mcp/schema-tool.ts",
