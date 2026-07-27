@@ -191,6 +191,14 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
       expect(error.code).toBe("VBA_TESTS_FAILED");
       expect(error.details?.failures).toHaveLength(2);
     });
+
+    it("surfaces #1166 in error.relatedIssueNumbers so consumers can grep the source PR", () => {
+      // Regression-lock the related-issue register so a future cleanup of
+      // explain-builder.ts does not silently drop #1166.
+      const translated = translateCoreResultToMcpContent(makeFailingResult());
+      const issueNumbers = translated.error?.relatedIssueNumbers ?? [];
+      expect(issueNumbers).toContain("#1166");
+    });
   });
 
   describe("single-procedure failure path", () => {

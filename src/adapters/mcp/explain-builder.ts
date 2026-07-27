@@ -102,6 +102,11 @@ export const RELATED_ISSUE_NUMBERS: Readonly<Record<string, readonly string[]>> 
   BINARY_FORMAT_UNSUPPORTED: ["#980"],
   INTERNAL_ERROR: ["#980"],
   RUNTIME_STALE: ["#980"],
+  // #1166 — `test_vba` failure envelope carries the per-procedure reports
+  // in `error.details.failures[]` so consumers can read structured data
+  // without parsing `error.message`. The related PR appears here so a
+  // consumer that greps `error.relatedIssueNumbers` lands on the contract.
+  VBA_TESTS_FAILED: ["#1166"],
 };
 
 /**
