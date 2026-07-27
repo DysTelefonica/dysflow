@@ -36,6 +36,26 @@ export type McpTextContent = {
   text: string;
 };
 
+/**
+ * Issue #1168 — top-level `schemaVersion` discriminator for every dysflow
+ * MCP tool response.
+ *
+ * The literal is the single source of truth: a versioned string in the
+ * `dysflow.result/v1` family. Consumers (notably OpenCode Code Mode, which
+ * sometimes flattens structured results to `[object Object]`) can branch on
+ * a single field to detect a real dysflow envelope:
+ *
+ *     const raw = await tools.dysflow.someTool(args);
+ *     const env = typeof raw === "string" ? JSON.parse(raw) : raw;
+ *     if (env.schemaVersion !== "dysflow.result/v1") throw new Error("not a dysflow envelope");
+ *
+ * Bumping the literal (e.g. to `v2`) is a breaking change for consumers and
+ * must ship with a migration note in CHANGELOG.md. Additive additions do NOT
+ * bump the literal — keep `v1` until the envelope shape itself changes.
+ */
+export const RESULT_SCHEMA_VERSION = "dysflow.result/v1" as const;
+export type ResultSchemaVersion = typeof RESULT_SCHEMA_VERSION;
+
 export type McpToolError = {
   code: string;
   message: string;
@@ -147,6 +167,15 @@ export type McpToolError = {
 };
 
 export type McpToolResult = {
+  /**
+   * Issue #1168 — top-level `schemaVersion` discriminator. The literal value
+   * is fixed to `dysflow.result/v1` (see {@link RESULT_SCHEMA_VERSION}) and
+   * is injected by {@link withSchemaVersion} at the stdio central seam so
+   * every wire-level response carries it. Optional in the type so legacy
+   * test fixtures that construct `{ content, isError }` literally still
+   * compile; the runtime seam is the contract, not the type.
+   */
+  schemaVersion?: ResultSchemaVersion;
   content: readonly McpTextContent[];
   isError: boolean;
   /**
@@ -165,6 +194,20 @@ export type McpToolResult = {
    */
   error?: McpToolError;
 };
+
+/**
+ * Issue #1168 — single-source-of-truth injector for the `schemaVersion`
+ * discriminator. Idempotent: re-stamping a stamped envelope is a no-op so
+ * the literal never duplicates as a second field.
+ *
+ * Every helper envelope builder and the stdio central seam funnel through
+ * this helper so the discriminator never drifts. New dispatch surfaces
+ * should call this rather than constructing the field inline.
+ */
+export function withSchemaVersion(result: McpToolResult): McpToolResult {
+  if (result.schemaVersion === RESULT_SCHEMA_VERSION) return result;
+  return { ...result, schemaVersion: RESULT_SCHEMA_VERSION };
+}
 
 export type DysflowMcpTool = {
   name: string;
@@ -274,7 +317,7 @@ export function translateCoreResultToMcpContent<TData>(
           : {}),
       },
     ];
-    return {
+    return withSchemaVersion({
       content: [
         {
           type: "text",
@@ -299,14 +342,14 @@ export function translateCoreResultToMcpContent<TData>(
           ? { allowedProcedures: result.error.allowedProcedures }
           : {}),
       },
-    };
+    });
   }
 
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: stringifyForMcp(result.data) }],
     isError: false,
     ok: true,
-  };
+  });
 }
 
 /**

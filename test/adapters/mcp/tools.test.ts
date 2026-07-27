@@ -165,6 +165,7 @@ describe("MCP tool registration over core services", () => {
           mode: "read",
         }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [{ id: 1, name: "Ada" }] }) }],
       isError: false,
       ok: true,
@@ -172,6 +173,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools.find((tool) => tool.name === "doctor")?.handler({ includeEnvironment: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [
         {
           type: "text",
@@ -567,6 +569,7 @@ describe("MCP tool registration over core services", () => {
         .find((tool) => tool.name === "seed_fixture")
         ?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], dryRun: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
       ok: true,
@@ -724,6 +727,7 @@ describe("MCP tool registration over core services", () => {
         .find((tool) => tool.name === "query_execute")
         ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
       ok: true,
@@ -756,6 +760,7 @@ describe("MCP tool registration over core services", () => {
           apply: true,
         }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
       isError: false,
       ok: true,
@@ -813,6 +818,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       runVba?.handler({ procedureName: "Blank", argsJson: "   ", dryRun: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
       ok: true,
@@ -820,6 +826,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]', dryRun: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
       ok: true,
@@ -827,6 +834,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       runVba?.handler({ procedureName: "Single", argsJson: "42", dryRun: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
       isError: false,
       ok: true,
@@ -905,6 +913,7 @@ describe("MCP tool registration over core services", () => {
       for (const toolName of IMPLEMENTED_VERIFY_TOOL_NAMES) {
         const result = await tools.find((t) => t.name === toolName)?.handler({ diff: true });
         expect(result).toEqual({
+          schemaVersion: "dysflow.result/v1",
           content: [
             // Issue #785 (v2.1.1) — the dispatch seam injects the
             // policy-driven effective dryRun default. These tools are
@@ -1067,6 +1076,7 @@ describe("MCP tool registration over core services", () => {
       const target = tools.find((t) => t.name === "verify_code");
       const result = await target?.handler({ timeoutMs: 120_000 });
       expect(result).toEqual({
+        schemaVersion: "dysflow.result/v1",
         content: [
           {
             type: "text",
@@ -1119,6 +1129,7 @@ describe("MCP tool registration over core services", () => {
       });
 
       expect(result).toEqual({
+        schemaVersion: "dysflow.result/v1",
         content: [
           {
             type: "text",
