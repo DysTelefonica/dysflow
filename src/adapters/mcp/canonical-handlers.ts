@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
+import { isRecord } from "../../core/utils/index.js";
 import type { AccessOperationListEntry } from "../../core/operations/access-operation-registry.js";
 import {
   type AccessOperationRegistryHealth,
@@ -126,6 +127,22 @@ export async function handleMcpQueryExecute(
   buildRequest: (input: unknown) => AccessQueryRequest,
   context?: McpToolContext,
 ): Promise<McpToolResult> {
+  // Issue #1164 — `query_execute` requires `mode: "read" | "write"`. The
+  // generic validator rejects missing `mode` with a plain `"mode is required."`
+  // string, which `enrichmentForValidationMessage` cannot enrich (it only
+  // recognizes the `is not allowed.` shape from #757 C4). Without this
+  // short-circuit, an AI consumer (notably OpenCode Code Mode, which
+  // flattens the JSON envelope to `[object Object]`) loses the structured
+  // `rejectedFlag: "mode"` / `remediation` field and has to guess what is
+  // missing. Short-circuit BEFORE the validator so the envelope is exact
+  // and the AI consumer can self-correct in one turn.
+  if (isRecord(input) && input.mode === undefined) {
+    return invalidInput(
+      "Required parameter 'mode' is missing.",
+      "Pass mode: 'read' for SELECT or mode: 'write' for INSERT/UPDATE/DELETE/DDL.",
+      { rejectedFlag: "mode", toolName: "query_execute" },
+    );
+  }
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every

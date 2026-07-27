@@ -700,6 +700,20 @@ export function enrichmentForValidationMessage(
       toolName,
     };
   }
+  // Issue #1164 — missing-required field surface. The validator emits
+  // `"<param> is required."` when a schema-declared `required` key is
+  // absent from the caller's input. Without this branch the structured
+  // envelope degrades to the generic `MCP_INPUT_INVALID` (no
+  // `rejectedFlag`, no tool-aware remediation), which AI consumers running
+  // inside OpenCode Code Mode experience as the opaque
+  // `Error { str: "[object Object]" }` flattening. Surfacing the missing
+  // parameter as the `rejectedFlag` lets a consumer self-correct in one
+  // turn and matches the `#757 C4` envelope contract the rest of the
+  // tool surface already promises.
+  const requiredMatch = /^([a-zA-Z][a-zA-Z0-9_]*)\s+is required\.$/.exec(validation);
+  if (requiredMatch !== null) {
+    return { rejectedFlag: requiredMatch[1], toolName };
+  }
   // Legacy single-flag rejection shape (#757 C4).
   const flagMatch = /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
     validation,
