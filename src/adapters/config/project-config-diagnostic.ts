@@ -12,6 +12,7 @@ import {
   remediationText,
 } from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
+import { resolveActiveWorktreeRoot } from "../runtime/worktree-resolver.js";
 import { nodeConfigFileSystem } from "./dysflow-config-node.js";
 
 export type ProjectConfigStatus =
@@ -118,7 +119,32 @@ export function diagnoseProjectConfig(
   request: ProjectConfigRequest = {},
   candidateConfig?: Record<string, unknown>,
 ): ProjectConfigDiagnostic {
-  let targetCwdInput = cwdInput;
+  // Issue #1179 — auto-detect the active worktree from the process cwd.
+  // The MCP process is spawned from a fixed cwd; the consumer's OpenCode
+  // session may operate from a subdirectory of a sibling worktree. The
+  // resolver walks up to the git worktree toplevel (default port runs
+  // `git rev-parse --show-toplevel` with a filesystem-walk fallback) so
+  // the implicit target is the worktree, not the spawn cwd.
+  const detectedWorktreeRoot = resolveActiveWorktreeRoot(cwdInput);
+  // Issue #1179 — typed warnings accumulate here. They are appended to the
+  // diagnostic array on every exit path (success, failure, mismatch) so the
+  // consumer can flag the gap without parsing the legacy error code.
+  const warnings: ProjectConfigDiagnostic["diagnostics"] = [];
+  if (detectedWorktreeRoot === null) {
+    warnings.push({
+      code: "CWD_NOT_IN_WORKTREE",
+      severity: "warning",
+      message:
+        "The process cwd is not inside a git worktree; projectConfig.cwd uses the process cwd as a fallback.",
+    });
+  }
+  // Effective cwd for the resolver: the worktree toplevel whenever the
+  // process cwd is inside a worktree, otherwise the process cwd verbatim.
+  // The override is the #1179 contract — the implicit/default context is the
+  // worktree, not the spawn cwd.
+  const effectiveCwdInput = detectedWorktreeRoot ?? cwdInput;
+
+  let targetCwdInput = effectiveCwdInput;
   const requestedId = request.projectId;
   const explicitTargetSupplied =
     requestedId !== undefined ||
@@ -131,7 +157,7 @@ export function diagnoseProjectConfig(
     request.accessPath ?? request.accessDbPath ?? request.databasePath ?? request.sourcePath;
 
   let discoveredProjects: DiscoveredProjectDiagnostic[] | undefined;
-  const cwdNative = worktreeRoot(cwdInput);
+  const cwdNative = worktreeRoot(effectiveCwdInput);
   let matchedInCwd = false;
   if (cwdNative !== null) {
     const configCandidate = join(cwdNative, ".dysflow", "project.json");
@@ -140,7 +166,7 @@ export function diagnoseProjectConfig(
         const raw = JSON.parse(readFileSync(configCandidate, "utf8")) as Record<string, unknown>;
         const configuredId = typeof raw.id === "string" && raw.id ? raw.id : null;
         const normAccess = requestedAccessPath
-          ? normalize(resolve(cwdInput, requestedAccessPath))
+          ? normalize(resolve(effectiveCwdInput, requestedAccessPath))
           : undefined;
 
         const idOk =
@@ -181,14 +207,14 @@ export function diagnoseProjectConfig(
   }
 
   if (!matchedInCwd) {
-    discoveredProjects = discoverWorktreeProjectConfigs(cwdInput, nodeConfigFileSystem);
+    discoveredProjects = discoverWorktreeProjectConfigs(effectiveCwdInput, nodeConfigFileSystem);
     if (requestedId !== undefined && requestedId !== null) {
       const match = discoveredProjects.find((p) => p.id === requestedId);
       if (match) {
         targetCwdInput = match.projectRoot;
       }
     } else if (requestedAccessPath !== undefined && requestedAccessPath !== null) {
-      const normAccess = normalize(resolve(cwdInput, requestedAccessPath));
+      const normAccess = normalize(resolve(effectiveCwdInput, requestedAccessPath));
       const match = discoveredProjects.find(
         (p) =>
           (p.accessPath !== null && identity(p.accessPath) === identity(normAccess)) ||
@@ -222,6 +248,7 @@ export function diagnoseProjectConfig(
           severity: "error",
           message: "The requested cwd is not inside a Git worktree.",
         },
+        ...warnings,
       ],
       remediation: `Run Dysflow from the intended Git worktree or pass its path with \`--cwd\`.`,
     };
@@ -397,14 +424,25 @@ export function diagnoseProjectConfig(
   };
   const siblingRoot = repoSiblingRoot();
   const effectiveOwning = siblingRoot !== null ? canonical(siblingRoot) : canonicalProjectRoot;
-  if (requestedId !== undefined && requestedId !== projectId)
+  if (requestedId !== undefined && requestedId !== projectId) {
+    // Issue #1179 — typed warning when the auto-detected worktree would
+    // route to a different configured project than the request. The error
+    // path is preserved so the dispatch gate still fails closed; the
+    // warning is additive so the consumer can flag the gap explicitly.
+    warnings.push({
+      code: "TARGET_MISMATCH_WARNING",
+      severity: "warning",
+      message: `Requested projectId '${requestedId}' does not match the auto-detected worktree's projectId '${projectId ?? "(missing)"}'.`,
+    });
     return failWith(
       base,
       "id-mismatch",
       `Requested project identity '${requestedId}' does not match '${projectId ?? "(missing)"}'.`,
       remediationForProjectIdMismatch(projectId),
       "PROJECT_ID_MISMATCH",
+      warnings,
     );
+  }
   const capabilities = parsed.capabilities;
   if (
     capabilities !== null &&
@@ -666,7 +704,7 @@ export function diagnoseProjectConfig(
     ...base,
     status: "valid",
     writeReady: true,
-    diagnostics: [],
+    diagnostics: [...warnings],
     remediation: null,
     owningWorktree: siblingRoot !== null ? `sibling:${siblingRoot}` : "cwd",
   };
@@ -838,13 +876,14 @@ function failWith(
   message: string,
   remediation: DiagnosticRemediation,
   code: string = status.toUpperCase().replaceAll("-", "_"),
+  warnings: ProjectConfigDiagnostic["diagnostics"] = [],
 ): ProjectConfigDiagnostic {
   const descText = remediationText(remediation);
   return {
     ...base,
     status,
     writeReady: false,
-    diagnostics: [{ code, severity: "error", message, remediation }],
+    diagnostics: [{ code, severity: "error", message, remediation }, ...warnings],
     remediation: descText,
   };
 }
