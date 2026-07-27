@@ -16,6 +16,7 @@ import {
 } from "../../core/services/form-ir-service.js";
 import type { FormFileSystemPort } from "../../core/services/vba-form-service.js";
 import { stringValue } from "../../core/utils/index.js";
+import { withResolvedDestinationRoot } from "./destination-root-override.js";
 import { applyGuardedFormWrite } from "./vba-forms-guarded-write.js";
 import { resolveManagedMutationSource } from "./vba-forms-managed-source.js";
 import { deriveFormName } from "./vba-forms-paths.js";
@@ -183,6 +184,29 @@ export async function serializeForm(
     };
   }
 
+  // Issue #1169 — stamp the success envelope with the EFFECTIVE
+  // destinationRoot + provenance tag. The orchestrator's own
+  // `resolveExecutionTarget` already honors `params.destinationRoot`
+  // as a precedence-1 override; the helper just classifies the
+  // resolved value so a consumer can audit the path without
+  // re-running the resolver. Skip when no orchestrator is wired
+  // (legacy direct-call path: the helper has no surface to inspect).
+  // Also skip when no `destinationRoot` override and no `projectId`
+  // are supplied — the no-projectId passthrough never consulted the
+  // orchestrator, so the audit must NOT trigger a brand new
+  // `resolveExecutionTarget` call either (the legacy short-circuit
+  // contract is preserved).
+  if (
+    orchestrator !== undefined &&
+    (stringValue(params.destinationRoot) !== undefined ||
+      stringValue(params.projectId) !== undefined)
+  ) {
+    return withResolvedDestinationRoot(
+      successResult(data),
+      params,
+      orchestrator,
+    );
+  }
   return successResult(data);
 }
 
@@ -245,29 +269,41 @@ export async function deserializeForm(args: {
   if (!apply) {
     const outputMode = stringValue(params.outputMode) ?? "full";
     if (outputMode === "summary") {
-      return successResult({
-        mode: "dry-run",
-        sourcePath: source.data.sourcePath,
-        written: false,
-        appliedChecksumBefore: undefined,
-        appliedChecksumAfter: undefined,
-        loadFromTextGate: "skipped",
-      });
+      return withResolvedDestinationRoot(
+        successResult({
+          mode: "dry-run",
+          sourcePath: source.data.sourcePath,
+          written: false,
+          appliedChecksumBefore: undefined,
+          appliedChecksumAfter: undefined,
+          loadFromTextGate: "skipped",
+        }),
+        params,
+        orchestrator,
+      );
     } else if (outputMode === "file") {
-      return successResult({
-        sourcePath: source.data.sourcePath,
-        preview: serializedText,
-      });
+      return withResolvedDestinationRoot(
+        successResult({
+          sourcePath: source.data.sourcePath,
+          preview: serializedText,
+        }),
+        params,
+        orchestrator,
+      );
     } else {
-      return successResult({
-        mode: "dry-run",
-        sourcePath: source.data.sourcePath,
-        written: false,
-        appliedChecksumBefore: undefined,
-        appliedChecksumAfter: undefined,
-        loadFromTextGate: "skipped",
-        preview: serializedText,
-      });
+      return withResolvedDestinationRoot(
+        successResult({
+          mode: "dry-run",
+          sourcePath: source.data.sourcePath,
+          written: false,
+          appliedChecksumBefore: undefined,
+          appliedChecksumAfter: undefined,
+          loadFromTextGate: "skipped",
+          preview: serializedText,
+        }),
+        params,
+        orchestrator,
+      );
     }
   }
 
@@ -284,15 +320,19 @@ export async function deserializeForm(args: {
   });
   if (!write.ok) return write;
 
-  return successResult({
-    mode: "apply",
-    sourcePath: source.data.sourcePath,
-    written: true,
-    appliedChecksumBefore: undefined,
-    appliedChecksumAfter: undefined,
-    loadFromTextGate: "passed",
-    importResult: write.data.importResult,
-  });
+  return withResolvedDestinationRoot(
+    successResult({
+      mode: "apply",
+      sourcePath: source.data.sourcePath,
+      written: true,
+      appliedChecksumBefore: undefined,
+      appliedChecksumAfter: undefined,
+      loadFromTextGate: "passed",
+      importResult: write.data.importResult,
+    }),
+    params,
+    orchestrator,
+  );
 }
 
 /** Count opaque (blob) entries in a FormIR — used for the metadata report. */
