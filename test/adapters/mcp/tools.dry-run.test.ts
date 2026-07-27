@@ -49,7 +49,7 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
 
     it("create_table with {apply:true} triggers write guard when writesEnabled=false", async () => {
       const handler = getToolHandler("create_table");
-      const result = await handler({ apply: true });
+      const result = await handler({ apply: true, tableName: "Example" });
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
     });

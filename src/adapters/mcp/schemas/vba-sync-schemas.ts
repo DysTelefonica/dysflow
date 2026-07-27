@@ -1557,9 +1557,9 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   form_set_property: {
     type: "object",
     // `propertyName` is canonical, while `property` remains an indefinitely
-    // supported compatibility alias. The dispatch boundary enforces that at
-    // least one is present because this validator does not support anyOf.
+    // supported compatibility alias.
     required: ["sourcePath", "controlName"],
+    anyOf: [{ required: ["propertyName"] }, { required: ["property"] }],
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,

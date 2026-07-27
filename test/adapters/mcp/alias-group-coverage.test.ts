@@ -38,7 +38,19 @@ type AliasGroup = {
   toolName: string;
   alternatives: readonly string[];
   canonical: string;
+  baseInput?: Readonly<Record<string, unknown>>;
 };
+
+const TABLE_ALIAS_TOOL_NAMES = [
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "unlink_table",
+] as const;
 
 const ALIAS_GROUPS: readonly AliasGroup[] = [
   {
@@ -51,10 +63,19 @@ const ALIAS_GROUPS: readonly AliasGroup[] = [
     alternatives: ["sourcePath", "path"],
     canonical: "sourcePath",
   },
-  {
-    toolName: "unlink_table",
-    alternatives: ["tableName", "table"],
+  ...TABLE_ALIAS_TOOL_NAMES.map((toolName) => ({
+    toolName,
+    alternatives: ["tableName", "table"] as const,
     canonical: "tableName",
+  })),
+  {
+    toolName: "form_set_property",
+    alternatives: ["propertyName", "property"],
+    canonical: "propertyName",
+    baseInput: {
+      sourcePath: "forms/Form_Example.form.txt",
+      controlName: "txtExample",
+    },
   },
   {
     toolName: "validate_manifest",
@@ -68,8 +89,10 @@ class FakeVbaService {
     return successResult({ returnValue: "ok" });
   }
 }
+let queryExecutionCount = 0;
 class FakeQueryService {
   async execute() {
+    queryExecutionCount += 1;
     return successResult({ rows: [] });
   }
 }
@@ -105,6 +128,49 @@ function readAnyOf(
 }
 
 describe("alias-group declarations (#1074)", () => {
+  it("covers every advertised tool that accepts the tableName/table alias pair", () => {
+    const advertised = TOOLS.filter((tool) => {
+      const schema = inputSchemaFor(tool.name);
+      return schema?.properties.tableName !== undefined && schema.properties.table !== undefined;
+    })
+      .map((tool) => tool.name)
+      .sort();
+
+    expect(advertised).toEqual([...TABLE_ALIAS_TOOL_NAMES].sort());
+  });
+
+  it("drop_table and unlink_table reject a missing table at the MCP schema boundary", async () => {
+    queryExecutionCount = 0;
+    const messages: string[] = [];
+
+    for (const toolName of ["drop_table", "unlink_table"]) {
+      const tool = TOOL_BY_NAME.get(toolName);
+      if (tool === undefined) throw new Error(`Tool missing: ${toolName}`);
+      const result = await tool.handler({ projectId: "example" });
+      expect(result.isError).toBe(true);
+      messages.push(result.content[0]?.text ?? "");
+    }
+
+    expect(messages[0]).toContain("one of these is required: [tableName], [table]");
+    expect(messages[1]).toContain("one of these is required: [tableName], [table]");
+    expect(queryExecutionCount).toBe(0);
+  });
+
+  it("form_set_property rejects a missing property alias at the MCP schema boundary", async () => {
+    const tool = TOOL_BY_NAME.get("form_set_property");
+    if (tool === undefined) throw new Error("Tool missing: form_set_property");
+
+    const result = await tool.handler({
+      sourcePath: "forms/Form_Example.form.txt",
+      controlName: "txtExample",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text ?? "").toContain(
+      "one of these is required: [propertyName], [property]",
+    );
+  });
+
   for (const group of ALIAS_GROUPS) {
     it(`${group.toolName} declares an anyOf on every documented alias`, () => {
       const schema = inputSchemaFor(group.toolName);
@@ -127,14 +193,14 @@ describe("alias-group declarations (#1074)", () => {
     });
   }
 
-  it("every alias-group tool rejects an empty input via the validator", () => {
+  it("every alias-group tool rejects input that omits the alias group", () => {
     for (const group of ALIAS_GROUPS) {
       const schema = inputSchemaFor(group.toolName);
       if (schema === undefined) throw new Error(`Schema missing for ${group.toolName}`);
-      const result = validateInput({}, schema);
+      const result = validateInput({ ...group.baseInput }, schema);
       expect(
         result,
-        `validateInput({}, ${group.toolName}Schema) must reject empty input — the alias-group constraint must be declarative`,
+        `validateInput(baseInput, ${group.toolName}Schema) must reject a missing alias group — the constraint must be declarative`,
       ).toBeDefined();
       expect(result ?? "").toMatch(/required|anyOf|one of|missing/i);
     }
@@ -145,7 +211,10 @@ describe("alias-group declarations (#1074)", () => {
       const schema = inputSchemaFor(group.toolName);
       if (schema === undefined) throw new Error(`Schema missing for ${group.toolName}`);
       for (const alternative of group.alternatives) {
-        const fixture: Record<string, string> = { [alternative]: "ok" };
+        const fixture: Record<string, unknown> = {
+          ...group.baseInput,
+          [alternative]: "ok",
+        };
         const result = validateInput(fixture, schema);
         expect(
           result,
@@ -159,7 +228,10 @@ describe("alias-group declarations (#1074)", () => {
     for (const group of ALIAS_GROUPS) {
       const schema = inputSchemaFor(group.toolName);
       if (schema === undefined) throw new Error(`Schema missing for ${group.toolName}`);
-      const fixture: Record<string, string> = { [group.canonical]: "canonical-value" };
+      const fixture: Record<string, unknown> = {
+        ...group.baseInput,
+        [group.canonical]: "canonical-value",
+      };
       for (const other of group.alternatives) {
         if (other === group.canonical) continue;
         fixture[other] = "alias-value";
