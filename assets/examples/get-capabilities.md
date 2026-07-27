@@ -66,3 +66,36 @@ diagnosis is available:
 - Other non-valid statuses produce `outcome: "unresolved"` with a null resolution project ID.
 
 Consumers can therefore use `projectIdResolution.outcome === "resolved"` as the single project-identity gate before a dysflow call, and use `projectConfig` for detailed diagnostics and target paths. The two fields must never be interpreted as independent project resolvers.
+
+### Structured config-migration remediation (issue #1176)
+
+Migration diagnostics expose a discriminated object in
+`projectConfig.diagnostics[].remediation`. For example,
+`FRONTEND_PATH_NOT_BASENAME` returns:
+
+```json
+{
+  "projectConfig": {
+    "diagnostics": [
+      {
+        "code": "FRONTEND_PATH_NOT_BASENAME",
+        "severity": "error",
+        "message": "Legacy accessPath '../shared/f16.accdb' is not a basename.",
+        "remediation": {
+          "kind": "config-migration",
+          "field": "accessPath",
+          "replaceWith": "frontendFile",
+          "suggestedValue": "f16.accdb",
+          "rationale": "absolute and separator-containing frontend paths cannot authorize cross-worktree access"
+        }
+      }
+    ],
+    "remediation": "Replace it with frontendFile: 'f16.accdb'."
+  }
+}
+```
+
+Branch on `remediation.kind === "config-migration"` only after confirming the
+entry remediation is an object. `suggestedValue` is omitted when no value can
+be inferred. The top-level `projectConfig.remediation` string remains populated
+from the structured fields for backward-compatible consumers.
