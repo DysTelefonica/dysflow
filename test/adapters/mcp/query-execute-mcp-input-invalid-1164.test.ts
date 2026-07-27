@@ -6,7 +6,7 @@
  *
  * Acceptance contract — the response envelope MUST expose:
  *   - `error.code === "MCP_INPUT_INVALID"`
- *   - `error.rejectedFlag === "mode"` (or `error.rejectedFlags: ["mode"]`)
+ *   - `error.missingParam === "mode"`
  *   - `error.message` mentions `mode`
  *   - `error.remediation` instructs the caller to pass `mode: "read"` or
  *     `mode: "write"`
@@ -60,15 +60,15 @@ describe("query_execute (issue #1164) — missing mode returns structured MCP_IN
     expect(queryExecute).not.toHaveBeenCalled();
   });
 
-  it("missing mode surfaces error.rejectedFlag === 'mode' (or rejectedFlags: ['mode'])", async () => {
+  it("missing mode surfaces error.missingParam === 'mode'", async () => {
     const { services, queryExecute } = buildQueryExecuteServices();
     const tools = createDysflowMcpTools({ services, writes: true });
     const tool = tools.find((t) => t.name === "query_execute");
 
     const result = await tool?.handler({ sql: "SELECT 1", apply: true });
 
-    const rejected = result?.error?.rejectedFlag ?? result?.error?.rejectedFlags?.[0];
-    expect(rejected).toBe("mode");
+    expect((result?.error as { missingParam?: string } | undefined)?.missingParam).toBe("mode");
+    expect(result?.error?.rejectedFlag).toBeUndefined();
     expect(queryExecute).not.toHaveBeenCalled();
   });
 
@@ -114,7 +114,8 @@ describe("query_execute (issue #1164) — missing mode returns structured MCP_IN
 
     expect(result?.isError).toBe(true);
     expect(result?.error?.code).toBe("MCP_INPUT_INVALID");
-    expect(result?.error?.rejectedFlag).toBe("mode");
+    expect((result?.error as { missingParam?: string } | undefined)?.missingParam).toBe("mode");
+    expect(result?.error?.rejectedFlag).toBeUndefined();
     expect(queryExecute).not.toHaveBeenCalled();
   });
 

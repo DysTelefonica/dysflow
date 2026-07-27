@@ -356,7 +356,11 @@ export function createMigrateProjectConfigTool(
       // returns.
       const validation = validateInput(input, MIGRATE_PROJECT_CONFIG_SCHEMA);
       if (validation !== undefined) {
-        const enrichment = enrichmentForValidationMessage(validation, "migrate_project_config");
+        const enrichment = enrichmentForValidationMessage(
+          validation,
+          "migrate_project_config",
+          MIGRATE_PROJECT_CONFIG_SCHEMA,
+        );
         if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
         return invalidInput(validation);
       }

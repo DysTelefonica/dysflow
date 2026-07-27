@@ -230,7 +230,7 @@ export function createDispatchTool(
         // known shape variants of `validateInput` output. The legacy
         // text body is preserved so regex consumers keep working;
         // the structured `error` block is additive.
-        const enrichment = enrichmentForValidationMessage(validation, name);
+        const enrichment = enrichmentForValidationMessage(validation, name, schema);
         if (enrichment !== undefined) {
           return invalidInput(validation, undefined, enrichment);
         }

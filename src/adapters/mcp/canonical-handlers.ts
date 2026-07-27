@@ -91,7 +91,7 @@ export async function handleMcpVbaExecute(
     // dispatch entry point. Use the shared helper so the apply/dryRun
     // contradiction and the legacy `<flag> is not allowed.` shape both
     // produce the structured rejection.
-    const enrichment = enrichmentForValidationMessage(validation, "run_vba");
+    const enrichment = enrichmentForValidationMessage(validation, "run_vba", schema);
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
@@ -142,14 +142,19 @@ export async function handleMcpQueryExecute(
   // before this fix (it only recognized the `is not allowed.` shape from
   // #757 C4). An AI consumer — notably OpenCode Code Mode, which
   // flattens the JSON envelope to `[object Object]` — lost the
-  // structured `rejectedFlag: "mode"` / `remediation` field and had to
+  // structured `missingParam: "mode"` / `remediation` field and had to
   // guess what is missing. Short-circuit BEFORE the validator so the
   // envelope is exact and the AI consumer can self-correct in one turn.
   if (isRecord(input) && input.mode === undefined && (schema.required ?? []).includes("mode")) {
     return invalidInput(
       "Required parameter 'mode' is missing.",
       "Pass mode: 'read' for SELECT or mode: 'write' for INSERT/UPDATE/DELETE/DDL.",
-      { rejectedFlag: "mode", toolName: "query_execute" },
+      {
+        kind: "missing-required",
+        missingParam: "mode",
+        parameterDescription: schema.properties.mode?.description,
+        toolName: "query_execute",
+      },
     );
   }
   const validation = validateInput(input, schema);
@@ -157,7 +162,7 @@ export async function handleMcpQueryExecute(
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every
     // dispatch entry point. The tool name (`query_execute`) is what the
     // structured enrichment binds to the registry's commit-flag metadata.
-    const enrichment = enrichmentForValidationMessage(validation, "query_execute");
+    const enrichment = enrichmentForValidationMessage(validation, "query_execute", schema);
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
@@ -207,7 +212,11 @@ export async function handleMcpAccessCleanup(
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
-    const enrichment = enrichmentForValidationMessage(validation, "cleanup_access_operation");
+    const enrichment = enrichmentForValidationMessage(
+      validation,
+      "cleanup_access_operation",
+      schema,
+    );
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
@@ -270,7 +279,11 @@ export async function handleMcpAccessOrphanCleanup(
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
-    const enrichment = enrichmentForValidationMessage(validation, "access_force_cleanup_orphaned");
+    const enrichment = enrichmentForValidationMessage(
+      validation,
+      "access_force_cleanup_orphaned",
+      schema,
+    );
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
@@ -339,7 +352,7 @@ export async function handleMcpCleanStaleMarkers(
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
-    const enrichment = enrichmentForValidationMessage(validation, "clean_stale_markers");
+    const enrichment = enrichmentForValidationMessage(validation, "clean_stale_markers", schema);
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
