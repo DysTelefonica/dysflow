@@ -3,10 +3,15 @@ import type { DoctorCategoryCheck } from "./types.js";
 
 /**
  * Tools whose commit flag is deliberately NOT `apply` — documented
- * exceptions, not polarity defects. `test_vba` commits with
- * `dryRun:false` because its schema never accepted `apply` (#1046).
+ * exceptions, not polarity defects. Issue #1167 unified `test_vba` to
+ * `apply:true` so this set is now empty. The pre-#1167 entry
+ * (`test_vba` commits with `dryRun:false` because its schema never
+ * accepted `apply`) was a legacy contract (#1046) that the
+ * homogenized single-flag design collapsed. A future tool that
+ * intentionally reverts to `dryRun`/`diff` polarity MUST add a row
+ * here with a one-line rationale and an issue link.
  */
-const DOCUMENTED_COMMIT_FLAG_EXCEPTIONS = new Set(["test_vba"]);
+const DOCUMENTED_COMMIT_FLAG_EXCEPTIONS: ReadonlySet<string> = new Set();
 
 /**
  * Single-module tools whose param is `moduleName` while the introspection

@@ -22,10 +22,12 @@
  * authoritative registry introduced by #1073) so adding a tool or a
  * write-intent flag in the registry surfaces the missing coverage here.
  *
- * The `test_vba` exception is pinned explicitly so a future generic
- * "reject all write-class contradictions" rule does not accidentally
- * tighten the dryRun-only surface — `test_vba` is the only
- * `commitFlag: "dryRun"` entry in the registry today.
+ * The pre-#1167 `test_vba` exception is collapsed by the unification:
+ * the schema now declares BOTH `apply` (canonical) and `dryRun` (legacy
+ * alias), and the registry advertises `commitFlag: "apply"`,
+ * `noWriteAlias: "dryRun"`. `test_vba` is exercised in the unified
+ * `describe.each(TRUTH_TABLE_FAMILIES)` block below; the legacy
+ * "exception" describe was removed (#1167).
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -194,20 +196,27 @@ afterEach(() => {
 
 describe("contradictory write flags — truth table (issue #1078)", () => {
   // ─────────────────────────────────────────────────────────────────────────
-  // 1. test_vba canonical `dryRun` exception — pin the intentional split.
+  // 1. test_vba (#1167 unification) — the schema now declares BOTH
+  //    `apply` (canonical) and `dryRun` (legacy alias), and the
+  //    registry advertises `commitFlag: "apply"`, `noWriteAlias:
+  //    "dryRun"`. The pre-#1167 "dryRun-only" exception is collapsed.
+  //    `test_vba` is exercised in the per-family `describe.each` block
+  //    below; the smoke test at
+  //    `test/adapters/mcp/get-capabilities-test-vba-canonical.test.ts`
+  //    pins the unification at the registry / snapshot boundary.
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe("test_vba — canonical dryRun exception", () => {
-    it("registry declares commitFlag:dryRun and noWriteAlias:null (the only dryRun-only entry)", () => {
+  describe("test_vba — #1167 unification (apply is canonical, dryRun is alias)", () => {
+    it("registry declares commitFlag:apply and noWriteAlias:dryRun (#1167 unification)", () => {
       const meta = registryEntry("test_vba");
-      expect(meta.commitFlag).toBe("dryRun");
-      expect(meta.noWriteAlias).toBeNull();
+      expect(meta.commitFlag).toBe("apply");
+      expect(meta.noWriteAlias).toBe("dryRun");
       expect(meta.defaultBehavior).toBe("plan");
     });
 
-    it("test_vba schema declares dryRun but NOT apply or diff", () => {
+    it("test_vba schema declares BOTH apply and dryRun (homogenized single-flag design)", () => {
+      expect(schemaDeclares("test_vba", "apply")).toBe(true);
       expect(schemaDeclares("test_vba", "dryRun")).toBe(true);
-      expect(schemaDeclares("test_vba", "apply")).toBe(false);
       expect(schemaDeclares("test_vba", "diff")).toBe(false);
     });
 
@@ -224,14 +233,17 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
       }
     });
 
-    it("test_vba({ apply: true }) — rejected by schema (apply is unknown for this tool)", async () => {
+    it("test_vba({ apply: true }) — accepted (commit path, canonical flag)", async () => {
+      // #1167 — the canonical commit signal for test_vba is now `apply:true`.
+      // The schema accepts it; the dispatch honors it; the adapter commits.
       const result = await invokeWithExtra("test_vba", { apply: true });
-      expect(result.isError).toBe(true);
-      expect(result.error?.code).toBe("MCP_INPUT_INVALID");
-      expect(result.error?.rejectedFlag).toBe("apply");
-      expect(result.error?.toolCommitFlag).toBe("dryRun");
-      // Remediation must point the caller at the canonical dryRun surface.
-      expect(result.error?.remediation ?? "").toMatch(/dryRun/i);
+      // Schema does not reject `apply:true`; the dispatch may still fail
+      // for downstream reasons (no Access binary, sandbox gate) but the
+      // MCP_INPUT_INVALID schema-rejection path is closed.
+      if (result.error?.code === "MCP_INPUT_INVALID") {
+        expect(result.error.message).not.toMatch(/apply is not allowed/i);
+        expect(result.error.message).not.toMatch(/unknown/i);
+      }
     });
   });
 

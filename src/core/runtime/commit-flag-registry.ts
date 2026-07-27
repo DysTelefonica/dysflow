@@ -212,17 +212,19 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   form_get_geometry: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   form_list_controls: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   harvest_form_catalog: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
-  // Issue #1046 (Bug A) — `test_vba` is a `dryRun` family tool. The schema
-  // (`VBA_SYNC_TOOL_SCHEMAS.test_vba`) exposes `dryRun` only; `apply` is
-  // NOT declared and the runtime rejects `apply:true` with
-  // `MCP_INPUT_INVALID: apply is not allowed`. The commit path is
-  // `dryRun:false`. The legacy `commitFlag: "apply"` + `defaultBehavior:
-  // "noop"` advertised a flag the schema rejects and a no-op the dispatch
-  // does not honor. Realigned: commitFlag matches the schema-accepted
-  // flag; defaultBehavior is "plan" (the safe-by-default policy injects
-  // `dryRun:true`, the developer policy injects `dryRun:false` — both
-  // are explicit caller intent and the tool defaults to a plan).
-  test_vba: { commitFlag: "dryRun", noWriteAlias: null, defaultBehavior: "plan" },
+  // Issue #1167 — `test_vba` joins the homogenized single-flag design.
+  // The schema (`VBA_SYNC_TOOL_SCHEMAS.test_vba`) now accepts BOTH
+  // `apply` (canonical) and `dryRun` (legacy alias) — the dispatch
+  // boundary honors either form, and the adapter treats them
+  // identically (resolveIsDryRun-style polarity). `apply:true` commits;
+  // `apply:false` (≡ `dryRun:true`) plans. The pre-#1167 contract
+  // (`commitFlag: "dryRun"`, noWriteAlias: null) forced every AI
+  // consumer to memorize the per-tool rule or look it up via
+  // `get_capabilities.tools.test_vba.canonicalCommitFlag` per call.
+  // After #1167 the lookup reads "apply" for every tool — the
+  // smoke test at `test/adapters/mcp/get-capabilities-test-vba-canonical.test.ts`
+  // loops `MCP_TOOL_CONTRACTS` and pins the unification.
+  test_vba: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   // Process-control tools — schema-rejection of `apply` lands here too.
   cleanup_access_operation: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   access_force_cleanup_orphaned: {

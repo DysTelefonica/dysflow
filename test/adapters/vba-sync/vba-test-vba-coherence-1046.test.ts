@@ -92,25 +92,29 @@ const MODULES = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test 1 — Registry ↔ schema consistency (Bug A).
+// Test 1 — Registry ↔ schema consistency (Bug A → #1167 unification).
 //
-// The single source of truth is `COMMIT_FLAG_REGISTRY.test_vba`. The schema
-// (`VBA_SYNC_TOOL_SCHEMAS.test_vba`) exposes `dryRun` and NOT `apply`, so
-// the registry's `commitFlag` MUST match the schema-accepted commit path:
-// `commitFlag === "dryRun"`. The legacy `apply:true` rejection shape is
-// not the bug — it is the registry's job to advertise the right flag.
+// The single source of truth is `COMMIT_FLAG_REGISTRY.test_vba`. The
+// schema (`VBA_SYNC_TOOL_SCHEMAS.test_vba`) exposes BOTH `apply`
+// (canonical, post-#1167) and `dryRun` (legacy alias) — the registry
+// MUST advertise `commitFlag: "apply"` and `noWriteAlias: "dryRun"`,
+// mirroring the rest of the write-class tools. The pre-#1167
+// (`commitFlag: "dryRun"`) entry was the legacy contract #1046 pinned;
+// the #1167 unification collapses the only "dryRun-only" tool into the
+// homogenized single-flag design. CI smoke in
+// `test/adapters/mcp/get-capabilities-test-vba-canonical.test.ts` loops
+// every advertised tool and asserts `canonicalCommitFlag === "apply"`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schema-accepted commit flag", () => {
+describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schema-accepted commit flag (#1167 unification)", () => {
   it("registry.test_vba.commitFlag is the flag the schema actually accepts", () => {
     const entry = commitFlagMetadataFor("test_vba") as CommitFlagMetadata;
-    // The schema exposes `dryRun` and does NOT expose `apply`; the runtime
-    // commit path is `dryRun:false`. Therefore the registry MUST advertise
-    // `commitFlag: "dryRun"`. The buggy legacy value was `"apply"`, which
-    // contradicted the schema (schema rejects apply with MCP_INPUT_INVALID)
-    // and the dispatch path (dispatcher does not consume apply).
-    expect(entry.commitFlag).toBe("dryRun");
-    expect(entry.noWriteAlias).toBeNull();
+    // Issue #1167 — the schema now exposes BOTH `apply` and `dryRun`;
+    // the runtime commit path is `apply:true` (canonical) or
+    // `dryRun:false` (legacy alias). The registry advertises the
+    // canonical flag: `commitFlag: "apply"`, `noWriteAlias: "dryRun"`.
+    expect(entry.commitFlag).toBe("apply");
+    expect(entry.noWriteAlias).toBe("dryRun");
     // When neither flag is supplied and no policy override fires, the tool
     // must PLAN (matches the safe-by-default policy: dryRun:true is injected;
     // matches the developer policy: dryRun:false is injected; the plan
@@ -128,12 +132,13 @@ describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schem
     });
     const tools = snapshot.tools as Readonly<Record<string, CommitFlagMetadata>>;
     expect(tools.test_vba).toEqual({
-      commitFlag: "dryRun",
-      noWriteAlias: null,
+      commitFlag: "apply",
+      noWriteAlias: "dryRun",
       defaultBehavior: "plan",
-      // #1057 (F7) — additive homogenized-flag fields.
-      canonicalCommitFlag: "dryRun",
-      legacyAliases: [],
+      // #1057 (F7) — additive homogenized-flag fields; #1167 the canonical
+      // flag is `apply` and `dryRun` joins the legacyAliases list.
+      canonicalCommitFlag: "apply",
+      legacyAliases: ["dryRun"],
     });
   });
 });
