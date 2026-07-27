@@ -7,6 +7,7 @@ import {
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
+import { isRecord } from "../../core/utils/index.js";
 import {
   allowlistNotConfigured,
   enrichmentForValidationMessage,
@@ -126,6 +127,31 @@ export async function handleMcpQueryExecute(
   buildRequest: (input: unknown) => AccessQueryRequest,
   context?: McpToolContext,
 ): Promise<McpToolResult> {
+  // Issue #1164 — `query_execute` (the canonical tool) requires
+  // `mode: "read" | "write"`. The read-only alias `query_sql` is built on
+  // the same handler but its schema does NOT require `mode` (read-only
+  // calls are fixed to `mode: "read"` by `buildQueryReadRequest`). The
+  // short-circuit is therefore schema-gated: it only fires when the
+  // active schema's `required` list actually names `mode`. Without this
+  // gate, the read-only alias would also be rejected with the same
+  // envelope — a regression on the long-standing read-only path.
+  //
+  // The generic validator still rejects missing `mode` on the
+  // query_execute schema, but it returns a plain `"mode is required."`
+  // string, which `enrichmentForValidationMessage` could not enrich
+  // before this fix (it only recognized the `is not allowed.` shape from
+  // #757 C4). An AI consumer — notably OpenCode Code Mode, which
+  // flattens the JSON envelope to `[object Object]` — lost the
+  // structured `rejectedFlag: "mode"` / `remediation` field and had to
+  // guess what is missing. Short-circuit BEFORE the validator so the
+  // envelope is exact and the AI consumer can self-correct in one turn.
+  if (isRecord(input) && input.mode === undefined && (schema.required ?? []).includes("mode")) {
+    return invalidInput(
+      "Required parameter 'mode' is missing.",
+      "Pass mode: 'read' for SELECT or mode: 'write' for INSERT/UPDATE/DELETE/DDL.",
+      { rejectedFlag: "mode", toolName: "query_execute" },
+    );
+  }
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every
