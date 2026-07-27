@@ -145,11 +145,12 @@ load `access-vba-e2e-methodology`.
 
 - **AP-1** — `Stop-Process -Name MSACCESS` (any variant). See HR-2.
 - **AP-2** — `compile_vba` or `compile:true` on `import_modules` / `import_all`. See HR-1.
-- **AP-3** — Using a legacy flag as the primary export contract. The live
-  registry reports `canonicalCommitFlag:"apply"` for `export_modules` /
-  `export_all`. Use `apply:true` to export and `apply:false` to preview.
-  `diff` and `dryRun` are compatibility aliases only when the live
-  `legacyAliases[]` reports them; never hard-code an alias as canonical.
+- **AP-3** — Using a legacy flag as the primary commit contract. The live
+  registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool —
+  `test_vba` included, which was the last holdout. Use `apply:true` to commit
+  and `apply:false` to preview. `diff` and `dryRun` are compatibility aliases
+  only when the live `legacyAliases[]` reports them; never hard-code an alias
+  as canonical, and never assume a tool is the exception — read the registry.
 - **AP-4** — Forgetting that `export_*` defaults to WRITE behavior. When no flag
   is passed, `defaultBehavior:"writes"` means the call writes. Explicit intent
   (`apply:true`/`apply:false`) is required in agent-authored calls.
@@ -208,7 +209,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.1.10 · last_verified 2026-07-26 · requires
+dysflow harness v0.1.10 · last_verified 2026-07-27 · requires
 dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
