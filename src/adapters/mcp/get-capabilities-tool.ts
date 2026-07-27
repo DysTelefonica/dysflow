@@ -346,6 +346,21 @@ function readAdapterVersion(): string {
 // truth for `runtime.dysflowVersion`).
 export { readAdapterVersion };
 
+function projectIdResolutionFromConfig(
+  projectConfig: ProjectConfigDiagnostic,
+): McpCapabilitySnapshot["projectIdResolution"] {
+  if (projectConfig.status === "valid" && projectConfig.writeReady) {
+    return {
+      projectId: projectConfig.projectId,
+      outcome: projectConfig.projectId === null ? "unresolved" : "resolved",
+    };
+  }
+
+  return {
+    projectId: null,
+    outcome: projectConfig.status === "ambiguous" ? "ambiguous" : "unresolved",
+  };
+}
 // ─── Tool factory ─────────────────────────────────────────────────────────────
 
 /**
@@ -415,7 +430,13 @@ export function createGetCapabilitiesTool(opts: {
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const projectConfig = await opts.projectConfigResolver?.();
       const result: OperationResult<McpCapabilitySnapshot> = successResult(
-        projectConfig === undefined ? snapshot : { ...snapshot, projectConfig },
+        projectConfig === undefined
+          ? snapshot
+          : {
+              ...snapshot,
+              projectConfig,
+              projectIdResolution: projectIdResolutionFromConfig(projectConfig),
+            },
       );
       return translateCoreResultToMcpContent(result);
     },
