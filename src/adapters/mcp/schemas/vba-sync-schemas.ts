@@ -683,6 +683,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // dispatching an unsafe auto-merge.
       scope: {
         type: "object",
+        description:
+          "Sync selection controls: actionableOnly (default true) excludes non-functional differences, while includeBothChanged (default false) reports conflicts as acknowledged skips without auto-merging them. Unknown scope keys are rejected.",
         additionalProperties: false,
         properties: {
           actionableOnly: {
@@ -1105,6 +1107,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       path: SCHEMA_PROPS.path,
       codegraphEvidence: {
         type: "array",
+        description:
+          "Optional CodeGraph traces to merge into the behavior map. Each item requires handler and callPath, with optional tables and effects arrays. Omit for form-declared events only; malformed evidence is rejected at the schema boundary.",
         items: {
           type: "object",
           required: ["handler", "callPath"],
@@ -1124,7 +1128,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // failure (no `.codegraph/`, CLI missing, parse error) the adapter
       // falls back to whatever the caller supplied (or the `.form.txt`-only
       // behavior) — never throws.
-      autoFetchCodeGraph: { type: "boolean" },
+      autoFetchCodeGraph: {
+        type: "boolean",
+        description:
+          "When true, fetch CodeGraph evidence internally and merge it with caller-supplied evidence. Defaults to false. If CodeGraph is unavailable or returns invalid data, mapping falls back to supplied evidence or form-declared events and emits a warning instead of failing.",
+      },
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
@@ -1170,6 +1178,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // is the single source-path surface; resolved by the #718 resolver.
       plan: {
         type: "object",
+        description:
+          "Form UI design plan produced by generate_form_design_plan. Requires formName, sourceContract, and ordered operations whose kind is add-control, delete-control, move-control, note, rename-control, or set-property; malformed plans are rejected before any source or binary write.",
         required: ["formName", "sourceContract", "operations"],
         additionalProperties: true, // accept `referencePattern`, generator-emitted metadata, future fields
         properties: {
