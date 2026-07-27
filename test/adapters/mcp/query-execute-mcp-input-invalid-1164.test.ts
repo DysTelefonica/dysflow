@@ -22,21 +22,17 @@
  *     `dryRun` short-circuits to the structured rejection.
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-  createDysflowMcpTools,
-  type DysflowMcpServices,
-} from "../../../src/adapters/mcp/tools.js";
+import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 
 function buildQueryExecuteServices(): {
   services: DysflowMcpServices;
   queryExecute: ReturnType<typeof vi.fn>;
 } {
-  const queryExecute = vi.fn(
-    async () =>
-      successResult({
-        rows: [{ "1": 1 }],
-      }),
+  const queryExecute = vi.fn(async () =>
+    successResult({
+      rows: [{ "1": 1 }],
+    }),
   );
   return {
     queryExecute,

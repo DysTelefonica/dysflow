@@ -432,7 +432,10 @@ describe("enrichmentForValidationMessage — missing-required branch (issue #116
   });
 
   it("does NOT shadow the legacy 'is not allowed.' single-flag surface (#757 C4)", () => {
-    const result = enrichmentForValidationMessage('"propertyName" is not allowed.', "form_set_property");
+    const result = enrichmentForValidationMessage(
+      '"propertyName" is not allowed.',
+      "form_set_property",
+    );
     expect(result?.rejectedFlag).toBe("propertyName");
   });
 });
