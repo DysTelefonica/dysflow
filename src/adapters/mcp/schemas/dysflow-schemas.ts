@@ -18,6 +18,7 @@ import {
   STRICT_CTX,
   WRITE_INTENT_BLOCK,
 } from "../../../shared/validation/index.js";
+import { EXPLICIT_READ_TARGET_OVERRIDE } from "./query-schemas.js";
 
 // Re-exports — types.
 export type {
@@ -75,9 +76,9 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   properties: {
     ...composeIdentityAndCorrelation(),
     sql: { type: "string", minLength: 1, description: "Access SQL to execute." },
-    backendPath: SCHEMA_PROPS.backendPath,
-    databasePath: SCHEMA_PROPS.databasePath,
-    sourcePath: SCHEMA_PROPS.sourcePath,
+    // Issue #1193 — the unified query entry point exposes the same target
+    // atoms as query_sql by reference, preventing schema/description drift.
+    ...EXPLICIT_READ_TARGET_OVERRIDE,
     mode: {
       type: "string",
       enum: ["read", "write"],
