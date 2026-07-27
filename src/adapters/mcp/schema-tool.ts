@@ -58,8 +58,8 @@ import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { LOGS_TOOL_SCHEMA } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
-import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
 import { MIGRATE_PROJECT_CONFIG_SCHEMA } from "./migrate-project-config-tool.js";
+import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 import {
   CLEAN_STALE_MARKERS_SCHEMA,

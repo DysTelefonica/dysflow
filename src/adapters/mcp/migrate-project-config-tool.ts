@@ -1,13 +1,9 @@
-import { rename, readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { isRecord } from "../../core/utils/index.js";
 import { PROJECT_IDENTITY_BLOCK, WRITE_INTENT_BLOCK } from "../../shared/validation/index.js";
 import { migrateProjectConfigResultContract } from "./contracts/bootstrap-result-contracts.js";
-import {
-  enrichmentForValidationMessage,
-  invalidInput,
-  writesDisabled,
-} from "./dispatch-common.js";
+import { enrichmentForValidationMessage, invalidInput, writesDisabled } from "./dispatch-common.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpToolResult } from "./result-translation.js";
 import { validateInput } from "./validator.js";
@@ -80,9 +76,7 @@ export type MigrateProjectConfigError = {
   };
 };
 
-export type MigrateProjectConfigResult =
-  | MigrateProjectConfigSuccess
-  | MigrateProjectConfigError;
+export type MigrateProjectConfigResult = MigrateProjectConfigSuccess | MigrateProjectConfigError;
 
 // ─── Pure helper ─────────────────────────────────────────────────────────────
 
@@ -146,7 +140,7 @@ function unifiedDiff(before: string, after: string, fileLabel: string): string {
  * the tool factory after the atomic write, not by this helper.
  */
 export async function tryMigrateProjectConfig(
-  input: MigrateProjectConfigInput,
+  _input: MigrateProjectConfigInput,
   cwd: string,
 ): Promise<MigrateProjectConfigResult> {
   const configPath = join(cwd, PROJECT_CONFIG_RELATIVE_PATH);
@@ -191,8 +185,7 @@ export async function tryMigrateProjectConfig(
   // 1. Legacy absolute `accessPath` → basename `frontendFile`.
   const legacyAccessPath = proposed[LEGACY_ACCESS_PATH_FIELD];
   if (typeof legacyAccessPath === "string" && legacyAccessPath.length > 0) {
-    const isAbsolute =
-      /^[a-zA-Z]:[\\/]/.test(legacyAccessPath) || legacyAccessPath.startsWith("/");
+    const isAbsolute = /^[a-zA-Z]:[\\/]/.test(legacyAccessPath) || legacyAccessPath.startsWith("/");
     const isBasenameOnly = basename(legacyAccessPath) === legacyAccessPath;
     if (isAbsolute || !isBasenameOnly) {
       const newBasename = basename(legacyAccessPath);
@@ -408,9 +401,7 @@ export function createMigrateProjectConfigTool(
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return {
-            content: [
-              { type: "text", text: `PROJECT_CONFIG_WRITE_FAILED: ${message}` },
-            ],
+            content: [{ type: "text", text: `PROJECT_CONFIG_WRITE_FAILED: ${message}` }],
             isError: true,
             ok: false,
             error: {

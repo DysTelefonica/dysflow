@@ -1,10 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -77,6 +71,7 @@ describe("tryMigrateProjectConfig() — pure helper", () => {
   it("returns a typed error when the project.json file is missing", async () => {
     const result = await tryMigrateProjectConfig({}, workdir);
     expect(result.outcome).toBe("error");
+    if (result.outcome !== "error") return;
     expect(result.error.code).toBe("PROJECT_CONFIG_NOT_FOUND");
   });
 
@@ -84,6 +79,7 @@ describe("tryMigrateProjectConfig() — pure helper", () => {
     writeProjectConfig("{ not valid json");
     const result = await tryMigrateProjectConfig({}, workdir);
     expect(result.outcome).toBe("error");
+    if (result.outcome !== "error") return;
     expect(result.error.code).toBe("PROJECT_CONFIG_INVALID");
   });
 
@@ -95,8 +91,8 @@ describe("tryMigrateProjectConfig() — pure helper", () => {
     expect(result.current.accessPath).toBe("C:/Users/alice/repos/legacy-app/frontend.accdb");
     expect(result.proposed.accessPath).toBeUndefined();
     expect(result.proposed.frontendFile).toBe("frontend.accdb");
-    expect(result.diff).toContain("-  \"accessPath\"");
-    expect(result.diff).toContain("+  \"frontendFile\"");
+    expect(result.diff).toContain('-  "accessPath"');
+    expect(result.diff).toContain('+  "frontendFile"');
     expect(result.diff).toContain("frontend.accdb");
     expect(result.remediation.length).toBeGreaterThan(0);
   });
