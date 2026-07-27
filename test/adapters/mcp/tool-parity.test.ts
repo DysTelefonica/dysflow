@@ -243,6 +243,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "export_modules")
         ?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "export_modules" }) }],
@@ -250,6 +251,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools.find((tool) => tool.name === "list_tables")?.handler({ backendPath: "C:/db.accdb" }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -259,6 +261,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "exec_sql")
         ?.handler({ sql: "UPDATE People SET Name='Ada'", apply: false }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -268,6 +271,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "run_script")
         ?.handler({ path: "fixtures.sql", apply: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -277,6 +281,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "teardown_fixture")
         ?.handler({ tableName: "People", dryRun: false }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -286,6 +291,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "verify_code")
         ?.handler({ moduleNames: ["Form_Main"], diff: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ ok: true, toolName: "verify_code" }) }],
@@ -489,6 +495,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     });
 
     await expect(tools.find((tool) => tool.name === "list_links")?.handler({})).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -498,6 +505,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "link_tables")
         ?.handler({ backendPath: "C:/backend.accdb" }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
@@ -507,6 +515,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         .find((tool) => tool.name === "compact_repair")
         ?.handler({ databasePath: "C:/db.accdb", dryRun: true }),
     ).resolves.toEqual({
+      schemaVersion: "dysflow.result/v1",
       isError: false,
       ok: true,
       content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }] }) }],
