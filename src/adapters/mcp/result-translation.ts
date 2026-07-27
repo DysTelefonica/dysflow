@@ -59,6 +59,12 @@ export type ResultSchemaVersion = typeof RESULT_SCHEMA_VERSION;
 export type McpToolError = {
   code: string;
   message: string;
+  /** Unknown tools/call name retained for safe aggregation by future telemetry. */
+  attemptedToolName?: string;
+  /** Closest advertised tool when a unique, conservative edit-distance match exists. */
+  suggestedToolName?: string;
+  /** Canonical replacement when the attempted name is a retired compatibility alias. */
+  supersededBy?: string;
   /** Caller-safe structured context for typed adapter failures. */
   details?: Record<string, unknown>;
   /**
