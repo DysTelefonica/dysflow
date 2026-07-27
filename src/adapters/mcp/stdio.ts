@@ -49,6 +49,7 @@ import {
   validateToolResult,
 } from "./contracts/result-validation.js";
 import type { McpToolResult } from "./result-translation.js";
+import { withSchemaVersion } from "./result-translation.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
   buildHiddenToolRegistry,
@@ -264,11 +265,13 @@ export async function startWithSdkServer(
     const { name, arguments: args, _meta } = request.params;
     const tool = toolMap.get(name);
     if (tool === undefined) {
-      return {
+      // Issue #1168 — stamp the schemaVersion discriminator even on the
+      // fallback "tool not found" envelope so consumers get a uniform shape.
+      return withSchemaVersion({
         content: [{ type: "text" as const, text: `MCP_TOOL_ERROR: Tool not found: ${name}` }],
         isError: true,
         ok: false,
-      };
+      });
     }
 
     const progressToken = _meta?.progressToken;
@@ -281,8 +284,12 @@ export async function startWithSdkServer(
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
     const result = await wrappedHandler(args, context);
     const validatedResult = validateMcpResultBeforeSerialization(tool, result, options);
+    // Issue #1168 — the schemaVersion discriminator is injected at the
+    // central MCP seam so every tool response (success, error, contract
+    // violation, "tool not found") carries it without per-tool changes.
+    const stamped = withSchemaVersion(validatedResult);
     // Spread readonly content[] into mutable array as required by the SDK's CallToolResult type.
-    return { ...validatedResult, content: [...validatedResult.content] };
+    return { ...stamped, content: [...stamped.content] };
   });
 
   if (transport !== undefined) {
@@ -328,7 +335,7 @@ function validateMcpResultBeforeSerialization(
   if (validation.ok || policy === "report") return result;
 
   const message = `Result from ${tool.name} did not satisfy its executable result contract.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${RESULT_CONTRACT_VIOLATION}: ${message}` }],
     isError: true,
     ok: false,
@@ -350,7 +357,7 @@ function validateMcpResultBeforeSerialization(
       ],
       relatedIssueNumbers: ["#1096"],
     },
-  };
+  });
 }
 
 function reportResultContractViolationToStderr(

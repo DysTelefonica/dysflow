@@ -15,6 +15,7 @@ import {
   type McpToolResult,
   type McpWriteAccessResolver,
   translateCoreResultToMcpContent,
+  withSchemaVersion,
 } from "./result-translation.js";
 import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
@@ -181,7 +182,7 @@ function buildWriteGateErrorEnvelope(
   });
   const specificMessage = diagnostics[0]?.message ?? "Project config is not write-ready.";
   const message = `${specificMessage} [legacy: ${PROJECT_CONFIG_NOT_WRITE_READY}]`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${code}: ${message}` }],
     isError: true,
     ok: false,
@@ -205,7 +206,7 @@ function buildWriteGateErrorEnvelope(
       },
       options,
     ),
-  };
+  });
 }
 
 export function projectConfigNotWriteReady(
@@ -392,7 +393,7 @@ export function binaryNotFound(
     `Verify the file at '${accessPath}' exists on disk (path is case-sensitive on Windows). ` +
     `If the path moved recently, update 'accessPath' in .dysflow/project.json or pass ` +
     `'databasePath' / 'sourcePath' explicitly on the call.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${BINARY_NOT_FOUND}: ${message}` }],
     isError: true,
     ok: false,
@@ -405,7 +406,7 @@ export function binaryNotFound(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -429,7 +430,7 @@ export function binaryLocked(
     `Close the process holding the lock (pid=${holderPid}) or, if it's a stray orphan, ` +
     `call 'access_force_cleanup_orphaned({confirmPid: ${holderPid}})' to terminate it. ` +
     `Never kill MSACCESS.EXE by process name — verify headless ownership first.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${BINARY_LOCKED}: ${message}` }],
     isError: true,
     ok: false,
@@ -446,7 +447,7 @@ export function binaryLocked(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -475,7 +476,7 @@ export function binaryPasswordInvalid(
     `If you recently rotated the password, restart any spawned child processes so ` +
     `they pick up the new env var. The value itself is never echoed — set the env ` +
     `var in the shell that launches the MCP adapter.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${BINARY_PASSWORD_INVALID}: ${message}` }],
     isError: true,
     ok: false,
@@ -488,7 +489,7 @@ export function binaryPasswordInvalid(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -512,7 +513,7 @@ export function binaryFormatUnsupported(
     `If it is a renamed file or a corrupt copy, restore the original from backup. ` +
     `If you recently upgraded the project from a pre-2007 format, run Access's ` +
     `'Convert Database' tool and retry.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${BINARY_FORMAT_UNSUPPORTED}: ${message}` }],
     isError: true,
     ok: false,
@@ -528,7 +529,7 @@ export function binaryFormatUnsupported(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -580,7 +581,7 @@ export function internalError(
     `stderr for the full stack (rotated to logs by the runtime). If the failure ` +
     `persists across retries, open an issue with the captured errorClass, the ` +
     `tool name, and the input payload (with secrets redacted).`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${INTERNAL_ERROR}: ${message}` }],
     isError: true,
     ok: false,
@@ -593,7 +594,7 @@ export function internalError(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -624,7 +625,7 @@ export function runtimeStale(
     `to re-derive the invariants. If the failure recurs within minutes of restart, ` +
     `inspect runtime state under .dysflow/runtime/ for orphan markers or oversized ` +
     `caches and file an issue with the captured 'tool' + 'signal'.`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${RUNTIME_STALE}: ${message}` }],
     isError: true,
     ok: false,
@@ -637,7 +638,7 @@ export function runtimeStale(
       },
       options,
     ),
-  };
+  });
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
@@ -649,7 +650,7 @@ export function writesDisabled(
   const suffix = toolName ? ` (attempted: ${toolName})` : "";
   const message = `Write tools are disabled for this MCP adapter${suffix}. Enable writes by setting "allowWrites": true in .dysflow/project.json (per-repo, recommended) or by launching the server with \`dysflow mcp --enable-writes\` (process-wide).`;
   const remediation = `Set "allowWrites": true in .dysflow/project.json, or launch the server with \`dysflow mcp --enable-writes\` (process-wide).`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `MCP_WRITES_DISABLED: ${message}` }],
     isError: true,
     ok: false,
@@ -662,7 +663,7 @@ export function writesDisabled(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -819,12 +820,12 @@ export function invalidInput(
   } else if (remediation !== undefined) {
     error.remediation = remediation;
   }
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
     isError: true,
     ok: false,
     error: applyUniformEnvelope(error, options),
-  };
+  });
 }
 
 /**
@@ -852,7 +853,7 @@ export function procedureNotAllowed(
   const message =
     `Procedure '${procedureName}' is not in the configured allowedProcedures ` +
     `list (active: ${allowedJson}). ${remediation}`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `MCP_PROCEDURE_NOT_ALLOWED: ${message}` }],
     isError: true,
     ok: false,
@@ -866,7 +867,7 @@ export function procedureNotAllowed(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -890,7 +891,7 @@ export function allowlistNotConfigured(
   const message =
     `Refusing to execute VBA procedure '${procedureName}': project config declares ` +
     `no allowedProcedures allowlist. ${remediation}`;
-  return {
+  return withSchemaVersion({
     content: [{ type: "text", text: `${MCP_ALLOWLIST_NOT_CONFIGURED}: ${message}` }],
     isError: true,
     ok: false,
@@ -903,7 +904,7 @@ export function allowlistNotConfigured(
       },
       options,
     ),
-  };
+  });
 }
 
 /**
@@ -935,7 +936,7 @@ export function exportSourceGuardRefused(
   const message =
     `Refusing ${toolName}: destination ${destination} overlaps the project's ` +
     `active source root (${sourceRoot}). ${remediation}`;
-  return {
+  return withSchemaVersion({
     content: [
       {
         type: "text",
@@ -955,7 +956,7 @@ export function exportSourceGuardRefused(
       },
       options,
     ),
-  };
+  });
 }
 
 export async function isWriteAllowed(
