@@ -361,8 +361,10 @@ function projectIdResolutionFromConfig(
     outcome: projectConfig.status === "ambiguous" ? "ambiguous" : "unresolved",
   };
 }
+// ─── Tool factory ─────────────────────────────────────────────────────────────
 
-
+/**
+ * Factory for the `get_capabilities` tool. Wires the aggregate
  * function with the captured adapter context (writesEnabled, resolver,
  * allowlist, projectId). Returns a `DysflowMcpTool` ready to register via
  * the `createDysflowMcpTools` factory.
