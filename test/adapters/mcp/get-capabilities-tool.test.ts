@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getCapabilitiesAll } from "../../../src/adapters/mcp/get-capabilities-tool";
+import { createGetCapabilitiesTool, getCapabilitiesAll } from "../../../src/adapters/mcp/get-capabilities-tool";
 import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
@@ -182,9 +182,42 @@ describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
     });
     expect(snapshot.writeClassToolsPermitted).toEqual([]);
   });
+  it("keeps projectIdResolution consistent with the diagnosed projectConfig", async () => {
+    const tool = createGetCapabilitiesTool({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: undefined,
+      projectId: undefined,
+      allowWrites: true,
+      projectConfigResolver: () => ({
+        status: "valid",
+        cwd: "C:/repo",
+        configPath: "C:/repo/.dysflow/project.json",
+        projectRoot: "C:/repo",
+        projectId: "project-1165",
+        accessPath: "C:/repo/app.accdb",
+        backendPath: null,
+        destinationRoot: "C:/repo/src",
+        writeReady: true,
+        diagnostics: [],
+        remediation: null,
+      }),
+    });
+
+    const result = await tool.handler({});
+    const payload = JSON.parse(result.content[0]?.text ?? "{}");
+    const snapshot = payload.result ?? payload;
+
+    expect(snapshot.projectIdResolution).toEqual({
+      outcome: "resolved",
+      projectId: "project-1165",
+    });
+    expect(snapshot.projectConfig.projectId).toBe("project-1165");
+    expect(snapshot.projectConfig.status).toBe("valid");
+    expect(snapshot.projectConfig.writeReady).toBe(true);
+  });
 });
 
-// Issue #746 — dryRunDefault must align with the AGENTS.md / CHANGELOG v1.14
 // promise ("Writing tools now consistently default to plan mode (dryRun: true)
 // unless apply === true or dryRun === false is explicitly supplied"). Per-tool
 // contracts and the global snapshot surface must report `true`.
