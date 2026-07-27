@@ -70,15 +70,17 @@ export function remediationForConfigMigration(input: {
   };
 }
 
+function isMigrationRemediation(input: StructuredRemediation): input is MigrationRemediation {
+  return (input as Partial<MigrationRemediation>).kind === "config-migration";
+}
+
 export function remediationText(input: DiagnosticRemediation): string {
   if (typeof input === "string") return input;
-  if ((input as MigrationRemediation).kind === "config-migration") {
-    const migration = input as MigrationRemediation;
-    const suggestedValue =
-      migration.suggestedValue === undefined ? "" : `: '${migration.suggestedValue}'`;
-    return `Replace it with ${migration.replaceWith}${suggestedValue}.`;
+  if (isMigrationRemediation(input)) {
+    const suggestedValue = input.suggestedValue === undefined ? "" : `: '${input.suggestedValue}'`;
+    return `Replace it with ${input.replaceWith}${suggestedValue}.`;
   }
-  return (input as Remediation).description;
+  return input.description;
 }
 
 /**
