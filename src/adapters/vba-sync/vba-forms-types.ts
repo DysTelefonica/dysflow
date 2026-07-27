@@ -50,6 +50,15 @@ export interface VbaFormsOrchestrator {
   executor: VbaManagerExecutor;
   env: Record<string, string | undefined>;
   cwd: string;
+  /**
+   * Issue #1169 — the configured `destinationRoot` (typically forwarded
+   * from `VbaSyncAdapter.destinationRoot`). The helper uses this to tag
+   * the `destinationRootSource` field as `"config"` when the resolved
+   * value matches it. Optional for backward compatibility — when the
+   * orchestrator has no configured `destinationRoot`, the helper falls
+   * back to `"projectRoot"` / `"cwd"` / `"default"`.
+   */
+  destinationRoot?: string;
   resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<unknown>>;
   validateStrictContext(
     params: Record<string, unknown>,

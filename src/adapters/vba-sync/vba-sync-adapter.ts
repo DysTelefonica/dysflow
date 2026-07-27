@@ -36,6 +36,10 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
+import {
+  type DestinationRootOrchestratorLike,
+  withResolvedDestinationRoot,
+} from "./destination-root-override.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import {
   runSyncBinary,
@@ -464,6 +468,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
         executor: this.executor,
         env: this.env,
         cwd: this.cwd,
+        // Issue #1169 — the forms adapter needs the configured
+        // `destinationRoot` so the helper can tag the response with
+        // `destinationRootSource: "config"` when no override is supplied.
+        destinationRoot: this.destinationRoot,
         resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
         validateStrictContext: (params, target) =>
           this.validateStrictContext(
@@ -485,6 +493,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
       scriptPath: this.scriptPath,
       accessPassword: this.accessPassword,
       cwd: this.cwd,
+      // Issue #1169 — the modules adapter needs the configured
+      // `destinationRoot` so the helper can tag the response with
+      // `destinationRootSource: "config"` when no override is supplied.
+      destinationRoot: this.destinationRoot,
       resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
       validateStrictContext: (params, target) => this.validateStrictContext(params, target),
       runPreflightCleanup: (target) => this.runPreflightCleanup(target),
@@ -620,7 +632,23 @@ export class VbaSyncAdapter implements VbaSyncPort {
     if ("error" in result) {
       return failureResult(result.error, { durationMs });
     }
-    return successResult(toSyncBinaryResponse(result), { durationMs });
+    // Issue #1169 — stamp the success envelope with the EFFECTIVE
+    // destinationRoot + provenance tag. The orchestrator's own
+    // `resolveExecutionTarget` already honors `params.destinationRoot`
+    // as a precedence-1 override; the helper just classifies the
+    // resolved value so a consumer can audit the path without
+    // re-running the resolver. Applies to `sync_binary` and to the
+    // inner import_modules / export_modules calls the orchestrator
+    // dispatches.
+    const response = toSyncBinaryResponse(result);
+    // Cast `this` to the helper's structural type. `resolveExecutionTarget`
+    // is private on VbaSyncAdapter but the helper only needs the public
+    // shape; the cast keeps the public API surface stable.
+    return withResolvedDestinationRoot(
+      successResult(response, { durationMs }),
+      params,
+      this as unknown as DestinationRootOrchestratorLike,
+    );
   }
 
   /**
