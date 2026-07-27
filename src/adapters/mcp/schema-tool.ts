@@ -1080,7 +1080,15 @@ function markCanonicalAlternatives(
 const TOOL_COMPOSITION_CANONICAL: Record<string, string> = {
   describe_tool: "name",
   analyze_form_ui: "sourcePath",
+  create_table: "tableName",
+  drop_table: "tableName",
+  seed_fixture: "tableName",
+  teardown_fixture: "tableName",
+  get_schema: "tableName",
+  count_rows: "tableName",
+  distinct_values: "tableName",
   unlink_table: "tableName",
+  form_set_property: "propertyName",
   validate_manifest: "testsPath",
 };
 

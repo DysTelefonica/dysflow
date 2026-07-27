@@ -50,6 +50,10 @@ const FRONTEND_TARGET_OVERRIDE = {
   } as JsonSchemaProperty,
 };
 
+const TABLE_NAME_ALIAS_REQUIREMENT: Pick<JsonObjectSchema, "anyOf"> = {
+  anyOf: [{ required: ["tableName"] }, { required: ["table"] }],
+};
+
 export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   query_sql: {
     type: "object",
@@ -95,6 +99,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   create_table: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...WRITE_TARGET_OVERRIDE,
@@ -108,6 +113,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   drop_table: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...WRITE_TARGET_OVERRIDE,
@@ -119,6 +125,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   seed_fixture: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...WRITE_TARGET_OVERRIDE,
@@ -135,6 +142,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   teardown_fixture: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...WRITE_TARGET_OVERRIDE,
@@ -166,6 +174,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   get_schema: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...TABLE_READ_TARGET_OVERRIDE,
@@ -176,6 +185,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   count_rows: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...TABLE_READ_TARGET_OVERRIDE,
@@ -188,6 +198,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   distinct_values: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...TABLE_READ_TARGET_OVERRIDE,
@@ -293,6 +304,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   unlink_table: {
     type: "object",
     additionalProperties: false,
+    ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
@@ -301,11 +313,6 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
     },
-    // Issue #1074 — declarative alias-group requirement for the table
-    // identifier. The mapper previously read whichever key was present
-    // (`tableName`, fallback `table`); the constraint now lives in the
-    // schema so the validator and the `schema` catalog can surface it.
-    anyOf: [{ required: ["tableName"] }, { required: ["table"] }],
   },
   import_queries: {
     type: "object",

@@ -213,15 +213,6 @@ export function createDispatchTool(
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
       let normalizedInput = stripDeprecatedCompileParams(name, input);
       normalizedInput = normalizeFormSetPropertyInput(name, normalizedInput);
-      if (
-        name === "form_set_property" &&
-        isRecord(normalizedInput) &&
-        !hasOwn(normalizedInput, "propertyName")
-      ) {
-        return invalidInput(
-          "propertyName (alias: property) is required. Provide the FormIR property name to mutate (for example: 'Caption', 'BackColor', or 'Enabled').",
-        );
-      }
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
         // Issue #1078 / #757 (C4) — `enrichmentForValidationMessage`
