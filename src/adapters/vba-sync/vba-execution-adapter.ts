@@ -7,6 +7,7 @@ import {
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
+import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
 import {
   isAbsolutePath,
@@ -265,6 +266,17 @@ export class VbaExecutionAdapter {
           },
         ),
       );
+    }
+
+    if (resolveIsDryRun(params)) {
+      return successResult({
+        operation: "vba_inline_execution",
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        willModifyFilesystem: false,
+        codeLength: rawCode.length,
+      });
     }
 
     if (typeof this.orchestrator.resolveExecutionTarget !== "function") {

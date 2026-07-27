@@ -54,7 +54,7 @@ describe("vba_inline_execution public MCP contract (#850)", () => {
     const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
     if (!tool) throw new Error("vba_inline_execution should be registered");
 
-    const response = await tool.handler({ code: 'result = "OK"' });
+    const response = await tool.handler({ code: 'result = "OK"', apply: true });
 
     expect(response).toMatchObject({ ok: true, isError: false });
     expect(JSON.parse(response.content[0]?.text ?? "null")).toMatchObject({ returnValue: "OK" });
@@ -214,7 +214,7 @@ describe("VBA-modifying tools write-gating", () => {
       const tool = tools.find((t) => t.name === "vba_inline_execution");
       expect(tool).toBeDefined();
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ code: "Sub Test(): End Sub" }, {} as any);
+      const res = await tool.handler({ code: "Sub Test(): End Sub", apply: true }, {} as any);
       expect(res.isError).toBe(true);
       expect(res.content?.[0]?.text).toContain(
         "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: vba_inline_execution).",
@@ -260,7 +260,7 @@ describe("VBA-modifying tools write-gating", () => {
     {
       const tool = tools.find((t) => t.name === "vba_inline_execution");
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ code: "Sub Test(): End Sub" }, {} as any);
+      const res = await tool.handler({ code: "Sub Test(): End Sub", apply: true }, {} as any);
       expect(res.isError).toBeFalsy();
     }
   });
@@ -441,7 +441,10 @@ describe("vba_inline_execution tool behavior", () => {
     const adapter = new (
       await import("../../../src/adapters/vba-sync/vba-execution-adapter.js")
     ).VbaExecutionAdapter(fakeOrchestrator, mockFs);
-    const result = await adapter.execute("vba_inline_execution", { code: "MsgBox 123" });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: "MsgBox 123",
+      apply: true,
+    });
 
     expect(result.ok).toBe(true);
 
@@ -523,7 +526,10 @@ describe("vba_inline_execution tool behavior", () => {
     const adapter = new (
       await import("../../../src/adapters/vba-sync/vba-execution-adapter.js")
     ).VbaExecutionAdapter(fakeOrchestrator, mockFs);
-    const result = await adapter.execute("vba_inline_execution", { code: "MsgBox 123" });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: "MsgBox 123",
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
 

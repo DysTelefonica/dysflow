@@ -10,6 +10,7 @@ import {
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
+import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import {
   recordPersistence,
   recordVerifyFail,
@@ -639,6 +640,17 @@ export class VbaModulesAdapter {
     // `dryRun && toolName === "delete_module"` handles dryRun:true or apply:false
     if (dryRun && toolName === "delete_module") {
       return this.planDelete(params);
+    }
+    if (toolName === "fix_encoding" && resolveIsDryRun(params)) {
+      return successResult({
+        operation: "fix_encoding",
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        willModifyFilesystem: false,
+        location: stringValue(params.location),
+        moduleNames: stringArray(params.moduleNames),
+      });
     }
 
     // Issue #958 — pre-import structural quality gate. Every planned
