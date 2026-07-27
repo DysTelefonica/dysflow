@@ -37,7 +37,10 @@ import {
   legacyAliasesFor,
   type NoWriteAliasName,
 } from "../../core/runtime/commit-flag-registry.js";
-import { PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
+import {
+  PROJECT_IDENTITY_BLOCK,
+  supportsSharedOutputMode,
+} from "../../shared/validation/schema-blocks.js";
 import {
   type AgentWorkflowMetadata,
   buildAgentWorkflowMetadata,
@@ -990,7 +993,7 @@ function safeByDefaultForTool(name: string, access: McpToolAccess): boolean {
   return contract.dryRunDefault !== false;
 }
 
-function inputSchemaForTool(name: string): JsonObjectSchema {
+export function inputSchemaForTool(name: string): JsonObjectSchema {
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
   if (modern !== undefined) return modern;
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
@@ -1062,6 +1065,11 @@ function buildSchemaForTool(name: string): ToolSchema {
   if (executableResultContract === undefined) {
     throw new Error(`Advertised MCP tool '${name}' is missing an executable result contract.`);
   }
+  const resultContract = toToolResultContract(executableResultContract);
+  const advertisedResultContract =
+    supportsSharedOutputMode(name) && resultContract.kind === "dataSchema"
+      ? { ...resultContract, outputModes: ["summary", "file", "full"] as const }
+      : resultContract;
   return {
     name,
     description,
@@ -1082,7 +1090,7 @@ function buildSchemaForTool(name: string): ToolSchema {
       name,
       compositionConstraintsFromSchema(inputSchema),
     ),
-    resultContract: toToolResultContract(executableResultContract),
+    resultContract: advertisedResultContract,
   };
 }
 

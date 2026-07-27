@@ -23,9 +23,15 @@ import {
   resolveResultValidationPolicy,
 } from "./contracts/result-validation.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
-import { effectiveDryRunDefaultForTool, MCP_TOOL_RISKS } from "./mcp-tool-risks.js";
+import {
+  effectiveDryRunDefaultForTool,
+  MCP_TOOL_RISKS,
+  sharedBlockExceptionsForTool,
+  sharedBlockPolicyForTool,
+} from "./mcp-tool-risks.js";
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
+import { inputSchemaForTool } from "./schema-tool.js";
 import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -111,6 +117,20 @@ export type McpCapabilitySnapshot = {
    * do NOT hardcode the per-tool default elsewhere.
    */
   effectiveDryRunDefault: Readonly<Record<string, boolean>>;
+  /** Issue #1192 — support and explicit exceptions for shared schema blocks. */
+  sharedBlockSupport: Readonly<
+    Record<
+      string,
+      {
+        strictContext: boolean;
+        timeoutMs: boolean;
+        transactional: boolean;
+        dryRunWithPreflight: boolean;
+        outputMode: boolean;
+        exceptions: Readonly<Partial<Record<"strictContext" | "timeoutMs", string>>>;
+      }
+    >
+  >;
   toolsVisible: number;
   preferredAgentWorkflows: readonly PreferredAgentWorkflow[];
   writeClassToolsPermitted: readonly string[];
@@ -237,8 +257,20 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
   const tools: McpCapabilitySnapshot["tools"] extends Readonly<Record<string, infer Entry>>
     ? Record<string, Entry>
     : never = {};
+  const sharedBlockSupport: Record<string, McpCapabilitySnapshot["sharedBlockSupport"][string]> =
+    {};
   for (const name of toolNames) {
     const metadata = commitFlagMetadataForOrNoop(name);
+    const policy = sharedBlockPolicyForTool(name);
+    const schemaProperties = inputSchemaForTool(name).properties ?? {};
+    sharedBlockSupport[name] = {
+      strictContext: Object.hasOwn(schemaProperties, "strictContext"),
+      timeoutMs: Object.hasOwn(schemaProperties, "timeoutMs"),
+      transactional: policy.transactional,
+      dryRunWithPreflight: policy.dryRunWithPreflight,
+      outputMode: policy.outputMode === "required",
+      exceptions: sharedBlockExceptionsForTool(name),
+    };
     // #1057 (F7) — additive fields for the homogenized single-flag design.
     tools[name] = {
       ...metadata,
@@ -283,6 +315,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     writeExecutionPolicy,
     resultValidationPolicy: resolveResultValidationPolicy(input.resultValidationPolicy),
     effectiveDryRunDefault,
+    sharedBlockSupport: Object.freeze(sharedBlockSupport),
     toolsVisible: toolNames.length,
     preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
       phase: workflow.phase,

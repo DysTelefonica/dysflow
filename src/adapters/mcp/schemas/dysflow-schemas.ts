@@ -13,6 +13,7 @@ import {
   ACCESS_OVERRIDE,
   composeIdentityAndCorrelation,
   type JsonObjectSchema,
+  PROCESS_TIMEOUT_BLOCK,
   PROJECT_IDENTITY_BLOCK,
   SCHEMA_PROPS,
   STRICT_CTX,
@@ -75,6 +76,7 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
   additionalProperties: false,
   properties: {
     ...composeIdentityAndCorrelation(),
+    ...ACCESS_OVERRIDE,
     sql: { type: "string", minLength: 1, description: "Access SQL to execute." },
     // Issue #1193 — the unified query entry point exposes the same target
     // atoms as query_sql by reference, preventing schema/description drift.
@@ -85,6 +87,8 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
       description: "Execution mode: read or write.",
     },
     ...WRITE_INTENT_BLOCK,
+    ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
     // PR2 (#621 F1 / #6a) — modern/legacy alias parity for query execute.
     // The legacy `exec_sql` schema already declares allowTables/denyTables
     // and `scripts/dysflow-access-runner.ps1:1062-1072` enforces them.

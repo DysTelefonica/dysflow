@@ -5,6 +5,7 @@ import {
   CTX_PROPS,
   type JsonObjectSchema,
   type JsonSchemaProperty,
+  OUTPUT_MODE_BLOCK,
   SCHEMA_PROPS,
   STRICT_CTX,
   WRITE_INTENT_BLOCK,
@@ -473,6 +474,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
       filter: SCHEMA_PROPS.filter,
       // Issue #968 — opt-in for external accessPath on read-only tools.
       allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
@@ -493,6 +495,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...OUTPUT_MODE_BLOCK,
       typeFilter: {
         type: "string",
         enum: ["standard", "class", "form", "report", "document"],
@@ -526,6 +529,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
       proceduresJson: SCHEMA_PROPS.proceduresJson,
       filter: SCHEMA_PROPS.filter,
       testsPath: SCHEMA_PROPS.testsPath,
@@ -762,6 +766,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
       moduleName: SCHEMA_PROPS.moduleName,
       moduleNames: SCHEMA_PROPS.moduleNames,
       force: SCHEMA_PROPS.force,
@@ -801,6 +806,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...STRICT_CTX,
       location: SCHEMA_PROPS.location,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
       ...WRITE_INTENT_BLOCK,
@@ -1170,6 +1176,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       // Issue #813 phase 6 — `targetPath` removed. It was an unvalidated
