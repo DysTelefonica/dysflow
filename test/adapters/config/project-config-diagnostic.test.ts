@@ -101,6 +101,30 @@ describe("per-worktree project config contract", () => {
     expect(result.status).toBe("path-mismatch");
     expect(result.diagnostics[0]?.code).toBe("FRONTEND_PATH_NOT_BASENAME");
   });
+  it("exposes structured migration remediation and preserves the legacy string", () => {
+    const root = worktree();
+    const access = join(root, "sibling", "Expedientes.accdb");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    mkdirSync(join(root, "sibling"));
+    writeFileSync(join(root, "sibling", ".git"), "gitdir: fixture");
+    writeFileSync(access, "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "app", accessPath: access, destinationRoot: "src" }),
+    );
+
+    const result = diagnoseProjectConfig(root);
+    expect(result.diagnostics[0]?.remediation).toEqual({
+      kind: "config-migration",
+      field: "accessPath",
+      replaceWith: "frontendFile",
+      suggestedValue: "Expedientes.accdb",
+      rationale:
+        "absolute and separator-containing frontend paths cannot authorize cross-worktree access",
+    });
+    expect(result.remediation).toBe("Replace it with frontendFile: 'Expedientes.accdb'.");
+  });
   it.each([
     "databasePath",
     "sourcePath",
