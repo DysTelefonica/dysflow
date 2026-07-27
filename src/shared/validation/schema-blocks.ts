@@ -20,8 +20,8 @@
 // is shared across the whole catalog. Tool-specific schemas compose
 // these blocks plus their functional parameters (via
 // `composeIdentityAndCorrelation`, `composeAccessAndSourceTargets`,
-// `composeFullTargetStack`, `composeStrictContext`, `composeWriteIntent`,
-// `composeOutputMode`); the consumer-facing schema never duplicates the
+// `composeFullTargetStack`, `composeStrictContext`, `composeOutputMode`);
+// the consumer-facing schema never duplicates the
 // shared text.
 //
 // The blocks are kept in a separate file from `schema-props.ts` so the
@@ -104,11 +104,6 @@ export const composeFullTargetStack = (): Record<string, JsonSchemaProperty> => 
 /** Compose the strict-context guard bundle. */
 export const composeStrictContext = (): Record<string, JsonSchemaProperty> => ({
   ...STRICT_CONTEXT_BLOCK,
-});
-
-/** Compose the write-intent flag bundle. Tools pick which flags to surface; the bundle holds all three. */
-export const composeWriteIntent = (): Record<string, JsonSchemaProperty> => ({
-  ...WRITE_INTENT_BLOCK,
 });
 
 /** Compose the output-mode selector. */

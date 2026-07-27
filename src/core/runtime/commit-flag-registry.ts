@@ -96,7 +96,7 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   import_modules: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   import_all: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   delete_module: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "noop" },
-  fix_encoding: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  fix_encoding: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   vba_inline_execution: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
   // #757 (C1): export_* now join the apply family. Historical `diff:true`
   // is preserved as the noWriteAlias; the adapter keeps it working with

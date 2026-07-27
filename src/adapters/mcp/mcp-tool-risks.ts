@@ -20,6 +20,7 @@
  *     the codebase that hardcodes per-tool defaults.
  */
 
+import { commitFlagMetadataForOrNoop } from "../../core/runtime/commit-flag-registry.js";
 import type { ToolRisk, WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { DEFAULT_DRY_RUN_TABLE } from "../../core/runtime/write-execution-policy.js";
 import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
@@ -159,6 +160,24 @@ export const MCP_TOOL_RISKS: Readonly<Record<string, ToolRisk>> = buildRiskRegis
  */
 export function resolveRiskForTool(name: string): ToolRisk | undefined {
   return MCP_TOOL_RISKS[name];
+}
+
+/**
+ * Whether a tool participates in the shared apply/dryRun/diff contract.
+ *
+ * Process-control tools and read-shaped generators can carry a non-read-only
+ * risk without accepting write-intent flags, so risk alone is insufficient.
+ * Commit metadata supplies the second half of the runtime classification:
+ * an executing default or a no-write alias means the tool has a caller-facing
+ * write-intent contract.
+ */
+export function isWriteIntentTool(name: string): boolean {
+  const metadata = commitFlagMetadataForOrNoop(name);
+  return (
+    resolveRiskForTool(name) !== "read-only" &&
+    resolveRiskForTool(name) !== undefined &&
+    (metadata.defaultBehavior !== "noop" || metadata.noWriteAlias !== null)
+  );
 }
 
 /**
