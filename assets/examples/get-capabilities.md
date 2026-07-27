@@ -1,8 +1,65 @@
 # get_capabilities
 
-`get_capabilities` returns `projectIdResolution` and `projectConfig` from the same snapshot.
+`get_capabilities` returns the live adapter snapshot: `adapterVersion`,
+`writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
+`toolsVisible`, `projectIdResolution`, `projectConfig`, and the per-tool
+`tools` map. See `dysflow-usage` SKILL.md for the full schema and the
+write-flag matrix.
 
-`projectIdResolution` is derived from the resolved `projectConfig` when that diagnosis is available:
+## Response contract — `schemaVersion` discriminator (issue #1168)
+
+Every dysflow MCP tool response — `get_capabilities` included — carries a
+top-level `schemaVersion: "dysflow.result/v1"` discriminator so consumers
+(notably OpenCode Code Mode, which sometimes flattens structured results to
+`[object Object]`) can branch on a single stable field instead of
+regex-parsing legacy text bodies.
+
+The discriminator is injected by `withSchemaVersion()` at the stdio central
+seam (`src/adapters/mcp/stdio.ts`) and re-applied by every helper envelope
+builder in `src/adapters/mcp/result-translation.ts` and
+`src/adapters/mcp/dispatch-common.ts`. The literal
+`dysflow.result/v1` is exported as the `RESULT_SCHEMA_VERSION` constant;
+treat that constant as the single source of truth — never inline the string
+in a consumer.
+
+### Consumer-side parse (the "Code Mode JSON-wrapping workaround")
+
+```js
+// Issue #1168 — universal MCP response contract.
+const raw = await tools.dysflow.someTool(args);
+const env = typeof raw === "string" ? JSON.parse(raw) : raw;
+if (env?.schemaVersion !== "dysflow.result/v1") {
+  throw new Error("not a dysflow MCP envelope — possibly flattened by the transport wrapper");
+}
+// env.content[0].text is the JSON-encoded tool payload (parse as needed).
+// env.error.code (when isError === true) is the typed error code.
+```
+
+The discriminator is the SINGLE branch signal. Hosts that parse JSON
+correctly (Claude/Cursor/Cline, the `dysflow` CLI, REST adapters) see the
+parsed object directly; the `typeof raw === "string"` branch is dead code
+for them but still useful as a defensive sanity gate. The break is
+specifically in the OpenCode Code Mode `execute` tool — `dysflow-usage`
+SKILL.md § "Code Mode JSON-wrapping workaround" documents the full
+workaround and the bug-class.
+
+### Invariants
+
+- **Universal** — every tool, every outcome (success, error, contract
+  violation, tool-not-found fallback) carries `schemaVersion`. Verified by
+  `test/adapters/mcp/result-schema-version-discriminator-1168.test.ts`.
+- **JSON-encodable** — every response is `JSON.stringify`-clean so the
+  defensive parse cannot fail mid-flight.
+- **Idempotent** — `withSchemaVersion` is a no-op on an already-stamped
+  envelope; the literal never appears as a duplicated field.
+- **Stable until bumped** — additive envelope changes do NOT bump the
+  literal. A bump (e.g. to `v2`) is a breaking change for consumers and
+  ships with a `CHANGELOG.md` migration note.
+
+## `projectIdResolution` and `projectConfig`
+
+`projectIdResolution` is derived from the resolved `projectConfig` when that
+diagnosis is available:
 
 - `projectConfig.status: "valid"` and `writeReady: true` produce `outcome: "resolved"` and the same non-null `projectId`.
 - `projectConfig.status: "ambiguous"` produces `outcome: "ambiguous"` with a null resolution project ID.
