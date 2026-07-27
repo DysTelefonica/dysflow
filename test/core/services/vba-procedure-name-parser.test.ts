@@ -34,7 +34,9 @@ import { parseProcedureName } from "../../../src/core/services/vba-procedure-nam
 
 describe("#1174 — parseProcedureName (run_vba procedureName parser)", () => {
   it("happy path: '<module>.<procedure>' splits into moduleName + procName", () => {
-    const result = parseProcedureName("MigracionTbCambiosParaPublicacionEdicionLong.EjecutarMigracion");
+    const result = parseProcedureName(
+      "MigracionTbCambiosParaPublicacionEdicionLong.EjecutarMigracion",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.moduleName).toBe("MigracionTbCambiosParaPublicacionEdicionLong");

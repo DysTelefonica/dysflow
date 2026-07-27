@@ -21,10 +21,7 @@
 import { describe, expect, it } from "vitest";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
 import type { AccessVbaRequest, OperationResult } from "../../../src/core/contracts/index.js";
-import type {
-  AccessRunner,
-  AccessRunnerOperation,
-} from "../../../src/core/runner/access-runner.js";
+import type { AccessRunner } from "../../../src/core/runner/access-runner.js";
 import { AccessVbaService } from "../../../src/core/services/vba-service.js";
 
 const config: DysflowConfig = {
@@ -130,7 +127,10 @@ describe("#1174 — PROCEDURE_NOT_CALLABLE reclassifier", () => {
 
   it("does NOT reclassify a non-RUNNER_FAILED code (e.g. VBA_MANAGER_TIMEOUT)", async () => {
     const runner = new StubRunner(
-      runnerResult("Runner exceeded its timeout while waiting for the COM lifecycle", "VBA_MANAGER_TIMEOUT"),
+      runnerResult(
+        "Runner exceeded its timeout while waiting for the COM lifecycle",
+        "VBA_MANAGER_TIMEOUT",
+      ),
     );
     const service = new AccessVbaService({ runner, config });
 

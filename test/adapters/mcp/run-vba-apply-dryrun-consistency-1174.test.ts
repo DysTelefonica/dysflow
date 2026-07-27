@@ -28,13 +28,13 @@
 
 import { describe, expect, it } from "vitest";
 import { buildRunVbaRequest, isMcpToolResult } from "../../../src/adapters/mcp/alias-tools.js";
-import { AccessVbaService } from "../../../src/core/services/vba-service.js";
 import type { DysflowConfig } from "../../../src/core/config/dysflow-config.js";
+import type { OperationResult } from "../../../src/core/contracts/index.js";
 import type {
   AccessRunner,
   AccessRunnerOperation,
 } from "../../../src/core/runner/access-runner.js";
-import type { OperationResult } from "../../../src/core/contracts/index.js";
+import { AccessVbaService } from "../../../src/core/services/vba-service.js";
 
 const config: DysflowConfig = {
   configSource: "explicit-request",
@@ -136,6 +136,7 @@ describe("#1174 — run_vba apply/dryRun consistency on procedureName parsing", 
       procedureName: "MyModule.Foo",
       // dryRun omitted → real execution
     });
+    expect(apply.ok).toBe(true);
     expect(runner.operations.length).toBe(1);
     const forwarded = runner.operations[0];
     expect(forwarded).toBeDefined();
@@ -161,7 +162,7 @@ describe("#1174 — run_vba apply/dryRun consistency on procedureName parsing", 
           'Attribute VB_Name = "MyModule"',
           "Option Explicit",
           "Public Function Proc() As String",
-          "    Proc = \"ok\"",
+          '    Proc = "ok"',
           "End Function",
         ].join("\r\n");
       },
@@ -199,7 +200,7 @@ describe("#1174 — run_vba apply/dryRun consistency on procedureName parsing", 
           'Attribute VB_Name = "MyModule"',
           "Option Explicit",
           "Public Function Foo() As String",
-          "    Foo = \"ok\"",
+          '    Foo = "ok"',
           "End Function",
         ].join("\r\n");
       },

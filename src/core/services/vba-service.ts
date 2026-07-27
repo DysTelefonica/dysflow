@@ -145,9 +145,7 @@ export class AccessVbaService {
     // mask the caller's intent.
     const normalizedRequest: AccessVbaRequest = {
       ...request,
-      ...(parsedName.moduleName.length > 0
-        ? { moduleName: parsedName.moduleName }
-        : {}),
+      ...(parsedName.moduleName.length > 0 ? { moduleName: parsedName.moduleName } : {}),
       procedureName: parsedName.original,
     };
 
@@ -191,10 +189,7 @@ export class AccessVbaService {
     // falls through to the runner so the existing diagnostics still fire —
     // this is non-regressive behavior.
     if (this.sourceResolver !== undefined) {
-      const preflight = await this.checkProcedureExists(
-        normalizedRequest,
-        parsedName.procName,
-      );
+      const preflight = await this.checkProcedureExists(normalizedRequest, parsedName.procName);
       if (preflight !== undefined) return preflight;
     }
 
