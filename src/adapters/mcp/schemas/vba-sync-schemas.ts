@@ -884,11 +884,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       targetPath: {
         type: "string",
         description:
-          "Path to the right-side .form.txt (compared against sourcePath). Required unless 'target' alias is provided.",
+          "Path to the right-side .form.txt (compared against sourcePath). Required unless the deprecated 'target' alias is provided.",
       },
       target: {
         type: "string",
-        description: "Alias for targetPath.",
+        description:
+          "Deprecated alias for targetPath. Accepted for backward compatibility except for the reserved database role values 'frontend', 'backend', and 'auto'; use targetPath.",
       },
       formName: {
         type: "string",
