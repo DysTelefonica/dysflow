@@ -25,39 +25,46 @@
  *     (result-contract violation + tool-not-found fallbacks).
  */
 
-import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createDysflowError, failureResult, successResult } from "../../../src/core/contracts/index";
+import { describe, expect, it } from "vitest";
+import { ALIAS_TOOL_NAME_LIST } from "../../../src/adapters/mcp/alias-tools";
 import {
   allowlistNotConfigured,
   binaryFormatUnsupported,
   binaryLocked,
   binaryNotFound,
   binaryPasswordInvalid,
-  exportSourceGuardRefused,
   EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION,
+  exportSourceGuardRefused,
   internalError,
   invalidInput,
   MCP_INPUT_INVALID_CODE,
   MCP_PROCEDURE_NOT_ALLOWED,
-  projectConfigNotWriteReady,
   procedureNotAllowed,
+  projectConfigNotWriteReady,
   RUNTIME_STALE,
   runtimeStale,
   writesDisabled,
 } from "../../../src/adapters/mcp/dispatch-common";
+import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
 import {
+  MODERN_ANALYSIS_TOOL_NAMES,
+  MODERN_TOOL_NAMES,
+} from "../../../src/adapters/mcp/modern-tool-registry";
+import {
+  type DysflowMcpTool,
+  type McpToolResult,
   RESULT_SCHEMA_VERSION,
   translateCoreResultToMcpContent,
-  type McpToolResult,
-  type DysflowMcpTool,
   withSchemaVersion,
 } from "../../../src/adapters/mcp/result-translation";
 import { startWithSdkServer } from "../../../src/adapters/mcp/stdio";
-import { ALIAS_TOOL_NAME_LIST } from "../../../src/adapters/mcp/alias-tools";
-import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry";
-import { MODERN_ANALYSIS_TOOL_NAMES, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/modern-tool-registry";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 
 /**
  * Every McpToolResult-shaped value must be JSON-encodable so consumers can
@@ -86,7 +93,7 @@ describe("MCP envelope schemaVersion discriminator (#1168)", () => {
 
     it("surfaces schemaVersion on the failure envelope", () => {
       const result = translateCoreResultToMcpContent(
-        failureResult(createDysflowError("BINARY_NOT_FOUND", "missing accdb", { accessPath: "/x" })),
+        failureResult(createDysflowError("BINARY_NOT_FOUND", "missing accdb")),
       );
       expectSchemaVersionDiscriminator(result);
     });
@@ -175,7 +182,12 @@ describe("MCP envelope schemaVersion discriminator (#1168)", () => {
         destinationRoot: "C:/repo/src",
         writeReady: false,
         diagnostics: [
-          { code: "DESTINATION_ROOT_NOT_FOUND", severity: "error", message: "no dest", remediation: "fix" },
+          {
+            code: "DESTINATION_ROOT_NOT_FOUND",
+            severity: "error",
+            message: "no dest",
+            remediation: "fix",
+          },
         ],
         remediation: "fix",
       } as never);
