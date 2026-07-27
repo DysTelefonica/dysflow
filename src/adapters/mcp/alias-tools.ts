@@ -1,5 +1,6 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
 import { buildWriteFixtureRequest } from "../../core/mapping/access-query-request-mapper.js";
+import { parseProcedureName } from "../../core/services/vba-procedure-name-parser.js";
 import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
   handleMcpAccessCleanup,
@@ -116,6 +117,14 @@ export function buildCleanupRequest(input: unknown): CleanupRequest {
  * Build a typed request for `run_vba`. Parses `argsJson` via the shared helper
  * and returns an `McpToolResult` (not throws) when argsJson is malformed.
  *
+ * #1174 — also parses `procedureName` via `parseProcedureName` so the typed
+ * request carries a non-empty `moduleName` whenever the caller supplied the
+ * `<module>.<procedure>` canonical form. Without this, the dry-run plan
+ * echoed `moduleName: ""` while the apply path's preflight scanned every
+ * module — the asymmetry the issue reports. Empty / malformed
+ * `procedureName` short-circuits with a typed `MCP_INPUT_INVALID` envelope
+ * BEFORE the runner is spawned so both paths fail loudly and identically.
+ *
  * Schema validation runs BEFORE the builder via `handleMcpVbaExecute`, so
  * missing required fields (`procedureName`) are filtered out at this point.
  */
@@ -124,9 +133,25 @@ export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolRe
   const parsedArgs = parseMcpArgsJson(typeof obj.argsJson === "string" ? obj.argsJson : undefined);
   if (!parsedArgs.ok) return invalidInput(parsedArgs.message);
 
+  // #1174 — parse procedureName up front so the typed request carries the
+  // module + procedure split. Schema validation already filtered non-string
+  // values; we still tolerate the absence (legacy `dryRun:true` opt-outs)
+  // by passing through the raw string and treating empty as no-op.
+  const rawProcedureName = typeof obj.procedureName === "string" ? obj.procedureName : "";
+  const parsedName = parseProcedureName(rawProcedureName);
+  if (!parsedName.ok) {
+    // Surface the typed envelope at the adapter boundary so the dry-run
+    // plan and the apply path both fail identically when the input cannot
+    // be parsed — never silently echo `moduleName: ""`.
+    if (parsedName.code === "PROCEDURE_NAME_EMPTY") {
+      return invalidInput("run_vba requires a non-empty procedureName.");
+    }
+    return invalidInput(parsedName.message);
+  }
+
   return {
-    moduleName: "",
-    procedureName: typeof obj.procedureName === "string" ? obj.procedureName : "",
+    moduleName: parsedName.moduleName,
+    procedureName: parsedName.original,
     arguments: parsedArgs.value,
     // PR1a (#621 F1) — project the dryRun escape hatch so the canonical
     // handler's gate can see it. Honored only when allowedProcedures is

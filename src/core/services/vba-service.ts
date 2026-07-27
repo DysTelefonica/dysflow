@@ -7,6 +7,7 @@ import {
   ensureResultShape,
 } from "../runner/access-runner.js";
 import { isRecord } from "../utils/index.js";
+import { parseProcedureName } from "./vba-procedure-name-parser.js";
 import { listVbaProcedures } from "./vba-procedure-service.js";
 
 /**
@@ -111,6 +112,45 @@ export class AccessVbaService {
     request: AccessVbaRequest,
     onProgress?: AccessRunnerProgressCallback,
   ): Promise<OperationResult<AccessVbaResult>> {
+    // #1174 — parse `procedureName` into the module / procedure pair BEFORE
+    // branching on dry-run so the dry-run plan and the apply-path preflight
+    // produce identical values for the same input. Without this, the
+    // adapter forwarded `moduleName: ""` while the apply path scanned every
+    // module — the asymmetry the bug report describes.
+    const parsedName = parseProcedureName(request.procedureName);
+    if (!parsedName.ok) {
+      // Empty / malformed procedureName short-circuits with the typed
+      // envelope BEFORE the runner is spawned, so both paths fail
+      // identically instead of dry-run succeeding silently.
+      return failureResult(
+        createDysflowError(
+          "PROCEDURE_NOT_FOUND",
+          parsedName.code === "PROCEDURE_NAME_EMPTY"
+            ? `Procedure name is empty. Pass a '<module>.<procedure>' name, e.g. 'Module.Foo'.`
+            : parsedName.message,
+          {
+            details: {
+              procedure: request.procedureName,
+              parseError: parsedName.code,
+            },
+          },
+        ),
+      );
+    }
+    // #1174 — when the caller supplied `<module>.<procedure>`, the parsed
+    // `moduleName` is authoritative. When the procedureName is unqualified
+    // (legacy `dysflow_vba_execute` shape) keep the explicit `moduleName`
+    // the caller already passed in — otherwise the parser would silently
+    // downgrade it to `""` and the apply path's all-modules fallback would
+    // mask the caller's intent.
+    const normalizedRequest: AccessVbaRequest = {
+      ...request,
+      ...(parsedName.moduleName.length > 0
+        ? { moduleName: parsedName.moduleName }
+        : {}),
+      procedureName: parsedName.original,
+    };
+
     // Round-3 Item 2 (#748) — honor the documented `dryRun: true` escape
     // hatch. Previously this branch delegated to the runner, which spawned
     // PowerShell even though no Access side-effect was intended. With
@@ -124,13 +164,18 @@ export class AccessVbaService {
     // is a "would have run" preview and the caller has not asked us to
     // execute anything; surfacing `PROCEDURE_NOT_FOUND` for an intentionally
     // absent procedure would defeat the contract.
-    if (request.dryRun === true) {
+    //
+    // #1174 — the plan echoes the parsed `moduleName` so dry-run and apply
+    // produce identical values for the same input. Previously this branch
+    // echoed `request.moduleName` (always `""`) which masked the
+    // adapter-vs-preflight asymmetry.
+    if (normalizedRequest.dryRun === true) {
       return successResult<AccessVbaPlan>({
         dryRun: true,
         willExecute: false,
         willModifyAccess: false,
-        procedureName: request.procedureName,
-        moduleName: request.moduleName,
+        procedureName: normalizedRequest.procedureName,
+        moduleName: normalizedRequest.moduleName,
       });
     }
 
@@ -146,12 +191,15 @@ export class AccessVbaService {
     // falls through to the runner so the existing diagnostics still fire —
     // this is non-regressive behavior.
     if (this.sourceResolver !== undefined) {
-      const preflight = await this.checkProcedureExists(request);
+      const preflight = await this.checkProcedureExists(
+        normalizedRequest,
+        parsedName.procName,
+      );
       if (preflight !== undefined) return preflight;
     }
 
     const result = await this.runner.run<AccessVbaExecutionResult>(
-      { kind: "vba", request },
+      { kind: "vba", request: normalizedRequest },
       this.config,
       {
         onProgress,
@@ -166,13 +214,21 @@ export class AccessVbaService {
    * when the procedure is present OR when the resolver could not produce
    * any source text to verify against (defensive — the runner will surface
    * the real Access-side failure in that case).
+   *
+   * #1174 — the lookup uses the parser-supplied `procName` (no module
+   * prefix) so `<module>.<procedure>` requests compare against the
+   * declarations `listVbaProcedures` actually returns. Previously the
+   * service compared the FULL `<module>.<procedure>` string against the
+   * bare procedure name, always missing — the silent lookup bug at the
+   * heart of issue #1174.
    */
   private async checkProcedureExists(
     request: AccessVbaRequest,
+    procName: string,
   ): Promise<OperationResult<AccessVbaResult> | undefined> {
     const resolver = this.sourceResolver;
     if (resolver === undefined) return undefined;
-    if (typeof request.procedureName !== "string" || request.procedureName.length === 0) {
+    if (typeof procName !== "string" || procName.length === 0) {
       return undefined;
     }
 
@@ -195,7 +251,7 @@ export class AccessVbaService {
 
     if (Object.keys(modulesToScan).length === 0) return undefined;
 
-    const target = request.procedureName.toLowerCase();
+    const target = procName.toLowerCase();
     let found = false;
     for (const source of Object.values(modulesToScan)) {
       const procedures = listVbaProcedures(source);
@@ -212,13 +268,14 @@ export class AccessVbaService {
         ? ` (scanned module: '${request.moduleName}')`
         : "";
     const message =
-      `Procedure '${request.procedureName}' was not found in the project's VBA source modules` +
+      `Procedure '${procName}' was not found in the project's VBA source modules` +
       `${moduleSuffix}. Verify the procedure name and module, or import the procedure into the binary before retrying.`;
 
     return failureResult(
       createDysflowError("PROCEDURE_NOT_FOUND", message, {
         details: {
-          procedure: request.procedureName,
+          procedure: procName,
+          fullProcedureName: request.procedureName,
           ...(typeof request.moduleName === "string" && request.moduleName.length > 0
             ? { moduleName: request.moduleName }
             : {}),
