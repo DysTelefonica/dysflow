@@ -205,7 +205,13 @@ export class AccessVbaService {
         onProgress,
       },
     );
-    return ensureResultShape(result, isRecord);
+    const ensured = ensureResultShape(result, isRecord);
+    // #1174 — distinguish "procedure exists in source but Access COM cannot
+    // call it" (PROCEDURE_NOT_CALLABLE) from "procedure is not in source"
+    // (PROCEDURE_NOT_FOUND). Without this, both surface as RUNNER_FAILED
+    // with a Spanish-localized COM message and agents cannot tell whether
+    // to re-import (no-op) or recompile (the actual fix).
+    return reclassifyRunnerFailure(ensured, normalizedRequest);
   }
 
   /**
@@ -284,4 +290,59 @@ export class AccessVbaService {
       }),
     );
   }
+}
+
+/**
+ * #1174 — reclassify a generic `RUNNER_FAILED` into the typed
+ * `PROCEDURE_NOT_CALLABLE` envelope when the underlying Access COM error
+ * pattern indicates the procedure is present in the binary but cannot be
+ * invoked (typical cause: stale p-code after source edits without a VBE
+ * recompile).
+ *
+ * Patterns detected:
+ *   - Spanish-localized: `Excepci[oó]n al llamar a "Run"` (Access VBA manager
+ *     emits this when `$AccessApplication.Run($ProcedureName)` throws — the
+ *     procedure exists in the project's VBComponents but the compiled
+ *     token is missing or stale).
+ *   - English fallback: `Cannot run the macro` / `The expression you
+ *     entered refers to an object that is closed or doesn't exist` (rare,
+ *     but the same root cause when the VBE is in a non-compiled state).
+ *
+ * Returns the original `OperationResult` unchanged when no pattern matches
+ * so genuine runner failures (`RUNNER_FAILED`, `VBA_MANAGER_TIMEOUT`,
+ * `VBA_MANAGER_FAILED`, etc.) propagate verbatim.
+ */
+function reclassifyRunnerFailure<T>(
+  result: OperationResult<T>,
+  request: AccessVbaRequest,
+): OperationResult<T> {
+  if (result.ok) return result;
+  const message = result.error.message;
+  if (!isCallableFailureMessage(message)) return result;
+  return failureResult(
+    createDysflowError(
+      "PROCEDURE_NOT_CALLABLE",
+      `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
+        "The binary's compiled p-code is likely stale — recompile in Access VBE (Debug → Compile) and retry.",
+      {
+        retryable: true,
+        details: {
+          procedure: request.procedureName,
+          moduleName: request.moduleName,
+          runnerCode: result.error.code,
+          runnerMessage: message,
+        },
+      },
+    ),
+  ) as OperationResult<T>;
+}
+
+const CALLABLE_FAILURE_PATTERNS: readonly RegExp[] = [
+  /Excepci[oó]n al llamar a\s+["']Run["']/i,
+  /Cannot run (?:the )?macro/i,
+  /object that is closed or doesn't exist/i,
+];
+
+function isCallableFailureMessage(message: string): boolean {
+  return CALLABLE_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
 }
