@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic";
 import {
+  enrichmentForValidationMessage,
   invalidInput,
   MCP_PROCEDURE_NOT_ALLOWED,
   MCP_WRITES_DISABLED,
@@ -377,5 +378,61 @@ describe("projectConfigNotWriteReady — distinct denial envelopes (#962)", () =
     );
     expect(result.error?.message).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
     expect(result.content[0]?.text).toContain("PROJECT_CONFIG_NOT_WRITE_READY");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Issue #1164 — `enrichmentForValidationMessage` recognizes the
+// `"<param> is required."` shape so any tool that omits a required
+// field gets the same structured `rejectedFlag` envelope #757 C4
+// promised. Without this branch the `MCP_INPUT_INVALID` envelope
+// degrades to a generic `message`-only body and an AI consumer running
+// in OpenCode Code Mode flattens it to `[object Object]`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("enrichmentForValidationMessage — missing-required branch (issue #1164)", () => {
+  it("returns { rejectedFlag, toolName } when the message matches '<param> is required.'", () => {
+    const result = enrichmentForValidationMessage("mode is required.", "query_execute");
+    expect(result).toEqual({ rejectedFlag: "mode", toolName: "query_execute" });
+  });
+
+  it("captures the parameter name verbatim (sql / projectId / accessPath)", () => {
+    expect(enrichmentForValidationMessage("sql is required.", "query_execute")?.rejectedFlag).toBe(
+      "sql",
+    );
+    expect(
+      enrichmentForValidationMessage("projectId is required.", "resolve_project")?.rejectedFlag,
+    ).toBe("projectId");
+    expect(
+      enrichmentForValidationMessage("accessPath is required.", "cleanup_access_operation")
+        ?.rejectedFlag,
+    ).toBe("accessPath");
+  });
+
+  it("toolName is preserved through the enrichment (drives invalidInput's registry lookup)", () => {
+    const result = enrichmentForValidationMessage("mode is required.", "query_execute");
+    expect(result?.toolName).toBe("query_execute");
+  });
+
+  it("does NOT match when the message is missing the literal ' is required.' suffix", () => {
+    expect(enrichmentForValidationMessage("mode is required", "query_execute")).toBeUndefined();
+    expect(enrichmentForValidationMessage("mode required", "query_execute")).toBeUndefined();
+    expect(
+      enrichmentForValidationMessage("expected property 'mode'", "query_execute"),
+    ).toBeUndefined();
+  });
+
+  it("does NOT shadow the apply/dryRun contradiction surface (#1078)", () => {
+    const result = enrichmentForValidationMessage(
+      "apply and dryRun are mutually exclusive: apply:true contradicts dryRun:true. Pass only one - apply is the canonical commit signal for this tool.",
+      "query_execute",
+    );
+    expect(result?.rejectedFlag).toBe("apply");
+    expect(result?.rejectedFlags).toEqual(["apply", "dryRun"]);
+  });
+
+  it("does NOT shadow the legacy 'is not allowed.' single-flag surface (#757 C4)", () => {
+    const result = enrichmentForValidationMessage('"propertyName" is not allowed.', "form_set_property");
+    expect(result?.rejectedFlag).toBe("propertyName");
   });
 });
