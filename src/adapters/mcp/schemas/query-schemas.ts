@@ -17,7 +17,7 @@ const WRITE_TARGET_OVERRIDE = {
   sourcePath: SCHEMA_PROPS.sourcePath,
 };
 
-const EXPLICIT_READ_TARGET_OVERRIDE = {
+export const EXPLICIT_READ_TARGET_OVERRIDE = {
   accessPath: SCHEMA_PROPS.accessPath,
   backendPath: SCHEMA_PROPS.backendPath,
   databasePath: SCHEMA_PROPS.databasePath,

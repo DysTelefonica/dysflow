@@ -1,9 +1,5 @@
-import {
-  type AccessQueryRequest,
-  createDysflowError,
-  failureResult,
-} from "../../core/contracts/index.js";
-import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
+import { createDysflowError, failureResult } from "../../core/contracts/index.js";
+import { buildQueryExecuteRequest } from "../../core/mapping/access-query-request-mapper.js";
 import { resolveAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
@@ -188,11 +184,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           services,
           writesEnabled,
           writeAccessResolver,
-          (validatedInput) => {
-            const request = validatedInput as AccessQueryRequest;
-            if (request.mode !== "write") return request;
-            return { ...request, dryRun: resolveIsDryRun(validatedInput) };
-          },
+          (validatedInput) => buildQueryExecuteRequest(validatedInput),
           context,
         ),
     },

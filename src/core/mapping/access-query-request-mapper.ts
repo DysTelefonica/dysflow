@@ -170,6 +170,46 @@ export function pickQueryTarget(params: Record<string, unknown>): QueryTarget | 
 }
 
 /**
+ * Normalizes `query_execute` with the established `query_sql` precedence.
+ * An explicit databasePath/sourcePath wins; accessPath is the fallback
+ * database for SQL execution, while target remains available for semantic
+ * project-config resolution.
+ */
+export function pickQueryExecutionTarget(
+  params: Record<string, unknown>,
+): Pick<AccessQueryRequest, "accessPath" | "backendPath" | "databasePath" | "target"> {
+  const accessPath = typeof params.accessPath === "string" ? params.accessPath : undefined;
+  const explicitDatabasePath =
+    typeof params.databasePath === "string"
+      ? params.databasePath
+      : typeof params.sourcePath === "string"
+        ? params.sourcePath
+        : undefined;
+  const target = pickQueryTarget(params);
+
+  return {
+    accessPath,
+    backendPath: typeof params.backendPath === "string" ? params.backendPath : undefined,
+    databasePath: explicitDatabasePath ?? accessPath,
+    ...(target === undefined ? {} : { target }),
+  };
+}
+
+/** Shapes the canonical read/write `query_execute` request. */
+export function buildQueryExecuteRequest(input: unknown): AccessQueryRequest {
+  const params = paramsOf(input);
+  const mode = params.mode === "write" ? "write" : "read";
+  const target = pickQueryExecutionTarget(params);
+  return {
+    ...params,
+    sql: getStr(params, "sql") ?? "",
+    mode,
+    ...(target.databasePath === undefined ? {} : { databasePath: target.databasePath }),
+    ...(mode === "write" ? { dryRun: resolveIsDryRun(input) } : {}),
+  } as AccessQueryRequest;
+}
+
+/**
  * Actions whose semantic target is always the frontend, even when an
  * auxiliary `backendPath` is also present in the request (#870). This is the
  * single source of truth for that role: the mapper forces `target: "frontend"`
