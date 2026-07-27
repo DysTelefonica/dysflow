@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createGetCapabilitiesTool, getCapabilitiesAll } from "../../../src/adapters/mcp/get-capabilities-tool";
+import {
+  createGetCapabilitiesTool,
+  getCapabilitiesAll,
+} from "../../../src/adapters/mcp/get-capabilities-tool";
 import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
