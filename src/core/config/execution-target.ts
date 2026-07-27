@@ -71,6 +71,17 @@ export async function resolveExecutionTarget(
         config.data.destinationRoot ??
         config.data.projectRoot ??
         context.cwd,
+      // Issue #1169 — when the caller supplies a `destinationRoot`
+      // override, the `projectRoot` MUST also follow the override so a
+      // form/serialization consumer can place `sourcePath` inside the
+      // override without tripping the path-containment guard. The
+      // configured `projectRoot` is preserved only when no override is
+      // supplied, so the legacy contract stays unchanged.
+      projectRoot:
+        stringValue(params.projectRoot) ??
+        stringValue(params.destinationRoot) ??
+        config.data.projectRoot ??
+        context.cwd,
       targetProvenance:
         stringValue(params.accessPath) !== undefined
           ? "explicit-access-path"
@@ -98,6 +109,13 @@ export async function resolveExecutionTarget(
           repoConfig.data.destinationRoot ??
           repoConfig.data.projectRoot ??
           context.cwd,
+        // Issue #1169 — see the matching comment in the explicit-override
+        // branch above. The override flows through the same precedence.
+        projectRoot:
+          stringValue(params.projectRoot) ??
+          stringValue(params.destinationRoot) ??
+          repoConfig.data.projectRoot ??
+          context.cwd,
         targetProvenance: "implicit-cwd",
       });
     }
@@ -115,7 +133,15 @@ export async function resolveExecutionTarget(
     accessPath: context.accessPath,
     backendPath: stringValue(params.backendPath),
     destinationRoot,
-    projectRoot: stringValue(params.projectRoot) ?? context.destinationRoot ?? context.cwd,
+    // Issue #1169 — same override-aware precedence as the configured
+    // branches. When the caller passes `destinationRoot`, projectRoot
+    // follows so the path-containment guards in the form / serialization
+    // tools accept the override root as the authoritative project root.
+    projectRoot:
+      stringValue(params.projectRoot) ??
+      stringValue(params.destinationRoot) ??
+      context.destinationRoot ??
+      context.cwd,
     projectId: undefined,
     timeoutMs: explicitTimeoutMs ?? context.timeoutMs ?? 30000,
     targetProvenance: stringValue(params.backendPath) ? "explicit-backend-path" : "implicit-cwd",
