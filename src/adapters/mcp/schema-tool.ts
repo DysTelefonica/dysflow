@@ -59,6 +59,7 @@ import { LOGS_TOOL_SCHEMA } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
+import { MIGRATE_PROJECT_CONFIG_SCHEMA } from "./migrate-project-config-tool.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 import {
   CLEAN_STALE_MARKERS_SCHEMA,
@@ -576,6 +577,11 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   state: STATE_TOOL_SCHEMA,
   clean_stale_markers: CLEAN_STALE_MARKERS_SCHEMA,
   logs: LOGS_TOOL_SCHEMA,
+  // Issue #1177 — `migrate_project_config` advertises its input schema
+  // through the `schema` / `describe_tool` catalog so consumers can
+  // introspect the read-only vs apply branching without re-reading the
+  // factory.
+  migrate_project_config: MIGRATE_PROJECT_CONFIG_SCHEMA,
 };
 
 /**

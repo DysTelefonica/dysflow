@@ -95,8 +95,8 @@ describe("tryMigrateProjectConfig() — pure helper", () => {
     expect(result.current.accessPath).toBe("C:/Users/alice/repos/legacy-app/frontend.accdb");
     expect(result.proposed.accessPath).toBeUndefined();
     expect(result.proposed.frontendFile).toBe("frontend.accdb");
-    expect(result.diff).toContain("-    \"accessPath\"");
-    expect(result.diff).toContain("+    \"frontendFile\"");
+    expect(result.diff).toContain("-  \"accessPath\"");
+    expect(result.diff).toContain("+  \"frontendFile\"");
     expect(result.diff).toContain("frontend.accdb");
     expect(result.remediation.length).toBeGreaterThan(0);
   });
@@ -241,7 +241,8 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
     });
     const tool = tools.find((t) => t.name === "migrate_project_config");
     expect(tool).toBeDefined();
-    expect(tool?.description).toMatch(/migrate_project_config/i);
+    expect(tool?.description).toMatch(/legacy config migration/i);
+    expect(tool?.description).toContain("MCP_WRITES_DISABLED");
   });
 });
 

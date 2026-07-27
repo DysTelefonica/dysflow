@@ -24,6 +24,7 @@ import { MCP_TOOL_ROUTES } from "./dispatch-routes.js";
 import { createGetCapabilitiesTool, readAdapterVersion } from "./get-capabilities-tool.js";
 import { createLogsTool } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { createMigrateProjectConfigTool } from "./migrate-project-config-tool.js";
 import { createModernAnalysisTools } from "./modern-analysis-tools.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
@@ -328,6 +329,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // never spawns PowerShell, never mutates state. Pairs with
     // get_capabilities (live state) and schema (static contract catalog).
     createLogsTool({ cwd }),
+    // Issue #1177 — `migrate_project_config`. Drives legacy
+    // `.dysflow/project.json` migrations (absolute accessPath →
+    // basename frontendFile, top-level allowWrites →
+    // capabilities.allowWrites). Default empty call is a pure
+    // read-class diff preview; `apply: true` atomically rewrites the
+    // file and is write-gated.
+    createMigrateProjectConfigTool({ cwd, writesEnabled }),
   ];
 
   const registered = registerMcpTools(

@@ -169,6 +169,49 @@ export const cleanStaleMarkersResultContract = defineResultContract({
     .strict(),
 });
 
+// Issue #1177 — `migrate_project_config` result contract. The success
+// branch carries the full diff preview (current / proposed / diff /
+// remediation) plus an `applied` flag; the error branch is a typed
+// envelope so consumers can branch on `outcome` instead of catching.
+const migrateRemediationEntry = z
+  .object({
+    field: z.string(),
+    from: z.string(),
+    to: z.string(),
+    reason: z.string(),
+  })
+  .strict();
+
+const migrateSuccess = z
+  .object({
+    outcome: z.literal("ok"),
+    configPath: z.string(),
+    current: unknownRecord,
+    proposed: unknownRecord,
+    diff: z.string(),
+    remediation: z.array(migrateRemediationEntry),
+    applied: z.boolean(),
+  })
+  .strict();
+
+const migrateError = z
+  .object({
+    outcome: z.literal("error"),
+    error: z
+      .object({
+        code: z.string(),
+        message: z.string(),
+        remediation: z.string().optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const migrateProjectConfigResultContract = defineResultContract({
+  modes: ["plan", "apply"],
+  schema: z.discriminatedUnion("outcome", [migrateSuccess, migrateError]),
+});
+
 export const bootstrapRecoveryResultContracts = {
   get_capabilities: getCapabilitiesResultContract,
   schema: schemaResultContract,
@@ -181,4 +224,5 @@ export const bootstrapRecoveryResultContracts = {
   cleanup_access_operation: cleanupAccessOperationResultContract,
   access_force_cleanup_orphaned: orphanCleanupResultContract,
   clean_stale_markers: cleanStaleMarkersResultContract,
+  migrate_project_config: migrateProjectConfigResultContract,
 } as const;

@@ -62,6 +62,12 @@ const OUTPUT_CONTRACT_GROUPS = {
     // (operations.json + markers/*.json) and returns structured log
     // entries; never opens Access, never mutates state.
     "logs",
+    // Issue #1177 — `migrate_project_config` drives legacy config
+    // migrations (read-class diff preview by default, apply:true
+    // rewrites `.dysflow/project.json` atomically). Bypasses the
+    // dispatch layer; same group as `clean_stale_markers` /
+    // `resolve_project`.
+    "migrate_project_config",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

@@ -19,7 +19,7 @@ Dysflow gives agents and scripts a **controlled, auditable execution surface** f
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**90 visible MCP tools · Windows / Node 20-26**
+**91 visible MCP tools · Windows / Node 20-26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -51,7 +51,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 90 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 91 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -866,8 +866,16 @@ Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transit
   - `options.confirm` (boolean, optional): Required for any non-dry-run call. Literal `true` is the only acceptable value; omitting it or passing false leaves the tool in dry-run mode.
 * **Returns**: `{ ok, scanned, removed, kept, removedMarkerIds, keptMarkerIds, errors }`. `scanned` counts every `*.json` file inspected; `removed` + `kept` partition successful decisions; `errors[]` carries per-file failures that did not abort the sweep.
 
+#### `migrate_project_config`
+Read `.dysflow/project.json` and (optionally with `apply:true`) rewrite it in place. Drives legacy config migrations deterministically — no more hand-editing absolute `accessPath` vs basename `frontendFile`, or top-level `allowWrites` vs `capabilities.allowWrites`. The read-only default returns `{ current, proposed, diff, remediation[] }` for review; the apply path atomically rewrites the file and refuses with `MCP_WRITES_DISABLED` when writes are off. Idempotent: an already-migrated config returns an empty diff and `applied:false`.
+* **Parameters**:
+  - `projectId` (string, optional): Reserved for cross-worktree parity — currently informational.
+  - `cwd` (string, optional): Per-call cwd override (#1057 F10). Must be an existing directory containing `.dysflow/project.json`. Omit to use the MCP factory cwd.
+  - `apply` (boolean, optional, default `false`): When `true`, atomically rewrites `.dysflow/project.json` with the proposed migration. Refuses with `MCP_WRITES_DISABLED` when writes are disabled. When omitted (or `false`), returns the proposed diff without writing — pure introspection.
+* **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
+
 #### `schema`
-Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 90 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 91 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.

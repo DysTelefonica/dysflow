@@ -269,6 +269,17 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Issue #1177 — `migrate_project_config` exposes a one-shot read /
+  // apply seam for legacy `.dysflow/project.json` migrations. The
+  // default empty call is a pure read-class diff preview; `apply: true`
+  // is write-class and is gated by the standard write-execution policy.
+  migrate_project_config: {
+    access: "conditional-write",
+    writeGate: "conditional",
+    dryRunDefault: true,
+    summary:
+      "Conditional-write MCP contract; the default empty call plans a legacy config migration without writing, apply:true rewrites .dysflow/project.json atomically and is write-gated.",
+  },
 };
 
 export const MCP_TOOL_CONTRACTS = {
