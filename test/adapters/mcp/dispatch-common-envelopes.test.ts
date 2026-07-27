@@ -384,28 +384,32 @@ describe("projectConfigNotWriteReady — distinct denial envelopes (#962)", () =
 // ─────────────────────────────────────────────────────────────────────────────
 // Issue #1164 — `enrichmentForValidationMessage` recognizes the
 // `"<param> is required."` shape so any tool that omits a required
-// field gets the same structured `rejectedFlag` envelope #757 C4
+// field gets a dedicated structured `missingParam` envelope
 // promised. Without this branch the `MCP_INPUT_INVALID` envelope
 // degrades to a generic `message`-only body and an AI consumer running
 // in OpenCode Code Mode flattens it to `[object Object]`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("enrichmentForValidationMessage — missing-required branch (issue #1164)", () => {
-  it("returns { rejectedFlag, toolName } when the message matches '<param> is required.'", () => {
+  it("returns an explicit missing-required kind when the message matches '<param> is required.'", () => {
     const result = enrichmentForValidationMessage("mode is required.", "query_execute");
-    expect(result).toEqual({ rejectedFlag: "mode", toolName: "query_execute" });
+    expect(result).toEqual({
+      kind: "missing-required",
+      missingParam: "mode",
+      toolName: "query_execute",
+    });
   });
 
   it("captures the parameter name verbatim (sql / projectId / accessPath)", () => {
-    expect(enrichmentForValidationMessage("sql is required.", "query_execute")?.rejectedFlag).toBe(
+    expect(enrichmentForValidationMessage("sql is required.", "query_execute")?.missingParam).toBe(
       "sql",
     );
     expect(
-      enrichmentForValidationMessage("projectId is required.", "resolve_project")?.rejectedFlag,
+      enrichmentForValidationMessage("projectId is required.", "resolve_project")?.missingParam,
     ).toBe("projectId");
     expect(
       enrichmentForValidationMessage("accessPath is required.", "cleanup_access_operation")
-        ?.rejectedFlag,
+        ?.missingParam,
     ).toBe("accessPath");
   });
 

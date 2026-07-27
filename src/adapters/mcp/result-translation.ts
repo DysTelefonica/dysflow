@@ -128,6 +128,12 @@ export type McpToolError = {
    */
   rejectedFlags?: readonly string[];
   /**
+   * Issue #1198 — a parameter declared by the tool schema but omitted by
+   * the caller. This is deliberately distinct from `rejectedFlag`: the
+   * parameter is accepted and required, not an unsupported input to remove.
+   */
+  missingParam?: string;
+  /**
    * v2.9.0 (#757 C4) — the commit flag this tool actually accepts
    * (today: `"apply"`, `"dryRun"`, or `"diff"`). Together with
    * `rejectedFlag`, a consumer can write:

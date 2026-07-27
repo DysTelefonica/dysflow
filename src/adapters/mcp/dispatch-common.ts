@@ -17,7 +17,7 @@ import {
   translateCoreResultToMcpContent,
   withSchemaVersion,
 } from "./result-translation.js";
-import { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
+import { type JsonObjectSchema, type JsonSchemaProperty, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
 /**
  * Round-12 (#972) — uniform ErrorEnvelope. `explain`-mode-aware helper
@@ -667,15 +667,11 @@ export function writesDisabled(
 }
 
 /**
- * Issue #1078 — derive the enrichment payload for a `validateInput`
- * rejection message. When the message names the apply/dryRun
- * contradiction (today the only multi-flag surface), populate BOTH
- * `rejectedFlag` (primary) and `rejectedFlags` (full list) so the
- * structured envelope can branch on either form. When the message is
- * the legacy `"<flag> is not allowed."` shape (#757 C4), populate
- * `rejectedFlag` with the literal flag name. Otherwise return
- * `undefined` so the caller falls back to the plain `invalidInput`
- * path.
+ * Derive an explicit validation-failure class from a `validateInput`
+ * message. Missing required parameters use `missingParam`; unsupported
+ * inputs use `rejectedFlag`; apply/dryRun contradictions populate both
+ * `rejectedFlag` and `rejectedFlags`. Otherwise return `undefined` so
+ * the caller falls back to the plain `invalidInput` path.
  *
  * Centralizing the match here means every dispatch entry point
  * (`createDispatchTool`, `handleMcpVbaExecute`, `handleMcpQueryExecute`,
@@ -683,19 +679,70 @@ export function writesDisabled(
  * `tools.ts`) produces a uniform `MCP_INPUT_INVALID` envelope without
  * each call site re-implementing the regex.
  */
+export type ValidationFailureKind =
+  | "conflicting-write-flags"
+  | "missing-required"
+  | "rejected-write-flag"
+  | "unknown-param";
+
+export type ValidationFailureEnrichment = {
+  kind: ValidationFailureKind;
+  missingParam?: string;
+  parameterDescription?: string;
+  rejectedFlag?: string;
+  rejectedFlags?: readonly string[];
+  toolName: string;
+};
+
+function isWriteFlag(toolName: string, flag: string): boolean {
+  const commitFlag = commitFlagFor(toolName);
+  const noWriteAlias = noWriteAliasFor(toolName);
+  return new Set<string>([
+    "apply",
+    "compile",
+    "diff",
+    "dryRun",
+    "dryRunWithPreflight",
+    "rollbackOnCompileFail",
+    commitFlag,
+    ...(noWriteAlias === null ? [] : [noWriteAlias]),
+  ]).has(flag);
+}
+
+function missingParameterRemediation(enrichment: {
+  missingParam: string;
+  parameterDescription?: string;
+  toolName?: string;
+}): string {
+  const toolName = enrichment.toolName ?? "This tool";
+  const description = enrichment.parameterDescription?.trim();
+  return `${toolName} requires "${enrichment.missingParam}".${
+    description === undefined || description.length === 0 ? "" : ` ${description}`
+  } Add it and retry.`;
+}
+
+function schemaPropertyAtPath(
+  schema: JsonObjectSchema | undefined,
+  path: string,
+): JsonSchemaProperty | undefined {
+  let property: JsonSchemaProperty | undefined;
+  let properties = schema?.properties;
+  for (const token of path.match(/[a-zA-Z][a-zA-Z0-9_]*|\[\d+\]/g) ?? []) {
+    property = token.startsWith("[") ? property?.items : properties?.[token];
+    properties = property?.properties;
+  }
+  return property;
+}
+
 export function enrichmentForValidationMessage(
   validation: string,
   toolName: string,
-):
-  | {
-      rejectedFlag?: string;
-      rejectedFlags?: readonly string[];
-      toolName: string;
-    }
-  | undefined {
+  schema?: JsonObjectSchema,
+): ValidationFailureEnrichment | undefined {
   // Apply/dryRun contradiction surface — both flags are rejected.
   if (validation.startsWith(APPLY_DRYRUN_CONTRADICTION_PREFIX)) {
     return {
+      kind: "conflicting-write-flags",
       rejectedFlag: "apply",
       rejectedFlags: ["apply", "dryRun"],
       toolName,
@@ -708,12 +755,28 @@ export function enrichmentForValidationMessage(
   // `rejectedFlag`, no tool-aware remediation), which AI consumers running
   // inside OpenCode Code Mode experience as the opaque
   // `Error { str: "[object Object]" }` flattening. Surfacing the missing
-  // parameter as the `rejectedFlag` lets a consumer self-correct in one
-  // turn and matches the `#757 C4` envelope contract the rest of the
-  // tool surface already promises.
-  const requiredMatch = /^([a-zA-Z][a-zA-Z0-9_]*)\s+is required\.$/.exec(validation);
+  // parameter as `missingParam` keeps the failure class honest: callers
+  // must add this field, not remove it as they would a rejected flag.
+  const requiredMatch =
+    /^([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*|\[\d+\])*)\s+is required\.$/.exec(
+      validation,
+    );
   if (requiredMatch !== null) {
-    return { rejectedFlag: requiredMatch[1], toolName };
+    const missingParam = requiredMatch[1];
+    if (missingParam === undefined) return undefined;
+    const activeSchema = schema ?? MCP_TOOL_SCHEMAS[toolName];
+    const parameterDescription = schemaPropertyAtPath(
+      activeSchema,
+      missingParam,
+    )?.description?.trim();
+    return {
+      kind: "missing-required",
+      missingParam,
+      ...(parameterDescription === undefined || parameterDescription.length === 0
+        ? {}
+        : { parameterDescription }),
+      toolName,
+    };
   }
   // Legacy single-flag rejection shape (#757 C4).
   const flagMatch = /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
@@ -721,7 +784,11 @@ export function enrichmentForValidationMessage(
   );
   const rejectedFlag = flagMatch?.[1] ?? flagMatch?.[2];
   if (rejectedFlag !== undefined) {
-    return { rejectedFlag, toolName };
+    return {
+      kind: isWriteFlag(toolName, rejectedFlag) ? "rejected-write-flag" : "unknown-param",
+      rejectedFlag,
+      toolName,
+    };
   }
   return undefined;
 }
@@ -738,6 +805,12 @@ export function invalidInput(
   message: string,
   remediation?: string,
   enrichment?: {
+    /** Explicit validation failure class; never infer required from rejection fields. */
+    kind?: ValidationFailureKind;
+    /** Required schema parameter omitted by the caller. */
+    missingParam?: string;
+    /** Schema description for the missing parameter, when declared. */
+    parameterDescription?: string;
     /** Flag the caller passed that was rejected. Pinpoint for the consumer. */
     rejectedFlag?: string;
     /**
@@ -760,19 +833,68 @@ export function invalidInput(
       remediation ??
       "Check the tool schema and replace unsupported or missing fields before retrying.",
   };
+  if (enrichment?.missingParam !== undefined || enrichment?.kind === "missing-required") {
+    if (enrichment.missingParam !== undefined) {
+      error.missingParam = enrichment.missingParam;
+      error.remediation =
+        remediation ??
+        missingParameterRemediation({
+          missingParam: enrichment.missingParam,
+          parameterDescription: enrichment.parameterDescription,
+          toolName: enrichment.toolName,
+        });
+    }
+    return withSchemaVersion({
+      content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
+      isError: true,
+      ok: false,
+      error: applyUniformEnvelope(error, options),
+    });
+  }
   if (enrichment?.rejectedFlag !== undefined) {
     error.rejectedFlag = enrichment.rejectedFlag;
     if (enrichment.rejectedFlags !== undefined && enrichment.rejectedFlags.length > 0) {
       error.rejectedFlags = enrichment.rejectedFlags;
     }
-    // Auto-derive the tool's actual commit flag from the registry so
-    // the structured envelope is always honest about what the tool
-    // accepts. `none` means the registry has no entry for the tool
-    // (and thus the caller is misrouted).
     if (enrichment.toolName !== undefined) {
+      const failureKind =
+        enrichment.kind ??
+        (isWriteFlag(enrichment.toolName, enrichment.rejectedFlag)
+          ? "rejected-write-flag"
+          : "unknown-param");
+      const guidance =
+        remediation ??
+        (enrichment.toolName === "form_set_property" && enrichment.rejectedFlag === "propertyName"
+          ? "Check the tool schema: form_set_property's schema requires `property` (single string token), not `propertyName`."
+          : enrichment.rejectedFlags !== undefined && enrichment.rejectedFlags.length > 1
+            ? `${enrichment.toolName} does not accept conflicting write-intent flags "${enrichment.rejectedFlags.join(", ")}" simultaneously.`
+            : `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`);
+
+      if (failureKind === "unknown-param") {
+        error.remediation = guidance;
+        return withSchemaVersion({
+          content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
+          isError: true,
+          ok: false,
+          error: applyUniformEnvelope(error, options),
+        });
+      }
+
+      // Commit metadata only belongs to write-flag failures.
       const commitFlag = commitFlagFor(enrichment.toolName);
       const noWriteAlias = noWriteAliasFor(enrichment.toolName);
       error.toolCommitFlag = commitFlag;
+      // A specific remediation is already actionable and authoritative.
+      // Preserve it verbatim after attaching write-flag metadata.
+      if (remediation !== undefined) {
+        error.remediation = remediation;
+        return withSchemaVersion({
+          content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
+          isError: true,
+          ok: false,
+          error: applyUniformEnvelope(error, options),
+        });
+      }
       // Always enrich the remediation with tool-aware guidance so
       // consumers that hit the schema rejection know what to do.
       // Three flavors:
@@ -784,15 +906,6 @@ export function invalidInput(
       //   3. The registry has no record (anonymous tool) → fall back
       //      to the message verbatim.
       const rejectedList = enrichment.rejectedFlags ?? [enrichment.rejectedFlag];
-      const guidance =
-        remediation ??
-        (enrichment.toolName === "form_set_property" && enrichment.rejectedFlag === "propertyName"
-          ? "Check the tool schema: form_set_property's schema requires `property` (single string token), not `propertyName`."
-          : rejectedList.length > 1
-            ? `${enrichment.toolName} does not accept conflicting write-intent flags "${rejectedList.join(", ")}" simultaneously.`
-            : commitFlag === "dryRun"
-              ? `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}". The canonical commit signal for this tool is "${commitFlag}".`
-              : `${enrichment.toolName} does not accept "${enrichment.rejectedFlag}".`);
       if (noWriteAlias === null) {
         // No-write default: the tool never writes (or never accepts a
         // no-write knob). If the rejected flag IS the commit flag,
@@ -1008,7 +1121,7 @@ export async function handleValidatedMcpWrite<TData>(
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     if (toolName !== undefined) {
-      const enrichment = enrichmentForValidationMessage(validation, toolName);
+      const enrichment = enrichmentForValidationMessage(validation, toolName, schema);
       if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     }
     return invalidInput(validation);
