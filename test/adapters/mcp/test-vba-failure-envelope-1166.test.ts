@@ -40,8 +40,12 @@
 
 import { describe, expect, it } from "vitest";
 import { translateCoreResultToMcpContent } from "../../../src/adapters/mcp/result-translation";
-import { createDysflowError, failureResult, successResult } from "../../../src/core/contracts/index";
 import type { OperationResult } from "../../../src/core/contracts/index";
+import {
+  createDysflowError,
+  failureResult,
+  successResult,
+} from "../../../src/core/contracts/index";
 
 type TestFailureDetail = {
   procedure?: string;
@@ -263,7 +267,9 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
           payload: { ok: false, error: "boom" },
         },
       ];
-      const translated = translateCoreResultToMcpContent(makeVbaTestsFailedResult(failures, results));
+      const translated = translateCoreResultToMcpContent(
+        makeVbaTestsFailedResult(failures, results),
+      );
       const details = translated.error?.details as TestFailureDetails | undefined;
       expect(details?.failedCount).toBe(1);
       expect(details?.failures).toHaveLength(1);
@@ -297,7 +303,9 @@ describe("#1166 — test_vba failure envelope is reachable without parsing error
           payload: undefined,
         },
       ];
-      const translated = translateCoreResultToMcpContent(makeVbaTestsFailedResult(failures, results));
+      const translated = translateCoreResultToMcpContent(
+        makeVbaTestsFailedResult(failures, results),
+      );
       const details = translated.error?.details as TestFailureDetails | undefined;
       assertFullFailureDetail(details?.failures[0], {
         procedure: "Test_Edge",
