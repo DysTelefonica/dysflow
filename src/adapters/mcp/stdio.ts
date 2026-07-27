@@ -58,6 +58,7 @@ import {
 } from "./stdio-wrappers.js";
 import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool } from "./tools.js";
 import type { McpToolContext } from "./types.js";
+import { unknownToolResult } from "./unknown-tool-result.js";
 
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
@@ -265,13 +266,7 @@ export async function startWithSdkServer(
     const { name, arguments: args, _meta } = request.params;
     const tool = toolMap.get(name);
     if (tool === undefined) {
-      // Issue #1168 — stamp the schemaVersion discriminator even on the
-      // fallback "tool not found" envelope so consumers get a uniform shape.
-      return withSchemaVersion({
-        content: [{ type: "text" as const, text: `MCP_TOOL_ERROR: Tool not found: ${name}` }],
-        isError: true,
-        ok: false,
-      });
+      return unknownToolResult(name, tools);
     }
 
     const progressToken = _meta?.progressToken;

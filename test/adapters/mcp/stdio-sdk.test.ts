@@ -49,6 +49,27 @@ async function createSdkTestHarness(tools: DysflowMcpTool[]): Promise<{
   return { client, close };
 }
 
+type UnknownToolError = {
+  code?: string;
+  errorCode?: string;
+  message?: string;
+  errorMessage?: string;
+  attemptedToolName?: string;
+  suggestedToolName?: string;
+  supersededBy?: string;
+  remediation?: string;
+  diagnostics?: readonly {
+    code?: string;
+    severity?: string;
+    message?: string;
+    remediation?: unknown;
+  }[];
+};
+
+function readUnknownToolError(result: unknown): UnknownToolError | undefined {
+  return (result as { error?: UnknownToolError }).error;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Behavior 1 — tools/list returns only non-hidden tools
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,13 +193,109 @@ describe("SDK path — error sanitization", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("SDK path — unknown tool", () => {
-  it("returns isError:true when calling a tool that does not exist", async () => {
+  it("offers a close advertised name without executing it or leaking argument values", async () => {
+    let invocationCount = 0;
+    const tools: DysflowMcpTool[] = [
+      {
+        name: "import_modules",
+        description: "Imports selected modules",
+        handler: async () => {
+          invocationCount++;
+          return { content: [{ type: "text", text: "executed" }], isError: false };
+        },
+      },
+    ];
+    const { client, close } = await createSdkTestHarness(tools);
+    try {
+      const result = await client.callTool({
+        name: "import_module",
+        arguments: { sql: "SELECT * FROM SecretTable", password: "do-not-leak" },
+      });
+      expect(result.isError).toBe(true);
+      expect(invocationCount).toBe(0);
+      expect(result).toMatchObject({ schemaVersion: "dysflow.result/v1", ok: false });
+      expect(readUnknownToolError(result)).toMatchObject({
+        code: "MCP_TOOL_NOT_FOUND",
+        errorCode: "MCP_TOOL_NOT_FOUND",
+        attemptedToolName: "import_module",
+        suggestedToolName: "import_modules",
+        remediation: expect.stringContaining('Did you mean "import_modules"?'),
+        diagnostics: [
+          expect.objectContaining({
+            code: "MCP_TOOL_NOT_FOUND",
+            severity: "error",
+            remediation: expect.anything(),
+          }),
+        ],
+      });
+      expect(JSON.stringify(result)).not.toContain("SecretTable");
+      expect(JSON.stringify(result)).not.toContain("do-not-leak");
+    } finally {
+      await close();
+    }
+  });
+
+  it("bounds suggestion work for an arbitrarily long unknown name", async () => {
+    const tools: DysflowMcpTool[] = Array.from({ length: 64 }, (_, index) => ({
+      name: `candidate_tool_${index}`,
+      description: "Synthetic advertised tool",
+      handler: async () => ({ content: [{ type: "text", text: "executed" }], isError: false }),
+    }));
+    const { client, close } = await createSdkTestHarness(tools);
+    try {
+      const result = await client.callTool({ name: "x".repeat(100_000), arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(readUnknownToolError(result)?.attemptedToolName).toHaveLength(100_000);
+      expect(readUnknownToolError(result)?.suggestedToolName).toBeUndefined();
+    } finally {
+      await close();
+    }
+  }, 500);
+
+  it.each([
+    "query_sql",
+    "exec_sql",
+  ])("reports the canonical replacement for retired name %s", async (retiredName) => {
     const { client, close } = await createSdkTestHarness([]);
     try {
-      const result = await client.callTool({ name: "nonexistent_tool", arguments: {} });
+      const result = await client.callTool({ name: retiredName, arguments: {} });
       expect(result.isError).toBe(true);
-      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
-      expect(text).toContain("nonexistent_tool");
+      expect(readUnknownToolError(result)).toMatchObject({
+        code: "MCP_TOOL_NOT_FOUND",
+        attemptedToolName: retiredName,
+        supersededBy: "query_execute",
+        remediation: expect.stringContaining('Use "query_execute"'),
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it("points unmatched names to compact schema discovery and describe_tool", async () => {
+    const tools: DysflowMcpTool[] = [
+      {
+        name: "schema",
+        description: "Lists contracts",
+        handler: async () => ({ content: [{ type: "text", text: "schema" }], isError: false }),
+      },
+      {
+        name: "describe_tool",
+        description: "Describes one contract",
+        handler: async () => ({ content: [{ type: "text", text: "describe" }], isError: false }),
+      },
+    ];
+    const { client, close } = await createSdkTestHarness(tools);
+    try {
+      const result = await client.callTool({ name: "launch_rocket", arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(readUnknownToolError(result)).toMatchObject({
+        code: "MCP_TOOL_NOT_FOUND",
+        attemptedToolName: "launch_rocket",
+        remediation: expect.stringMatching(/schema\(\{ view: ['"]compact['"] \}\)/),
+      });
+      expect(readUnknownToolError(result)?.remediation).toContain("describe_tool({ name:");
+      expect(readUnknownToolError(result)?.suggestedToolName).toBeUndefined();
+      expect(readUnknownToolError(result)?.supersededBy).toBeUndefined();
     } finally {
       await close();
     }
