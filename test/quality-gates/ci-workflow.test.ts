@@ -49,7 +49,13 @@ function workflowJobBlock(workflow: string, job: string): string {
   return (end < 0 ? rest : rest.slice(0, end)).join("\n");
 }
 
-/** Every Node major listed in a job's `strategy.matrix.node-version`. */
+function toNodeMajors(entries: readonly string[]): number[] {
+  return entries
+    .map((entry) => Number.parseInt(entry.trim().replace(/^["']|["']$/g, ""), 10))
+    .filter((major) => Number.isInteger(major));
+}
+
+/** Every Node major listed in a job's *literal* `strategy.matrix.node-version`. */
 function matrixNodeMajors(jobBlock: string): number[] {
   const inline = /node-version:[ \t]*\[([^\]]*)\]/.exec(jobBlock);
   const listed = /node-version:[ \t]*\n((?:[ \t]*-[ \t]*\S+\n?)+)/.exec(jobBlock);
@@ -57,9 +63,48 @@ function matrixNodeMajors(jobBlock: string): number[] {
     inline?.[1] !== undefined
       ? inline[1].split(",")
       : [...(listed?.[1] ?? "").matchAll(/-[ \t]*(\S+)/g)].map((match) => match[1] ?? "");
-  return entries
-    .map((entry) => Number.parseInt(entry.trim().replace(/^["']|["']$/g, ""), 10))
-    .filter((major) => Number.isInteger(major));
+  return toNodeMajors(entries);
+}
+
+/**
+ * The Node majors a job's matrix runs, split by whether the pull-request event
+ * is what selects them.
+ *
+ * A matrix may be a literal array — every event runs the same majors — or an
+ * expression that widens the matrix for pull requests and narrows it elsewhere
+ * (a push to main re-verifying a tree a pull request already proved). The
+ * support claim in `engines.node` must be verified on the pull-request path;
+ * `everyEvent` exists so a narrowed arm still cannot smuggle in a major the
+ * package never claimed.
+ */
+interface MatrixNodeCoverage {
+  readonly pullRequest: number[];
+  readonly everyEvent: number[];
+}
+
+function matrixNodeCoverage(jobBlock: string): MatrixNodeCoverage {
+  const expression = /node-version:[ \t]*\$\{\{(.+)\}\}/.exec(jobBlock)?.[1];
+  if (expression === undefined) {
+    const literal = matrixNodeMajors(jobBlock);
+    return { pullRequest: literal, everyEvent: literal };
+  }
+  if (!expression.includes("github.event_name == 'pull_request'")) {
+    throw new Error(
+      `the Quality gates matrix is conditional on something other than the pull_request event: ${expression.trim()}`,
+    );
+  }
+  // `<cond> && '<a>' || '<b>'` — the first quoted array is the arm the
+  // condition selects, i.e. the pull-request matrix.
+  const arms = [...expression.matchAll(/'\[([^\]]*)\]'/g)].map((match) =>
+    toNodeMajors((match[1] ?? "").split(",")),
+  );
+  const pullRequest = arms[0];
+  if (pullRequest === undefined) {
+    throw new Error(
+      `the Quality gates matrix expression declares no Node array: ${expression.trim()}`,
+    );
+  }
+  return { pullRequest, everyEvent: arms.flat() };
 }
 
 /**
@@ -162,31 +207,68 @@ describe("repository quality gates", () => {
     // Both halves are derived, never restated: widening `engines.node` without a
     // matching matrix entry — or matrixing a Node the package never claimed —
     // fails here instead of shipping an unverified support claim.
+    //
+    // The claim is verified on the pull-request path, the event every change
+    // passes through. A narrower arm for other events is allowed (a push to
+    // main re-verifying an already-proven tree) but may never reach a major
+    // outside the declared range.
     const workflow = await readText(".github/workflows/ci.yml");
     const declared =
       (JSON.parse(await readText("package.json")) as { engines?: Record<string, string> }).engines
         ?.node ?? "";
     const supported = enginesNodeBoundaries(declared);
     const quality = workflowJobBlock(workflow, "quality");
-    const matrix = matrixNodeMajors(quality);
+    const matrix = matrixNodeCoverage(quality);
 
     expect(quality, "the Quality gates job must take its Node version from the matrix").toMatch(
       /node-version:\s*\$\{\{\s*matrix\.node-version\s*\}\}/,
     );
     expect(
-      matrix,
-      `engines.node "${declared}" claims Node ${supported.floor}, which the Quality gates matrix never runs`,
+      matrix.pullRequest,
+      `engines.node "${declared}" claims Node ${supported.floor}, which the Quality gates matrix never runs on a pull request`,
     ).toContain(supported.floor);
     expect(
-      matrix,
-      `engines.node "${declared}" claims Node up to ${supported.ceiling}, which the Quality gates matrix never runs`,
+      matrix.pullRequest,
+      `engines.node "${declared}" claims Node up to ${supported.ceiling}, which the Quality gates matrix never runs on a pull request`,
     ).toContain(supported.ceiling);
-    for (const major of matrix) {
+    for (const major of matrix.everyEvent) {
       expect(
         major >= supported.floor && major <= supported.ceiling,
         `the Quality gates matrix runs Node ${major}, which engines.node "${declared}" does not claim to support`,
       ).toBe(true);
     }
+  });
+
+  it("runs the test suite exactly once per Node leg (#1188)", async () => {
+    // `pnpm coverage` is `vitest run --coverage`: the same suite `pnpm test`
+    // runs, plus instrumentation and thresholds. Running both unconditionally
+    // in one job doubled the heaviest step for no extra signal. Each leg must
+    // therefore reach exactly one of them, selected by a matrix condition.
+    const workflow = await readText(".github/workflows/ci.yml");
+    const quality = workflowJobBlock(workflow, "quality");
+    const steps = quality.split(/^ {6}- name: /m).slice(1);
+
+    for (const command of ["pnpm test", "pnpm coverage"]) {
+      const step = steps.find((body) => new RegExp(`run: ${command}\\s*$`, "m").test(body));
+      expect(step, `the Quality gates job never runs \`${command}\``).toBeDefined();
+      expect(
+        step,
+        `\`${command}\` runs on every Node leg; it must be selected by a matrix condition so the suite is not run twice per leg`,
+      ).toMatch(/^\s*if: matrix\.node-version [!=]= \d+$/m);
+    }
+  });
+
+  it("cancels superseded pull-request runs but never a push to main (#1188)", async () => {
+    // A superseded pull-request run validates a commit that will never merge.
+    // A push to main is different: scripts/release-prepare.ps1 polls the CI
+    // conclusion for one release SHA and refuses to tag on anything but
+    // `success`, so cancelling a main run would abort a legitimate release.
+    const workflow = await readText(".github/workflows/ci.yml");
+
+    expect(workflow, "CI declares no concurrency group").toMatch(/^concurrency:$/m);
+    expect(workflow).toMatch(
+      /^\s*cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m,
+    );
   });
 
   it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {

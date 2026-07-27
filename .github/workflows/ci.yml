@@ -6,18 +6,34 @@ on:
     branches:
       - main
 
+# A superseded pull-request run proves nothing: the commit it validated will
+# never be merged. Cancelling it frees a Windows runner (billed at 2x) that
+# would otherwise finish a ~13-minute gate nobody reads. Pushes to main are
+# NOT cancelled — scripts/release-prepare.ps1 polls the CI conclusion for one
+# specific release SHA and refuses to tag on anything but `success`, so a
+# cancelled main run would abort a legitimate release.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     name: Quality gates
     runs-on: windows-latest
-    # The boundaries of the `engines.node` range declared in package.json. A
-    # claimed Node major that CI never runs is supported on paper only, so
-    # test/quality-gates/ci-workflow.test.ts derives both sides and fails when
-    # they disagree.
+    # Pull requests exercise every Node major `engines.node` claims — a claimed
+    # major that CI never runs is supported on paper only. A push to main
+    # re-verifies the merged tree on the floor version alone, because the pull
+    # request that produced that tree already proved the ceiling; re-running it
+    # buys a second opinion on bytes that did not change.
+    #
+    # The ternary operates on the JSON *strings* and wraps the result in
+    # fromJSON, so truthiness is decided on a non-empty string rather than on
+    # an array. test/quality-gates/ci-workflow.test.ts derives both arms from
+    # engines.node and fails when they disagree.
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 26]
+        node-version: ${{ fromJSON(github.event_name == 'pull_request' && '[20, 26]' || '[20]') }}
 
     steps:
       - name: Checkout
@@ -46,17 +62,24 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # `pnpm coverage` is `vitest run --coverage`: the same suite `pnpm test`
+      # runs, plus instrumentation and the thresholds in vitest.config.ts. It
+      # is a strict superset — if coverage passes, the tests passed. Running
+      # both in one job spent ~650s where ~340s does the job, and the coverage
+      # thresholds are Node-independent, so exactly one leg carries them.
       - name: Test
+        if: matrix.node-version != 20
         run: pnpm test
+
+      - name: Test with coverage
+        if: matrix.node-version == 20
+        run: pnpm coverage
 
       - name: Public test suite (#979)
         run: pnpm test:public
 
       - name: Build
         run: pnpm build
-
-      - name: Coverage
-        run: pnpm coverage
 
   windows-integration-smoke:
     name: Windows PowerShell/Access smoke
