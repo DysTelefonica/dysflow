@@ -28,7 +28,7 @@
 ### Changed
 
 - `test_vba` commits with `apply` like every other write-class tool. The tool-wide contract is now uniform: `apply: true` commits, `apply: false` plans. The former `dryRun`-polarity exception is gone, and the doctor check that documented it no longer carries an exemption.
-- `diagnostics[].remediation` is a discriminated object rather than free text, so a consumer can act on the remediation without parsing prose.
+- A config-migration diagnostic carries its `remediation` as a discriminated object (`kind: "config-migration"`) exposing the offending field, its replacement, and the rationale as data, so a consumer can act on it without parsing prose. The existing plain-string and descriptive remediation shapes are unchanged.
 - `get_capabilities.projectConfig.cwd` reflects the active git worktree toplevel instead of the process spawn cwd. When the cwd is not inside a worktree, the previous behavior is preserved as a fallback and reported through a typed `CWD_NOT_IN_WORKTREE` warning; when the auto-detected worktree's `projectId` disagrees with the request, a typed `TARGET_MISMATCH_WARNING` accompanies the existing `PROJECT_ID_MISMATCH` error.
 
 ### Fixed
@@ -43,7 +43,7 @@
 
 - `test_vba` callers passing `dryRun` should move to `apply`. The legacy flag still resolves, but `apply` is the canonical commit signal the whole tool surface now reports through `canonicalCommitFlag`.
 - Consumers reading `projectConfig.cwd` outside the per-tool gate now see the worktree root rather than the spawn cwd. Pass an explicit `cwd` per call when targeting a sibling worktree.
-- Consumers that read `diagnostics[].remediation` as a string must read the discriminated object's fields instead.
+- `diagnostics[].remediation` may now be a discriminated object as well as a string. Consumers that assumed a string should branch on the shape, or render any shape through the exported `remediationText()` helper.
 
 ## [v2.25.0] - 2026-07-26
 
