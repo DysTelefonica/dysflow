@@ -36,6 +36,7 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
+import { withResolvedDestinationRoot } from "./destination-root-override.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import {
   runSyncBinary,
@@ -628,7 +629,20 @@ export class VbaSyncAdapter implements VbaSyncPort {
     if ("error" in result) {
       return failureResult(result.error, { durationMs });
     }
-    return successResult(toSyncBinaryResponse(result), { durationMs });
+    // Issue #1169 — stamp the success envelope with the EFFECTIVE
+    // destinationRoot + provenance tag. The orchestrator's own
+    // `resolveExecutionTarget` already honors `params.destinationRoot`
+    // as a precedence-1 override; the helper just classifies the
+    // resolved value so a consumer can audit the path without
+    // re-running the resolver. Applies to `sync_binary` and to the
+    // inner import_modules / export_modules calls the orchestrator
+    // dispatches.
+    const response = toSyncBinaryResponse(result);
+    return withResolvedDestinationRoot(
+      successResult(response, { durationMs }),
+      params,
+      this,
+    );
   }
 
   /**
