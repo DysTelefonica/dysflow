@@ -24,7 +24,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { nodeFormFileSystem } from "../../../src/adapters/services/node-form-file-system";
 import {
   type VbaManagerExecutor,
   VbaSyncAdapter,

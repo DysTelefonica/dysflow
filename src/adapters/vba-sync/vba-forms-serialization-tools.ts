@@ -201,11 +201,7 @@ export async function serializeForm(
     (stringValue(params.destinationRoot) !== undefined ||
       stringValue(params.projectId) !== undefined)
   ) {
-    return withResolvedDestinationRoot(
-      successResult(data),
-      params,
-      orchestrator,
-    );
+    return withResolvedDestinationRoot(successResult(data), params, orchestrator);
   }
   return successResult(data);
 }

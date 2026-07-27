@@ -36,7 +36,10 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
-import { withResolvedDestinationRoot } from "./destination-root-override.js";
+import {
+  type DestinationRootOrchestratorLike,
+  withResolvedDestinationRoot,
+} from "./destination-root-override.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import {
   runSyncBinary,
@@ -638,10 +641,13 @@ export class VbaSyncAdapter implements VbaSyncPort {
     // inner import_modules / export_modules calls the orchestrator
     // dispatches.
     const response = toSyncBinaryResponse(result);
+    // Cast `this` to the helper's structural type. `resolveExecutionTarget`
+    // is private on VbaSyncAdapter but the helper only needs the public
+    // shape; the cast keeps the public API surface stable.
     return withResolvedDestinationRoot(
       successResult(response, { durationMs }),
       params,
-      this,
+      this as unknown as DestinationRootOrchestratorLike,
     );
   }
 

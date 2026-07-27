@@ -27,12 +27,7 @@ import { stringValue } from "../../core/utils/index.js";
  * Stable set of provenance tags. The contract is additive: future
  * resolutions extend the union but never rename an existing member.
  */
-export type DestinationRootSource =
-  | "override"
-  | "config"
-  | "projectRoot"
-  | "cwd"
-  | "default";
+export type DestinationRootSource = "override" | "config" | "projectRoot" | "cwd" | "default";
 
 export type DestinationRootResolution = {
   resolved: string;
@@ -74,9 +69,7 @@ export type DestinationRootOrchestratorLike = {
   env?: Record<string, string | undefined>;
   cwd: string;
   destinationRoot?: string;
-  resolveExecutionTarget(
-    params: Record<string, unknown>,
-  ): Promise<OperationResult<unknown>>;
+  resolveExecutionTarget(params: Record<string, unknown>): Promise<OperationResult<unknown>>;
 };
 
 type ResolvedTargetShape = {
@@ -111,7 +104,7 @@ export async function resolveDestinationRoot(
     return { resolved: override, source: "override" };
   }
   const target = await orchestrator.resolveExecutionTarget(params);
-  if (!target || !target.ok) {
+  if (!target?.ok) {
     // Resolution failed or the orchestrator returned an undefined /
     // non-OperationResult value (e.g. a vi.fn() stub in unit tests).
     // Report a stable sentinel so the consumer never has to null-check

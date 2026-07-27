@@ -880,7 +880,7 @@ export class VbaModulesAdapter {
       }
     }
 
-    const resultWithPrune =
+    const resultWithPrune: OperationResult<unknown> =
       toolName === "import_all" && truthy(params.prune)
         ? {
             ...importResult,
@@ -898,21 +898,16 @@ export class VbaModulesAdapter {
     //     readers.
     let result: OperationResult<unknown> = resultWithPrune;
     if (deprecationNotice !== undefined) {
-      if (result.ok) {
-        result = {
-          ...result,
-          diagnostics: [...result.diagnostics, deprecationNotice.diagnostic],
-          metadata: mergeOperationMetadata(result.metadata, deprecationNotice.metadata),
-        };
-      } else {
-        // Failure envelope: surface the notice too so a consumer that
-        // bailed on the no-write run still sees the migration hint.
-        result = {
-          ...result,
-          diagnostics: [...result.diagnostics, deprecationNotice.diagnostic],
-          metadata: mergeOperationMetadata(result.metadata, deprecationNotice.metadata),
-        };
-      }
+      // Cast to widen the discriminated union to the shared shape so
+      // both branches can spread `diagnostics` + `metadata` without
+      // TypeScript collapsing the let-binding to `never` after the
+      // `result.ok` narrowing.
+      const stamped: OperationResult<unknown> = {
+        ...(result as OperationResult<unknown>),
+        diagnostics: [...result.diagnostics, deprecationNotice.diagnostic],
+        metadata: mergeOperationMetadata(result.metadata, deprecationNotice.metadata),
+      };
+      result = stamped;
     }
 
     // Issue #1169 — stamp the success envelope with the EFFECTIVE
