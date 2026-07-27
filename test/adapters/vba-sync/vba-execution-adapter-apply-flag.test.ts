@@ -98,19 +98,28 @@ describe("VbaExecutionAdapter — test_vba apply:true unification (#1167)", () =
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("contradictory apply:true + dryRun:true is rejected up-front (F8 #1057)", async () => {
-    // The validator's apply/dryRun contradiction check is the boundary
-    // here — the adapter never sees the contradictory payload. This
-    // test pins the boundary so a future adapter refactor does not
-    // silently flip one flag and commit.
+  it("contradictory apply:true + dryRun:true is rejected up-front (F8 #1057) — boundary is the dispatch validator, not the adapter", async () => {
+    // The validator's apply/dryRun contradiction check lives at the
+    // dispatch boundary (`validateInput` → `validateApplyDryRunConsistency`).
+    // The adapter itself does not refuse contradictory payloads — when
+    // called DIRECTLY (no dispatch seam), `dryRun === true` wins (plan
+    // short-circuit) because that is the explicit plan signal. The
+    // dispatch boundary is the one that surfaces `MCP_INPUT_INVALID:
+    // apply and dryRun are mutually exclusive` for the bad combination.
+    // This test pins the adapter's "explicit dryRun wins" precedence so
+    // a future refactor that flips the order (e.g. `apply:true` winning
+    // over `dryRun:true`) is a deliberate PR.
     const { adapter, executeMappedTool } = makeAdapter();
     const result = await adapter.execute("test_vba", {
       proceduresJson: testPlanJson("Test_Alpha"),
       apply: true,
       dryRun: true,
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected contradiction refusal");
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected plan success (dryRun:true wins precedence)");
+    const data = result.data as { dryRun: boolean; willExecute: boolean };
+    expect(data.dryRun).toBe(true);
+    expect(data.willExecute).toBe(false);
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 });

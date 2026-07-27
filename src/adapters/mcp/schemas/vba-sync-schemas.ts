@@ -542,6 +542,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // consumers had to commit real test execution before they could review
       // the plan. Same shape as the `run_vba` schema.
       dryRun: SCHEMA_PROPS.dryRun,
+      // Issue #1167 — `apply:true` is the canonical commit signal after
+      // the unification. The adapter honors BOTH `apply` (canonical) and
+      // `dryRun` (legacy alias) — see `VbaExecutionAdapter.executeTestVba`.
+      // The dispatch boundary accepts either form; the validator's
+      // apply/dryRun contradiction check (F8 #1057) fires when BOTH are
+      // present and agree (both true or both false).
+      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

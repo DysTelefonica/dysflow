@@ -486,7 +486,18 @@ End Function
     // `dryRun === true` short-circuits here. Direct adapter callers (no
     // dispatch seam) bypass the policy default and reach the runner
     // unless they pass `dryRun: true` explicitly.
-    if (params.dryRun === true) {
+    //
+    // Issue #1167 — `apply: false` is also a plan signal (the canonical
+    // form of the polarity after the test_vba apply-flag unification).
+    // The dispatch seam accepts `apply:true` (commit) / `apply:false`
+    // (plan) / `dryRun:true` (plan, legacy alias) / `dryRun:false`
+    // (commit, legacy alias) — the validator's apply/dryRun
+    // contradiction check (F8 #1057) catches the bad combination
+    // BEFORE this method sees it, so we only need to recognize the
+    // plan-shape inputs here. `apply:true` and `dryRun:false` both fall
+    // through to the runner; `apply:false` and `dryRun:true` both
+    // short-circuit to the plan shape.
+    if (params.dryRun === true || params.apply === false) {
       return successResult({
         dryRun: true,
         willExecute: false,
@@ -548,15 +559,22 @@ End Function
     // #674 AllowedProcedures contract.
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
-      // Issue #785 (v2.1.1, capa 3) — the gate's `params.dryRun !== true`
-      // check is the inverse of the dispatcher-seam's "plan mode" signal.
-      // When the dispatch seam injected `dryRun: false` (developer + routine
-      // dev-write), `params.dryRun` is `false` here and this branch fires:
-      // the gate refuses the execute-mode call when the allowlist is missing,
-      // even when the operator enabled developer mode opt-in. The MCP contract
-      // is "no allowlist = no plan-less execution"; `dryRun: true` (dispatcher
-      // or explicit) bypasses this refusal because the call is in plan mode.
-      if (params.dryRun !== true) {
+      // Issue #785 (v2.1.1, capa 3) — the gate's plan-mode check is the
+      // inverse of the dispatcher-seam's "execute mode" signal. When the
+      // dispatch seam injected `dryRun: false` (developer + routine
+      // dev-write), `params.dryRun` is `false` here and this branch
+      // fires: the gate refuses the execute-mode call when the
+      // allowlist is missing, even when the operator enabled developer
+      // mode opt-in. The MCP contract is "no allowlist = no plan-less
+      // execution"; `dryRun: true` (legacy alias) AND `apply: false`
+      // (canonical, post-#1167) bypass this refusal because the call is
+      // in plan mode.
+      //
+      // Issue #1167 — `apply: false` is the canonical plan signal after
+      // the test_vba apply-flag unification. The gate recognizes the
+      // same polarity as the early short-circuit above: `params.dryRun
+      // === true || params.apply === false` is plan mode.
+      if (params.dryRun !== true && params.apply !== false) {
         // F23 — best-effort config-path lookup so the refusal envelope names
         // the actual `.dysflow/project.json` the resolver was consulting.
         // When the lookup fails (no project config on disk, no projectId in
@@ -575,10 +593,10 @@ End Function
             `Refusing to execute test_vba plan [${procedures.join(", ")}]: ` +
               `project config declares no allowedProcedures allowlist. ` +
               `Declare a non-empty allowedProcedures in .dysflow/project.json ` +
-              `(re-read per call — no restart needed), or pass dryRun:true to plan without executing.`,
+              `(re-read per call — no restart needed), or pass apply:false (or dryRun:true) to plan without executing.`,
             {
               remediation:
-                "Declare a non-empty allowedProcedures in .dysflow/project.json, or pass dryRun:true.",
+                "Declare a non-empty allowedProcedures in .dysflow/project.json, or pass apply:false (or dryRun:true).",
               details: {
                 // The `.dysflow/project.json` path the resolver was consulting
                 // (or `undefined` when no project config was found).
