@@ -16,6 +16,7 @@ import {
   PROJECT_IDENTITY_BLOCK,
   SCHEMA_PROPS,
   STRICT_CTX,
+  WRITE_INTENT_BLOCK,
 } from "../../../shared/validation/index.js";
 
 // Re-exports — types.
@@ -60,7 +61,7 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
     // PR1a (#621 F1) — explicit escape hatch for default-deny gate at the MCP
     // adapter. When the project config does not declare `allowedProcedures`,
     // the adapter refuses execution unless the caller passes `dryRun: true`.
-    dryRun: SCHEMA_PROPS.dryRun,
+    dryRun: WRITE_INTENT_BLOCK.dryRun,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
     timeoutMs: SCHEMA_PROPS.timeoutMs,
@@ -82,8 +83,7 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
       enum: ["read", "write"],
       description: "Execution mode: read or write.",
     },
-    dryRun: SCHEMA_PROPS.dryRun,
-    apply: SCHEMA_PROPS.apply,
+    ...WRITE_INTENT_BLOCK,
     // PR2 (#621 F1 / #6a) — modern/legacy alias parity for query execute.
     // The legacy `exec_sql` schema already declares allowTables/denyTables
     // and `scripts/dysflow-access-runner.ps1:1062-1072` enforces them.

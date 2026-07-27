@@ -7,6 +7,7 @@ import {
   type JsonSchemaProperty,
   SCHEMA_PROPS,
   STRICT_CTX,
+  WRITE_INTENT_BLOCK,
 } from "../../../shared/validation/index.js";
 import type { QueryToolName } from "../mcp-tool-registry.js";
 
@@ -69,8 +70,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       sql: SCHEMA_PROPS.sql,
       query: SCHEMA_PROPS.query,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,
       denyTables: SCHEMA_PROPS.denyTables,
@@ -85,8 +85,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       scriptPath: SCHEMA_PROPS.scriptPath,
       path: SCHEMA_PROPS.path,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,
       denyTables: SCHEMA_PROPS.denyTables,
@@ -103,8 +102,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       table: SCHEMA_PROPS.table,
       definition: SCHEMA_PROPS.definition,
       fields: SCHEMA_PROPS.fields,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
     },
   },
   drop_table: {
@@ -115,8 +113,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
     },
   },
   seed_fixture: {
@@ -128,8 +125,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
       rows: SCHEMA_PROPS.rows,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,
       denyTables: SCHEMA_PROPS.denyTables,
@@ -144,8 +140,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,
       denyTables: SCHEMA_PROPS.denyTables,
@@ -266,10 +261,9 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
         description:
           "Scope the link/relink/create operation to these backend table names. Omit to target all existing frontend links (relink-only) or all backend tables (create-or-relink).",
       } as JsonSchemaProperty,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 / #1073 — apply parity with relink_tables, localize_backend_links,
       // unlink_table. Apply takes precedence over dryRun per the dispatch resolver.
-      apply: SCHEMA_PROPS.apply,
     },
   },
   relink_tables: {
@@ -281,9 +275,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
       backendPath: SCHEMA_PROPS.backendPath,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
     },
   },
   localize_backend_links: {
@@ -293,9 +286,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...CTX_PROPS,
       ...FRONTEND_TARGET_OVERRIDE,
       backendPath: SCHEMA_PROPS.backendPath,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
     },
   },
   unlink_table: {
@@ -306,9 +298,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...FRONTEND_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
     },
     // Issue #1074 — declarative alias-group requirement for the table
     // identifier. The mapper previously read whichever key was present
@@ -328,9 +319,8 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       importPath: SCHEMA_PROPS.importPath,
       queryDefinitions: SCHEMA_PROPS.queryDefinitions,
       queries: SCHEMA_PROPS.queries,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
     },
   },
   compact_repair: {
@@ -348,8 +338,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
           "Database role to compact. Defaults to frontend. backend resolves to the configured backendPath. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.",
       } as JsonSchemaProperty,
       backupFirst: SCHEMA_PROPS.backupFirst,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
     },
   },
   relink_directory: {
@@ -360,8 +349,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       rootPath: SCHEMA_PROPS.rootPath,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       backup: SCHEMA_PROPS.backup,
       recursive: {
         type: "boolean",

@@ -7,6 +7,7 @@ import {
   type JsonSchemaProperty,
   SCHEMA_PROPS,
   STRICT_CTX,
+  WRITE_INTENT_BLOCK,
 } from "../../../shared/validation/index.js";
 import type { VbaSyncToolName } from "../mcp-tool-registry.js";
 
@@ -255,9 +256,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // MCP adapter (legacy alias of `dysflow_vba_execute`). When the project
       // config does not declare `allowedProcedures`, the adapter refuses
       // execution unless the caller passes `dryRun: true`.
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
@@ -310,12 +310,10 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // too. The historical `diff:true` alias is honored as a
       // deprecated no-write mapping by VbaModulesAdapter; the schema
       // accepts both flags.
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1057 (F8) — `diff` and `dryRun` are declared so the
       // adapter's no-write routing (#1055) is reachable through MCP:
       // `dryRun:true` ≡ `apply:false` (plan) on every write tool.
-      diff: SCHEMA_PROPS.diff,
-      dryRun: SCHEMA_PROPS.dryRun,
       mutateBinary: {
         type: "boolean",
         description:
@@ -355,16 +353,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       filter: SCHEMA_PROPS.filter,
-      diff: SCHEMA_PROPS.diff,
+      ...WRITE_INTENT_BLOCK,
       // Issue #757 (C1) — `apply:true` is the new commit signal. The
       // historical `diff:true` is preserved as a deprecated no-write
       // alias (see vba-modules-adapter.ts). The schema accepts both
       // flags; the adapter picks the right one.
-      apply: SCHEMA_PROPS.apply,
       // Issue #1057 (F8) — `dryRun` declared so the adapter's no-write
       // routing (#1055) is reachable through MCP: `dryRun:true` ≡
       // `apply:false` (plan) on every write tool.
-      dryRun: SCHEMA_PROPS.dryRun,
       prune: SCHEMA_PROPS.prune,
       exportPath: SCHEMA_PROPS.exportPath,
       // issue #752 — opt-in verbose flag.
@@ -392,7 +388,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       moduleNames: SCHEMA_PROPS.moduleNames,
       importMode: SCHEMA_PROPS.importMode,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1014 — write-tool convention parity. The description
       // template promises "apply:true or dryRun:false" as the commit
       // signal; the schema must declare the `apply` flag so a caller
@@ -400,7 +396,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // `MCP_INPUT_INVALID: apply is not allowed.` Apply takes
       // precedence over `dryRun` (resolver contract); the legacy
       // `dryRun:false` form continues to work unchanged.
-      apply: SCHEMA_PROPS.apply,
       // issue #752 — opt-in verbose flag. Adds per-module {source,
       // destination, truncated, mismatchReason} to each result entry so an AI
       // caller can detect silent truncation instead of trusting `status:ok`.
@@ -465,9 +460,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       importMode: SCHEMA_PROPS.importMode,
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
@@ -541,14 +535,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // rejected `dryRun:true` silently with "dryRun is not allowed" and
       // consumers had to commit real test execution before they could review
       // the plan. Same shape as the `run_vba` schema.
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1167 — `apply:true` is the canonical commit signal after
       // the unification. The adapter honors BOTH `apply` (canonical) and
       // `dryRun` (legacy alias) — see `VbaExecutionAdapter.executeTestVba`.
       // The dispatch boundary accepts either form; the validator's
       // apply/dryRun contradiction check (F8 #1057) fires when BOTH are
       // present and agree (both true or both false).
-      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -571,7 +564,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       strict: SCHEMA_PROPS.strict,
       moduleNames: SCHEMA_PROPS.moduleNames,
-      diff: SCHEMA_PROPS.diff,
+      diff: WRITE_INTENT_BLOCK.diff,
       // Issue #807 (Feature 3) — internal chunking and parallelism for
       // whole-project verify_code over a non-trivial list. Defaults preserve
       // the v2.3.x single-round-trip behavior: omit both chunkSize and
@@ -708,8 +701,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // is the preview escape hatch. Absent both -> safe-by-default plan
       // (POLICY_EXEMPT_TOOLS keeps developer mode from injecting dryRun:false
       // on plan-intended calls).
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       // Chunking - modules per inner dispatch chunk during apply:true.
       // The default is conservative (10) so a single Access COM failure
       // cannot abort a large sync; raise it for projects with verified
@@ -780,7 +772,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // the plan. Unlike `import_*`/`import_all` this is an EXPLICIT-only
       // flag — `delete_module` without `dryRun` keeps the legacy execute
       // path so production deletes don't accidentally dry-run.
-      dryRun: SCHEMA_PROPS.dryRun,
+      ...WRITE_INTENT_BLOCK,
       // Issue #1014 — write-tool convention parity. The description
       // template promises "apply:true or dryRun:false" as the commit
       // signal; the schema must declare the `apply` flag so a caller
@@ -788,7 +780,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // `MCP_INPUT_INVALID: apply is not allowed.` Apply takes
       // precedence over `dryRun` (resolver contract); the legacy
       // `dryRun:false` form continues to work unchanged.
-      apply: SCHEMA_PROPS.apply,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -810,7 +801,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       location: SCHEMA_PROPS.location,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -835,8 +826,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       kind: SCHEMA_PROPS.kind,
       name: SCHEMA_PROPS.name,
       replace: SCHEMA_PROPS.replace,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
     },
   },
   catalog_add_control: {
@@ -854,8 +844,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // DELTA-007 — dryRun/apply parity with generate_form. Both default-dry-run
       // semantics and apply wins; see vba-form-service.ts:catalogAddControl
       // and dispatch-factory.ts isFilesystemWrite branch.
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
     },
   },
   harvest_form_catalog: {
@@ -978,8 +967,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       type: SCHEMA_PROPS.type,
       targetSectionName: SCHEMA_PROPS.targetSectionName,
       properties: SCHEMA_PROPS.properties,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -997,8 +985,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       controlName: SCHEMA_PROPS.controlName,
       left: SCHEMA_PROPS.left,
       top: SCHEMA_PROPS.top,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1015,8 +1002,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       path: SCHEMA_PROPS.path,
       controlName: SCHEMA_PROPS.controlName,
       newName: SCHEMA_PROPS.newName,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1060,8 +1046,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "FormIR (parsed by parseFormTxt). Pass an existing FormIR; the tool re-serializes it with serializeFormTxt and writes the result. The IR contract is the slice-1 FormIR model (name/kind/preamble/root/codeBehind).",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1084,8 +1069,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       missingTokenPolicy: SCHEMA_PROPS.missingTokenPolicy,
       strictMissingTokens: SCHEMA_PROPS.strictMissingTokens,
       overwrite: SCHEMA_PROPS.overwrite,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1266,8 +1250,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
           },
         },
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       outputMode: SCHEMA_PROPS.outputMode,
     },
   },
@@ -1613,8 +1596,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Persistence boundary. Defaults to 'source-and-binary' (write source, then run the guarded Access import). Use 'source' to persist only the .form.txt mutation and explicitly skip the binary import gate; reconcile the Access binary separately.",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1630,8 +1612,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       controlName: SCHEMA_PROPS.controlName,
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1678,8 +1659,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Map of property name → scalar value. Typical use: `{ Left: 100, Top: 200, Width: 4536, Height: 500, Caption: '\"Tile 1\"' }`. All per-key guards from form_set_property carry over: 'Name' is refused (use form_rename_control), protected/metadata keys (Checksum, Format, PrtDevMode*) throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement. LayoutCached* keys are silently dropped (Issue #872 F3 — they're Access IDE serialisation noise).",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1728,8 +1708,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Optional map of property name → scalar value applied AFTER the deep-clone. Same per-key guards as form_set_properties: 'Name' is ignored (identity is always `newName`), protected/metadata keys throw FORM_PROPERTY_PROTECTED, blob-kind entries refuse scalar replacement, LayoutCached* keys are silently dropped (#872 F3).",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1764,8 +1743,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Which edge / center to align on. 'left'/'right'/'center-horizontal' move Left; 'top'/'bottom'/'center-vertical' move Top.",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1798,8 +1776,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Optional exact gap (twips) between consecutive control edges. When omitted, distributes across the bounding box of the selection.",
       },
-      dryRun: SCHEMA_PROPS.dryRun,
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
       outputMode: SCHEMA_PROPS.outputMode,
     },
@@ -1822,7 +1799,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       code: SCHEMA_PROPS.code,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      apply: SCHEMA_PROPS.apply,
+      ...WRITE_INTENT_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

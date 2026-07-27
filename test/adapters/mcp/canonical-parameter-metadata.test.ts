@@ -43,6 +43,7 @@
  * The GREEN fix lands in the next commit.
  */
 import { describe, expect, it } from "vitest";
+import { isWriteIntentTool } from "../../../src/adapters/mcp/mcp-tool-risks.js";
 import {
   buildToolSchemaCatalog,
   type ToolParameterSchema,
@@ -50,6 +51,7 @@ import {
 } from "../../../src/adapters/mcp/schema-tool.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
+import { legacyAliasesFor } from "../../../src/core/runtime/commit-flag-registry.js";
 
 class FakeVbaService {
   async execute() {
@@ -146,16 +148,13 @@ const KNOWN_SENSITIVE_PARAMS: ReadonlyArray<{ tool: string; param: string }> = [
   { tool: "relink_directory", param: "backendPassword" },
 ];
 
-// Seed list of known write-flag pairs with conflicts.
-const KNOWN_WRITE_FLAG_PAIRS: ReadonlyArray<{
+const WRITE_FLAG_PAIRS: ReadonlyArray<{
   tool: string;
   flags: readonly string[];
-}> = [
-  { tool: "export_modules", flags: ["apply", "dryRun", "diff"] },
-  { tool: "export_all", flags: ["apply", "dryRun", "diff"] },
-  { tool: "import_modules", flags: ["apply", "dryRun"] },
-  { tool: "import_all", flags: ["apply", "dryRun"] },
-];
+}> = TOOLS.filter((tool) => isWriteIntentTool(tool.name)).map((tool) => ({
+  tool: tool.name,
+  flags: ["apply", "dryRun", ...(legacyAliasesFor(tool.name).includes("diff") ? ["diff"] : [])],
+}));
 
 function requiredParameter(parameter: ToolParameterSchema | undefined): ToolParameterSchema {
   if (parameter === undefined) throw new Error("Expected catalog parameter to exist");
@@ -302,7 +301,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
   });
 
   it("write-flag conflicts expose conflictsWith and precedence", () => {
-    for (const pair of KNOWN_WRITE_FLAG_PAIRS) {
+    for (const pair of WRITE_FLAG_PAIRS) {
       const entry = catalogEntry(pair.tool);
       for (const flag of pair.flags) {
         const param = entry.parameters[flag];

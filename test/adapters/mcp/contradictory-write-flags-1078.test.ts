@@ -217,7 +217,7 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
     it("test_vba schema declares BOTH apply and dryRun (homogenized single-flag design)", () => {
       expect(schemaDeclares("test_vba", "apply")).toBe(true);
       expect(schemaDeclares("test_vba", "dryRun")).toBe(true);
-      expect(schemaDeclares("test_vba", "diff")).toBe(false);
+      expect(schemaDeclares("test_vba", "diff")).toBe(true);
     });
 
     it("test_vba({ dryRun: true }) — accepted (plan path)", async () => {

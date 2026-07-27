@@ -40,6 +40,7 @@
  * / accessPath / destinationRoot / etc. copies.
  */
 import { describe, expect, it } from "vitest";
+import { isWriteIntentTool } from "../../../src/adapters/mcp/mcp-tool-risks.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 import { SCHEMA_PROPS } from "../../../src/shared/validation/index.js";
@@ -97,6 +98,12 @@ function advertisedSchema(name: string): JsonSchemaLike {
 function propertyOf(schema: JsonSchemaLike, name: string): unknown {
   return schema.properties?.[name];
 }
+
+const WRITE_INTENT_FIELDS = [
+  ["dryRun", SCHEMA_PROPS.dryRun],
+  ["apply", SCHEMA_PROPS.apply],
+  ["diff", SCHEMA_PROPS.diff],
+] as const;
 
 describe("schema composition blocks (#1076)", () => {
   it("exports the eight named composition blocks as single source of truth", () => {
@@ -229,23 +236,22 @@ describe("schema composition blocks (#1076)", () => {
     expect(failures, `tools with inlined strict-context: ${failures.join(", ")}`).toEqual([]);
   });
 
-  it("every advertised tool's dryRun/apply/diff is the shared reference when present", () => {
+  it("every write-class tool advertises the complete shared write-intent block", () => {
     const failures: string[] = [];
-    const fields = [
-      ["dryRun", SCHEMA_PROPS.dryRun],
-      ["apply", SCHEMA_PROPS.apply],
-      ["diff", SCHEMA_PROPS.diff],
-    ] as const;
     for (const tool of TOOLS) {
+      if (!isWriteIntentTool(tool.name)) continue;
       const schema = advertisedSchema(tool.name);
-      for (const [name, expected] of fields) {
+      for (const [name, expected] of WRITE_INTENT_FIELDS) {
         const value = propertyOf(schema, name);
-        if (value !== undefined && value !== expected) {
+        if (value !== expected) {
           failures.push(`${tool.name}.${name}`);
         }
       }
     }
-    expect(failures, `tools with inlined write intent: ${failures.join(", ")}`).toEqual([]);
+    expect(
+      failures,
+      `write-class tools missing the complete shared write intent: ${failures.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("every advertised tool's outputMode is the shared reference when present", () => {
