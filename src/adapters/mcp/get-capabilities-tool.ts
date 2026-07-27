@@ -346,10 +346,23 @@ function readAdapterVersion(): string {
 // truth for `runtime.dysflowVersion`).
 export { readAdapterVersion };
 
-// ─── Tool factory ─────────────────────────────────────────────────────────────
+function projectIdResolutionFromConfig(
+  projectConfig: ProjectConfigDiagnostic,
+): McpCapabilitySnapshot["projectIdResolution"] {
+  if (projectConfig.status === "valid" && projectConfig.writeReady) {
+    return {
+      projectId: projectConfig.projectId,
+      outcome: projectConfig.projectId === null ? "unresolved" : "resolved",
+    };
+  }
 
-/**
- * Factory for the `get_capabilities` tool. Wires the aggregate
+  return {
+    projectId: null,
+    outcome: projectConfig.status === "ambiguous" ? "ambiguous" : "unresolved",
+  };
+}
+
+
  * function with the captured adapter context (writesEnabled, resolver,
  * allowlist, projectId). Returns a `DysflowMcpTool` ready to register via
  * the `createDysflowMcpTools` factory.
@@ -415,7 +428,13 @@ export function createGetCapabilitiesTool(opts: {
     handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const projectConfig = await opts.projectConfigResolver?.();
       const result: OperationResult<McpCapabilitySnapshot> = successResult(
-        projectConfig === undefined ? snapshot : { ...snapshot, projectConfig },
+        projectConfig === undefined
+          ? snapshot
+          : {
+              ...snapshot,
+              projectConfig,
+              projectIdResolution: projectIdResolutionFromConfig(projectConfig),
+            },
       );
       return translateCoreResultToMcpContent(result);
     },
