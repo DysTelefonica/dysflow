@@ -40,6 +40,26 @@ export type DestinationRootResolution = {
 };
 
 /**
+ * Issue #1169 — the canonical set of write-class tools that MUST surface
+ * `resolvedDestinationRoot` and `destinationRootSource` on their success
+ * envelope. Read-class tools (`list_objects`, `verify_code`, `exists`,
+ * `list_vba_modules`, `vba_orphan_audit`, ...) keep their exact prior
+ * shape untouched. Centralized here so the contract surface is
+ * discoverable from one place — adapters import this set instead of
+ * declaring local copies that drift out of sync.
+ */
+export const DESTINATION_ROOT_WRITE_TOOLS = new Set<string>([
+  "export_modules",
+  "export_all",
+  "import_modules",
+  "import_all",
+  "delete_module",
+  "sync_binary",
+  "form_serialize",
+  "form_deserialize",
+]);
+
+/**
  * The minimum surface of the orchestrator this helper depends on.
  * Declared structurally so the helper can be invoked through any
  * object that exposes `env`, `cwd`, and `resolveExecutionTarget` (the

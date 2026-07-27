@@ -268,43 +268,34 @@ export async function deserializeForm(args: {
 
   if (!apply) {
     const outputMode = stringValue(params.outputMode) ?? "full";
+    let data: Record<string, unknown>;
     if (outputMode === "summary") {
-      return withResolvedDestinationRoot(
-        successResult({
-          mode: "dry-run",
-          sourcePath: source.data.sourcePath,
-          written: false,
-          appliedChecksumBefore: undefined,
-          appliedChecksumAfter: undefined,
-          loadFromTextGate: "skipped",
-        }),
-        params,
-        orchestrator,
-      );
+      data = {
+        mode: "dry-run",
+        sourcePath: source.data.sourcePath,
+        written: false,
+        appliedChecksumBefore: undefined,
+        appliedChecksumAfter: undefined,
+        loadFromTextGate: "skipped",
+      };
     } else if (outputMode === "file") {
-      return withResolvedDestinationRoot(
-        successResult({
-          sourcePath: source.data.sourcePath,
-          preview: serializedText,
-        }),
-        params,
-        orchestrator,
-      );
+      data = {
+        sourcePath: source.data.sourcePath,
+        preview: serializedText,
+      };
     } else {
-      return withResolvedDestinationRoot(
-        successResult({
-          mode: "dry-run",
-          sourcePath: source.data.sourcePath,
-          written: false,
-          appliedChecksumBefore: undefined,
-          appliedChecksumAfter: undefined,
-          loadFromTextGate: "skipped",
-          preview: serializedText,
-        }),
-        params,
-        orchestrator,
-      );
+      // "full"
+      data = {
+        mode: "dry-run",
+        sourcePath: source.data.sourcePath,
+        written: false,
+        appliedChecksumBefore: undefined,
+        appliedChecksumAfter: undefined,
+        loadFromTextGate: "skipped",
+        preview: serializedText,
+      };
     }
+    return withResolvedDestinationRoot(successResult(data), params, orchestrator);
   }
 
   const write = await applyGuardedFormWrite({

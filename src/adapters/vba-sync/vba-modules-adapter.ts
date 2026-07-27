@@ -44,6 +44,7 @@ import {
   NoopControlPropertyReader,
 } from "./control-property-reader.js";
 import {
+  DESTINATION_ROOT_WRITE_TOOLS,
   type DestinationRootOrchestratorLike,
   withResolvedDestinationRoot,
 } from "./destination-root-override.js";
@@ -194,23 +195,6 @@ export interface VbaModulesOrchestrator {
 }
 
 const MANAGED_CODE_EXTENSIONS = [".bas", ".cls"];
-
-/**
- * Issue #1169 — write-class tools routed through `VbaModulesAdapter`
- * whose success envelope MUST surface `resolvedDestinationRoot` and
- * `destinationRootSource`. Read-class tools (`list_objects`,
- * `verify_code`, `exists`, `list_vba_modules`, `vba_orphan_audit`,
- * `fix_encoding` is intentionally excluded because it operates on the
- * binary, not the managed source tree) keep their exact prior shape
- * untouched.
- */
-const DESTINATION_ROOT_WRITE_TOOLS = new Set<string>([
-  "export_modules",
-  "export_all",
-  "import_modules",
-  "import_all",
-  "delete_module",
-]);
 
 /**
  * Maps a disk file name to the VBA module name it represents, or null when the
