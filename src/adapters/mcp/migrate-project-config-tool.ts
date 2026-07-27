@@ -1,4 +1,4 @@
-import { rename, readFile, writeFile } from "node:fs/promises";
+import { rename, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { isRecord } from "../../core/utils/index.js";
 import { PROJECT_IDENTITY_BLOCK, WRITE_INTENT_BLOCK } from "../../shared/validation/index.js";
@@ -6,7 +6,6 @@ import { migrateProjectConfigResultContract } from "./contracts/bootstrap-result
 import {
   enrichmentForValidationMessage,
   invalidInput,
-  MCP_WRITES_DISABLED,
   writesDisabled,
 } from "./dispatch-common.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
@@ -266,10 +265,6 @@ export async function tryMigrateProjectConfig(
   const changed = stableStringify(normalizedCurrent) !== stableStringify(normalizedProposed);
   const diff = changed ? unifiedDiff(beforeText, afterText, configPath) : "";
 
-  // Suppress an unused-variable lint when no migrations are present —
-  // the empty array is the canonical "already migrated" signal.
-  void normalizedCurrent;
-
   return {
     outcome: "ok",
     configPath,
@@ -296,12 +291,7 @@ async function writeProjectJsonAtomically(
     await rename(tempPath, configPath);
   } catch (error) {
     // Best-effort temp cleanup; never mask the original error.
-    try {
-      const { unlink } = await import("node:fs/promises");
-      await unlink(tempPath);
-    } catch {
-      // ignore
-    }
+    await unlink(tempPath).catch(() => undefined);
     throw error;
   }
 }
@@ -446,8 +436,3 @@ export function createMigrateProjectConfigTool(
     },
   };
 }
-
-// Suppress an unused-import lint for the MCP_WRITES_DISABLED constant —
-// we deliberately keep the literal reference so future readers can grep
-// the gate source by error code.
-void MCP_WRITES_DISABLED;
