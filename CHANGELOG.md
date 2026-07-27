@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Closed issues
+
+- #1179 — `fix(auto-detect): derive project target from git worktree toplevel, not process cwd`
+
+### Fixed
+
+- `get_capabilities.projectConfig.cwd` now reflects the active git worktree toplevel instead of the process spawn cwd. The project-target resolver walks up to the worktree root via `git rev-parse --show-toplevel` (with a filesystem-walk fallback) so the implicit context is the worktree, not the shell that spawned the MCP process. When the process cwd is not inside a worktree, the resolver falls back to the process cwd and adds a typed `CWD_NOT_IN_WORKTREE` warning diagnostic. When the auto-detected worktree's configured `projectId` differs from the request's `projectId`, a typed `TARGET_MISMATCH_WARNING` surfaces alongside the existing `PROJECT_ID_MISMATCH` error so the consumer can flag the gap explicitly without parsing the legacy error code.
+
+### Migration notes
+
+- No API or runtime contract changes. The `projectConfig.cwd` field semantics tightened (auto-derive from the worktree toplevel) but the previous behavior — `cwd` echoing the input — is preserved for the failure case (cwd outside any worktree) via the same fallback plus a new warning. Consumers that read `projectConfig.cwd` outside the per-tool gate will now see the worktree root instead of the spawn cwd; pass an explicit `cwd` per-call when targeting a sibling worktree.
+
 ## [v2.25.0] - 2026-07-26
 
 ### Closed issues
