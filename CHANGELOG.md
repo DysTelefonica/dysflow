@@ -1,5 +1,10 @@
 # Changelog
 
+## [v2.26.0] - 2026-07-27
+
+- fix(runner): classify a rejected Access password as ACCESS_PASSWORD_INVALID (#1186) (#1187) - fix(auto-detect): derive project target from git worktree toplevel (#1179) (#1185) - feat(mcp): add migrate_project_config tool for legacy config migrations (#1177) (#1184) - fix(mcp): run_vba apply and dryRun agree on procedure resolution (#1174) (#1183) - feat(mcp): structure diagnostics[].remediation as discriminated object (#1176) (#1182) - enh(mcp): destinationRoot override on all write-class tools (#1169) (#1181) - docs(dysflow-usage): add legacy accessPath -> frontendFile migration recipe (#1178) (#1180) - feat(mcp): schemaVersion discriminator on every tool response (#1168) (#1175) - feat(mcp): unify test_vba canonical commit flag to apply (#1167) (#1173) - feat(mcp): test_vba failure envelope accessible without string parsing (#1166) (#1172) - fix(mcp): structured MCP_INPUT_INVALID when query_execute omits mode (#1164) (#1171) - fix(mcp): get_capabilities projectIdResolution self-consistent with projectConfig (#1165) (#1170) - chore(openspec): re-verify and archive ai-form-ui-builder (#1163)
+
+
 ## [Unreleased]
 
 ### Closed issues
