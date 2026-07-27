@@ -139,6 +139,12 @@ const KNOWN_ALIAS_GROUPS: ReadonlyArray<{
     aliases: ["testsPath", "path", "manifest"],
     deprecated: ["path", "manifest"],
   },
+  {
+    tool: "compare_form",
+    canonical: "targetPath",
+    aliases: ["targetPath", "target"],
+    deprecated: ["target"],
+  },
 ];
 
 // Seed list of known sensitive parameters. The audit identified
@@ -155,6 +161,10 @@ const WRITE_FLAG_PAIRS: ReadonlyArray<{
   tool: tool.name,
   flags: ["apply", "dryRun", ...(legacyAliasesFor(tool.name).includes("diff") ? ["diff"] : [])],
 }));
+
+// Pre-existing collision outside #1191. Keep it explicit so the generative
+// gate blocks every new collision without silently expanding this baseline.
+const PARAMETER_SHAPE_EXCEPTIONS = new Set(["generate_form.kind"]);
 
 function requiredParameter(parameter: ToolParameterSchema | undefined): ToolParameterSchema {
   if (parameter === undefined) throw new Error("Expected catalog parameter to exist");
@@ -282,6 +292,53 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
         ).toMatch(/^v?\d+\.\d+\.\d+/);
       }
     }
+  });
+
+  it("records compare_form target as the v2.27.0 migration alias for targetPath", () => {
+    const target = getExtendedParam(
+      requiredParameter(catalogEntry("compare_form").parameters.target),
+    );
+
+    expect(target).toMatchObject({
+      canonicalName: "targetPath",
+      deprecated: true,
+      deprecatedSince: "2.27.0",
+      precedence: "deprecated",
+    });
+  });
+
+  it("rejects cross-tool enum/free-string parameter collisions without a deprecated alias", () => {
+    const occurrences = new Map<string, Array<{ tool: string; parameter: ToolParameterSchema }>>();
+    for (const tool of TOOLS) {
+      const entry = catalogEntry(tool.name);
+      for (const [name, parameter] of Object.entries(entry.parameters)) {
+        const existing = occurrences.get(name) ?? [];
+        existing.push({ tool: tool.name, parameter });
+        occurrences.set(name, existing);
+      }
+    }
+
+    const violations: string[] = [];
+    for (const [name, entries] of occurrences) {
+      const hasEnum = entries.some(({ parameter }) => parameter.type === "enum");
+      const freeStrings = entries.filter(({ parameter }) => parameter.type === "string");
+      if (!hasEnum || freeStrings.length === 0) continue;
+
+      for (const { tool, parameter } of freeStrings) {
+        if (PARAMETER_SHAPE_EXCEPTIONS.has(`${tool}.${name}`)) continue;
+        const metadata = getExtendedParam(parameter);
+        if (
+          metadata.deprecated !== true ||
+          metadata.precedence !== "deprecated" ||
+          metadata.canonicalName === undefined ||
+          metadata.canonicalName === name
+        ) {
+          violations.push(`${tool}.${name}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 
   it("sensitive parameters surface sensitive:true", () => {

@@ -811,6 +811,46 @@ function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): v
   }
 }
 
+const EXPLICIT_PARAMETER_ALIAS_MIGRATIONS: Readonly<
+  Record<
+    string,
+    readonly {
+      canonical: string;
+      alias: string;
+      deprecatedSince: string;
+    }[]
+  >
+> = {
+  compare_form: [
+    {
+      canonical: "targetPath",
+      alias: "target",
+      deprecatedSince: "2.27.0",
+    },
+  ],
+};
+
+function applyExplicitAliasMigrations(
+  toolName: string,
+  parameters: Record<string, ToolParameterSchema>,
+): void {
+  for (const migration of EXPLICIT_PARAMETER_ALIAS_MIGRATIONS[toolName] ?? []) {
+    const canonical = parameters[migration.canonical];
+    const alias = parameters[migration.alias];
+    if (canonical === undefined || alias === undefined) continue;
+
+    const aliases = [migration.canonical, migration.alias];
+    canonical.canonicalName = migration.canonical;
+    canonical.aliases = aliases;
+    canonical.precedence = "canonical";
+    alias.canonicalName = migration.canonical;
+    alias.aliases = aliases;
+    alias.precedence = "deprecated";
+    alias.deprecated = true;
+    alias.deprecatedSince = migration.deprecatedSince;
+  }
+}
+
 function enrichParameterMetadata(
   toolName: string,
   schema: unknown,
@@ -846,6 +886,7 @@ function enrichParameterMetadata(
   }
 
   enrichProseMetadata(parameters);
+  applyExplicitAliasMigrations(toolName, parameters);
 
   for (const [name, parameter] of Object.entries(parameters)) {
     if (/password|secret|token/i.test(name)) parameter.sensitive = true;

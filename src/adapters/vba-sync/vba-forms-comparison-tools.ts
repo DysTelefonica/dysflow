@@ -15,6 +15,7 @@ import { stringValue } from "../../core/utils/index.js";
 import type { FormTargetResolver } from "./vba-forms-read-context.js";
 
 type FormSnapshot = { path: string; text: string };
+const RESERVED_TARGET_ROLES = new Set(["frontend", "backend", "auto"]);
 
 async function readSnapshot(
   fileSystem: FormFileSystemPort,
@@ -87,7 +88,21 @@ export async function compareForm(
   orchestrator?: FormTargetResolver,
 ): Promise<OperationResult<unknown>> {
   const sourcePath = stringValue(params.sourcePath) ?? stringValue(params.path);
-  const targetPath = stringValue(params.targetPath) ?? stringValue(params.target);
+  const canonicalTargetPath = stringValue(params.targetPath);
+  const legacyTarget = stringValue(params.target);
+  if (
+    canonicalTargetPath === undefined &&
+    legacyTarget !== undefined &&
+    RESERVED_TARGET_ROLES.has(legacyTarget.trim().toLowerCase())
+  ) {
+    return failureResult(
+      createDysflowError(
+        "MCP_INPUT_INVALID",
+        `compare_form parameter "target" is a deprecated path alias and does not accept the database role "${legacyTarget}". Pass the right-side .form.txt path as targetPath.`,
+      ),
+    );
+  }
+  const targetPath = canonicalTargetPath ?? legacyTarget;
   const projectId = stringValue(params.projectId);
   const formName = stringValue(params.formName) ?? stringValue(params.name);
   const targetName = stringValue(params.targetName) ?? stringValue(params.targetForm);

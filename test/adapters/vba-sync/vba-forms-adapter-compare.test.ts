@@ -102,6 +102,27 @@ describe("VbaFormsAdapter — compare_form", () => {
     }
   });
 
+  it.each([
+    "frontend",
+    "backend",
+    "auto",
+  ])("rejects role-shaped legacy target '%s' and names targetPath", async (target) => {
+    const fs = mockFs();
+    const adapter = new VbaFormsAdapter(makeOrchestrator(), fs);
+
+    const result = await adapter.execute("compare_form", {
+      sourcePath: "C:/repo/forms/Form_A.form.txt",
+      target,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain("targetPath");
+    }
+    expect(fs.readFile).not.toHaveBeenCalled();
+  });
+
   it("returns FORM_NOT_FOUND when the source file does not exist", async () => {
     const fs = mockFs({
       readFile: vi.fn().mockImplementation((p: string) => {
