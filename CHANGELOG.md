@@ -1,25 +1,49 @@
 # Changelog
 
-## [v2.26.0] - 2026-07-27
-
-- fix(runner): classify a rejected Access password as ACCESS_PASSWORD_INVALID (#1186) (#1187) - fix(auto-detect): derive project target from git worktree toplevel (#1179) (#1185) - feat(mcp): add migrate_project_config tool for legacy config migrations (#1177) (#1184) - fix(mcp): run_vba apply and dryRun agree on procedure resolution (#1174) (#1183) - feat(mcp): structure diagnostics[].remediation as discriminated object (#1176) (#1182) - enh(mcp): destinationRoot override on all write-class tools (#1169) (#1181) - docs(dysflow-usage): add legacy accessPath -> frontendFile migration recipe (#1178) (#1180) - feat(mcp): schemaVersion discriminator on every tool response (#1168) (#1175) - feat(mcp): unify test_vba canonical commit flag to apply (#1167) (#1173) - feat(mcp): test_vba failure envelope accessible without string parsing (#1166) (#1172) - fix(mcp): structured MCP_INPUT_INVALID when query_execute omits mode (#1164) (#1171) - fix(mcp): get_capabilities projectIdResolution self-consistent with projectConfig (#1165) (#1170) - chore(openspec): re-verify and archive ai-form-ui-builder (#1163)
-
-
 ## [Unreleased]
+
+## [v2.26.0] - 2026-07-27
 
 ### Closed issues
 
-- #1179 — `fix(auto-detect): derive project target from git worktree toplevel, not process cwd`
-- #1186 — `fix(e2e): doctor step fails with OpenDatabase "no es una contraseña válida" after v2.26.0 campaign`
+- #1164 — `fix(mcp): structured MCP_INPUT_INVALID when query_execute omits mode` (PR #1171)
+- #1165 — `fix(mcp): get_capabilities projectIdResolution self-consistent with projectConfig` (PR #1170)
+- #1166 — `feat(mcp): test_vba failure envelope accessible without string parsing` (PR #1172)
+- #1167 — `feat(mcp): unify test_vba canonical commit flag to apply` (PR #1173)
+- #1168 — `feat(mcp): schemaVersion discriminator on every tool response` (PR #1175)
+- #1169 — `enh(mcp): destinationRoot override on all write-class tools` (PR #1181)
+- #1174 — `fix(mcp): run_vba apply and dryRun agree on procedure resolution` (PR #1183)
+- #1176 — `feat(mcp): structure diagnostics[].remediation as discriminated object` (PR #1182)
+- #1177 — `feat(mcp): add migrate_project_config tool for legacy config migrations` (PR #1184)
+- #1178 — `docs(dysflow-usage): add legacy accessPath -> frontendFile migration recipe` (PR #1180)
+- #1179 — `fix(auto-detect): derive project target from git worktree toplevel, not process cwd` (PR #1185)
+- #1186 — `fix(e2e): doctor step fails with OpenDatabase "no es una contraseña válida" after v2.26.0 campaign` (PR #1187)
+
+### Added
+
+- `migrate_project_config` migrates a legacy `.dysflow/project.json` to the current contract. The default call is a read-only diff preview; committing the rewrite is an explicit, write-gated action.
+- Every tool response carries a `schemaVersion` discriminator, so a consumer can branch on the envelope revision instead of inferring it from which fields happen to be present.
+- Every write-class tool accepts a `destinationRoot` override, and the project root follows the override so path-containment guards accept it as authoritative.
+
+### Changed
+
+- `test_vba` commits with `apply` like every other write-class tool. The tool-wide contract is now uniform: `apply: true` commits, `apply: false` plans. The former `dryRun`-polarity exception is gone, and the doctor check that documented it no longer carries an exemption.
+- `diagnostics[].remediation` is a discriminated object rather than free text, so a consumer can act on the remediation without parsing prose.
+- `get_capabilities.projectConfig.cwd` reflects the active git worktree toplevel instead of the process spawn cwd. When the cwd is not inside a worktree, the previous behavior is preserved as a fallback and reported through a typed `CWD_NOT_IN_WORKTREE` warning; when the auto-detected worktree's `projectId` disagrees with the request, a typed `TARGET_MISMATCH_WARNING` accompanies the existing `PROJECT_ID_MISMATCH` error.
 
 ### Fixed
 
-- A database password Access rejects is now reported as the typed `ACCESS_PASSWORD_INVALID` error instead of a generic `RUNNER_FAILED` carrying raw, host-locale-dependent Access text. The remediation names the environment variable actually consulted, and the original Access diagnostic is preserved as evidence, so a wrong password no longer reads like a runtime defect.
-- `get_capabilities.projectConfig.cwd` now reflects the active git worktree toplevel instead of the process spawn cwd. The project-target resolver walks up to the worktree root via `git rev-parse --show-toplevel` (with a filesystem-walk fallback) so the implicit context is the worktree, not the shell that spawned the MCP process. When the process cwd is not inside a worktree, the resolver falls back to the process cwd and adds a typed `CWD_NOT_IN_WORKTREE` warning diagnostic. When the auto-detected worktree's configured `projectId` differs from the request's `projectId`, a typed `TARGET_MISMATCH_WARNING` surfaces alongside the existing `PROJECT_ID_MISMATCH` error so the consumer can flag the gap explicitly without parsing the legacy error code.
+- A database password Access rejects is reported as the typed `ACCESS_PASSWORD_INVALID` error instead of a generic runner failure carrying raw, host-locale-dependent Access text. The remediation names the environment variable actually consulted, and the original Access diagnostic is preserved as evidence, so a wrong password no longer reads like a runtime defect.
+- `run_vba` resolves procedures identically whether the call plans or commits, so a preview can no longer disagree with the write it previewed.
+- `query_execute` rejects a missing `mode` with a structured error naming the absent parameter, instead of an opaque generic input error.
+- `get_capabilities.projectIdResolution` agrees with the `projectConfig` it is reported alongside.
+- `test_vba` failures are readable from the envelope's own fields; recovering the cause no longer requires parsing the message text.
 
 ### Migration notes
 
-- No API or runtime contract changes. The `projectConfig.cwd` field semantics tightened (auto-derive from the worktree toplevel) but the previous behavior — `cwd` echoing the input — is preserved for the failure case (cwd outside any worktree) via the same fallback plus a new warning. Consumers that read `projectConfig.cwd` outside the per-tool gate will now see the worktree root instead of the spawn cwd; pass an explicit `cwd` per-call when targeting a sibling worktree.
+- `test_vba` callers passing `dryRun` should move to `apply`. The legacy flag still resolves, but `apply` is the canonical commit signal the whole tool surface now reports through `canonicalCommitFlag`.
+- Consumers reading `projectConfig.cwd` outside the per-tool gate now see the worktree root rather than the spawn cwd. Pass an explicit `cwd` per call when targeting a sibling worktree.
+- Consumers that read `diagnostics[].remediation` as a string must read the discriminated object's fields instead.
 
 ## [v2.25.0] - 2026-07-26
 
