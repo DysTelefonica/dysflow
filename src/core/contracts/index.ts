@@ -381,6 +381,13 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
     "Inspect details.knownProperties to find the right key. Use form_list_controls, form_get_geometry, or inspect_form for the full inventory.",
   FORM_PROPERTY_VALUE_INVALID:
     'Inspect details.expectedType vs details.actualType. Wrap as the appropriate literal: text → "value", boolean → true/false, integer → number, color → &HBBGGRR& hex, twip → finite number 0..50000.',
+  // #1174 — distinguishes "in binary but not callable via COM" from the
+  // "procedure not in binary" case (PROCEDURE_NOT_FOUND). The remediation
+  // is a single Action: recompile in Access VBE so the binary's p-code
+  // matches the source on disk. Without this distinction, agents would
+  // chase a phantom import issue when the real fix is a VBE recompile.
+  PROCEDURE_NOT_CALLABLE:
+    "Recompile in Access VBE (Debug → Compile) so the binary's compiled p-code matches the on-disk source, then retry.",
 };
 const DEFAULT_ERROR_REMEDIATION =
   "Review the error message and correct the reported condition before retrying.";

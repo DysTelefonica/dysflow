@@ -118,6 +118,67 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     }
   });
 
+  // #1174 — the adapter now parses `<module>.<procedure>` and projects the
+  // split onto the typed request. Without this assertion the dry-run plan
+  // would echo `moduleName: ""` while the apply path scanned every module.
+  it("buildRunVbaRequest projects moduleName parsed from '<module>.<procedure>' (#1174)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({
+      procedureName: "MigracionTbCambiosParaPublicacionEdicionLong.EjecutarMigracion",
+    });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.moduleName).toBe("MigracionTbCambiosParaPublicacionEdicionLong");
+      expect(request.procedureName).toBe(
+        "MigracionTbCambiosParaPublicacionEdicionLong.EjecutarMigracion",
+      );
+    }
+  });
+
+  // #1174 — unqualified procedureName (legacy `dysflow_vba_execute` shape)
+  // preserves the empty moduleName so the apply path's all-modules fallback
+  // still applies.
+  it("buildRunVbaRequest preserves empty moduleName for unqualified procedureName (#1174)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({ procedureName: "JustAProc" });
+    expect(isMcpToolResult(request)).toBe(false);
+    if (!isMcpToolResult(request)) {
+      expect(request.moduleName).toBe("");
+      expect(request.procedureName).toBe("JustAProc");
+    }
+  });
+
+  // #1174 — empty / malformed procedureName short-circuits at the adapter
+  // boundary with a typed MCP_INPUT_INVALID envelope. Both dry-run and apply
+  // paths must fail identically instead of dry-run succeeding silently.
+  it("buildRunVbaRequest rejects empty procedureName with MCP_INPUT_INVALID (#1174)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({ procedureName: "" });
+    expect(isMcpToolResult(request)).toBe(true);
+    if (isMcpToolResult(request)) {
+      expect(request.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(request.content[0]?.text).toContain("procedureName");
+    }
+  });
+
+  it("buildRunVbaRequest rejects malformed procedureName ('Module.') with MCP_INPUT_INVALID (#1174)", async () => {
+    const { buildRunVbaRequest, isMcpToolResult } = await import(
+      "../../../src/adapters/mcp/alias-tools.js"
+    );
+    const request = buildRunVbaRequest({ procedureName: "Module." });
+    expect(isMcpToolResult(request)).toBe(true);
+    if (isMcpToolResult(request)) {
+      expect(request.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(request.content[0]?.text).toContain("malformed");
+    }
+  });
+
   it("buildRunVbaRequest projects dryRun:true through to the typed request (PR1a #621 escape hatch)", async () => {
     const { buildRunVbaRequest, isMcpToolResult } = await import(
       "../../../src/adapters/mcp/alias-tools.js"

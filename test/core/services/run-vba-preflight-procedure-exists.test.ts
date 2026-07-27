@@ -260,12 +260,20 @@ describe("AccessVbaService — procedure-existence preflight (#1045)", () => {
   });
 
   it("Test 4 (no-regression) — passes through genuine RUNNER_FAILED failures verbatim without trying to reclassify them as PROCEDURE_NOT_FOUND", async () => {
+    // #1174 — the runner-failure fixture uses a NON-matching message so the
+    // reclassifier (added by #1174) does not fire on this assertion. The
+    // Spanish-localized 'Excepción al llamar a "Run"' pattern is the
+    // reclassifier's trigger; asserting that exact string would reclassify
+    // the failure into PROCEDURE_NOT_CALLABLE and break this no-regression
+    // contract. Use a generic Access runtime error instead — the test still
+    // proves the preflight does NOT flatten genuine runner failures into
+    // PROCEDURE_NOT_FOUND.
     const runner = new RecordingRunner({
       ok: false,
       error: {
         code: "RUNNER_FAILED",
         message:
-          'PowerShell runner failed with exit code 1: Excepción al llamar a "Run" con los argumentos "31": "real Access engine failure".',
+          "PowerShell runner failed with exit code 1: El motor de base de datos de Microsoft Access no pudo inicializar el catálogo.",
         retryable: false,
       },
       diagnostics: [],
@@ -292,7 +300,7 @@ describe("AccessVbaService — procedure-existence preflight (#1045)", () => {
     if (result.ok) throw new Error("expected RUNNER_FAILED to propagate");
     // Genuine runner failure taxonomy MUST NOT be flattened.
     expect(result.error.code).toBe("RUNNER_FAILED");
-    expect(result.error.message).toContain("Excepción");
+    expect(result.error.message).toContain("motor de base de datos");
   });
 
   it("preserves the dry-run escape hatch: dryRun:true returns the plan without invoking runner or preflight", async () => {
