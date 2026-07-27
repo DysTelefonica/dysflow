@@ -4,7 +4,7 @@ import type {
   OperationResult,
   VbaSyncPort,
 } from "../../core/contracts/index.js";
-import type { Remediation } from "../../core/contracts/remediation.js";
+import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
 import type {
@@ -76,7 +76,7 @@ export type McpToolError = {
      * string (treated as `description` by `structureRemediation`) or the
      * new structured shape (`{description, command, platform, ...}`).
      */
-    remediation?: Remediation | string;
+    remediation?: DiagnosticRemediation;
   }[];
   /**
    * Optional allowlist surfaced when the rejection is an allowlist

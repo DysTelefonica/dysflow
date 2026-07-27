@@ -1,13 +1,15 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
-import type { Remediation } from "../../core/contracts/remediation.js";
+import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import {
   remediationForCapabilitiesDisallowWrite,
+  remediationForConfigMigration,
   remediationForDestinationRootNotFound,
   remediationForMissingProjectConfig,
   remediationForProjectIdMismatch,
   remediationForWriteLockedByRunningOp,
+  remediationText,
 } from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
 import { nodeConfigFileSystem } from "./dysflow-config-node.js";
@@ -49,7 +51,7 @@ export type ProjectConfigDiagnostic = {
     code: string;
     severity: "error" | "warning";
     message: string;
-    remediation?: Remediation | string;
+    remediation?: DiagnosticRemediation;
   }[];
   remediation: string | null;
 };
@@ -245,9 +247,9 @@ export function diagnoseProjectConfig(
   const fail = (
     status: ProjectConfigStatus,
     message: string,
-    remediation: Remediation | string,
+    remediation: DiagnosticRemediation,
   ): ProjectConfigDiagnostic => {
-    const descText = typeof remediation === "string" ? remediation : remediation.description;
+    const descText = remediationText(remediation);
     return {
       ...base,
       status,
@@ -322,7 +324,13 @@ export function diagnoseProjectConfig(
       base,
       "path-mismatch",
       `Legacy accessPath '${configuredFrontend}' is not a basename.`,
-      `Replace it with frontendFile: '${basename(configuredFrontend)}'.`,
+      remediationForConfigMigration({
+        field: "accessPath",
+        replaceWith: "frontendFile",
+        suggestedValue: basename(configuredFrontend),
+        rationale:
+          "absolute and separator-containing frontend paths cannot authorize cross-worktree access",
+      }),
       explicitTargetSupplied ? "INHERITED_WORKTREE_MISMATCH" : "FRONTEND_PATH_NOT_BASENAME",
     );
   const localCandidates = readdirSync(projectRootNative)
@@ -828,10 +836,10 @@ function failWith(
   base: Omit<ProjectConfigDiagnostic, "status" | "writeReady" | "diagnostics" | "remediation">,
   status: ProjectConfigStatus,
   message: string,
-  remediation: Remediation | string,
+  remediation: DiagnosticRemediation,
   code: string = status.toUpperCase().replaceAll("-", "_"),
 ): ProjectConfigDiagnostic {
-  const descText = typeof remediation === "string" ? remediation : remediation.description;
+  const descText = remediationText(remediation);
   return {
     ...base,
     status,

@@ -47,6 +47,40 @@ export type Remediation = {
   safeToAutoExecute?: boolean;
 };
 
+export type MigrationRemediation = {
+  kind: "config-migration";
+  field: string;
+  replaceWith: string;
+  suggestedValue?: string;
+  rationale: string;
+};
+
+export type StructuredRemediation = Remediation | MigrationRemediation;
+export type DiagnosticRemediation = string | StructuredRemediation;
+
+export function remediationForConfigMigration(input: {
+  field: string;
+  replaceWith: string;
+  suggestedValue?: string;
+  rationale: string;
+}): MigrationRemediation {
+  return {
+    kind: "config-migration",
+    ...input,
+  };
+}
+
+export function remediationText(input: DiagnosticRemediation): string {
+  if (typeof input === "string") return input;
+  if ((input as MigrationRemediation).kind === "config-migration") {
+    const migration = input as MigrationRemediation;
+    const suggestedValue =
+      migration.suggestedValue === undefined ? "" : `: '${migration.suggestedValue}'`;
+    return `Replace it with ${migration.replaceWith}${suggestedValue}.`;
+  }
+  return (input as Remediation).description;
+}
+
 /**
  * Backward-compat shim — when a caller or legacy code passes a plain string,
  * normalize it into a `Remediation` shape so downstream consumers always see
@@ -55,7 +89,11 @@ export type Remediation = {
  * is set to the original text (treated as a generic hint); callers that need
  * a richer structure should emit one directly.
  */
-export function structureRemediation(input: string | Remediation): Remediation {
+export function structureRemediation(input: string): Remediation;
+export function structureRemediation(input: Remediation): Remediation;
+export function structureRemediation(input: MigrationRemediation): MigrationRemediation;
+export function structureRemediation(input: DiagnosticRemediation): StructuredRemediation;
+export function structureRemediation(input: DiagnosticRemediation): StructuredRemediation {
   if (typeof input === "object" && input !== null) return input;
   return {
     description: input,
