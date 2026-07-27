@@ -39,6 +39,13 @@ the message and nested details as diagnostic evidence; do not parse localized Ac
 | `TABLE_NOT_IN_DATABASE` | The requested table is absent from the selected database. | Enumerate the live schema and retry with an existing table. |
 | `COLUMN_NOT_IN_TABLE` | The requested column is absent from the selected table. | Enumerate the table columns and retry with an existing column. |
 
+## Runner and Access binary failures
+
+| Code | Meaning | Remediation |
+| --- | --- | --- |
+| `ACCESS_PASSWORD_INVALID` | Access rejected the password dysflow supplied for the target `.accdb` — DAO error 3031, raised by `OpenDatabase`. Before #1186 this surfaced as a generic `RUNNER_FAILED` carrying the raw, host-locale-dependent Access text (`"No es una contraseña válida."` on a Spanish Windows), so the reader had to parse a localized string to conclude the only broken thing was an environment variable. The runner now classifies the DAO 3031 signature (Spanish, English, and accent-mangled variants) into this code on both the probe and the locked-operation paths; the MCP dispatch seam remaps it to the canonical `BINARY_PASSWORD_INVALID`. `details.passwordEnv` names the env var actually consulted, `details.accessDbPath` the target, and `details.runnerOutput` preserves the original secret-sanitized Access diagnostic. | Set the correct database password in the env var named by `details.passwordEnv` (`ACCESS_VBA_PASSWORD` unless the project config declares another), then restart the process that spawns the runner so the child inherits the new value. The password itself is never echoed. |
+| `RUNNER_FAILED` | The PowerShell runner exited non-zero for a reason with no typed classification. The message carries the secret-sanitized runner output as diagnostic evidence. | Read the embedded runner output; do not branch on its localized text. If the cause turns out to be a recurring, recognizable failure mode, it belongs in this table with its own code. |
+
 ## Recovery rule
 
 Never kill `MSACCESS.EXE` by process name. Inspect `list_access_operations`, reconcile tracked stale

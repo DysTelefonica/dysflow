@@ -33,6 +33,7 @@ import {
 } from "../runtime/cross-db-table-lookup.js";
 import { isRecord, sanitizeSecrets } from "../utils/index.js";
 import { parseSimpleSelectShape } from "../utils/simple-select-shape.js";
+import { classifyInvalidPasswordFailure } from "./runner-failure-classifier.js";
 
 export type {
   AccessProcessOwnership,
@@ -316,11 +317,15 @@ export class AccessPowerShellRunner implements AccessRunner {
         execution.stderr || execution.stdout || "No runner output.",
         secrets,
       );
+      // #1186 — a rejected database password is a config defect, not a runner
+      // defect; surface the typed code so the consumer never has to recognise
+      // a localized Access string.
       return failureResult(
-        createDysflowError(
-          "RUNNER_FAILED",
-          `Probe failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
-        ),
+        classifyInvalidPasswordFailure(safeOutput, config) ??
+          createDysflowError(
+            "RUNNER_FAILED",
+            `Probe failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+          ),
         { durationMs: execution.durationMs },
       );
     }
@@ -859,11 +864,13 @@ export class AccessPowerShellRunner implements AccessRunner {
         execution.stderr || execution.stdout || "No runner output.",
         secrets,
       );
+      // #1186 — see the matching comment in the probe path above.
       return failureResult(
-        createDysflowError(
-          "RUNNER_FAILED",
-          `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
-        ),
+        classifyInvalidPasswordFailure(safeOutput, config) ??
+          createDysflowError(
+            "RUNNER_FAILED",
+            `PowerShell runner failed with exit code ${execution.exitCode ?? "unknown"}: ${safeOutput}`,
+          ),
         { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
       );
     }

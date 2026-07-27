@@ -5,9 +5,11 @@
 ### Closed issues
 
 - #1179 — `fix(auto-detect): derive project target from git worktree toplevel, not process cwd`
+- #1186 — `fix(e2e): doctor step fails with OpenDatabase "no es una contraseña válida" after v2.26.0 campaign`
 
 ### Fixed
 
+- A database password Access rejects is now reported as the typed `ACCESS_PASSWORD_INVALID` error instead of a generic `RUNNER_FAILED` carrying raw, host-locale-dependent Access text. The remediation names the environment variable actually consulted, and the original Access diagnostic is preserved as evidence, so a wrong password no longer reads like a runtime defect.
 - `get_capabilities.projectConfig.cwd` now reflects the active git worktree toplevel instead of the process spawn cwd. The project-target resolver walks up to the worktree root via `git rev-parse --show-toplevel` (with a filesystem-walk fallback) so the implicit context is the worktree, not the shell that spawned the MCP process. When the process cwd is not inside a worktree, the resolver falls back to the process cwd and adds a typed `CWD_NOT_IN_WORKTREE` warning diagnostic. When the auto-detected worktree's configured `projectId` differs from the request's `projectId`, a typed `TARGET_MISMATCH_WARNING` surfaces alongside the existing `PROJECT_ID_MISMATCH` error so the consumer can flag the gap explicitly without parsing the legacy error code.
 
 ### Migration notes
