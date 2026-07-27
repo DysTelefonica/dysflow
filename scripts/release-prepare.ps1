@@ -4,12 +4,14 @@
 # documented in the Engram topic "dysflow/release/process-gap-2026-06-29":
 #
 #   1. Bump package.json version (interactive: patch | minor | major | explicit).
-#   2. Stage CHANGELOG.md + package.json and commit "chore(release): prepare vX.Y.Z".
-#   3. Push to origin/main.
-#   4. Wait for the CI workflow on the release commit to reach
+#   2. Generate one CHANGELOG bullet per non-merge commit and run the
+#      changelog format quality gate locally.
+#   3. Stage CHANGELOG.md + package.json and commit "chore(release): prepare vX.Y.Z".
+#   4. Push to origin/main.
+#   5. Wait for the CI workflow on the release commit to reach
 #      `conclusion: success` (or fail loudly if it stays red).
-#   5. ONLY when CI is green: create annotated tag vX.Y.Z and push it.
-#   6. The existing `.github/workflows/release.yml` fires on the tag push,
+#   6. ONLY when CI is green: create annotated tag vX.Y.Z and push it.
+#   7. The existing `.github/workflows/release.yml` fires on the tag push,
 #      builds the tarball, signs SHA256SUMS with Ed25519, and publishes the
 #      GitHub Release with the assets.
 #
@@ -37,6 +39,103 @@ Param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+function New-ReleaseChangelogSection {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Tag,
+        [Parameter(Mandatory)]
+        [string]$Date,
+        [string[]]$CommitSubjects = @()
+    )
+
+    $notes = @(
+        $CommitSubjects |
+            Where-Object { $_ -and $_ -notmatch '^Merge pull request\b' } |
+            ForEach-Object {
+                "- $($_.Trim() -replace ' - ', ' — ')"
+            }
+    )
+    if ($notes.Count -eq 0) {
+        $notes = @("- No user-visible changes were detected; verify the previous tag.")
+    }
+    $noteLines = $notes -join [Environment]::NewLine
+
+    return @"
+## [$Tag] - $Date
+
+### Changes
+
+$noteLines
+
+"@
+}
+
+function Test-ReleaseChangelogQuality {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$ChangelogPath,
+        [string]$RepoRoot = (Get-Location).Path,
+        [string]$QualityGatePath = "test/quality-gates/changelog-release-entry-format.test.ts",
+        [ValidateRange(1, 3600)]
+        [int]$TimeoutSeconds = 120,
+        [switch]$Quiet
+    )
+
+    $resolvedChangelog = (Resolve-Path $ChangelogPath).Path
+    $previousChangelogPath = $env:DYSFLOW_CHANGELOG_PATH
+    try {
+        $env:DYSFLOW_CHANGELOG_PATH = $resolvedChangelog
+        Push-Location $RepoRoot
+        try {
+            $process = Start-Process -FilePath "pnpm" `
+                -ArgumentList @("exec", "vitest", "run", $QualityGatePath) `
+                -PassThru -NoNewWindow
+            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+                $process.Kill($true)
+                $process.WaitForExit()
+                throw "Local changelog quality gate timed out after $TimeoutSeconds s; its owned process tree was terminated."
+            }
+            return $process.ExitCode -eq 0
+        } finally {
+            Pop-Location
+        }
+    } finally {
+        $env:DYSFLOW_CHANGELOG_PATH = $previousChangelogPath
+    }
+}
+
+function Assert-ReleaseChangelogQuality {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$ChangelogPath,
+        [string]$RepoRoot = (Get-Location).Path,
+        [string]$QualityGatePath = "test/quality-gates/changelog-release-entry-format.test.ts",
+        [int]$TimeoutSeconds = 120
+    )
+
+    if (-not (Test-ReleaseChangelogQuality `
+        -ChangelogPath $ChangelogPath `
+        -RepoRoot $RepoRoot `
+        -QualityGatePath $QualityGatePath `
+        -TimeoutSeconds $TimeoutSeconds)) {
+        throw "Local changelog quality gate failed before creating or pushing the release commit."
+    }
+}
+
+function Invoke-ReleasePrepare {
+    [CmdletBinding()]
+    Param(
+        [ValidateSet("patch", "minor", "major")]
+        [string]$Bump,
+        [string]$Version,
+        [int]$GateTimeoutSeconds = 120,
+        [int]$CiMaxWaitSeconds = 600,
+        [int]$CiPollSeconds = 10
+    )
 
 # --- preflight ---------------------------------------------------------------
 
@@ -92,12 +191,19 @@ if ($next -le $current) {
 $tag = "v$next"
 Write-Host "Bumping $current -> $next (tag $tag)" -ForegroundColor Cyan
 
+$packagePath = (Resolve-Path "package.json").Path
+$changelogPath = Join-Path (Get-Location).Path "CHANGELOG.md"
+$packageBefore = [IO.File]::ReadAllBytes($packagePath)
+$changelogExisted = Test-Path $changelogPath
+$changelogBefore = if ($changelogExisted) { [IO.File]::ReadAllBytes($changelogPath) } else { $null }
+$preCommitSucceeded = $false
+try {
 # Update package.json (preserve formatting: parse, modify, emit).
-$pkgRaw = Get-Content "package.json" -Raw
+$pkgRaw = Get-Content $packagePath -Raw
 $pkgRaw = $pkgRaw -replace '"version"\s*:\s*"[^"]+"', ('"version": "{0}"' -f $next)
-Set-Content "package.json" -Value $pkgRaw -NoNewline
+Set-Content $packagePath -Value $pkgRaw -NoNewline
 
-# Update CHANGELOG.md (prepend a fresh section using git log since the last tag).
+# Update CHANGELOG.md (prepend one physical note per non-merge commit since the last tag).
 $lastTag = git describe --tags --abbrev=0 2>$null
 if ($null -eq $lastTag) {
     $logRange = "HEAD"
@@ -107,19 +213,12 @@ if ($null -eq $lastTag) {
     $date = (Get-Date).ToString("yyyy-MM-dd")
 }
 
-$commits = git log $logRange --pretty=format:"- %s" 2>$null
-if (-not $commits) {
-    $commits = @("- No commits since $lastTag (verify the previous tag is correct)")
-}
+$commits = git log $logRange --no-merges --pretty=format:"%s" 2>$null
+$changelogNewSection = New-ReleaseChangelogSection `
+    -Tag $tag `
+    -Date $date `
+    -CommitSubjects $commits
 
-$changelogNewSection = @"
-## [$tag] - $date
-
-$commits
-
-"@
-
-$changelogPath = "CHANGELOG.md"
 if (Test-Path $changelogPath) {
     $existing = Get-Content $changelogPath -Raw
     $marker = "# Changelog"
@@ -135,6 +234,21 @@ if (Test-Path $changelogPath) {
     Set-Content $changelogPath -Value ("# Changelog`n`n" + $changelogNewSection) -NoNewline
 }
 
+# Validate the exact file that would be committed. A malformed generated entry
+# must fail locally before the release commit can make main red.
+Assert-ReleaseChangelogQuality -ChangelogPath $changelogPath -TimeoutSeconds $GateTimeoutSeconds
+$preCommitSucceeded = $true
+} finally {
+    if (-not $preCommitSucceeded) {
+        [IO.File]::WriteAllBytes($packagePath, $packageBefore)
+        if ($changelogExisted) {
+            [IO.File]::WriteAllBytes($changelogPath, $changelogBefore)
+        } elseif (Test-Path $changelogPath) {
+            Remove-Item $changelogPath -Force
+        }
+    }
+}
+
 # --- commit + push ----------------------------------------------------------
 
 git add "package.json" "CHANGELOG.md"
@@ -147,16 +261,14 @@ git push origin main
 # --- wait for CI ------------------------------------------------------------
 
 Write-Host "Waiting for CI to confirm green on $headSha..." -ForegroundColor Cyan
-$maxWaitSeconds = 600  # 10 minutes — e2e + unit tests usually finish in ~2 min
-$pollSeconds = 10
 $elapsed = 0
 $ciConcluded = $null
 $ciRunId = $null
 
 # Find the run that corresponds to our head SHA.
-while ($elapsed -lt $maxWaitSeconds -and -not $ciConcluded) {
-    Start-Sleep -Seconds $pollSeconds
-    $elapsed += $pollSeconds
+while ($elapsed -lt $CiMaxWaitSeconds -and -not $ciConcluded) {
+    Start-Sleep -Seconds $CiPollSeconds
+    $elapsed += $CiPollSeconds
     $runJson = gh run list --limit 20 --workflow ci.yml --json databaseId,headSha,status,conclusion 2>$null | ConvertFrom-Json
     $matchingRun = $runJson | Where-Object { $_.headSha -eq $headSha } | Select-Object -First 1
     if ($matchingRun) {
@@ -170,7 +282,7 @@ while ($elapsed -lt $maxWaitSeconds -and -not $ciConcluded) {
 }
 
 if (-not $ciConcluded) {
-    throw "CI did not conclude within $maxWaitSeconds s. Check run at: https://github.com/DysTelefonica/dysflow/actions"
+    throw "CI did not conclude within $CiMaxWaitSeconds s. Check run at: https://github.com/DysTelefonica/dysflow/actions"
 }
 
 if ($ciConcluded -ne "success") {
@@ -191,3 +303,8 @@ Write-Host "  - Sign SHA256SUMS with Ed25519"
 Write-Host "  - Publish the GitHub Release with the assets"
 Write-Host ""
 Write-Host "Watch progress: gh run watch --workflow release.yml"
+}
+
+if ($MyInvocation.InvocationName -ne ".") {
+    Invoke-ReleasePrepare -Bump $Bump -Version $Version
+}

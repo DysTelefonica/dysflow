@@ -11,21 +11,27 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
      bundle unrelated work).
   2. Refuses if local `main` is ahead of `origin/main` (so no un-CI'd commits
      land in the release).
-  3. Bumps `package.json` and pre-pends a `## [vX.Y.Z] - YYYY-MM-DD` block to
-     `CHANGELOG.md` from `git log <last-tag>..HEAD`.
-  4. Pushes the `chore(release): prepare vX.Y.Z` commit to `origin/main`.
-  5. **Polls `gh run list --workflow ci.yml` filtered by the release commit's
+  3. Bumps `package.json` and prepends a `## [vX.Y.Z] - YYYY-MM-DD` block to
+     `CHANGELOG.md`, with one physical bullet per non-merge commit from
+     `git log <last-tag>..HEAD`.
+  4. Runs `test/quality-gates/changelog-release-entry-format.test.ts` locally
+     against the generated file. A malformed entry aborts before `git add`,
+     commit, or push.
+  5. Pushes the `chore(release): prepare vX.Y.Z` commit to `origin/main`.
+  6. **Polls `gh run list --workflow ci.yml` filtered by the release commit's
      SHA** — not by `latest run` — and refuses to tag unless the conclusion
      is `success`. The CI workflow (`pnpm test` + `pnpm test:ps1` + `pnpm build`
      + `pnpm lint`) does NOT run the heavy `node E2E_testing/mcp-e2e.mjs`
      battery, which takes ~30 minutes; see the E2E row below.
-  6. On CI green: creates an annotated `vX.Y.Z` tag and pushes it. The
+  7. On CI green: creates an annotated `vX.Y.Z` tag and pushes it. The
      `.github/workflows/release.yml` workflow fires on the tag push, builds
      the tarball, signs `SHA256SUMS` with Ed25519, and publishes the
      GitHub Release.
 
-15 Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract
-so a future refactor cannot regress to "tag unconditionally". Run them with:
+Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this
+contract, including a generated entry that passes the real Vitest quality gate
+and a deliberately collapsed entry that aborts before release Git writes. Run
+them with:
 
     pwsh -NoProfile -Command "Invoke-Pester -Path scripts/tests/release-prepare.Tests.ps1"
 
@@ -37,6 +43,11 @@ so a future refactor cannot regress to "tag unconditionally". Run them with:
 
 The script exits with a non-zero status if any step fails, including the CI
 gate. Watch progress with `gh run watch <id>`.
+
+Review the non-merge commit subjects since the previous tag as consumer-facing
+release text before running the script. The script turns them into `### Changes`
+notes and preserves one physical bullet per commit, but the operator still owns
+wording and grouping.
 
 ## MCP protocol compatibility
 
