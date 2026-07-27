@@ -125,7 +125,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("blocks fix_encoding when writes are disabled (regression #665)", async () => {
+  it("blocks fix_encoding apply:true when writes are disabled (regression #665)", async () => {
     const { tool, vbaSyncToolService } = toolByName("fix_encoding", false);
     // fix_encoding schema accepts location + accessPath + projectRoot but not
     // moduleNames (modules are derived from the project). Provide enough to
@@ -133,10 +133,64 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     const result = await tool.handler({
       location: "module",
       projectRoot: "C:/project",
+      apply: true,
     });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it.each([
+    "fix_encoding",
+    "vba_inline_execution",
+  ] as const)("allows %s dryRun:true through public dispatch with writes disabled", async (name) => {
+    const { tool, vbaSyncToolService } = toolByName(name, false);
+    const input =
+      name === "fix_encoding"
+        ? { location: "module", dryRun: true }
+        : { code: 'result = "OK"', dryRun: true };
+
+    const result = await tool.handler(input);
+
+    expect(result.isError).toBe(false);
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ dryRun: true })]);
+  });
+
+  it.each([
+    "fix_encoding",
+    "vba_inline_execution",
+  ] as const)("keeps %s diff:true and omitted intent as safe plans", async (name) => {
+    for (const intent of [{ diff: true }, {}]) {
+      const { tool, vbaSyncToolService } = toolByName(name, false);
+      const input =
+        name === "fix_encoding"
+          ? { location: "module", ...intent }
+          : { code: 'result = "OK"', ...intent };
+
+      const result = await tool.handler(input);
+
+      expect(result.isError).toBe(false);
+      expect(vbaSyncToolService.requests).toEqual([
+        expect.objectContaining({ dryRun: true, ...intent }),
+      ]);
+    }
+  });
+
+  it.each([
+    "fix_encoding",
+    "vba_inline_execution",
+  ] as const)("lets apply:true override dryRun:true for %s at public dispatch", async (name) => {
+    const { tool, vbaSyncToolService } = toolByName(name, true);
+    const input =
+      name === "fix_encoding"
+        ? { location: "module", apply: true, dryRun: true }
+        : { code: 'result = "OK"', apply: true, dryRun: true };
+
+    const result = await tool.handler(input);
+
+    expect(result.isError).toBe(false);
+    expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ apply: true })]);
   });
 
   it("blocks generate_form when writes are disabled", async () => {
@@ -412,11 +466,14 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
     for (const name of binaryWriters) {
       const tool = tools.find((t) => t.name === name);
       if (!tool) throw new Error(`Tool not registered: ${name}`);
-      // These tools force isDryRun=false, so they must gate even without apply/dryRun.
+      // Explicit apply must always cross the write gate.
       // fix_encoding is ALSO a filesystem write, so it requires non-empty input
       // (the dispatch-factory rejects empty input with MCP_INPUT_INVALID before
       // the gate would fire). Provide a minimal location to pass that check.
-      const input = name === "fix_encoding" ? { location: "module" } : (minimalInput[name] ?? {});
+      const input =
+        name === "fix_encoding"
+          ? { location: "module", apply: true }
+          : { ...(minimalInput[name] ?? {}), apply: true };
       const result = await tool.handler(input);
       expect(result.content[0]?.text, name).toContain("MCP_WRITES_DISABLED");
     }

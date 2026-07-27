@@ -105,6 +105,16 @@ describe("dispatch-family executable result contracts — #1098", () => {
     if (contract.kind !== "dataSchema") return;
 
     expect(contract.schema.safeParse({ returnValue: "ok" }).success).toBe(true);
+    expect(
+      contract.schema.safeParse({
+        operation: "vba_inline_execution",
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        willModifyFilesystem: false,
+        codeLength: 13,
+      }).success,
+    ).toBe(true);
     expect(contract.schema.safeParse({ mode: "apply" }).success).toBe(false);
   });
 

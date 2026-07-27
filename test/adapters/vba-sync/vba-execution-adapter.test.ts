@@ -184,7 +184,7 @@ describe("VbaExecutionAdapter", () => {
       'result = "a""b" \' quoted content',
       '\' "OK" is only a comment\nresult = 1',
     ]) {
-      const result = await adapter.execute("vba_inline_execution", { code });
+      const result = await adapter.execute("vba_inline_execution", { code, apply: true });
       expect(result.ok, code).toBe(true);
     }
     expect(executeMappedTool).toHaveBeenCalled();
@@ -245,7 +245,10 @@ describe("VbaExecutionAdapter", () => {
     };
     const adapter = new VbaExecutionAdapter(orchestrator, fileSystem, TEST_ALLOWED_PROCEDURES);
 
-    const result = await adapter.execute("vba_inline_execution", { code: 'Debug.Print "x"' });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'Debug.Print "x"',
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected rejection");
@@ -263,6 +266,7 @@ describe("VbaExecutionAdapter", () => {
     await adapter.execute("vba_inline_execution", {
       code: 'Debug.Print "ok"',
       timeoutMs: 120_000,
+      apply: true,
     });
     for (const toolName of ["import_modules", "run_vba"]) {
       const call = executeMappedTool.mock.calls.find((c) => c[0] === toolName);
@@ -286,6 +290,7 @@ describe("VbaExecutionAdapter", () => {
 
     const result = await adapter.execute("vba_inline_execution", {
       code: 'Debug.Print "Hello World"',
+      apply: true,
     });
 
     expect(result.ok).toBe(true);
@@ -315,7 +320,7 @@ describe("VbaExecutionAdapter", () => {
     // imports.
     const { adapter, fileSystem } = makeInlineAdapter();
 
-    await adapter.execute("vba_inline_execution", { code: 'result = "ok"' });
+    await adapter.execute("vba_inline_execution", { code: 'result = "ok"', apply: true });
 
     const written = fileSystem.writeFile.mock.calls[0]?.[1] as string;
     expect(written).toContain("Public Function ExecuteInline() As Variant");
@@ -330,7 +335,7 @@ describe("VbaExecutionAdapter", () => {
     // run_vba must receive the bare procedure name so the snippet resolves.
     const { adapter, executeMappedTool } = makeInlineAdapter();
 
-    await adapter.execute("vba_inline_execution", { code: 'result = "ok"' });
+    await adapter.execute("vba_inline_execution", { code: 'result = "ok"', apply: true });
 
     const runCall = executeMappedTool.mock.calls.find((c) => c[0] === "run_vba");
     expect(runCall, "expected a run_vba call").toBeDefined();
@@ -348,7 +353,10 @@ describe("VbaExecutionAdapter", () => {
           : successResult({ ok: true }),
       ),
     );
-    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'result = "OK"',
+      apply: true,
+    });
     expect(result).toMatchObject({ ok: true, data: { returnValue: "OK" } });
   });
 
@@ -370,7 +378,10 @@ describe("VbaExecutionAdapter", () => {
       .mockRejectedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("file remained"));
 
-    const result = await adapter.execute("vba_inline_execution", { code: "result = missingName" });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: "result = missingName",
+      apply: true,
+    });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected primary failure");
     expect(result.error.code).toBe("VBA_SYNTAX_ERROR");
@@ -405,7 +416,10 @@ describe("VbaExecutionAdapter", () => {
       return Promise.resolve(successResult({ ok: true }));
     });
 
-    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'result = "OK"',
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected cleanup failure");
@@ -429,7 +443,10 @@ describe("VbaExecutionAdapter", () => {
       return Promise.resolve(successResult({ ok: true }));
     });
 
-    const result = await adapter.execute("vba_inline_execution", { code: 'result = "OK"' });
+    const result = await adapter.execute("vba_inline_execution", {
+      code: 'result = "OK"',
+      apply: true,
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected phase failure");

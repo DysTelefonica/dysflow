@@ -30,8 +30,21 @@ const RUN_VBA_CONTRACT = defineResultContract({
 });
 
 const VBA_INLINE_EXECUTION_CONTRACT = defineResultContract({
-  description: "Inline VBA execution result returned by the temporary run_vba procedure.",
-  schema: z.object({ returnValue: z.json() }).loose(),
+  description: "Inline VBA plan or execution result returned by the temporary run_vba procedure.",
+  modes: ["plan", "apply"],
+  schema: z.union([
+    z.object({ returnValue: z.json() }).loose(),
+    z
+      .object({
+        operation: z.literal("vba_inline_execution"),
+        dryRun: z.literal(true),
+        willExecute: z.literal(false),
+        willModifyAccess: z.literal(false),
+        willModifyFilesystem: z.literal(false),
+        codeLength: z.number().int().nonnegative(),
+      })
+      .loose(),
+  ]),
 });
 
 const IMPORT_QUERIES_CONTRACT = defineResultContract({

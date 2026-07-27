@@ -153,6 +153,8 @@ export function createDispatchTool(
   const isBinaryWrite = route.kind === "vba-sync" && route.mutatesBinary;
   const isFilesystemWrite = route.kind === "vba-sync" && route.mutatesFilesystem;
   const isDryRunCapableBinaryWrite =
+    name === "fix_encoding" ||
+    name === "vba_inline_execution" ||
     name === "form_add_control" ||
     name === "form_move_control" ||
     name === "form_rename_control" ||
@@ -213,6 +215,13 @@ export function createDispatchTool(
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
       let normalizedInput = stripDeprecatedCompileParams(name, input);
       normalizedInput = normalizeFormSetPropertyInput(name, normalizedInput);
+      if (
+        (name === "fix_encoding" || name === "vba_inline_execution") &&
+        isRecord(normalizedInput) &&
+        normalizedInput.apply === true
+      ) {
+        normalizedInput = { ...normalizedInput, dryRun: false };
+      }
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
         // Issue #1078 / #757 (C4) — `enrichmentForValidationMessage`
@@ -298,6 +307,8 @@ export function createDispatchTool(
               // plan-only path; apply:true performs the chunked execute.
               // form_set_properties + form_duplicate_control (#872 F1, F2)
               // join the same seam with the same apply/dryRun semantics.
+              name === "fix_encoding" ||
+              name === "vba_inline_execution" ||
               name === "catalog_add_control" ||
               name === "form_add_control" ||
               name === "form_move_control" ||

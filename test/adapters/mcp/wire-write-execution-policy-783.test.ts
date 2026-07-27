@@ -690,6 +690,7 @@ describe("AC8 — allowWrites:false blocks every write regardless of policy (#78
         location: "modules",
         projectRoot: "C:/project",
         accessPath: "C:/project/front.accdb",
+        apply: true,
       },
     },
   ];
