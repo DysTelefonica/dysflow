@@ -43,6 +43,10 @@ import {
   type ControlPropertyReader,
   NoopControlPropertyReader,
 } from "./control-property-reader.js";
+import {
+  type DestinationRootOrchestratorLike,
+  withResolvedDestinationRoot,
+} from "./destination-root-override.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
@@ -161,6 +165,15 @@ export interface VbaModulesOrchestrator {
   scriptPath: string;
   accessPassword?: string;
   cwd: string;
+  /**
+   * Issue #1169 — the configured `destinationRoot` (typically forwarded
+   * from `VbaSyncAdapter.destinationRoot`). The helper uses this to tag
+   * the `destinationRootSource` field as `"config"` when the resolved
+   * value matches it. Optional for backward compatibility — when the
+   * orchestrator has no configured `destinationRoot`, the helper falls
+   * back to `"projectRoot"` / `"cwd"` / `"default"`.
+   */
+  destinationRoot?: string;
   env?: Record<string, string | undefined>;
   resolveExecutionTarget(
     params: Record<string, unknown>,
@@ -181,6 +194,23 @@ export interface VbaModulesOrchestrator {
 }
 
 const MANAGED_CODE_EXTENSIONS = [".bas", ".cls"];
+
+/**
+ * Issue #1169 — write-class tools routed through `VbaModulesAdapter`
+ * whose success envelope MUST surface `resolvedDestinationRoot` and
+ * `destinationRootSource`. Read-class tools (`list_objects`,
+ * `verify_code`, `exists`, `list_vba_modules`, `vba_orphan_audit`,
+ * `fix_encoding` is intentionally excluded because it operates on the
+ * binary, not the managed source tree) keep their exact prior shape
+ * untouched.
+ */
+const DESTINATION_ROOT_WRITE_TOOLS = new Set<string>([
+  "export_modules",
+  "export_all",
+  "import_modules",
+  "import_all",
+  "delete_module",
+]);
 
 /**
  * Maps a disk file name to the VBA module name it represents, or null when the
@@ -882,24 +912,42 @@ export class VbaModulesAdapter {
     //   - `metadata.deprecated` for AI consumers (programmatic branch).
     //   - `diagnostics[*]` (level:"warning") for log-grep + legacy
     //     readers.
+    let result: OperationResult<unknown> = resultWithPrune;
     if (deprecationNotice !== undefined) {
-      if (resultWithPrune.ok) {
-        return {
-          ...resultWithPrune,
-          diagnostics: [...resultWithPrune.diagnostics, deprecationNotice.diagnostic],
-          metadata: mergeOperationMetadata(resultWithPrune.metadata, deprecationNotice.metadata),
+      if (result.ok) {
+        result = {
+          ...result,
+          diagnostics: [...result.diagnostics, deprecationNotice.diagnostic],
+          metadata: mergeOperationMetadata(result.metadata, deprecationNotice.metadata),
+        };
+      } else {
+        // Failure envelope: surface the notice too so a consumer that
+        // bailed on the no-write run still sees the migration hint.
+        result = {
+          ...result,
+          diagnostics: [...result.diagnostics, deprecationNotice.diagnostic],
+          metadata: mergeOperationMetadata(result.metadata, deprecationNotice.metadata),
         };
       }
-      // Failure envelope: surface the notice too so a consumer that
-      // bailed on the no-write run still sees the migration hint.
-      return {
-        ...resultWithPrune,
-        diagnostics: [...resultWithPrune.diagnostics, deprecationNotice.diagnostic],
-        metadata: mergeOperationMetadata(resultWithPrune.metadata, deprecationNotice.metadata),
-      };
     }
 
-    return resultWithPrune;
+    // Issue #1169 — stamp the success envelope with the EFFECTIVE
+    // destinationRoot + provenance tag. The orchestrator already
+    // honors `params.destinationRoot` as a precedence-1 override; the
+    // helper just classifies the resolved value so a consumer can audit
+    // the path without re-running `resolveExecutionTarget`. Restricted
+    // to write-class tools only (read-class tools like `list_objects`,
+    // `verify_code`, `exists`, etc. must keep their exact prior
+    // envelope shape — the contract only commits to the destinationRoot
+    // surface on writes).
+    if (DESTINATION_ROOT_WRITE_TOOLS.has(toolName)) {
+      return withResolvedDestinationRoot(
+        result,
+        effectiveParams,
+        this.orchestrator satisfies DestinationRootOrchestratorLike,
+      );
+    }
+    return result;
   }
 
   /**

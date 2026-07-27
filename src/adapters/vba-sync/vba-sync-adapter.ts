@@ -485,6 +485,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
       scriptPath: this.scriptPath,
       accessPassword: this.accessPassword,
       cwd: this.cwd,
+      // Issue #1169 — the modules adapter needs the configured
+      // `destinationRoot` so the helper can tag the response with
+      // `destinationRootSource: "config"` when no override is supplied.
+      destinationRoot: this.destinationRoot,
       resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
       validateStrictContext: (params, target) => this.validateStrictContext(params, target),
       runPreflightCleanup: (target) => this.runPreflightCleanup(target),
