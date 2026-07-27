@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 
 /**
  * `CHANGELOG.md` is packaged into the release tarball, so every released entry is a
- * user-facing artifact. Entries are written by hand during release prep; nothing
- * generates them, so a pasted `git log` dump — merge-commit subjects, or a whole
- * release folded onto one physical line — reaches consumers unnoticed.
+ * user-facing artifact. `release-prepare.ps1` generates the initial entry, and an
+ * operator may curate it further. This gate prevents either path from preserving a
+ * pasted `git log` dump — merge-commit subjects, or a whole release folded onto one
+ * physical line.
  *
  * This gate reads the changelog as data: it discovers released version entries from
  * their headings rather than naming any single release, so every future release is
@@ -125,7 +126,9 @@ function describeViolations(violations: readonly Violation[]): string[] {
   );
 }
 
-const changelog = readFileSync("CHANGELOG.md", "utf8");
+// The override lets the release-script Pester suite exercise this exact gate
+// against isolated fixtures without mutating the repository changelog.
+const changelog = readFileSync(process.env.DYSFLOW_CHANGELOG_PATH ?? "CHANGELOG.md", "utf8");
 const releaseEntries = parseReleaseEntries(changelog);
 const curatedEntries = releaseEntries.filter(
   (entry) => !LEGACY_UNCURATED_RELEASES.has(entry.version),
