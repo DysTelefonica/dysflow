@@ -80,6 +80,23 @@ describe("DysflowProjectConfig — capabilities consolidated block (#657, #655, 
       expect(result.diagnostics).toEqual([]);
     });
 
+    it("allows project-local invocation telemetry to be disabled explicitly", () => {
+      const disabled = buildConfigWithCapabilities({
+        accessPath: "app.accdb",
+        capabilities: { telemetry: { invocations: false } },
+      });
+      const defaulted = buildConfigWithCapabilities({
+        accessPath: "app.accdb",
+        capabilities: {},
+      });
+
+      expect(disabled.ok).toBe(true);
+      expect(defaulted.ok).toBe(true);
+      if (!disabled.ok || !defaulted.ok) throw new Error("expected valid configs");
+      expect(disabled.data.invocationTelemetryEnabled).toBe(false);
+      expect(defaulted.data.invocationTelemetryEnabled).toBe(true);
+    });
+
     it("treats an empty capabilities.procedures.allow as an empty allowlist (dryrun-only)", () => {
       const result = buildConfigWithCapabilities({
         accessPath: "app.accdb",

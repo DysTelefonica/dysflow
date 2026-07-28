@@ -107,6 +107,14 @@ export const logsResultContract = defineResultContract({
       entries: z.array(unknownRecord),
       totalCount: z.number().int().nonnegative(),
       truncated: z.boolean(),
+      aggregate: z
+        .object({
+          tools: z.array(unknownRecord),
+          rejectedParams: z.array(unknownRecord),
+          missingParams: z.array(unknownRecord),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
 });

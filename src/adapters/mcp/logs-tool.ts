@@ -31,6 +31,7 @@ import { logsResultContract } from "./contracts/bootstrap-result-contracts.js";
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { InvocationTelemetryEntry } from "../../core/telemetry/invocation-telemetry.js";
 import { type JsonObjectSchema, PROJECT_IDENTITY_BLOCK } from "../../shared/validation/index.js";
 import { CWD_OVERRIDE_SCHEMA_PROP, resolveCwdOverride } from "./cwd-override.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
@@ -43,8 +44,9 @@ export type LogLevel = "error" | "warning" | "info" | "debug";
 export type LogEntry = {
   timestamp: string;
   level: LogLevel;
-  operationId: string;
+  operationId: string | null;
   tool: string;
+  action: string;
   message: string;
   context: Record<string, unknown>;
 };
@@ -55,6 +57,8 @@ export type LogsOptions = {
   level?: LogLevel;
   operationId?: string;
   tool?: string;
+  action?: string;
+  groupBy?: "tool";
   limit?: number;
   orderBy?: "asc" | "desc";
 };
@@ -68,6 +72,20 @@ export type LogsResult = {
   entries: LogEntry[];
   totalCount: number;
   truncated: boolean;
+  aggregate?: {
+    tools: Array<{
+      tool: string;
+      calls: number;
+      errors: number;
+      contractErrors: number;
+      runtimeErrors: number;
+      p50Ms: number;
+      p95Ms: number;
+      lastUsed: string;
+    }>;
+    rejectedParams: Array<{ parameter: string; count: number }>;
+    missingParams: Array<{ parameter: string; count: number }>;
+  };
 };
 
 const DEFAULT_LIMIT = 100;
@@ -173,6 +191,7 @@ function recordToLogEntry(record: OperationRecord): LogEntry | null {
     level,
     operationId,
     tool: action,
+    action,
     message: status === undefined ? `${action}` : `${action} (${status})`,
     context: recordMetadata(record.metadata),
   };
@@ -223,6 +242,7 @@ function markerToLogEntry(parsed: unknown, fallbackOperationId: string): LogEntr
     level,
     operationId,
     tool,
+    action: optionalString(obj.action) ?? tool,
     message,
     context: recordMetadata(obj.context ?? obj.metadata),
   };
@@ -259,6 +279,93 @@ async function readMarkers(runtimePath: string): Promise<LogEntry[]> {
   return entries;
 }
 
+function isInvocationTelemetryEntry(value: unknown): value is InvocationTelemetryEntry {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.timestamp === "string" &&
+    typeof record.tool === "string" &&
+    typeof record.action === "string" &&
+    (record.operationId === null || typeof record.operationId === "string") &&
+    (record.projectId === null || typeof record.projectId === "string") &&
+    (record.outcome === "ok" || record.outcome === "error") &&
+    (record.failureClass === "contract" ||
+      record.failureClass === "runtime" ||
+      record.failureClass === "none") &&
+    (record.errorCode === null || typeof record.errorCode === "string") &&
+    typeof record.durationMs === "number" &&
+    (record.writeIntent === "apply" ||
+      record.writeIntent === "dryRun" ||
+      record.writeIntent === "read") &&
+    Array.isArray(record.paramNamesPresent) &&
+    record.paramNamesPresent.every((name) => typeof name === "string") &&
+    (record.missingParams === undefined ||
+      (Array.isArray(record.missingParams) &&
+        record.missingParams.every((name) => typeof name === "string"))) &&
+    Array.isArray(record.rejectedParams) &&
+    record.rejectedParams.every((name) => typeof name === "string") &&
+    (record.unknownToolName === null || typeof record.unknownToolName === "string")
+  );
+}
+
+function invocationToLogEntry(record: InvocationTelemetryEntry): LogEntry {
+  return {
+    timestamp: record.timestamp,
+    level: record.outcome === "error" ? "error" : "info",
+    operationId: record.operationId,
+    tool: record.tool,
+    action: record.action,
+    message: `${record.tool} (${record.outcome})`,
+    context: {
+      outcome: record.outcome,
+      failureClass: record.failureClass,
+      errorCode: record.errorCode,
+      durationMs: record.durationMs,
+      writeIntent: record.writeIntent,
+      projectId: record.projectId,
+      paramNamesPresent: record.paramNamesPresent,
+      missingParams: record.missingParams,
+      rejectedParams: record.rejectedParams,
+      unknownToolName: record.unknownToolName,
+    },
+  };
+}
+
+async function readInvocationLog(
+  runtimePath: string,
+): Promise<Array<{ entry: LogEntry; record: InvocationTelemetryEntry }>> {
+  let names: string[];
+  try {
+    names = (await readdir(runtimePath))
+      .filter((name) => /^invocations\.jsonl(?:\.\d+)?$/.test(name))
+      .sort();
+  } catch {
+    return [];
+  }
+  const records: Array<{ entry: LogEntry; record: InvocationTelemetryEntry }> = [];
+  for (const name of names) {
+    let raw: string;
+    try {
+      raw = await readFile(join(runtimePath, name), "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of raw.split(/\r?\n/)) {
+      if (line.trim().length === 0) continue;
+      try {
+        const parsed: unknown = JSON.parse(line);
+        if (!isInvocationTelemetryEntry(parsed)) continue;
+        const record = {
+          ...parsed,
+          missingParams: parsed.missingParams ?? [],
+        };
+        records.push({ entry: invocationToLogEntry(record), record });
+      } catch {}
+    }
+  }
+  return records;
+}
+
 // ─── Filtering / ordering ─────────────────────────────────────────────────────
 
 function compareTimestamp(a: LogEntry, b: LogEntry, orderBy: "asc" | "desc"): number {
@@ -279,13 +386,14 @@ function withinTimeRange(
 
 function applyFilters(entries: LogEntry[], options: LogsOptions | undefined): LogEntry[] {
   if (options === undefined) return entries;
-  const { since, until, level, operationId, tool } = options;
+  const { since, until, level, operationId, tool, action } = options;
   if (
     since === undefined &&
     until === undefined &&
     level === undefined &&
     operationId === undefined &&
-    tool === undefined
+    tool === undefined &&
+    action === undefined
   ) {
     return entries;
   }
@@ -294,8 +402,66 @@ function applyFilters(entries: LogEntry[], options: LogsOptions | undefined): Lo
     if (level !== undefined && entry.level !== level) return false;
     if (operationId !== undefined && entry.operationId !== operationId) return false;
     if (tool !== undefined && entry.tool !== tool) return false;
+    if (action !== undefined && entry.action !== action) return false;
     return true;
   });
+}
+
+function percentile(values: number[], ratio: number): number {
+  if (values.length === 0) return 0;
+  const ordered = [...values].sort((left, right) => left - right);
+  return ordered[Math.max(0, Math.ceil(ordered.length * ratio) - 1)] ?? 0;
+}
+
+function buildInvocationAggregate(
+  records: InvocationTelemetryEntry[],
+): NonNullable<LogsResult["aggregate"]> {
+  const perTool = new Map<string, InvocationTelemetryEntry[]>();
+  const rejected = new Map<string, number>();
+  const missing = new Map<string, number>();
+  for (const record of records) {
+    const bucket = perTool.get(record.tool) ?? [];
+    bucket.push(record);
+    perTool.set(record.tool, bucket);
+    for (const parameter of record.rejectedParams) {
+      rejected.set(parameter, (rejected.get(parameter) ?? 0) + 1);
+    }
+    for (const parameter of record.missingParams) {
+      missing.set(parameter, (missing.get(parameter) ?? 0) + 1);
+    }
+  }
+  const tools = [...perTool.entries()]
+    .map(([tool, bucket]) => ({
+      tool,
+      calls: bucket.length,
+      errors: bucket.filter((record) => record.outcome === "error").length,
+      contractErrors: bucket.filter((record) => record.failureClass === "contract").length,
+      runtimeErrors: bucket.filter((record) => record.failureClass === "runtime").length,
+      p50Ms: percentile(
+        bucket.map((record) => record.durationMs),
+        0.5,
+      ),
+      p95Ms: percentile(
+        bucket.map((record) => record.durationMs),
+        0.95,
+      ),
+      lastUsed: bucket.reduce(
+        (latest, record) => (record.timestamp > latest ? record.timestamp : latest),
+        "",
+      ),
+    }))
+    .sort((left, right) => right.calls - left.calls || left.tool.localeCompare(right.tool));
+  const rejectedParams = [...rejected.entries()]
+    .map(([parameter, count]) => ({ parameter, count }))
+    .sort(
+      (left, right) => right.count - left.count || left.parameter.localeCompare(right.parameter),
+    );
+  const missingParams = [...missing.entries()]
+    .map(([parameter, count]) => ({ parameter, count }))
+    .sort(
+      (left, right) => right.count - left.count || left.parameter.localeCompare(right.parameter),
+    );
+  return { tools, rejectedParams, missingParams };
 }
 
 function clampLimit(value: number | undefined): number {
@@ -321,12 +487,17 @@ export async function tryReadLogs(input: LogsInput, cwd: string): Promise<LogsRe
   const runtimePath = join(cwd, ".dysflow", "runtime");
   const options = input.options;
 
-  const [operationsEntries, markerEntries] = await Promise.all([
+  const [operationsEntries, markerEntries, invocationPairs] = await Promise.all([
     readOperationsLog(runtimePath),
     readMarkers(runtimePath),
+    readInvocationLog(runtimePath),
   ]);
 
-  const merged: LogEntry[] = [...operationsEntries, ...markerEntries];
+  const merged: LogEntry[] = [
+    ...operationsEntries,
+    ...markerEntries,
+    ...invocationPairs.map(({ entry }) => entry),
+  ];
   const filtered = applyFilters(merged, options);
 
   const orderBy = options?.orderBy ?? "desc";
@@ -337,7 +508,21 @@ export async function tryReadLogs(input: LogsInput, cwd: string): Promise<LogsRe
   const totalCount = ordered.length;
   const truncated = totalCount > entries.length;
 
-  return { entries, totalCount, truncated };
+  const aggregate =
+    options?.groupBy === "tool"
+      ? buildInvocationAggregate(
+          invocationPairs
+            .filter(({ entry }) => applyFilters([entry], options).length === 1)
+            .map(({ record }) => record),
+        )
+      : undefined;
+
+  return {
+    entries,
+    totalCount,
+    truncated,
+    ...(aggregate === undefined ? {} : { aggregate }),
+  };
 }
 
 // ─── MCP tool factory ─────────────────────────────────────────────────────────
@@ -355,7 +540,7 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
     options: {
       type: "object",
       description:
-        "Optional log query controls: since, until, level, operationId, tool, limit, and orderBy. Defaults to limit 100 and newest-first order; limit is capped at 1000. Unknown keys or invalid enum values are rejected by the schema.",
+        "Optional log query controls: since, until, level, operationId, real MCP tool, coarse action, aggregate grouping, limit, and orderBy. Defaults to limit 100 and newest-first order; limit is capped at 1000. Unknown keys or invalid enum values are rejected by the schema.",
       additionalProperties: false,
       properties: {
         since: {
@@ -377,7 +562,19 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
         },
         tool: {
           type: "string",
-          description: "Filter by tool/action (e.g. vba, query, diagnostics).",
+          description:
+            "Filter by the exact MCP tool name (for example query_sql or import_modules).",
+        },
+        action: {
+          type: "string",
+          description:
+            "Filter by the coarse compatibility action family (for example vba, query, diagnostics, import, test, or run).",
+        },
+        groupBy: {
+          type: "string",
+          enum: ["tool"],
+          description:
+            "Return aggregate per-tool call/error/latency statistics plus rejected and omitted-required parameter frequencies.",
         },
         limit: {
           type: "number",
@@ -410,7 +607,7 @@ export function createLogsTool(opts: { cwd: string }): DysflowMcpTool {
     name: "logs",
     resultContract: logsResultContract,
     description:
-      "Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Sources: operations.json (recorded operations) + markers/*.json (per-operation markers). Filter by since/until/level/operationId/tool; limit defaults to 100, capped at 1000; orderBy defaults to desc (most recent first). Response: { entries: LogEntry[], totalCount, truncated }. Each LogEntry carries { timestamp, level, operationId, tool, message, context }. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
+      "Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Sources: invocations.jsonl (real MCP attempts), operations.json (lock ledger), and markers/*.json. Filter exact tool and coarse action independently; groupBy:'tool' adds per-tool counts, split errors, latency percentiles, last use, and rejected/omitted-required parameter frequencies. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.logs.summary,
     inputSchema: LOGS_TOOL_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
