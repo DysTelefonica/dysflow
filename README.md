@@ -32,10 +32,16 @@ the release commit's SHA**, tag, push tag) and refuses to tag unless CI conclude
 Ed25519, and publishes the GitHub Release.
 
 The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md).
-Heavy MCP E2E (`node E2E_testing/mcp-e2e.mjs`) is run by humans only at the very end
+Heavy MCP E2E (`pnpm test:e2e:mcp:release`) is run by humans only at the very end
 of a release — it is NOT run by CI — and its structural contracts are pinned by
 cheap vitest tests in `test/quality-gates/mcp-e2e-*` so the 30-minute battery
 rarely surprises you.
+
+MCP invocation telemetry is local to the selected project at
+`.dysflow/runtime/invocations.jsonl`. It records only tool and parameter names;
+argument values are never persisted. Set `capabilities.telemetry.invocations` to
+`false` in `.dysflow/project.json` to opt out, and use the read-only `logs` tool
+for exact `tool` or coarse `action` filters and `groupBy: "tool"` aggregation.
 
 Operator commands:
 
@@ -911,7 +917,7 @@ Return static tool contracts in one of two views. Use `compact` for low-context 
   4. `schema({ "view": "full" })` only for bulk analysis that genuinely needs every complete contract.
 
 #### `describe_tool`
-Preferred one-tool deep introspection view. It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`. Use it after compact discovery instead of fetching the full 90-tool catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Preferred one-tool deep introspection view. It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`. Use it after compact discovery instead of fetching the complete tool catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `name` (string): Tool name to describe (canonical param).
   - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
