@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type {
   InvocationFailureClass,
@@ -23,8 +23,10 @@ const DEFAULT_MAX_FILES = 3;
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 30_000;
 const LOCK_RETRY_MS = 10;
+const PENDING_LOCK_REAP_LIMIT = 32;
 const MAX_NAME_LENGTH = 128;
 const MAX_PARAMETER_NAMES = 256;
+const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
 export type InvocationTelemetryTarget = {
   cwd: string;
@@ -198,6 +200,8 @@ export function createInvocationTelemetryRecorder(options: {
   maxFiles?: number;
   lockTimeoutMs?: number;
   staleLockMs?: number;
+  /** Test seam; production probes a PID without signalling it. */
+  isProcessAlive?: (pid: number) => boolean;
 }): InvocationTelemetryRecorder {
   const enabled = options.enabled !== false;
   const maxBytes = Math.max(512, Math.floor(options.maxBytes ?? DEFAULT_MAX_BYTES));
@@ -210,7 +214,9 @@ export function createInvocationTelemetryRecorder(options: {
   const runtimePath = join(options.cwd, ".dysflow", "runtime");
   const sinkPath = join(runtimePath, "invocations.jsonl");
   const lockPath = `${sinkPath}.lock`;
+  const isProcessAlive = options.isProcessAlive ?? processIsAlive;
   let pending = Promise.resolve();
+  let reapCursor = 0;
 
   const rotateIfNeeded = async (incomingBytes: number): Promise<void> => {
     let currentBytes = 0;
@@ -236,10 +242,17 @@ export function createInvocationTelemetryRecorder(options: {
       const line = `${JSON.stringify(entry)}\n`;
       const write = async (): Promise<void> => {
         await mkdir(runtimePath, { recursive: true });
-        await withInvocationFileLock(lockPath, lockTimeoutMs, staleLockMs, async () => {
-          await rotateIfNeeded(Buffer.byteLength(line, "utf8"));
-          await appendFile(sinkPath, line, { encoding: "utf8", mode: 0o600 });
-        });
+        reapCursor = await reapPendingLocks(lockPath, staleLockMs, isProcessAlive, reapCursor);
+        await withInvocationFileLock(
+          lockPath,
+          lockTimeoutMs,
+          staleLockMs,
+          isProcessAlive,
+          async () => {
+            await rotateIfNeeded(Buffer.byteLength(line, "utf8"));
+            await appendFile(sinkPath, line, { encoding: "utf8", mode: 0o600 });
+          },
+        );
       };
       pending = pending.catch(() => undefined).then(write);
       await pending;
@@ -306,6 +319,7 @@ async function withInvocationFileLock<T>(
   lockPath: string,
   timeoutMs: number,
   staleLockMs: number,
+  _isProcessAlive: (pid: number) => boolean,
   operation: () => Promise<T>,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -342,6 +356,85 @@ async function withInvocationFileLock<T>(
   } finally {
     await removeInvocationLockByOwner(lockPath, ownerMarkerName, "release");
   }
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM and unfamiliar platform errors are not evidence that a PID is dead.
+    return lockErrorCode(error) !== "ESRCH";
+  }
+}
+
+function escapedRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Reaps only abandoned sibling directories from interrupted lock acquisition.
+ * The stable lock path is intentionally never a candidate for recursive removal.
+ */
+async function reapPendingLocks(
+  lockPath: string,
+  staleLockMs: number,
+  isProcessAlive: (pid: number) => boolean,
+  cursor: number,
+): Promise<number> {
+  const parentPath = dirname(lockPath);
+  const pendingName = new RegExp(
+    `^${escapedRegExp(basename(lockPath))}\\.pending-([1-9]\\d*)-${UUID_PATTERN}$`,
+  );
+  let candidates: Array<{ name: string }>;
+  try {
+    candidates = (await readdir(parentPath, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && pendingName.test(entry.name))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch {
+    return cursor;
+  }
+  const start = candidates.length === 0 ? 0 : cursor % candidates.length;
+  candidates.push(...candidates.splice(0, start));
+  const batch = candidates.slice(0, PENDING_LOCK_REAP_LIMIT);
+
+  for (const candidate of batch) {
+    const match = pendingName.exec(candidate.name);
+    const pid = match?.[1] === undefined ? Number.NaN : Number(match[1]);
+    if (!Number.isSafeInteger(pid) || pid <= 0) continue;
+
+    const pendingPath = join(parentPath, candidate.name);
+    let entries: string[];
+    let latestMtimeMs: number;
+    try {
+      const [directory, children] = await Promise.all([stat(pendingPath), readdir(pendingPath)]);
+      if (!directory.isDirectory()) continue;
+      entries = children;
+      latestMtimeMs = directory.mtimeMs;
+      if (entries.length === 1 && entries[0] !== undefined) {
+        const ownerMarker = new RegExp(`^owner-${pid}-${UUID_PATTERN}$`);
+        if (!ownerMarker.test(entries[0])) continue;
+        const marker = await stat(join(pendingPath, entries[0]));
+        if (!marker.isFile()) continue;
+        latestMtimeMs = Math.max(latestMtimeMs, marker.mtimeMs);
+      } else if (entries.length !== 0) {
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    if (Date.now() - latestMtimeMs < staleLockMs) continue;
+
+    let alive: boolean;
+    try {
+      alive = isProcessAlive(pid);
+    } catch {
+      continue;
+    }
+    if (alive) continue;
+    await rm(pendingPath, { recursive: true, force: true }).catch(() => undefined);
+  }
+  return candidates.length === 0 ? 0 : (start + batch.length) % candidates.length;
 }
 
 async function reclaimStaleInvocationLock(lockPath: string, staleLockMs: number): Promise<void> {

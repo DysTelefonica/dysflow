@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, rmdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildInvocationTelemetryEntry,
@@ -44,6 +44,22 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 const roots: string[] = [];
+const PENDING_LOCK_ENTRY: InvocationTelemetryEntry = {
+  timestamp: "2026-07-28T00:00:00.000Z",
+  tool: "schema",
+  action: "diagnostics",
+  operationId: null,
+  projectId: null,
+  outcome: "ok",
+  failureClass: "none",
+  errorCode: null,
+  durationMs: 1,
+  writeIntent: "read",
+  paramNamesPresent: [],
+  missingParams: [],
+  rejectedParams: [],
+  unknownToolName: null,
+};
 
 function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "dysflow-invocations-"));
@@ -59,6 +75,62 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+async function createStalePendingLock(
+  lockPath: string,
+  pid: number,
+  options: { marker?: "owner" | "unexpected"; fresh?: boolean } = {},
+): Promise<string> {
+  const pendingPath = `${lockPath}.pending-${pid}-123e4567-e89b-42d3-a456-426614174000`;
+  await mkdir(dirname(lockPath), { recursive: true });
+  await mkdir(pendingPath);
+  if (options.marker === "owner") {
+    await writeFile(
+      join(pendingPath, `owner-${pid}-123e4567-e89b-42d3-a456-426614174001`),
+      "",
+      "utf8",
+    );
+  }
+  if (options.marker === "unexpected") {
+    await writeFile(join(pendingPath, "unexpected"), "", "utf8");
+  }
+  if (!options.fresh) {
+    await utimes(pendingPath, new Date(0), new Date(0));
+    if (options.marker !== undefined) {
+      await utimes(
+        join(
+          pendingPath,
+          options.marker === "owner"
+            ? `owner-${pid}-123e4567-e89b-42d3-a456-426614174001`
+            : "unexpected",
+        ),
+        new Date(0),
+        new Date(0),
+      );
+    }
+  }
+  return pendingPath;
+}
+
+async function recordAgainstLiveStableLock(
+  cwd: string,
+  isProcessAlive: (pid: number) => boolean,
+): Promise<ReturnType<typeof createInvocationTelemetryRecorder>> {
+  const runtime = join(cwd, ".dysflow", "runtime");
+  const lockPath = join(runtime, "invocations.jsonl.lock");
+  await mkdir(lockPath, { recursive: true });
+  await writeFile(join(lockPath, "owner-stable"), "", "utf8");
+  const recorder = createInvocationTelemetryRecorder({
+    cwd,
+    lockTimeoutMs: 30,
+    staleLockMs: 60_000,
+    isProcessAlive,
+  });
+  await expect(recorder.record(PENDING_LOCK_ENTRY)).rejects.toThrow(
+    "Timed out acquiring invocation telemetry lock",
+  );
+  return recorder;
+}
 
 describe("invocation telemetry privacy contract (#1197)", () => {
   it("records parameter names and typed contract failure metadata, never values", () => {
@@ -480,5 +552,59 @@ describe("local invocation JSONL sink (#1197)", () => {
     await expect(recorder.record(entry("schema"))).rejects.toThrow(
       "Timed out acquiring invocation telemetry lock",
     );
+  });
+
+  it("reaps a stale pending lock owned by a dead process without touching the stable lock", async () => {
+    const cwd = tempRoot();
+    const lockPath = join(cwd, ".dysflow", "runtime", "invocations.jsonl.lock");
+    const pendingPath = await createStalePendingLock(lockPath, 2001, { marker: "owner" });
+
+    await recordAgainstLiveStableLock(cwd, () => false);
+
+    await expect(readdir(pendingPath)).rejects.toThrow();
+    expect(await readFile(join(lockPath, "owner-stable"), "utf8")).toBe("");
+  });
+
+  it("retains live, fresh, and malformed pending directories", async () => {
+    const cwd = tempRoot();
+    const lockPath = join(cwd, ".dysflow", "runtime", "invocations.jsonl.lock");
+    const [live, fresh, malformed, emittedSibling, mixedMarker] = await Promise.all([
+      createStalePendingLock(lockPath, 2002, { marker: "owner" }),
+      createStalePendingLock(lockPath, 2003, { marker: "owner", fresh: true }),
+      createStalePendingLock(lockPath, 2004, { marker: "unexpected" }),
+      createStalePendingLock(lockPath, 2005),
+      createStalePendingLock(lockPath, 2006, { marker: "owner" }),
+    ]);
+    const mixedSibling = emittedSibling.replace("invocations.jsonl", "Invocations.jsonl");
+    await rename(emittedSibling, mixedSibling);
+    const owner = (await readdir(mixedMarker))[0] ?? "";
+    await rename(join(mixedMarker, owner), join(mixedMarker, owner.replace("owner", "Owner")));
+
+    await recordAgainstLiveStableLock(cwd, (pid) => pid === 2002);
+
+    expect(await readdir(live)).toHaveLength(1);
+    expect(await readdir(fresh)).toHaveLength(1);
+    expect(await readdir(malformed)).toEqual(["unexpected"]);
+    expect(await readdir(mixedSibling)).toEqual([]);
+    expect(await readdir(mixedMarker)).toHaveLength(1);
+  });
+
+  it("advances past 32 retained prefix candidates on the next call", async () => {
+    const cwd = tempRoot();
+    const lockPath = join(cwd, ".dysflow", "runtime", "invocations.jsonl.lock");
+    const pendingPaths = await Promise.all(
+      Array.from({ length: 33 }, (_, index) =>
+        createStalePendingLock(lockPath, 2100 + index, { marker: "owner" }),
+      ),
+    );
+
+    const recorder = await recordAgainstLiveStableLock(cwd, (pid) => pid !== 2132);
+
+    expect(await readdir(pendingPaths[0] ?? "")).toHaveLength(1);
+    expect(await readdir(pendingPaths[32] ?? "")).toHaveLength(1);
+    await expect(recorder.record(PENDING_LOCK_ENTRY)).rejects.toThrow(
+      "Timed out acquiring invocation telemetry lock",
+    );
+    await expect(readdir(pendingPaths[32] ?? "")).rejects.toThrow();
   });
 });
