@@ -763,6 +763,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   delete_module: {
     type: "object",
     additionalProperties: false,
+    // Issue #1224 — delete_module requires at least one of moduleName or moduleNames.
+    // Without `anyOf` the schema accepts `{ projectId }` and the adapter returns a
+    // no-op plan instead of rejecting the malformed call. The dispatcher enriches
+    // the resulting "one of these is required" message with `missingParam:
+    // "moduleName"` so the structured MCP_INPUT_INVALID envelope names the first
+    // missing required parameter, the release-telemetry aggregate counts the
+    // `moduleName` miss, and AI consumers can self-correct.
+    anyOf: [{ required: ["moduleName"] }, { required: ["moduleNames"] }],
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,

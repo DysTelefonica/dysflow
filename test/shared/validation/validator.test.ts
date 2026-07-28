@@ -76,6 +76,31 @@ describe("validateInput — coercePrimitive behavior", () => {
   });
 });
 
+describe("validateInput — anyOf required (#1224)", () => {
+  const schemaWithAnyOf: JsonObjectSchema = {
+    type: "object",
+    additionalProperties: false,
+    anyOf: [{ required: ["moduleName"] }, { required: ["moduleNames"] }],
+    properties: {
+      moduleName: { type: "string" },
+      moduleNames: { type: "array", items: { type: "string" } },
+    },
+  };
+
+  it("accepts when the first alternative is satisfied", () => {
+    expect(validateInput({ moduleName: "Mod1" }, schemaWithAnyOf)).toBeUndefined();
+  });
+
+  it("accepts when a later alternative is satisfied", () => {
+    expect(validateInput({ moduleNames: ["Mod1", "Mod2"] }, schemaWithAnyOf)).toBeUndefined();
+  });
+
+  it("rejects with a one-of message when no alternative is satisfied", () => {
+    const result = validateInput({}, schemaWithAnyOf);
+    expect(result).toBe("one of these is required: [moduleName], [moduleNames].");
+  });
+});
+
 describe("validateInput — nested object validation", () => {
   const schemaWithNested: JsonObjectSchema = {
     type: "object",

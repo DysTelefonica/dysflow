@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { writesDisabled } from "../../../src/adapters/mcp/dispatch-common.js";
+import {
+  enrichmentForValidationMessage,
+  writesDisabled,
+} from "../../../src/adapters/mcp/dispatch-common.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-registry.js";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
@@ -112,6 +115,28 @@ describe("delete_module batch input contract", () => {
     const schema = VBA_SYNC_TOOL_SCHEMAS.delete_module;
     const error = validateInput({ moduleName: "ACService", force: true }, schema);
     expect(error).toBeUndefined();
+  });
+
+  it("rejects the call when neither moduleName nor moduleNames is provided (#1224)", () => {
+    const schema = VBA_SYNC_TOOL_SCHEMAS.delete_module;
+    const error = validateInput({ projectId: "noconformidades-e2e" }, schema);
+    expect(error).toBeDefined();
+    expect(error).toMatch(/one of these is required.*moduleName.*moduleNames/is);
+  });
+
+  it("enriches the validation failure with missingParam=moduleName so the structured MCP_INPUT_INVALID envelope names the missing required field (#1224)", () => {
+    const schema = VBA_SYNC_TOOL_SCHEMAS.delete_module;
+    const validation = validateInput({ projectId: "noconformidades-e2e" }, schema);
+    expect(validation).toBeDefined();
+    const enrichment = enrichmentForValidationMessage(
+      validation as string,
+      "delete_module",
+      schema,
+    );
+    expect(enrichment).toBeDefined();
+    expect(enrichment?.kind).toBe("missing-required");
+    expect(enrichment?.missingParam).toBe("moduleName");
+    expect(enrichment?.toolName).toBe("delete_module");
   });
 });
 

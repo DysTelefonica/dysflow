@@ -314,6 +314,13 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
 
   // Minimal valid input per tool; only tools with `required` fields need an override.
   const minimalInput: Record<string, Record<string, unknown>> = {
+    // Issue #1224 — delete_module now requires moduleName OR moduleNames.
+    // The write-gate test passes the gate only AFTER validation succeeds,
+    // so every tool's minimal input must be schema-valid.
+    delete_module: {
+      moduleName: "TestModule",
+      apply: true,
+    },
     form_add_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",
       controlName: "cmd",
