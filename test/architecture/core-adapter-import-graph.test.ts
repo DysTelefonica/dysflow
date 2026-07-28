@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,16 +37,73 @@ function project(coreSource: string): { root: string; coreFile: string; adapterF
   return { root, coreFile, adapterFile };
 }
 
-function run(root: string): string {
-  try {
-    execFileSync(process.execPath, [script], { cwd: root, encoding: "utf8", stdio: "pipe" });
-    return "";
-  } catch (error) {
-    return String((error as { stderr?: string }).stderr ?? error);
+function run(
+  root: string,
+  executable = process.execPath,
+  args: readonly string[] = [script],
+): string {
+  const attempts = 2;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(executable, args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+      windowsHide: true,
+    });
+    const output = [result.stderr ?? "", result.stdout ?? ""]
+      .filter((value) => value.length > 0)
+      .join("\n");
+    if (result.status === 0 && result.error === undefined) return output;
+    if (output.length > 0) return output;
+    if (attempt < attempts) continue;
+
+    const reason =
+      result.error?.message ??
+      (result.signal === null
+        ? `status ${result.status ?? "unknown"}`
+        : `signal ${result.signal} (status ${result.status ?? "unknown"})`);
+    return `Architecture boundary subprocess failed without output after ${attempts} attempts: ${reason}`;
   }
+  return "Architecture boundary subprocess failed without output";
 }
 
 describe("core-to-adapter import graph gate", () => {
+  it("reports spawn errors instead of throwing while reading absent output", () => {
+    const fixture = project("export const legal = true;\n");
+    expect(run(fixture.root, join(fixture.root, "missing-node.exe"))).toContain("ENOENT");
+  });
+
+  it("never collapses a silent subprocess failure into successful empty output", () => {
+    const fixture = project("export const legal = true;\n");
+    const silentFailure = join(fixture.root, "silent-failure.mjs");
+    writeFileSync(silentFailure, "process.exit(73);\n");
+
+    expect(run(fixture.root, process.execPath, [silentFailure])).toContain("status 73");
+  });
+
+  it("retries one silent resource failure before evaluating boundary output", () => {
+    const fixture = project("export const legal = true;\n");
+    const marker = join(fixture.root, "first-attempt.marker");
+    const transientFailure = join(fixture.root, "transient-failure.mjs");
+    writeFileSync(
+      transientFailure,
+      `
+        import { existsSync, writeFileSync } from "node:fs";
+        const marker = process.argv[2];
+        if (!existsSync(marker)) {
+          writeFileSync(marker, "failed once");
+          process.exit(73);
+        }
+        console.error("Core adapter boundary failed after retry");
+        process.exit(1);
+      `,
+    );
+
+    expect(run(fixture.root, process.execPath, [transientFailure, marker])).toContain(
+      "Core adapter boundary failed after retry",
+    );
+  });
+
   it.each([
     ['import { forbidden } from "../adapters/forbidden.js";', "static import"],
     ['import type { Forbidden } from "@infra/forbidden";', "type import through alias"],
