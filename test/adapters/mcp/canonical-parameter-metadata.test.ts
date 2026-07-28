@@ -145,6 +145,12 @@ const KNOWN_ALIAS_GROUPS: ReadonlyArray<{
     aliases: ["targetPath", "target"],
     deprecated: ["target"],
   },
+  {
+    tool: "generate_form",
+    canonical: "artifactKind",
+    aliases: ["artifactKind", "kind"],
+    deprecated: ["kind"],
+  },
 ];
 
 // Seed list of known sensitive parameters. The audit identified
@@ -161,10 +167,6 @@ const WRITE_FLAG_PAIRS: ReadonlyArray<{
   tool: tool.name,
   flags: ["apply", "dryRun", ...(legacyAliasesFor(tool.name).includes("diff") ? ["diff"] : [])],
 }));
-
-// Pre-existing collision outside #1191. Keep it explicit so the generative
-// gate blocks every new collision without silently expanding this baseline.
-const PARAMETER_SHAPE_EXCEPTIONS = new Set(["generate_form.kind"]);
 
 function requiredParameter(parameter: ToolParameterSchema | undefined): ToolParameterSchema {
   if (parameter === undefined) throw new Error("Expected catalog parameter to exist");
@@ -307,6 +309,31 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
     });
   });
 
+  it("publishes artifactKind as generate_form's canonical enum and kind as its deprecated alias", () => {
+    const advertised = advertisedSchema("generate_form");
+    expect(advertised.properties.artifactKind).toMatchObject({
+      type: "string",
+      enum: ["Form", "Report"],
+    });
+
+    const entry = catalogEntry("generate_form");
+    expect(getExtendedParam(requiredParameter(entry.parameters.artifactKind))).toMatchObject({
+      type: "enum",
+      enumValues: ["Form", "Report"],
+      canonicalName: "artifactKind",
+      aliases: ["artifactKind", "kind"],
+      precedence: "canonical",
+    });
+    expect(getExtendedParam(requiredParameter(entry.parameters.kind))).toMatchObject({
+      type: "string",
+      canonicalName: "artifactKind",
+      aliases: ["artifactKind", "kind"],
+      deprecated: true,
+      deprecatedSince: "2.27.0",
+      precedence: "deprecated",
+    });
+  });
+
   it("rejects cross-tool enum/free-string parameter collisions without a deprecated alias", () => {
     const occurrences = new Map<string, Array<{ tool: string; parameter: ToolParameterSchema }>>();
     for (const tool of TOOLS) {
@@ -325,7 +352,6 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
       if (!hasEnum || freeStrings.length === 0) continue;
 
       for (const { tool, parameter } of freeStrings) {
-        if (PARAMETER_SHAPE_EXCEPTIONS.has(`${tool}.${name}`)) continue;
         const metadata = getExtendedParam(parameter);
         if (
           metadata.deprecated !== true ||

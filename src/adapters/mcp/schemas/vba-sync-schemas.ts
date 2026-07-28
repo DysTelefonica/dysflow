@@ -831,7 +831,17 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       specPath: SCHEMA_PROPS.specPath,
       spec: SCHEMA_PROPS.spec,
-      kind: SCHEMA_PROPS.kind,
+      artifactKind: {
+        type: "string",
+        enum: ["Form", "Report"],
+        description:
+          "Canonical generated artifact kind. Use 'Form' for a .form.json artifact or 'Report' for a .report.json artifact.",
+      },
+      kind: {
+        ...SCHEMA_PROPS.kind,
+        description:
+          "Deprecated compatibility alias for artifactKind. Use artifactKind for the generated Form or Report artifact kind.",
+      },
       name: SCHEMA_PROPS.name,
       replace: SCHEMA_PROPS.replace,
       ...WRITE_INTENT_BLOCK,

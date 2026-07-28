@@ -831,6 +831,13 @@ const EXPLICIT_PARAMETER_ALIAS_MIGRATIONS: Readonly<
       deprecatedSince: "2.27.0",
     },
   ],
+  generate_form: [
+    {
+      canonical: "artifactKind",
+      alias: "kind",
+      deprecatedSince: "2.27.0",
+    },
+  ],
 };
 
 function applyExplicitAliasMigrations(

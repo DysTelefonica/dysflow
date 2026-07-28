@@ -333,6 +333,7 @@ export class VbaFormService {
     }
     const kindText =
       stringValue(loaded.kind) ??
+      stringValue(params.artifactKind) ??
       stringValue(params.kind) ??
       (name.startsWith("Report_") ? "Report" : "Form");
     if (kindText !== "Form" && kindText !== "Report") {

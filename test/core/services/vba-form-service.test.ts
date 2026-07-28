@@ -60,7 +60,17 @@ describe("VbaFormService", () => {
     if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
   });
 
-  it("falls back to params.kind when spec has no kind and name does not start with Report_", async () => {
+  it("falls back to params.artifactKind when spec has no kind", async () => {
+    const service = createService({ cwd: process.cwd() });
+    const result = await service.validateFormSpec({
+      spec: { name: "MyForm", controls: [] },
+      artifactKind: "Report",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
+  });
+
+  it("accepts deprecated params.kind when spec has no kind", async () => {
     const service = createService({ cwd: process.cwd() });
     const result = await service.validateFormSpec({
       spec: { name: "MyForm", controls: [] },
@@ -68,6 +78,27 @@ describe("VbaFormService", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
+  });
+
+  it("prefers canonical artifactKind when deprecated kind is also provided", async () => {
+    const service = createService({ cwd: process.cwd() });
+    const result = await service.validateFormSpec({
+      spec: { name: "MyForm", controls: [] },
+      artifactKind: "Report",
+      kind: "Form",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.data as { kind: string }).kind).toBe("Report");
+  });
+
+  it("returns FORM_SPEC_INVALID for an unsupported artifactKind", async () => {
+    const service = createService({ cwd: process.cwd() });
+    const result = await service.validateFormSpec({
+      spec: { name: "BadForm", controls: [] },
+      artifactKind: "Subform",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("FORM_SPEC_INVALID");
   });
 
   it("returns FORM_SPEC_INVALID for unsupported form kind", async () => {
