@@ -125,6 +125,7 @@ describe("dysflow configuration", () => {
           destinationRoot: expect.any(String),
           httpToken: undefined,
           httpTokenEnv: undefined,
+          invocationTelemetryEnabled: true,
         },
         diagnostics: [],
         durationMs: 0,

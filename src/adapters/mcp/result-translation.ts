@@ -6,7 +6,10 @@ import type {
 } from "../../core/contracts/index.js";
 import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
-import type { AccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
+import type {
+  AccessOperationMetadata,
+  AccessOperationRegistry,
+} from "../../core/operations/access-operation-registry.js";
 import type {
   AccessOrphanCandidate,
   AccessOrphanCleanupResult,
@@ -188,6 +191,8 @@ export type McpToolResult = {
    * compile; the runtime seam is the contract, not the type.
    */
   schemaVersion?: ResultSchemaVersion;
+  /** Trusted runtime metadata; never derived from result.data. */
+  operation?: Pick<AccessOperationMetadata, "operationId">;
   content: readonly McpTextContent[];
   isError: boolean;
   /**
@@ -338,6 +343,7 @@ export function translateCoreResultToMcpContent<TData>(
       ],
       isError: true,
       ok: false,
+      ...(result.operation ? { operation: { operationId: result.operation.operationId } } : {}),
       error: {
         code: errorCode,
         // Round-12 (#972) — uniform envelope aliases.
@@ -361,6 +367,7 @@ export function translateCoreResultToMcpContent<TData>(
     content: [{ type: "text", text: stringifyForMcp(result.data) }],
     isError: false,
     ok: true,
+    ...(result.operation ? { operation: { operationId: result.operation.operationId } } : {}),
   });
 }
 

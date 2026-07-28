@@ -1,0 +1,393 @@
+import { randomUUID } from "node:crypto";
+import { appendFile, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import type {
+  InvocationFailureClass,
+  InvocationTelemetryEntry,
+  InvocationTelemetryRecorder,
+  InvocationWriteIntent,
+} from "../../core/telemetry/invocation-telemetry.js";
+import { isTransientLockContentionError, lockErrorCode } from "../../core/utils/lock-errors.js";
+import { effectiveDryRunDefaultForTool, isWriteIntentTool } from "./mcp-tool-risks.js";
+import type { McpToolResult } from "./result-translation.js";
+
+export type {
+  InvocationTelemetryEntry,
+  InvocationTelemetryRecorder,
+  InvocationWriteIntent,
+} from "../../core/telemetry/invocation-telemetry.js";
+
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_FILES = 3;
+const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
+const DEFAULT_STALE_LOCK_MS = 30_000;
+const LOCK_RETRY_MS = 10;
+const MAX_NAME_LENGTH = 128;
+const MAX_PARAMETER_NAMES = 256;
+
+export type InvocationTelemetryTarget = {
+  cwd: string;
+  enabled: boolean;
+  writeExecutionPolicy: WriteExecutionPolicy;
+};
+
+export type InvocationTelemetryContext = {
+  recorder: InvocationTelemetryRecorder;
+  writeExecutionPolicy: WriteExecutionPolicy;
+};
+
+export type InvocationTelemetryContextResolver = (
+  args: unknown,
+) => Promise<InvocationTelemetryContext>;
+
+const CONTRACT_FAILURE_CODES = new Set([
+  "MCP_INPUT_INVALID",
+  "MCP_TOOL_NOT_FOUND",
+  "MCP_WRITES_DISABLED",
+  "PROJECT_CONFIG_NOT_WRITE_READY",
+  "RESULT_CONTRACT_VIOLATION",
+]);
+
+function boundedName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (normalized.length === 0) return null;
+  return normalized.slice(0, MAX_NAME_LENGTH);
+}
+
+function parameterNames(args: unknown): string[] {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return [];
+  return Object.keys(args as Record<string, unknown>)
+    .map((name) => boundedName(name))
+    .filter((name): name is string => name !== null)
+    .sort()
+    .slice(0, MAX_PARAMETER_NAMES);
+}
+
+function rejectedParameterNames(result: McpToolResult): string[] {
+  const error = result.error;
+  if (error === undefined) return [];
+  const candidates = [
+    ...(Array.isArray(error.rejectedFlags) ? error.rejectedFlags : []),
+    error.rejectedFlag,
+  ];
+  return [...new Set(candidates.map(boundedName).filter((name): name is string => name !== null))]
+    .sort()
+    .slice(0, MAX_PARAMETER_NAMES);
+}
+
+function missingParameterNames(result: McpToolResult): string[] {
+  const missingParam = boundedName(result.error?.missingParam);
+  return missingParam === null ? [] : [missingParam];
+}
+
+function failureClassFor(
+  toolKnown: boolean,
+  result: McpToolResult,
+  errorCode: string | null,
+): InvocationFailureClass {
+  if (!result.isError) return "none";
+  if (!toolKnown) return "contract";
+  if (
+    errorCode !== null &&
+    (CONTRACT_FAILURE_CODES.has(errorCode) ||
+      errorCode.startsWith("CONFIG_") ||
+      errorCode.startsWith("DYSFLOW_CONFIG_"))
+  ) {
+    return "contract";
+  }
+  return "runtime";
+}
+
+function operationIdFromResult(result: McpToolResult): string | null {
+  return boundedName(result.operation?.operationId);
+}
+
+/**
+ * Stable compatibility family retained alongside the real MCP tool name.
+ * This taxonomy is deliberately coarse: callers filter by `tool` for the
+ * exact surface and by `action` only for the historical family view.
+ */
+export function invocationActionForTool(toolName: string): string {
+  if (toolName.startsWith("import_")) return "import";
+  if (toolName.startsWith("test_")) return "test";
+  if (toolName.startsWith("run_")) return "run";
+  if (
+    toolName === "doctor" ||
+    toolName === "diagnose" ||
+    toolName === "logs" ||
+    toolName === "state" ||
+    toolName === "schema" ||
+    toolName === "get_capabilities" ||
+    toolName === "describe_tool" ||
+    toolName === "resolve_project"
+  ) {
+    return "diagnostics";
+  }
+  if (
+    toolName.includes("query") ||
+    toolName.includes("table") ||
+    toolName.includes("schema") ||
+    toolName.includes("sql") ||
+    toolName.startsWith("link_") ||
+    toolName.startsWith("relink_") ||
+    toolName === "compact_repair"
+  ) {
+    return "query";
+  }
+  return "vba";
+}
+
+export function resolveInvocationWriteIntent(
+  toolName: string,
+  toolKnown: boolean,
+  args: unknown,
+  policy: WriteExecutionPolicy = "safe-by-default",
+): InvocationWriteIntent {
+  if (!toolKnown || !isWriteIntentTool(toolName)) return "read";
+  const params =
+    args !== null && typeof args === "object" && !Array.isArray(args)
+      ? (args as Record<string, unknown>)
+      : {};
+  if (params.apply === true || params.dryRun === false || params.diff === false) return "apply";
+  if (params.apply === false || params.dryRun === true || params.diff === true) return "dryRun";
+  return effectiveDryRunDefaultForTool(toolName, policy) ? "dryRun" : "apply";
+}
+
+export function buildInvocationTelemetryEntry(input: {
+  toolName: string;
+  toolKnown: boolean;
+  args: unknown;
+  result: McpToolResult;
+  durationMs: number;
+  writeIntent: InvocationWriteIntent;
+  timestamp?: string;
+}): InvocationTelemetryEntry {
+  const tool = boundedName(input.toolName) ?? "(invalid-tool-name)";
+  const projectId =
+    input.args !== null && typeof input.args === "object" && !Array.isArray(input.args)
+      ? boundedName((input.args as Record<string, unknown>).projectId)
+      : null;
+  const errorCode = input.toolKnown
+    ? (boundedName(input.result.error?.code ?? input.result.error?.errorCode) ??
+      (input.result.isError ? "MCP_TOOL_HANDLER_ERROR" : null))
+    : "MCP_TOOL_NOT_FOUND";
+  return {
+    timestamp: input.timestamp ?? new Date().toISOString(),
+    tool,
+    action: invocationActionForTool(tool),
+    operationId: operationIdFromResult(input.result),
+    projectId,
+    outcome: input.result.isError ? "error" : "ok",
+    failureClass: failureClassFor(input.toolKnown, input.result, errorCode),
+    errorCode,
+    durationMs: Math.max(0, Math.round(input.durationMs)),
+    writeIntent: input.writeIntent,
+    paramNamesPresent: parameterNames(input.args),
+    missingParams: missingParameterNames(input.result),
+    rejectedParams: rejectedParameterNames(input.result),
+    unknownToolName: input.toolKnown ? null : tool,
+  };
+}
+
+export function createInvocationTelemetryRecorder(options: {
+  cwd: string;
+  enabled?: boolean;
+  maxBytes?: number;
+  maxFiles?: number;
+  lockTimeoutMs?: number;
+  staleLockMs?: number;
+}): InvocationTelemetryRecorder {
+  const enabled = options.enabled !== false;
+  const maxBytes = Math.max(512, Math.floor(options.maxBytes ?? DEFAULT_MAX_BYTES));
+  const maxFiles = Math.max(1, Math.floor(options.maxFiles ?? DEFAULT_MAX_FILES));
+  const lockTimeoutMs = Math.max(
+    LOCK_RETRY_MS,
+    Math.floor(options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS),
+  );
+  const staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
+  const runtimePath = join(options.cwd, ".dysflow", "runtime");
+  const sinkPath = join(runtimePath, "invocations.jsonl");
+  const lockPath = `${sinkPath}.lock`;
+  let pending = Promise.resolve();
+
+  const rotateIfNeeded = async (incomingBytes: number): Promise<void> => {
+    let currentBytes = 0;
+    try {
+      currentBytes = (await stat(sinkPath)).size;
+    } catch {}
+    if (currentBytes === 0 || currentBytes + incomingBytes <= maxBytes) return;
+    for (let generation = maxFiles; generation >= 1; generation -= 1) {
+      const destination = `${sinkPath}.${generation}`;
+      if (generation === maxFiles) {
+        await rm(destination, { force: true });
+      }
+      const source = generation === 1 ? sinkPath : `${sinkPath}.${generation - 1}`;
+      try {
+        await rename(source, destination);
+      } catch {}
+    }
+  };
+
+  return {
+    record: async (entry) => {
+      if (!enabled) return;
+      const line = `${JSON.stringify(entry)}\n`;
+      const write = async (): Promise<void> => {
+        await mkdir(runtimePath, { recursive: true });
+        await withInvocationFileLock(lockPath, lockTimeoutMs, staleLockMs, async () => {
+          await rotateIfNeeded(Buffer.byteLength(line, "utf8"));
+          await appendFile(sinkPath, line, { encoding: "utf8", mode: 0o600 });
+        });
+      };
+      pending = pending.catch(() => undefined).then(write);
+      await pending;
+    },
+  };
+}
+
+export function createInvocationTelemetryContextResolver(options: {
+  fallback: InvocationTelemetryTarget;
+  resolveTarget: (args: unknown) => Promise<InvocationTelemetryTarget | undefined>;
+}): InvocationTelemetryContextResolver {
+  const recorders = new Map<string, InvocationTelemetryRecorder>();
+  const contextFor = (target: InvocationTelemetryTarget): InvocationTelemetryContext => {
+    const cwd = resolve(target.cwd);
+    const key = `${cwd}\0${target.enabled ? "on" : "off"}`;
+    let recorder = recorders.get(key);
+    if (recorder === undefined) {
+      recorder = createInvocationTelemetryRecorder({ cwd, enabled: target.enabled });
+      recorders.set(key, recorder);
+    }
+    return { recorder, writeExecutionPolicy: target.writeExecutionPolicy };
+  };
+  const fallbackFor = (args: unknown) =>
+    contextFor(
+      hasExplicitTelemetryTarget(args) ? { ...options.fallback, enabled: false } : options.fallback,
+    );
+
+  return async (args) => {
+    if (hasInvalidExplicitContextId(args)) return fallbackFor(args);
+    try {
+      const target = await options.resolveTarget(args);
+      return target === undefined ? fallbackFor(args) : contextFor(target);
+    } catch {
+      return fallbackFor(args);
+    }
+  };
+}
+
+function hasInvalidExplicitContextId(args: unknown): boolean {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return false;
+  const values = args as Record<string, unknown>;
+  if (!Object.hasOwn(values, "contextId")) return false;
+  return typeof values.contextId !== "string" || values.contextId.trim().length === 0;
+}
+
+function hasExplicitTelemetryTarget(args: unknown): boolean {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return false;
+  const values = args as Record<string, unknown>;
+  return [
+    "projectId",
+    "contextId",
+    "cwd",
+    "projectRoot",
+    "accessPath",
+    "accessDbPath",
+    "databasePath",
+    "sourcePath",
+    "backendPath",
+    "destinationRoot",
+  ].some((field) => Object.hasOwn(values, field));
+}
+
+async function withInvocationFileLock<T>(
+  lockPath: string,
+  timeoutMs: number,
+  staleLockMs: number,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  const ownerMarkerName = `owner-${process.pid}-${randomUUID()}`;
+  const pendingPath = `${lockPath}.pending-${process.pid}-${randomUUID()}`;
+  while (true) {
+    try {
+      await mkdir(pendingPath);
+      await writeFile(join(pendingPath, ownerMarkerName), "", { encoding: "utf8", flag: "wx" });
+      try {
+        await stat(lockPath);
+        throw Object.assign(new Error("Invocation telemetry lock already exists"), {
+          code: "EEXIST",
+        });
+      } catch (error) {
+        if (lockErrorCode(error) !== "ENOENT") throw error;
+      }
+      await rename(pendingPath, lockPath);
+      break;
+    } catch (error) {
+      await rm(pendingPath, { recursive: true, force: true }).catch(() => undefined);
+      if (!isTransientLockContentionError(error) && lockErrorCode(error) !== "ENOTEMPTY")
+        throw error;
+      await reclaimStaleInvocationLock(lockPath, staleLockMs);
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out acquiring invocation telemetry lock: ${lockPath}`);
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, LOCK_RETRY_MS));
+    }
+  }
+
+  try {
+    return await operation();
+  } finally {
+    await removeInvocationLockByOwner(lockPath, ownerMarkerName, "release");
+  }
+}
+
+async function reclaimStaleInvocationLock(lockPath: string, staleLockMs: number): Promise<void> {
+  let entries: string[];
+  let mtimeMs: number;
+  try {
+    entries = await readdir(lockPath);
+    const stats = await Promise.all([
+      stat(lockPath),
+      ...entries.map((name) => stat(join(lockPath, name))),
+    ]);
+    mtimeMs = Math.max(...stats.map((entry) => entry.mtimeMs));
+  } catch {
+    return;
+  }
+  if (Date.now() - mtimeMs < staleLockMs) return;
+
+  const owners = entries.filter((name) => name.startsWith("owner-"));
+  if (owners.length === 1 && owners[0] !== undefined) {
+    await removeInvocationLockByOwner(lockPath, owners[0], "stale");
+    return;
+  }
+  if (
+    owners.length > 0 ||
+    entries.some((name) => !name.startsWith("release-") && !name.startsWith("stale-"))
+  ) {
+    return;
+  }
+
+  for (const marker of entries) {
+    await rm(join(lockPath, marker), { force: true }).catch(() => undefined);
+  }
+  await rmdir(lockPath).catch(() => undefined);
+}
+
+async function removeInvocationLockByOwner(
+  lockPath: string,
+  ownerMarkerName: string,
+  reason: "release" | "stale",
+): Promise<void> {
+  const claimedMarker = join(lockPath, `${reason}-${process.pid}-${randomUUID()}`);
+  try {
+    await rename(join(lockPath, ownerMarkerName), claimedMarker);
+  } catch {
+    return;
+  }
+  await rm(claimedMarker, { force: true }).catch(() => undefined);
+  await rmdir(lockPath).catch(() => undefined);
+}

@@ -176,6 +176,23 @@ effectiveDryRunDefault: {
 }
 ```
 
+MCP invocations are recorded locally in the owning project's
+`.dysflow/runtime/invocations.jsonl`. The sink contains tool/parameter names
+and typed outcomes. The sole argument-value exception is the canonical
+`projectId`, retained so multi-project calls can be attributed; SQL, passwords,
+paths, and every other value are never recorded. Appends and rotation share a
+cross-process lock, and the sink rotates automatically. To opt out for a project:
+
+```json
+{
+  "capabilities": {
+    "telemetry": {
+      "invocations": false
+    }
+  }
+}
+```
+
 Risk classification (v2.1.0):
 
 - `read-only` — never writes (e.g. `verify_code`, `list_procedures`, `find_references`).
@@ -919,7 +936,7 @@ Return the runtime operational state of a dysflow project as `{ operations, mark
 * **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
 
 #### `logs`
-Return runtime log entries from `.dysflow/runtime/` (operations.json + per-operation markers/*.json) as a structured envelope. Pairs with `get_capabilities` (live state) and `schema` (static contract catalog): `logs` surfaces the historical operation log an AI consumer needs to answer "what happened?" without hand-parsing the runtime dir. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return runtime log entries from `.dysflow/runtime/` (`invocations.jsonl`, `operations.json`, and per-operation markers) as a structured envelope. Invocation entries identify the exact MCP tool while the legacy operation ledger remains unchanged and joinable by `operationId`. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `projectId` (string, optional): Canonical project identity for traceability. The runtime dir is always `<cwd>/.dysflow/runtime/`; `projectId` is echoed back in the response for future per-project scoping.
   - `options` (object, optional): Filters and pagination.
@@ -927,10 +944,12 @@ Return runtime log entries from `.dysflow/runtime/` (operations.json + per-opera
     - `until` (string, ISO 8601, optional): Upper bound on `timestamp`.
     - `level` (string, optional): One of `error`, `warning`, `info`, `debug`. Status mapping: `failed` / `timed_out` / `abandoned` → `error`; `cleanup_pending` → `warning`; `completed` / `cleaned` → `info`; everything else → `debug`.
     - `operationId` (string, optional): Narrow to a single operationId.
-    - `tool` (string, optional): Filter by tool/action (e.g. `vba`, `query`, `diagnostics`, `import`, `test`, `run`).
+    - `tool` (string, optional): Filter by the exact MCP tool name (e.g. `query_sql` or `import_modules`).
+    - `action` (string, optional): Filter by the coarse compatibility family (`vba`, `query`, `diagnostics`, `import`, `test`, or `run`).
+    - `groupBy` (`"tool"`, optional): Add per-tool calls, split contract/runtime errors, p50/p95 latency, last-use timestamps, rejected-parameter frequencies, and omitted-required-parameter frequencies.
     - `limit` (number, optional, 1..1000): Maximum entries to return. Defaults to `100`.
     - `orderBy` (string, optional): `asc` or `desc`. Defaults to `desc` (most recent first).
-* **Returns**: `{ entries: LogEntry[], totalCount, truncated }` where each `LogEntry` carries `{ timestamp, level, operationId, tool, message, context }`. `totalCount` is the post-filter cardinality and `truncated: true` signals more entries exist past `limit`.
+* **Returns**: `{ entries, totalCount, truncated, aggregate? }` where each entry carries exact `tool`, separate `action`, nullable `operationId`, and privacy-safe invocation context. With `groupBy:"tool"`, `aggregate` contains `tools[]`, `rejectedParams[]`, and `missingParams[]`; it is computed across all filtered invocation entries rather than the paginated raw slice.
 
 ---
 

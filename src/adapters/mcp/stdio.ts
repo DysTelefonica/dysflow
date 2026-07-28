@@ -48,6 +48,13 @@ import {
   resolveResultValidationPolicy,
   validateToolResult,
 } from "./contracts/result-validation.js";
+import {
+  buildInvocationTelemetryEntry,
+  createInvocationTelemetryContextResolver,
+  type InvocationTelemetryContextResolver,
+  type InvocationTelemetryRecorder,
+  resolveInvocationWriteIntent,
+} from "./invocation-telemetry.js";
 import type { McpToolResult } from "./result-translation.js";
 import { withSchemaVersion } from "./result-translation.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
@@ -172,7 +179,30 @@ export async function startMcpStdioAdapter(
   });
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
-  await startWithSdkServer(tools, undefined, { resultValidationPolicy: "enforce" });
+  const fallbackTelemetryCwd = startupConfig?.projectRoot ?? process.cwd();
+  await startWithSdkServer(tools, undefined, {
+    resultValidationPolicy: "enforce",
+    invocationContextResolver: createInvocationTelemetryContextResolver({
+      fallback: {
+        cwd: fallbackTelemetryCwd,
+        enabled: startupConfig?.invocationTelemetryEnabled !== false,
+        writeExecutionPolicy: resolveStartupWriteExecutionPolicy(startupConfig),
+      },
+      resolveTarget: async (input) => {
+        const params = isRecord(input) ? input : {};
+        const callCwd = stringOrUndefined(params.cwd);
+        const result = await resolveConfigForInput(input, {
+          cwd: callCwd ?? fallbackTelemetryCwd,
+        });
+        if (!result.ok) return undefined;
+        return {
+          cwd: result.data.projectRoot ?? callCwd ?? fallbackTelemetryCwd,
+          enabled: result.data.invocationTelemetryEnabled !== false,
+          writeExecutionPolicy: resolveStartupWriteExecutionPolicy(result.data),
+        };
+      },
+    }),
+  });
 }
 
 /**
@@ -237,6 +267,9 @@ export async function startWithSdkServer(
   options: {
     resultValidationPolicy?: ResultValidationPolicy;
     reportResultContractViolation?: (diagnostic: ResultContractViolationDiagnostic) => void;
+    invocationRecorder?: InvocationTelemetryRecorder;
+    invocationContextResolver?: InvocationTelemetryContextResolver;
+    writeExecutionPolicy?: "safe-by-default" | "developer";
   } = {},
 ): Promise<void> {
   const toolMap = new Map(tools.map((t) => [t.name, t]));
@@ -264,9 +297,20 @@ export async function startWithSdkServer(
 
   server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args, _meta } = request.params;
+    const startedAt = performance.now();
+    const invocationContext = await resolveInvocationContext(options, args);
     const tool = toolMap.get(name);
     if (tool === undefined) {
-      return unknownToolResult(name, tools);
+      const result = unknownToolResult(name, tools);
+      await recordInvocationBestEffort(invocationContext.recorder, {
+        toolName: name,
+        toolKnown: false,
+        args,
+        result,
+        durationMs: performance.now() - startedAt,
+        writeIntent: "read",
+      });
+      return result;
     }
 
     const progressToken = _meta?.progressToken;
@@ -283,6 +327,19 @@ export async function startWithSdkServer(
     // central MCP seam so every tool response (success, error, contract
     // violation, "tool not found") carries it without per-tool changes.
     const stamped = withSchemaVersion(validatedResult);
+    await recordInvocationBestEffort(invocationContext.recorder, {
+      toolName: name,
+      toolKnown: true,
+      args,
+      result: stamped,
+      durationMs: performance.now() - startedAt,
+      writeIntent: resolveInvocationWriteIntent(
+        name,
+        true,
+        args,
+        invocationContext.writeExecutionPolicy,
+      ),
+    });
     // Spread readonly content[] into mutable array as required by the SDK's CallToolResult type.
     return { ...stamped, content: [...stamped.content] };
   });
@@ -297,6 +354,44 @@ export async function startWithSdkServer(
 
   const stdioTransport = new StdioServerTransport(sizeGuard, process.stdout);
   await server.connect(stdioTransport);
+}
+
+async function resolveInvocationContext(
+  options: {
+    invocationRecorder?: InvocationTelemetryRecorder;
+    invocationContextResolver?: InvocationTelemetryContextResolver;
+    writeExecutionPolicy?: "safe-by-default" | "developer";
+  },
+  args: unknown,
+): Promise<{
+  recorder: InvocationTelemetryRecorder | undefined;
+  writeExecutionPolicy: "safe-by-default" | "developer";
+}> {
+  if (options.invocationContextResolver !== undefined) {
+    try {
+      return await options.invocationContextResolver(args);
+    } catch {
+      // The invocation result must never depend on telemetry resolution.
+    }
+  }
+  return {
+    recorder: options.invocationRecorder,
+    writeExecutionPolicy: options.writeExecutionPolicy ?? "safe-by-default",
+  };
+}
+
+async function recordInvocationBestEffort(
+  recorder: InvocationTelemetryRecorder | undefined,
+  input: Parameters<typeof buildInvocationTelemetryEntry>[0],
+): Promise<void> {
+  if (recorder === undefined) return;
+  try {
+    await recorder.record(buildInvocationTelemetryEntry(input));
+  } catch (error) {
+    if (process.env.DYSFLOW_DEBUG_TELEMETRY === "true") {
+      process.stderr.write(`[dysflow] invocation telemetry error: ${String(error)}\n`);
+    }
+  }
 }
 
 function validateMcpResultBeforeSerialization(

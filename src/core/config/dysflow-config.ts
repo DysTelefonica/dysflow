@@ -56,6 +56,10 @@ export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-
  */
 export type DysflowProjectCapabilities = {
   allowWrites?: boolean;
+  /** Project-local developer telemetry controls. Invocation recording defaults on. */
+  telemetry?: {
+    invocations?: boolean;
+  };
   procedures?: {
     allow?: readonly string[];
     deny?: readonly string[];
@@ -172,6 +176,8 @@ export type DysflowConfig = {
   configPath?: string;
   httpToken?: string;
   httpTokenEnv?: string;
+  /** Resolved opt-out for `.dysflow/runtime/invocations.jsonl`. */
+  invocationTelemetryEnabled?: boolean;
   /**
    * #731 — per-rule lint overrides from `.dysflow/project.json`
    * `capabilities.lint.rules`. Surfaced into the runtime so the MCP
@@ -769,6 +775,7 @@ function buildExplicitConfig(
     ),
     httpToken: resolvePassword(input.httpToken, env.DYSFLOW_HTTP_TOKEN),
     httpTokenEnv: undefined,
+    invocationTelemetryEnabled: true,
     // #779 — `writeExecutionPolicy` left undefined. The MCP layer
     // resolves it to `safe-by-default` via `DEFAULT_WRITE_EXECUTION_POLICY`
     // (see write-execution-policy.ts) so this path stays in the
@@ -932,6 +939,7 @@ function buildProjectConfig(
     lintRulesOverride,
     writeExecutionPolicy,
     lintIdentifierSafetyStrict,
+    invocationTelemetryEnabled,
   } = capabilitiesResolution.data;
   const discoveryResult =
     capabilitiesAllowedProcedures === undefined
@@ -969,6 +977,7 @@ function buildProjectConfig(
     // non-ASCII identifiers inside `identifier-safety`. Default `false`
     // (warning) for cross-fleet back-compat.
     lintIdentifierSafetyStrict,
+    invocationTelemetryEnabled,
   });
 }
 
@@ -1309,6 +1318,8 @@ function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
    * findings are unaffected by this flag.
    */
   lintIdentifierSafetyStrict: boolean;
+  /** Issue #1197 — local invocation telemetry is on unless explicitly disabled. */
+  invocationTelemetryEnabled: boolean;
 }> {
   const capabilities = raw.capabilities;
   // T18: the top-level `allowWrites` / `allowedProcedures` fields were
@@ -1354,6 +1365,7 @@ function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
     lintRulesOverride: normalizeLintRulesOverride(capabilities?.lint?.rules),
     writeExecutionPolicy,
     lintIdentifierSafetyStrict: capabilities?.lint?.identifierSafety?.strictNonAscii === true,
+    invocationTelemetryEnabled: capabilities?.telemetry?.invocations !== false,
   });
 }
 
