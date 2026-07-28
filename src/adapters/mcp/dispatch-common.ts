@@ -778,6 +778,39 @@ export function enrichmentForValidationMessage(
       toolName,
     };
   }
+  // Issue #1224 — `anyOf`/`oneOf` "one of these is required" surface.
+  // `validateAnyOf` (shared/validation/validator.ts) emits
+  //   `one of these is required: [paramA], [paramB].`
+  // when the schema declares `anyOf: [{required:["paramA"]},
+  // {required:["paramB"]}]` and the caller omits every alternative. The
+  // structured envelope MUST still name a single missing parameter so
+  // (a) the AI consumer sees one actionable hint, and (b) the
+  // release-telemetry `missingParams` aggregate can attribute the miss
+  // to a stable identifier. We pick the first alternative's first
+  // required key — declaration order is the contract surface.
+  const anyOfMatch = /^one of these is required: \[([^\]]+)\](?:, .*)?\.$/.exec(validation);
+  if (anyOfMatch !== null) {
+    const alternatives = anyOfMatch[1] ?? "";
+    const firstAlternative = alternatives
+      .split("|")
+      .map((token) => token.trim())
+      .find((token) => token.length > 0);
+    if (firstAlternative !== undefined) {
+      const activeSchema = schema ?? MCP_TOOL_SCHEMAS[toolName];
+      const parameterDescription = schemaPropertyAtPath(
+        activeSchema,
+        firstAlternative,
+      )?.description?.trim();
+      return {
+        kind: "missing-required",
+        missingParam: firstAlternative,
+        ...(parameterDescription === undefined || parameterDescription.length === 0
+          ? {}
+          : { parameterDescription }),
+        toolName,
+      };
+    }
+  }
   // Legacy single-flag rejection shape (#757 C4).
   const flagMatch = /"([^"]+)"\s+is not allowed\.|^([a-zA-Z][a-zA-Z0-9_]*)\s+is not allowed\./.exec(
     validation,
