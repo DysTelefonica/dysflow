@@ -239,3 +239,43 @@ describe("mcp-e2e.mjs — ACCESS_VBA_PASSWORD pre-flight", () => {
     expect(src).toMatch(/Missing Access password|process\.exit\(1\)/);
   });
 });
+
+describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("runs unknown-tool, missing-param, and conflicting-write-flag probes through record()", () => {
+    expect(src).toMatch(
+      /record\(\s*["']release-telemetry["']\s*,\s*["']DysflowMcpE2EUnknownTool["']/,
+    );
+    expect(src).toMatch(
+      /record\(\s*["']release-telemetry["']\s*,\s*["']delete_module["']\s*,\s*\{\s*projectId\s*\}/,
+    );
+    expect(src).toMatch(
+      /record\(\s*["']release-telemetry["']\s*,\s*["']delete_module["'][\s\S]*?apply:\s*true[\s\S]*?dryRun:\s*true/,
+    );
+  });
+
+  it("asserts exact logs filters and aggregate telemetry after the error probes", () => {
+    expect(src).toMatch(/tool:\s*["']delete_module["']/);
+    expect(src).toMatch(/action:\s*["']vba["']/);
+    expect(src).toMatch(/groupBy:\s*["']tool["']/);
+    expect(src).toContain("rejectedParams");
+    expect(src).toContain("missingParams");
+  });
+
+  it("pins privacy sentinels and restores opt-out config byte-for-byte", () => {
+    expect(src).toContain("DYSFLOW_E2E_TELEMETRY_SECRET");
+    expect(src).toContain("DYSFLOW_E2E_TELEMETRY_SQL_SECRET");
+    expect(src).toMatch(/readFile\(projectConfigPath, ["']utf8["']\)/);
+    expect(src).toMatch(/writeFile\(projectConfigPath, projectConfigBefore, ["']utf8["']\)/);
+    expect(src).toMatch(/Buffer\.compare/);
+  });
+
+  it("snapshots release telemetry config until the opt-out write is restored", () => {
+    const mutatingAreas = src.match(/const mutatingAreas = new Set\(\[([^\]]*)\]\);/);
+    expect(mutatingAreas?.[1]).toContain('"release-telemetry"');
+    expect(src).toMatch(
+      /createPhaseSnapshots\(tempRoot,\s*\[[\s\S]*?join\(tempRoot, ".dysflow", "project.json"\)/,
+    );
+  });
+});

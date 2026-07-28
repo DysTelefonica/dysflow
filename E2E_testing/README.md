@@ -30,7 +30,7 @@ pay the E2E cost only when you need it.
 | Every change | `pnpm test` (Vitest unit) | seconds | always, on every edit |
 | Per feature/bug | `pnpm test:integration -t <pattern>` (Vitest integration) | seconds–minute | every PR / branch |
 | Per feature/bug | manual JSON-RPC smoke for the touched tool | seconds | when integration tests don't cover the change end-to-end |
-| Pre-release | **full E2E battery** (`node E2E_testing/mcp-e2e.mjs`) | 5–15 minutes | **only** when cutting a release |
+| Pre-release | **full E2E battery** (`pnpm test:e2e:mcp:release`) | 5–15 minutes | **only** when cutting a release |
 
 Targeted hotfix scripts:
 
@@ -53,9 +53,8 @@ in the same PR:
 - New tool → add a `record(...)` call under the right `area`.
 - New area of behavior → add at least one positive `record` plus one `expected: "error"` case if
   the failure path is user-visible.
-- New advertised tool → update the hardcoded count in `mcp-e2e.mjs` (`advertised.length === N`)
-  **and** `test/adapters/mcp/advertised-tool-count.test.ts`. The two are pinned together — keep
-  them in sync or the protocol preflight flips red.
+- New advertised tool → update the shared `E2E_testing/_helpers/advertised-tool-count.mjs` source
+  used by both the harness and its unit pin. Do not add a second numeric literal.
 - Bug fix → add a regression record that exercises the previously-broken path.
 
 If you skip this, the harness silently goes stale and the release gate stops catching real
@@ -77,8 +76,9 @@ writes). Areas currently covered:
 - **maintenance** — `compact_repair` (dry-run + apply)
 - **links** — `link_tables`, `relink_tables`, `localize_backend_links`, `unlink_table`, `relink_directory`
 - **write** — `create_table`, `exec_sql`, `run_script`, `seed_fixture`, `teardown_fixture`, `drop_table`
-- **vba-sync** — `export_modules`, `export_all` (incl. prune-report), `import_modules`, `import_all`,
-  `compile_vba`
+- **vba-sync** — `export_modules`, `export_all` (incl. prune-report), `import_modules`, `import_all`
+- **release-telemetry** — unknown tools, missing and conflicting input flags, exact `logs` filters
+  and aggregation, privacy sentinels, and telemetry opt-out byte identity.
 - **form-ui** — `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
   `apply_form_design_plan`, `copy_form_ui_pattern`, `verify_form_ui`.
 
@@ -154,7 +154,7 @@ pnpm build
 node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui
 
 # 3. Run the harness. Auto-uses test-runtime/bin/dysflow.cmd.
-node E2E_testing/mcp-e2e.mjs
+pnpm test:e2e:mcp:release
 ```
 
 Report lands at `%TEMP%\dysflow-mcp-e2e-*\mcp-e2e-report.md`. The battery's `STOP-ON-FAIL`

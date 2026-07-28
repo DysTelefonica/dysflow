@@ -166,7 +166,7 @@ const runIdentity = await hashRunIdentity([
   sandboxPlan.source.destinationRoot,
 ]);
 const mutatingAreas = new Set([
-  "maintenance", "links", "write", "vba-sync", "forms", "form-ui", "query/import_queries",
+  "maintenance", "links", "write", "vba-sync", "forms", "form-ui", "query/import_queries", "release-telemetry",
 ]);
 const phaseSnapshots = createPhaseSnapshots(tempRoot, [
   accessPath,
@@ -174,6 +174,7 @@ const phaseSnapshots = createPhaseSnapshots(tempRoot, [
   destinationRoot,
   sandboxPlan.sandbox.exportsRoot,
   sandboxPlan.sandbox.erdPath,
+  join(tempRoot, ".dysflow", "project.json"),
 ]);
 let resumedCheckpoint;
 if (resumeRoot) {
@@ -217,6 +218,7 @@ function extractMcpErrorCode(text) {
     if (parsed.error && typeof parsed.error.code === "string") return parsed.error.code;
   }
   const textValue = String(text ?? "");
+  if (/MCP_TOOL_NOT_FOUND/i.test(textValue)) return "MCP_TOOL_NOT_FOUND";
   if (/FORM_UI_ANALYSIS_FAILED/i.test(textValue)) return "FORM_UI_ANALYSIS_FAILED";
   if (/FORM_SPEC_MISSING/i.test(textValue)) return "FORM_SPEC_MISSING";
   if (/MCP_INPUT_INVALID/i.test(textValue)) return "MCP_INPUT_INVALID";
@@ -378,6 +380,156 @@ await record("vba", "delete_module", { projectId, module: "DysflowE2ENoSuchModul
 // #1057 (F8) — contradictory apply+dryRun is rejected as mutually exclusive
 // at validation, before the write gate.
 await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, dryRun: true }, { expected: "error" });
+
+// #1212 — release-only friction paths must remain observable in the real
+// stdio transport. Keep every call behind record(): that seam owns the
+// per-tool PID and zombie gates, even when the handler rejects before Access.
+const telemetrySecret = "DYSFLOW_E2E_TELEMETRY_SECRET";
+const telemetrySqlSecret = "DYSFLOW_E2E_TELEMETRY_SQL_SECRET";
+const projectConfigPath = join(tempRoot, ".dysflow", "project.json");
+const invocationSinkPath = join(tempRoot, ".dysflow", "runtime", "invocations.jsonl");
+const unknownToolResult = await record(
+  "release-telemetry",
+  "DysflowMcpE2EUnknownTool",
+  { projectId },
+  { expected: "error" },
+);
+const missingParamResult = await record("release-telemetry", "delete_module", { projectId }, { expected: "error" });
+const conflictingFlagsResult = await record(
+  "release-telemetry",
+  "delete_module",
+  { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, dryRun: true },
+  { expected: "error" },
+);
+const expectedReleaseErrorsPass =
+  extractMcpErrorCode(unknownToolResult.text) === "MCP_TOOL_NOT_FOUND" &&
+  extractMcpErrorCode(missingParamResult.text) === "MCP_INPUT_INVALID" &&
+  extractMcpErrorCode(conflictingFlagsResult.text) === "MCP_INPUT_INVALID";
+addFailFastResult({
+  area: "release-telemetry",
+  tool: "error-codes",
+  pass: expectedReleaseErrorsPass,
+  expected: "MCP_TOOL_NOT_FOUND for unknown tool; MCP_INPUT_INVALID for schema failures",
+  ms: 0,
+  summary: expectedReleaseErrorsPass
+    ? "unknown-tool and differentiated schema error codes verified"
+    : "release telemetry probes returned unexpected error codes",
+});
+console.log(`${expectedReleaseErrorsPass ? "PASS" : "FAIL"}\terror-codes\t0ms\t${rows.at(-1).summary}`);
+await record(
+  "release-telemetry",
+  "query_execute",
+  {
+    projectId,
+    backendPath,
+    mode: "read",
+    password: telemetrySecret,
+    sql: `SELECT '${telemetrySqlSecret}' AS SecretValue`,
+  },
+  { expected: "error" },
+);
+
+const deleteModuleLogs = await record("release-telemetry", "logs", {
+  projectId,
+  options: { tool: "delete_module", limit: 1000, orderBy: "asc" },
+});
+const vbaActionLogs = await record("release-telemetry", "logs", {
+  projectId,
+  options: { action: "vba", limit: 1000, orderBy: "asc" },
+});
+const telemetryAggregateLogs = await record("release-telemetry", "logs", {
+  projectId,
+  options: { tool: "delete_module", groupBy: "tool", limit: 1000, orderBy: "asc" },
+});
+const deleteModuleLogData = safeJsonParse(deleteModuleLogs.text);
+const vbaActionLogData = safeJsonParse(vbaActionLogs.text);
+const telemetryAggregateData = safeJsonParse(telemetryAggregateLogs.text);
+const deleteModuleAggregate = telemetryAggregateData?.aggregate?.tools?.find(
+  (tool) => tool.tool === "delete_module",
+);
+const telemetryLogsPass = Boolean(
+  Array.isArray(deleteModuleLogData?.entries) &&
+    deleteModuleLogData.entries.length >= 4 &&
+    deleteModuleLogData.entries.every((entry) => entry.tool === "delete_module") &&
+    Array.isArray(vbaActionLogData?.entries) &&
+    vbaActionLogData.entries.some((entry) => entry.tool === "delete_module") &&
+    vbaActionLogData.entries.every((entry) => entry.action === "vba") &&
+    deleteModuleAggregate?.calls >= 4 &&
+    deleteModuleAggregate?.errors >= 4 &&
+    deleteModuleAggregate?.contractErrors >= 4 &&
+    telemetryAggregateData?.aggregate?.missingParams?.some(
+      (parameter) => parameter.parameter === "moduleName" && parameter.count >= 1,
+    ) &&
+    telemetryAggregateData?.aggregate?.rejectedParams?.some(
+      (parameter) => parameter.parameter === "module" && parameter.count >= 1,
+    ),
+);
+addFailFastResult({
+  area: "release-telemetry",
+  tool: "logs:filters-and-aggregate",
+  pass: telemetryLogsPass,
+  expected: "exact delete_module/vba filters plus aggregate missing/rejected parameter counts",
+  ms: 0,
+  summary: telemetryLogsPass
+    ? "exact tool/action filters and aggregate parameter frequencies verified"
+    : "logs did not preserve the expected release telemetry error aggregation",
+});
+console.log(`${telemetryLogsPass ? "PASS" : "FAIL"}\tlogs:filters-and-aggregate\t0ms\t${rows.at(-1).summary}`);
+
+const invocationSinkBeforeOptOut = await readFile(invocationSinkPath);
+const telemetryPrivacyPass =
+  !invocationSinkBeforeOptOut.includes(Buffer.from(telemetrySecret)) &&
+  !invocationSinkBeforeOptOut.includes(Buffer.from(telemetrySqlSecret));
+addFailFastResult({
+  area: "release-telemetry",
+  tool: "invocation-sink:privacy",
+  pass: telemetryPrivacyPass,
+  expected: "invocation sink contains parameter names only, never supplied values",
+  ms: 0,
+  summary: telemetryPrivacyPass
+    ? "privacy sentinels are absent from the sandbox-local invocation sink"
+    : "privacy sentinel leaked into the sandbox-local invocation sink",
+});
+console.log(`${telemetryPrivacyPass ? "PASS" : "FAIL"}\tinvocation-sink:privacy\t0ms\t${rows.at(-1).summary}`);
+
+const projectConfigBefore = await readFile(projectConfigPath, "utf8");
+try {
+  const projectConfig = JSON.parse(projectConfigBefore);
+  projectConfig.capabilities = {
+    ...(projectConfig.capabilities ?? {}),
+    telemetry: { ...(projectConfig.capabilities?.telemetry ?? {}), invocations: false },
+  };
+  await writeFile(projectConfigPath, `${JSON.stringify(projectConfig, null, 2)}\n`, "utf8");
+  const telemetryOptOutCall = await record("release-telemetry", "schema", { projectId });
+  const invocationSinkAfterOptOut = await readFile(invocationSinkPath);
+  const telemetryOptOutPass = Buffer.compare(invocationSinkBeforeOptOut, invocationSinkAfterOptOut) === 0;
+  addFailFastResult({
+    area: "release-telemetry",
+    tool: "invocation-sink:opt-out",
+    pass: telemetryOptOutPass,
+    expected: "telemetry opt-out leaves invocation sink byte-identical",
+    ms: 0,
+    summary: telemetryOptOutPass
+      ? "opt-out left the existing sandbox-local invocation sink byte-identical"
+      : "opt-out changed the existing sandbox-local invocation sink",
+  });
+  console.log(`${telemetryOptOutPass ? "PASS" : "FAIL"}\tinvocation-sink:opt-out\t0ms\t${rows.at(-1).summary}`);
+} finally {
+  await writeFile(projectConfigPath, projectConfigBefore, "utf8");
+}
+const projectConfigRestored = Buffer.compare(
+  Buffer.from(projectConfigBefore),
+  await readFile(projectConfigPath),
+) === 0;
+addFailFastResult({
+  area: "release-telemetry",
+  tool: "invocation-sink:opt-out-config-restore",
+  pass: projectConfigRestored,
+  expected: "project config restored byte-for-byte after opt-out proof",
+  ms: 0,
+  summary: projectConfigRestored ? "sandbox project config restored byte-for-byte" : "sandbox project config restoration drifted",
+});
+console.log(`${projectConfigRestored ? "PASS" : "FAIL"}\tinvocation-sink:opt-out-config-restore\t0ms\t${rows.at(-1).summary}`);
 {
   // Cross-check: the snapshot's toolsVisible must match the live registry advertised above.
   // Drift here means the unit test pin and the live MCP server disagree — flag it loudly.

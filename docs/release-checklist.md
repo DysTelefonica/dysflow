@@ -21,7 +21,7 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
   6. **Polls `gh run list --workflow ci.yml` filtered by the release commit's
      SHA** — not by `latest run` — and refuses to tag unless the conclusion
      is `success`. The CI workflow (`pnpm test` + `pnpm test:ps1` + `pnpm build`
-     + `pnpm lint`) does NOT run the heavy `node E2E_testing/mcp-e2e.mjs`
+     + `pnpm lint`) does NOT run the heavy `pnpm test:e2e:mcp:release`
      battery, which takes ~30 minutes; see the E2E row below.
   7. On CI green: creates an annotated `vX.Y.Z` tag and pushes it. The
      `.github/workflows/release.yml` workflow fires on the tag push, builds
@@ -79,7 +79,7 @@ Reference: `docs/testing/mcp-protocol-maintenance.md`.
 - [ ] `pnpm test` passes locally.
 - [ ] Integration/E2E (`vitest.integration.config.ts`) passes locally where the
   host platform supports it.
-- [ ] Real MCP E2E (`node E2E_testing/mcp-e2e.mjs`) passes against the safe
+- [ ] Real MCP E2E (`pnpm test:e2e:mcp:release`) passes against the safe
   `test-runtime/` build, with `DYSFLOW_E2E_COMMAND` pointing at it. Never run
   E2E against `%LOCALAPPDATA%\dysflow` or `~/.config/opencode/opencode.json`.
   **Run the heavy E2E only at the very end, after every other issue on this
@@ -95,10 +95,9 @@ The mcp-e2e suite's structural invariants are pinned by cheap vitest tests
 so the heavy E2E never has to catch a regression that could have been caught
 in 100ms:
 
-- `test/quality-gates/mcp-e2e-suite-contracts.test.ts` (9 tests) — pins
-  `verify_code` timeout (≥180s), `tools/list` called before advertised, count =
-  53, sandbox isolation, final lingering-access-check row, STOP-ON-FAIL
-  invariant, `suiteOwnPids.add(childPid)`, ACCESS_VBA_PASSWORD pre-flight.
+- `test/quality-gates/mcp-e2e-suite-contracts.test.ts` — pins `verify_code`
+  timeout (≥180s), `tools/list` ordering, sandbox isolation, PID/zombie gates,
+  release telemetry friction paths, privacy sentinels, and opt-out byte identity.
 - `test/quality-gates/mcp-e2e-tool-existence.test.ts` (3 tests) — pins that
   every `record(area, tool, …)` call in `mcp-e2e.mjs` references a tool
   that exists in `createDysflowMcpTools()` (catches renames, removals,
