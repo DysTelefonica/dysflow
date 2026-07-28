@@ -1,5 +1,29 @@
 # Changelog
 
+## [v2.27.0] - 2026-07-28
+
+### Changes
+
+- fix(mcp): require moduleName or moduleNames on delete_module (#1224) (#1225)
+- test(e2e): cover MCP friction contracts (#1223)
+- fix(telemetry): reap orphaned pending locks (#1222)
+- feat(logs): record per-tool invocation telemetry (#1221)
+- test(architecture): stabilize subprocess diagnostics (#1220)
+- fix(mcp): canonicalize generated artifact kind (#1217)
+- fix(mcp): distinguish missing required parameters (#1213)
+- feat(mcp): structure unknown tool errors (#1211)
+- fix(release): generate valid changelog entries (#1210)
+- feat(mcp): complete shared block coverage (#1209)
+- fix(mcp): align dry-run write intent (#1208)
+- fix(query): align query_execute target controls (#1207)
+- docs(schema): document every advertised parameter (#1206)
+- fix(schema): enforce required alias groups (#1205)
+- fix(schema): disambiguate compare form target path (#1204)
+- docs(agents): re-embed the arn├®s block after the v2.26.0 alignment (#1201)
+- refactor(schema): adopt shared write intent block (#1200)
+- perf(ci): stop running the test suite twice per Node leg (#1196)
+
+
 ## [Unreleased]
 
 ## [v2.26.0] - 2026-07-27
