@@ -291,7 +291,14 @@ describe("#980 dispatch-factory — INTERNAL_ERROR wraps unexpected throws", () 
       throw new Error("explode");
     });
     const tool = createDispatchTool("export_modules", services, true, undefined, {});
-    const result = await tool.handler({});
+    // Issue #1226 — pre-resolve destinationRoot gate must pass so the
+    // dispatcher reaches the runner (where the synthetic throw fires).
+    const result = await tool.handler({
+      moduleNames: ["Foo"],
+      destinationRoot: "C:/elsewhere/throw-test",
+      exportPath: "C:/elsewhere/throw-test",
+      accessPath: "C:/elsewhere/throw-test/front.accdb",
+    });
     expect(result.error?.code).toBe(INTERNAL_ERROR);
   });
 });
@@ -332,7 +339,16 @@ describe("#980 dispatch-factory — remaps legacy codes to the new taxonomy", ()
       ),
     );
     const tool = createDispatchTool("export_modules", services, true, undefined, {});
-    const result = await tool.handler({});
+    // Issue #1226 — pre-resolve destinationRoot gate must pass so the
+    // dispatcher's legacy-code remap (BINARY_ALREADY_LOCKED → BINARY_LOCKED)
+    // is reachable. External destination so the post-resolve #785 guard
+    // also stays silent.
+    const result = await tool.handler({
+      moduleNames: ["Foo"],
+      destinationRoot: "C:/elsewhere/locked-test",
+      exportPath: "C:/elsewhere/locked-test",
+      accessPath: "C:/elsewhere/locked-test/front.accdb",
+    });
     expect(result.error?.code).toBe(BINARY_LOCKED);
     expect(result.error?.details?.holderPid).toBe(999);
   });

@@ -298,7 +298,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     type: "object",
     additionalProperties: false,
     description:
-      "Issue #966 Pre-flight checks: before apply:true the runtime confirms (1) destinationRoot exists as a directory — `git rm -r src/` removes the directory itself, recreate it with `mkdir src/` before calling apply:true; (2) accessPath exists and resolves inside projectRoot or carries allowExternalAccessPath:true (#968); (3) no stale running markers in .dysflow/runtime/markers/; (4) capabilities.allowWrites=true and writesProcess.enabled=true; (5) projectId matches .dysflow/project.json. Failures surface as typed errorCodes with diagnostics[].remediation carrying the next command — see references/error-codes.md#DESTINATION_ROOT_NOT_FOUND for the destinationRoot case.",
+      "Issue #966 Pre-flight checks: before apply:true the runtime confirms (1) destinationRoot exists as a directory — `git rm -r src/` removes the directory itself, recreate it with `mkdir src/` before calling apply:true; (2) accessPath exists and resolves inside projectRoot or carries allowExternalAccessPath:true (#968); (3) no stale running markers in .dysflow/runtime/markers/; (4) capabilities.allowWrites=true and writesProcess.enabled=true; (5) projectId matches .dysflow/project.json. Failures surface as typed errorCodes with diagnostics[].remediation carrying the next command — see references/error-codes.md#DESTINATION_ROOT_NOT_FOUND for the destinationRoot case. Issue #1226: the call MUST supply an explicit destinationRoot (or exportPath) OR pass allowConfiguredDestinationRoot:true — without either, the dispatch seam short-circuits with DESTINATION_ROOT_REQUIRED before any service call.",
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
@@ -307,6 +307,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       filter: SCHEMA_PROPS.filter,
       destinationRoot: SCHEMA_PROPS.destinationRoot,
       exportPath: SCHEMA_PROPS.exportPath,
+      // Issue #1226 — opt-in to using the configured `destinationRoot`
+      // from `.dysflow/project.json` when the caller does not supply an
+      // explicit `destinationRoot` / `exportPath`. See also
+      // `references/error-codes.md#DESTINATION_ROOT_REQUIRED`.
+      allowConfiguredDestinationRoot: SCHEMA_PROPS.allowConfiguredDestinationRoot,
       // Issue #757 (C1) — `apply:true` joins the export_modules family
       // too. The historical `diff:true` alias is honored as a
       // deprecated no-write mapping by VbaModulesAdapter; the schema
@@ -349,6 +354,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   export_all: {
     type: "object",
     additionalProperties: false,
+    description:
+      "Issue #1226 — the call MUST supply an explicit destinationRoot (or exportPath) OR pass allowConfiguredDestinationRoot:true — without either, the dispatch seam short-circuits with DESTINATION_ROOT_REQUIRED before any service call. See references/error-codes.md#DESTINATION_ROOT_REQUIRED.",
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
@@ -363,7 +370,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // routing (#1055) is reachable through MCP: `dryRun:true` ≡
       // `apply:false` (plan) on every write tool.
       prune: SCHEMA_PROPS.prune,
+      destinationRoot: SCHEMA_PROPS.destinationRoot,
       exportPath: SCHEMA_PROPS.exportPath,
+      // Issue #1226 — opt-in to using the configured `destinationRoot`
+      // from `.dysflow/project.json`. See
+      // `references/error-codes.md#DESTINATION_ROOT_REQUIRED`.
+      allowConfiguredDestinationRoot: SCHEMA_PROPS.allowConfiguredDestinationRoot,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
       // Issue #785 (v2.1.1) — see export_modules for semantics; same

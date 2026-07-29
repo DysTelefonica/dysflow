@@ -39,6 +39,13 @@ export type ExplainDecisionTreeStep = {
   evidence: string;
   /** Optional remediation text — present on the leaf step (last step). */
   remediation?: string;
+  /**
+   * Issue #1226 — supplementary structured data surfaced on the leaf
+   * step. Today this carries `missingFields` for
+   * `DESTINATION_ROOT_REQUIRED`. Future decision-tree leaves may add
+   * their own bag-of-data here without reshaping the type.
+   */
+  missingFields?: readonly string[];
 };
 
 export type ExplainObject = {
@@ -92,6 +99,10 @@ export const RELATED_ISSUE_NUMBERS: Readonly<Record<string, readonly string[]>> 
   MCP_ALLOWLIST_NOT_CONFIGURED: ["#757"],
   // #785 — export-source guard
   EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION: ["#785"],
+  // #1226 — pre-resolve destinationRoot gate (mandatory explicit
+  // destination on export_modules / export_all). Companion to the
+  // existing #785 post-resolve guard.
+  DESTINATION_ROOT_REQUIRED: ["#1226"],
   // #941 — form-property catalog
   FORM_UNKNOWN_PROPERTY: ["#941"],
   FORM_PROPERTY_VALUE_INVALID: ["#941"],
@@ -469,6 +480,59 @@ function explainExportSourceGuardRefused(input: ExplainInput): ExplainObject {
   };
 }
 
+/**
+ * Issue #1226 — pre-resolve destinationRoot gate.
+ *
+ * Distinct from `DESTINATION_ROOT_NOT_FOUND` (post-resolve: the configured
+ * directory does not exist on disk) and from
+ * `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` (post-resolve: the
+ * destination overlaps source). This code fires ONLY on `export_modules`
+ * / `export_all` and ONLY when the caller passed NONE of the
+ * destinationRoot / exportPath / allowConfiguredDestinationRoot fields.
+ */
+function explainDestinationRootRequired(input: ExplainInput): ExplainObject {
+  const toolName = typeof input.details?.toolName === "string" ? input.details.toolName : "<tool>";
+  const missingFields = Array.isArray(input.details?.missingFields)
+    ? (input.details?.missingFields as unknown[]).map((entry) => String(entry))
+    : ["destinationRoot", "allowConfiguredDestinationRoot"];
+  return {
+    summary:
+      `caller declared no destination on ${toolName}; the silent fallback to ` +
+      `.dysflow/project.json's destinationRoot was removed in #1226.`,
+    decisionTree: [
+      {
+        step: 1,
+        check: `params.destinationRoot is a non-empty string`,
+        result: "FAIL",
+        evidence: "params.destinationRoot is missing or empty.",
+      },
+      {
+        step: 2,
+        check: `params.exportPath is a non-empty string (legacy alias of destinationRoot)`,
+        result: "FAIL",
+        evidence: "params.exportPath is missing or empty.",
+      },
+      {
+        step: 3,
+        check: `params.allowConfiguredDestinationRoot === true (opt-in to .dysflow/project.json)`,
+        result: "FAIL",
+        evidence: "params.allowConfiguredDestinationRoot is not true.",
+      },
+      {
+        step: 4,
+        check: `Declare one of the three above fields and retry.`,
+        result: "LIKELY",
+        evidence:
+          "Each accepted field satisfies the gate independently. Declaring an explicit `destinationRoot` is the strongest contract; `allowConfiguredDestinationRoot:true` is the lightest.",
+        remediation:
+          input.remediation ??
+          `On ${toolName}, pass an explicit \`destinationRoot\`, the legacy \`exportPath\` alias, or \`allowConfiguredDestinationRoot: true\` to opt into the configured value. The call also reaches the post-resolve export-source guard (#785) automatically when the destination overlaps the source root.`,
+        missingFields,
+      },
+    ],
+  };
+}
+
 function explainFormUnknownProperty(input: ExplainInput): ExplainObject {
   const controlName =
     typeof input.details?.controlName === "string"
@@ -824,6 +888,7 @@ export const EXPLAIN_BUILDERS: ReadonlyMap<string, (input: ExplainInput) => Expl
     ["MCP_ALLOWLIST_NOT_CONFIGURED", explainAllowlistNotConfigured],
     ["MCP_INPUT_INVALID", explainInputInvalid],
     ["EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION", explainExportSourceGuardRefused],
+    ["DESTINATION_ROOT_REQUIRED", explainDestinationRootRequired],
     ["FORM_UNKNOWN_PROPERTY", explainFormUnknownProperty],
     ["FORM_PROPERTY_VALUE_INVALID", explainFormPropertyValueInvalid],
     // #980 — read-tool taxonomy

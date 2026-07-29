@@ -345,6 +345,10 @@ describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
       apply: true,
       dryRunWithPreflight: true,
       confirmOverwriteSource: true,
+      // Issue #1226 — destinationRoot gate must pass before the
+      // dryRun/apply exclusivity test reaches the dispatch seam.
+      destinationRoot: `${root}/scratch-1226`,
+      exportPath: `${root}/scratch-1226`,
     });
     // apply wins on the existing dispatch seam — the preflight is
     // bypassed and the call runs the apply path. The apply path

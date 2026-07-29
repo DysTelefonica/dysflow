@@ -52,7 +52,22 @@ export const SCHEMA_PROPS = {
   scriptPath: { type: "string", description: "SQL script path." } as JsonSchemaProperty,
   destinationRoot: {
     type: "string",
-    description: "Optional override for source/export root.",
+    description:
+      "Override for the source/export root. The dispatch seam refuses a call without an explicit value unless the caller opts in via `allowConfiguredDestinationRoot:true` (see #1226).",
+  } as JsonSchemaProperty,
+  // Issue #1226 — explicit opt-in for falling back to the configured
+  // `destinationRoot` in `.dysflow/project.json`. Only honored by
+  // `export_modules` / `export_all`; other tools ignore it. Together with
+  // `destinationRoot`, this is one of two ways to satisfy the
+  // pre-resolve destinationRoot gate (#1226). The dispatch seam
+  // short-circuits with `DESTINATION_ROOT_REQUIRED` when neither is
+  // supplied, so the silent config fallback can no longer overwrite a
+  // stale or wrong `.dysflow/project.json` without the caller
+  // declaring intent.
+  allowConfiguredDestinationRoot: {
+    type: "boolean",
+    description:
+      "Issue #1226 — opt-in acknowledgment that the call should fall back to the configured `destinationRoot` in `.dysflow/project.json`. Equivalent to passing `destinationRoot` explicitly for the purpose of the destinationRoot gate. Required whenever the caller does NOT supply `destinationRoot` (or the legacy `exportPath` alias) on `export_modules` / `export_all`. Default false preserves the safe-by-default contract.",
   } as JsonSchemaProperty,
   projectRoot: {
     type: "string",
@@ -109,15 +124,18 @@ export const SCHEMA_PROPS = {
   } as JsonSchemaProperty,
   // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
   // guard. When the caller passes confirmOverwriteSource: true AND the
-  // destination overlaps the project's active source root AND the policy
-  // is `developer` AND the call is in execute mode, the guard fires its
-  // refusal; this field bypasses the guard for callers who have
-  // reviewed the destination and accept the overwrite risk. Ignored in
-  // `safe-by-default` mode (the policy never reaches the guard).
+  // destination overlaps the project's active source root, the guard fires
+  // its refusal; this field bypasses the guard for callers who have
+  // reviewed the destination and accept the overwrite risk. The guard
+  // is policy-aware (`safe-by-default` vs `developer`) but the explicit
+  // destinationRoot / destination contract (#1226) applies BEFORE the
+  // guard so a caller that never declared where they write to can
+  // never reach the guard. Pass `confirmOverwriteSource: true` to bypass
+  // the guard on legitimate overlap.
   confirmOverwriteSource: {
     type: "boolean",
     description:
-      "Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path; ignored otherwise.",
+      "Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path AND under safe-by-default mode. Ignored when the call did not declare an explicit destination (destinationRoot, exportPath, or allowConfiguredDestinationRoot) — that case fails earlier with DESTINATION_ROOT_REQUIRED (#1226).",
   } as JsonSchemaProperty,
   allowTables: {
     type: "array",

@@ -203,7 +203,15 @@ describe("Dysflow MCP tool parity inventory", () => {
     });
     const exportModules = tools.find((tool) => tool.name === "export_modules");
 
-    await expect(exportModules?.handler({ moduleNames: ["Module1"] })).resolves.toEqual({
+    await expect(
+      exportModules?.handler({
+        moduleNames: ["Module1"],
+        // Issue #1226 — destinationRoot gate must pass so the runner's
+        // SERVICE_UNAVAILABLE branch is reachable.
+        destinationRoot: "C:/elsewhere/parity-unconfigured",
+        exportPath: "C:/elsewhere/parity-unconfigured",
+      }),
+    ).resolves.toEqual({
       isError: true,
       ok: false,
       content: [
@@ -241,7 +249,14 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "export_modules")
-        ?.handler({ moduleNames: ["Module1"], accessPath: "C:/db.accdb" }),
+        // Issue #1226 — destinationRoot gate must pass before the
+        // dispatch seam reaches the fake vbaSyncToolService.
+        ?.handler({
+          moduleNames: ["Module1"],
+          accessPath: "C:/db.accdb",
+          destinationRoot: "C:/elsewhere/parity-1226",
+          exportPath: "C:/elsewhere/parity-1226",
+        }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -303,9 +318,18 @@ describe("Dysflow MCP tool parity inventory", () => {
       // the safe-by-default policy default is `dryRun: true`. `verify_code`
       // is read-only — its risk-driven default is also `true`. The
       // routing+intent assertion is preserved (tool name + caller fields).
+      // Issue #1226 — the test now declares an explicit destinationRoot +
+      // exportPath so the pre-resolve gate passes; both fields are forwarded
+      // to the adapter unchanged.
       {
         toolName: "export_modules",
-        input: { moduleNames: ["Module1"], accessPath: "C:/db.accdb", dryRun: true },
+        input: {
+          moduleNames: ["Module1"],
+          accessPath: "C:/db.accdb",
+          destinationRoot: "C:/elsewhere/parity-1226",
+          exportPath: "C:/elsewhere/parity-1226",
+          dryRun: true,
+        },
       },
       {
         toolName: "verify_code",

@@ -112,6 +112,22 @@ export type McpToolError = {
    */
   sourceRoot?: string;
   /**
+   * Issue #1226 — tool name that triggered the rejection. Mirrors the
+   * `details.toolName` redundancy exposed by `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION`
+   * so a consumer can branch on `error.toolName === "export_modules"`
+   * without string-parsing `message` or reaching into `details`.
+   */
+  toolName?: string;
+  /**
+   * Issue #1226 — structured list of fields the caller did NOT supply
+   * when `DESTINATION_ROOT_REQUIRED` fired. The pre-resolve gate
+   * surfaces the missing fields explicitly so a consumer can map the
+   * rejection to a remediation rule (which input field to set).
+   * Always populated on `DESTINATION_ROOT_REQUIRED` envelopes; absent
+   * on every other code.
+   */
+  missingFields?: readonly string[];
+  /**
    * v2.9.0 (#757 C4) — when the schema-rejection (`MCP_INPUT_INVALID`)
    * is for a flag the tool does not accept, this is the literal flag
    * name the caller passed. Pairs with `toolCommitFlag` to surface the
