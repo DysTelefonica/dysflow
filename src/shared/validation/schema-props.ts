@@ -184,12 +184,14 @@ export const SCHEMA_PROPS = {
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: {
     type: "string",
+    default: "Auto",
     enum: ["Auto", "Form", "Code", "auto", "form", "code", "replace"],
     description:
       "VBA import mode. Auto (default) imports a form/report's UI from its .form.txt and its canonical code from the sibling .cls. Code imports only code-behind/.bas. Form is a deprecated alias for Auto (there is no layout-only import). Lowercase variants and replace are normalized before invoking the runner.",
   } as JsonSchemaProperty,
   mode: {
     type: "string",
+    default: "read",
     enum: ["read", "write"],
     description: "Execution mode: read or write.",
   } as JsonSchemaProperty,
