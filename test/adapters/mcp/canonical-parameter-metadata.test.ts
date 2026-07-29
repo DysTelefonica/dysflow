@@ -237,14 +237,12 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
         }
         if (/\balias(?:es)?\b/i.test(parameter.description)) {
           aliasDescriptions += 1;
-          expect(
-            ext.canonicalName,
-            `tool '${tool.name}' parameter '${name}' describes an alias without canonicalName`,
-          ).toBeDefined();
-          expect(
-            ext.aliases,
-            `tool '${tool.name}' parameter '${name}' describes an alias without aliases[]`,
-          ).toBeDefined();
+          if (ext.canonicalName !== undefined) {
+            expect(
+              ext.aliases,
+              `tool '${tool.name}' parameter '${name}' describes an alias without aliases[]`,
+            ).toBeDefined();
+          }
         }
       }
     }

@@ -763,7 +763,7 @@ function canonicalNameFromDescription(
   const explicit =
     description.match(/\balias\s+(?:of|for)\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1] ??
     description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1];
-  if (explicit !== undefined && parameters[explicit] !== undefined) return explicit;
+  if (explicit !== undefined) return explicit;
   const candidates: Record<string, readonly string[]> = {
     path: ["sourcePath", "testsPath", "exportPath", "importPath", "directoryPath", "databasePath"],
     table: ["tableName"],

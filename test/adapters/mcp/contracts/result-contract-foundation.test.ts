@@ -52,6 +52,9 @@ describe("executable result-contract foundation", () => {
         shape: {
           code: { type: "string" },
           message: { type: "string" },
+          rejectedFlag: { type: "string", optional: true },
+          rejectedFlags: { type: "array", optional: true, items: { type: "string" } },
+          toolCommitFlag: { type: "string", optional: true },
           remediation: { type: "string", optional: true },
         },
       },
