@@ -11,6 +11,9 @@ import type {
 const STANDARD_ERROR_ENVELOPE_SHAPE = {
   code: { type: "string" },
   message: { type: "string" },
+  rejectedFlag: { type: "string", optional: true },
+  rejectedFlags: { type: "array", optional: true, items: { type: "string" } },
+  toolCommitFlag: { type: "string", optional: true },
   remediation: { type: "string", optional: true },
 } as const satisfies ToolErrorEnvelopeShape;
 
