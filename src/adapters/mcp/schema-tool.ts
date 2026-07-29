@@ -761,9 +761,9 @@ function canonicalNameFromDescription(
   parameters: Record<string, ToolParameterSchema>,
 ): string | undefined {
   const explicit =
-    description.match(/\balias\s+(?:of|for)\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1] ??
-    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1];
-  if (explicit !== undefined) return explicit;
+    description.match(/\balias\s+(?:of|for)\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1] ??
+    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1];
+  if (explicit !== undefined && parameters[explicit] !== undefined) return explicit;
   const candidates: Record<string, readonly string[]> = {
     path: ["sourcePath", "testsPath", "exportPath", "importPath", "directoryPath", "databasePath"],
     table: ["tableName"],
@@ -788,12 +788,16 @@ function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): v
     if (!/\balias(?:es)?\b/i.test(parameter.description) || parameter.canonicalName !== undefined) {
       continue;
     }
-    parameter.canonicalName =
-      canonicalNameFromDescription(name, parameter.description, parameters) ?? name;
+    const candidate = canonicalNameFromDescription(name, parameter.description, parameters);
+    if (candidate === undefined) continue;
+    parameter.canonicalName = candidate;
     parameter.precedence = parameter.canonicalName === name ? "canonical" : "deprecated";
     if (parameter.canonicalName !== name) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
+    } else {
+      delete parameter.deprecated;
+      delete parameter.deprecatedSince;
     }
   }
 
@@ -902,7 +906,11 @@ function enrichParameterMetadata(
   applyExplicitAliasMigrations(toolName, parameters);
 
   for (const [name, parameter] of Object.entries(parameters)) {
-    if (/password|secret|token/i.test(name)) parameter.sensitive = true;
+    if (/password|secret|credential|apiKey|authToken/i.test(name) || /^token$/i.test(name)) {
+      parameter.sensitive = true;
+    } else {
+      delete parameter.sensitive;
+    }
   }
 
   const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
