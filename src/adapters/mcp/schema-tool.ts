@@ -1215,12 +1215,15 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
       .filter(([, parameter]) => parameter.required)
       .map(([name]) => name)
       .sort(),
-    requiredParameterGroups: (tool.compositionConstraints.length > 0
-      ? [...tool.compositionConstraints]
-      : ((tool.inputSchema.anyOf ?? []).map((alternative) => ({
-          kind: "anyOf" as const,
-          alternatives: (alternative.required ?? []).map((parameter) => ({ parameters: [parameter] })),
-        })) as SchemaCompositionConstraint[])),
+    requiredParameterGroups:
+      tool.compositionConstraints.length > 0
+        ? [...tool.compositionConstraints]
+        : ((tool.inputSchema.anyOf ?? []).map((alternative) => ({
+            kind: "anyOf" as const,
+            alternatives: (alternative.required ?? []).map((parameter) => ({
+              parameters: [parameter],
+            })),
+          })) as SchemaCompositionConstraint[]),
     defaults,
     writeIntent:
       tool.access === "read-only"

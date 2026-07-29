@@ -13,6 +13,11 @@ export type JsonSchemaProperty = {
   pattern?: string;
   items?: JsonSchemaProperty;
   maxItems?: number;
+  // Issue #1230 — concrete default value surfaced for parameters that
+  // previously declared defaults only in prose. The audit demands a
+  // structured `default` (concrete value or `null`) instead of the
+  // "runtime-defined" sentinel.
+  default?: unknown;
   // Boolean form (true / false) and schema form (a nested
   // JsonSchemaProperty) are both enforced by the dysflow validator
   // (#624 PR 5). Schema-form lets callers constrain values of arbitrary

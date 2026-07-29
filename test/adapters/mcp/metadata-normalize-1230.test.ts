@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildToolSchemaCatalog, type ToolSchema } from "../../../src/adapters/mcp/schema-tool.js";
+import { buildToolSchemaCatalog } from "../../../src/adapters/mcp/schema-tool.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 
@@ -11,7 +11,10 @@ type InputError = {
   remediation?: string;
 };
 
-type ErrorEnvelopeShape = Record<string, { type: string; optional?: true; items?: { type: string } }>;
+type ErrorEnvelopeShape = Record<
+  string,
+  { type: string; optional?: true; items?: { type: string } }
+>;
 
 class FakeVbaService {
   async execute() {
@@ -42,12 +45,6 @@ const tools = createDysflowMcpTools({
 
 const full = buildToolSchemaCatalog({ view: "full" });
 const compact = buildToolSchemaCatalog({ view: "compact" });
-
-function toolByName(catalog: { tools: readonly ToolSchema[] }, name: string): ToolSchema {
-  const tool = catalog.tools.find((entry) => entry.name === name);
-  if (tool === undefined) throw new Error(`Missing tool ${name}`);
-  return tool;
-}
 
 function isSecretParameter(name: string): boolean {
   return /password|secret|credential|apiKey|authToken/i.test(name);
