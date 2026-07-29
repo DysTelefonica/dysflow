@@ -916,7 +916,7 @@ function enrichParameterMetadata(
       parameter.precedence = "canonical";
       continue;
     }
-    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "alias";
+    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "deprecated";
     if (legacyAliases.has(flag)) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
