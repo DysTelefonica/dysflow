@@ -684,16 +684,38 @@ export function diagnoseProjectConfig(
         );
     }
   }
-  if (
-    request.destinationRoot !== undefined &&
-    identity(resolve(projectRootNative, request.destinationRoot)) !== identity(destinationRoot)
-  )
-    return failWith(
-      base,
-      "outside-project-root",
-      "Requested destinationRoot is not owned by this worktree config.",
-      `Use destinationRoot '${destinationRoot}'.`,
-    );
+  if (request.destinationRoot !== undefined) {
+    const requestedDestinationRoot = identity(resolve(projectRootNative, request.destinationRoot));
+    // Round-14 (#1228) — accept any destinationRoot inside the project
+    // root when the config is modern (`frontendFile` rather than legacy
+    // `accessPath` absolute). The legacy equality check rejected every
+    // interior subdir, forcing consumers to point `destinationRoot`
+    // exactly at the configured `src/` (defeating the purpose of an
+    // override) or to use the `exportPath` legacy alias (which has its
+    // own dispatch contract). The fix: containment under `projectRoot`
+    // is the contract; equality with the configured `destinationRoot`
+    // is a single valid case but not the only one.
+    const isLegacyAbsoluteAccessPath =
+      parsed.accessPath !== undefined &&
+      typeof parsed.accessPath === "string" &&
+      (isAbsolute(parsed.accessPath) || basename(parsed.accessPath) !== parsed.accessPath);
+    const withinProjectRoot = (() => {
+      try {
+        return within(resolve(projectRootNative, request.destinationRoot ?? ""), projectRootNative);
+      } catch {
+        return false;
+      }
+    })();
+    const isEqualToConfigured = requestedDestinationRoot === identity(destinationRoot);
+    const accepted = isEqualToConfigured || (withinProjectRoot && !isLegacyAbsoluteAccessPath);
+    if (!accepted)
+      return failWith(
+        base,
+        "outside-project-root",
+        "Requested destinationRoot is not owned by this worktree config.",
+        `Use destinationRoot '${destinationRoot}' or a subdirectory of '${projectRoot}'.`,
+      );
+  }
   const thresholdMs = resolveStaleMarkerThresholdMs(capabilities);
   reapStaleMarkerFiles(join(projectRootNative, ".dysflow", "runtime", "markers"), thresholdMs);
   reapStaleOperationsRegistry(projectRootNative, thresholdMs);
