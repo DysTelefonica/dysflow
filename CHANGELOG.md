@@ -1,5 +1,14 @@
 # Changelog
 
+## [v2.29.0] - 2026-07-29
+
+### Changes
+
+- fix(import-modules): validate post-write content matches source when importMode is Code (#1228)
+- fix(sync-binary): honor dryRun contract and surface typed error on plan violation (#1228)
+- fix(export-modules): support destinationRoot override with modern frontendFile config (#1228)
+- fix(export-modules): route exportPath through pure runner, no PowerShell spawn (#1228)
+
 ## [v2.28.0] - 2026-07-29
 
 ### Changes
