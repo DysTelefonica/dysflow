@@ -224,6 +224,11 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // across the three write-tool schemas (`export_modules`,
       // `import_modules`, `sync_binary`).
       "dryRunWithPreflight",
+      // Issue #1226 — explicit opt-in to the configured `destinationRoot`
+      // in `.dysflow/project.json`. Sits on the same shared SCHEMA_PROPS
+      // atom as `confirmOverwriteSource` so the description for the new
+      // contract lives in one place.
+      "allowConfiguredDestinationRoot",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

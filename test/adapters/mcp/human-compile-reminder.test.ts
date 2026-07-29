@@ -208,6 +208,8 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     const result = await tool.handler({
       accessPath: ACCESS_PATH_A,
       moduleNames: ["Module_X"],
+      destinationRoot: "C:/elsewhere/human-compile-1226",
+      exportPath: "C:/elsewhere/human-compile-1226",
     });
 
     expect(result.isError).toBe(false);

@@ -1105,6 +1105,71 @@ export function exportSourceGuardRefused(
   });
 }
 
+/**
+ * Issue #1226 — typed envelope raised when `export_modules` /
+ * `export_all` is invoked without declaring WHERE it writes to.
+ *
+ * The dispatch seam fires this BEFORE any service call, BEFORE the
+ * post-resolve export-source guard (#785), and BEFORE the runner is
+ * engaged. Two valid ways to satisfy the gate:
+ *
+ *   1. `params.destinationRoot: "<path>"` — explicit override.
+ *   2. `params.allowConfiguredDestinationRoot: true` — opt-in to the
+ *      configured value in `.dysflow/project.json`.
+ *
+ * `params.exportPath` is accepted as a legacy alias of (1) for
+ * `export_modules` / `export_all` (it predates `destinationRoot` and
+ * the runtime forwards it as `destinationRoot` at the adapter seam).
+ */
+export const DESTINATION_ROOT_REQUIRED = "DESTINATION_ROOT_REQUIRED" as const;
+export type DestinationRootRequiredCode = typeof DESTINATION_ROOT_REQUIRED;
+
+/**
+ * Structured refusal for `DESTINATION_ROOT_REQUIRED`. Mirrors
+ * `MCP_ALLOWLIST_NOT_CONFIGURED` / `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION`
+ * envelope shape: stable string code, structured `toolName` /
+ * `missingFields` / `remediation` for programmatic consumers, and the
+ * legacy `content[0].text` prefix for regex consumers.
+ */
+export function destinationRootRequired(
+  args: {
+    toolName: string;
+    missingFields: readonly string[];
+  },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { toolName, missingFields } = args;
+  const remediation =
+    `Pass an explicit \`destinationRoot\` (or the legacy \`exportPath\` alias) on ` +
+    `${toolName}, or set \`allowConfiguredDestinationRoot: true\` on the call to opt ` +
+    `into the \`destinationRoot\` configured in .dysflow/project.json.`;
+  const message =
+    `Refusing ${toolName}: no destination declared. The caller must specify ` +
+    `where bytes land before the dispatcher can engage the export runner. ` +
+    `${remediation}`;
+  return withSchemaVersion({
+    content: [
+      {
+        type: "text",
+        text: `${DESTINATION_ROOT_REQUIRED}: ${message}`,
+      },
+    ],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: DESTINATION_ROOT_REQUIRED,
+        message,
+        toolName,
+        missingFields: [...missingFields],
+        remediation,
+        details: { toolName, missingFields: [...missingFields] },
+      },
+      options,
+    ),
+  });
+}
+
 export async function isWriteAllowed(
   input: unknown,
   writesEnabled: boolean,

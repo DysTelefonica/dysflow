@@ -106,6 +106,8 @@ describe("MCP/core architecture boundary", () => {
       .find((tool) => tool.name === "export_all")
       ?.handler({
         projectRoot: "C:/project",
+        destinationRoot: "C:/elsewhere/core-boundary-1226",
+        exportPath: "C:/elsewhere/core-boundary-1226",
       });
     expect(result?.content[0]?.text).toBe("TOOL_NOT_IMPLEMENTED: not implemented");
     expect(result?.isError).toBe(true);
@@ -119,9 +121,17 @@ describe("MCP/core architecture boundary", () => {
       // non-routine-dev-write tool — here `export_all` is destructive-write).
       // The wire shape between dispatcher and adapter changed in v2.1.1; the
       // routing assertion (tool name + caller-provided fields) is preserved.
+      // Issue #1226 — the test now passes an explicit destinationRoot +
+      // exportPath to satisfy the pre-resolve gate; both are forwarded to the
+      // adapter unchanged so the dispatcher's strip-set stays empty.
       {
         toolName: "export_all",
-        input: { projectRoot: "C:/project", dryRun: true },
+        input: {
+          projectRoot: "C:/project",
+          destinationRoot: "C:/elsewhere/core-boundary-1226",
+          exportPath: "C:/elsewhere/core-boundary-1226",
+          dryRun: true,
+        },
       },
     ]);
   });

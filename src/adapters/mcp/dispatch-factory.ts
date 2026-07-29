@@ -7,6 +7,7 @@ import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-po
 import { isRecord } from "../../core/utils/index.js";
 import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import {
+  destinationRootRequired,
   enrichmentForValidationMessage,
   exportSourceGuardRefused,
   internalError,
@@ -337,6 +338,41 @@ export function createDispatchTool(
       }
       switch (route.kind) {
         case "vba-sync": {
+          // Issue #1226 — pre-resolve destinationRoot gate. The
+          // export-source guard (#785) fires AFTER resolution, on the
+          // post-resolve destination/sourceRoot pair. Before the guard
+          // can fire, the caller MUST declare where bytes land. The
+          // gate below catches three ways to satisfy the contract:
+          //   1. `params.destinationRoot: string`
+          //   2. `params.exportPath: string` (legacy alias — converted
+          //      to `destinationRoot` by the adapter for write tools)
+          //   3. `params.allowConfiguredDestinationRoot: true` (opt-in)
+          // Any other shape → `DESTINATION_ROOT_REQUIRED`. The check
+          // is strictly pre-resolve: it does NOT consult the configured
+          // value, so a stale `.dysflow/project.json` cannot silently
+          // satisfy the contract.
+          //
+          // Scoped to `export_modules` / `export_all` because those
+          // are the two write-class tools where the silent config
+          // fallback was the documented footgun. Other vba-sync
+          // writers (import_modules, import_all, sync_binary,
+          // delete_module, fix_encoding) follow their own pre-flight
+          // contracts and are not affected.
+          if (name === "export_modules" || name === "export_all") {
+            const inputRecord = isRecord(normalizedInput) ? normalizedInput : {};
+            const explicitDestinationRoot =
+              typeof inputRecord.destinationRoot === "string" &&
+              inputRecord.destinationRoot.length > 0;
+            const explicitExportPath =
+              typeof inputRecord.exportPath === "string" && inputRecord.exportPath.length > 0;
+            const optedInToConfig = inputRecord.allowConfiguredDestinationRoot === true;
+            if (!explicitDestinationRoot && !explicitExportPath && !optedInToConfig) {
+              return destinationRootRequired({
+                toolName: name,
+                missingFields: ["destinationRoot", "allowConfiguredDestinationRoot"],
+              });
+            }
+          }
           // Issue #785 (v2.1.1) — export-source guard fires here, before
           // forwarding to `vbaSyncToolService.execute`. The guard is
           // policy-driven (developer mode only), execute-mode-only (plan
