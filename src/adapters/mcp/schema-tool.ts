@@ -743,7 +743,7 @@ function defaultFromDescription(parameter: ToolParameterSchema): unknown {
     /\bdefault(?:s|ed)?(?:\s+value)?(?:\s+is|\s+to)?\s+[`'"]?([^.;,`'"]+)/i,
   )?.[1];
   const raw = (quoted ?? stated)?.trim();
-  if (raw === undefined || raw.length === 0) return "runtime-defined";
+  if (raw === undefined || raw.length === 0) return undefined;
   if (parameter.type === "boolean") {
     if (/^true\b/i.test(raw)) return true;
     if (/^false\b/i.test(raw)) return false;
