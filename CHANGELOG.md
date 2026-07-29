@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.28.0] - 2026-07-29
+
+### Changes
+
+- feat(mcp): require destinationRoot or allowConfiguredDestinationRoot on export_modules and export_all (new `allowConfiguredDestinationRoot` opt-in flag; new typed error code `DESTINATION_ROOT_REQUIRED`) (#1226)
+- docs: align export-source guard description in `dysflow-usage` and `describe_tool` (#1226)
+
 ## [v2.27.0] - 2026-07-28
 
 ### Changes
