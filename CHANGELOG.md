@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.30.0] - 2026-07-30
+
+### Changes
+
+- fix(mcp-error-envelope): include contradiction metadata in result contracts (#1230)
+- fix(mcp-precedence): normalize deprecated alias precedence from alias to deprecated (#1230)
+- fix(mcp-composition): align compact requiredParameterGroups with full inputSchema.anyOf required groups (#1230)
+- fix(mcp-defaults): emit concrete default values instead of runtime-defined sentinel (#1230)
+- fix(mcp-canonical): drop dead canonicalName refs and reset sensitive on non-secret params (#1230)
+
 ## [v2.29.0] - 2026-07-29
 
 ### Changes
