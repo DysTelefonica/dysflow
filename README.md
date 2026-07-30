@@ -12,6 +12,10 @@
 
 Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
 
+New installation? Follow [Install and verify Dysflow](./docs/SETUP.md).
+Building an agent integration? Read the
+[Dysflow plugin author guide](./docs/PLUGIN-AUTHORS.md).
+
 ---
 
 ## Versioning
