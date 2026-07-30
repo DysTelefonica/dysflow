@@ -69,6 +69,7 @@ export const HELP_TEXT = [
   "  access  Batch Access database operations (e.g. relink-directory)",
   "  lint    Run static VBA source checks (e.g. lint callees)",
   "  codegraph-drift Scan or fix stale codegraph-vba runtime refs in user-supplement blocks",
+  "  migrate-dryrun Migrate legacy consumer dryRun payloads to apply with undo support",
 ].join("\n");
 
 export type CommandHandler = (

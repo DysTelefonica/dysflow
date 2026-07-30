@@ -8,6 +8,7 @@ import { handleDoctorCommand } from "./commands/doctor.js";
 import { handleInstallCommand, handleUpdateCommand } from "./commands/install.js";
 import { handleLintCommand } from "./commands/lint.js";
 import { handleMcpCommand } from "./commands/mcp.js";
+import { handleMigrateDryRunCommand } from "./commands/migrate-dryrun.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
 import { handleTuiCommand } from "./commands/tui.js";
@@ -34,6 +35,7 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["access", handleAccessCommand],
   ["lint", handleLintCommand],
   ["codegraph-drift", handleCodegraphDriftCommand],
+  ["migrate-dryrun", handleMigrateDryRunCommand],
 ]);
 
 /**
