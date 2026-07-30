@@ -5,18 +5,21 @@ import { fileExists } from "./file-utils.js";
 
 const PLUGIN_AGENTS = [
   {
+    cliAgent: "claude",
     name: "claude-code",
     sourceDirectory: "claude-code",
     destinationParts: [".claude", "plugins", "dysflow"],
     skillParts: [".claude", "skills", "dysflow-protocol"],
   },
   {
+    cliAgent: "codex",
     name: "codex",
     sourceDirectory: "codex",
     destinationParts: [".codex", "plugins", "dysflow"],
     skillParts: [".codex", "skills", "dysflow-protocol"],
   },
   {
+    cliAgent: "opencode",
     name: "opencode",
     sourceDirectory: "opencode",
     destinationParts: [".config", "opencode", "plugins", "dysflow"],
@@ -32,6 +35,7 @@ export type PluginRefreshEntry = {
   changedFileCount: number;
   hooks: string[];
   mcpConfigDiff: McpConfigDiff;
+  copiedDestinationPaths: string[];
 };
 
 export type PluginRefreshReport = {
@@ -151,13 +155,19 @@ async function readSkillSymlinks(home: string): Promise<Map<string, string>> {
 export async function refreshBundledAgentPlugins(
   packageRoot: string,
   home: string,
+  selectedAgents?: readonly ("codex" | "opencode" | "claude")[],
 ): Promise<PluginRefreshReport | undefined> {
   const pluginRoot = path.join(packageRoot, "plugin");
   if (!(await fileExists(pluginRoot))) {
     return undefined;
   }
 
-  const sources = PLUGIN_AGENTS.map((agent) => ({
+  const selected =
+    selectedAgents === undefined
+      ? PLUGIN_AGENTS
+      : PLUGIN_AGENTS.filter((agent) => selectedAgents.includes(agent.cliAgent));
+  if (selected.length === 0) return undefined;
+  const sources = selected.map((agent) => ({
     agent,
     sourceRoot: path.join(pluginRoot, agent.sourceDirectory),
   }));
@@ -184,6 +194,9 @@ export async function refreshBundledAgentPlugins(
       changedFileCount: countChangedFiles(sourceFiles, installedFiles),
       hooks: await readHookList(source.sourceRoot),
       mcpConfigDiff: compareMcpConfig(sourceFiles, installedFiles),
+      copiedDestinationPaths: [...sourceFiles.keys()].map((relativePath) =>
+        path.join(destination, ...relativePath.split("/")),
+      ),
     };
 
     await mirrorDirectoryAtomically(source.sourceRoot, destination);
@@ -210,16 +223,22 @@ export async function refreshBundledAgentPlugins(
   };
 }
 
-export function createPluginRefreshReport(report: PluginRefreshReport | undefined): string {
+export function createPluginRefreshReport(
+  report: PluginRefreshReport | undefined,
+  options: { verbose?: boolean } = {},
+): string {
   if (report === undefined) return "";
-  return [
-    "Plugin layer refresh:",
-    ...report.entries.map(
-      (entry) =>
-        `- ${entry.agent}: ${entry.fileCount} file(s), ${entry.changedFileCount} changed; ` +
+  const lines = ["Plugin layer refresh:"];
+  for (const entry of report.entries) {
+    lines.push(
+      `- ${entry.agent}: ${entry.fileCount} file(s), ${entry.changedFileCount} changed; ` +
         `hooks: ${entry.hooks.length === 0 ? "(none)" : entry.hooks.join(", ")}; ` +
         `MCP config: ${entry.mcpConfigDiff}`,
-    ),
-    `- dysflow-protocol skill symlink: ${report.skillSymlinkStatus}`,
-  ].join("\n");
+    );
+    if (options.verbose === true) {
+      lines.push(...entry.copiedDestinationPaths.map((file) => `  - ${file}`));
+    }
+  }
+  lines.push(`- dysflow-protocol skill symlink: ${report.skillSymlinkStatus}`);
+  return lines.join("\n");
 }

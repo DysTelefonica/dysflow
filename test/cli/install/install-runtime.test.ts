@@ -131,6 +131,21 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     expect(s.isDirectory()).toBe(true);
   });
 
+  it("returns a manifest of copied package files and excludes generated dependencies", async () => {
+    const packageRoot = join(root, "pkg");
+
+    const { installRuntime } = await importExtractor();
+    const report = await installRuntime(runtimePaths, packageRoot);
+
+    expect(report.copiedFiles).toContain(join(runtimeDir, "app", "dist", "index.js"));
+    expect(report.copiedFiles).toContain(join(runtimeDir, "app", "scripts", "noop.mjs"));
+    expect(report.copiedFiles).toContain(join(runtimeDir, "app", "package.json"));
+    expect(report.copiedFiles).toContain(
+      join(runtimeDir, "docs", "diagnostics", "hresult-guide.md"),
+    );
+    expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
+  });
+
   it("installReport mentions all three new docs by name", () => {
     const report = createInstallReport(runtimeDir, []);
     expect(report).toContain("error-codes.md");

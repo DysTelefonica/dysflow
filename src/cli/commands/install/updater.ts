@@ -20,13 +20,14 @@ import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-
 import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 
 export const INSTALL_USAGE =
-  "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--no-tui]";
+  "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--no-tui] [--verbose]";
 const UPDATE_USAGE = "Usage: dysflow update [--runtime-dir <dir>] [--force]";
 
 export type InstallOptions = {
   runtimeDir?: string;
   agentNames: AgentName[];
   interactive: boolean;
+  verbose: boolean;
 };
 
 type UpdateOptions = {
@@ -68,6 +69,7 @@ export function parseInstallArgs(
       { name: "--agents", type: "string" },
       { name: "--agent-all", type: "boolean" },
       { name: "--no-tui", type: "boolean" },
+      { name: "--verbose", type: "boolean" },
     ],
     args,
     onUnknown: (arg) => `Unsupported install option: ${arg}`,
@@ -109,6 +111,7 @@ export function parseInstallArgs(
       runtimeDir: parsed.values["--runtime-dir"] as string | undefined,
       agentNames,
       interactive,
+      verbose: parsed.values["--verbose"] === true,
     },
   };
 }
@@ -252,7 +255,11 @@ export async function handleUpdateCommand(
       env,
     });
     const releaseRuntimePaths = resolveRuntimePaths(runtimeDir, preparedPackage.packageRoot);
-    await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
+    const runtimeInstall = await installRuntime(
+      releaseRuntimePaths,
+      preparedPackage.packageRoot,
+      env,
+    );
     const pluginRefresh = await refreshBundledAgentPlugins(
       preparedPackage.packageRoot,
       getHome(env),
@@ -268,7 +275,7 @@ export async function handleUpdateCommand(
         (preparedPackage.commitSha === undefined
           ? ""
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
-        createInstallReport(runtimeDir, []) +
+        createInstallReport(runtimeDir, [], { copiedFiles: runtimeInstall.copiedFiles }) +
         (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
       stderr: "",
     };

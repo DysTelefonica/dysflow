@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildVersionStatus,
   renderDashboard,
+  renderIntegrationResult,
   renderIntegrationSelection,
 } from "../../src/cli/tui/render";
 
@@ -101,5 +102,19 @@ describe("Dysflow TUI rendering", () => {
     expect(output).toContain("▸ [x] pi");
     expect(output).toContain("  [ ] codex");
     expect(output).toContain("space: toggle");
+  });
+
+  it("renders a compact integration result and verbatim details on demand", () => {
+    const result = { exitCode: 0, stdout: "COPIED\nC:/runtime/file.js", stderr: "" };
+
+    const compact = renderIntegrationResult(result, false);
+    const details = renderIntegrationResult(result, true);
+
+    expect(compact).toContain("Integration setup succeeded");
+    expect(compact).toContain("Reload");
+    expect(compact).toContain("i: show details");
+    expect(compact).not.toContain("C:/runtime/file.js");
+    expect(details).toContain(result.stdout);
+    expect(details).toContain("i: hide details");
   });
 });

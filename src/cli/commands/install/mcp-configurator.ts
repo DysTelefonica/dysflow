@@ -151,12 +151,35 @@ export async function configureAgent(
   agentConfigPaths: AgentConfigPaths,
   commandPath: string,
   runtimeDir: string,
-): Promise<void> {
-  if (agent === "codex") return configureCodex(agentConfigPaths.codex, commandPath);
+): Promise<{
+  agent: AgentName;
+  configPath: string;
+  status: "added" | "changed" | "unchanged";
+  active: boolean;
+}> {
+  const configPath =
+    agent === "codex"
+      ? agentConfigPaths.codex
+      : agent === "opencode"
+        ? agentConfigPaths.opencode
+        : agent === "claude"
+          ? await resolveClaudeConfigPath(agentConfigPaths)
+          : agentConfigPaths.pi;
+  const wasActive = await hasDysflowMcpConfig(agent, configPath);
+  const before = await readFile(configPath, "utf8").catch(() => undefined);
+
+  if (agent === "codex") await configureCodex(configPath, commandPath);
   if (agent === "opencode") {
-    return configureOpencode(agentConfigPaths.opencode, await opencodeCommandForConfig(runtimeDir));
+    await configureOpencode(configPath, await opencodeCommandForConfig(runtimeDir));
   }
-  if (agent === "claude")
-    return configureClaude(await resolveClaudeConfigPath(agentConfigPaths), commandPath);
-  return configurePi(agentConfigPaths.pi, commandPath);
+  if (agent === "claude") await configureClaude(configPath, commandPath);
+  if (agent === "pi") await configurePi(configPath, commandPath);
+
+  const after = await readFile(configPath, "utf8");
+  return {
+    agent,
+    configPath,
+    status: !wasActive ? "added" : before === after ? "unchanged" : "changed",
+    active: await hasDysflowMcpConfig(agent, configPath),
+  };
 }

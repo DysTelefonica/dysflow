@@ -134,6 +134,19 @@ describe("install arg parsing", () => {
         runtimeDir: "C:/tmp/runtime",
         agentNames: ["codex", "opencode", "claude", "pi"],
         interactive: false,
+        verbose: false,
+      },
+    });
+  });
+
+  it("accepts verbose install reporting without changing agent selection", () => {
+    expect(parseInstallArgs(["--agents", "opencode", "--no-tui", "--verbose"])).toEqual({
+      ok: true,
+      options: {
+        runtimeDir: undefined,
+        agentNames: ["opencode"],
+        interactive: false,
+        verbose: true,
       },
     });
   });
@@ -371,6 +384,10 @@ describe("Dysflow MCP config state", () => {
       });
 
       expect(result.exitCode).toBe(0);
+      expect(result.stdout).toMatch(/Copied files: \d+/);
+      expect(result.stdout).toContain(join(runtimeDir, "app", "dist", "cli", "index.js"));
+      expect(result.stdout).toContain("- opencode: active (added)");
+      expect(result.stdout).toContain("Reload your selected agents");
       expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(false);
       expect(await hasDysflowMcpConfig("opencode", opencodeConfig)).toBe(true);
       expect(await hasDysflowMcpConfig("claude", claudeDesktopConfig)).toBe(false);
@@ -486,6 +503,12 @@ describe("handleInstallCommand end-to-end", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain(`Dysflow runtime installed at: ${runtimeDir}`);
       expect(result.stdout).toContain("Configured agents: codex, opencode, claude, pi");
+      expect(result.stdout).toMatch(/Copied files: \d+/);
+      expect(result.stdout).toContain("MCP active config:");
+      expect(result.stdout).toContain("- codex: active (added)");
+      expect(result.stdout).toContain("- opencode: active (added)");
+      expect(result.stdout).toContain("Reload your selected agents");
+      expect(result.stdout).not.toContain(join(runtimeDir, "app", "dist", "cli", "index.js"));
 
       expect(await readFile(join(runtimeDir, "app", "dist", "cli", "index.js"), "utf8")).toContain(
         "runCli",
@@ -533,6 +556,67 @@ describe("handleInstallCommand end-to-end", () => {
       expect(ps1Launcher).toContain(`$env:DYSFLOW_HOME = "${runtimeDir.replaceAll("\\", "\\\\")}"`);
       expect(ps1Launcher).toContain("$env:ProgramFiles\\nodejs;$env:PATH");
       expect(ps1Launcher).not.toContain("$env:LOCALAPPDATA\\dysflow");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("prints copied destination paths only for verbose non-interactive installs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-verbose-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "VERBOSE_RUNTIME");
+
+    try {
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "pi", "--no-tui", "--verbose"],
+        { env: { USERPROFILE: home }, packageRoot },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Copied destinations:");
+      expect(result.stdout).toContain(join(runtimeDir, "app", "dist", "cli", "index.js"));
+      expect(result.stdout).toContain(
+        join(runtimeDir, "app", "scripts", "dysflow-vba-manager.ps1"),
+      );
+      expect(result.stdout).not.toContain("node_modules");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refreshes bundled plugins only for selected supported agents during install", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-selected-plugin-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "SELECTED_PLUGIN_RUNTIME");
+    const opencodeSource = join(packageRoot, "plugin", "opencode");
+    const opencodeDestination = join(home, ".config", "opencode", "plugins", "dysflow");
+
+    try {
+      await mkdir(join(opencodeSource, "hooks"), { recursive: true });
+      await writeFile(join(opencodeSource, ".mcp.json"), '{"mcpServers":{}}\n', "utf8");
+      await writeFile(join(opencodeSource, "dysflow.ts"), "export {};\n", "utf8");
+      await writeFile(
+        join(opencodeSource, "hooks", "hooks.json"),
+        '{"hooks":{"SessionStart":[]}}\n',
+        "utf8",
+      );
+
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "opencode,pi", "--no-tui"],
+        { env: { USERPROFILE: home }, packageRoot },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(await readFile(join(opencodeDestination, "dysflow.ts"), "utf8")).toBe("export {};\n");
+      expect(result.stdout).toContain("Plugin layer refresh:");
+      expect(result.stdout).toContain("- opencode:");
+      expect(result.stdout).not.toContain("- codex:");
+      expect(result.stdout).not.toContain("- claude-code:");
+      expect(result.stdout).toContain("hooks: SessionStart");
+      expect(result.stdout).toContain("MCP config: added");
+      expect(result.stdout).toContain("dysflow-protocol skill symlink:");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

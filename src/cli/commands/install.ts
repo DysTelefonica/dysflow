@@ -3,6 +3,10 @@ import { createInterface } from "node:readline/promises";
 import { createInstallReport, installRuntime, resolveRuntimePaths } from "./install/extractor.js";
 import { configureAgent } from "./install/mcp-configurator.js";
 import { resolvePackageRoot } from "./install/package-root.js";
+import {
+  createPluginRefreshReport,
+  refreshBundledAgentPlugins,
+} from "./install/plugin-refresher.js";
 import { INSTALL_USAGE, parseInstallArgs } from "./install/updater.js";
 import {
   type AgentConfigPaths,
@@ -67,10 +71,13 @@ export async function applyIntegrationSelection(
   const selected = new Set(selectedAgents);
 
   try {
-    await installRuntime(runtimePaths, packageRoot, env);
+    const runtimeInstall = await installRuntime(runtimePaths, packageRoot, env);
+    const mcpConfigurations = [];
     for (const agent of ALL_AGENTS) {
       if (selected.has(agent)) {
-        await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir);
+        mcpConfigurations.push(
+          await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir),
+        );
         continue;
       }
       try {
@@ -79,9 +86,23 @@ export async function applyIntegrationSelection(
         // Ignore cleanup failures for unselected agents
       }
     }
+    const pluginRefresh = await refreshBundledAgentPlugins(
+      packageRoot,
+      getHome(env),
+      selectedAgents.filter((agent): agent is "codex" | "opencode" | "claude" => agent !== "pi"),
+    );
     return {
       exitCode: 0,
-      stdout: createInstallReport(runtimeDir, [...selected]),
+      stdout: [
+        createInstallReport(runtimeDir, [...selected], {
+          copiedFiles: runtimeInstall.copiedFiles,
+          mcpConfigurations,
+          verbose: true,
+        }),
+        createPluginRefreshReport(pluginRefresh, { verbose: true }),
+      ]
+        .filter((section) => section.length > 0)
+        .join("\n"),
       stderr: "",
     };
   } catch (error) {
@@ -140,15 +161,32 @@ export async function handleInstallCommand(
       agents = await selectAgentsInteractive(ALL_AGENTS);
     }
 
-    await installRuntime(runtimePaths, packageRoot, env);
+    const runtimeInstall = await installRuntime(runtimePaths, packageRoot, env);
 
+    const mcpConfigurations = [];
     for (const agent of agents) {
-      await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir);
+      mcpConfigurations.push(
+        await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir),
+      );
     }
+    const pluginRefresh = await refreshBundledAgentPlugins(
+      packageRoot,
+      getHome(env),
+      agents.filter((agent): agent is "codex" | "opencode" | "claude" => agent !== "pi"),
+    );
 
     return {
       exitCode: 0,
-      stdout: createInstallReport(runtimeDir, agents),
+      stdout: [
+        createInstallReport(runtimeDir, agents, {
+          copiedFiles: runtimeInstall.copiedFiles,
+          mcpConfigurations,
+          verbose: parsed.options.verbose,
+        }),
+        createPluginRefreshReport(pluginRefresh, { verbose: parsed.options.verbose }),
+      ]
+        .filter((section) => section.length > 0)
+        .join("\n"),
       stderr: "",
     };
   } catch (error) {

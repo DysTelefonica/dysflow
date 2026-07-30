@@ -89,12 +89,12 @@ describe("dysflow command modules", () => {
 
   it("opens integration selection and applies selected agents from the TUI", async () => {
     const frames: string[] = [];
-    const keys: Array<"enter" | "down" | "space"> = ["enter", "down", "space", "enter"];
+    const keys: Array<"enter" | "down" | "space" | "q"> = ["enter", "down", "space", "enter", "q"];
     const applied: unknown[] = [];
 
     const result = await runCli([], {
       tuiInteractive: true,
-      readTuiKey: async () => keys.shift() ?? "enter",
+      readTuiKey: async () => keys.shift() ?? "q",
       writeTuiFrame: (frame) => frames.push(frame),
       tuiApplyIntegrationSelection: async (agents) => {
         applied.push([...agents]);
