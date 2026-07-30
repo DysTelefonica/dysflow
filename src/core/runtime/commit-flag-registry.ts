@@ -66,7 +66,7 @@
  */
 
 export type CommitFlagName = "apply" | "dryRun" | "diff";
-export type NoWriteAliasName = "dryRun" | "diff" | null;
+export type NoWriteAliasName = "diff" | null;
 export type DefaultBehavior = "writes" | "plan" | "noop";
 
 export interface CommitFlagMetadata {
@@ -93,61 +93,61 @@ export interface CommitFlagMetadata {
  */
 export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> = Object.freeze({
   // ── vba-sync write side (commitFlag = "apply") ─────────────────────────
-  import_modules: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  import_all: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  delete_module: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "noop" },
-  fix_encoding: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  vba_inline_execution: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  import_modules: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  import_all: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  delete_module: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  fix_encoding: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  vba_inline_execution: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // #757 (C1): export_* now join the apply family. Historical `diff:true`
   // is preserved as the noWriteAlias; the adapter keeps it working with
   // a deprecation warning pointing at `apply`.
   export_modules: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "writes" },
   export_all: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "writes" },
   // Form / catalog mutation family (`applyGuardedFormWrite` seam).
-  form_add_control: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_move_control: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_rename_control: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_deserialize: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_set_property: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_delete_control: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  form_align_controls: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  form_add_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_move_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_rename_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_deserialize: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_set_property: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_delete_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  form_align_controls: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   form_distribute_controls: {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
   // Issue #872 F1 + F2 — `form_set_properties` (atomic batch property
   // updates) + `form_duplicate_control` (control clone) join the
   // applyGuardedFormWrite seam. Same plan-by-default contract as the
   // rest of the form mutation family.
-  form_set_properties: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  form_set_properties: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   form_duplicate_control: {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
   create_form_from_template: {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
-  catalog_add_control: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  generate_form: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  sync_binary: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  apply_form_design_plan: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  run_vba: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  catalog_add_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  generate_form: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  sync_binary: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  apply_form_design_plan: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  run_vba: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // Query maintenance writes.
-  compact_repair: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  link_tables: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  relink_tables: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  relink_directory: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  compact_repair: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  link_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  relink_tables: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  relink_directory: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   localize_backend_links: {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
-  unlink_table: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  import_queries: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  unlink_table: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  import_queries: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // Query alias tools (write mode).
   // Issue #1073 — `query_sql` is the read-only side of the query alias
   // pair (the access contract in `mcp-tool-contracts.ts` is `read-only`).
@@ -155,13 +155,13 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // advertised a write signal the schema never accepted; align the
   // registry with the read-only sentinel below.
   query_sql: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
-  exec_sql: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  run_script: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  query_execute: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  create_table: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  drop_table: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  seed_fixture: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
-  teardown_fixture: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  exec_sql: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  run_script: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  query_execute: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  create_table: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  drop_table: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  seed_fixture: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
+  teardown_fixture: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
 
   // ── read-only / no-write-default tools ────────────────────────────────
   // These accept `apply` in the schema defensively but never mutate;
@@ -224,7 +224,7 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // After #1167 the lookup reads "apply" for every tool — the
   // smoke test at `test/adapters/mcp/get-capabilities-test-vba-canonical.test.ts`
   // loops `MCP_TOOL_CONTRACTS` and pins the unification.
-  test_vba: { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  test_vba: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // Process-control tools — schema-rejection of `apply` lands here too.
   cleanup_access_operation: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   access_force_cleanup_orphaned: {
@@ -236,7 +236,7 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // does not declare `apply` (the explicit user-callable commit signal is
   // `confirm: true` paired with `dryRun: false`). Listing it here keeps
   // the snapshot uniform with `access_force_cleanup_orphaned`.
-  clean_stale_markers: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  clean_stale_markers: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // Issue #1177 — `migrate_project_config` rewrites
   // `.dysflow/project.json` on apply. Default empty call is a pure
   // read-class diff preview; `apply: true` (or `dryRun: false`) commits.
@@ -245,7 +245,7 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // commit signal).
   migrate_project_config: {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
   // Round-12 (#978) — `state` is pure read-only. The schema defensively
@@ -279,13 +279,13 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // Alias tools.
   "dysflow.diagnose_query": {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
-  "dysflow.hygiene_audit": { commitFlag: "apply", noWriteAlias: "dryRun", defaultBehavior: "plan" },
+  "dysflow.hygiene_audit": { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   "dysflow.diagnose_hygiene": {
     commitFlag: "apply",
-    noWriteAlias: "dryRun",
+    noWriteAlias: null,
     defaultBehavior: "plan",
   },
 });
@@ -329,9 +329,7 @@ export function commitFlagFor(toolName: string): CommitFlagName {
  */
 export function legacyAliasesFor(toolName: string): readonly string[] {
   const { noWriteAlias } = commitFlagMetadataForOrNoop(toolName);
-  if (noWriteAlias === null) return [];
-  if (noWriteAlias === "diff") return ["diff", "dryRun"];
-  return [noWriteAlias];
+  return noWriteAlias === null ? [] : [noWriteAlias];
 }
 
 /**

@@ -3,7 +3,12 @@ import { basename, join } from "node:path";
 import { isRecord } from "../../core/utils/index.js";
 import { PROJECT_IDENTITY_BLOCK, WRITE_INTENT_BLOCK } from "../../shared/validation/index.js";
 import { migrateProjectConfigResultContract } from "./contracts/bootstrap-result-contracts.js";
-import { enrichmentForValidationMessage, invalidInput, writesDisabled } from "./dispatch-common.js";
+import {
+  enforceRequiresConfirmation,
+  enrichmentForValidationMessage,
+  invalidInput,
+  writesDisabled,
+} from "./dispatch-common.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool, McpToolResult } from "./result-translation.js";
 import { validateInput } from "./validator.js";
@@ -364,6 +369,9 @@ export function createMigrateProjectConfigTool(
         if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
         return invalidInput(validation);
       }
+
+      const confirmation = enforceRequiresConfirmation(input, "migrate_project_config");
+      if (confirmation !== undefined) return confirmation;
 
       const params = isPlainObject(input) ? input : {};
       const cwdOverride =

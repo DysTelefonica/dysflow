@@ -34,6 +34,51 @@ import { translateCoreResultToMcpContent } from "./result-translation.js";
 import { inputSchemaForTool } from "./schema-tool.js";
 import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
 
+export const ESCAPE_HATCH_MIGRATION_NOTES = {
+  dryRun: {
+    removed: "dryRun: true",
+    replacement: "apply: false",
+    example: { before: { dryRun: true }, after: { apply: false } },
+  },
+  confirm: {
+    removed: "options.confirm: true",
+    replacement: "confirmedRequiresConfirmation: true",
+    implements_check: "stale_markers",
+    example: {
+      before: { options: { confirm: true } },
+      after: {
+        implements_check: "stale_markers",
+        confirmedRequiresConfirmation: true,
+      },
+    },
+  },
+  confirmOverwriteSource: {
+    removed: "confirmOverwriteSource: true",
+    replacement: "confirmedRequiresConfirmation: true",
+    implements_check: "export_overwrites_source_precheck",
+    example: {
+      before: { confirmOverwriteSource: true },
+      after: {
+        implements_check: "export_overwrites_source_precheck",
+        confirmedRequiresConfirmation: true,
+      },
+    },
+  },
+  confirmPid: {
+    removed: "confirmPid: 12345",
+    replacement: "confirmedRequiresConfirmation: true",
+    implements_check: "orphans_msaccess",
+    example: {
+      before: { confirmPid: 12345 },
+      after: {
+        pid: 12345,
+        implements_check: "orphans_msaccess",
+        confirmedRequiresConfirmation: true,
+      },
+    },
+  },
+} as const;
+
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 /**
@@ -131,6 +176,7 @@ export type McpCapabilitySnapshot = {
       }
     >
   >;
+  migrationNotes: typeof ESCAPE_HATCH_MIGRATION_NOTES;
   toolsVisible: number;
   preferredAgentWorkflows: readonly PreferredAgentWorkflow[];
   writeClassToolsPermitted: readonly string[];
@@ -316,6 +362,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     resultValidationPolicy: resolveResultValidationPolicy(input.resultValidationPolicy),
     effectiveDryRunDefault,
     sharedBlockSupport: Object.freeze(sharedBlockSupport),
+    migrationNotes: ESCAPE_HATCH_MIGRATION_NOTES,
     toolsVisible: toolNames.length,
     preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
       phase: workflow.phase,

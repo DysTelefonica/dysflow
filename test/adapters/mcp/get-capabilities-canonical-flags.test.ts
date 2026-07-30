@@ -26,22 +26,22 @@ function snapshot() {
 }
 
 describe("get_capabilities — canonicalCommitFlag + legacyAliases (#1057 F7)", () => {
-  it("delete_module reports apply as canonical with dryRun as legacy alias", () => {
+  it("delete_module reports apply as canonical with no dryRun legacy alias", () => {
     const tools = snapshot().tools as Record<
       string,
       { canonicalCommitFlag?: string; legacyAliases?: readonly string[] }
     >;
     expect(tools.delete_module?.canonicalCommitFlag).toBe("apply");
-    expect(tools.delete_module?.legacyAliases).toContain("dryRun");
+    expect(tools.delete_module?.legacyAliases).toEqual([]);
   });
 
-  it("export_modules reports apply as canonical with diff AND dryRun as legacy aliases", () => {
+  it("export_modules reports apply as canonical with diff as its only legacy alias", () => {
     const tools = snapshot().tools as Record<
       string,
       { canonicalCommitFlag?: string; legacyAliases?: readonly string[] }
     >;
     expect(tools.export_modules?.canonicalCommitFlag).toBe("apply");
-    expect(tools.export_modules?.legacyAliases).toEqual(expect.arrayContaining(["diff", "dryRun"]));
+    expect(tools.export_modules?.legacyAliases).toEqual(["diff"]);
   });
 
   it("read-only tools report an empty legacyAliases list", () => {
@@ -60,14 +60,14 @@ describe("get_capabilities — canonicalCommitFlag + legacyAliases (#1057 F7)", 
     }
   });
 
-  it("keeps the pre-#1057 fields for backward compatibility", () => {
+  it("keeps the pre-#1057 fields while removing the dryRun alias", () => {
     const tools = snapshot().tools as Record<
       string,
       { commitFlag?: string; noWriteAlias?: string | null; defaultBehavior?: string }
     >;
     expect(tools.delete_module?.commitFlag).toBe("apply");
-    expect(tools.delete_module?.noWriteAlias).toBe("dryRun");
-    expect(tools.delete_module?.defaultBehavior).toBe("noop");
+    expect(tools.delete_module?.noWriteAlias).toBeNull();
+    expect(tools.delete_module?.defaultBehavior).toBe("plan");
   });
 
   it("publishes concrete v2.31 migration examples for every removed escape hatch", () => {

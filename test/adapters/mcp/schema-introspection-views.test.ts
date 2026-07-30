@@ -177,7 +177,7 @@ describe("schema compact and full introspection views (#1079)", () => {
       canonicalCommitFlag: "apply",
       noWriteAlias: "diff",
       defaultBehavior: "writes",
-      legacyAliases: ["diff", "dryRun"],
+      legacyAliases: ["diff"],
     });
     expect(compact.tools.find((tool) => tool.name === "resolve_project")?.writeIntent).toBeNull();
   });

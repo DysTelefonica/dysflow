@@ -112,21 +112,21 @@ describe("getCapabilitiesAll() — per-tool commit metadata (#757 C2)", () => {
       noWriteAlias: "diff",
       defaultBehavior: "writes",
       canonicalCommitFlag: "apply",
-      legacyAliases: ["diff", "dryRun"],
+      legacyAliases: ["diff"],
     });
     expect(tools.import_modules).toEqual({
       commitFlag: "apply",
-      noWriteAlias: "dryRun",
+      noWriteAlias: null,
       defaultBehavior: "plan",
       canonicalCommitFlag: "apply",
-      legacyAliases: ["dryRun"],
+      legacyAliases: [],
     });
     expect(tools.delete_module).toEqual({
       commitFlag: "apply",
-      noWriteAlias: "dryRun",
-      defaultBehavior: "noop",
+      noWriteAlias: null,
+      defaultBehavior: "plan",
       canonicalCommitFlag: "apply",
-      legacyAliases: ["dryRun"],
+      legacyAliases: [],
     });
   });
 

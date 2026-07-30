@@ -26,14 +26,6 @@ export type JsonSchemaProperty = {
   additionalProperties?: boolean | JsonSchemaProperty;
   required?: readonly string[];
   properties?: Record<string, JsonSchemaProperty>;
-  // Slice 3 — JSON Schema 2020-12 + OpenAPI 3.1 deprecation marker.
-  // When true, the validator still accepts the parameter; downstream
-  // consumers (skill docs, IDE hints) surface a deprecation notice.
-  // The runtime treats the field identically to a non-deprecated
-  // boolean of the same shape — `deprecated: true` is documentary,
-  // not behavior-changing. Used for the four escape-hatch flags
-  // (`dryRun`, `confirm`, `confirmOverwriteSource`, `confirmPid`)
-  // during the v2.31.0 → v3.0 deprecation cycle.
   deprecated?: boolean;
 };
 

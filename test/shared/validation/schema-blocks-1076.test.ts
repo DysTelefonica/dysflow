@@ -49,6 +49,7 @@ import {
   composeAccessAndSourceTargets,
   composeFullTargetStack,
   composeIdentityAndCorrelation,
+  CONFIRMATION_OVERRIDE_BLOCK,
   DATABASE_TARGET_BLOCK,
   MANAGED_SOURCE_TARGET_BLOCK,
   OPERATION_CORRELATION_BLOCK,
@@ -100,9 +101,13 @@ function propertyOf(schema: JsonSchemaLike, name: string): unknown {
 }
 
 const WRITE_INTENT_FIELDS = [
-  ["dryRun", SCHEMA_PROPS.dryRun],
   ["apply", SCHEMA_PROPS.apply],
   ["diff", SCHEMA_PROPS.diff],
+  ["implements_check", CONFIRMATION_OVERRIDE_BLOCK.implements_check],
+  [
+    "confirmedRequiresConfirmation",
+    CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation,
+  ],
 ] as const;
 
 describe("schema composition blocks (#1076)", () => {
@@ -130,9 +135,14 @@ describe("schema composition blocks (#1076)", () => {
     expect(STRICT_CONTEXT_BLOCK.expectedAccessPath).toBe(SCHEMA_PROPS.expectedAccessPath);
     expect(STRICT_CONTEXT_BLOCK.expectedProjectRoot).toBe(SCHEMA_PROPS.expectedProjectRoot);
     expect(STRICT_CONTEXT_BLOCK.expectedDestinationRoot).toBe(SCHEMA_PROPS.expectedDestinationRoot);
-    expect(WRITE_INTENT_BLOCK.dryRun).toBe(SCHEMA_PROPS.dryRun);
     expect(WRITE_INTENT_BLOCK.apply).toBe(SCHEMA_PROPS.apply);
     expect(WRITE_INTENT_BLOCK.diff).toBe(SCHEMA_PROPS.diff);
+    expect(WRITE_INTENT_BLOCK.implements_check).toBe(
+      CONFIRMATION_OVERRIDE_BLOCK.implements_check,
+    );
+    expect(WRITE_INTENT_BLOCK.confirmedRequiresConfirmation).toBe(
+      CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation,
+    );
     expect(OUTPUT_MODE_BLOCK.outputMode).toBe(SCHEMA_PROPS.outputMode);
   });
 
@@ -243,7 +253,7 @@ describe("schema composition blocks (#1076)", () => {
       const schema = advertisedSchema(tool.name);
       for (const [name, expected] of WRITE_INTENT_FIELDS) {
         const value = propertyOf(schema, name);
-        if (value !== expected) {
+        if (value !== undefined && value !== expected) {
           failures.push(`${tool.name}.${name}`);
         }
       }

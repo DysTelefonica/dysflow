@@ -25,6 +25,7 @@ export const getCapabilitiesResultContract = defineResultContract({
       writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
       resultValidationPolicy: z.enum(["off", "report", "enforce"]),
       effectiveDryRunDefault: z.record(z.string(), z.boolean()),
+      migrationNotes: unknownRecord,
       toolsVisible: z.number().int().nonnegative(),
       preferredAgentWorkflows: z.array(unknownRecord),
       writeClassToolsPermitted: z.array(z.string()),

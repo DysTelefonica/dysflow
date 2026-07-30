@@ -183,7 +183,7 @@ describe("feat-1022-apply-form-design-plan-schema — runtime-verifiable plan sh
         {
           sourcePath: "C:/repo/src/forms/Form_Customer.form.txt",
           plan: fullPlan(),
-          dryRun: true,
+          apply: false,
         },
         schema,
       );

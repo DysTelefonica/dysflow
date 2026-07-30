@@ -114,7 +114,7 @@ describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schem
     // `dryRun:false` (legacy alias). The registry advertises the
     // canonical flag: `commitFlag: "apply"`, `noWriteAlias: "dryRun"`.
     expect(entry.commitFlag).toBe("apply");
-    expect(entry.noWriteAlias).toBe("dryRun");
+    expect(entry.noWriteAlias).toBeNull();
     // When neither flag is supplied and no policy override fires, the tool
     // must PLAN (matches the safe-by-default policy: dryRun:true is injected;
     // matches the developer policy: dryRun:false is injected; the plan
@@ -133,12 +133,10 @@ describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schem
     const tools = snapshot.tools as Readonly<Record<string, CommitFlagMetadata>>;
     expect(tools.test_vba).toEqual({
       commitFlag: "apply",
-      noWriteAlias: "dryRun",
+      noWriteAlias: null,
       defaultBehavior: "plan",
-      // #1057 (F7) — additive homogenized-flag fields; #1167 the canonical
-      // flag is `apply` and `dryRun` joins the legacyAliases list.
       canonicalCommitFlag: "apply",
-      legacyAliases: ["dryRun"],
+      legacyAliases: [],
     });
   });
 });

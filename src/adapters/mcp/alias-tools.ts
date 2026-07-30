@@ -153,10 +153,7 @@ export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolRe
     moduleName: parsedName.moduleName,
     procedureName: parsedName.original,
     arguments: parsedArgs.value,
-    // PR1a (#621 F1) — project the dryRun escape hatch so the canonical
-    // handler's gate can see it. Honored only when allowedProcedures is
-    // unconfigured; otherwise the gate falls through to the allowlist check.
-    dryRun: obj.dryRun === true ? true : undefined,
+    dryRun: obj.apply === true ? false : true,
     projectId: typeof obj.projectId === "string" ? obj.projectId : undefined,
     contextId: typeof obj.contextId === "string" ? obj.contextId : undefined,
     accessPath: typeof obj.accessPath === "string" ? obj.accessPath : undefined,

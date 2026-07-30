@@ -94,14 +94,15 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
       additionalProperties: false,
       properties: {
         projectId: { type: "string" },
+        apply: { type: "boolean" },
+        implements_check: { type: "string" },
+        confirmedRequiresConfirmation: { type: "boolean" },
         options: {
           type: "object",
           additionalProperties: false,
           properties: {
             olderThanMinutes: { type: "number", minimum: 1 },
-            dryRun: { type: "boolean" },
             keepFailed: { type: "boolean" },
-            confirm: { type: "boolean" },
           },
         },
       },
@@ -150,7 +151,7 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     expect(payload.scanned).toBe(4);
   });
 
-  it("apply with dryRun:false + confirm:true removes only stale running markers", async () => {
+  it("apply with unified confirmation removes only stale running markers", async () => {
     // 3 stale running + 1 fresh running + 1 failed. After apply: 3 removed, 2 kept.
     const fake = new FakeCleanStaleMarkersService({
       ok: true,
@@ -171,7 +172,10 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
 
     const result = await tool?.handler({
       projectId: "proj-main",
-      options: { olderThanMinutes: 30, dryRun: false, confirm: true, keepFailed: true },
+      apply: true,
+      implements_check: "stale_markers",
+      confirmedRequiresConfirmation: true,
+      options: { olderThanMinutes: 30, keepFailed: true },
     });
 
     expect(result?.isError).toBe(false);
@@ -214,7 +218,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
 
     await tool?.handler({
       projectId: "proj-main",
-      options: { olderThanMinutes: 60, keepFailed: false, dryRun: true },
+      apply: false,
+      options: { olderThanMinutes: 60, keepFailed: false },
     });
 
     expect(fake.calls).toEqual([
@@ -227,7 +232,7 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     ]);
   });
 
-  it("dryRun:false without confirm:true returns MCP_INPUT_INVALID and never calls the service", async () => {
+  it("apply without unified confirmation returns CONFIRMATION_REQUIRED and never calls the service", async () => {
     const fake = new FakeCleanStaleMarkersService({
       ok: true,
       scanned: 0,
@@ -247,21 +252,44 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
 
     const result = await tool?.handler({
       projectId: "proj-main",
-      options: { dryRun: false },
+      apply: true,
+      implements_check: "stale_markers",
     });
 
     expect(result?.isError).toBe(true);
-    expect(result?.content[0]?.text).toContain("MCP_INPUT_INVALID");
-    expect(result?.content[0]?.text).toContain("confirm");
+    expect(result?.error?.code).toBe("CONFIRMATION_REQUIRED");
     expect(fake.calls).toEqual([]);
+  });
 
-    // confirm:false is also rejected (only literal `true` unblocks the gate).
-    const resultFalse = await tool?.handler({
-      projectId: "proj-main",
-      options: { dryRun: false, confirm: false },
+  it("rejects removed dryRun and confirm fields", async () => {
+    const fake = new FakeCleanStaleMarkersService({
+      ok: true,
+      scanned: 0,
+      removed: 0,
+      kept: 0,
+      removedMarkerIds: [],
+      keptMarkerIds: [],
+      errors: [],
     });
-    expect(resultFalse?.isError).toBe(true);
-    expect(resultFalse?.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    const tools = createDysflowMcpTools({
+      services: makeServices(fake),
+      writes: true,
+      accessContextResolver: async () =>
+        successResult({ accessPath: "C:/proj/app.accdb", projectRoot: "C:/proj" }),
+    });
+    const tool = tools.find((t) => t.name === TOOL);
+
+    const dryRunResult = await tool?.handler({
+      projectId: "proj-main",
+      options: { dryRun: true },
+    });
+    const confirmResult = await tool?.handler({
+      projectId: "proj-main",
+      options: { confirm: true },
+    });
+
+    expect(dryRunResult?.error?.code).toBe("MCP_INPUT_INVALID");
+    expect(confirmResult?.error?.code).toBe("MCP_INPUT_INVALID");
     expect(fake.calls).toEqual([]);
   });
 

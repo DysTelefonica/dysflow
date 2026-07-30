@@ -57,20 +57,20 @@ function snapshot() {
 }
 
 describe("get_capabilities — test_vba canonical commit flag unification (#1167)", () => {
-  it("registry: test_vba reports commitFlag 'apply' and noWriteAlias 'dryRun' (parity with the rest of the write tools)", () => {
+  it("registry: test_vba reports commitFlag 'apply' with no dryRun alias", () => {
     const entry = COMMIT_FLAG_REGISTRY.test_vba;
     expect(entry).toBeDefined();
     expect(entry?.commitFlag).toBe("apply");
-    expect(entry?.noWriteAlias).toBe("dryRun");
+    expect(entry?.noWriteAlias).toBeNull();
   });
 
-  it("snapshot: test_vba.canonicalCommitFlag === 'apply' and legacyAliases includes 'dryRun'", () => {
+  it("snapshot: test_vba.canonicalCommitFlag === 'apply' and legacyAliases is empty", () => {
     const tools = snapshot().tools as Record<
       string,
       { canonicalCommitFlag?: string; legacyAliases?: readonly string[] }
     >;
     expect(tools.test_vba?.canonicalCommitFlag).toBe("apply");
-    expect(tools.test_vba?.legacyAliases).toContain("dryRun");
+    expect(tools.test_vba?.legacyAliases).toEqual([]);
   });
 
   it("CI smoke: every advertised MCP tool reports canonicalCommitFlag === 'apply' (#1167 acceptance criterion 6)", () => {
@@ -93,7 +93,7 @@ describe("get_capabilities — test_vba canonical commit flag unification (#1167
     // mirrors it. Pin both paths to be in lockstep.
     const entry = commitFlagMetadataForOrNoop("test_vba");
     expect(entry.commitFlag).toBe("apply");
-    expect(entry.noWriteAlias).toBe("dryRun");
-    expect(legacyAliasesFor("test_vba")).toContain("dryRun");
+    expect(entry.noWriteAlias).toBeNull();
+    expect(legacyAliasesFor("test_vba")).toEqual([]);
   });
 });

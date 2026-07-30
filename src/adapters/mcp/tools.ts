@@ -211,7 +211,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // names) are REMOVED entirely; the alias is the sole source.
       name: "access_force_cleanup_orphaned",
       resultContract: orphanCleanupResultContract,
-      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one only when confirmPid is explicitly provided. Listing is read-only; confirmPid is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
+       description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one selected by pid after confirmedRequiresConfirmation is accepted. Listing is read-only; cleanup is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(
@@ -221,13 +221,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           writesEnabled,
           writeAccessResolver,
           async (validatedInput) => {
-            const request = validatedInput as { confirmPid?: number };
+            const request = validatedInput as { pid?: number };
             const context = await accessContextResolver(validatedInput);
             if (!context.ok) return translateCoreResultToMcpContent(context);
-            if (request.confirmPid === undefined) return context.data;
+            if (request.pid === undefined) return context.data;
             return {
               ...context.data,
-              confirmPid: request.confirmPid,
+              confirmPid: request.pid,
             };
           },
         ),
@@ -241,7 +241,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     {
       name: "clean_stale_markers",
       resultContract: cleanStaleMarkersResultContract,
-      description: `Sweep <projectRoot>/.dysflow/runtime/markers/ and either plan or apply transitions of stale \`status: "running"\` markers (and, when keepFailed is false, stale \`status: "failed"\` markers) to \`status: "abandoned"\`. Dry-run is the default; any apply call requires \`options.confirm: true\` and is write-gated (returns MCP_WRITES_DISABLED when writes are off). ${MCP_TOOL_CONTRACTS.clean_stale_markers.summary}`,
+      description: `Sweep <projectRoot>/.dysflow/runtime/markers/ and either plan or apply transitions of stale \`status: "running"\` markers (and, when keepFailed is false, stale \`status: "failed"\` markers) to \`status: "abandoned"\`. apply:false is the plan path; apply:true requires \`confirmedRequiresConfirmation: true\` and is write-gated. ${MCP_TOOL_CONTRACTS.clean_stale_markers.summary}`,
       inputSchema: CLEAN_STALE_MARKERS_SCHEMA,
       handler: async (input) =>
         handleMcpCleanStaleMarkers(

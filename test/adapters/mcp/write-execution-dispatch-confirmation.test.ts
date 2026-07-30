@@ -68,14 +68,26 @@ describe("requiresExportSourceConfirmation — execute-mode flag matrix (#785, c
     ).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
   });
 
-  it("confirmOverwriteSource:true + dangerous destination + dryRun:false → no refusal (explicit confirmation)", () => {
+  it("apply:false + dangerous destination → refusal (legacy plan signal still triggers)", () => {
+    expect(
+      requiresExportSourceConfirmation(
+        "export_modules",
+        "developer",
+        { apply: false, exportPath: SRC },
+        { destination: SRC, sourceRoot: SRC },
+      )?.code,
+    ).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
+  });
+
+  it("confirmedRequiresConfirmation:true + dangerous destination + apply:true → no refusal (explicit confirmation)", () => {
     expect(
       requiresExportSourceConfirmation(
         "export_modules",
         "developer",
         {
-          confirmOverwriteSource: true,
-          dryRun: false,
+          implements_check: "export_overwrites_source_precheck",
+          confirmedRequiresConfirmation: true,
+          apply: true,
           exportPath: SRC,
         },
         { destination: SRC, sourceRoot: SRC },

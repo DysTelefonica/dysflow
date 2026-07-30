@@ -58,7 +58,7 @@ describe("Issue #1031 — query-maintenance apply:true saturation", () => {
       it("keeps commitFlag:apply in the canonical registry", () => {
         expect(COMMIT_FLAG_REGISTRY[toolName]).toEqual({
           commitFlag: "apply",
-          noWriteAlias: "dryRun",
+          noWriteAlias: null,
           defaultBehavior: "plan",
         });
       });

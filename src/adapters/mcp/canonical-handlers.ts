@@ -10,6 +10,7 @@ import {
 import { isRecord } from "../../core/utils/index.js";
 import {
   allowlistNotConfigured,
+  enforceRequiresConfirmation,
   enrichmentForValidationMessage,
   invalidInput,
   isWriteAllowed,
@@ -96,6 +97,9 @@ export async function handleMcpVbaExecute(
     return invalidInput(validation);
   }
 
+  const confirmation = enforceRequiresConfirmation(input, "run_vba");
+  if (confirmation !== undefined) return confirmation;
+
   const request = buildRequest(input);
   if (isMcpToolResult(request)) return request;
 
@@ -167,6 +171,9 @@ export async function handleMcpQueryExecute(
     return invalidInput(validation);
   }
 
+  const confirmation = enforceRequiresConfirmation(input, "query_execute");
+  if (confirmation !== undefined) return confirmation;
+
   const request = buildRequest(input);
   if (
     request.mode === "write" &&
@@ -220,6 +227,8 @@ export async function handleMcpAccessCleanup(
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
+  const confirmation = enforceRequiresConfirmation(input, "cleanup_access_operation");
+  if (confirmation !== undefined) return confirmation;
   if (services.cleanupService === undefined) {
     return {
       content: [
@@ -287,6 +296,15 @@ export async function handleMcpAccessOrphanCleanup(
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
+  const confirmationInput =
+    isRecord(input) && input.pid !== undefined
+      ? { ...input, implements_check: "orphans_msaccess" }
+      : input;
+  const confirmation = enforceRequiresConfirmation(
+    confirmationInput,
+    "access_force_cleanup_orphaned",
+  );
+  if (confirmation !== undefined) return confirmation;
   if (services.orphanCleanupService === undefined) {
     return {
       content: [
@@ -357,6 +375,13 @@ export async function handleMcpCleanStaleMarkers(
     return invalidInput(validation);
   }
 
+  const confirmationInput =
+    isRecord(input) && input.apply === true
+      ? { ...input, implements_check: "stale_markers" }
+      : input;
+  const confirmation = enforceRequiresConfirmation(confirmationInput, "clean_stale_markers");
+  if (confirmation !== undefined) return confirmation;
+
   if (services.cleanStaleMarkersService === undefined) {
     return {
       content: [
@@ -377,26 +402,16 @@ export async function handleMcpCleanStaleMarkers(
   ) as
     | {
         olderThanMinutes?: number;
-        dryRun?: boolean;
         keepFailed?: boolean;
-        confirm?: boolean;
       }
     | undefined;
 
-  const dryRun = options?.dryRun ?? true;
+  const dryRun = !(isRecord(input) && input.apply === true);
   const keepFailed = options?.keepFailed ?? true;
   const olderThanMinutes =
     typeof options?.olderThanMinutes === "number" && options.olderThanMinutes > 0
       ? options.olderThanMinutes
       : 30;
-
-  // Confirm gate — refuse any non-dry-run call without literal confirm:true.
-  if (dryRun === false && options?.confirm !== true) {
-    return invalidInput(
-      "clean_stale_markers requires options.confirm === true whenever options.dryRun === false. Re-run with dryRun omitted (default true) to plan without writing, or pass { dryRun: false, confirm: true } to apply.",
-      "Pass { dryRun: true } (or omit dryRun) to plan, or pass { dryRun: false, confirm: true } to apply.",
-    );
-  }
 
   // Resolve the project root so we can locate the markers directory. The
   // access-context resolver is the same seam every other MCP write tool

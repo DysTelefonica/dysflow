@@ -192,9 +192,11 @@ describe("sync_binary schema (#809)", () => {
     expect(scope?.properties?.includeBothChanged).toBeDefined();
   });
 
-  it("declares dryRun + apply (apply is the commit signal; dryRun is the explicit escape hatch)", () => {
-    expect(schema?.properties?.dryRun).toBeDefined();
+  it("declares apply and unified confirmation fields without dryRun", () => {
     expect(schema?.properties?.apply).toBeDefined();
+    expect(schema?.properties?.implements_check).toBeDefined();
+    expect(schema?.properties?.confirmedRequiresConfirmation).toBeDefined();
+    expect(schema?.properties?.dryRun).toBeUndefined();
   });
 
   it("declares batchSize (modules per chunk during execute)", () => {
@@ -360,17 +362,16 @@ describe("MCP_WRITES_DISABLED — sync_binary gate enforcement (#809 acceptance 
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("dryRun:true when writes are disabled is NOT gated (preview path)", async () => {
+  it("apply:false when writes are disabled is NOT gated (preview path)", async () => {
     const services = makeServices();
     const { tool, vbaSyncToolService } = toolByName(services, "sync_binary", false);
     const result = await tool.handler({
       projectId: "test-809",
       direction: "src-to-binary",
-      dryRun: true,
+      apply: false,
     });
-    expect(result.isError, "sync_binary dryRun must not gate").toBe(false);
+    expect(result.isError, "sync_binary preview must not gate").toBe(false);
     expect(result.content[0]?.text ?? "").not.toContain("MCP_WRITES_DISABLED");
-    // Adapter is called once with the dryRun payload preserved.
     expect(vbaSyncToolService.requests).toHaveLength(1);
   });
 

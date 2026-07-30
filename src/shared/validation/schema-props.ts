@@ -120,22 +120,7 @@ export const SCHEMA_PROPS = {
   apply: {
     type: "boolean",
     description:
-      "Commit the write, disabling the default dry-run. apply:true takes precedence over dryRun. Omit both apply and dryRun to plan only (the safe default).",
-  } as JsonSchemaProperty,
-  // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
-  // guard. When the caller passes confirmOverwriteSource: true AND the
-  // destination overlaps the project's active source root, the guard fires
-  // its refusal; this field bypasses the guard for callers who have
-  // reviewed the destination and accept the overwrite risk. The guard
-  // is policy-aware (`safe-by-default` vs `developer`) but the explicit
-  // destinationRoot / destination contract (#1226) applies BEFORE the
-  // guard so a caller that never declared where they write to can
-  // never reach the guard. Pass `confirmOverwriteSource: true` to bypass
-  // the guard on legitimate overlap.
-  confirmOverwriteSource: {
-    type: "boolean",
-    description:
-      "Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path AND under safe-by-default mode. Ignored when the call did not declare an explicit destination (destinationRoot, exportPath, or allowConfiguredDestinationRoot) — that case fails earlier with DESTINATION_ROOT_REQUIRED (#1226).",
+      "Canonical write intent. Pass true to commit or false to plan. Omit it to use the tool's policy-defined default.",
   } as JsonSchemaProperty,
   allowTables: {
     type: "array",

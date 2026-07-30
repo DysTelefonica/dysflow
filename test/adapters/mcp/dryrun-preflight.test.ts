@@ -302,7 +302,8 @@ describe("dryRunWithPreflight — failed preflight replicates apply failure (#97
       moduleNames: ["Example"],
       projectId: "app",
       apply: true,
-      confirmOverwriteSource: true,
+      implements_check: "export_overwrites_source_precheck",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(preflight.error?.code).toBe("DESTINATION_ROOT_NOT_FOUND");
@@ -344,7 +345,8 @@ describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
       projectId: "app",
       apply: true,
       dryRunWithPreflight: true,
-      confirmOverwriteSource: true,
+      implements_check: "export_overwrites_source_precheck",
+      confirmedRequiresConfirmation: true,
       // Issue #1226 — destinationRoot gate must pass before the
       // dryRun/apply exclusivity test reaches the dispatch seam.
       destinationRoot: `${root}/scratch-1226`,

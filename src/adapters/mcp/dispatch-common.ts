@@ -147,7 +147,7 @@ export async function requestRequiresWriteReady(
   // the common apply/dryRun pair.
   if (toolName === "query_execute") return request.mode === "write" && !resolveIsDryRun(request);
   if (toolName === "cleanup_access_operation") return request.force === true;
-  if (toolName === "access_force_cleanup_orphaned") return request.confirmPid !== undefined;
+  if (toolName === "access_force_cleanup_orphaned") return request.pid !== undefined;
 
   // Load the policy seam only when a concrete request needs it. A static import
   // here creates an initialization cycle through risks -> contracts -> tools,
@@ -1239,7 +1239,8 @@ export function exportSourceGuardRefused(
 ): McpToolResult {
   const { toolName, destination, sourceRoot } = args;
   const remediation =
-    `Pass confirmOverwriteSource: true to confirm the overwrite, or point ` +
+    `Pass confirmedRequiresConfirmation: true with ` +
+    `implements_check: "export_overwrites_source_precheck", or point ` +
     `exportPath / destinationRoot outside the project's source tree.`;
   const message =
     `Refusing ${toolName}: destination ${destination} overlaps the project's ` +
@@ -1385,6 +1386,10 @@ export async function handleValidatedMcpWrite<TData>(
       if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     }
     return invalidInput(validation);
+  }
+  if (toolName !== undefined) {
+    const confirmation = enforceRequiresConfirmation(input, toolName);
+    if (confirmation !== undefined) return confirmation;
   }
   const isDryRun = resolveIsDryRun(input);
   if (!isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver)))

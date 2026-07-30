@@ -12,6 +12,7 @@
 import {
   ACCESS_OVERRIDE,
   composeIdentityAndCorrelation,
+  CONFIRMATION_OVERRIDE_BLOCK,
   type JsonObjectSchema,
   PROCESS_TIMEOUT_BLOCK,
   PROJECT_IDENTITY_BLOCK,
@@ -60,10 +61,8 @@ export const VBA_EXECUTE_SCHEMA: JsonObjectSchema = {
       description: "Public VBA procedure to execute.",
     },
     arguments: { type: "array", items: {}, description: "Procedure arguments." },
-    // PR1a (#621 F1) — explicit escape hatch for default-deny gate at the MCP
-    // adapter. When the project config does not declare `allowedProcedures`,
-    // the adapter refuses execution unless the caller passes `dryRun: true`.
-    dryRun: WRITE_INTENT_BLOCK.dryRun,
+    apply: WRITE_INTENT_BLOCK.apply,
+    ...CONFIRMATION_OVERRIDE_BLOCK,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
     timeoutMs: SCHEMA_PROPS.timeoutMs,
@@ -329,71 +328,27 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
     // other tool that uses these atoms.
     ...PROJECT_IDENTITY_BLOCK,
     accessPath: SCHEMA_PROPS.accessPath,
-    // Slice 3 — unified `requires_confirmation` policy.
-    implements_check: {
-      type: "string",
-      description:
-        "Diagnostic check_id for the unified envelope. access_force_cleanup_orphaned maps to 'orphans_msaccess'. Enforced by dispatch-factory.ts:enforceRequiresConfirmation.",
-    },
-    confirmedRequiresConfirmation: {
-      type: "boolean",
-      description:
-        "Required when implements_check maps to 'orphans_msaccess' (requires_confirmation: true) and the call wants to actually kill the listed process. Pass 'true' after explicit human ack.",
-    },
-    // Slice 3 — `confirmPid` is preserved as a deprecated accept-and-ignore
-    // alias. The new contract is `implements_check: "orphans_msaccess"` +
-    // `confirmedRequiresConfirmation: true` (dispatch-factory.ts
-    // :enforceRequiresConfirmation enforces the unified policy). Test
-    // fixtures and operator-side clients may still pass `confirmPid`;
-    // the schema accepts it without error so the migration is non-breaking.
-    // Hard-removal targeted for v3.0.
-    confirmPid: {
+    ...CONFIRMATION_OVERRIDE_BLOCK,
+    pid: {
       type: "number",
       minimum: 1,
-      description:
-        "DEPRECATED (slice 3) — legacy PID-specific cleanup confirmation. Use 'confirmedRequiresConfirmation: true' with 'implements_check: \"orphans_msaccess\"' instead. Accepted without error for backward compatibility; hard-removal in v3.0.",
-      deprecated: true,
+      description: "Positive process id selected from the preceding orphan listing.",
     },
   },
 };
 
-// Round-12 (#976) — `clean_stale_markers`. The user-callable companion to
-// the #967 auto-cleanup. Safe-by-default: `dryRun` defaults to true and
-// `confirm` is required before any non-dry-run call is allowed through.
-//
-//   - `olderThanMinutes` defaults to 30 (matches the #967 default).
-//   - `keepFailed` defaults to true (preserves diagnostic value of
-//     markers from failed operations regardless of age).
-//   - `dryRun` defaults to true; `confirm` is only consulted when
-//     `dryRun: false`.
-//
-// The handler refuses `dryRun: false` without `confirm: true` BEFORE
-// any service call, so a missed confirm never reaches the filesystem.
 export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: [],
   additionalProperties: false,
   properties: {
-    // Issue #1076 — this tool only needs the project identity (not
-    // call correlation). Compose the ProjectIdentity block directly so
-    // the consumer-facing description is the same as every other tool
-    // that uses this atom.
     ...PROJECT_IDENTITY_BLOCK,
-    // Slice 3 — unified `requires_confirmation` policy.
-    implements_check: {
-      type: "string",
-      description:
-        "Diagnostic check_id for the unified envelope. clean_stale_markers maps to 'stale_markers' (requires_confirmation: true). Enforced by dispatch-factory.ts:enforceRequiresConfirmation.",
-    },
-    confirmedRequiresConfirmation: {
-      type: "boolean",
-      description:
-        "Required for non-dry-run calls when implements_check = 'stale_markers'. Pass 'true' after the human confirmed the reaper intent.",
-    },
+    apply: WRITE_INTENT_BLOCK.apply,
+    ...CONFIRMATION_OVERRIDE_BLOCK,
     options: {
       type: "object",
       description:
-        "Cleanup controls: olderThanMinutes (default 30), dryRun (default true), keepFailed (default true), and confirm. Unknown keys are rejected; a non-dry-run request without confirm:true is refused before any filesystem transition.",
+        "Cleanup controls: olderThanMinutes defaults to 30 and keepFailed defaults to true. Unknown keys are rejected.",
       additionalProperties: false,
       properties: {
         olderThanMinutes: {
@@ -402,22 +357,10 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
           description:
             "Stale cutoff in minutes. Markers with `updatedAt` older than this are reap candidates. Defaults to 30.",
         },
-        dryRun: {
-          type: "boolean",
-          description:
-            "DEPRECATED (slice 3) — legacy plan signal. Use 'apply: false' instead; the dispatch seam injects the plan default from the write-execution policy. Accepted without error for backward compatibility; hard-removal in v3.0.",
-          deprecated: true,
-        },
         keepFailed: {
           type: "boolean",
           description:
             "When true (default), markers from failed operations are NEVER transitioned regardless of age. Set false to also reap stale failed markers.",
-        },
-        confirm: {
-          type: "boolean",
-          description:
-            "DEPRECATED (slice 3) — legacy confirmation flag. Use top-level 'confirmedRequiresConfirmation: true' with 'implements_check: \"stale_markers\"' instead. Literal `true` was the only acceptable value; omitting it or passing false left the tool in dry-run mode. Accepted without error for backward compatibility; hard-removal in v3.0.",
-          deprecated: true,
         },
       },
     },
