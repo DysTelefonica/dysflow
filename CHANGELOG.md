@@ -9,6 +9,12 @@
 - fix(dispatch): `dryRun`, `confirm`, `confirmOverwriteSource`, and `confirmPid` are now preserved as `@deprecated` accept-and-ignore fields on the affected schemas. They continue to validate and reach the handler unchanged, so the legacy escape hatches keep working without forcing the migration. Hard-removal deferred to v3.0 — the v2.31.0 release ships the deprecation warning in the schema description so consumers can discover the replacement before the v3.0 sweep.
 - docs(contracts): `CHECK_REQUIRED_CONFIRMATION` and `CHECK_NOT_REQUIRE_CONFIRMATION` are exposed on every mutating tool's input schema. The `confirmedRequiresConfirmation` boolean is treated as a one-shot override per call; the dispatch seam does not memoize across invocations.
 - docs(openspec): retroactive SDD entry at `openspec/changes/feat-check-envelope-unification/{proposal,tasks,design}.md`. The unified envelope is the primitives-plane contract that the runtime-autonomy épica (`docs/work/epic-runtime-autonomy-rollout.md`) builds on. Originating design context: `docs/prompts/prompt-ia-mantenedora-dysflow-round-17-2026-07-29.md`.
+## [v2.30.1] - 2026-07-30
+
+### Changes
+
+- fix(vba-sync): harden PowerShell startup and temp cleanup (#1234)
+
 
 ## [v2.30.0] - 2026-07-30
 
@@ -61,6 +67,10 @@
 
 
 ## [Unreleased]
+
+### Fixed
+
+- Resolve an absolute compatible PowerShell executable when the MCP host PATH is degraded, and retry Windows `EBUSY`/`EPERM` cleanup for disposable export databases (#1233).
 
 ## [v2.26.0] - 2026-07-27
 
@@ -3380,3 +3390,4 @@ Initial production release focused on making Access automation safe, observable 
 - Added protocol maintenance guide: `docs/testing/mcp-protocol-maintenance.md`.
 - Added HTTP API reference: `docs/api/http-api.md`.
 - Added E2E MCP reference: `docs/testing/mcp-access-e2e.md`.
+
