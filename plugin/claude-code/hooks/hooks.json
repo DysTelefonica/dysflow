@@ -1,0 +1,66 @@
+{
+  "description": "Dysflow lifecycle hooks (session-start, post-compaction, user-prompt-submit, subagent-stop, stop) — Mirror engram's hook shape but adapted to dysflow's Access/VBA domain. Namespace: dysflow-plugin. Each event handler runs `scripts/<event>.sh` from this plugin's install root.",
+  "_dysflow_marker": "DO NOT EDIT MANUALLY — replaced on plugin update. The `description` field above documents the namespace.",
+  "_dysflow_collaboration": "Coexists with engram's hooks.json (which declares the same event names but for memory lifecycle). Both plugins' hooks fire independently — Claude Code concatenates per-plugin handlers, no override. If you need to customize, fork the plugin or add a separate plugin.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh\"",
+            "timeout": 10,
+            "statusMessage": "[dysflow-plugin] Loading canonical workflow + project state..."
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/post-compaction.sh\"",
+            "timeout": 10,
+            "statusMessage": "[dysflow-plugin] Re-establishing context after compaction..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop.sh\"",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh\"",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

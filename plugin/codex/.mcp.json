@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dysflow": {
+      "_dysflow_marker": "Codex-specific MCP server config for the dysflow-plugin. Coexists with engram's MCP server (which declares mcpServers.engram).",
+      "command": "npx",
+      "args": ["-y", "dysflow", "mcp", "--tools=agent"]
+    }
+  },
+  "_dysflow_marker_root": "DO NOT EDIT MANUALLY — replaced on plugin update."
+}

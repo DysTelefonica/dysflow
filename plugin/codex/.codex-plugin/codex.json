@@ -1,0 +1,14 @@
+{
+  "name": "dysflow",
+  "description": "Source-binary sync, TDD, and form UI operations on Microsoft Access / VBA projects via the dysflow MCP. Codex entry point.",
+  "version": "2.31.0",
+  "namespace": "dysflow-plugin",
+  "author": {
+    "name": "Andrés Román (DysTelefonica)"
+  },
+  "homepage": "https://github.com/DysTelefonica/dysflow",
+  "repository": "https://github.com/DysTelefonica/dysflow",
+  "license": "Apache-2.0",
+  "_dysflow_marker": "DO NOT EDIT MANUALLY — replaced on plugin update. Mirrors engram's plugin/codex/.codex-plugin/codex.json shape but namespaced under 'dysflow'. See plugin/claude-code/.claude-plugin/plugin.json for the parallel Claude Code version.",
+  "_dysflow_collaboration": "Coexists with Gentleman-Programming/engram codex plugin. Namespace separation: engram owns `engram` plugin; dysflow owns `dysflow` plugin. Codex's plugin loader fires both per event."
+}
