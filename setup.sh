@@ -1,32 +1,19 @@
 #!/usr/bin/env bash
 # =====================================================================
-# dysflow plugin installer v2.31.0
+# dysflow-plugin installer v2.31.0
 # =====================================================================
-# Mirrors gentle-ai's installer shape + engram's setup.sh pattern.
+# One-shot install: links skills + installs plugin + MCP config +
+# post-worktree git hook for Claude Code + Codex + OpenCode.
 #
-# Strategy:
-#   1. Link skills/ to user-local per-agent dirs.
-#   2. Install the dysflow plugin into Claude Code + Codex + OpenCode
-#      user-local plugin dirs.
-#   3. Install the post-worktree git hook so every new worktree
-#      bootstraps .dysflow/ automatically.
+# Auto-creates user-local agent dirs if missing. Mirrors engram's
+# plugin install pattern but ships in a single shell script (no Go
+# binary install required for the plugin/skill layer).
 #
-# Coexistence with engram:
-#   - engram owns `engram` name + ~/.engram/  + its own plugin files.
-#   - dysflow owns `dysflow` name + .dysflow/ + its own plugin files.
-#   - Both plugins fire independently under each agent's plugin loader.
-#   - No shared scripts, no shared install paths, no shared env vars.
+# Usage: ./setup.sh [--scope=project|user]
+#   default --scope=user: install to ~/.claude, ~/.codex, ~/.config/opencode
+#   --scope=project: install only to ./<project>/.claude, etc. (for CI)
 #
-# Naming convention (every file owned by this plugin is prefixed):
-#   - Plugin name:        "dysflow"
-#   - JSON marker fields: "_dysflow_marker", "_dysflow_*"
-#   - Script headers:     "# dysflow-plugin: v2.31.0"
-#   - Env-var namespace:   CODEX_PLUGIN_ROOT / CLAUDE_PLUGIN_ROOT (per agent)
-#
-# Update model:
-#   - Source files live in plugin/<agent>/ in this repo.
-#   - `setup.sh` regenerates the user-local plugin + skill dirs.
-#   - `setup.sh` is idempotent: re-run after each dysflow-plugin update.
+# Update model: re-run after each dysflow-plugin update to refresh.
 # =====================================================================
 set -euo pipefail
 
@@ -35,18 +22,38 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DYSFLOW_SKILLS_SRC="${REPO_ROOT}/skills"
 DYSFLOW_PLUGIN_SRC="${REPO_ROOT}/plugin"
 
-echo "[dysflow-plugin setup v2.31.0]"
-echo "  Repo root:    ${REPO_ROOT}"
-echo "  Skills source: ${DYSFLOW_SKILLS_SRC}"
+# Parse args
+SCOPE="user"
+for arg in "$@"; do
+    case "$arg" in
+        --scope=project) SCOPE="project" ;;
+        --scope=user)   SCOPE="user" ;;
+        *) echo "[warn] unknown arg: $arg (use --scope=user|project)" ;;
+    esac
+done
+
+HOME_DIR="${HOME:-$(eval echo ~)}"
+
+# ─── User-local agent dirs ───────────────────────────────────────────
+CLAUDE_USER_DIR="${HOME_DIR}/.claude"
+CODEX_USER_DIR="${HOME_DIR}/.codex"
+OPENCODE_USER_DIR="${HOME_DIR}/.config/opencode"
+
+# ─── Project-local agent dirs (if --scope=project) ──────────────────
+CLAUDE_PROJ_DIR="${REPO_ROOT}/.claude"
+CODEX_PROJ_DIR="${REPO_ROOT}/.codex"
+OPENCODE_PROJ_DIR="${REPO_ROOT}/.opencode"
+
+echo "[dysflow-plugin installer v2.31.0]"
+echo "  Repo:     ${REPO_ROOT}"
+echo "  Scope:    ${SCOPE}"
+echo "  Home:     ${HOME_DIR}"
 echo
 
-# 1. Verify prerequisites.
-[ -d "${DYSFLOW_SKILLS_SRC}" ] || { echo "ERROR: skills/ not found at ${DYSFLOW_SKILLS_SRC}" >&2; exit 1; }
-[ -d "${DYSFLOW_PLUGIN_SRC}" ] || { echo "ERROR: plugin/ not found at ${DYSFLOW_PLUGIN_SRC}" >&2; exit 1; }
+# ═══════════════════════════════════════════════════════════════════════
+# 1. Skill linking — same shape as engram/setup.sh
+# ═══════════════════════════════════════════════════════════════════════
 
-# 2. Link skills to per-agent local config dirs.
-#    Same pattern as engram's setup.sh. Linking is reversible (delete
-#    the symlinks to uninstall).
 link_skills() {
     local agent_dir="$1"
     local agent_name="$2"
@@ -57,7 +64,6 @@ link_skills() {
 
     mkdir -p "${target_dir}"
 
-    # Remove legacy aggregate link if present.
     if [ -L "${target_dir}/dysflow" ]; then
         rm -f "${target_dir}/dysflow"
     fi
@@ -70,28 +76,33 @@ link_skills() {
     done
 }
 
-# Per-agent skill links.
-[ -d "${REPO_ROOT}/.claude" ]   && link_skills "${REPO_ROOT}/.claude"   "claude-code" || true
-[ -d "${REPO_ROOT}/.codex" ]    && link_skills "${REPO_ROOT}/.codex"    "codex"      || true
-[ -d "${REPO_ROOT}/.opencode" ] && link_skills "${REPO_ROOT}/.opencode" "opencode"   || true
+echo "[1/4] Linking skills..."
 
-# 3. Plugin install per agent.
-#
-# Each agent has its own user-local plugin dir. The plugin dir holds:
-#   - plugin.json / codex.json  (manifest)
-#   - .mcp.json                  (MCP server config)
-#   - hooks/hooks.json           (event handlers)
-#   - scripts/*.sh               (hook implementations)
-#   - For OpenCode: dysflow.ts   (TypeScript plugin)
-#
-# We copy the source dir verbatim into the user-local plugin dir.
+if [ "${SCOPE}" = "user" ]; then
+    [ -d "${CLAUDE_USER_DIR}" ]   || mkdir -p "${CLAUDE_USER_DIR}"
+    [ -d "${CODEX_USER_DIR}" ]    || mkdir -p "${CODEX_USER_DIR}"
+    [ -d "${OPENCODE_USER_DIR}" ] || mkdir -p "${OPENCODE_USER_DIR}"
+    link_skills "${CLAUDE_USER_DIR}"   "claude-code"
+    link_skills "${CODEX_USER_DIR}"    "codex"
+    link_skills "${OPENCODE_USER_DIR}" "opencode"
+else
+    mkdir -p "${CLAUDE_PROJ_DIR}" "${CODEX_PROJ_DIR}" "${OPENCODE_PROJ_DIR}"
+    link_skills "${CLAUDE_PROJ_DIR}"   "claude-code"
+    link_skills "${CODEX_PROJ_DIR}"    "codex"
+    link_skills "${OPENCODE_PROJ_DIR}" "opencode"
+fi
+echo
+
+# ═══════════════════════════════════════════════════════════════════════
+# 2. Plugin install — Claude Code + Codex + OpenCode
+# ═══════════════════════════════════════════════════════════════════════
 
 install_claude_code_plugin() {
     local agent_dir="$1"
     local target_plugin_dir="${agent_dir}/plugins/dysflow"
     mkdir -p "${target_plugin_dir}"
     cp -R "${DYSFLOW_PLUGIN_SRC}/claude-code/." "${target_plugin_dir}/"
-    echo "  [claude-code] installed plugin -> ${target_plugin_dir}"
+    echo "  [claude-code] plugin -> ${target_plugin_dir}"
 }
 
 install_codex_plugin() {
@@ -99,7 +110,7 @@ install_codex_plugin() {
     local target_plugin_dir="${agent_dir}/plugins/dysflow"
     mkdir -p "${target_plugin_dir}"
     cp -R "${DYSFLOW_PLUGIN_SRC}/codex/." "${target_plugin_dir}/"
-    echo "  [codex] installed plugin -> ${target_plugin_dir}"
+    echo "  [codex] plugin -> ${target_plugin_dir}"
 }
 
 install_opencode_plugin() {
@@ -107,28 +118,49 @@ install_opencode_plugin() {
     local target_plugin_dir="${agent_dir}/plugins/dysflow"
     mkdir -p "${target_plugin_dir}"
     cp -R "${DYSFLOW_PLUGIN_SRC}/opencode/." "${target_plugin_dir}/"
-    echo "  [opencode] installed plugin -> ${target_plugin_dir}"
+    echo "  [opencode] plugin -> ${target_plugin_dir}"
 }
 
-[ -d "${REPO_ROOT}/.claude" ]   && install_claude_code_plugin "${REPO_ROOT}/.claude"   || true
-[ -d "${REPO_ROOT}/.codex" ]    && install_codex_plugin      "${REPO_ROOT}/.codex"    || true
-[ -d "${REPO_ROOT}/.opencode" ] && install_opencode_plugin   "${REPO_ROOT}/.opencode" || true
+echo "[2/4] Installing plugins..."
 
-# 4. Install the post-worktree git hook so every new worktree bootstraps
-#    its .dysflow/ automatically. Coexists with any engram hook the user
-#    may have installed — git fires ALL post-worktree hooks in parallel.
+if [ "${SCOPE}" = "user" ]; then
+    install_claude_code_plugin "${CLAUDE_USER_DIR}"
+    install_codex_plugin      "${CODEX_USER_DIR}"
+    install_opencode_plugin   "${OPENCODE_USER_DIR}"
+else
+    install_claude_code_plugin "${CLAUDE_PROJ_DIR}"
+    install_codex_plugin      "${CODEX_PROJ_DIR}"
+    install_opencode_plugin   "${OPENCODE_PROJ_DIR}"
+fi
+echo
+
+# ═══════════════════════════════════════════════════════════════════════
+# 3. MCP server config — Claude Code + Codex + OpenCode
+# ═══════════════════════════════════════════════════════════════════════
+
+# Claude Code reads .mcp.json from the plugin dir (already copied in step 2).
+# Codex reads .mcp.json from the plugin dir (already copied in step 2).
+# OpenCode reads .mcp.json from the plugin dir (already copied in step 2).
+#
+# All three agents auto-launch the dysflow MCP server when the plugin is
+# loaded. The .mcp.json in each plugin dir is the canonical config.
+
+# ═══════════════════════════════════════════════════════════════════════
+# 4. Git hook — post-worktree bootstrap of .dysflow/
+# ═══════════════════════════════════════════════════════════════════════
+
 install_worktree_hook() {
     local hooks_dir=".git/hooks"
     local hook_path="${hooks_dir}/post-worktree"
     local source_hook="${REPO_ROOT}/plugin/shared/post-worktree.sh"
 
     if [ ! -d "${hooks_dir}" ]; then
-        echo "  [skip] ${hooks_dir} not present — not in a git repo"
+        echo "  [skip] not in a git repo"
         return 0
     fi
 
     if [ ! -f "${source_hook}" ]; then
-        echo "  [skip] ${source_hook} not found — post-worktree hook not installed"
+        echo "  [skip] post-worktree.sh not found at ${source_hook}"
         return 0
     fi
 
@@ -137,13 +169,50 @@ install_worktree_hook() {
     echo "  [git] installed ${hook_path}"
 }
 
+echo "[3/4] Installing post-worktree git hook..."
 install_worktree_hook
-
 echo
-echo "Done. Skills linked + plugins installed + post-worktree hook installed."
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Optional: also link the plugin into agent's global plugins dir if
+#    the agent supports a marketplace-style install (Claude Code does).
+# ═══════════════════════════════════════════════════════════════════════
+
+echo "[4/4] Plugin manifest registration..."
+
+# Claude Code auto-discovers ~/.claude/plugins/* without registration.
+# Codex auto-discovers ~/.codex/plugins/* without registration.
+# OpenCode auto-loads ~/.config/opencode/plugins/* without registration.
+
+echo "  No manual registration needed — agents auto-load plugins from the dirs above."
+echo
+
+# ═══════════════════════════════════════════════════════════════════════
+# Status
+# ═══════════════════════════════════════════════════════════════════════
+
+if [ "${SCOPE}" = "user" ]; then
+    CATALOG_BASE="${HOME_DIR}"
+    CLAUDE_LABEL="${CLAUDE_USER_DIR}"
+    CODEX_LABEL="${CODEX_USER_DIR}"
+    OPENCODE_LABEL="${OPENCODE_USER_DIR}"
+else
+    CATALOG_BASE="${REPO_ROOT}"
+    CLAUDE_LABEL="${CLAUDE_PROJ_DIR} (project-local)"
+    CODEX_LABEL="${CODEX_PROJ_DIR} (project-local)"
+    OPENCODE_LABEL="${OPENCODE_PROJ_DIR} (project-local)"
+fi
+
+echo "Done. Installed at:"
+echo "  Claude Code: ${CLAUDE_LABEL}/plugins/dysflow/"
+echo "  Codex:       ${CODEX_LABEL}/plugins/dysflow/"
+echo "  OpenCode:    ${OPENCODE_LABEL}/plugins/dysflow/"
+echo "  Skills:      ${CLAUDE_LABEL}/skills/  (linked from ${DYSFLOW_SKILLS_SRC})"
+echo
+echo "Restart your agent to load the plugin."
 echo "Re-run after each dysflow-plugin update to refresh."
 echo
 echo "Coexistence notes:"
-echo "  - engram plugin (Gentleman-Programming/engram) fires its own hooks under the 'engram' namespace."
-echo "  - dysflow plugin (this repo) fires its own hooks under the 'dysflow' namespace."
-echo "  - Both plugins share the same Claude Code/Codex/OpenCode event surface but never overwrite each other."
+echo "  - engram plugin (Gentleman-Programming/engram) is at the same paths but under 'engram' namespace."
+echo "  - dysflow plugin (this repo) is under 'dysflow' namespace."
+echo "  - Both plugins fire independently. No shared scripts, no shared state."
