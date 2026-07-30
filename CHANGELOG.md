@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.31.0] - 2026-07-30
+
+### Changes
+
+- feat(dispatch): unified `requires_confirmation` policy across every mutating MCP tool. Every mutating tool schema declares an `implements_check: CheckId` field that points to a diagnostic check in `DOCTOR_CHECK_METADATA`. The dispatch seam (`src/adapters/mcp/dispatch-factory.ts:247`) calls `enforceRequiresConfirmation(input, toolName)` after `validateInput` and before any policy injection; the helper looks up the matched check and either demands `confirmedRequiresConfirmation: true` (returns `CONFIRMATION_REQUIRED` if missing) or rejects the override (returns `CONFIRMATION_NOT_NEEDED` if the override is present on a check that does not require it).
+- feat(dispatch): new `confirmedRequiresConfirmation: true` override flag at the call site is the preferred way to confirm a mutating tool that maps to a `requires_confirmation: true` check. Tools currently wired: `export_modules`, `export_all` (both map to `export_overwrites_source_precheck`), `clean_stale_markers` (maps to `stale_markers`), and `access_force_cleanup_orphaned` (maps to `orphans_msaccess`). The override is optional for the 21 advisory checks that declare `requires_confirmation: false`.
+- fix(dispatch): `dryRun`, `confirm`, `confirmOverwriteSource`, and `confirmPid` are now preserved as `@deprecated` accept-and-ignore fields on the affected schemas. They continue to validate and reach the handler unchanged, so the legacy escape hatches keep working without forcing the migration. Hard-removal deferred to v3.0 — the v2.31.0 release ships the deprecation warning in the schema description so consumers can discover the replacement before the v3.0 sweep.
+- docs(contracts): `CHECK_REQUIRED_CONFIRMATION` and `CHECK_NOT_REQUIRE_CONFIRMATION` are exposed on every mutating tool's input schema. The `confirmedRequiresConfirmation` boolean is treated as a one-shot override per call; the dispatch seam does not memoize across invocations.
+- docs(openspec): retroactive SDD entry at `openspec/changes/feat-check-envelope-unification/{proposal,tasks,design}.md`. The unified envelope is the primitives-plane contract that the runtime-autonomy épica (`docs/work/epic-runtime-autonomy-rollout.md`) builds on. Originating design context: `docs/prompts/prompt-ia-mantenedora-dysflow-round-17-2026-07-29.md`.
+
 ## [v2.30.0] - 2026-07-30
 
 ### Changes
