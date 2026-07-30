@@ -481,4 +481,139 @@ describe("legacy sibling worktree config migration (#873 → #1092)", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+  // ════════════════════════════════════════════════════════════════════════
+  // Round 16 — legacy `projectId` / `accessPath` / `destinationRoot`
+  // keys (pre-#1092 contract). The resolver MUST honor them with an
+  // explicit migration hint instead of the misleading "(missing)"
+  // surface that round 16 reproducer hit in `expedientes`.
+  // ════════════════════════════════════════════════════════════════════════
+
+  it("R16-1: reads legacy `projectId` key as fallback when `id` is absent", () => {
+    const root = siblingWorktree("dysflow-r16-1-");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        projectId: "legacy-name",
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      const result = diagnoseProjectConfig(root, { projectId: "legacy-name" });
+      expect(result).toMatchObject({
+        status: "valid",
+        writeReady: true,
+        projectId: "legacy-name",
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("R16-2: emits MIGRATE_LEGACY warning (severity=warning) when legacy `projectId` is read", () => {
+    const root = siblingWorktree("dysflow-r16-2-");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        projectId: "legacy-name",
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      const result = diagnoseProjectConfig(root, { projectId: "legacy-name" });
+      expect(result.diagnostics).toContainEqual({
+        code: "MIGRATE_LEGACY_PROJECT_ID",
+        severity: "warning",
+        message: expect.stringContaining("dysflow migrate-project-config"),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("R16-3: legacy absolute accessPath is reported with structured migration remediation", () => {
+    const root = siblingWorktree("dysflow-r16-3-");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        projectId: "legacy-name",
+        accessPath: "/tmp/legacy/.accdb",
+        destinationRoot: "src",
+      }),
+    );
+    try {
+      const result = diagnoseProjectConfig(root, { projectId: "legacy-name" });
+      expect(result).toMatchObject({
+        status: "path-mismatch",
+        writeReady: false,
+        projectId: null,
+        diagnostics: [
+          {
+            code: "INHERITED_WORKTREE_MISMATCH",
+            severity: "error",
+            remediation: {
+              kind: "config-migration",
+              field: "accessPath",
+              replaceWith: "frontendFile",
+              suggestedValue: ".accdb",
+            },
+          },
+        ],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("R16-4: honors `cwd` override in the request payload (per-worktree config takes priority)", () => {
+    // Setup: a parent dir with legacy shared config + a per-worktree dir
+    // with canonical config. Calling diagnoseProjectConfig with the
+    // worktree's cwd should resolve the worktree's config, NOT the parent's.
+    const parentRoot = mkdtempSync(join(tmpdir(), "dysflow-r16-parent-"));
+    const worktreeRoot = mkdtempSync(join(tmpdir(), "dysflow-r16-worktree-"));
+    writeFileSync(join(parentRoot, ".git"), "gitdir: fixture");
+    writeFileSync(join(worktreeRoot, ".git"), "gitdir: fixture");
+    mkdirSync(join(parentRoot, ".dysflow"));
+    mkdirSync(join(worktreeRoot, ".dysflow"));
+    writeFileSync(
+      join(parentRoot, ".dysflow", "project.json"),
+      JSON.stringify({
+        projectId: "parent-legacy",
+        accessPath: "/tmp/parent.accdb",
+        destinationRoot: "src",
+      }),
+    );
+    writeFileSync(
+      join(worktreeRoot, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "worktree-canonical",
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+      }),
+    );
+    mkdirSync(join(worktreeRoot, "src"));
+    writeFileSync(join(worktreeRoot, "app.accdb"), "");
+    try {
+      const result = diagnoseProjectConfig(worktreeRoot, {
+        projectId: "worktree-canonical",
+      });
+      expect(result).toMatchObject({
+        status: "valid",
+        writeReady: true,
+        projectId: "worktree-canonical",
+      });
+    } finally {
+      rmSync(parentRoot, { recursive: true, force: true });
+      rmSync(worktreeRoot, { recursive: true, force: true });
+    }
+  });
 });
