@@ -27,6 +27,12 @@ import { diagnoseResultContract } from "./contracts/bootstrap-result-contracts.j
 
 import { existsSync, statSync } from "node:fs";
 import { join, normalize } from "node:path";
+import type {
+  CheckId,
+  DiagnosticCategory,
+  ReasonCode,
+  Severity,
+} from "../../core/contracts/diagnostic-check.js";
 import { remediationText } from "../../core/contracts/remediation.js";
 import {
   type AccessOperationListEntry,
@@ -38,7 +44,9 @@ import {
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import { pathOverlapsSourceRoot } from "../../core/utils/path-overlap.js";
 import { composeIdentityAndCorrelation, SCHEMA_PROPS } from "../../shared/validation/index.js";
+import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,
@@ -127,10 +135,23 @@ export type DiagnoseProjectConfig = {
  * consumers can branch without consulting schema docs (the `schema` tool
  * exposes this same shape for live validation).
  */
+export type DiagnoseCheck<TValue> = {
+  name: string;
+  ok: boolean;
+  message: string;
+  severity: Severity;
+  check_id: CheckId;
+  reason_code: ReasonCode;
+  requires_confirmation: boolean;
+  category: DiagnosticCategory;
+  value: TValue;
+};
+
 export type DiagnoseResult = {
   projectConfig: DiagnoseProjectConfig;
   filesystem: DiagnoseFilesystem;
   runtime: DiagnoseRuntime;
+  checks: readonly DiagnoseCheck<unknown>[];
 };
 
 /**
@@ -263,21 +284,26 @@ export async function computeDiagnose(options: ComputeDiagnoseOptions): Promise<
   const staleMarkers = filterStaleMarkers(records, nowMs, thresholdMs);
   const activeOps = filterActiveOps(records);
 
+  const projectConfig = shapeProjectConfig(projectConfigRaw);
+  const runtime: DiagnoseRuntime = {
+    staleMarkers,
+    activeOps,
+    orphans: { msaccess: 0, pwshWorkers: 0 },
+    dysflowVersion: snapshot.adapterVersion,
+    writeExecutionPolicy: snapshot.writeExecutionPolicy,
+  };
+  const filesystem: DiagnoseFilesystem = {
+    accessPath,
+    backendPath,
+    destinationRoot,
+    projectRoot: projectRootBlock,
+  };
+
   return {
-    projectConfig: shapeProjectConfig(projectConfigRaw),
-    filesystem: {
-      accessPath,
-      backendPath,
-      destinationRoot,
-      projectRoot: projectRootBlock,
-    },
-    runtime: {
-      staleMarkers,
-      activeOps,
-      orphans: { msaccess: 0, pwshWorkers: 0 },
-      dysflowVersion: snapshot.adapterVersion,
-      writeExecutionPolicy: snapshot.writeExecutionPolicy,
-    },
+    projectConfig,
+    filesystem,
+    runtime,
+    checks: buildDiagnoseChecks({ projectConfig, filesystem, runtime }),
   };
 }
 
@@ -373,6 +399,122 @@ export function createDiagnoseTool(options: CreateDiagnoseToolOptions): DysflowM
 }
 
 // ─── Internals (not exported) ─────────────────────────────────────────────────
+
+function diagnoseCheck<TValue>(
+  checkId: CheckId,
+  name: string,
+  ok: boolean,
+  message: string,
+  severity: Severity,
+  value: TValue,
+): DiagnoseCheck<TValue> {
+  return { name, ok, message, severity, value, ...doctorCheckMetadata(checkId) };
+}
+
+export function buildDiagnoseChecks(input: {
+  projectConfig: DiagnoseProjectConfig;
+  filesystem: DiagnoseFilesystem;
+  runtime: DiagnoseRuntime;
+}): readonly DiagnoseCheck<unknown>[] {
+  const { projectConfig, filesystem, runtime } = input;
+  const warningCodes = new Set(["CWD_NOT_IN_WORKTREE", "TARGET_MISMATCH_WARNING"]);
+  const projectWarnings = projectConfig.diagnostics.filter((entry) => warningCodes.has(entry.code));
+  const overlapsSource =
+    filesystem.destinationRoot.path !== null &&
+    pathOverlapsSourceRoot(filesystem.destinationRoot.path, filesystem.projectRoot.path);
+  return [
+    diagnoseCheck(
+      "diagnose_project_config_status",
+      "diagnose.projectConfig.status",
+      projectConfig.status === "valid",
+      `projectConfig status: ${projectConfig.status}`,
+      projectConfig.status === "valid" ? "info" : "critical",
+      projectConfig.status,
+    ),
+    diagnoseCheck(
+      "diagnose_filesystem_access_path_exists",
+      "diagnose.filesystem.accessPath.exists",
+      filesystem.accessPath.exists,
+      `accessPath exists: ${filesystem.accessPath.exists}`,
+      filesystem.accessPath.exists ? "info" : "critical",
+      filesystem.accessPath.exists,
+    ),
+    diagnoseCheck(
+      "diagnose_filesystem_backend_path_exists",
+      "diagnose.filesystem.backendPath.exists",
+      filesystem.backendPath.path === null || filesystem.backendPath.exists,
+      `backendPath exists: ${filesystem.backendPath.exists}`,
+      filesystem.backendPath.path === null || filesystem.backendPath.exists ? "info" : "warning",
+      filesystem.backendPath.exists,
+    ),
+    diagnoseCheck(
+      "diagnose_filesystem_destination_root_exists",
+      "diagnose.filesystem.destinationRoot.exists",
+      filesystem.destinationRoot.exists,
+      `destinationRoot exists: ${filesystem.destinationRoot.exists}`,
+      filesystem.destinationRoot.exists ? "info" : "critical",
+      filesystem.destinationRoot.exists,
+    ),
+    diagnoseCheck(
+      "stale_markers",
+      "diagnose.runtime.staleMarkers",
+      runtime.staleMarkers === 0,
+      `stale markers: ${runtime.staleMarkers}`,
+      runtime.staleMarkers === 0 ? "info" : "warning",
+      runtime.staleMarkers,
+    ),
+    diagnoseCheck(
+      "diagnose_runtime_active_ops",
+      "diagnose.runtime.activeOps",
+      runtime.activeOps === 0,
+      `active operations: ${runtime.activeOps}`,
+      runtime.activeOps === 0 ? "info" : "warning",
+      runtime.activeOps,
+    ),
+    diagnoseCheck(
+      "orphans_msaccess",
+      "diagnose.runtime.orphans.msaccess",
+      runtime.orphans.msaccess === 0,
+      `orphan MSACCESS processes: ${runtime.orphans.msaccess}`,
+      runtime.orphans.msaccess === 0 ? "info" : "warning",
+      runtime.orphans.msaccess,
+    ),
+    diagnoseCheck(
+      "diagnose_runtime_dysflow_version",
+      "diagnose.runtime.dysflowVersion",
+      true,
+      `dysflow version: ${runtime.dysflowVersion}`,
+      "info",
+      runtime.dysflowVersion,
+    ),
+    diagnoseCheck(
+      "diagnose_runtime_write_execution_policy",
+      "diagnose.runtime.writeExecutionPolicy",
+      true,
+      `write execution policy: ${runtime.writeExecutionPolicy}`,
+      "info",
+      runtime.writeExecutionPolicy,
+    ),
+    diagnoseCheck(
+      "diagnose_project_config_warnings",
+      "diagnose.projectConfig.warnings",
+      projectWarnings.length === 0,
+      `cwd or target mismatch warnings: ${projectWarnings.length}`,
+      projectWarnings.length === 0 ? "info" : "warning",
+      projectWarnings,
+    ),
+    diagnoseCheck(
+      "export_overwrites_source_precheck",
+      "export destination overlaps source precheck",
+      !overlapsSource,
+      overlapsSource
+        ? "configured destinationRoot overlaps the project source root"
+        : "configured destinationRoot does not overlap the project source root",
+      overlapsSource ? "warning" : "info",
+      overlapsSource,
+    ),
+  ];
+}
 
 function filterStaleMarkers(
   records: readonly AccessOperationListEntry[],

@@ -2,6 +2,7 @@
 
 import {
   ACCESS_OVERRIDE,
+  CONFIRMATION_OVERRIDE_BLOCK,
   CTX_PROPS,
   type JsonObjectSchema,
   type JsonSchemaProperty,
@@ -240,6 +241,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       operationId: SCHEMA_PROPS.operationId,
       force: SCHEMA_PROPS.force,
+      ...CONFIRMATION_OVERRIDE_BLOCK,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
@@ -329,17 +331,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
       verbose: SCHEMA_PROPS.verboseContract,
-      // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
-      // guard. When `developer` mode is active and the destination overlaps
-      // the project's active source root, the dispatcher refuses with
-      // `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the caller
-      // passes this flag. Ignored in `safe-by-default` mode.
-      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
-      // Issue #968 — opt-in acknowledgment that the accessPath override
-      // lives outside the active worktree. Honored because `export_modules`
-      // never mutates the binary; reads from a release `.accdb` are allowed
-      // when the caller has explicitly opted in. Ignored for binary writers
-      // (`import_modules`, etc.).
       allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
@@ -378,9 +369,6 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       allowConfiguredDestinationRoot: SCHEMA_PROPS.allowConfiguredDestinationRoot,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
-      // Issue #785 (v2.1.1) — see export_modules for semantics; same
-      // opt-in acknowledgment field for full-mirror exports.
-      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
@@ -833,6 +821,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      ...CONFIRMATION_OVERRIDE_BLOCK,
       erdPath: SCHEMA_PROPS.erdPath,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },

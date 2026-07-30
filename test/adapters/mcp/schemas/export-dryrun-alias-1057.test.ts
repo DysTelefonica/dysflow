@@ -10,13 +10,13 @@ import { describe, expect, it } from "vitest";
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../../src/adapters/mcp/schemas/vba-sync-schemas";
 import { validateInput } from "../../../../src/shared/validation/validator";
 
-describe("export tools accept the dryRun alias (#1057 F8)", () => {
-  it("export_modules({ moduleNames, dryRun: true }) passes schema validation", () => {
+describe("export tools hard-remove the dryRun alias", () => {
+  it("export_modules rejects dryRun", () => {
     const result = validateInput(
       { moduleNames: ["Mod1"], dryRun: true },
       VBA_SYNC_TOOL_SCHEMAS.export_modules,
     );
-    expect(result).toBeUndefined();
+    expect(result).toMatch(/dryRun is not allowed/);
   });
 
   it("export_modules({ moduleNames, diff: true }) passes schema validation (legacy alias)", () => {
@@ -27,16 +27,16 @@ describe("export tools accept the dryRun alias (#1057 F8)", () => {
     expect(result).toBeUndefined();
   });
 
-  it("export_all({ dryRun: true }) passes schema validation", () => {
+  it("export_all rejects dryRun", () => {
     const result = validateInput({ dryRun: true }, VBA_SYNC_TOOL_SCHEMAS.export_all);
-    expect(result).toBeUndefined();
+    expect(result).toMatch(/dryRun is not allowed/);
   });
 
-  it("export_modules rejects contradictory apply:true + dryRun:true (#1057 F8)", () => {
+  it("export_modules rejects dryRun even when apply is present", () => {
     const result = validateInput(
       { moduleNames: ["Mod1"], apply: true, dryRun: true },
       VBA_SYNC_TOOL_SCHEMAS.export_modules,
     );
-    expect(result).toMatch(/mutually exclusive/);
+    expect(result).toMatch(/dryRun is not allowed/);
   });
 });

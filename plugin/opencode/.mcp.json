@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dysflow": {
+      "_dysflow_marker": "OpenCode-specific MCP server config for the dysflow-plugin. Server namespace 'dysflow' is the canonical identifier. DO NOT rename without coordinating with the plugin installer. Coexists with engram's MCP server (which declares mcpServers.engram).",
+      "command": "npx",
+      "args": ["-y", "dysflow", "mcp", "--tools=agent"]
+    }
+  },
+  "_dysflow_marker_root": "DO NOT EDIT MANUALLY — replaced on plugin update. Coexists with engram's OpenCode plugin (Gentleman-Programming/engram). Two MCP servers — dysflow (per-worktree Access/VBA) + engram (per-user memory) — load side-by-side.",
+  "_dysflow_opencode_plugin": "The plugin itself lives at plugin/opencode/dysflow.ts in this repo. After `setup.sh` runs, OpenCode loads it from ~/.config/opencode/plugins/dysflow/dysflow.ts (or wherever OpenCode's plugin loader expects)."
+}

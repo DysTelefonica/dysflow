@@ -141,16 +141,11 @@ describe("export_modules / export_all schema — allowConfiguredDestinationRoot 
     expect(schema.properties.exportPath).toBeDefined();
   });
 
-  it("confirmOverwriteSource description reflects both-modes guard semantics (#1226 doc drift fix)", () => {
+  it("export confirmation uses the unified fields", () => {
     const schema = VBA_SYNC_TOOL_SCHEMAS.export_all;
-    const desc = schema.properties.confirmOverwriteSource?.description ?? "";
-    expect(desc.toLowerCase()).toContain("safe-by-default");
-    // The old buggy description was "ignored otherwise" — that wording
-    // hid the safe-by-default path. The new description must explicitly
-    // mention safe-by-default as one of the modes where the guard fires.
-    expect(desc).not.toBe(
-      "Issue #785 — opt-in acknowledgment that the export destination may overwrite the project's source root. Required when the destination overlaps the active source root under developer mode + execute path; ignored otherwise.",
-    );
+    expect(schema.properties.confirmOverwriteSource).toBeUndefined();
+    expect(schema.properties.implements_check).toBeDefined();
+    expect(schema.properties.confirmedRequiresConfirmation).toBeDefined();
   });
 });
 

@@ -26,6 +26,7 @@ export type JsonSchemaProperty = {
   additionalProperties?: boolean | JsonSchemaProperty;
   required?: readonly string[];
   properties?: Record<string, JsonSchemaProperty>;
+  deprecated?: boolean;
 };
 
 export type JsonObjectSchema = {

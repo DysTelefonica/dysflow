@@ -200,7 +200,11 @@ export function requiresExportSourceConfirmation(
   // plan or commit begins. `safe-by-default` mode never reaches this
   // branch (handled by `requiresConfirmOverwriteSource === false`
   // above).
-  if (record.confirmOverwriteSource === true) return undefined;
+  if (
+    record.implements_check === "export_overwrites_source_precheck" &&
+    record.confirmedRequiresConfirmation === true
+  )
+    return undefined;
 
   const destination = typeof paths.destination === "string" ? paths.destination : undefined;
   const sourceRoot = typeof paths.sourceRoot === "string" ? paths.sourceRoot : undefined;
@@ -209,7 +213,7 @@ export function requiresExportSourceConfirmation(
 
   const remediation =
     `Refusing ${toolName}: destination ${destination} overlaps the project's active source root (${sourceRoot}). ` +
-    `Pass confirmOverwriteSource: true to confirm the overwrite, or point exportPath / destinationRoot outside the project's source tree.`;
+    `Pass confirmedRequiresConfirmation: true with implements_check: "export_overwrites_source_precheck", or point exportPath / destinationRoot outside the project's source tree.`;
   return {
     code: "EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION",
     message: remediation,

@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { DoctorCategoryCheck } from "./types.js";
+import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
 
 /**
  * Issue #1057 (F9) — Category A: validate `.dysflow/project.json` schema,
  * path resolution, and conventions. Read-only; never opens Access.
  */
 export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
+  const projectJsonSchema = doctorCheckMetadata("project_json_schema");
   const configPath = path.join(cwd, ".dysflow", "project.json");
   if (!existsSync(configPath)) {
     return [
@@ -15,6 +16,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         name: "project.json schema",
         message: `.dysflow/project.json not found at ${configPath}. Run \`dysflow setup --write-project\` to create it.`,
         severity: "critical",
+        ...projectJsonSchema,
       },
     ];
   }
@@ -29,6 +31,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         name: "project.json schema",
         message: `.dysflow/project.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
         severity: "critical",
+        ...projectJsonSchema,
       },
     ];
   }
@@ -44,12 +47,14 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
           name: "project.json schema",
           message: "all required fields present (id, accessPath, destinationRoot)",
           severity: "warning",
+          ...projectJsonSchema,
         }
       : {
           ok: false,
           name: "project.json schema",
           message: `missing required field(s): ${missing.join(", ")}`,
           severity: "critical",
+          ...projectJsonSchema,
         },
   );
 
@@ -63,6 +68,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         name: "accessPath resolves",
         message: `${accessPath} (${sizeMb} MB)`,
         severity: "warning",
+        ...doctorCheckMetadata("access_path_resolves"),
       });
     } else {
       checks.push({
@@ -70,6 +76,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         name: "accessPath resolves",
         message: `${accessPath} does not exist on disk`,
         severity: "critical",
+        ...doctorCheckMetadata("access_path_resolves"),
       });
     }
   }
@@ -84,12 +91,14 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
             name: "backendPath resolves",
             message: backendPath,
             severity: "warning",
+            ...doctorCheckMetadata("backend_path_resolves"),
           }
         : {
             ok: false,
             name: "backendPath resolves",
             message: `${backendPath} does not exist on disk`,
             severity: "critical",
+            ...doctorCheckMetadata("backend_path_resolves"),
           },
     );
   }
@@ -104,12 +113,14 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
             name: "destinationRoot resolves",
             message: destinationRoot,
             severity: "warning",
+            ...doctorCheckMetadata("destination_root_resolves"),
           }
         : {
             ok: false,
             name: "destinationRoot resolves",
             message: `${destinationRoot} is not an existing directory`,
             severity: "critical",
+            ...doctorCheckMetadata("destination_root_resolves"),
           },
     );
   }
@@ -123,6 +134,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         ? `'${raw.id}' (lowercase kebab-case)`
         : `'${raw.id}' does not match the lowercase kebab-case convention ([a-z0-9-])`,
       severity: "warning",
+      ...doctorCheckMetadata("project_id_matches_convention"),
     });
   }
 
@@ -140,6 +152,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
         ? `'${String(policy)}'`
         : `'${String(policy)}' is not a known policy (expected safe-by-default | developer)`,
       severity: "warning",
+      ...doctorCheckMetadata("write_execution_policy_known"),
     });
   }
 

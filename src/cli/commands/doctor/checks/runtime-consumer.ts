@@ -1,5 +1,5 @@
 import { COMMIT_FLAG_REGISTRY } from "../../../../core/runtime/commit-flag-registry.js";
-import type { DoctorCategoryCheck } from "./types.js";
+import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
 
 /**
  * Tools whose commit flag is deliberately NOT `apply` — documented
@@ -48,12 +48,14 @@ export function runRuntimeConsumerChecks(): DoctorCategoryCheck[] {
           message:
             "every write tool commits with apply:true; dryRun/diff are plan aliases (no #1055-style inversion)",
           severity: "warning",
+          ...doctorCheckMetadata("apply_polarity"),
         }
       : {
           ok: false,
           name: "apply polarity",
           message: `apply polarity inversion candidates: ${inverted.join(", ")} — verify against get_capabilities.tools[].canonicalCommitFlag`,
           severity: "warning",
+          ...doctorCheckMetadata("apply_polarity"),
         },
   );
 
@@ -67,6 +69,7 @@ export function runRuntimeConsumerChecks(): DoctorCategoryCheck[] {
             (entry) => `${entry.tool} uses '${entry.param}' (${entry.family})`,
           ).join("; ")} — rejected params now hint the correct name (#1057 F4)`,
     severity: "warning",
+    ...doctorCheckMetadata("module_param_naming"),
   });
 
   return checks;

@@ -105,7 +105,7 @@ class AdapterAwareFakeVbaService {
       // The gate still fires on the commit path (no dryRun) so a real
       // execute attempt is still refused when no allowlist is configured.
       const obj = forwarded as Record<string, unknown> | undefined;
-      const dryRun = obj?.dryRun === true;
+      const dryRun = obj?.dryRun === true || obj?.apply === false;
       if (dryRun) {
         return successResult({
           dryRun: true,
@@ -382,7 +382,7 @@ describe("AC3 — developer + export_modules overlapping source refused (#783)",
     expect(result.content[0]?.text).toContain(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
   });
 
-  it("export_modules with confirmOverwriteSource:true → executes (no refusal)", async () => {
+  it("export_modules with unified confirmation → executes (no refusal)", async () => {
     const services = makeServices();
     const tools = buildTools(services, {
       writeExecutionPolicy: "developer",
@@ -400,7 +400,8 @@ describe("AC3 — developer + export_modules overlapping source refused (#783)",
       moduleNames: ["Foo"],
       destinationRoot: sourceRoot,
       exportPath: sourceRoot,
-      confirmOverwriteSource: true,
+      implements_check: "export_overwrites_source_precheck",
+      confirmedRequiresConfirmation: true,
       projectRoot: sourceRoot,
       accessPath: `${sourceRoot}/front.accdb`,
     });
@@ -585,7 +586,7 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
     });
   }
 
-  it("developer mode + confirmPid + writes enabled → cleanup service engaged", async () => {
+  it("developer mode + confirmed pid + writes enabled → cleanup service engaged", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services,
@@ -598,14 +599,16 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
 
     const result = await tool.handler({
       accessPath: "C:/project/app.accdb",
-      confirmPid: 12345,
+      pid: 12345,
+      implements_check: "orphans_msaccess",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(result.isError).toBeFalsy();
     expect(services.orphanCleanupService.cleanupRequests.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("developer mode + no confirmPid → lists orphans (does NOT cleanup)", async () => {
+  it("developer mode + no pid → lists orphans (does NOT cleanup)", async () => {
     // Per-call gating: without confirmPid the tool lists candidates; the
     // policy does NOT bypass the gate. This is the same shape as in
     // safe-by-default mode.
@@ -624,7 +627,7 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
     expect(services.orphanCleanupService.cleanupRequests).toHaveLength(0);
   });
 
-  it("developer mode + confirmPid + writes disabled → MCP_WRITES_DISABLED", async () => {
+  it("developer mode + confirmed pid + writes disabled → MCP_WRITES_DISABLED", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services,
@@ -637,7 +640,9 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
 
     const result = await tool.handler({
       accessPath: "C:/project/app.accdb",
-      confirmPid: 12345,
+      pid: 12345,
+      implements_check: "orphans_msaccess",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(result.isError).toBe(true);
@@ -796,7 +801,7 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
     expect(services.vbaSyncToolService.requests.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("developer mode + test_vba + dryRun:true → plan-shaped success (Bug B #1046 inverts the previous behavior)", async () => {
+  it("developer mode + test_vba + apply:false → plan-shaped success", async () => {
     // Issue #1046 (Bug B) — dryRun:true is now an explicit escape hatch
     // for `test_vba` (matching the docs promise at
     // `assets/examples/test-vba.md:31-35`). The previous behavior (gate
@@ -819,7 +824,7 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
 
     const result = await tool.handler({
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
-      dryRun: true,
+      apply: false,
     });
 
     expect(result.isError).toBeFalsy();

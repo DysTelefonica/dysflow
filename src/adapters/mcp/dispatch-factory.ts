@@ -9,6 +9,7 @@ import { resultContractForDispatchTool } from "./contracts/dispatch-result-contr
 import {
   destinationRootRequired,
   enrichmentForValidationMessage,
+  enforceRequiresConfirmation,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
@@ -216,13 +217,6 @@ export function createDispatchTool(
       // `test/adapters/mcp/import-modules-compile-flag.test.ts`.
       let normalizedInput = stripDeprecatedCompileParams(name, input);
       normalizedInput = normalizeFormSetPropertyInput(name, normalizedInput);
-      if (
-        (name === "fix_encoding" || name === "vba_inline_execution") &&
-        isRecord(normalizedInput) &&
-        normalizedInput.apply === true
-      ) {
-        normalizedInput = { ...normalizedInput, dryRun: false };
-      }
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
         // Issue #1078 / #757 (C4) — `enrichmentForValidationMessage`
@@ -237,6 +231,14 @@ export function createDispatchTool(
         }
         return invalidInput(validation, undefined, { toolName: name });
       }
+      // Slice 3 — unified `requires_confirmation` enforcement. The
+      // helper reads `params.implements_check` + `params.confirmedRequiresConfirmation`,
+      // looks up the matched check's `requires_confirmation` policy,
+      // and either demands the override or returns a typed envelope.
+      // Centralised here so every mutating tool inherits it without
+      // per-handler wiring.
+      const confirmationCheck = enforceRequiresConfirmation(normalizedInput, name);
+      if (confirmationCheck !== undefined) return confirmationCheck;
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
       // caller-supplied payload, untouched by the policy injection) and

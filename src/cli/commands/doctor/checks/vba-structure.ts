@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { DoctorCategoryCheck } from "./types.js";
+import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
 
 const SOURCE_EXTENSIONS = [".bas", ".cls", ".form.txt", ".report.txt"];
 const CODE_EXTENSIONS = [".bas", ".cls"];
@@ -64,6 +64,7 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
           name: "Attribute VB_Name",
           message: `present in all ${files.length} source files`,
           severity: "warning",
+          ...doctorCheckMetadata("attribute_vb_name"),
         }
       : {
           ok: false,
@@ -74,6 +75,7 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
               ", ",
             )}${missingVbName.length > MAX_LISTED_EXAMPLES ? ", …" : ""}) — see the vba-form-metadata-repair guidance`,
           severity: "warning",
+          ...doctorCheckMetadata("attribute_vb_name"),
         },
   );
 
@@ -84,6 +86,7 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
           name: "Option Explicit",
           message: "present in every .bas/.cls module",
           severity: "warning",
+          ...doctorCheckMetadata("option_explicit"),
         }
       : {
           ok: false,
@@ -92,6 +95,7 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
             .slice(0, MAX_LISTED_EXAMPLES)
             .join(", ")}${missingOptionExplicit.length > MAX_LISTED_EXAMPLES ? ", …" : ""})`,
           severity: "warning",
+          ...doctorCheckMetadata("option_explicit"),
         },
   );
 

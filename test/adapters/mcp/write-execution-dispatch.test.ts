@@ -210,7 +210,7 @@ function makeServices() {
 }
 
 describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
-  it("developer + import_modules without flags → vbaSyncToolService receives dryRun:false", async () => {
+  it("developer + import_modules without flags → vbaSyncToolService receives apply:true", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services,
@@ -228,6 +228,7 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
+      apply: true,
       dryRun: false,
       moduleNames: ["Foo"],
     });
@@ -251,12 +252,13 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
+      apply: true,
       dryRun: true,
       moduleNames: ["Foo"],
     });
   });
 
-  it("explicit dryRun:true wins over developer mode (caller intent)", async () => {
+  it("explicit apply:true wins over developer mode (caller intent)", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services,
@@ -270,12 +272,13 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
       moduleNames: ["Foo"],
       projectRoot: "C:/project",
       accessPath: "C:/project/frontend.accdb",
-      dryRun: true,
+      apply: true,
     });
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
-      dryRun: true,
+      apply: true,
+      dryRun: false,
     });
   });
 
@@ -293,6 +296,7 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
+      apply: true,
       dryRun: true,
     });
   });

@@ -75,11 +75,23 @@ export const PROCESS_TIMEOUT_BLOCK = {
   timeoutMs: SCHEMA_PROPS.timeoutMs,
 } as const satisfies Record<string, JsonSchemaProperty>;
 
-/** Issue #1076 — write-intent flags. `apply` is the canonical commit signal; `dryRun` and `diff` are aliases / opt-ins. */
+export const CONFIRMATION_OVERRIDE_BLOCK = {
+  implements_check: {
+    type: "string",
+    description:
+      "Diagnostic check_id implemented by this call. Omit it when no diagnostic check governs the operation.",
+  },
+  confirmedRequiresConfirmation: {
+    type: "boolean",
+    description:
+      "Pass true only after explicit approval when implements_check resolves to requires_confirmation: true.",
+  },
+} as const satisfies Record<string, JsonSchemaProperty>;
+
 export const WRITE_INTENT_BLOCK = {
-  dryRun: SCHEMA_PROPS.dryRun,
   apply: SCHEMA_PROPS.apply,
   diff: SCHEMA_PROPS.diff,
+  ...CONFIRMATION_OVERRIDE_BLOCK,
 } as const satisfies Record<string, JsonSchemaProperty>;
 
 /** Issue #1076 — large-response output mode selector. */

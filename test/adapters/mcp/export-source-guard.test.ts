@@ -13,7 +13,7 @@
  *
  * This is the runtime half of the v2.1.0 README §3b promise that the
  * dispatch layer refuses exports that would overwrite the active source
- * root unless the caller passes `confirmOverwriteSource: true`.
+ * root unless the caller passes `confirmedRequiresConfirmation: true`.
  */
 
 import { describe, expect, it } from "vitest";
@@ -39,7 +39,7 @@ describe("requiresExportSourceConfirmation — truth table (#785, capa 4)", () =
     expect(out?.toolName).toBe("export_modules");
     expect(out?.destination).toBe("C:/Projets/dysflow");
     expect(out?.sourceRoot).toBe("C:/Projets/dysflow");
-    expect(out?.remediation).toContain("confirmOverwriteSource");
+    expect(out?.remediation).toContain("confirmedRequiresConfirmation");
   });
 
   it("developer + export_modules + nested managed folder + no confirmation → refusal", () => {
@@ -66,24 +66,29 @@ describe("requiresExportSourceConfirmation — truth table (#785, capa 4)", () =
     expect(out).toBeUndefined();
   });
 
-  it("developer + export_modules + confirmOverwriteSource: true → no refusal", () => {
+  it("developer + export_modules + confirmedRequiresConfirmation: true → no refusal", () => {
     const out = requiresExportSourceConfirmation(
       "export_modules",
       "developer",
       {
         exportPath: "C:/Projets/dysflow",
-        confirmOverwriteSource: true,
+        implements_check: "export_overwrites_source_precheck",
+        confirmedRequiresConfirmation: true,
       },
       { destination: "C:/Projets/dysflow", sourceRoot: "C:/Projets/dysflow" },
     );
     expect(out).toBeUndefined();
   });
 
-  it("developer + export_all + confirmOverwriteSource: true → no refusal", () => {
+  it("developer + export_all + confirmedRequiresConfirmation: true → no refusal", () => {
     const out = requiresExportSourceConfirmation(
       "export_all",
       "developer",
-      { destinationRoot: "C:/Projets/dysflow", confirmOverwriteSource: true },
+      {
+        destinationRoot: "C:/Projets/dysflow",
+        implements_check: "export_overwrites_source_precheck",
+        confirmedRequiresConfirmation: true,
+      },
       { destination: "C:/Projets/dysflow", sourceRoot: "C:/Projets/dysflow" },
     );
     expect(out).toBeUndefined();
@@ -126,16 +131,16 @@ describe("requiresExportSourceConfirmation — truth table (#785, capa 4)", () =
     expect(out?.code).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
   });
 
-  it("dryRun:true + dangerous destination → refusal (guard fires regardless of dryRun)", () => {
+  it("apply:false + dangerous destination → refusal (guard fires regardless of write intent)", () => {
     // Capa 4 contract: the export-source guard fires at the dispatch
     // boundary whenever the destination overlaps the active source root,
     // regardless of dryRun/apply. The dispatch seam surfaces the refusal
-    // before any plan or commit begins. `confirmOverwriteSource: true`
+    // before any plan or commit begins. `confirmedRequiresConfirmation: true`
     // is the only opt-out.
     const out = requiresExportSourceConfirmation(
       "export_modules",
       "developer",
-      { exportPath: "C:/Projets/dysflow", dryRun: true },
+      { exportPath: "C:/Projets/dysflow", apply: false },
       { destination: "C:/Projets/dysflow", sourceRoot: "C:/Projets/dysflow" },
     );
     expect(out?.code).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
@@ -174,7 +179,7 @@ describe("requiresExportSourceConfirmation — truth table (#785, capa 4)", () =
     expect(out).not.toBeNull();
     expect(out?.code).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(out?.message.toLowerCase()).toContain("export");
-    expect(out?.remediation).toContain("confirmOverwriteSource");
+    expect(out?.remediation).toContain("confirmedRequiresConfirmation");
   });
 });
 
@@ -193,7 +198,7 @@ describe("exportSourceGuardRefused — envelope shape (#785, capa 4)", () => {
     expect(result.error?.code).toBe(EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION);
     expect(result.error?.destination).toBe("C:/Projets/dysflow");
     expect(result.error?.sourceRoot).toBe("C:/Projets/dysflow");
-    expect(result.error?.remediation).toContain("confirmOverwriteSource");
+    expect(result.error?.remediation).toContain("confirmedRequiresConfirmation");
   });
 });
 
@@ -242,7 +247,6 @@ describe("dispatch-factory — export-source guard short-circuit (#785, capa 4)"
       moduleNames: ["Foo"],
       destinationRoot: sourceRoot,
       exportPath: sourceRoot,
-      confirmOverwriteSource: false,
     });
 
     expect(result.isError).toBe(true);
@@ -250,7 +254,7 @@ describe("dispatch-factory — export-source guard short-circuit (#785, capa 4)"
     expect(services.vbaSyncToolService.requests).toHaveLength(0);
   });
 
-  it("developer + export_modules + confirmOverwriteSource:true → executes the runner", async () => {
+  it("developer + export_modules + confirmedRequiresConfirmation:true → executes the runner", async () => {
     const services = makeServices();
     const sourceRoot = "C:/Projets/dysflow";
     const tools = createDysflowMcpTools({
@@ -265,7 +269,8 @@ describe("dispatch-factory — export-source guard short-circuit (#785, capa 4)"
       moduleNames: ["Foo"],
       destinationRoot: sourceRoot,
       exportPath: sourceRoot,
-      confirmOverwriteSource: true,
+      implements_check: "export_overwrites_source_precheck",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(services.vbaSyncToolService.requests.length).toBeGreaterThanOrEqual(1);

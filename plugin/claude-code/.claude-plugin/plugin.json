@@ -1,0 +1,15 @@
+{
+  "name": "dysflow",
+  "description": "Source-binary sync, TDD, and form UI operations on Microsoft Access / VBA projects via the dysflow MCP. Plugin entry point for Claude Code.",
+  "version": "2.31.0",
+  "namespace": "dysflow-plugin",
+  "author": {
+    "name": "Andrés Román (DysTelefonica)"
+  },
+  "homepage": "https://github.com/DysTelefonica/dysflow",
+  "repository": "https://github.com/DysTelefonica/dysflow",
+  "license": "Apache-2.0",
+  "_dysflow_marker": "DO NOT EDIT MANUALLY — this manifest is replaced on plugin update. Use setup.sh to install; Claude Code's plugin loader treats `name` as the namespace.",
+  "_dysflow_owner": "Andrés Román (DysTelefonica)",
+  "_dysflow_collaboration": "Coexists with Gentleman-Programming/engram plugin. Namespace separation: engram owns `engram` name + `~/.engram/`; dysflow owns `dysflow` name + `<worktree>/.dysflow/`. Hooks from both fire independently per Claude Code's per-plugin hook model — no collision at the dispatch layer."
+}

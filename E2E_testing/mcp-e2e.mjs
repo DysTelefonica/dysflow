@@ -364,7 +364,12 @@ await recordContract("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2
 await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"', timeoutMs: 120000 }, { timeoutMs: 120000 });
 await record("operations", "list_access_operations", {});
 await recordContract("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" }, ["recovery"]);
-await record("operations", "access_force_cleanup_orphaned", { projectId, accessPath, confirmPid: 999999 }, { expected: "error" });
+await record("operations", "access_force_cleanup_orphaned", {
+  projectId,
+  accessPath,
+  implements_check: "orphans_msaccess",
+  confirmedRequiresConfirmation: true,
+}, { expected: "ok" });
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
 // Same harness shape as every other tool — record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
@@ -379,7 +384,7 @@ await record("capabilities", "describe_tool", { name: "delete_module" });
 await record("vba", "delete_module", { projectId, module: "DysflowE2ENoSuchModule" }, { expected: "error" });
 // #1057 (F8) — contradictory apply+dryRun is rejected as mutually exclusive
 // at validation, before the write gate.
-await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, dryRun: true }, { expected: "error" });
+await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, diff: true }, { expected: "error" });
 
 // #1212 — release-only friction paths must remain observable in the real
 // stdio transport. Keep every call behind record(): that seam owns the
@@ -398,7 +403,7 @@ const missingParamResult = await record("release-telemetry", "delete_module", { 
 const conflictingFlagsResult = await record(
   "release-telemetry",
   "delete_module",
-  { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, dryRun: true },
+  { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, diff: true },
   { expected: "error" },
 );
 const expectedReleaseErrorsPass =
@@ -570,8 +575,8 @@ await record("query", "get_relationships", { projectId, ...backendTarget });
 await record("query", "compare_backends", { projectId, accessPath, backendPath, comparePath: backendPath });
 await record("query", "list_access_files", { projectId, rootPath: tempRoot });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
-await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], dryRun: false });
-await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, dryRun: true, backupFirst: false });
+await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], apply: true });
+await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, apply: false, backupFirst: false });
 // compact_repair APPLY on the sandbox's password-protected frontend. The source
 // fixture remains untouched, while the configured sandbox target stays inside
 // the write-ready ownership boundary.
@@ -583,26 +588,26 @@ await record("links", "link_tables", {
   backendPath,
   mode: "create-or-relink",
   tableNames: ["TbNoConformidades"],
-  dryRun: false,
+  apply: true,
 });
-await record("links", "relink_tables", { projectId, backendPath, dryRun: false });
-await record("links", "localize_backend_links", { projectId, backendPath, dryRun: false });
+await record("links", "relink_tables", { projectId, backendPath, apply: true });
+await record("links", "localize_backend_links", { projectId, backendPath, apply: true });
 // Remove the deterministic link created above, leaving the disposable frontend
 // in its pre-link state while exercising a real unlink write.
-await record("links", "unlink_table", { projectId, accessPath, tableName: "TbNoConformidades", dryRun: false });
+await record("links", "unlink_table", { projectId, accessPath, tableName: "TbNoConformidades", apply: true });
 await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
 
-await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", dryRun: false });
-await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, dryRun: false, allowTable: probeTable });
-await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, dryRun: false, allowTable: probeTable });
-await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: 3, Name: "seed" }], dryRun: false, allowTable: probeTable });
-await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, dryRun: false, allowTable: probeTable });
-await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, dryRun: false });
+await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", apply: true });
+await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, apply: true, allowTable: probeTable });
+await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, apply: true, allowTable: probeTable });
+await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: 3, Name: "seed" }], apply: true, allowTable: probeTable });
+await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, allowTable: probeTable });
+await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true });
 
 await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });
-await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName] }, {}, ["vba-sync", "file-backed", "plan"]);
-await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, diff: false });
+await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName], destinationRoot }, {}, ["vba-sync", "file-backed", "plan"]);
+await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, destinationRoot, apply: false });
 // export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
@@ -622,8 +627,8 @@ try {
 await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, filter: existingModuleName }, { expected: "error" });
 // feat-759-no-compile (v1.19.0) — `compile` parameter on import_tools
 // is gone. Callers passing it are rejected by Zod additionalProperties:false.
-await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", dryRun: true });
-await record("vba-sync", "import_all", { ...ctx, importMode: "code", dryRun: true });
+await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", apply: false });
+await record("vba-sync", "import_all", { ...ctx, importMode: "code", apply: false });
 // feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool was removed.
 // The mojibake-state pin test was retired; compile is no longer a
 // runtime concern (the human compiles in Access). The fixture binary's
@@ -749,7 +754,7 @@ await record("vba-sync", "fix_encoding", { ...ctx, location: "Src" });
 await record("vba-sync", "generate_erd", { ...ctx, backendPath, erdPath: join(tempRoot, "ERD"), timeoutMs: 120000 });
 
 await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
-await recordContract("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", dryRun: true, replace: true }, {}, ["forms", "plan"]);
+await recordContract("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", apply: false, replace: true }, {}, ["forms", "plan"]);
 await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
 await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
 const missingFormUiTools = [

@@ -176,6 +176,18 @@ export type McpToolError = {
    */
   errorMessage?: string;
   /**
+   * Slice 3 — diagnostic check_id surfaced on
+   * `CONFIRMATION_REQUIRED` / `CONFIRMATION_NOT_NEEDED` envelopes so
+   * AI agents can branch on the offending check without parsing
+   * the human-readable message string. Optional on every other code.
+   */
+  check_id?: string;
+  /**
+   * Slice 3 — stable reason_code emitted by the offending check.
+   * Pairs with `check_id` on the unified diagnostic-envelope surface.
+   */
+  reason_code?: string;
+  /**
    * Round-12 (#972) — issue numbers related to this error code, sourced
    * from the canonical {@link RELATED_ISSUE_NUMBERS} table in
    * `explain-builder.ts`. Consumers can grep these to learn the PR that

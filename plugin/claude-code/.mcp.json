@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "dysflow": {
+      "_dysflow_marker": "Server namespace 'dysflow' is the canonical dysflow-plugin identifier. DO NOT rename without coordinating with the dysflow-plugin installer.",
+      "command": "npx",
+      "args": [
+        "-y",
+        "dysflow",
+        "mcp",
+        "--tools=agent"
+      ]
+    }
+  },
+  "_dysflow_marker_root": "DO NOT EDIT MANUALLY — replaced on plugin update. Coexists with engram's .mcp.json (which declares mcpServers.engram). Two MCP servers — dysflow (per-worktree Access/VBA) + engram (per-user memory) — load side-by-side.",
+  "_dysflow_collaboration_note": "Engram's plugin (Gentleman-Programming/engram) owns the `engram` MCP server and its session lifecycle hooks. Dysflow owns the `dysflow` MCP server and its Access/VBA workflow hooks. The two plugins share the same Claude Code hook events but each plugin's hooks fire under its own namespace."
+}

@@ -16,6 +16,11 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   const applyDryRunConflict = validateApplyDryRunConsistency(params, schema);
   if (applyDryRunConflict !== undefined) return applyDryRunConflict;
 
+  // Slice 3 — same mutual exclusion for `apply + diff`. `diff` is the
+  // v2.x-era alias of `apply: false` and survives the dryRun removal.
+  const applyDiffConflict = validateApplyDiffConsistency(params, schema);
+  if (applyDiffConflict !== undefined) return applyDiffConflict;
+
   if (schema.additionalProperties === false) {
     for (const key of Object.keys(params)) {
       if (schema.properties[key] === undefined)
@@ -273,6 +278,39 @@ function validateApplyDryRunConsistency(
       `Pass only one — apply is the canonical commit signal ` +
       `(apply:true = commit, apply:false = plan); ` +
       `dryRun:true is a deprecated alias of apply:false.`
+    );
+  }
+  return undefined;
+}
+
+/**
+ * Slice 3 — `apply + diff` mutual exclusion.
+ *
+ * `diff: true` is the v2.x-era alias of `apply: false` (#1057 F8). After
+ * the unified-envelope migration (v2.31), `dryRun` is removed but `diff`
+ * remains as a deprecated alias. `apply: true + diff: true` is the same
+ * contradiction as the old `apply: true + dryRun: true`: two different
+ * commit signals colliding.
+ */
+export const APPLY_DIFF_CONTRADICTION_PREFIX =
+  "apply and diff are mutually exclusive" as const;
+
+function validateApplyDiffConsistency(
+  params: Record<string, unknown>,
+  schema: JsonObjectSchema,
+): string | undefined {
+  if (schema.properties.apply === undefined || schema.properties.diff === undefined)
+    return undefined;
+  const apply = params.apply;
+  const diff = params.diff;
+  if (typeof apply !== "boolean" || typeof diff !== "boolean") return undefined;
+  if (apply === diff) {
+    return (
+      `${APPLY_DIFF_CONTRADICTION_PREFIX}: ` +
+      `apply:${apply} contradicts diff:${diff}. ` +
+      `Pass only one — apply is the canonical commit signal ` +
+      `(apply:true = commit, apply:false = plan); ` +
+      `diff:true is a deprecated alias of apply:false.`
     );
   }
   return undefined;

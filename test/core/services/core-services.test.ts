@@ -216,9 +216,27 @@ describe("core services over AccessRunner", () => {
     expect(runner.operations).toEqual([
       { kind: "diagnostics", request: { includeEnvironment: true } },
     ]);
+    // Slice 3 — the service injects the four unified metadata fields
+    // (`check_id`, `reason_code`, `requires_confirmation`, `category`)
+    // on every diagnostic check, with `diagnostics_powershell_router`
+    // as the default `check_id` for PowerShell-routed checks. See
+    // `src/cli/commands/doctor/checks/types.ts` and
+    // `src/core/services/diagnostics-service.ts`.
     expect(result).toEqual({
       ok: true,
-      data: { checks: [{ name: "access-db-path", ok: true, message: "configured" }] },
+      data: {
+        checks: [
+          {
+            name: "access-db-path",
+            ok: true,
+            message: "configured",
+            check_id: "diagnostics_powershell_router",
+            reason_code: "DIAGNOSTICS_PS_ROUTED",
+            requires_confirmation: false,
+            category: "runtimeConsumer",
+          },
+        ],
+      },
       diagnostics: [],
       durationMs: 3,
     });
