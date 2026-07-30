@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { DoctorCategoryCheck } from "./types.js";
+import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
 
 const CODEGRAPH_STALE_MS = 24 * 60 * 60 * 1000;
 
@@ -20,6 +20,7 @@ export function runExternalDepsChecks(cwd: string): DoctorCategoryCheck[] {
           name: ".laccdb locks",
           message: "no orphan .laccdb locks",
           severity: "warning",
+          ...doctorCheckMetadata("lacdb_locks"),
         }
       : {
           ok: false,
@@ -30,6 +31,7 @@ export function runExternalDepsChecks(cwd: string): DoctorCategoryCheck[] {
               ", ",
             )}) — if no Access instance is open, cleanup via list_access_operations → access_force_cleanup_orphaned (never kill MSACCESS.EXE by name)`,
           severity: "warning",
+          ...doctorCheckMetadata("lacdb_locks"),
         },
   );
 
@@ -44,6 +46,7 @@ export function runExternalDepsChecks(cwd: string): DoctorCategoryCheck[] {
         ? `index is ${Math.round((Date.now() - (newest as number)) / (60 * 60 * 1000))}h old — reindex recommended (codegraph index <projectPath>)`
         : "index is fresh (<24h)",
       severity: "warning",
+      ...doctorCheckMetadata("codegraph_freshness"),
     });
   } else {
     checks.push({
@@ -51,6 +54,7 @@ export function runExternalDepsChecks(cwd: string): DoctorCategoryCheck[] {
       name: ".codegraph freshness",
       message: "no .codegraph index in this worktree — check skipped",
       severity: "warning",
+      ...doctorCheckMetadata("codegraph_freshness"),
     });
   }
 

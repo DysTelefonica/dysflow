@@ -20,6 +20,99 @@ import type {
   RequiresConfirmationOverride,
 } from '../../../src/core/contracts/diagnostic-registry.js';
 import type { Remediation } from '../../../src/core/contracts/remediation.js';
+import {
+  DOCTOR_CHECK_METADATA,
+  type DoctorCategoryCheck,
+} from '../../../src/cli/commands/doctor/checks/types.js';
+import { buildDiagnoseChecks } from '../../../src/adapters/mcp/diagnose-tool.js';
+
+describe('DoctorCategoryCheck PR 2 migration', () => {
+  it('keeps the four metadata fields optional for legacy callers', () => {
+    const legacy: DoctorCategoryCheck = {
+      ok: true,
+      name: 'legacy',
+      message: 'still valid',
+      severity: 'warning',
+    };
+    expect(legacy.check_id).toBeUndefined();
+  });
+
+  it('marks exactly six checks as requiring confirmation', () => {
+    expect(
+      DOCTOR_CHECK_METADATA.filter((check) => check.requires_confirmation).map(
+        (check) => check.check_id,
+      ),
+    ).toEqual([
+      'attribute_vb_name',
+      'option_explicit',
+      'lacdb_locks',
+      'stale_markers',
+      'orphans_msaccess',
+      'export_overwrites_source_precheck',
+    ]);
+  });
+
+  it('marks the other twenty checks as advisory', () => {
+    const advisory = DOCTOR_CHECK_METADATA.filter((check) => !check.requires_confirmation);
+    expect(advisory).toHaveLength(20);
+    expect(advisory.every((check) => check.requires_confirmation === false)).toBe(true);
+  });
+
+  it('diagnose checks expose unified metadata while preserving legacy fields', () => {
+    const checks = buildDiagnoseChecks({
+      projectConfig: {
+        status: 'valid',
+        projectId: 'fixture',
+        writeReady: true,
+        diagnostics: [],
+        owningWorktree: 'C:/fixture',
+      },
+      filesystem: {
+        accessPath: {
+          path: 'C:/fixture/frontend.accdb',
+          exists: true,
+          readable: true,
+          sizeBytes: 1,
+          lastModified: '2026-07-30T00:00:00.000Z',
+        },
+        backendPath: { path: null, exists: false, hint: null },
+        destinationRoot: { path: 'C:/fixture/src', exists: true, hint: null },
+        projectRoot: { path: 'C:/fixture', exists: true },
+      },
+      runtime: {
+        staleMarkers: 0,
+        activeOps: 0,
+        orphans: { msaccess: 0, pwshWorkers: 0 },
+        dysflowVersion: 'test',
+        writeExecutionPolicy: 'safe-by-default',
+      },
+    });
+    expect(checks[0]).toEqual(
+      expect.objectContaining({
+        name: expect.any(String),
+        ok: expect.any(Boolean),
+        message: expect.any(String),
+        severity: expect.any(String),
+        check_id: expect.any(String),
+        reason_code: expect.any(String),
+        requires_confirmation: expect.any(Boolean),
+        category: expect.any(String),
+      }),
+    );
+  });
+
+  it('export overlap precheck is pure and has no mutation input', () => {
+    expect(buildDiagnoseChecks.length).toBe(1);
+    const check = DOCTOR_CHECK_METADATA.find(
+      (entry) => entry.check_id === 'export_overwrites_source_precheck',
+    );
+    expect(check).toMatchObject({
+      reason_code: 'DESTINATION_OVERLAPS_SOURCE',
+      requires_confirmation: true,
+      category: 'safety',
+    });
+  });
+});
 
 describe('DiagnosticCheck contract', () => {
   it('exposes the 25 known check_ids as a stable superset (PR 2 closure target)', () => {

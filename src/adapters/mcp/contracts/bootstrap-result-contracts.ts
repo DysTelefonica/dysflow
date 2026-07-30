@@ -86,7 +86,12 @@ export const resolveProjectResultContract = defineResultContract({
 
 export const diagnoseResultContract = defineResultContract({
   schema: z
-    .object({ projectConfig: unknownRecord, filesystem: unknownRecord, runtime: unknownRecord })
+    .object({
+      projectConfig: unknownRecord,
+      filesystem: unknownRecord,
+      runtime: unknownRecord,
+      checks: z.array(unknownRecord),
+    })
     .strict(),
 });
 

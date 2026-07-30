@@ -22,6 +22,12 @@ import {
   type InstructionFileReadPort,
   type SupplementDriftScanResult,
 } from "../../core/services/codegraph-supplement-drift-detector.js";
+import type {
+  CheckId,
+  DiagnosticCategory,
+  ReasonCode,
+} from "../../core/contracts/diagnostic-check.js";
+import { doctorCheckMetadata } from "./doctor/checks/types.js";
 import { getHome } from "./install/agent-config.js";
 
 /**
@@ -67,6 +73,10 @@ export type SupplementDriftDiagnostic = {
    * the `warnOnly` pattern from `opencode-mcp-wiring.ts`.
    */
   warnOnly: boolean;
+  check_id: CheckId;
+  reason_code: ReasonCode;
+  requires_confirmation: boolean;
+  category: DiagnosticCategory;
 };
 
 /**
@@ -151,6 +161,7 @@ export function formatSupplementDriftDiagnostic(
     message,
     result,
     warnOnly: true,
+    ...doctorCheckMetadata("codegraph_supplement_drift"),
   };
 }
 

@@ -1,4 +1,9 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
+import type {
+  CheckId,
+  DiagnosticCategory,
+  ReasonCode,
+} from "../contracts/diagnostic-check.js";
 import type { OperationResult } from "../contracts/index.js";
 import {
   type AccessDiagnosticsRequest,
@@ -11,6 +16,10 @@ export type AccessDiagnosticCheck = {
   name: string;
   ok: boolean;
   message: string;
+  check_id?: CheckId;
+  reason_code?: ReasonCode;
+  requires_confirmation?: boolean;
+  category?: DiagnosticCategory;
 };
 
 export type AccessDiagnosticsResult = {
@@ -38,10 +47,23 @@ export class AccessDiagnosticsService {
       { kind: "diagnostics", request },
       this.config,
     );
-    return ensureResultShape(result, (d) => {
+    const shaped = ensureResultShape(result, (d) => {
       if (!isRecord(d)) return false;
       const checks = (d as Record<string, unknown>).checks;
       return checks === undefined || Array.isArray(checks);
     });
+    if (!shaped.ok) return shaped;
+    return {
+      ...shaped,
+      data: {
+        checks: shaped.data.checks.map((check) => ({
+          ...check,
+          check_id: check.check_id ?? "diagnostics_powershell_router",
+          reason_code: check.reason_code ?? "DIAGNOSTICS_PS_ROUTED",
+          requires_confirmation: check.requires_confirmation ?? false,
+          category: check.category ?? "runtimeConsumer",
+        })),
+      },
+    };
   }
 }

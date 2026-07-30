@@ -9,6 +9,13 @@
  *   the process exit code.
  */
 
+import type {
+  CheckId,
+  DiagnosticCategory,
+  ReasonCode,
+} from "../../core/contracts/diagnostic-check.js";
+import { doctorCheckMetadata } from "./doctor/checks/types.js";
+
 /** Subset of an OpenCode config relevant to MCP wiring. */
 type OpencodeConfig = {
   mcp?: Record<string, { command?: unknown }>;
@@ -23,6 +30,10 @@ export type McpWiringCheck = {
   ok: boolean;
   message: string;
   warnOnly: boolean;
+  check_id: CheckId;
+  reason_code: ReasonCode;
+  requires_confirmation: boolean;
+  category: DiagnosticCategory;
 };
 
 export type OpencodeMcpWiringOptions = {
@@ -138,6 +149,7 @@ export async function checkOpencodeWiring(
       ok: false,
       message: `OpenCode dysflow MCP command points to a missing file: "${entrypoint}" (from ${sourceFile})`,
       warnOnly: true,
+      ...doctorCheckMetadata("opencode_mcp_wiring"),
     };
   }
 
@@ -157,7 +169,8 @@ export async function checkOpencodeWiring(
           `Global config (${globalConfigPath}) expected: ${globalDesc}. ` +
           `Project-local config (${projectConfigPath}) found: ${localDesc}. ` +
           `Align the local command to the global, or remove the command override and keep only project-specific env.`,
-        warnOnly: true,
+warnOnly: true,
+        ...doctorCheckMetadata("opencode_mcp_wiring"),
       };
     }
   }
