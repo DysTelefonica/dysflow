@@ -290,6 +290,7 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
     },
     rules: {
       type: "array",
+      default: [],
       description:
         "Optional rule filter. Omit to run all rules. An empty array produces a clean report (no rules applied). Unknown rule names are rejected by schema validation. Supported rules: option-declaration, identifier-safety, declaration-order, arg-type-match, forbidden-name, logical-short-circuit, implicit-variant, missing-exit-handler, invalid-static-class-call, openargs-contract-mismatch. " +
         "Rule limitations: arg-type-match checks same-module signatures only and detects clear literal-argument / declared-type mismatches. forbidden-name (F22) flags identifiers that shadow VBA / Access / DAO / Scripting globals (Err, Date, Name, Form, DoCmd, etc.). logical-short-circuit flags And/Or operations on the same object combining existence check and member access. implicit-variant flags multiple declarations on a single line missing explicit As clause. missing-exit-handler flags missing Exit Sub/Function/Property before error label. invalid-static-class-call flags static-style calls on non-predeclared class modules. " +

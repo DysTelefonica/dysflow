@@ -424,36 +424,43 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // ignored (defaults preserve the current behavior).
       sourceDir: {
         type: "string",
+        default: "",
         description:
           "Issue #807 (Feature 2) — source directory root to bulk-import. Default: project's destinationRoot from .dysflow/project.json. When set AND moduleNames is empty/omitted, the adapter walks this directory. Mutually exclusive with explicit moduleNames — passing a non-empty moduleNames array forces the legacy single-call path.",
       },
       recursive: {
         type: "boolean",
+        default: true,
         description:
           "Issue #807 (Feature 2) — walk subdirectories of sourceDir. Default true. When false, only the top-level of sourceDir is scanned.",
       },
       filePattern: {
         type: "string",
+        default: "*",
         description:
           "Issue #807 (Feature 2) — glob-style filename pattern (e.g. 'Test_*' to limit to test modules). Single `*` wildcard at either end. Default '*' (every managed extension).",
       },
       includeTests: {
         type: "boolean",
+        default: true,
         description:
           "Issue #807 (Feature 2) — include Test_*.bas files in the bulk walk. Default true. Set false when you want to ship a release without re-importing the test suite.",
       },
       includeForms: {
         type: "boolean",
+        default: true,
         description:
           "Issue #807 (Feature 2) — include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt files. Default true. Set false for code-only bulk imports.",
       },
       chunkSize: {
         type: "number",
+        default: 10,
         description:
           "Issue #807 (Feature 2) — modules per chunk when sourceDir is set. Default 10. The bulk path NEVER forwards more than this many modules per sub-call to the runner, so a single chunk failure (e.g. a corrupt .bas) cannot abort the entire batch.",
       },
       onChunkError: {
         type: "string",
+        default: "continue",
         enum: ["continue", "abort"],
         description:
           "Issue #807 (Feature 2) — behavior when a chunk fails. continue (default) records chunk-level errors in chunkFailures[] and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.",
@@ -590,16 +597,19 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // final result.
       chunkSize: {
         type: "number",
+        default: 25,
         description:
           "Issue #807 (Feature 3) — modules per internal chunk. Default 25. When moduleNames.length <= chunkSize (or chunkSize is omitted), the call falls back to the legacy single round-trip; otherwise the list is sliced into chunks, each chunk is a fresh verify sub-call, and the merged result includes every chunk's matched / different / missing entries plus chunkFailures[].",
       },
       parallelChunks: {
         type: "number",
+        default: 2,
         description:
           "Issue #807 (Feature 3) — concurrent chunks. Default 2 (bounded). Range 1..8 — higher values risk Access COM contention on a single .accdb. The chunked path uses this to drive Promise.all-of-chunks; the legacy path ignores it.",
       },
       onChunkTimeout: {
         type: "string",
+        default: "retry",
         enum: ["retry", "skip", "fail"],
         description:
           "Issue #807 (Feature 3) - per-chunk timeout behavior. retry (default) re-runs the chunk ONCE before giving up. skip records the chunk's modules as chunkTimedOut in the final result. fail propagates the chunk's timeout as the call-level error.",
@@ -662,16 +672,19 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       },
       recursive: {
         type: "boolean",
+        default: true,
         description:
           "Issue #809 - when true (default), sync_binary walks subdirectories of directoryPath. Mirrors import_modules.recursive (#807).",
       },
       includeTests: {
         type: "boolean",
+        default: true,
         description:
           "Issue #809 - include Test_*.bas files when resolving the scope from directoryPath. Default true.",
       },
       includeForms: {
         type: "boolean",
+        default: true,
         description:
           "Issue #809 - include Form_*.cls / Form_*.form.txt / Report_*.cls / Report_*.report.txt when resolving the scope from directoryPath. Default true.",
       },
@@ -681,12 +694,14 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // (binary ahead). both (default) is the union.
       direction: {
         type: "string",
+        default: "both",
         enum: ["src-to-binary", "binary-to-src", "both"],
         description:
           "Issue #809 - sync direction. src-to-binary maps to import_modules on the listed names. binary-to-src maps to export_modules on the listed names. both (default) is the union and emits a single recommendation.",
       },
       acceptBothChanged: {
         type: "boolean",
+        default: false,
         description:
           "Issue #1065 - explicit escape valve for a bothChanged conflict. With a one-way direction and apply:true, routes each conflict through that direction. Default false; direction:'both' never auto-resolves conflicts.",
       },
@@ -726,6 +741,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // long lists of safe modules.
       batchSize: {
         type: "number",
+        default: 10,
         minimum: 1,
         maximum: 200,
         description:
@@ -733,6 +749,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       },
       onChunkError: {
         type: "string",
+        default: "continue",
         enum: ["continue", "abort"],
         description:
           "Issue #809 - chunk failure behavior. continue (default) records chunk-level errors and proceeds with the next chunk. abort stops after the first failed chunk and surfaces the partial result.",

@@ -274,6 +274,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       // backward-compatible default (never creates a missing link).
       mode: {
         type: "string",
+        default: "relink-only",
         enum: ["relink-only", "create-or-relink"],
         description:
           "relink-only (default): refresh/re-point existing links only. create-or-relink: also create a linked TableDef for each requested backend table missing from the frontend.",

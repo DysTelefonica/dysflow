@@ -178,6 +178,9 @@ export type ToolFieldShape = {
 export type ToolErrorEnvelopeShape = {
   code: { type: "string" };
   message: { type: "string" };
+  rejectedFlag?: { type: "string"; optional: true };
+  rejectedFlags?: { type: "array"; optional: true; items: { type: "string" } };
+  toolCommitFlag?: { type: "string"; optional: true };
   remediation?: { type: "string"; optional: true };
 };
 
@@ -334,7 +337,7 @@ export type CompactToolSchema = {
   access: McpToolAccess;
   agentWorkflow: AgentWorkflowMetadata;
   requiredParameters: string[];
-  requiredParameterGroups: SchemaCompositionConstraint[];
+  requiredParameterGroups: readonly (readonly string[])[];
   defaults: Record<string, unknown>;
   writeIntent: CompactToolWriteIntent | null;
   primaryResult: CompactToolPrimaryResult;
@@ -703,7 +706,7 @@ function parameterFromJsonSchema(
     result.enumValues = (property?.enum ?? []).map((value) => String(value));
   }
   if (property?.default !== undefined) {
-    result.default = property.default;
+    result.default = property.default === "runtime-defined" ? null : property.default;
   }
   // Tiny accommodation for tool-specific naming (`dryRun`/`apply` live
   // under the inputSchema; the `name` argument documents them too).
@@ -740,7 +743,7 @@ function defaultFromDescription(parameter: ToolParameterSchema): unknown {
     /\bdefault(?:s|ed)?(?:\s+value)?(?:\s+is|\s+to)?\s+[`'"]?([^.;,`'"]+)/i,
   )?.[1];
   const raw = (quoted ?? stated)?.trim();
-  if (raw === undefined || raw.length === 0) return "runtime-defined";
+  if (raw === undefined || raw.length === 0) return undefined;
   if (parameter.type === "boolean") {
     if (/^true\b/i.test(raw)) return true;
     if (/^false\b/i.test(raw)) return false;
@@ -758,8 +761,8 @@ function canonicalNameFromDescription(
   parameters: Record<string, ToolParameterSchema>,
 ): string | undefined {
   const explicit =
-    description.match(/\balias\s+(?:of|for)\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1] ??
-    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]?([A-Za-z][A-Za-z0-9]*)/i)?.[1];
+    description.match(/\balias\s+(?:of|for)\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1] ??
+    description.match(/\b[A-Za-z]+\s+alias\s+for\s+[`'"]([A-Za-z][A-Za-z0-9]*)[`'"]/i)?.[1];
   if (explicit !== undefined) return explicit;
   const candidates: Record<string, readonly string[]> = {
     path: ["sourcePath", "testsPath", "exportPath", "importPath", "directoryPath", "databasePath"],
@@ -780,17 +783,25 @@ function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): v
   for (const [name, parameter] of Object.entries(parameters)) {
     if (parameter.default === undefined) {
       const inferredDefault = defaultFromDescription(parameter);
-      if (inferredDefault !== undefined) parameter.default = inferredDefault;
+      if (inferredDefault !== undefined) {
+        parameter.default = inferredDefault === "runtime-defined" ? null : inferredDefault;
+      }
+    } else if (parameter.default === "runtime-defined") {
+      parameter.default = null;
     }
     if (!/\balias(?:es)?\b/i.test(parameter.description) || parameter.canonicalName !== undefined) {
       continue;
     }
-    parameter.canonicalName =
-      canonicalNameFromDescription(name, parameter.description, parameters) ?? name;
+    const candidate = canonicalNameFromDescription(name, parameter.description, parameters);
+    if (candidate === undefined) continue;
+    parameter.canonicalName = candidate;
     parameter.precedence = parameter.canonicalName === name ? "canonical" : "deprecated";
     if (parameter.canonicalName !== name) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
+    } else {
+      delete parameter.deprecated;
+      delete parameter.deprecatedSince;
     }
   }
 
@@ -899,7 +910,11 @@ function enrichParameterMetadata(
   applyExplicitAliasMigrations(toolName, parameters);
 
   for (const [name, parameter] of Object.entries(parameters)) {
-    if (/password|secret|token/i.test(name)) parameter.sensitive = true;
+    if (/password|secret|credential|apiKey|authToken/i.test(name) || /^token$/i.test(name)) {
+      parameter.sensitive = true;
+    } else {
+      delete parameter.sensitive;
+    }
   }
 
   const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
@@ -913,7 +928,7 @@ function enrichParameterMetadata(
       parameter.precedence = "canonical";
       continue;
     }
-    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "alias";
+    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "deprecated";
     if (legacyAliases.has(flag)) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
@@ -1191,7 +1206,6 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
   );
   const primaryResult = primaryResultForTool(tool);
   const commitMetadata = commitFlagMetadataForOrNoop(tool.name);
-
   return {
     name: tool.name,
     purpose: tool.useCases[0] ?? primaryResult.summary,
@@ -1204,7 +1218,12 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
       .filter(([, parameter]) => parameter.required)
       .map(([name]) => name)
       .sort(),
-    requiredParameterGroups: [...tool.compositionConstraints],
+    requiredParameterGroups:
+      tool.compositionConstraints.length > 0
+        ? tool.compositionConstraints.flatMap((group) =>
+            group.alternatives.map((alt) => [...alt.parameters]),
+          )
+        : (tool.inputSchema.anyOf ?? []).map((alternative) => [...(alternative.required ?? [])]),
     defaults,
     writeIntent:
       tool.access === "read-only"

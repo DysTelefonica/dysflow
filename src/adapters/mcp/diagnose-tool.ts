@@ -294,6 +294,7 @@ export const DIAGNOSE_INPUT_SCHEMA = {
     accessPath: SCHEMA_PROPS.accessPath,
     verbose: {
       type: "boolean",
+      default: false,
       description:
         "When true, the runtime block surfaces the active staleMarker threshold and an extended orphans enumeration. Reserved for v2.16.x; currently always reports the default.",
     },
