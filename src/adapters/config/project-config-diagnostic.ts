@@ -341,7 +341,21 @@ export function diagnoseProjectConfig(
     typeof parsed[key] === "string" && parsed[key]
       ? normalize(resolve(projectRootNative, parsed[key] as string))
       : null;
-  const projectId = typeof parsed.id === "string" && parsed.id ? parsed.id : null;
+  const projectId =
+    typeof parsed.id === "string" && parsed.id
+      ? parsed.id
+      : typeof parsed.projectId === "string" && parsed.projectId
+        ? parsed.projectId
+        : null;
+  if (projectId !== null && parsed.id === undefined && parsed.projectId !== undefined) {
+    warnings.push({
+      code: "MIGRATE_LEGACY_PROJECT_ID",
+      severity: "warning",
+      message:
+        `Project config uses legacy \`projectId\` key. Rename to canonical \`id\` to silence this warning. ` +
+        `Run \`dysflow migrate-project-config --cwd ${cwd}\` to apply the rename automatically.`,
+    });
+  }
   const configuredFrontend =
     typeof parsed.frontendFile === "string" && parsed.frontendFile
       ? parsed.frontendFile
