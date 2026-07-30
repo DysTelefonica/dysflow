@@ -69,4 +69,24 @@ describe("get_capabilities — canonicalCommitFlag + legacyAliases (#1057 F7)", 
     expect(tools.delete_module?.noWriteAlias).toBe("dryRun");
     expect(tools.delete_module?.defaultBehavior).toBe("noop");
   });
+
+  it("publishes concrete v2.31 migration examples for every removed escape hatch", () => {
+    expect(snapshot().migrationNotes).toMatchObject({
+      dryRun: {
+        replacement: "apply: false",
+        example: { before: { dryRun: true }, after: { apply: false } },
+      },
+      confirm: {
+        replacement: "confirmedRequiresConfirmation: true",
+      },
+      confirmOverwriteSource: {
+        replacement: "confirmedRequiresConfirmation: true",
+        implements_check: "export_overwrites_source_precheck",
+      },
+      confirmPid: {
+        replacement: "confirmedRequiresConfirmation: true",
+        implements_check: "orphans_msaccess",
+      },
+    });
+  });
 });
