@@ -53,10 +53,12 @@ export class AccessDiagnosticsService {
       return checks === undefined || Array.isArray(checks);
     });
     if (!shaped.ok) return shaped;
+    const incomingChecks = isRecord(shaped.data) ? shaped.data.checks : undefined;
+    const checksArray = Array.isArray(incomingChecks) ? incomingChecks : [];
     return {
       ...shaped,
       data: {
-        checks: shaped.data.checks.map((check) => ({
+        checks: checksArray.map((check) => ({
           ...check,
           check_id: check.check_id ?? "diagnostics_powershell_router",
           reason_code: check.reason_code ?? "DIAGNOSTICS_PS_ROUTED",
