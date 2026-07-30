@@ -163,7 +163,11 @@ describe("schema compact and full introspection views (#1079)", () => {
           .map(([name]) => name)
           .sort(),
       );
-      expect(tool.requiredParameterGroups).toEqual(source.compositionConstraints);
+      expect(tool.requiredParameterGroups).toEqual(
+        source.compositionConstraints.flatMap((group) =>
+          group.alternatives.map((alt) => [...alt.parameters]),
+        ),
+      );
       expect(tool.defaults).toEqual(defaultsFrom(source));
       expect(tool.primaryResult.kind).toBe(source.resultContract.kind);
       expect(tool.recommendations.useCases).toEqual(source.useCases);

@@ -102,13 +102,10 @@ describe("MCP metadata normalization for issue #1230", () => {
     for (const compactTool of compact.tools) {
       const fullTool = fullByName.get(compactTool.name);
       if (fullTool === undefined) throw new Error(`Missing full tool ${compactTool.name}`);
-      const expected: string[][] = (fullTool.inputSchema.anyOf ?? []).map((alternative) =>
-        [...(alternative.required ?? [])].sort(),
-      );
-      const actual: string[][] = compactTool.requiredParameterGroups.flatMap((group) =>
-        group.alternatives.map((alt) => [...alt.parameters].sort()),
-      );
-      expect(actual, compactTool.name).toEqual(expected);
+      const expected: string[][] = (fullTool.inputSchema.anyOf ?? []).map((alternative) => [
+        ...(alternative.required ?? []),
+      ]);
+      expect(compactTool.requiredParameterGroups, compactTool.name).toEqual(expected);
     }
   });
 

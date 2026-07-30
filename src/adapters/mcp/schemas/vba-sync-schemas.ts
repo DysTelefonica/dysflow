@@ -597,11 +597,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // final result.
       chunkSize: {
         type: "number",
+        default: 25,
         description:
           "Issue #807 (Feature 3) — modules per internal chunk. Default 25. When moduleNames.length <= chunkSize (or chunkSize is omitted), the call falls back to the legacy single round-trip; otherwise the list is sliced into chunks, each chunk is a fresh verify sub-call, and the merged result includes every chunk's matched / different / missing entries plus chunkFailures[].",
       },
       parallelChunks: {
         type: "number",
+        default: 2,
         description:
           "Issue #807 (Feature 3) — concurrent chunks. Default 2 (bounded). Range 1..8 — higher values risk Access COM contention on a single .accdb. The chunked path uses this to drive Promise.all-of-chunks; the legacy path ignores it.",
       },

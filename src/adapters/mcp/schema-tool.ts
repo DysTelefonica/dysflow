@@ -337,7 +337,7 @@ export type CompactToolSchema = {
   access: McpToolAccess;
   agentWorkflow: AgentWorkflowMetadata;
   requiredParameters: string[];
-  requiredParameterGroups: SchemaCompositionConstraint[];
+  requiredParameterGroups: readonly (readonly string[])[];
   defaults: Record<string, unknown>;
   writeIntent: CompactToolWriteIntent | null;
   primaryResult: CompactToolPrimaryResult;
@@ -706,7 +706,7 @@ function parameterFromJsonSchema(
     result.enumValues = (property?.enum ?? []).map((value) => String(value));
   }
   if (property?.default !== undefined) {
-    result.default = property.default;
+    result.default = property.default === "runtime-defined" ? null : property.default;
   }
   // Tiny accommodation for tool-specific naming (`dryRun`/`apply` live
   // under the inputSchema; the `name` argument documents them too).
@@ -783,7 +783,11 @@ function enrichProseMetadata(parameters: Record<string, ToolParameterSchema>): v
   for (const [name, parameter] of Object.entries(parameters)) {
     if (parameter.default === undefined) {
       const inferredDefault = defaultFromDescription(parameter);
-      if (inferredDefault !== undefined) parameter.default = inferredDefault;
+      if (inferredDefault !== undefined) {
+        parameter.default = inferredDefault === "runtime-defined" ? null : inferredDefault;
+      }
+    } else if (parameter.default === "runtime-defined") {
+      parameter.default = null;
     }
     if (!/\balias(?:es)?\b/i.test(parameter.description) || parameter.canonicalName !== undefined) {
       continue;
@@ -1202,7 +1206,6 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
   );
   const primaryResult = primaryResultForTool(tool);
   const commitMetadata = commitFlagMetadataForOrNoop(tool.name);
-
   return {
     name: tool.name,
     purpose: tool.useCases[0] ?? primaryResult.summary,
@@ -1217,13 +1220,12 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
       .sort(),
     requiredParameterGroups:
       tool.compositionConstraints.length > 0
-        ? [...tool.compositionConstraints]
-        : ((tool.inputSchema.anyOf ?? []).map((alternative) => ({
-            kind: "anyOf" as const,
-            alternatives: (alternative.required ?? []).map((parameter) => ({
-              parameters: [parameter],
-            })),
-          })) as SchemaCompositionConstraint[]),
+        ? tool.compositionConstraints.flatMap((group) =>
+            group.alternatives.map((alt) => [...alt.parameters]),
+          )
+        : ((tool.inputSchema.anyOf ?? []).map((alternative) =>
+            [...(alternative.required ?? [])],
+          )),
     defaults,
     writeIntent:
       tool.access === "read-only"
