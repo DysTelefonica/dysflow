@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute, win32 } from "node:path";
 import type {
   AccessProcessOwnership,
   PowerShellExecutionResult,
@@ -43,6 +45,58 @@ const KILL_TREE_BOUND_MS = 3_000;
 const ACCESS_PROCESS_MARKER = "DYSFLOW_ACCESS_PROCESS ";
 const PROGRESS_MARKER = "DYSFLOW_PROGRESS ";
 
+type PowerShellExecutableResolutionOptions = {
+  platform?: NodeJS.Platform;
+  env?: Record<string, string | undefined>;
+  exists?: (path: string) => boolean;
+};
+
+/**
+ * Resolves the Windows PowerShell worker without relying on the long-lived
+ * host process PATH. Absolute caller commands remain authoritative; custom
+ * relative commands retain their historical PATH-based behavior.
+ */
+export function resolvePowerShellExecutable(
+  command: string | undefined,
+  options: PowerShellExecutableResolutionOptions = {},
+): string | undefined {
+  const platform = options.platform ?? process.platform;
+  const requested = command ?? (platform === "win32" ? "powershell.exe" : "pwsh");
+  if (platform !== "win32") return requested;
+
+  const exists = options.exists ?? existsSync;
+  if (isAbsolute(requested)) return exists(requested) ? requested : undefined;
+
+  const normalized = requested.toLowerCase();
+  if (
+    normalized !== "powershell" &&
+    normalized !== "powershell.exe" &&
+    normalized !== "pwsh" &&
+    normalized !== "pwsh.exe"
+  ) {
+    return requested;
+  }
+
+  const env = options.env ?? (process.env as Record<string, string | undefined>);
+  const systemRoot = env.SystemRoot ?? env.SYSTEMROOT ?? env.windir;
+  const programFiles = env.ProgramFiles ?? env.ProgramW6432 ?? env.PROGRAMFILES;
+  const windowsPowerShell =
+    systemRoot === undefined
+      ? undefined
+      : win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const pwsh =
+    programFiles === undefined
+      ? undefined
+      : win32.join(programFiles, "PowerShell", "7", "pwsh.exe");
+  const candidates =
+    normalized === "pwsh" || normalized === "pwsh.exe"
+      ? [pwsh, windowsPowerShell]
+      : [windowsPowerShell, pwsh];
+  return candidates.find(
+    (candidate): candidate is string => candidate !== undefined && exists(candidate),
+  );
+}
+
 async function killProcessTree(pid: number): Promise<void> {
   const taskkill = spawn("taskkill", ["/T", "/F", "/PID", String(pid)], {
     stdio: "ignore",
@@ -64,6 +118,8 @@ async function killProcessTree(pid: number): Promise<void> {
 export const POWERSHELL_SYSTEM_ENV_KEYS = [
   "SystemRoot",
   "windir",
+  "ProgramFiles",
+  "ProgramW6432",
   "PATH",
   "PATHEXT",
   "TEMP",
@@ -96,14 +152,25 @@ export function spawnPowerShellProcess(
   options: PowerShellProcessOptions,
 ): Promise<PowerShellProcessResult> {
   const startedAt = Date.now();
+  const childEnv = buildChildEnv(options.env);
+  const resolvedCommand = resolvePowerShellExecutable(options.command, { env: childEnv });
+  if (resolvedCommand === undefined) {
+    return Promise.resolve({
+      exitCode: null,
+      stdout: "",
+      stderr: "No compatible PowerShell executable was found.",
+      durationMs: Date.now() - startedAt,
+      timedOut: false,
+      aborted: false,
+      spawnError: "No compatible PowerShell executable was found.",
+    });
+  }
   return new Promise((resolve) => {
-    const resolvedCommand =
-      options.command === "powershell.exe" || !options.command ? POWERSHELL_EXE : options.command;
     const child = spawn(resolvedCommand, options.args, {
       shell: false,
       windowsHide: true,
       cwd: options.cwd,
-      env: buildChildEnv(options.env),
+      env: childEnv,
     });
     let stdout = "";
     let stderr = "";

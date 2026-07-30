@@ -52,6 +52,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve an absolute compatible PowerShell executable when the MCP host PATH is degraded, and retry Windows `EBUSY`/`EPERM` cleanup for disposable export databases (#1233).
+
 ## [v2.26.0] - 2026-07-27
 
 ### Closed issues
