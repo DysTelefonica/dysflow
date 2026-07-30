@@ -606,8 +606,8 @@ await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableNa
 
 await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });
-await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName] }, {}, ["vba-sync", "file-backed", "plan"]);
-await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, diff: false });
+await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName], destinationRoot }, {}, ["vba-sync", "file-backed", "plan"]);
+await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, destinationRoot, apply: false });
 // export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
