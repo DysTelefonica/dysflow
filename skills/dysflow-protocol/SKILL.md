@@ -191,7 +191,81 @@ dysflow does NOT spawn sub-agents. You call tools directly. If isolation is need
 
 For repo maps, architecture, call flow, dependencies, symbol references, impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration. Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project folders.
 
-## 11. Version + authorship
+## 11. Worktree workflow (canonical)
+
+**Worktrees are the primary friction surface for dysflow.** `git worktree add ../new-wt` does NOT copy `.dysflow/` into the new worktree. Without explicit setup, every mutating call returns `CONFIG_MISSING_ACCESS_PATH` and the agent has to invent a config from scratch. The canonical workflow eliminates that:
+
+### A. The happy path (post-hook-install)
+
+After `dysflow setup` has been run **once** in the main repo (which installs the `post-worktree` git hook — see `dysflow setup --install-hooks`), every subsequent worktree bootstrap is automatic:
+
+1. **Create the worktree** the standard way:
+   ```
+   git worktree add ../repo-feature-x main
+   ```
+2. **Navigate** to the new worktree:
+   ```
+   cd ../repo-feature-x
+   ```
+3. **Use dysflow normally.** The `post-worktree` hook fired on `git worktree add`, copied `.dysflow/project.json` from the parent worktree, minted a fresh `id` (UUID v7), and the runtime is ready.
+
+No `dysflow setup` re-run. No `git mv` of `.dysflow/`. No manual `projectId` minting. The agent does not have to invent anything.
+
+### B. What the hook does (post-worktree git hook)
+
+When `git worktree add <new-path> [<commitish>]` runs, git invokes `.git/hooks/post-worktree <new-path>` (per `man githooks`). The hook, installed by `dysflow setup --install-hooks`:
+
+1. Reads `<new-path>` from `$1` (git's first arg).
+2. Walks to the parent's worktree toplevel (the one that issued the `add`) and reads its `.dysflow/project.json`.
+3. Deep-copies the parent's `.dysflow/project.json` verbatim — same `accessPath`, same `backendPath`, same `capabilities`, same `dryRun` policy.
+4. **Mints a fresh `id`** (UUID v7 — sortable, collision-safe) for the new worktree so `discoveredProjects[]` distinguishes siblings.
+5. Writes the new `.dysflow/project.json` to `<new-path>/.dysflow/`.
+
+Both worktrees share the SAME `.accdb` (the `accessPath` is intentionally NOT changed). What differs across worktrees: `id`, `projectRoot`, `cwd` resolution at runtime, and `destinationRoot` (the worktree's own `src/`).
+
+### C. Manual fallback (when the hook is NOT installed)
+
+When `dysflow setup --install-hooks` was never run, or when the agent is on a CI runner without git hooks enabled, the agent MUST bootstrap manually:
+
+1. **Detect the missing config.** Call `get_capabilities({})`. It surfaces `projectConfig.status: "missing"` and a `remediation` field with the exact command.
+2. **Read the parent's config** (any sibling worktree's `.dysflow/project.json`) to learn the `accessPath`.
+3. **Run the suggested command**:
+   ```
+   dysflow setup --cwd <new-worktree-path> --apply --access-path <parent-access-path>
+   ```
+   Use the SAME `accessPath` as the parent. The `id` is auto-minted.
+4. **Verify** with `state({})`: `projectConfig.status` should be `valid` and `writeReady: true`.
+
+### D. Recovery
+
+If a worktree's `.dysflow/project.json` becomes corrupt, stale, or missing entirely:
+
+| Symptom | Recovery |
+|---|---|
+| `projectConfig.status: "missing"` | Run the manual fallback command (C.3). |
+| `projectConfig.status: "outside-project-root"` | The `.dysflow/` is in a directory git does not consider the worktree toplevel. Move it. |
+| `PROJECT_ID_COLLISION` (multiple worktrees share the same `id`) | Manually edit one worktree's `.dysflow/project.json#id` to a fresh UUID v7. Re-run `get_capabilities` to confirm. |
+| `INHERITED_WORKTREE_MISMATCH` | A child worktree inherited config from a parent that's been deleted. Delete the child worktree and re-create with the hook installed. |
+| `CWD_NOT_IN_WORKTREE` | The process cwd is outside any git worktree (e.g., a temp dir). Pass `cwd` or `projectId` explicitly per call. |
+
+### E. Anti-patterns
+
+- **AP-15** — copy `.dysflow/project.json` from a sibling by hand. Don't — the hook does it deterministically with a fresh UUID v7. Manual copying risks stale `id` collisions in `discoveredProjects[]`.
+- **AP-16** — run `dysflow setup --access-path <different-path>` per worktree. Don't — worktrees share the SAME `.accdb` on purpose. Splitting the binary per worktree breaks `compare_backends`, drift detection, and `humanCompilePending` continuity (the human compiles once for the binary; both worktrees see the same compile state).
+- **AP-17** — commit `.dysflow/project.json` to git. Don't — `.dysflow/` is gitignored. Each worktree mints its own config at bootstrap time.
+- **AP-18** — invoke `.git/hooks/post-worktree` manually outside of `git worktree add`. Don't — git only invokes hooks under specific commands; manual invocation skips the `gitdir` discovery that the hook relies on.
+
+### F. Detection (does the hook exist?)
+
+If unsure whether the hook is installed, the agent can ask:
+
+```sh
+test -x .git/hooks/post-worktree && echo "installed" || echo "missing"
+```
+
+If `missing`, run `dysflow setup --install-hooks` once. The hook lands at `.git/hooks/post-worktree` and persists across worktree additions until someone deletes the hooks directory.
+
+## 12. Version + authorship
 
 - dysflow-protocol v1.0.0 — initial release aligned with v2.31.0.
 - Requires dysflow MCP >= 2.31.
