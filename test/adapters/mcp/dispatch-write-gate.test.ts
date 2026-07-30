@@ -143,18 +143,18 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
   it.each([
     "fix_encoding",
     "vba_inline_execution",
-  ] as const)("allows %s dryRun:true through public dispatch with writes disabled", async (name) => {
+  ] as const)("allows %s apply:false preview through public dispatch with writes disabled", async (name) => {
     const { tool, vbaSyncToolService } = toolByName(name, false);
     const input =
       name === "fix_encoding"
-        ? { location: "module", dryRun: true }
-        : { code: 'result = "OK"', dryRun: true };
+        ? { location: "module", apply: false }
+        : { code: 'result = "OK"', apply: false };
 
     const result = await tool.handler(input);
 
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
-    expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ dryRun: true })]);
+    expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ apply: false })]);
   });
 
   it.each([
@@ -171,16 +171,14 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
       const result = await tool.handler(input);
 
       expect(result.isError).toBe(false);
-      expect(vbaSyncToolService.requests).toEqual([
-        expect.objectContaining({ dryRun: true, ...intent }),
-      ]);
+      expect(vbaSyncToolService.requests).toEqual([expect.objectContaining(intent)]);
     }
   });
 
   it.each([
     "fix_encoding",
     "vba_inline_execution",
-  ] as const)("lets apply:true override dryRun:true for %s at public dispatch", async (name) => {
+  ] as const)("rejects removed dryRun even when apply:true is present for %s", async (name) => {
     const { tool, vbaSyncToolService } = toolByName(name, true);
     const input =
       name === "fix_encoding"
@@ -189,11 +187,13 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
 
     const result = await tool.handler(input);
 
-    expect(result.isError).toBe(false);
-    expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ apply: true })]);
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
+    expect(result.content[0]?.text).toContain("dryRun is not allowed");
+    expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("blocks generate_form when writes are disabled", async () => {
+  it("keeps generate_form omission as a safe plan when writes are disabled", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_form", false);
 
     const result = await tool.handler({
@@ -201,34 +201,34 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
       projectRoot: "C:/project",
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
-    expect(vbaSyncToolService.requests).toEqual([]);
+    expect(result.isError).toBe(false);
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(vbaSyncToolService.requests).toHaveLength(1);
   });
 
-  it("allows generate_form dryRun:true without the write-gate when writes are disabled", async () => {
+  it("allows generate_form apply:false without the write-gate when writes are disabled", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_form", false);
 
     const result = await tool.handler({
       spec: { name: "CustomerEntry", kind: "Form", controls: [] },
       projectRoot: "C:/project",
-      dryRun: true,
+      apply: false,
     });
 
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toEqual([
-      expect.objectContaining({ dryRun: true, projectRoot: "C:/project" }),
+      expect.objectContaining({ apply: false, projectRoot: "C:/project" }),
     ]);
   });
 
-  it("blocks generate_form dryRun:false when writes are disabled", async () => {
+  it("blocks generate_form apply:true when writes are disabled", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_form", false);
 
     const result = await tool.handler({
       spec: { name: "CustomerEntry", kind: "Form", controls: [] },
       projectRoot: "C:/project",
-      dryRun: false,
+      apply: true,
     });
 
     expect(result.isError).toBe(true);
@@ -236,7 +236,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("rejects generate_form dryRun:true with apply:true as mutually exclusive (#1057 F8) before the write gate", async () => {
+  it("rejects removed generate_form dryRun before the write gate", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_form", false);
 
     const result = await tool.handler({
@@ -248,7 +248,7 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
-    expect(result.content[0]?.text).toContain("mutually exclusive");
+    expect(result.content[0]?.text).toContain("dryRun is not allowed");
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
@@ -489,30 +489,30 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELTA-007 (mcp-reliability-fix) — catalog_add_control schema parity +
-// dryRun/apply resolution + write-gate dispatch.
+// canonical apply resolution + write-gate dispatch.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("DELTA-007 — catalog_add_control schema parity (dryRun/apply)", () => {
-  it("catalog_add_control schema includes dryRun and apply properties", async () => {
+  it("catalog_add_control schema exposes apply and rejects legacy dryRun", async () => {
     const { VBA_SYNC_TOOL_SCHEMAS } = await import(
       "../../../src/adapters/mcp/schemas/vba-sync-schemas.js"
     );
     const schema = VBA_SYNC_TOOL_SCHEMAS.catalog_add_control;
     expect(schema).toBeDefined();
-    expect(schema?.properties?.dryRun).toBeDefined();
+    expect(schema?.properties?.dryRun).toBeUndefined();
     expect(schema?.properties?.apply).toBeDefined();
   });
 });
 
 describe("DELTA-007 — catalog_add_control dry-run dispatch parity", () => {
-  it("catalog_add_control with dryRun:true (writes disabled) does NOT trigger write-gate", async () => {
+  it("catalog_add_control with apply:false (writes disabled) does NOT trigger write-gate", async () => {
     const { tool, vbaSyncToolService } = toolByName("catalog_add_control", false);
     const result = await tool.handler({
       spec: { name: "CustomerEntry", kind: "Form", controls: [] },
       controlName: "txtName",
       controlType: "TextBox",
       catalogPath: "C:/project/forms/catalog.json",
-      dryRun: true,
+      apply: false,
     });
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
@@ -532,7 +532,7 @@ describe("DELTA-007 — catalog_add_control dry-run dispatch parity", () => {
     expect(vbaSyncToolService.requests).toHaveLength(1);
   });
 
-  it("catalog_add_control with no dryRun/apply defaults to dry-run (no write-gate trip)", async () => {
+  it("catalog_add_control with omitted apply uses its safe plan default (no write-gate trip)", async () => {
     const { tool, vbaSyncToolService } = toolByName("catalog_add_control", false);
     const result = await tool.handler({
       spec: { name: "CustomerEntry", kind: "Form", controls: [] },

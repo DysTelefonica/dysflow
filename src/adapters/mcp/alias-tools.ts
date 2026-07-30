@@ -153,7 +153,7 @@ export function buildRunVbaRequest(input: unknown): AccessVbaRequest | McpToolRe
     moduleName: parsedName.moduleName,
     procedureName: parsedName.original,
     arguments: parsedArgs.value,
-    dryRun: obj.apply === true ? false : true,
+    dryRun: obj.apply !== true,
     projectId: typeof obj.projectId === "string" ? obj.projectId : undefined,
     contextId: typeof obj.contextId === "string" ? obj.contextId : undefined,
     accessPath: typeof obj.accessPath === "string" ? obj.accessPath : undefined,

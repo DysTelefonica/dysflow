@@ -98,7 +98,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
-          dryRun: false,
+          apply: true,
           compile: false,
         },
         {} as any,
@@ -119,7 +119,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
-          dryRun: false,
+          apply: true,
           compile: true,
         },
         {} as any,
@@ -138,7 +138,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
-          dryRun: false,
+          apply: true,
           rollbackOnCompileFail: true,
         },
         {} as any,
@@ -161,7 +161,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1", "Mod2"],
-          dryRun: false,
+          apply: true,
           compile: true,
         },
         {} as any,
@@ -182,7 +182,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
-          dryRun: false,
+          apply: true,
           compile: false,
         },
         {} as any,
@@ -201,7 +201,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
-          dryRun: false,
+          apply: true,
           compile: true,
         },
         {} as any,
@@ -223,7 +223,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1"],
-          dryRun: false,
+          apply: true,
         },
         {} as any,
       );
@@ -235,7 +235,7 @@ describe("F13 — compile / rollbackOnCompileFail are silently stripped (silent 
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1"],
-          dryRun: false,
+          apply: true,
           compile: false,
         },
         {} as any,

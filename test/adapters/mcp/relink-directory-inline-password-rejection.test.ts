@@ -139,7 +139,7 @@ describe("relink_directory inline password rejection (#694)", () => {
     const tool = relinkTool();
     const result = await tool.handler({
       rootPath: "C:\\data",
-      dryRun: true,
+      apply: false,
     });
 
     // No password fields → no inline-password rejection

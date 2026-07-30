@@ -11,8 +11,8 @@
 
 import {
   ACCESS_OVERRIDE,
-  composeIdentityAndCorrelation,
   CONFIRMATION_OVERRIDE_BLOCK,
+  composeIdentityAndCorrelation,
   type JsonObjectSchema,
   PROCESS_TIMEOUT_BLOCK,
   PROJECT_IDENTITY_BLOCK,

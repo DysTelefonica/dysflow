@@ -1,5 +1,6 @@
-import type { OperationResult } from "../../core/contracts/index.js";
+import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import type { CheckId } from "../../core/contracts/diagnostic-check.js";
+import type { OperationResult } from "../../core/contracts/index.js";
 import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
@@ -9,7 +10,6 @@ import {
   APPLY_DRYRUN_CONTRADICTION_PREFIX,
   validateInput,
 } from "../../shared/validation/validator.js";
-import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
@@ -1186,8 +1186,7 @@ export function enforceRequiresConfirmation(
   const rec = input as Record<string, unknown>;
   const override = rec.confirmedRequiresConfirmation;
   const rawCheckId = rec.implements_check;
-  const checkIdStr =
-    typeof rawCheckId === "string" && rawCheckId.length > 0 ? rawCheckId : null;
+  const checkIdStr = typeof rawCheckId === "string" && rawCheckId.length > 0 ? rawCheckId : null;
 
   // Case: override present, no check declared (or empty check).
   if (override === true && checkIdStr === null) {

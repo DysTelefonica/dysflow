@@ -36,7 +36,7 @@ describe("contract: import_modules (issue #979)", () => {
     rmSync(workdir, { recursive: true, force: true });
   });
 
-  it("is registered with moduleNames and dryRun parameters (#807 bulk path accepts sourceDir)", () => {
+  it("is registered with moduleNames and canonical apply (#807 bulk path accepts sourceDir)", () => {
     const execute = vi.fn(async () => successResult({}));
     const tools = createDysflowMcpTools({
       services: { vbaService: { execute } } as unknown as DysflowMcpServices,
@@ -51,10 +51,11 @@ describe("contract: import_modules (issue #979)", () => {
     // are both valid entry points per #807).
     const props = tool?.inputSchema?.properties ?? {};
     expect("moduleNames" in props).toBe(true);
-    expect("dryRun" in props).toBe(true);
+    expect("apply" in props).toBe(true);
+    expect("dryRun" in props).toBe(false);
   });
 
-  it("applies the write gate on dryRun:false (issue #962)", async () => {
+  it("applies the write gate on apply:true (issue #962)", async () => {
     // Re-seed the project with allowWrites:false in .dysflow/project.json
     // so the gate can fire. The factory option alone is not enough; the
     // project config resolver reads the file.
@@ -84,7 +85,7 @@ describe("contract: import_modules (issue #979)", () => {
     const result = await tool?.handler({
       moduleNames: ["Module1"],
       projectId: "app",
-      dryRun: false,
+      apply: true,
     });
     expect(result?.error?.code).toBe("CAPABILITIES_DISALLOW_WRITE");
     expect(execute).not.toHaveBeenCalled();

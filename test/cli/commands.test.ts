@@ -561,6 +561,10 @@ describe("dysflow command modules", () => {
           errors: [],
         },
         warnOnly: true,
+        check_id: "codegraph_supplement_drift",
+        reason_code: "SUPPLEMENT_DRIFT",
+        requires_confirmation: false,
+        category: "externalDeps",
       }),
       env: {},
     });

@@ -201,6 +201,8 @@ export type SharedBlockPolicy = {
 export const STRICT_CONTEXT_EXCEPTIONS = {
   catalog_add_control:
     "Offline catalog-file mutation; it resolves no Access or managed-source execution target.",
+  clean_stale_markers:
+    "Local runtime-marker maintenance; it resolves no Access or managed-source execution target.",
   generate_form:
     "Offline form-spec generation; it resolves no Access or managed-source execution target.",
   migrate_project_config:

@@ -46,10 +46,10 @@ import { successResult } from "../../../src/core/contracts/index.js";
 import { SCHEMA_PROPS } from "../../../src/shared/validation/index.js";
 import {
   ACCESS_TARGET_BLOCK,
+  CONFIRMATION_OVERRIDE_BLOCK,
   composeAccessAndSourceTargets,
   composeFullTargetStack,
   composeIdentityAndCorrelation,
-  CONFIRMATION_OVERRIDE_BLOCK,
   DATABASE_TARGET_BLOCK,
   MANAGED_SOURCE_TARGET_BLOCK,
   OPERATION_CORRELATION_BLOCK,
@@ -104,10 +104,7 @@ const WRITE_INTENT_FIELDS = [
   ["apply", SCHEMA_PROPS.apply],
   ["diff", SCHEMA_PROPS.diff],
   ["implements_check", CONFIRMATION_OVERRIDE_BLOCK.implements_check],
-  [
-    "confirmedRequiresConfirmation",
-    CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation,
-  ],
+  ["confirmedRequiresConfirmation", CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation],
 ] as const;
 
 describe("schema composition blocks (#1076)", () => {
@@ -137,9 +134,7 @@ describe("schema composition blocks (#1076)", () => {
     expect(STRICT_CONTEXT_BLOCK.expectedDestinationRoot).toBe(SCHEMA_PROPS.expectedDestinationRoot);
     expect(WRITE_INTENT_BLOCK.apply).toBe(SCHEMA_PROPS.apply);
     expect(WRITE_INTENT_BLOCK.diff).toBe(SCHEMA_PROPS.diff);
-    expect(WRITE_INTENT_BLOCK.implements_check).toBe(
-      CONFIRMATION_OVERRIDE_BLOCK.implements_check,
-    );
+    expect(WRITE_INTENT_BLOCK.implements_check).toBe(CONFIRMATION_OVERRIDE_BLOCK.implements_check);
     expect(WRITE_INTENT_BLOCK.confirmedRequiresConfirmation).toBe(
       CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation,
     );

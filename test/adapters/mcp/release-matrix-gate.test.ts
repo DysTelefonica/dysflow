@@ -139,7 +139,7 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("backendPath");
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("databasePath");
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("sourcePath");
-    expect(queryExecute?.inputSchema?.properties).toHaveProperty("dryRun");
+    expect(queryExecute?.inputSchema?.properties).not.toHaveProperty("dryRun");
     expect(queryExecute?.inputSchema?.properties).toHaveProperty("apply");
 
     // Verify read-only sql query
@@ -153,10 +153,11 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // Verify write sql exec
     const execSql = tools.find((t) => t.name === "exec_sql");
     expect(execSql).toBeDefined();
-    expect(execSql?.inputSchema?.properties?.dryRun).toBeDefined();
+    expect(execSql?.inputSchema?.properties?.dryRun).toBeUndefined();
+    expect(execSql?.inputSchema?.properties?.apply).toBeDefined();
 
-    // Dry-run vs Apply checks across maintenance/write tools
-    const dryRunApplyTools = [
+    // Canonical apply checks across maintenance/write tools
+    const applyTools = [
       "link_tables",
       "relink_tables",
       "localize_backend_links",
@@ -171,18 +172,15 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
       "teardown_fixture",
     ];
 
-    for (const toolName of dryRunApplyTools) {
+    for (const toolName of applyTools) {
       const tool = tools.find((t) => t.name === toolName);
       expect(tool, `Tool ${toolName} must be registered and implemented`).toBeDefined();
 
       const properties = tool?.inputSchema?.properties ?? {};
-      const hasDryRun = "dryRun" in properties;
-      const hasApply = "apply" in properties;
-
-      expect(
-        hasDryRun || hasApply,
-        `Tool ${toolName} must support split mode (dryRun or apply)`,
-      ).toBe(true);
+      expect(properties).not.toHaveProperty("dryRun");
+      expect(properties, `Tool ${toolName} must support canonical apply intent`).toHaveProperty(
+        "apply",
+      );
     }
   });
 

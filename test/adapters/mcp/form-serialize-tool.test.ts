@@ -3,8 +3,8 @@
  *
  * Mirrors the slice-4 form-mutation-tools.test.ts pattern:
  * - Registration in 5 surfaces (registry, dispatch-routes, parity, schemas, adapter.handles)
- * - Schema discovery (required params + dryRun/apply gates)
- * - Dry-run when writes are disabled
+ * - Schema discovery (required params + canonical apply gate)
+ * - Preview when writes are disabled
  * - Apply-route through `vbaSync` service when writes enabled
  * - Round-trip invariant: serialize(ir) === normalizeLineEndings(source)
  *
@@ -133,12 +133,11 @@ describe("public form serialize/deserialize MCP tools — schemas", () => {
     expect(properties).not.toHaveProperty("dryRun");
   });
 
-  it("form_deserialize exposes sourcePath, ir, dryRun, apply", () => {
+  it("form_deserialize exposes sourcePath, ir, and apply only", () => {
     expect(VBA_SYNC_TOOL_SCHEMAS.form_deserialize.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         ir: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -146,7 +145,7 @@ describe("public form serialize/deserialize MCP tools — schemas", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dry-run behavior — write must not happen when writes are disabled
+// Preview behavior — write must not happen when writes are disabled
 // ---------------------------------------------------------------------------
 
 describe("public form serialize/deserialize MCP tools — write-gate", () => {
@@ -172,12 +171,11 @@ describe("public form serialize/deserialize MCP tools — write-gate", () => {
         codeBehind: null,
       },
       apply: true,
-      dryRun: false,
     });
     expect(result.ok).toBe(false);
   });
 
-  it("deserialize tool accepts dryRun:true when writes are disabled", async () => {
+  it("deserialize tool accepts apply:false when writes are disabled", async () => {
     const { tool } = toolByName("form_deserialize", false);
     const result = await tool.handler({
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
@@ -190,7 +188,6 @@ describe("public form serialize/deserialize MCP tools — write-gate", () => {
         codeBehind: null,
       },
       apply: false,
-      dryRun: true,
     });
     expect(result.ok).toBe(true);
   });
@@ -207,7 +204,7 @@ describe("slice-3 wiring does not regress slice-4 mutation tools", () => {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "txtNewField",
       controlType: "TextBox",
-      dryRun: true,
+      apply: false,
     });
     expect(result.ok).toBe(true);
   });

@@ -169,7 +169,7 @@ export async function checkOpencodeWiring(
           `Global config (${globalConfigPath}) expected: ${globalDesc}. ` +
           `Project-local config (${projectConfigPath}) found: ${localDesc}. ` +
           `Align the local command to the global, or remove the command override and keep only project-specific env.`,
-warnOnly: true,
+        warnOnly: true,
         ...doctorCheckMetadata("opencode_mcp_wiring"),
       };
     }

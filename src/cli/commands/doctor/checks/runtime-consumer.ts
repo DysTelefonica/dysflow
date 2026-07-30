@@ -1,5 +1,5 @@
 import { COMMIT_FLAG_REGISTRY } from "../../../../core/runtime/commit-flag-registry.js";
-import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
+import { type DoctorCategoryCheck, doctorCheckMetadata } from "./types.js";
 
 /**
  * Tools whose commit flag is deliberately NOT `apply` — documented

@@ -8,8 +8,8 @@ import { isRecord } from "../../core/utils/index.js";
 import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import {
   destinationRootRequired,
-  enrichmentForValidationMessage,
   enforceRequiresConfirmation,
+  enrichmentForValidationMessage,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
@@ -289,30 +289,27 @@ export function createDispatchTool(
         isBinaryWrite && !isDryRunCapableBinaryWrite
           ? false
           : isDryRunCapableBinaryWrite || isFilesystemWrite
-            ? // DELTA-007 — catalog_add_control defaults to dry-run at the service
-              // level (same as generateForm), so the dispatch must always evaluate
-              // resolveIsDryRun for catalog_add_control (regardless of `hasOwn`
-              // — service defaults dryRun to true when both flags are absent).
-              // generate_form preserves the legacy `hasOwn` gate because the
-              // service-level default there is different.
+            ? // Canonical public write intent is `apply`: false previews, true commits.
+              // All preview-capable filesystem tools must resolve it before the
+              // write gate; the public `dryRun` input was removed in v2.31.
               // form_deserialize joins the slice-4 mutation family with
-              // the same apply/dryRun semantics (#616 slice 3).
+              // the same plan/apply semantics (#616 slice 3).
               // create_form_from_template (slice 5, #618) extends that
               // family: default dry-run at the service level; apply:true is a
               // binary mutation gated by MCP_WRITES_DISABLED.
               // apply_form_design_plan + form_set_property + form_delete_control
               // (#813 phase 6) share the same seam: apply:true is a binary
-              // mutation gated by MCP_WRITES_DISABLED; dryRun:true is a
-              // preview that returns the plan without writing.
+              // mutation gated by MCP_WRITES_DISABLED; apply:false previews.
               // form_align_controls + form_distribute_controls (#816 phase 3)
-              // join the same seam with the same apply/dryRun semantics.
-              // sync_binary (#809) joins the same seam: dryRun:true is the
-              // plan-only path; apply:true performs the chunked execute.
+              // join the same seam with the same plan/apply semantics.
+              // sync_binary (#809) joins the same seam: apply:false plans and
+              // apply:true performs the chunked execute.
               // form_set_properties + form_duplicate_control (#872 F1, F2)
-              // join the same seam with the same apply/dryRun semantics.
+              // join the same seam with the same plan/apply semantics.
               name === "fix_encoding" ||
               name === "vba_inline_execution" ||
               name === "catalog_add_control" ||
+              name === "generate_form" ||
               name === "form_add_control" ||
               name === "form_move_control" ||
               name === "form_rename_control" ||
@@ -327,9 +324,7 @@ export function createDispatchTool(
               name === "form_set_properties" ||
               name === "form_duplicate_control"
               ? resolveIsDryRun(normalizedInput)
-              : name === "generate_form" && hasOwn(normalizedInput, "dryRun")
-                ? resolveIsDryRun(normalizedInput)
-                : false
+              : false
             : resolveIsDryRun(normalizedInput);
       if (
         isWriteGated &&

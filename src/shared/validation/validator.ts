@@ -292,8 +292,7 @@ function validateApplyDryRunConsistency(
  * contradiction as the old `apply: true + dryRun: true`: two different
  * commit signals colliding.
  */
-export const APPLY_DIFF_CONTRADICTION_PREFIX =
-  "apply and diff are mutually exclusive" as const;
+export const APPLY_DIFF_CONTRADICTION_PREFIX = "apply and diff are mutually exclusive" as const;
 
 function validateApplyDiffConsistency(
   params: Record<string, unknown>,

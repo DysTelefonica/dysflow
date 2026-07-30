@@ -151,7 +151,7 @@ describe("central project config write guard", () => {
     const result = await tool?.handler({
       moduleNames: ["Example"],
       accessPath: join(root, "explicit.accdb"),
-      dryRun: false,
+      apply: true,
     });
     expect(result?.error).toMatchObject({
       code: "PROJECT_CONFIG_NOT_WRITE_READY",
@@ -161,7 +161,7 @@ describe("central project config write guard", () => {
   });
 
   it.each([
-    ["import_modules", { moduleNames: ["Example"], dryRun: true }, true],
+    ["import_modules", { moduleNames: ["Example"], apply: false }, true],
     ["query_execute", { mode: "read", sql: "SELECT 1" }, true],
     ["cleanup_access_operation", { operationId: "op-1", accessPath: "x.accdb" }, false],
     ["access_force_cleanup_orphaned", {}, false],
@@ -189,7 +189,7 @@ describe("central project config write guard", () => {
   it.each([
     ["query_execute", { mode: "write", sql: "DELETE FROM T", apply: true }],
     ["cleanup_access_operation", { operationId: "op-1", accessPath: "x.accdb", force: true }],
-    ["access_force_cleanup_orphaned", { confirmPid: 123 }],
+    ["access_force_cleanup_orphaned", { pid: 123, confirmedRequiresConfirmation: true }],
   ])("fails closed for the mutating branch of %s", async (toolName, input) => {
     const root = mkdtempSync(join(tmpdir(), "dysflow-mutating-branch-"));
     writeFileSync(join(root, ".git"), "gitdir: fixture");

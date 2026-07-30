@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
+import { type DoctorCategoryCheck, doctorCheckMetadata } from "./types.js";
 
 const CODEGRAPH_STALE_MS = 24 * 60 * 60 * 1000;
 

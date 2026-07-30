@@ -5,6 +5,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 
 type InputError = {
   code?: string;
+  message?: string;
   rejectedFlag?: string;
   rejectedFlags?: readonly string[];
   toolCommitFlag?: string;
@@ -77,15 +78,17 @@ describe("MCP metadata normalization for issue #1230", () => {
 
     const exportModules = tools.find((tool) => tool.name === "export_modules");
     if (exportModules === undefined) throw new Error("export_modules is not registered");
-    const result = await exportModules.handler({ apply: true, dryRun: true });
+    const result = await exportModules.handler({
+      moduleNames: ["Example"],
+      apply: true,
+      diff: true,
+    });
     const error = result.error as InputError | undefined;
     expect(result.isError).toBe(true);
     expect(error?.code).toBe("MCP_INPUT_INVALID");
-    expect([error?.rejectedFlag, ...(error?.rejectedFlags ?? [])]).toEqual(
-      expect.arrayContaining(["apply", "dryRun"]),
-    );
-    expect(error?.toolCommitFlag).toBe("apply");
-    expect(error?.remediation).toMatch(/apply|dryRun/i);
+    expect(error?.message).toContain("apply and diff are mutually exclusive");
+    expect(error?.message).toContain("apply is the canonical commit signal");
+    expect(error?.remediation).toContain("Check the tool schema");
   });
 
   it("uses only canonical or deprecated precedence values", () => {

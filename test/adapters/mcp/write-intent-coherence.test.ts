@@ -25,8 +25,8 @@
  * any disagreement with the tool name.
  */
 import { describe, expect, it } from "vitest";
-import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts.js";
+import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 import {
   COMMIT_FLAG_REGISTRY,
@@ -222,7 +222,9 @@ describe("write-intent contract coherence (#1073)", () => {
   });
 
   it("removes the three tool-specific confirmation escape hatches from MCP schemas", () => {
-    expect(inputSchema("access_force_cleanup_orphaned").properties).not.toHaveProperty("confirmPid");
+    expect(inputSchema("access_force_cleanup_orphaned").properties).not.toHaveProperty(
+      "confirmPid",
+    );
     expect(inputSchema("export_modules").properties).not.toHaveProperty("confirmOverwriteSource");
     expect(inputSchema("export_all").properties).not.toHaveProperty("confirmOverwriteSource");
     const options = inputSchema("clean_stale_markers").properties?.options as

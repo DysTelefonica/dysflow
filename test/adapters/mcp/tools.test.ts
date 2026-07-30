@@ -150,7 +150,7 @@ describe("MCP tool registration over core services", () => {
         ?.handler({
           procedureName: "Refresh",
           argsJson: JSON.stringify([2026]),
-          dryRun: true,
+          apply: false,
         }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
@@ -328,7 +328,7 @@ describe("MCP tool registration over core services", () => {
         ?.handler({
           contextId: "00-no-conformidades-staging-clean",
           procedureName: "Smoke",
-          dryRun: true,
+          apply: false,
         }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
@@ -390,7 +390,7 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
-  it("advertises dryRun/apply on modern query execution", () => {
+  it("advertises canonical apply on modern query execution", () => {
     const tools = createDysflowMcpTools({
       services: {
         vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -401,7 +401,7 @@ describe("MCP tool registration over core services", () => {
 
     const properties = tools.find((tool) => tool.name === "query_execute")?.inputSchema?.properties;
 
-    expect(properties).toHaveProperty("dryRun");
+    expect(properties).not.toHaveProperty("dryRun");
     expect(properties).toHaveProperty("apply");
   });
 
@@ -426,7 +426,7 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
-  it("treats modern write query with dryRun:true as plan and bypasses write gate", async () => {
+  it("treats modern write query with apply:false as plan and bypasses write gate", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -439,11 +439,11 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "query_execute")
-        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true }),
+        ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: false }),
     ).resolves.toMatchObject({ isError: false });
 
     expect(query.requests).toEqual([
-      { sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: true },
+      { sql: "UPDATE People SET name='Ada'", mode: "write", apply: false, dryRun: true },
     ]);
   });
 
@@ -466,7 +466,7 @@ describe("MCP tool registration over core services", () => {
     expect(query.requests).toEqual([]);
   });
 
-  it("blocks modern write query with dryRun:false when writes are disabled", async () => {
+  it("blocks modern write query with apply:true when writes are disabled through the canonical surface", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -478,7 +478,7 @@ describe("MCP tool registration over core services", () => {
 
     const result = await tools
       .find((tool) => tool.name === "query_execute")
-      ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", dryRun: false });
+      ?.handler({ sql: "UPDATE People SET name='Ada'", mode: "write", apply: true });
 
     expect(result?.isError).toBe(true);
     expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
@@ -568,7 +568,7 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "seed_fixture")
-        ?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], dryRun: true }),
+        ?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], apply: false }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
@@ -817,7 +817,7 @@ describe("MCP tool registration over core services", () => {
       error: { code: "MCP_INPUT_INVALID", message: "argsJson must be valid JSON." },
     });
     await expect(
-      runVba?.handler({ procedureName: "Blank", argsJson: "   ", dryRun: true }),
+      runVba?.handler({ procedureName: "Blank", argsJson: "   ", apply: false }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -825,7 +825,7 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]', dryRun: true }),
+      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]', apply: false }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -833,7 +833,7 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      runVba?.handler({ procedureName: "Single", argsJson: "42", dryRun: true }),
+      runVba?.handler({ procedureName: "Single", argsJson: "42", apply: false }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -1126,7 +1126,7 @@ describe("MCP tool registration over core services", () => {
       const result = await importModules.handler({
         moduleNames: ["DysflowMcpE2EMissing"],
         importMode: "code",
-        dryRun: true,
+        apply: false,
       });
 
       expect(result).toEqual({
@@ -1139,7 +1139,7 @@ describe("MCP tool registration over core services", () => {
               input: {
                 moduleNames: ["DysflowMcpE2EMissing"],
                 importMode: "code",
-                dryRun: true,
+                apply: false,
               },
               ok: true,
             }),
@@ -1257,8 +1257,8 @@ describe("MCP tool registration over core services", () => {
     ]);
   });
 
-  // Issue #184: dryRun:true must bypass the write guard for relink_tables
-  it("allows relink_tables with dryRun:true even when writes are disabled (issue #184)", async () => {
+  // Issue #184: apply:false must bypass the write guard for relink_tables.
+  it("allows relink_tables with apply:false even when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -1269,17 +1269,17 @@ describe("MCP tool registration over core services", () => {
     });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
-    // dryRun:true — must NOT be blocked by write guard
-    const dryRunResult = await relinkTool?.handler({ dryRun: true });
-    expect(dryRunResult?.isError).toBe(false);
-    expect(dryRunResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
-    // Query service must have been called (the dry-run plan passes through)
+    // Canonical preview intent must NOT be blocked by the write guard.
+    const previewResult = await relinkTool?.handler({ apply: false });
+    expect(previewResult?.isError).toBe(false);
+    expect(previewResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    // Query service must have been called (the preview plan passes through).
     expect(query.requests.length).toBeGreaterThan(0);
     const dryRunRequest = query.requests[0] as Record<string, unknown>;
     expect(dryRunRequest.dryRun).toBe(true);
   });
 
-  it("blocks relink_tables with dryRun:false when writes are disabled (issue #184)", async () => {
+  it("blocks relink_tables with apply:true when writes are disabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -1290,14 +1290,14 @@ describe("MCP tool registration over core services", () => {
     });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
-    // dryRun:false — must be blocked by write guard when writes are disabled
-    const writeResult = await relinkTool?.handler({ dryRun: false });
+    // Canonical commit intent must be blocked when writes are disabled.
+    const writeResult = await relinkTool?.handler({ apply: true });
     expect(writeResult?.isError).toBe(true);
     expect(writeResult?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
     expect(query.requests).toEqual([]);
   });
 
-  it("allows relink_tables with dryRun:false when writes are enabled (issue #184)", async () => {
+  it("allows relink_tables with apply:true when writes are enabled (issue #184)", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -1309,13 +1309,13 @@ describe("MCP tool registration over core services", () => {
     });
     const relinkTool = tools.find((tool) => tool.name === "relink_tables");
 
-    const writeResult = await relinkTool?.handler({ dryRun: false });
+    const writeResult = await relinkTool?.handler({ apply: true });
     expect(writeResult?.isError).toBe(false);
     expect(writeResult?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
     expect(query.requests.length).toBeGreaterThan(0);
   });
 
-  it("allows localize_backend_links with optional backendPath and dryRun", async () => {
+  it("allows localize_backend_links with optional backendPath and apply", async () => {
     const query = new FakeQueryService(successResult({ rows: [] }));
     const tools = createDysflowMcpTools({
       services: {
@@ -1331,7 +1331,7 @@ describe("MCP tool registration over core services", () => {
 
     const result = await localizeTool?.handler({
       backendPath: "C:/custom/backend.accdb",
-      dryRun: false,
+      apply: true,
     });
 
     expect(result?.isError).toBe(false);
@@ -1424,7 +1424,7 @@ describe("MCP tool registration over core services", () => {
       const context = { progressToken: "tok-1", sendProgress };
 
       const tool = tools.find((t) => t.name === "run_vba");
-      await tool?.handler({ procedureName: "DoWork", dryRun: true }, context);
+      await tool?.handler({ procedureName: "DoWork", apply: false }, context);
 
       expect(vba.capturedOnProgress).toHaveLength(1);
       expect(vba.capturedOnProgress[0]).toBe(sendProgress);
@@ -1465,10 +1465,10 @@ describe("MCP tool registration over core services", () => {
       const mcpTool = tools.find((t) => t.name === "run_vba");
 
       // MCP tool handlers don't use context — calling with it must not throw.
-      // Pass dryRun:true so the default-deny gate passes; this test is about
+      // Pass apply:false so the preview bypasses the execution allowlist; this test is about
       // context-passing, not gate behavior (see canonical-handlers.test.ts).
       await expect(
-        mcpTool?.handler({ procedureName: "TestProc", dryRun: true }, context),
+        mcpTool?.handler({ procedureName: "TestProc", apply: false }, context),
       ).resolves.toMatchObject({ isError: false });
     });
   });
@@ -1507,23 +1507,23 @@ describe("MCP tool registration over core services", () => {
       const tools = makeTools(["Refresh", "Sync"]);
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "Refresh" });
+        ?.handler({ procedureName: "Refresh", apply: true });
       expect(result?.isError).toBe(false);
     });
 
-    it("refuses by default when allowlist is empty and no dryRun (default-deny, PR1a #621)", async () => {
+    it("refuses apply:true when the allowlist is empty (default-deny, PR1a #621)", async () => {
       const tools = makeTools([]);
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "DeleteAll" });
+        ?.handler({ procedureName: "DeleteAll", apply: true });
       expect(result?.isError).toBe(true);
       // #757 (F6) — the no-allowlist branch now has its own distinct code.
       expect(result?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
       expect(result?.content[0]?.text).toContain("DeleteAll");
-      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
+      expect(result?.content[0]?.text).toContain("allowedProcedures");
     });
 
-    it("refuses by default when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
+    it("refuses apply:true when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
       const tools = createDysflowMcpTools({
         services: {
           vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1533,24 +1533,24 @@ describe("MCP tool registration over core services", () => {
       });
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "AnyProcedure" });
+        ?.handler({ procedureName: "AnyProcedure", apply: true });
       expect(result?.isError).toBe(true);
-      expect(result?.content[0]?.text).toMatch(/allowedProcedures|dryRun/);
+      expect(result?.content[0]?.text).toContain("allowedProcedures");
     });
 
-    it("accepts dryRun:true as escape hatch when allowlist is empty (PR1a #621)", async () => {
+    it("accepts apply:false as preview when allowlist is empty", async () => {
       const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
       const tools = makeTools([], vba);
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "DeleteAll", dryRun: true });
+        ?.handler({ procedureName: "DeleteAll", apply: false });
       expect(result?.isError).toBe(false);
       expect(vba.requests).toEqual([
         expect.objectContaining({ procedureName: "DeleteAll", dryRun: true }),
       ]);
     });
 
-    it("accepts dryRun:true as escape hatch when allowedProcedures is not passed (PR1a #621)", async () => {
+    it("accepts apply:false as preview when allowedProcedures is not passed", async () => {
       const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
       const tools = createDysflowMcpTools({
         services: {
@@ -1561,18 +1561,18 @@ describe("MCP tool registration over core services", () => {
       });
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "AnyProcedure", dryRun: true });
+        ?.handler({ procedureName: "AnyProcedure", apply: false });
       expect(result?.isError).toBe(false);
       expect(vba.requests).toEqual([
         expect.objectContaining({ procedureName: "AnyProcedure", dryRun: true }),
       ]);
     });
 
-    it("still refuses a procedure not in the configured allowlist even when dryRun is true", async () => {
+    it("still refuses a procedure not in the configured allowlist when apply:true", async () => {
       const tools = makeTools(["Refresh", "Sync"]);
       const result = await tools
         .find((t) => t.name === "run_vba")
-        ?.handler({ procedureName: "DeleteAll", dryRun: true });
+        ?.handler({ procedureName: "DeleteAll", apply: true });
       expect(result?.isError).toBe(true);
       expect(result?.content[0]?.text).toContain("DeleteAll");
       expect(result?.content[0]?.text).toContain("allowedProcedures");

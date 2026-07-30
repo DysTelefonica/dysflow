@@ -91,7 +91,7 @@ describe("public AI form UI builder MCP tools", () => {
     }
   });
 
-  it("defines strict schemas for source paths, CodeGraph evidence, plans, dryRun/apply, and outputMode", () => {
+  it("defines strict schemas for source paths, CodeGraph evidence, plans, canonical apply, and outputMode", () => {
     expect(VBA_SYNC_TOOL_SCHEMAS.analyze_form_ui.properties).toEqual(
       expect.objectContaining({ sourcePath: expect.any(Object), outputMode: expect.any(Object) }),
     );
@@ -106,14 +106,14 @@ describe("public AI form UI builder MCP tools", () => {
     );
     // Issue #813 phase 6 — `targetPath` was removed (unvalidated alternate
     // write destination). The schema still declares sourcePath-equivalent
-    // (via sourcePath or path alias), plan, dryRun, apply, outputMode.
+    // (via sourcePath or path alias), plan, apply, outputMode.
     expect(VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan.properties).toEqual(
       expect.objectContaining({
         plan: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
+    expect(VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan.properties).not.toHaveProperty("dryRun");
     expect(
       VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan.properties?.targetPath,
       "targetPath must be removed in phase 6",
@@ -177,8 +177,8 @@ describe("public AI form UI builder MCP tools", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("allows apply_form_design_plan with dryRun:true (preview path) regardless of writes-disabled", async () => {
-    // Issue #813 phase 6 — a legitimate dryRun:true preview call is NOT
+  it("allows apply_form_design_plan with apply:false (preview path) regardless of writes-disabled", async () => {
+    // Issue #813 phase 6 — a legitimate apply:false preview call is NOT
     // gated. It reaches the adapter and returns the planned payload
     // without writing. The adapter-port path returns the in-memory
     // preview (mock service returns ok:true here).
@@ -195,13 +195,13 @@ describe("public AI form UI builder MCP tools", () => {
       operations: [],
       warnings: [],
     };
-    const dryRun = await tool.handler({
+    const preview = await tool.handler({
       plan,
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
-      dryRun: true,
+      apply: false,
     });
-    expect(dryRun.isError).toBe(false);
-    expect(dryRun.content[0]?.text ?? "").not.toContain("MCP_WRITES_DISABLED");
+    expect(preview.isError).toBe(false);
+    expect(preview.content[0]?.text ?? "").not.toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toHaveLength(1);
   });
 

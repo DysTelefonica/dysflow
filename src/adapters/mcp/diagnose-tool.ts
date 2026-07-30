@@ -27,6 +27,7 @@ import { diagnoseResultContract } from "./contracts/bootstrap-result-contracts.j
 
 import { existsSync, statSync } from "node:fs";
 import { join, normalize } from "node:path";
+import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import type {
   CheckId,
   DiagnosticCategory,
@@ -46,7 +47,6 @@ import {
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { pathOverlapsSourceRoot } from "../../core/utils/path-overlap.js";
 import { composeIdentityAndCorrelation, SCHEMA_PROPS } from "../../shared/validation/index.js";
-import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import {
   diagnoseProjectConfig,
   type ProjectConfigDiagnostic,

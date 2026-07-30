@@ -49,7 +49,7 @@ describe("MCP/core architecture boundary", () => {
         // `run_vba` does not enforce `minLength: 1` on procedureName,
         // so empty/whitespace procedureNames fall through to the
         // default-deny gate at the runner level.
-        ?.handler({ procedureName: "Smoke", argsJson: "[]", dryRun: true }),
+        ?.handler({ procedureName: "Smoke", argsJson: "[]", apply: false }),
     ).resolves.toMatchObject({ isError: false });
     await expect(
       tools
