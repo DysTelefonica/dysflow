@@ -1,5 +1,6 @@
 import { compareVersions } from "../../core/utils/version.js";
 import type { AgentName } from "../commands/install.js";
+import type { CliResult } from "../commands/types.js";
 
 const MENU_OPTIONS = ["Install / Integrations", "Doctor", "Exit"] as const;
 const UPDATE_COMMAND_PREFIX = "pnpm add -g git+https://github.com/DysTelefonica/dysflow.git#";
@@ -80,6 +81,22 @@ export function renderIntegrationSelection(options: IntegrationSelectionRenderOp
     "",
     "space: toggle • enter: apply • esc: back",
   ].join("\n");
+}
+
+export function renderIntegrationResult(result: CliResult, showDetails: boolean): string {
+  const succeeded = result.exitCode === 0;
+  const lines = [
+    succeeded ? "Integration setup succeeded" : "Integration setup failed",
+    succeeded
+      ? "Reload your selected agents to activate the integration."
+      : "Review the details before retrying.",
+    "",
+  ];
+  if (showDetails) {
+    lines.push("Details:", result.stdout, result.stderr);
+  }
+  lines.push(showDetails ? "i: hide details • q: return" : "i: show details • q: return");
+  return lines.join("\n");
 }
 
 function renderLogo(): string {

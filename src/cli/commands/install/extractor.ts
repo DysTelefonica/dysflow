@@ -1,4 +1,4 @@
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runCommand } from "./command-runner.js";
 import { fileExists } from "./file-utils.js";
@@ -39,12 +39,37 @@ async function copyIfDifferent(
   source: string,
   destination: string,
   options: Parameters<typeof cp>[2],
-): Promise<void> {
-  if (path.resolve(source) === path.resolve(destination)) return;
+): Promise<boolean> {
+  if (path.resolve(source) === path.resolve(destination)) return false;
   await cp(source, destination, options);
+  return true;
 }
 
-async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Promise<void> {
+async function listDestinationFiles(
+  sourceRoot: string,
+  destinationRoot: string,
+): Promise<string[]> {
+  const destinations: string[] = [];
+
+  async function visit(sourceDirectory: string, destinationDirectory: string): Promise<void> {
+    const entries = await readdir(sourceDirectory, { withFileTypes: true });
+    for (const entry of entries) {
+      const source = path.join(sourceDirectory, entry.name);
+      const destination = path.join(destinationDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(source, destination);
+      } else if (entry.isFile()) {
+        destinations.push(destination);
+      }
+    }
+  }
+
+  await visit(sourceRoot, destinationRoot);
+  return destinations;
+}
+
+async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Promise<string[]> {
+  const copiedFiles: string[] = [];
   await mkdir(runtimePaths.appDir, { recursive: true });
   await mkdir(runtimePaths.binDir, { recursive: true });
 
@@ -54,18 +79,29 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
     );
   }
 
-  await copyIfDifferent(runtimePaths.distSource, path.join(runtimePaths.appDir, "dist"), {
-    recursive: true,
-    force: true,
-  });
+  const distDestination = path.join(runtimePaths.appDir, "dist");
+  if (
+    await copyIfDifferent(runtimePaths.distSource, distDestination, {
+      recursive: true,
+      force: true,
+    })
+  ) {
+    copiedFiles.push(...(await listDestinationFiles(runtimePaths.distSource, distDestination)));
+  }
 
   // Scripts are required by MCP/Access/VBA tools at runtime.
   await mkdir(runtimePaths.scriptsDest, { recursive: true });
   if (await fileExists(runtimePaths.scriptsSource)) {
-    await copyIfDifferent(runtimePaths.scriptsSource, runtimePaths.scriptsDest, {
-      recursive: true,
-      force: true,
-    });
+    if (
+      await copyIfDifferent(runtimePaths.scriptsSource, runtimePaths.scriptsDest, {
+        recursive: true,
+        force: true,
+      })
+    ) {
+      copiedFiles.push(
+        ...(await listDestinationFiles(runtimePaths.scriptsSource, runtimePaths.scriptsDest)),
+      );
+    }
   }
 
   // Copy pnpm-lock.yaml so the install is reproducible (#666). Without it,
@@ -76,13 +112,19 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
   const lockfileDest = path.join(runtimePaths.appDir, "pnpm-lock.yaml");
   const lockfileAvailable = await fileExists(lockfileSource);
   if (lockfileAvailable) {
-    await copyIfDifferent(lockfileSource, lockfileDest, { force: true });
+    if (await copyIfDifferent(lockfileSource, lockfileDest, { force: true })) {
+      copiedFiles.push(lockfileDest);
+    }
   }
 
   if (await fileExists(runtimePaths.packageJsonSource)) {
-    await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
-      force: true,
-    });
+    if (
+      await copyIfDifferent(runtimePaths.packageJsonSource, runtimePaths.packageJsonDest, {
+        force: true,
+      })
+    ) {
+      copiedFiles.push(runtimePaths.packageJsonDest);
+    }
     // Install production dependencies so runtime deps (e.g. @modelcontextprotocol/sdk)
     // are available without requiring the full source node_modules to be copied.
     // When the lockfile is present we pass --frozen-lockfile to fail closed if
@@ -98,18 +140,22 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
       timeoutMs: 120_000,
     });
   }
+  return copiedFiles;
 }
 
-async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promise<void> {
+async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promise<string[]> {
+  const copiedFiles: string[] = [];
   const sourceReadme = path.join(packageRoot, "README.md");
   const sourceChangelog = path.join(packageRoot, "CHANGELOG.md");
 
   if (await fileExists(sourceReadme)) {
     await cp(sourceReadme, runtimePaths.readmePath, { force: true });
+    copiedFiles.push(runtimePaths.readmePath);
   }
 
   if (await fileExists(sourceChangelog)) {
     await cp(sourceChangelog, runtimePaths.changelogPath, { force: true });
+    copiedFiles.push(runtimePaths.changelogPath);
   }
 
   // Issue #940 — the install pipeline ships three diagnostic docs in the
@@ -117,32 +163,39 @@ async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promis
   // every typed error envelope's `remediation` field pointing at a markdown
   // anchor that did not exist on disk. Copy them through, creating parent
   // directories as needed.
-  await copyDocIfPresent(
+  const errorCodes = await copyDocIfPresent(
     packageRoot,
     path.join("references", "error-codes.md"),
     path.join(runtimePaths.runtimeDir, "references", "error-codes.md"),
   );
-  await copyDocIfPresent(
+  const hresultGuide = await copyDocIfPresent(
     packageRoot,
     path.join("docs", "diagnostics", "hresult-guide.md"),
     path.join(runtimePaths.runtimeDir, "docs", "diagnostics", "hresult-guide.md"),
   );
-  await copyDocIfPresent(
+  const formImportGuide = await copyDocIfPresent(
     packageRoot,
     path.join("docs", "diagnostics", "form-import-gate-failures.md"),
     path.join(runtimePaths.runtimeDir, "docs", "diagnostics", "form-import-gate-failures.md"),
   );
+  copiedFiles.push(
+    ...[errorCodes, hresultGuide, formImportGuide].filter(
+      (file): file is string => file !== undefined,
+    ),
+  );
+  return copiedFiles;
 }
 
 async function copyDocIfPresent(
   packageRoot: string,
   relativeSource: string,
   destination: string,
-): Promise<void> {
+): Promise<string | undefined> {
   const source = path.join(packageRoot, relativeSource);
-  if (!(await fileExists(source))) return;
+  if (!(await fileExists(source))) return undefined;
   await mkdir(path.dirname(destination), { recursive: true });
   await cp(source, destination, { force: true });
+  return destination;
 }
 
 export async function writeRuntimeMarker(markerPath: string, runtimeDir: string): Promise<void> {
@@ -156,10 +209,35 @@ export async function writeRuntimeMarker(markerPath: string, runtimeDir: string)
 export function createInstallReport(
   runtimeDir: string,
   configuredAgents: readonly string[],
+  options: {
+    copiedFiles?: readonly string[];
+    mcpConfigurations?: readonly {
+      agent: string;
+      status: "added" | "changed" | "unchanged";
+      active: boolean;
+    }[];
+    verbose?: boolean;
+  } = {},
 ): string {
-  return [
+  const copiedFiles = options.copiedFiles ?? [];
+  const lines = [
     `Dysflow runtime installed at: ${runtimeDir}`,
     `Configured agents: ${configuredAgents.length === 0 ? "(none)" : configuredAgents.join(", ")}`,
+    `Copied files: ${copiedFiles.length}`,
+  ];
+  if (options.verbose === true && copiedFiles.length > 0) {
+    lines.push("Copied destinations:", ...copiedFiles.map((file) => `- ${file}`));
+  }
+  if (options.mcpConfigurations !== undefined && options.mcpConfigurations.length > 0) {
+    lines.push(
+      "MCP active config:",
+      ...options.mcpConfigurations.map(
+        (config) =>
+          `- ${config.agent}: ${config.active ? "active" : "inactive"} (${config.status})`,
+      ),
+    );
+  }
+  lines.push(
     "",
     "Note:",
     "- Runtime docs were copied to INSTALL_DIR: README.md, CHANGELOG.md,",
@@ -167,16 +245,25 @@ export function createInstallReport(
     "  and docs/diagnostics/form-import-gate-failures.md.",
     `- MCP server command used in integrations: ${path.join(runtimeDir, "bin", "dysflow.cmd")}`,
     "- Re-run `dysflow install` to refresh runtime + integrations.",
-  ].join("\n");
+    "- Reload your selected agents to activate the refreshed integration.",
+  );
+  return lines.join("\n");
 }
+
+export type RuntimeInstallReport = {
+  copiedFiles: string[];
+};
 
 export async function installRuntime(
   runtimePaths: RuntimePaths,
   packageRoot: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<void> {
-  await copyRuntime(runtimePaths, packageRoot);
-  await copyDocs(runtimePaths, packageRoot);
+): Promise<RuntimeInstallReport> {
+  const copiedFiles = [
+    ...(await copyRuntime(runtimePaths, packageRoot)),
+    ...(await copyDocs(runtimePaths, packageRoot)),
+  ];
   await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
   await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);
+  return { copiedFiles };
 }

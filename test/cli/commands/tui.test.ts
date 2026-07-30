@@ -53,14 +53,43 @@ describe("handleTuiCommand", () => {
 
   it("toggles and applies integration selection on Space and Enter in integration loop", async () => {
     const frames: string[] = [];
-    const keys: Array<"enter" | "space" | "enter"> = ["enter", "space", "enter"];
+    const keys: Array<"enter" | "space" | "q"> = ["enter", "space", "enter", "q"];
     const result = await handleTuiCommand([], {
       tuiInteractive: true,
-      readTuiKey: async () => keys.shift() ?? "enter",
+      readTuiKey: async () => keys.shift() ?? "q",
       writeTuiFrame: (frame) => frames.push(frame),
       tuiApplyIntegrationSelection: async () => ({ exitCode: 0, stdout: "FAKE_APPLY", stderr: "" }),
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("FAKE_APPLY");
+    expect(frames.at(-1)).toContain("Integration setup succeeded");
+    expect(frames.at(-1)).toContain("i: show details");
+  });
+
+  it("shows complete apply output on i without reapplying and returns the original result on q", async () => {
+    const frames: string[] = [];
+    const keys: Array<"enter" | "space" | "i" | "q"> = ["enter", "space", "enter", "i", "q"];
+    let applyCount = 0;
+    const expected = {
+      exitCode: 1,
+      stdout: "COPIED\n/path/to/file",
+      stderr: "FAILED\nverbatim detail",
+    };
+
+    const result = await handleTuiCommand([], {
+      tuiInteractive: true,
+      readTuiKey: async () => keys.shift() ?? "q",
+      writeTuiFrame: (frame) => frames.push(frame),
+      tuiApplyIntegrationSelection: async () => {
+        applyCount += 1;
+        return expected;
+      },
+    });
+
+    expect(applyCount).toBe(1);
+    expect(result).toEqual(expected);
+    expect(frames.some((frame) => frame.includes("Integration setup failed"))).toBe(true);
+    expect(frames.at(-1)).toContain(expected.stdout);
+    expect(frames.at(-1)).toContain(expected.stderr);
   });
 });

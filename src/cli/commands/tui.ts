@@ -1,5 +1,9 @@
 import readline from "node:readline";
-import { renderDashboard, renderIntegrationSelection } from "../tui/render.js";
+import {
+  renderDashboard,
+  renderIntegrationResult,
+  renderIntegrationSelection,
+} from "../tui/render.js";
 import { handleDoctorCommand } from "./doctor.js";
 import {
   type AgentName,
@@ -121,13 +125,20 @@ async function runIntegrationSelectionLoop(options: {
     }
     if (key === "enter") {
       const agents = ALL_AGENTS.filter((agent) => selected.has(agent));
-      return (
+      const result = await (
         options.context.tuiApplyIntegrationSelection ??
         ((selectedAgents) =>
           applyIntegrationSelection(selectedAgents, {
             env: options.context.env ?? process.env,
           }))
       )(agents);
+      let showDetails = false;
+      while (true) {
+        options.writeFrame(renderIntegrationResult(result, showDetails));
+        const resultKey = await options.readKey();
+        if (resultKey === "q") return result;
+        if (resultKey === "i") showDetails = !showDetails;
+      }
     }
   }
 }
@@ -184,6 +195,7 @@ function mapKeypress(key: readline.Key): TuiKey | undefined {
   if (key.name === "down") return "down";
   if (key.name === "return") return "enter";
   if (key.name === "space") return "space";
+  if (key.name === "i") return "i";
   if (key.name === "escape" || key.name === "q") return "q";
   return undefined;
 }

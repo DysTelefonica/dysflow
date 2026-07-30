@@ -13,7 +13,7 @@ export type CliResult = {
   stderr: string;
 };
 
-export type TuiKey = "up" | "down" | "enter" | "space" | "q";
+export type TuiKey = "up" | "down" | "enter" | "space" | "i" | "q";
 
 export type CliCommandContext = {
   env?: Record<string, string | undefined>;
