@@ -436,20 +436,20 @@ describe("MCP_WRITES_DISABLED — five-tool gate enforcement (#813 phase 6 + #81
       expect(vbaSyncToolService.requests, `${name} must NOT reach the adapter`).toEqual([]);
     });
 
-    it(`${name} with dryRun:true when writes are disabled is NOT gated (preview path)`, async () => {
+    it(`${name} with apply:false when writes are disabled is NOT gated (preview path)`, async () => {
       const services = makeServices();
       const { tool, vbaSyncToolService } = toolByName(services, name, false);
-      const input = { ...(WRITE_GATE_INPUTS[name] ?? {}), apply: undefined, dryRun: true };
+      const input = { ...(WRITE_GATE_INPUTS[name] ?? {}), apply: false };
       const result = await tool.handler(input);
-      expect(result.isError, `${name} dryRun must not gate`).toBe(false);
+      expect(result.isError, `${name} preview must not gate`).toBe(false);
       expect(
         result.content[0]?.text ?? "",
-        `${name} dryRun must not surface MCP_WRITES_DISABLED`,
+        `${name} preview must not surface MCP_WRITES_DISABLED`,
       ).not.toContain("MCP_WRITES_DISABLED");
-      // Adapter is called once with the dryRun payload preserved.
+      // Adapter is called once with the apply:false preview payload preserved.
       expect(
         vbaSyncToolService.requests,
-        `${name} dryRun must reach the adapter once`,
+        `${name} preview must reach the adapter once`,
       ).toHaveLength(1);
     });
 
@@ -477,16 +477,16 @@ describe("apply_form_design_plan schema (#813 phase 6 — targetPath removed)", 
     ).toBeUndefined();
   });
 
-  it("still declares sourcePath / path / plan / dryRun / apply / outputMode", () => {
+  it("still declares sourcePath / path / plan / apply / outputMode", () => {
     const schema = VBA_SYNC_TOOL_SCHEMAS.apply_form_design_plan;
     expect(schema?.properties).toEqual(
       expect.objectContaining({
         plan: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
         outputMode: expect.any(Object),
       }),
     );
+    expect(schema?.properties).not.toHaveProperty("dryRun");
     // sourcePath is on the base spread (CTX_PROPS / ACCESS_OVERRIDE) — accept
     // either the explicit field or its alias `path`.
     const hasSource = Boolean(schema?.properties?.sourcePath) || Boolean(schema?.properties?.path);

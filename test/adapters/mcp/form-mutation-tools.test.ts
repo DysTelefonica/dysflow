@@ -76,13 +76,12 @@ describe("public form mutation MCP tools", () => {
     }
   });
 
-  it("defines schemas with sourcePath, dryRun/apply, and mutation-specific fields", () => {
+  it("defines schemas with sourcePath, apply, and mutation-specific fields", () => {
     expect(VBA_SYNC_TOOL_SCHEMAS.form_add_control.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         controlType: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -92,7 +91,6 @@ describe("public form mutation MCP tools", () => {
         controlName: expect.any(Object),
         left: expect.any(Object),
         top: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -101,12 +99,11 @@ describe("public form mutation MCP tools", () => {
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         newName: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
     // Issue #813 phase 6 — the 2 net-new standalone tools mirror the
-    // slice-4 mutation family: sourcePath + controlName + dryRun/apply.
+    // slice-4 mutation family: sourcePath + controlName + apply.
     expect(VBA_SYNC_TOOL_SCHEMAS.form_set_property.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
@@ -114,7 +111,6 @@ describe("public form mutation MCP tools", () => {
         property: expect.any(Object),
         propertyName: expect.any(Object),
         commitScope: expect.objectContaining({ enum: ["source", "source-and-binary"] }),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -122,19 +118,17 @@ describe("public form mutation MCP tools", () => {
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
     // Issue #872 F1 — `form_set_properties` accepts `properties: Record<...>`
     // (not a single `property` + `value` pair) so the schema pins both the
-    // map-shape field and the standard sourcePath/dryRun/apply trio.
+    // map-shape field and the standard sourcePath/apply pair.
     expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).toEqual(
       expect.objectContaining({
         sourcePath: expect.any(Object),
         controlName: expect.any(Object),
         properties: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -146,12 +140,11 @@ describe("public form mutation MCP tools", () => {
         sourceControlName: expect.any(Object),
         newName: expect.any(Object),
         overrides: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
     // slice 5 (issue #618) — `create_form_from_template` requires
-    // sourceForm + targetForm + tokenMap and supports dryRun/apply,
+    // sourceForm + targetForm + tokenMap and supports apply,
     // missingTokenPolicy, overwrite. Source target must NOT carry a `.form.txt`
     // extension because the adapter derives it from the name (mirroring slice-1
     // FormIR naming).
@@ -162,7 +155,6 @@ describe("public form mutation MCP tools", () => {
         tokenMap: expect.any(Object),
         missingTokenPolicy: expect.any(Object),
         overwrite: expect.any(Object),
-        dryRun: expect.any(Object),
         apply: expect.any(Object),
       }),
     );
@@ -179,7 +171,7 @@ describe("public form mutation MCP tools", () => {
       controlName: "cmdSave",
       ...alias,
       value: '"Save"',
-      dryRun: true,
+      apply: false,
     });
 
     expect(result.isError).toBe(false);
@@ -201,7 +193,7 @@ describe("public form mutation MCP tools", () => {
       sourcePath: "C:/repo/forms/Form_Customer.form.txt",
       controlName: "cmdSave",
       value: '"Save"',
-      dryRun: true,
+      apply: false,
     });
 
     expect(result.isError).toBe(true);
@@ -218,7 +210,7 @@ describe("public form mutation MCP tools", () => {
     expect(VBA_SYNC_TOOL_SCHEMAS.form_set_properties.properties).not.toHaveProperty("propertyName");
   });
 
-  it("allows dry-run mutation calls when writes are disabled and routes to the VBA sync service", async () => {
+  it("allows apply:false preview mutation calls when writes are disabled and routes to the VBA sync service", async () => {
     const { tool, vbaSyncToolService } = toolByName("form_add_control", false);
 
     const result = await tool.handler({
@@ -226,14 +218,14 @@ describe("public form mutation MCP tools", () => {
       controlName: "cmdSave",
       controlType: "CommandButton",
       properties: { Caption: '"Save"' },
-      dryRun: true,
+      apply: false,
     });
 
     expect(result.isError).toBe(false);
     expect(vbaSyncToolService.requests).toEqual([
       {
         toolName: "form_add_control",
-        input: expect.objectContaining({ controlName: "cmdSave", dryRun: true }),
+        input: expect.objectContaining({ controlName: "cmdSave", apply: false }),
       },
     ]);
   });
@@ -256,20 +248,20 @@ describe("public form mutation MCP tools", () => {
   it("create_form_from_template — dry-run is allowed when writes are disabled; apply is write-gated", async () => {
     const { tool, vbaSyncToolService } = toolByName("create_form_from_template", false);
 
-    // Dry-run should pass through to the VBA sync service (default dry-run is
-    // the safe semantic; we never accept a binary-mutating call with writes
-    // disabled, but a dry-run is a no-op for the binary).
-    const dryRunResult = await tool.handler({
+    // apply:false preview should pass through to the VBA sync service (default dry-run is
+    // the explicit safe semantic; we never accept a binary-mutating call with writes
+    // disabled, but a preview is a no-op for the binary).
+    const previewResult = await tool.handler({
       sourceForm: "Form_FormRiesgosGestionRiesgo",
       targetForm: "Form_FormNuevaAuditoria",
       tokenMap: { FormName: "FormNuevaAuditoria" },
-      dryRun: true,
+      apply: false,
     });
 
-    expect(dryRunResult.isError).toBe(false);
+    expect(previewResult.isError).toBe(false);
     expect(vbaSyncToolService.requests.slice(-1)[0]).toMatchObject({
       toolName: "create_form_from_template",
-      input: expect.objectContaining({ dryRun: true }),
+      input: expect.objectContaining({ apply: false }),
     });
 
     // Apply must be write-gated when writes are disabled.

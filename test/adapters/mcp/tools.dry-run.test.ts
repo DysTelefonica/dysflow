@@ -24,7 +24,7 @@ const services = {
   diagnosticsService: new FakeDiagnosticsService(),
 };
 
-describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
+describe("canonical apply write-intent resolution truth table", () => {
   // These tests verify via the write tools' handler behavior:
   // - if isDryRun returns false → write guard is checked → writesDisabled() if no resolver
   // - if isDryRun returns true → execution proceeds (no write check)
@@ -55,16 +55,17 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
     });
   });
 
-  describe("dryRun:false → isDryRun=false → write guard fires", () => {
-    it("exec_sql with {dryRun:false} triggers write guard when writesEnabled=false", async () => {
+  describe("removed dryRun input is rejected before write-intent resolution", () => {
+    it("exec_sql with {dryRun:false} returns MCP_INPUT_INVALID", async () => {
       const handler = getToolHandler("exec_sql");
       const result = await handler({ dryRun: false, sql: "UPDATE T SET x=1" });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+      expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(result.content[0]?.text).toContain("dryRun is not allowed");
     });
   });
 
-  describe("empty input → isDryRun=true → proceeds without write guard", () => {
+  describe("empty input → preview by default → proceeds without write guard", () => {
     it("exec_sql with {} does NOT trigger write guard (dry-run default)", async () => {
       const handler = getToolHandler("exec_sql");
       const result = await handler({});
@@ -72,10 +73,12 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
       expect(result.isError).toBe(false);
     });
 
-    it("exec_sql with {dryRun:true} does NOT trigger write guard", async () => {
+    it("exec_sql with {dryRun:true} rejects the removed public flag", async () => {
       const handler = getToolHandler("exec_sql");
       const result = await handler({ dryRun: true });
-      expect(result.isError).toBe(false);
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("MCP_INPUT_INVALID");
+      expect(result.content[0]?.text).toContain("dryRun is not allowed");
     });
   });
 
@@ -87,7 +90,7 @@ describe("resolveIsDryRun — canonical dry-run resolution truth table", () => {
       expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
     });
 
-    it("relink_directory with {} (no apply/dryRun) does NOT trigger write guard", async () => {
+    it("relink_directory with {} (no apply) does NOT trigger write guard", async () => {
       const handler = getToolHandler("relink_directory");
       const result = await handler({});
       // dry-run = true by default → no write guard

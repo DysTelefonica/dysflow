@@ -251,7 +251,7 @@ describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
       /record\(\s*["']release-telemetry["']\s*,\s*["']delete_module["']\s*,\s*\{\s*projectId\s*\}/,
     );
     expect(src).toMatch(
-      /record\(\s*["']release-telemetry["']\s*,\s*["']delete_module["'][\s\S]*?apply:\s*true[\s\S]*?dryRun:\s*true/,
+      /record\(\s*["']release-telemetry["']\s*,\s*["']delete_module["'][\s\S]*?apply:\s*true[\s\S]*?diff:\s*true/,
     );
   });
 

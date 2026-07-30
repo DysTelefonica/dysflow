@@ -188,14 +188,14 @@ describe("Issue #1031 — eight sibling tools accept apply:true", () => {
 
   describe("dispatch forwarding and existing default behavior", () => {
     for (const toolName of AFFECTED_TOOLS) {
-      it(`${toolName} forwards apply:true and preserves its existing dry-run/default behavior`, async () => {
+      it(`${toolName} forwards apply:true and preserves its existing preview/default behavior`, async () => {
         if (toolName === "run_vba") {
           const { handler, vbaRequests } = runVbaHandler();
           const applyResult = await handler(inputFor(toolName, { apply: true }));
-          const dryRunResult = await handler(inputFor(toolName, { dryRun: false }));
+          const previewResult = await handler(inputFor(toolName, { apply: false }));
           const defaultResult = await handler(inputFor(toolName));
 
-          expect([applyResult.isError, dryRunResult.isError, defaultResult.isError]).toEqual([
+          expect([applyResult.isError, previewResult.isError, defaultResult.isError]).toEqual([
             false,
             false,
             false,
@@ -206,9 +206,9 @@ describe("Issue #1031 — eight sibling tools accept apply:true", () => {
               dryRun: request.dryRun,
             })),
           ).toEqual([
-            { procedureName: "Issue1031Proc", dryRun: undefined },
-            { procedureName: "Issue1031Proc", dryRun: undefined },
-            { procedureName: "Issue1031Proc", dryRun: undefined },
+            { procedureName: "Issue1031Proc", dryRun: false },
+            { procedureName: "Issue1031Proc", dryRun: true },
+            { procedureName: "Issue1031Proc", dryRun: true },
           ]);
           return;
         }
@@ -217,10 +217,10 @@ describe("Issue #1031 — eight sibling tools accept apply:true", () => {
 
         if (QUERY_MAINTENANCE_SIBLING_NAMES.has(toolName)) {
           const applyResult = await handler(inputFor(toolName, { apply: true }));
-          const dryRunResult = await handler(inputFor(toolName, { dryRun: false }));
+          const previewResult = await handler(inputFor(toolName, { apply: false }));
           const defaultResult = await handler(inputFor(toolName));
 
-          expect([applyResult.isError, dryRunResult.isError, defaultResult.isError]).toEqual([
+          expect([applyResult.isError, previewResult.isError, defaultResult.isError]).toEqual([
             false,
             false,
             false,
@@ -233,7 +233,7 @@ describe("Issue #1031 — eight sibling tools accept apply:true", () => {
             })),
           ).toEqual([
             { action: toolName, mode: "write", dryRun: false },
-            { action: toolName, mode: "write", dryRun: false },
+            { action: toolName, mode: "write", dryRun: true },
             { action: toolName, mode: "write", dryRun: true },
           ]);
           return;

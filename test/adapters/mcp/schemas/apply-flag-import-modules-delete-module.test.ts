@@ -175,7 +175,7 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
       expect(captured[0]?.input).toMatchObject({ apply: true });
     });
 
-    it("import_modules({ apply: true, dryRun: false }) survives — apply wins (apply takes precedence over dryRun per #977)", async () => {
+    it("import_modules rejects the hard-removed dryRun public flag", async () => {
       const { handler, captured } = buildHandlerForTool("import_modules");
 
       const result = await handler(
@@ -183,19 +183,17 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1"],
-          apply: true,
           dryRun: false,
         },
         {} as any,
       );
 
-      expect(result.isError).toBe(false);
-      expect(captured).toHaveLength(1);
-      // Both flags ride through verbatim; the resolver below decides intent.
-      expect(captured[0]?.input).toMatchObject({ apply: true, dryRun: false });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("dryRun is not allowed");
+      expect(captured).toHaveLength(0);
     });
 
-    it("delete_module({ apply: false, dryRun: false }) is rejected as mutually exclusive (#1057 F8)", async () => {
+    it("delete_module({ apply: true, diff: true }) rejects contradictory write intents", async () => {
       const { handler, captured } = buildHandlerForTool("delete_module");
 
       const result = await handler(
@@ -203,51 +201,46 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleName: "Mod1",
-          apply: false,
-          dryRun: false,
+          apply: true,
+          diff: true,
         },
         {} as any,
       );
 
-      // apply:false (plan) contradicts dryRun:false (commit); the caller's
-      // intent is ambiguous, so the dispatch rejects instead of letting one
-      // flag silently win. Consistent combos (apply:true + dryRun:false)
-      // keep the #977 precedence contract.
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain("mutually exclusive");
       expect(captured).toHaveLength(0);
     });
   });
 
-  describe("dispatch parity — apply:true and dryRun:false produce identical forwarded payloads (semantic equivalence)", () => {
-    it("import_modules: apply:true vs dryRun:false both clear validation and forward", async () => {
+  describe("dispatch parity — apply:false and legacy diff:true both express preview", () => {
+    it("import_modules: apply:false vs diff:true both clear validation and forward", async () => {
       const { handler: viaApply, captured: applyCaptured } = buildHandlerForTool("import_modules");
-      const { handler: viaDryRun, captured: dryRunCaptured } =
-        buildHandlerForTool("import_modules");
+      const { handler: viaDiff, captured: diffCaptured } = buildHandlerForTool("import_modules");
 
       const viaApplyResult = await viaApply(
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1"],
-          apply: true,
+          apply: false,
         },
         {} as any,
       );
-      const viaDryRunResult = await viaDryRun(
+      const viaDiffResult = await viaDiff(
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleNames: ["Mod1"],
-          dryRun: false,
+          diff: true,
         },
         {} as any,
       );
 
       expect(viaApplyResult.isError).toBe(false);
-      expect(viaDryRunResult.isError).toBe(false);
+      expect(viaDiffResult.isError).toBe(false);
       expect(applyCaptured).toHaveLength(1);
-      expect(dryRunCaptured).toHaveLength(1);
+      expect(diffCaptured).toHaveLength(1);
 
       // The two forwarded payloads must agree on every flag the consumer
       // can read at the adapter boundary. `apply` rides through only when
@@ -257,49 +250,48 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
       // visible to the adapter, neither short-circuits the write-gate,
       // and the resolver decides intent.
       const applyInput = applyCaptured[0]?.input ?? {};
-      const dryRunInput = dryRunCaptured[0]?.input ?? {};
-      // Both calls reach the execute path (one captured call each).
-      expect(applyInput).toHaveProperty("apply", true);
-      expect(dryRunInput).toHaveProperty("dryRun", false);
+      const diffInput = diffCaptured[0]?.input ?? {};
+      expect(applyInput).toHaveProperty("apply", false);
+      expect(diffInput).toHaveProperty("diff", true);
     });
 
-    it("delete_module: apply:true vs dryRun:false both clear validation and forward", async () => {
+    it("delete_module: apply:false vs diff:true both clear validation and forward", async () => {
       const { handler: viaApply, captured: applyCaptured } = buildHandlerForTool("delete_module");
-      const { handler: viaDryRun, captured: dryRunCaptured } = buildHandlerForTool("delete_module");
+      const { handler: viaDiff, captured: diffCaptured } = buildHandlerForTool("delete_module");
 
       const viaApplyResult = await viaApply(
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleName: "Mod1",
-          apply: true,
+          apply: false,
         },
         {} as any,
       );
-      const viaDryRunResult = await viaDryRun(
+      const viaDiffResult = await viaDiff(
         {
           accessPath: "C:/project/Foo.accdb",
           projectRoot: "C:/project",
           moduleName: "Mod1",
-          dryRun: false,
+          diff: true,
         },
         {} as any,
       );
 
       expect(viaApplyResult.isError).toBe(false);
-      expect(viaDryRunResult.isError).toBe(false);
+      expect(viaDiffResult.isError).toBe(false);
       expect(applyCaptured).toHaveLength(1);
-      expect(dryRunCaptured).toHaveLength(1);
+      expect(diffCaptured).toHaveLength(1);
 
       const applyInput = applyCaptured[0]?.input ?? {};
-      const dryRunInput = dryRunCaptured[0]?.input ?? {};
-      expect(applyInput).toHaveProperty("apply", true);
-      expect(dryRunInput).toHaveProperty("dryRun", false);
+      const diffInput = diffCaptured[0]?.input ?? {};
+      expect(applyInput).toHaveProperty("apply", false);
+      expect(diffInput).toHaveProperty("diff", true);
     });
   });
 
   describe("dispatch parity — omitting both flags still validates cleanly (no regression)", () => {
-    it("import_modules without apply / dryRun still validates (default = dry-run)", async () => {
+    it("import_modules without apply still validates (default = preview)", async () => {
       const result = validateInput(
         { accessPath: "C:/project/Foo.accdb", moduleNames: ["Mod1"] },
         VBA_SYNC_TOOL_SCHEMAS.import_modules,
@@ -307,7 +299,7 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
       expect(result).toBeUndefined();
     });
 
-    it("delete_module without apply / dryRun still validates", async () => {
+    it("delete_module without apply still validates", async () => {
       const result = validateInput(
         { accessPath: "C:/project/Foo.accdb", moduleName: "Mod1" },
         VBA_SYNC_TOOL_SCHEMAS.delete_module,

@@ -129,8 +129,8 @@ describe("hard gates win over policy default (#785, capa 5)", () => {
 // ─── Explicit caller intent always wins ─────────────────────────────────────
 
 describe("explicit caller intent always wins (#785, capa 5)", () => {
-  it("dryRun:true + developer + import_modules → planImport (caller intent wins)", async () => {
-    // The dispatch seam forwards `dryRun: true` to the vba-modules
+  it("apply:false + developer + import_modules → planImport (caller intent wins)", async () => {
+    // The dispatch seam translates public `apply: false` to the vba-modules
     // adapter via `vbaSyncToolService.execute`. The adapter's planImport
     // path (post-capa 2: `params.dryRun === true` triggers the
     // short-circuit) decides plan vs. execute. We pin the forwarded
@@ -140,16 +140,16 @@ describe("explicit caller intent always wins (#785, capa 5)", () => {
     const { tool, vbaSyncToolService } = toolByName(services, "import_modules", true, "developer");
     await tool.handler({
       moduleNames: ["Foo"],
-      dryRun: true,
+      apply: false,
       projectRoot: "C:/project",
       accessPath: "C:/project/front.accdb",
     });
     expect(vbaSyncToolService.requests).toHaveLength(1);
-    expect(vbaSyncToolService.requests[0]).toMatchObject({ dryRun: true });
+    expect(vbaSyncToolService.requests[0]).toMatchObject({ apply: false });
   });
 
-  it("dryRun:false + safe-by-default + import_modules → executes the runner (caller intent wins)", async () => {
-    // Explicit `dryRun: false` is the documented opt-out for the
+  it("apply:true + safe-by-default + import_modules → executes the runner (caller intent wins)", async () => {
+    // Explicit `apply: true` is the documented opt-in for the
     // safe-by-default default — it lands in execute mode even when the
     // dispatcher seam would otherwise inject `dryRun: true`. The
     // adapter's truth table (post-capa 2: `params.dryRun === true`)
@@ -165,25 +165,25 @@ describe("explicit caller intent always wins (#785, capa 5)", () => {
     );
     await tool.handler({
       moduleNames: ["Foo"],
-      dryRun: false,
+      apply: true,
       projectRoot: "C:/project",
       accessPath: "C:/project/front.accdb",
     });
     expect(vbaSyncToolService.requests).toHaveLength(1);
-    expect(vbaSyncToolService.requests[0]).toMatchObject({ dryRun: false });
+    expect(vbaSyncToolService.requests[0]).toMatchObject({ apply: true });
   });
 
-  it("dryRun:false + developer + import_modules without flags → executes the runner (caller intent wins)", async () => {
+  it("apply:true + developer + import_modules → executes the runner (caller intent wins)", async () => {
     const services = makeServices();
     const { tool, vbaSyncToolService } = toolByName(services, "import_modules", true, "developer");
     await tool.handler({
       moduleNames: ["Foo"],
-      dryRun: false,
+      apply: true,
       projectRoot: "C:/project",
       accessPath: "C:/project/front.accdb",
     });
     expect(vbaSyncToolService.requests).toHaveLength(1);
-    expect(vbaSyncToolService.requests[0]).toMatchObject({ dryRun: false });
+    expect(vbaSyncToolService.requests[0]).toMatchObject({ apply: true });
   });
 });
 

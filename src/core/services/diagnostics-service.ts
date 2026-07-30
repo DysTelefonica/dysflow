@@ -1,9 +1,5 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
-import type {
-  CheckId,
-  DiagnosticCategory,
-  ReasonCode,
-} from "../contracts/diagnostic-check.js";
+import type { CheckId, DiagnosticCategory, ReasonCode } from "../contracts/diagnostic-check.js";
 import type { OperationResult } from "../contracts/index.js";
 import {
   type AccessDiagnosticsRequest,

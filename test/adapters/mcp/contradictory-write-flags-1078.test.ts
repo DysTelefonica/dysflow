@@ -196,41 +196,33 @@ afterEach(() => {
 
 describe("contradictory write flags — truth table (issue #1078)", () => {
   // ─────────────────────────────────────────────────────────────────────────
-  // 1. test_vba (#1167 unification) — the schema now declares BOTH
-  //    `apply` (canonical) and `dryRun` (legacy alias), and the
-  //    registry advertises `commitFlag: "apply"`, `noWriteAlias:
-  //    "dryRun"`. The pre-#1167 "dryRun-only" exception is collapsed.
+  // 1. test_vba uses the v2.31 single public write-intent flag:
+  //    `apply` is canonical and `dryRun` is rejected at the schema boundary.
   //    `test_vba` is exercised in the per-family `describe.each` block
   //    below; the smoke test at
   //    `test/adapters/mcp/get-capabilities-test-vba-canonical.test.ts`
   //    pins the unification at the registry / snapshot boundary.
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe("test_vba — #1167 unification (apply is canonical, dryRun is alias)", () => {
-    it("registry declares commitFlag:apply and noWriteAlias:dryRun (#1167 unification)", () => {
+  describe("test_vba — v2.31 apply-only public contract", () => {
+    it("registry declares commitFlag:apply without a no-write alias", () => {
       const meta = registryEntry("test_vba");
       expect(meta.commitFlag).toBe("apply");
-      expect(meta.noWriteAlias).toBe("dryRun");
+      expect(meta.noWriteAlias).toBeNull();
       expect(meta.defaultBehavior).toBe("plan");
     });
 
-    it("test_vba schema declares BOTH apply and dryRun (homogenized single-flag design)", () => {
+    it("test_vba schema declares apply and hard-removes dryRun", () => {
       expect(schemaDeclares("test_vba", "apply")).toBe(true);
-      expect(schemaDeclares("test_vba", "dryRun")).toBe(true);
+      expect(schemaDeclares("test_vba", "dryRun")).toBe(false);
       expect(schemaDeclares("test_vba", "diff")).toBe(true);
     });
 
-    it("test_vba({ dryRun: true }) — accepted (plan path)", async () => {
+    it("test_vba({ dryRun: true }) — rejects the removed public flag", async () => {
       const result = await invokeWithExtra("test_vba", { dryRun: true });
-      // We do not require `ok:true` here — the dispatch may legitimately
-      // refuse for downstream reasons (no Access binary, sandbox gate);
-      // we only care that the schema did NOT reject the combination.
-      // Pin the negative space: schema validation must not flag the
-      // contradiction path for this canonical dryRun entry.
-      if (result.error?.code === "MCP_INPUT_INVALID") {
-        expect(result.error.message).not.toMatch(/mutually exclusive/i);
-        expect(result.error.message).not.toMatch(/contradicts/i);
-      }
+      expect(result.error?.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error?.rejectedFlag).toBe("dryRun");
+      expect(result.error?.message).toMatch(/dryRun is not allowed/i);
     });
 
     it("test_vba({ apply: true }) — accepted (commit path, canonical flag)", async () => {
@@ -449,7 +441,7 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
       expect(legacyAliasesFor("export_modules")).toContain("diff");
     });
 
-    it("export_modules({ apply: true, dryRun: true }) — canonical contradiction, same envelope as the apply-family", async () => {
+    it("export_modules({ apply: true, dryRun: true }) rejects removed dryRun before dispatch", async () => {
       const result = await invokeWithExtra("export_modules", {
         apply: true,
         dryRun: true,
@@ -459,12 +451,8 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
         result.error?.rejectedFlag,
         ...((result.error as { rejectedFlags?: readonly string[] })?.rejectedFlags ?? []),
       ].filter((flag): flag is string => typeof flag === "string");
-      expect(allRejected).toContain("apply");
       expect(allRejected).toContain("dryRun");
-      // Acceptance criterion #4 — legacy aliases cannot invert an
-      // explicit canonical intent. The canonical `apply:true` wins,
-      // and the contradiction is surfaced uniformly.
-      expect(result.error?.toolCommitFlag).toBe("apply");
+      expect(result.error?.message).toMatch(/dryRun is not allowed/i);
     });
   });
 

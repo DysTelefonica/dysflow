@@ -180,7 +180,7 @@ describe("Dysflow MCP tool parity inventory", () => {
 
     await byName
       .get("run_vba")
-      ?.handler({ procedureName: "Smoke", argsJson: "[1,2]", dryRun: true });
+      ?.handler({ procedureName: "Smoke", argsJson: "[1,2]", apply: false });
     await byName.get("query_sql")?.handler({ sql: "SELECT 1" });
 
     expect(vba.requests).toEqual([
@@ -294,7 +294,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "teardown_fixture")
-        ?.handler({ tableName: "People", dryRun: false }),
+        ?.handler({ tableName: "People", apply: true }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -537,7 +537,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "compact_repair")
-        ?.handler({ databasePath: "C:/db.accdb", dryRun: true }),
+        ?.handler({ databasePath: "C:/db.accdb", apply: false }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,

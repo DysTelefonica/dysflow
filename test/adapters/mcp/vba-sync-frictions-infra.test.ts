@@ -210,7 +210,7 @@ describe("VBA-modifying tools write-gating", () => {
       const tool = tools.find((t) => t.name === "import_modules");
       expect(tool).toBeDefined();
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ moduleNames: ["Mod1"], dryRun: false }, {} as any);
+      const res = await tool.handler({ moduleNames: ["Mod1"], apply: true }, {} as any);
       expect(res.isError).toBe(true);
       expect(res.content?.[0]?.text).toContain(
         "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: import_modules).",
@@ -222,7 +222,7 @@ describe("VBA-modifying tools write-gating", () => {
       const tool = tools.find((t) => t.name === "import_all");
       expect(tool).toBeDefined();
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ dryRun: false }, {} as any);
+      const res = await tool.handler({ apply: true }, {} as any);
       expect(res.isError).toBe(true);
       expect(res.content?.[0]?.text).toContain(
         "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: import_all).",
@@ -265,7 +265,7 @@ describe("VBA-modifying tools write-gating", () => {
     {
       const tool = tools.find((t) => t.name === "import_modules");
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ moduleNames: ["Mod1"], dryRun: false }, {} as any);
+      const res = await tool.handler({ moduleNames: ["Mod1"], apply: true }, {} as any);
       expect(res.isError).toBeFalsy();
     }
 
@@ -273,7 +273,7 @@ describe("VBA-modifying tools write-gating", () => {
     {
       const tool = tools.find((t) => t.name === "import_all");
       if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ dryRun: false }, {} as any);
+      const res = await tool.handler({ apply: true }, {} as any);
       expect(res.isError).toBeFalsy();
     }
 

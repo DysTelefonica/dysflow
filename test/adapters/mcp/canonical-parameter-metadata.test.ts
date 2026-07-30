@@ -16,15 +16,15 @@
  *   2. Every parameter that the schema accepts as a legacy alias
  *      (e.g. `toolName` for `name`, `path` for `sourcePath`,
  *      `table` for `tableName`, `query` for `sql`, `directory` for
- *      `rootPath`, `diff` for `dryRun:false`) exposes (a) a `canonicalName`
+ *      `rootPath`, or legacy `diff` for preview mode) exposes (a) a `canonicalName`
  *      pointing at the preferred parameter, (b) `aliases` listing all
  *      canonical + legacy names known to the parser, and (c) `deprecated`
  *      with a `deprecatedSince` version when the alias is a documented
  *      legacy name.
  *   3. Sensitive parameters (`password`, `backendPassword`, `passwordEnv`)
  *      surface `sensitive: true`.
- *   4. Documented write-flag conflicts (`apply` vs `dryRun`, `dryRun:false`
- *      vs `diff:true`) surface `conflictsWith` and `precedence` so the
+ *   4. Documented write-flag conflicts (`apply:true` vs legacy `diff:true`)
+ *      surface `conflictsWith` and `precedence` so the
  *      consumer knows which flag wins.
  *   5. `describe_tool` (single-tool view) exposes the same metadata per
  *      parameter without requiring the full catalog.
@@ -165,7 +165,7 @@ const WRITE_FLAG_PAIRS: ReadonlyArray<{
   flags: readonly string[];
 }> = TOOLS.filter((tool) => isWriteIntentTool(tool.name)).map((tool) => ({
   tool: tool.name,
-  flags: ["apply", "dryRun", ...(legacyAliasesFor(tool.name).includes("diff") ? ["diff"] : [])],
+  flags: ["apply", ...(legacyAliasesFor(tool.name).includes("diff") ? ["diff"] : [])],
 }));
 
 function requiredParameter(parameter: ToolParameterSchema | undefined): ToolParameterSchema {
@@ -246,7 +246,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
         }
       }
     }
-    expect(defaultDescriptions).toBeGreaterThan(100);
+    expect(defaultDescriptions).toBeGreaterThan(90);
     expect(aliasDescriptions).toBeGreaterThan(80);
   });
 
@@ -383,6 +383,7 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
 
   it("write-flag conflicts expose conflictsWith and precedence", () => {
     for (const pair of WRITE_FLAG_PAIRS) {
+      if (pair.flags.length < 2) continue;
       const entry = catalogEntry(pair.tool);
       for (const flag of pair.flags) {
         const param = entry.parameters[flag];

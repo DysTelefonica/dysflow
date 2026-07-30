@@ -16,17 +16,17 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import type {
+  CheckId,
+  DiagnosticCategory,
+  ReasonCode,
+} from "../../core/contracts/diagnostic-check.js";
 import {
   DEFAULT_INSTRUCTION_FILE_PATHS,
   detectSupplementDrift,
   type InstructionFileReadPort,
   type SupplementDriftScanResult,
 } from "../../core/services/codegraph-supplement-drift-detector.js";
-import type {
-  CheckId,
-  DiagnosticCategory,
-  ReasonCode,
-} from "../../core/contracts/diagnostic-check.js";
 import { doctorCheckMetadata } from "./doctor/checks/types.js";
 import { getHome } from "./install/agent-config.js";
 

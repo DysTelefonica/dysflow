@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { doctorCheckMetadata, type DoctorCategoryCheck } from "./types.js";
+import { type DoctorCategoryCheck, doctorCheckMetadata } from "./types.js";
 
 /**
  * Issue #1057 (F9) — Category A: validate `.dysflow/project.json` schema,

@@ -20,11 +20,11 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  enforceRequiresConfirmation,
-  confirmationRequired,
-  confirmationNotNeeded,
-  CONFIRMATION_REQUIRED_CODE,
   CONFIRMATION_NOT_NEEDED_CODE,
+  CONFIRMATION_REQUIRED_CODE,
+  confirmationNotNeeded,
+  confirmationRequired,
+  enforceRequiresConfirmation,
 } from "../../../src/adapters/mcp/dispatch-common";
 import { doctorCheckMetadata } from "../../../src/cli/commands/doctor/checks/types";
 

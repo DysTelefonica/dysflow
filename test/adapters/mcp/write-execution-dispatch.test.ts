@@ -228,7 +228,6 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
-      apply: true,
       dryRun: false,
       moduleNames: ["Foo"],
     });
@@ -252,7 +251,6 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
-      apply: true,
       dryRun: true,
       moduleNames: ["Foo"],
     });
@@ -278,7 +276,6 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
       apply: true,
-      dryRun: false,
     });
   });
 
@@ -296,7 +293,6 @@ describe("writeExecutionPolicy forward — dispatch seam (#785)", () => {
 
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
-      apply: true,
       dryRun: true,
     });
   });

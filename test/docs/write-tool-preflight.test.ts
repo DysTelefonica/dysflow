@@ -65,7 +65,7 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
     expect(syncBinarySection).toContain("git rm -r");
   });
 
-  it("verify-examples-vs-runtime.ps1 covers the recovery workflow (git rm -r -> mkdir -> export_modules apply:true)", async () => {
+  it("verify-examples-vs-runtime.ps1 refreshes live captures before the semantic audit", async () => {
     if (!(await fileExists(VERIFY_SCRIPT_PATH))) {
       // Skill asset lives outside the repo (operator-local install).
       // CI runners don't have it; the schema assertions above still
@@ -73,15 +73,9 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
       return;
     }
     const script = await readFile(VERIFY_SCRIPT_PATH, "utf8");
-    // A single regex that matches all three steps in sequence with
-    // tolerated whitespace: removing src/, recreating it, then exporting.
-    expect(script).toMatch(
-      /git rm -r[^\n]*\n[\s\S]*?mkdir[\s\S]*?export_modules[\s\S]*?apply\s*:\s*true/s,
-    );
-    // The recovery story must be named in prose so reviewers can spot
-    // it without grepping the syntax.
-    expect(script).toMatch(/git rm -r/);
-    expect(script).toMatch(/mkdir/);
+    expect(script).toContain("Invoke-DysflowSemanticAudit.ps1");
+    expect(script).toMatch(/& \$audit -Refresh/);
+    expect(script).toContain("-SkipLive requires an existing complete -CapturesDir");
   });
 
   it("export-modules.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {

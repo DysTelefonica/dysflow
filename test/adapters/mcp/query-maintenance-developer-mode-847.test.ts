@@ -133,8 +133,8 @@ describe("#847 — safe-by-default mode: query-maintenance writes still plan (dr
   }
 });
 
-describe("#847 — explicit caller intent wins over policy injection", () => {
-  it("developer + link_tables + dryRun:true forwards dryRun:true (no policy override)", async () => {
+describe("#847 — explicit canonical caller intent wins over policy injection", () => {
+  it("developer + link_tables + apply:false forwards a plan (no policy override)", async () => {
     const queryService = new CapturingQueryService();
     const tools = buildTools(queryService, "developer");
     const tool = tools.find((candidate) => candidate.name === "link_tables");
@@ -143,7 +143,7 @@ describe("#847 — explicit caller intent wins over policy injection", () => {
     await tool.handler({
       accessPath: "C:/project/front.accdb",
       backendPath: "C:/project/back.accdb",
-      dryRun: true,
+      apply: false,
     });
 
     expect(queryService.requests).toHaveLength(1);

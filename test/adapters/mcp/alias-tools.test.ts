@@ -193,7 +193,7 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     }
   });
 
-  it("buildRunVbaRequest leaves dryRun undefined when not provided (PR1a #621)", async () => {
+  it("buildRunVbaRequest defaults its internal request to preview mode", async () => {
     const { buildRunVbaRequest, isMcpToolResult } = await import(
       "../../../src/adapters/mcp/alias-tools.js"
     );
@@ -202,7 +202,7 @@ describe("DELTA-006 — typed alias-tool request builders (read only declared fi
     });
     expect(isMcpToolResult(request)).toBe(false);
     if (!isMcpToolResult(request)) {
-      expect(request.dryRun).toBeUndefined();
+      expect(request.dryRun).toBe(true);
     }
   });
 

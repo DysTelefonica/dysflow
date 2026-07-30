@@ -7,12 +7,8 @@
 // check ports its policy via `requires_confirmation`; the registry
 // exposes those declarations so the dispatch seam can read them.
 
-import type {
-  CheckId,
-  DiagnosticCheck,
-  DiagnosticCategory,
-} from './diagnostic-check.js';
-import type { Remediation } from './remediation.js';
+import type { CheckId, DiagnosticCategory, DiagnosticCheck } from "./diagnostic-check.js";
+import type { Remediation } from "./remediation.js";
 
 /**
  * The pluggable registry. Implementation lives elsewhere
@@ -36,7 +32,7 @@ export interface MutatingToolDeclaration {
 
   /** The unified override flag the tool accepts. Literal type to
    *  prevent the regression of four parallel escape hatches. */
-  readonly accepts_override: 'confirmedRequiresConfirmation';
+  readonly accepts_override: "confirmedRequiresConfirmation";
 }
 
 /**
@@ -60,7 +56,7 @@ export interface RequiresConfirmationOverride {
  * override. Replaces ad-hoc rejection text from the four escape hatches.
  */
 export interface RequiresConfirmationError {
-  readonly code: 'CONFIRMATION_REQUIRED';
+  readonly code: "CONFIRMATION_REQUIRED";
   readonly message: string;
   readonly check_id: CheckId;
   readonly reason_code: string;

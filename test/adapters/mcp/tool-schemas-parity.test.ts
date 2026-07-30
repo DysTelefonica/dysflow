@@ -94,18 +94,16 @@ describe("HTTP validation schemas", () => {
     });
   });
 
-  it("MCP VBA_EXECUTE_SCHEMA declares dryRun as an optional boolean (PR1a #621 escape hatch)", () => {
-    const dryRun = VBA_EXECUTE_SCHEMA.properties?.dryRun as { type: string };
-    expect(dryRun).toBeDefined();
-    expect(dryRun.type).toBe("boolean");
-    expect(VBA_EXECUTE_SCHEMA.required).not.toContain("dryRun");
+  it("MCP VBA_EXECUTE_SCHEMA exposes canonical apply intent and rejects legacy dryRun", () => {
+    expect(VBA_EXECUTE_SCHEMA.properties).not.toHaveProperty("dryRun");
+    expect(VBA_EXECUTE_SCHEMA.properties?.apply).toMatchObject({ type: "boolean" });
+    expect(VBA_EXECUTE_SCHEMA.required).not.toContain("apply");
   });
 
-  it("MCP run_vba schema declares dryRun as an optional boolean (PR1a #621 escape hatch)", () => {
-    const dryRun = MCP_TOOL_SCHEMAS.run_vba?.properties?.dryRun as { type: string };
-    expect(dryRun).toBeDefined();
-    expect(dryRun.type).toBe("boolean");
-    expect(MCP_TOOL_SCHEMAS.run_vba?.required).not.toContain("dryRun");
+  it("MCP run_vba schema exposes canonical apply intent and rejects legacy dryRun", () => {
+    expect(MCP_TOOL_SCHEMAS.run_vba?.properties).not.toHaveProperty("dryRun");
+    expect(MCP_TOOL_SCHEMAS.run_vba?.properties?.apply).toMatchObject({ type: "boolean" });
+    expect(MCP_TOOL_SCHEMAS.run_vba?.required).not.toContain("apply");
   });
 
   // PR2 (#621 F1 / #6a) — query_execute write mode must surface
@@ -145,11 +143,15 @@ describe("HTTP validation schemas", () => {
     expect(legacy).toBeDefined();
     if (legacy === undefined) return; // narrows `legacy` for the rest of the block
 
-    // Every property that the legacy schema declares (except the required
-    // operationId/accessPath and `force`) MUST also be present on the modern
-    // CLEANUP_SCHEMA. This pins the parity surface that buildCleanupRequest
-    // projects.
-    const requiredLegacyKeys = ["operationId", "accessPath", "force"] as const;
+    // Protocol-only confirmation metadata stays on the MCP schema and is not
+    // projected into the HTTP cleanup request.
+    const requiredLegacyKeys = [
+      "operationId",
+      "accessPath",
+      "force",
+      "implements_check",
+      "confirmedRequiresConfirmation",
+    ] as const;
     const legacyOptionalKeys = Object.keys(legacy.properties ?? {}).filter(
       (key) => !requiredLegacyKeys.includes(key as (typeof requiredLegacyKeys)[number]),
     );

@@ -95,6 +95,8 @@ describe("shared-block class coverage (#1192)", () => {
     expect(STRICT_CONTEXT_EXCEPTIONS).toEqual({
       catalog_add_control:
         "Offline catalog-file mutation; it resolves no Access or managed-source execution target.",
+      clean_stale_markers:
+        "Local runtime-marker maintenance; it resolves no Access or managed-source execution target.",
       generate_form:
         "Offline form-spec generation; it resolves no Access or managed-source execution target.",
       migrate_project_config:
@@ -230,7 +232,7 @@ describe("shared-block class coverage (#1192)", () => {
     expect(result.ok).toBe(true);
     expect(executeMappedTool).toHaveBeenCalledWith(
       "import_modules",
-      expect.objectContaining({ timeoutMs: 12_345, apply: true, dryRun: false }),
+      expect.objectContaining({ timeoutMs: 12_345, apply: true }),
       expect.anything(),
     );
   });

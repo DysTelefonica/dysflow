@@ -103,7 +103,7 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     const result = await tool.handler({
       accessPath: ACCESS_PATH_A,
       moduleNames: ["Module_A"],
-      dryRun: false,
+      apply: true,
     });
 
     expect(result.isError).toBe(false);
@@ -178,7 +178,7 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     const resultA = await toolA.handler({
       accessPath: ACCESS_PATH_A,
       moduleNames: ["X"],
-      dryRun: false,
+      apply: true,
     });
     const dataA = parseHandlerContent<Record<string, unknown>>(resultA.content);
     expect(typeof dataA.humanCompileReminder).toBe("string");
@@ -188,7 +188,7 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     const resultB = await toolB.handler({
       accessPath: ACCESS_PATH_B,
       moduleNames: ["Y"],
-      dryRun: false,
+      apply: true,
     });
     const dataB = parseHandlerContent<Record<string, unknown>>(resultB.content);
     expect(dataB.humanCompileReminder).toBeUndefined();
@@ -241,7 +241,7 @@ describe("humanCompileReminder (#762) — emitted on vba-sync tool results", () 
     const result = await tool.handler({
       accessPath: ACCESS_PATH_A,
       moduleNames: ["X"],
-      dryRun: false,
+      apply: true,
     });
 
     expect(result.isError).toBe(true);

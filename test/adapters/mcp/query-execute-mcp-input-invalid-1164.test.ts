@@ -18,8 +18,8 @@
  *   - Happy path — `mode: "read"` returns the query service result.
  *   - Sad path — missing `mode` returns the structured envelope.
  *   - Edge path — `mode: "write"` + `apply: true` (writes enabled) commits;
- *     `dryRun: true` plans; missing `mode` with any value of `apply` /
- *     `dryRun` short-circuits to the structured rejection.
+ *     `apply: false` plans; missing `mode` with either value of `apply`
+ *     short-circuits to the structured rejection.
  */
 import { describe, expect, it, vi } from "vitest";
 import { createDysflowMcpTools, type DysflowMcpServices } from "../../../src/adapters/mcp/tools.js";
@@ -105,12 +105,12 @@ describe("query_execute (issue #1164) — missing mode returns structured MCP_IN
     expect(result?.content[0]?.text.startsWith("MCP_INPUT_INVALID:")).toBe(true);
   });
 
-  it("missing mode short-circuits even when dryRun: true is supplied (apply/dryRun are orthogonal)", async () => {
+  it("missing mode short-circuits even when apply: false is supplied", async () => {
     const { services, queryExecute } = buildQueryExecuteServices();
     const tools = createDysflowMcpTools({ services, writes: true });
     const tool = tools.find((t) => t.name === "query_execute");
 
-    const result = await tool?.handler({ sql: "SELECT 1", dryRun: true });
+    const result = await tool?.handler({ sql: "SELECT 1", apply: false });
 
     expect(result?.isError).toBe(true);
     expect(result?.error?.code).toBe("MCP_INPUT_INVALID");
@@ -147,7 +147,7 @@ describe("query_execute (issue #1164) — missing mode returns structured MCP_IN
     expect(queryExecute).toHaveBeenCalledTimes(1);
   });
 
-  it("happy path — mode: 'write' + dryRun: true plans (apply/dryRun contract preserved)", async () => {
+  it("happy path — mode: 'write' + apply: false plans", async () => {
     const { services, queryExecute } = buildQueryExecuteServices();
     const tools = createDysflowMcpTools({ services, writes: true });
     const tool = tools.find((t) => t.name === "query_execute");
@@ -155,7 +155,7 @@ describe("query_execute (issue #1164) — missing mode returns structured MCP_IN
     const result = await tool?.handler({
       sql: "UPDATE T SET A = 1",
       mode: "write",
-      dryRun: true,
+      apply: false,
     });
 
     expect(result?.isError).toBeFalsy();

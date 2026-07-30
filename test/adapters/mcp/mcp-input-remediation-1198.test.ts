@@ -9,6 +9,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 import { validateInput } from "../../../src/shared/validation/validator.js";
 
 type InputError = {
+  message?: string;
   missingParam?: string;
   rejectedFlag?: string;
   rejectedFlags?: readonly string[];
@@ -79,20 +80,20 @@ describe("MCP input remediation failure kinds (#1198)", () => {
     expect(error.remediation).toBe('fix_encoding does not accept "unexpectedOption".');
   });
 
-  it("keeps conflicting apply and dryRun on the write-flag guidance path", async () => {
+  it("explains the conflict between canonical apply and legacy diff", async () => {
     const result = await tool("query_execute").handler({
       sql: "SELECT 1",
-      mode: "read",
+      mode: "write",
       apply: true,
-      dryRun: true,
+      diff: true,
     });
     const error = inputError(result);
 
-    expect(error.rejectedFlag).toBe("apply");
-    expect(error.rejectedFlags).toEqual(["apply", "dryRun"]);
+    expect(error.message).toContain("apply and diff are mutually exclusive");
+    expect(error.message).toContain("apply is the canonical commit signal");
+    expect(error.message).toContain("diff:true is a deprecated alias of apply:false");
     expect(error.missingParam).toBeUndefined();
-    expect(error.toolCommitFlag).toBe("apply");
-    expect(error.remediation).toContain("opposite write intents");
+    expect(error.remediation).toContain("Check the tool schema");
   });
 
   it("keeps a specific remediation verbatim instead of appending generic guidance", () => {

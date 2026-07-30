@@ -14,9 +14,9 @@
 // internal/diagnostic/registry.go and to enable trivial JSON <-> TS
 // round-trips without a transform layer.
 
-import type { Remediation } from './remediation.js';
+import type { Remediation } from "./remediation.js";
 
-export type Severity = 'critical' | 'warning' | 'info';
+export type Severity = "critical" | "warning" | "info";
 
 /**
  * Stable snake_case identifier. Branch-stable. Version-stable.
@@ -39,11 +39,11 @@ export type ReasonCode = string;
  * (foreign-PID lock).
  */
 export type DiagnosticCategory =
-  | 'projectConfig'   // existing category A — project-config.ts
-  | 'source'          // existing category B — vba-structure.ts
-  | 'runtimeConsumer' // existing category C — runtime-consumer.ts
-  | 'externalDeps'    // existing category D — external-deps.ts
-  | 'safety';         // NEW — cross-cutting runtime/policy checks
+  | "projectConfig" // existing category A — project-config.ts
+  | "source" // existing category B — vba-structure.ts
+  | "runtimeConsumer" // existing category C — runtime-consumer.ts
+  | "externalDeps" // existing category D — external-deps.ts
+  | "safety"; // NEW — cross-cutting runtime/policy checks
 
 /**
  * Single source of truth for diagnostic check shape.
@@ -105,7 +105,7 @@ export interface DiagnosticCheck<TInput = unknown, TEvidence = unknown> {
 
 export interface DiagnosticCheckResult<TEvidence = unknown> {
   readonly check_id: CheckId;
-  readonly status: 'pass' | 'fail' | 'skip';
+  readonly status: "pass" | "fail" | "skip";
   readonly severity: Severity;
   readonly message: string;
   readonly evidence?: TEvidence;
