@@ -329,12 +329,30 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // array to the response with per-module {source, destination, truncated,
       // mismatchReason} entries.
       verbose: SCHEMA_PROPS.verboseContract,
-      // Issue #785 (v2.1.1) — opt-in acknowledgment for the export-source
-      // guard. When `developer` mode is active and the destination overlaps
-      // the project's active source root, the dispatcher refuses with
-      // `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` unless the caller
-      // passes this flag. Ignored in `safe-by-default` mode.
-      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
+      // Slice 3 — unified `requires_confirmation` policy.
+      implements_check: {
+        type: "string",
+        description:
+          "Issue #feat-check-envelope-unification — diagnostic check_id that enforces the requires_confirmation policy for this tool. export_modules maps to 'export_overwrites_source_precheck' (#1245). Passes through `dispatch-factory.ts:enforceRequiresConfirmation`.",
+      },
+      confirmedRequiresConfirmation: {
+        type: "boolean",
+        description:
+          "Required when implements_check maps to a check with requires_confirmation: true and the destination overlaps the source root. Pass 'true' to explicitly confirm; the helper returns CONFIRMATION_REQUIRED if missing.",
+      },
+      // Slice 3 — `confirmOverwriteSource` is preserved as a deprecated
+      // accept-and-ignore alias. The new contract is
+      // `implements_check: "export_overwrites_source_precheck"` +
+      // `confirmedRequiresConfirmation: true`. Test fixtures and
+      // operator-side clients may still pass the legacy flag; the
+      // schema accepts it without error so the migration is
+      // non-breaking. Hard-removal targeted for v3.0.
+      confirmOverwriteSource: {
+        type: "boolean",
+        description:
+          "DEPRECATED (slice 3) — legacy export-source guard opt-in. Use 'confirmedRequiresConfirmation: true' with 'implements_check: \"export_overwrites_source_precheck\"' instead. Required when the destination overlaps the active source root under developer mode + execute path; the safe-by-default policy injects dryRun:true and never reaches the guard. Accepted without error for backward compatibility; hard-removal in v3.0.",
+        deprecated: true,
+      },
       // Issue #968 — opt-in acknowledgment that the accessPath override
       // lives outside the active worktree. Honored because `export_modules`
       // never mutates the binary; reads from a release `.accdb` are allowed
@@ -378,9 +396,26 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       allowConfiguredDestinationRoot: SCHEMA_PROPS.allowConfiguredDestinationRoot,
       // issue #752 — opt-in verbose flag.
       verbose: SCHEMA_PROPS.verboseContract,
-      // Issue #785 (v2.1.1) — see export_modules for semantics; same
-      // opt-in acknowledgment field for full-mirror exports.
-      confirmOverwriteSource: SCHEMA_PROPS.confirmOverwriteSource,
+      // Slice 3 — unified `requires_confirmation` policy. Same shape as
+      // export_modules above; references the same check.
+      implements_check: {
+        type: "string",
+        description:
+          "Diagnostic check_id for the unified envelope (slice 3). export_all maps to 'export_overwrites_source_precheck'.",
+      },
+      confirmedRequiresConfirmation: {
+        type: "boolean",
+        description:
+          "Required when implements_check maps to a check with requires_confirmation: true. Pass 'true' to confirm an overwriting export.",
+      },
+      // Slice 3 — `confirmOverwriteSource` is preserved as a deprecated
+      // accept-and-ignore alias. Same rationale as export_modules above.
+      confirmOverwriteSource: {
+        type: "boolean",
+        description:
+          "DEPRECATED (slice 3) — legacy export-source guard opt-in. Use 'confirmedRequiresConfirmation: true' with 'implements_check: \"export_overwrites_source_precheck\"' instead. Required when the destination overlaps the active source root under developer mode + execute path; the safe-by-default policy injects dryRun:true and never reaches the guard. Accepted without error for backward compatibility; hard-removal in v3.0.",
+        deprecated: true,
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

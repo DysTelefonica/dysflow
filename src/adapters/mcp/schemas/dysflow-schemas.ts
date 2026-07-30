@@ -329,11 +329,30 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
     // other tool that uses these atoms.
     ...PROJECT_IDENTITY_BLOCK,
     accessPath: SCHEMA_PROPS.accessPath,
+    // Slice 3 — unified `requires_confirmation` policy.
+    implements_check: {
+      type: "string",
+      description:
+        "Diagnostic check_id for the unified envelope. access_force_cleanup_orphaned maps to 'orphans_msaccess'. Enforced by dispatch-factory.ts:enforceRequiresConfirmation.",
+    },
+    confirmedRequiresConfirmation: {
+      type: "boolean",
+      description:
+        "Required when implements_check maps to 'orphans_msaccess' (requires_confirmation: true) and the call wants to actually kill the listed process. Pass 'true' after explicit human ack.",
+    },
+    // Slice 3 — `confirmPid` is preserved as a deprecated accept-and-ignore
+    // alias. The new contract is `implements_check: "orphans_msaccess"` +
+    // `confirmedRequiresConfirmation: true` (dispatch-factory.ts
+    // :enforceRequiresConfirmation enforces the unified policy). Test
+    // fixtures and operator-side clients may still pass `confirmPid`;
+    // the schema accepts it without error so the migration is non-breaking.
+    // Hard-removal targeted for v3.0.
     confirmPid: {
       type: "number",
       minimum: 1,
       description:
-        "Optional explicit PID the operator confirms they want killed. Omit confirmPid to list orphan candidates (MSACCESS.EXE or pwsh.exe worker). When present, the tool refuses zero or negative values. No wildcards, no name match — only this exact PID, and only if it is headless AND holding the accessPath (MSACCESS) or owned by a Dysflow operation (pwsh worker).",
+        "DEPRECATED (slice 3) — legacy PID-specific cleanup confirmation. Use 'confirmedRequiresConfirmation: true' with 'implements_check: \"orphans_msaccess\"' instead. Accepted without error for backward compatibility; hard-removal in v3.0.",
+      deprecated: true,
     },
   },
 };
@@ -360,6 +379,17 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
     // the consumer-facing description is the same as every other tool
     // that uses this atom.
     ...PROJECT_IDENTITY_BLOCK,
+    // Slice 3 — unified `requires_confirmation` policy.
+    implements_check: {
+      type: "string",
+      description:
+        "Diagnostic check_id for the unified envelope. clean_stale_markers maps to 'stale_markers' (requires_confirmation: true). Enforced by dispatch-factory.ts:enforceRequiresConfirmation.",
+    },
+    confirmedRequiresConfirmation: {
+      type: "boolean",
+      description:
+        "Required for non-dry-run calls when implements_check = 'stale_markers'. Pass 'true' after the human confirmed the reaper intent.",
+    },
     options: {
       type: "object",
       description:
@@ -375,7 +405,8 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
         dryRun: {
           type: "boolean",
           description:
-            "When true (default), return the plan without writing. When false, perform real transitions (requires confirm:true).",
+            "DEPRECATED (slice 3) — legacy plan signal. Use 'apply: false' instead; the dispatch seam injects the plan default from the write-execution policy. Accepted without error for backward compatibility; hard-removal in v3.0.",
+          deprecated: true,
         },
         keepFailed: {
           type: "boolean",
@@ -385,7 +416,8 @@ export const CLEAN_STALE_MARKERS_SCHEMA: JsonObjectSchema = {
         confirm: {
           type: "boolean",
           description:
-            "Required for any non-dry-run call. Literal `true` is the only acceptable value; omitting it or passing false leaves the tool in dry-run mode.",
+            "DEPRECATED (slice 3) — legacy confirmation flag. Use top-level 'confirmedRequiresConfirmation: true' with 'implements_check: \"stale_markers\"' instead. Literal `true` was the only acceptable value; omitting it or passing false left the tool in dry-run mode. Accepted without error for backward compatibility; hard-removal in v3.0.",
+          deprecated: true,
         },
       },
     },
