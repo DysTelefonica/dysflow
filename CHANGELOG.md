@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.30.1] - 2026-07-30
+
+### Changes
+
+- fix(vba-sync): harden PowerShell startup and temp cleanup (#1234)
+
+
 ## [v2.30.0] - 2026-07-30
 
 ### Changes
