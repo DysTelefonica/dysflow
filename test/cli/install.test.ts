@@ -1,4 +1,13 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -548,6 +557,123 @@ describe("handleInstallCommand end-to-end", () => {
 });
 
 describe("handleUpdateCommand end-to-end", () => {
+  it("refreshes every bundled agent plugin byte-for-byte and preserves skill symlinks", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-plugins-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const releasePackageRoot = await createPackageRoot(root, "9.9.9", "PLUGIN_RUNTIME");
+    const pluginFixtures = [
+      {
+        source: "claude-code",
+        destination: join(home, ".claude", "plugins", "dysflow"),
+        manifest: join(".claude-plugin", "plugin.json"),
+      },
+      {
+        source: "codex",
+        destination: join(home, ".codex", "plugins", "dysflow"),
+        manifest: join(".codex-plugin", "codex.json"),
+      },
+      {
+        source: "opencode",
+        destination: join(home, ".config", "opencode", "plugins", "dysflow"),
+        manifest: "dysflow.ts",
+      },
+    ] as const;
+
+    try {
+      for (const fixture of pluginFixtures) {
+        const sourceRoot = join(releasePackageRoot, "plugin", fixture.source);
+        await mkdir(join(sourceRoot, "hooks"), { recursive: true });
+        await mkdir(join(sourceRoot, join(fixture.manifest, "..")), { recursive: true });
+        await writeFile(join(sourceRoot, fixture.manifest), `${fixture.source}-manifest\n`, "utf8");
+        await writeFile(
+          join(sourceRoot, ".mcp.json"),
+          JSON.stringify({ mcpServers: { dysflow: { command: fixture.source } } }),
+          "utf8",
+        );
+        await writeFile(
+          join(sourceRoot, "hooks", "hooks.json"),
+          JSON.stringify({ hooks: { SessionStart: [], Stop: [] } }),
+          "utf8",
+        );
+
+        await mkdir(fixture.destination, { recursive: true });
+        await writeFile(join(fixture.destination, ".mcp.json"), "old config\n", "utf8");
+        await writeFile(join(fixture.destination, "stale.txt"), "remove me\n", "utf8");
+      }
+
+      const skillTarget = join(root, "dysflow-protocol-skill");
+      const skillLink = join(home, ".codex", "skills", "dysflow-protocol");
+      await mkdir(skillTarget, { recursive: true });
+      await writeFile(join(skillTarget, "SKILL.md"), "# protocol\n", "utf8");
+      await mkdir(join(skillLink, ".."), { recursive: true });
+      await symlink(skillTarget, skillLink, "junction");
+      const originalSkillTarget = await readlink(skillLink);
+
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+        env: { USERPROFILE: home },
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => ({ packageRoot: releasePackageRoot }),
+        },
+      });
+
+      expect(result.exitCode).toBe(0);
+      for (const fixture of pluginFixtures) {
+        const sourceRoot = join(releasePackageRoot, "plugin", fixture.source);
+        expect(await readFile(join(fixture.destination, fixture.manifest))).toEqual(
+          await readFile(join(sourceRoot, fixture.manifest)),
+        );
+        expect(await readFile(join(fixture.destination, ".mcp.json"))).toEqual(
+          await readFile(join(sourceRoot, ".mcp.json")),
+        );
+        await expect(access(join(fixture.destination, "stale.txt"))).rejects.toThrow();
+      }
+      expect(await readlink(skillLink)).toBe(originalSkillTarget);
+      expect(result.stdout).toContain("Plugin layer refresh:");
+      expect(result.stdout).toContain("claude-code:");
+      expect(result.stdout).toContain("codex:");
+      expect(result.stdout).toContain("opencode:");
+      expect(result.stdout).toContain("hooks: SessionStart, Stop");
+      expect(result.stdout).toContain("MCP config: changed");
+      expect(result.stdout).toContain("dysflow-protocol skill symlink: preserved");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed before replacing any plugin when a bundled agent source is incomplete", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-partial-plugins-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const releasePackageRoot = await createPackageRoot(root, "9.9.9", "PARTIAL_PLUGIN_RUNTIME");
+    const claudeSource = join(releasePackageRoot, "plugin", "claude-code");
+    const claudeDestination = join(home, ".claude", "plugins", "dysflow");
+
+    try {
+      await mkdir(claudeSource, { recursive: true });
+      await writeFile(join(claudeSource, ".mcp.json"), "new config\n", "utf8");
+      await mkdir(claudeDestination, { recursive: true });
+      await writeFile(join(claudeDestination, ".mcp.json"), "existing config\n", "utf8");
+
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+        env: { USERPROFILE: home },
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => ({ packageRoot: releasePackageRoot }),
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Bundled plugin source is incomplete");
+      expect(await readFile(join(claudeDestination, ".mcp.json"), "utf8")).toBe(
+        "existing config\n",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("updates runtime from a newer GitHub release package provider", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-update-release-"));
     const runtimeDir = join(root, "runtime");

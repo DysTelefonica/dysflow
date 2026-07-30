@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { compareVersions } from "../../../core/utils/version.js";
 import { parseNamedArgs } from "../arg-parser.js";
 import type { CliResult } from "../types.js";
-import { type AgentName, ALL_AGENTS } from "./agent-config.js";
+import { type AgentName, ALL_AGENTS, getHome } from "./agent-config.js";
 import {
   createGitHubReleaseUpdateProvider,
   type PreparedReleasePackage,
@@ -16,6 +16,7 @@ import {
   writeRuntimeMarker,
 } from "./extractor.js";
 import { resolvePackageRoot } from "./package-root.js";
+import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
 import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 
 export const INSTALL_USAGE =
@@ -252,6 +253,11 @@ export async function handleUpdateCommand(
     });
     const releaseRuntimePaths = resolveRuntimePaths(runtimeDir, preparedPackage.packageRoot);
     await installRuntime(releaseRuntimePaths, preparedPackage.packageRoot, env);
+    const pluginRefresh = await refreshBundledAgentPlugins(
+      preparedPackage.packageRoot,
+      getHome(env),
+    );
+    const pluginRefreshReport = createPluginRefreshReport(pluginRefresh);
     const previousVersionStr =
       installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
     const latestVersionStr = `v${latestRelease.version}`;
@@ -262,7 +268,8 @@ export async function handleUpdateCommand(
         (preparedPackage.commitSha === undefined
           ? ""
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
-        createInstallReport(runtimeDir, []),
+        createInstallReport(runtimeDir, []) +
+        (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
       stderr: "",
     };
   } catch (error) {
