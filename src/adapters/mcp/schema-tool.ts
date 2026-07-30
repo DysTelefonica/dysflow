@@ -1223,9 +1223,7 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
         ? tool.compositionConstraints.flatMap((group) =>
             group.alternatives.map((alt) => [...alt.parameters]),
           )
-        : ((tool.inputSchema.anyOf ?? []).map((alternative) =>
-            [...(alternative.required ?? [])],
-          )),
+        : (tool.inputSchema.anyOf ?? []).map((alternative) => [...(alternative.required ?? [])]),
     defaults,
     writeIntent:
       tool.access === "read-only"
