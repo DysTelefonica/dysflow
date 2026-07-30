@@ -19,6 +19,7 @@ describe("release diagnostics bundle", () => {
       const bundledPaths = archiveCommand?.[1]?.trim().split(/\s+/) ?? [];
       expect(bundledPaths).toEqual(
         expect.arrayContaining([
+          "plugin",
           "references/error-codes.md",
           "docs/diagnostics/hresult-guide.md",
           "docs/diagnostics/form-import-gate-failures.md",
