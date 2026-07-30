@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSpawn = vi.fn();
@@ -8,6 +9,7 @@ vi.mock("node:child_process", () => ({
 import {
   createDefaultPowerShellExecutor,
   POWERSHELL_SYSTEM_ENV_KEYS,
+  resolvePowerShellExecutable,
   spawnPowerShellProcess,
 } from "../../../src/adapters/powershell/default-executor.js";
 
@@ -51,6 +53,57 @@ describe("spawnPowerShellProcess — spawn security options", () => {
     const capturedOptions = mockSpawn.mock.calls.at(0)?.[2] as { shell?: unknown };
     expect(capturedOptions).toBeDefined();
     expect(capturedOptions.shell).toBe(false);
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "spawns an absolute compatible executable instead of inheriting PATH lookup",
+    async () => {
+      await spawnPowerShellProcess({
+        command: "powershell.exe",
+        args: ["-Command", "exit 0"],
+        timeoutMs: 5_000,
+        env: { PATH: "" },
+      });
+
+      const command = mockSpawn.mock.calls.at(0)?.[0];
+      expect(typeof command).toBe("string");
+      expect(isAbsolute(command as string)).toBe(true);
+    },
+  );
+});
+
+describe("resolvePowerShellExecutable — degraded Windows PATH (#1233)", () => {
+  const windowsPowerShell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  const pwsh = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+
+  it("resolves the absolute Windows PowerShell executable without consulting PATH", () => {
+    expect(
+      resolvePowerShellExecutable("powershell.exe", {
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ProgramFiles: "C:\\Program Files", PATH: "" },
+        exists: (candidate) => candidate === windowsPowerShell,
+      }),
+    ).toBe(windowsPowerShell);
+  });
+
+  it("falls back to an absolute pwsh executable when Windows PowerShell is unavailable", () => {
+    expect(
+      resolvePowerShellExecutable("powershell.exe", {
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ProgramFiles: "C:\\Program Files", PATH: "" },
+        exists: (candidate) => candidate === pwsh,
+      }),
+    ).toBe(pwsh);
+  });
+
+  it("fails closed when neither compatible executable exists", () => {
+    expect(
+      resolvePowerShellExecutable("powershell.exe", {
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ProgramFiles: "C:\\Program Files", PATH: "" },
+        exists: () => false,
+      }),
+    ).toBeUndefined();
   });
 });
 
