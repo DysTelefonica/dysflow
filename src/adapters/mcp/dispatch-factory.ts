@@ -9,6 +9,7 @@ import { resultContractForDispatchTool } from "./contracts/dispatch-result-contr
 import {
   destinationRootRequired,
   enrichmentForValidationMessage,
+  enforceRequiresConfirmation,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
@@ -237,6 +238,14 @@ export function createDispatchTool(
         }
         return invalidInput(validation, undefined, { toolName: name });
       }
+      // Slice 3 — unified `requires_confirmation` enforcement. The
+      // helper reads `params.implements_check` + `params.confirmedRequiresConfirmation`,
+      // looks up the matched check's `requires_confirmation` policy,
+      // and either demands the override or returns a typed envelope.
+      // Centralised here so every mutating tool inherits it without
+      // per-handler wiring.
+      const confirmationCheck = enforceRequiresConfirmation(normalizedInput, name);
+      if (confirmationCheck !== undefined) return confirmationCheck;
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
       // caller-supplied payload, untouched by the policy injection) and
