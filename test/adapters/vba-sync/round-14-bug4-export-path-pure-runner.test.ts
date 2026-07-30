@@ -22,10 +22,65 @@
  * path is the `spawn powershell.exe` code path that produced
  * `POWERSHELL_SPAWN_FAILED` on the consumer.
  */
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveExportPathOverride } from "../../../src/adapters/vba-sync/export-path-router.js";
+import {
+  type VbaManagerExecutionRequest,
+  VbaSyncAdapter,
+} from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
 
 describe("Round-14 bug 4 — exportPath routes through the pure runner (#1228)", () => {
+  async function executeProductionExport(params: Record<string, unknown>) {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-export-route-"));
+    const accessPath = join(root, "front.accdb");
+    await writeFile(accessPath, "fixture", "utf8");
+    const calls: VbaManagerExecutionRequest[] = [];
+    const service = new VbaSyncAdapter({
+      cwd: root,
+      accessPath,
+      destinationRoot: join(root, "configured-src"),
+      env: {},
+      executor: async (request) => {
+        calls.push(request);
+        return {
+          exitCode: 0,
+          stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Module1"]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("export_modules", {
+      moduleNames: ["Module1"],
+      apply: true,
+      ...params,
+    });
+    return { result, calls };
+  }
+
+  it("wires destinationRoot through the real production export executor seam", async () => {
+    const destinationRoot = join(await mkdtemp(join(tmpdir(), "dysflow-destination-")), "src");
+    const { result, calls } = await executeProductionExport({ destinationRoot });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.destinationRoot).toBe(destinationRoot);
+  });
+
+  it("wires legacy exportPath through the same real production export executor seam", async () => {
+    const exportPath = join(await mkdtemp(join(tmpdir(), "dysflow-export-path-")), "src");
+    const { result, calls } = await executeProductionExport({ exportPath });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.destinationRoot).toBe(exportPath);
+  });
+
   it("resolves exportPath as the destinationRoot for the pure-runner path", () => {
     const result = resolveExportPathOverride({
       toolName: "export_modules",

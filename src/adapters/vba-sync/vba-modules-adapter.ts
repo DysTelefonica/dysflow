@@ -38,6 +38,10 @@ import {
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
+import {
+  removeTemporaryDirectoryWithRetry,
+  TemporaryDirectoryCleanupError,
+} from "../../core/utils/temporary-directory-cleanup.js";
 import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import {
   type ControlPropertyBatch,
@@ -508,21 +512,45 @@ export class VbaModulesAdapter {
 
     const stagingDirectory = await mkdtemp(join(tmpdir(), "dysflow-export-"));
     const stagingPath = join(stagingDirectory, parse(binaryPath).base);
+    let result: OperationResult<unknown> | undefined;
+    let executionError: unknown;
     try {
       await copyFile(binaryPath, stagingPath);
-      const result = await this.orchestrator.executeMappedTool(
+      result = await this.orchestrator.executeMappedTool(
         toolName,
         { ...effectiveParams, accessPath: stagingPath, transactional: false },
         mapping,
       );
-      if (!result.ok) return result;
-      return {
-        ...result,
-        data: { ...(result.data as Record<string, unknown>), binaryMutated: false },
-      };
-    } finally {
-      await rm(stagingDirectory, { recursive: true, force: true });
+    } catch (error) {
+      executionError = error;
     }
+    try {
+      await removeTemporaryDirectoryWithRetry(stagingDirectory, { remove: rm });
+    } catch (error) {
+      if (error instanceof TemporaryDirectoryCleanupError) {
+        return failureResult(
+          createDysflowError("TEMP_CLEANUP_FAILED", error.message, {
+            retryable: true,
+            details: { causeCode: error.causeCode, attempts: error.attempts },
+          }),
+        );
+      }
+      throw error;
+    }
+    if (executionError !== undefined) throw executionError;
+    if (result === undefined) {
+      return failureResult(
+        createDysflowError(
+          "TEMP_CLEANUP_FAILED",
+          "The disposable export did not produce a result.",
+        ),
+      );
+    }
+    if (!result.ok) return result;
+    return {
+      ...result,
+      data: { ...(result.data as Record<string, unknown>), binaryMutated: false },
+    };
   }
 
   static handles(toolName: string): boolean {
