@@ -1,4 +1,5 @@
 import type { OperationResult } from "../../core/contracts/index.js";
+import type { CheckId } from "../../core/contracts/diagnostic-check.js";
 import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
@@ -8,6 +9,7 @@ import {
   APPLY_DRYRUN_CONTRADICTION_PREFIX,
   validateInput,
 } from "../../shared/validation/validator.js";
+import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
@@ -1051,6 +1053,166 @@ export function allowlistNotConfigured(
       options,
     ),
   });
+}
+
+/**
+ * Slice 3 — unified `requires_confirmation` policy.
+ *
+ * Replaces the four ad-hoc escape hatches (dryRun as planning signal,
+ * confirm on clean_stale_markers, confirmOverwriteSource on export_*,
+ * confirmPid on access_force_cleanup_orphaned) with one declarative
+ * field per check (`requires_confirmation: boolean`) and one override
+ * flag per call (`confirmedRequiresConfirmation: true`).
+ *
+ * Two envelope shapes: `CONFIRMATION_REQUIRED` (the check requires
+ * it, the caller didn't pass it) and `CONFIRMATION_NOT_NEEDED` (the
+ * caller passed the override on a check that doesn't need it, or no
+ * `implements_check` was declared at all).
+ */
+
+export const CONFIRMATION_REQUIRED_CODE = "CONFIRMATION_REQUIRED" as const;
+export const CONFIRMATION_NOT_NEEDED_CODE = "CONFIRMATION_NOT_NEEDED" as const;
+
+export type ConfirmationRequiredCode = typeof CONFIRMATION_REQUIRED_CODE;
+export type ConfirmationNotNeededCode = typeof CONFIRMATION_NOT_NEEDED_CODE;
+
+/**
+ * Build a `CONFIRMATION_REQUIRED` envelope from a DoctorCheckMetadata row.
+ * The check_id / reason_code flow through as top-level extras on
+ * `error`, so consumers can branch on them without parsing the message.
+ */
+export function confirmationRequired(
+  meta: ReturnType<typeof doctorCheckMetadata>,
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const message =
+    `check '${meta.check_id}' declares requires_confirmation: true; ` +
+    `the agent must capture explicit confirmation before this call is allowed.`;
+  const remediation =
+    `Re-run the call with 'confirmedRequiresConfirmation: true' after ` +
+    `the human explicitly approved the operation.`;
+  return withSchemaVersion({
+    content: [
+      {
+        type: "text",
+        text: `CONFIRMATION_REQUIRED: ${meta.check_id} (${meta.reason_code})`,
+      },
+    ],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: CONFIRMATION_REQUIRED_CODE,
+        message,
+        remediation,
+        check_id: meta.check_id,
+        reason_code: meta.reason_code,
+        details: { check: meta.check_id, severity_hint: "requires_confirmation: true" },
+      },
+      options,
+    ),
+  });
+}
+
+/**
+ * Build a `CONFIRMATION_NOT_NEEDED` envelope. Carries the offending
+ * check_id (or a sentinel `no_check_declared` when the caller passed
+ * the override without declaring a check) plus the check's reason_code
+ * so the agent can branch on it.
+ */
+export function confirmationNotNeeded(
+  checkId: string,
+  reasonCode: string,
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const message =
+    `check '${checkId}' does not require confirmation; ` +
+    `remove 'confirmedRequiresConfirmation' from the call.`;
+  const remediation =
+    `Drop the 'confirmedRequiresConfirmation' override; the check declares ` +
+    `requires_confirmation: false so the seam does not ask for one.`;
+  return withSchemaVersion({
+    content: [
+      {
+        type: "text",
+        text: `CONFIRMATION_NOT_NEEDED: ${checkId} (${reasonCode})`,
+      },
+    ],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: CONFIRMATION_NOT_NEEDED_CODE,
+        message,
+        remediation,
+        check_id: checkId,
+        reason_code: reasonCode,
+        details: { check: checkId, severity_hint: "requires_confirmation: false" },
+      },
+      options,
+    ),
+  });
+}
+
+/**
+ * Slice 3 dispatch helper — enforce the unified `requires_confirmation` policy.
+ *
+ * Inputs:
+ *   - `input` — the parsed MCP params object (post `validateInput`)
+ *   - `toolName` — for diagnostics only
+ *
+ * Returns:
+ *   - `undefined` if the call is allowed to proceed
+ *   - A `McpToolResult` envelope on either `CONFIRMATION_REQUIRED`
+ *     (check needs confirmation, override missing) or
+ *     `CONFIRMATION_NOT_NEEDED` (override present but check doesn't
+ *     need it, or no `implements_check` declared at all).
+ *
+ * Edge cases (pin by `test/adapters/mcp/dispatch-confirmation-required.test.ts`):
+ *   - non-record `input` → undefined
+ *   - empty string `implements_check` → treated as no check declared
+ *   - unknown check_id → `doctorCheckMetadata` throws; the helper
+ *     DOES NOT swallow this — surfaces the error path so consumers
+ *     see a typo in a `implements_check` value immediately.
+ */
+export function enforceRequiresConfirmation(
+  input: unknown,
+  toolName: string,
+): McpToolResult | undefined {
+  void toolName; // currently unused; reserved for future logging
+  if (typeof input !== "object" || input === null) {
+    return undefined;
+  }
+  const rec = input as Record<string, unknown>;
+  const override = rec.confirmedRequiresConfirmation;
+  const rawCheckId = rec.implements_check;
+  const checkIdStr =
+    typeof rawCheckId === "string" && rawCheckId.length > 0 ? rawCheckId : null;
+
+  // Case: override present, no check declared (or empty check).
+  if (override === true && checkIdStr === null) {
+    return confirmationNotNeeded("no_check_declared", "NO_CHECK_DECLARED");
+  }
+
+  // Case: no check declared and no override — default-allow.
+  if (checkIdStr === null) {
+    return undefined;
+  }
+
+  // checkIdStr is non-empty. Look up metadata. The helper deliberately
+  // does NOT catch the throw — typos in implements_check must surface.
+  const meta = doctorCheckMetadata(checkIdStr as CheckId);
+
+  if (meta.requires_confirmation && override !== true) {
+    return confirmationRequired(meta);
+  }
+  if (!meta.requires_confirmation && override === true) {
+    return confirmationNotNeeded(meta.check_id, meta.reason_code);
+  }
+
+  // Default-allow: either requires_confirmation: false + no override,
+  // or requires_confirmation: true + override present.
+  return undefined;
 }
 
 /**
