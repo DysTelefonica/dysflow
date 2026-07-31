@@ -6,7 +6,7 @@ describe("issue #1256 release E2E records", () => {
   const source = readFileSync(resolve("E2E_testing/mcp-e2e.mjs"), "utf8");
 
   it.each([
-    'await record("protocol", "data-schema-coverage", { projectId });',
+    'await record("protocol", "data-schema-coverage", { projectId, view: "compact" });',
     'await record("vba", "find_references:1018-schema-leak", {',
     'await record("vba-sync", "fix_encoding:plan-drift-visibility", {',
     'await record("vba-sync", "delete_module:bad-backendPath", {',
