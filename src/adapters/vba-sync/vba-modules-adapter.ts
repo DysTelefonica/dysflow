@@ -1,6 +1,6 @@
 import { copyFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, join, parse, resolve } from "node:path";
+import { extname, join, parse, relative, resolve } from "node:path";
 import packageJson from "../../../package.json" with { type: "json" };
 import {
   createDysflowError,
@@ -670,15 +670,7 @@ export class VbaModulesAdapter {
       return this.planDelete(params);
     }
     if (toolName === "fix_encoding" && resolveIsDryRun(params)) {
-      return successResult({
-        operation: "fix_encoding",
-        dryRun: true,
-        willExecute: false,
-        willModifyAccess: false,
-        willModifyFilesystem: false,
-        location: stringValue(params.location),
-        moduleNames: stringArray(params.moduleNames),
-      });
+      return this.planFixEncoding(params);
     }
 
     // Issue #958 — pre-import structural quality gate. Every planned
@@ -1639,6 +1631,22 @@ export class VbaModulesAdapter {
     const strict = this.orchestrator.validateStrictContext(params, target.data);
     if (!strict.ok) return strict;
 
+    const explicitBackendPath = stringValue(params.backendPath);
+    if (explicitBackendPath !== undefined) {
+      const backendExists = await stat(explicitBackendPath)
+        .then((entry) => entry.isFile())
+        .catch(() => false);
+      if (!backendExists) {
+        return failureResult(
+          createDysflowError("FILE_NOT_FOUND", `backendPath not found: ${explicitBackendPath}`, {
+            remediation:
+              "Pass an existing .accdb/.mdb backendPath, or omit backendPath to use the configured Access target.",
+            details: { backendPath: explicitBackendPath },
+          }),
+        );
+      }
+    }
+
     // Mirror the delete_module mapping (line 107): prefer `moduleNames`, fall
     // back to the singular `moduleName` so the plan exactly matches what the
     // runner would have received.
@@ -1671,6 +1679,53 @@ export class VbaModulesAdapter {
         errors,
       }),
     );
+  }
+
+  private async planFixEncoding(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.orchestrator.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+
+    const requested = new Set(stringArray(params.moduleNames).map((name) => name.toLowerCase()));
+    const filesInspected: string[] = [];
+    const detectedDrift: Array<{ file: string; issue: "utf8-bom" }> = [];
+    const location = stringValue(params.location)?.toLowerCase() ?? "both";
+
+    if (location !== "access") {
+      for (const folder of managedFolders(target.data.destinationRoot)) {
+        const entries = await readdir(folder, { withFileTypes: true }).catch(() => []);
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          const moduleName = managedDiskModuleName(entry.name);
+          if (moduleName === null) continue;
+          if (requested.size > 0 && !requested.has(moduleName.toLowerCase())) continue;
+          const absolutePath = join(folder, entry.name);
+          const file = relative(target.data.destinationRoot, absolutePath).replaceAll("\\", "/");
+          const bytes = await readFile(absolutePath);
+          filesInspected.push(file);
+          if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+            detectedDrift.push({ file, issue: "utf8-bom" });
+          }
+        }
+      }
+    }
+
+    filesInspected.sort((left, right) => left.localeCompare(right));
+    detectedDrift.sort((left, right) => left.file.localeCompare(right.file));
+    return successResult({
+      operation: "fix_encoding",
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      willModifyFilesystem: false,
+      location: stringValue(params.location),
+      moduleNames: stringArray(params.moduleNames),
+      filesInspected,
+      detectedDrift,
+    });
   }
 
   // Issue #807 (Feature 2) — bulk import_modules by directory. Resolves

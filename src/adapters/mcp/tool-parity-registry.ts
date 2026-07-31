@@ -78,7 +78,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   delete_module:
     "Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.",
   generate_erd:
-    "Generate an entity-relationship document of the database schema to erdPath. Read-only.",
+    "Generate an entity-relationship Markdown document of the database schema to the erdPath file. An extension-less erdPath is normalized by appending .md; erdPath is never interpreted as a directory. Read-only.",
   fix_encoding:
     "Normalize a leading UTF-8 BOM on source files (and round-trip module encoding in the binary). It ONLY removes BOMs — it does NOT restore lossy '?' characters left by mojibake; restore those by editing the source and confirm with verify_code.",
   // VBA sync — forms

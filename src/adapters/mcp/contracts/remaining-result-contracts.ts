@@ -67,25 +67,35 @@ export const getProcedureResultContract = defineResultContract({
 
 export const findReferencesResultContract = defineResultContract({
   description: "Paginated VBA symbol references, including source/binary differences in all scope.",
-  schema: z
-    .object({
-      symbol: z.string(),
-      scope: z.string(),
-      references: z.array(referenceEntrySchema),
-      totalCount: z.number().int().nonnegative(),
-      truncated: z.boolean(),
-      nextOffset: z.number().int().nonnegative().nullable(),
-      sourceReferences: z.array(referenceEntrySchema).optional(),
-      binaryReferences: z.array(referenceEntrySchema).optional(),
-      hasDifferences: z.boolean().optional(),
-      differences: z
-        .object({
+  schema: z.discriminatedUnion("scope", [
+    z
+      .object({
+        symbol: z.string(),
+        scope: z.literal("all"),
+        references: z.array(referenceEntrySchema),
+        totalCount: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+        nextOffset: z.number().int().nonnegative().nullable(),
+        sourceReferences: z.array(referenceEntrySchema),
+        binaryReferences: z.array(referenceEntrySchema),
+        hasDifferences: z.boolean(),
+        differences: z.object({
           onlyInSource: z.array(referenceEntrySchema),
           onlyInBinary: z.array(referenceEntrySchema),
-        })
-        .optional(),
-    })
-    .passthrough(),
+        }),
+      })
+      .passthrough(),
+    z
+      .object({
+        symbol: z.string(),
+        scope: z.enum(["module", "binary", "source"]),
+        references: z.array(referenceEntrySchema),
+        totalCount: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+        nextOffset: z.number().int().nonnegative().nullable(),
+      })
+      .passthrough(),
+  ]),
 });
 
 export const detectDeadCodeResultContract = defineResultContract({

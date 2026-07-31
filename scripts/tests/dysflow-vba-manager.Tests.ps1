@@ -2681,9 +2681,9 @@ Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" {
             $script:ComOpened | Should -Be $false
             $script:ExportDataStructureCalled | Should -Be $true
             $script:ExportDataStructureParams.DatabasePath | Should -Be "C:\mock\backend.accdb"
-            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd\backend.md"
+            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd.md"
             $script:ExportDataStructureParams.Password | Should -Be "secret"
-            $script:StatusMessages | Should -Contain "OK ERD generado en: C:\mock\erd\backend.md"
+            $script:StatusMessages | Should -Contain "OK ERD generado en: C:\mock\erd.md"
         }
     }
 
@@ -2702,7 +2702,7 @@ Describe "Invoke-GenerateErdAction — behavioral (decompose S3)" {
             $script:ComOpened | Should -Be $false
             $script:ExportDataStructureCalled | Should -Be $true
             $script:ExportDataStructureParams.DatabasePath | Should -Be "C:\mock\current\TestDB_Datos.accdb"
-            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd\TestDB_Datos.md"
+            $script:ExportDataStructureParams.OutputPath | Should -Be "C:\mock\erd.md"
             $script:ExportDataStructureParams.Password | Should -BeNullOrEmpty
         }
 

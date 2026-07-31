@@ -12,6 +12,51 @@ const passthroughObject = z.object({}).loose();
 const stringArray = z.array(z.string());
 const planApplyMode = z.enum(["plan", "apply"]);
 
+const queryReadPayload = z
+  .object({
+    rows: z.array(z.unknown()).optional(),
+    columns: z.array(z.unknown()).optional(),
+    affectedRows: z.number().int().nonnegative().optional(),
+    resolvedAccessPath: z.string().optional(),
+    count: z.number().int().nonnegative().optional(),
+    values: z.array(z.unknown()).optional(),
+    tables: z.array(z.unknown()).optional(),
+    files: z.array(z.unknown()).optional(),
+  })
+  .loose();
+
+/**
+ * The VBA read family has heterogeneous handlers, but its schema still names
+ * the observable fields consumers can receive instead of exposing an empty
+ * passthrough object. Route-specific contracts remain reserved for genuinely
+ * discriminated payloads.
+ */
+const vbaReadPayload = z
+  .object({
+    outputMode: z.string().optional(),
+    summary: z.unknown().optional(),
+    itemCount: z.number().int().nonnegative().optional(),
+    forms: z.array(z.unknown()).optional(),
+    reports: z.array(z.unknown()).optional(),
+    modules: z.array(z.unknown()).optional(),
+    classes: z.array(z.unknown()).optional(),
+    documentModules: z.array(z.unknown()).optional(),
+    components: z.array(z.unknown()).optional(),
+    moduleName: z.string().optional(),
+    moduleExists: z.boolean().optional(),
+    classExists: z.boolean().optional(),
+    controls: z.array(z.unknown()).optional(),
+    relationships: z.array(z.unknown()).optional(),
+    links: z.array(z.unknown()).optional(),
+    linkedTables: z.array(z.unknown()).optional(),
+    issues: z.array(z.unknown()).optional(),
+    diagnostics: z.array(z.unknown()).optional(),
+    warnings: z.array(z.unknown()).optional(),
+    errors: z.array(z.unknown()).optional(),
+    valid: z.boolean().optional(),
+  })
+  .loose();
+
 const RUN_VBA_CONTRACT = defineResultContract({
   description: "VBA procedure execution or dry-run plan.",
   modes: ["plan", "apply"],
@@ -27,6 +72,46 @@ const RUN_VBA_CONTRACT = defineResultContract({
       .loose(),
     z.object({ returnValue: z.unknown().optional() }).loose(),
   ]),
+});
+
+const QUERY_SQL_CONTRACT = defineResultContract({
+  description: "Access SQL rows.",
+  schema: queryReadPayload,
+});
+
+const FIX_ENCODING_CONTRACT = defineResultContract({
+  description: "Encoding normalization plan with inspected files and detected BOM drift.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      operation: z.literal("fix_encoding").optional(),
+      dryRun: z.boolean().optional(),
+      filesInspected: z.array(z.string()).optional(),
+      detectedDrift: z
+        .array(z.object({ file: z.string(), issue: z.literal("utf8-bom") }))
+        .optional(),
+    })
+    .loose(),
+});
+
+const DELETE_MODULE_CONTRACT = defineResultContract({
+  description: "Delete-module plan or applied deletion result.",
+  modes: ["plan", "apply"],
+  schema: z
+    .object({
+      operation: z.literal("delete_module").optional(),
+      dryRun: z.boolean().optional(),
+      modulesPlanned: z.array(z.string()).optional(),
+      modulesCount: z.number().int().nonnegative().optional(),
+      deleted: z.array(z.string()).optional(),
+    })
+    .loose(),
+});
+
+const GENERATE_ERD_CONTRACT = defineResultContract({
+  description: "Generated ERD Markdown file.",
+  outputModes: ["file"],
+  schema: z.object({ ok: z.boolean().optional(), markdownFile: z.string() }).loose(),
 });
 
 const VBA_INLINE_EXECUTION_CONTRACT = defineResultContract({
@@ -124,7 +209,7 @@ const APPLY_FORM_DESIGN_PLAN_CONTRACT = defineResultContract({
 const CONTRACTS = {
   "query-read": defineResultContract({
     description: "Read-only SQL/query payload.",
-    schema: passthroughObject,
+    schema: queryReadPayload,
   }),
   "query-write": defineResultContract({
     description: "SQL/query maintenance result discriminated by plan or apply.",
@@ -140,7 +225,7 @@ const CONTRACTS = {
   "vba-read": defineResultContract({
     description: "Read-only VBA dispatch payload.",
     outputModes: ["summary", "file", "full"],
-    schema: passthroughObject,
+    schema: vbaReadPayload,
   }),
   "vba-write": defineResultContract({
     description: "VBA mutation result discriminated by plan or apply.",
@@ -279,6 +364,9 @@ export function resultContractForDispatchTool(
   name: GeneratedDispatchToolName,
 ): AnyExecutableResultContract {
   if (name === "vba_inline_execution") return VBA_INLINE_EXECUTION_CONTRACT;
+  if (name === "fix_encoding") return FIX_ENCODING_CONTRACT;
+  if (name === "delete_module") return DELETE_MODULE_CONTRACT;
+  if (name === "generate_erd") return GENERATE_ERD_CONTRACT;
   if (name === "import_queries") return IMPORT_QUERIES_CONTRACT;
   if (name === "compact_repair") return COMPACT_REPAIR_CONTRACT;
   if (name === "relink_tables" || name === "localize_backend_links") return RELINK_TABLES_CONTRACT;
@@ -310,6 +398,13 @@ export function resultContractForToolAlias(name: AliasToolName): {
       canonicalFamily: "vba-test",
       contract: RUN_VBA_CONTRACT,
       canonicalContract: RUN_VBA_CONTRACT,
+    };
+  }
+  if (name === "query_sql") {
+    return {
+      canonicalFamily: "query-read",
+      contract: QUERY_SQL_CONTRACT,
+      canonicalContract: QUERY_SQL_CONTRACT,
     };
   }
   const canonicalFamily = ALIAS_CANONICAL_FAMILIES[name];

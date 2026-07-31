@@ -4901,19 +4901,25 @@ function Invoke-GenerateErdAction {
     $BackendPath = (Resolve-Path -Path $BackendPath).Path
     Write-Status -Message ("Backend: {0}" -f $BackendPath) -Color Yellow
 
+    $backendName = [System.IO.Path]::GetFileNameWithoutExtension($BackendPath)
     if ([string]::IsNullOrWhiteSpace($ErdPath)) {
         $parent = Split-Path -Parent $DestinationRoot
-        $ErdPath = Join-Path -Path $parent -ChildPath "ERD"
+        $erdDirectory = Join-Path -Path $parent -ChildPath "ERD"
+        $mdFile = Join-Path -Path $erdDirectory -ChildPath ($backendName + ".md")
+    } else {
+        # Issue #1256 — erdPath is an output FILE, not a directory. Preserve
+        # the friendly extension-less call by appending .md explicitly.
+        if ([string]::IsNullOrEmpty([System.IO.Path]::GetExtension($ErdPath))) {
+            $ErdPath = $ErdPath + ".md"
+        }
+        $mdFile = $ErdPath
+        $erdDirectory = Split-Path -Parent $mdFile
     }
 
-    if (-not (Test-Path -Path $ErdPath)) {
-        New-Item -ItemType Directory -Force -Path $ErdPath | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($erdDirectory) -and -not (Test-Path -Path $erdDirectory)) {
+        New-Item -ItemType Directory -Force -Path $erdDirectory | Out-Null
     }
-    $ErdPath = (Resolve-Path -Path $ErdPath).Path
-    Write-Status -Message ("ERD Folder: {0}" -f $ErdPath) -Color Yellow
-
-    $backendName = [System.IO.Path]::GetFileNameWithoutExtension($BackendPath)
-    $mdFile = Join-Path -Path $ErdPath -ChildPath ($backendName + ".md")
+    Write-Status -Message ("ERD File: {0}" -f $mdFile) -Color Yellow
 
     Export-DataStructure -DatabasePath $BackendPath -OutputPath $mdFile -Password $Password
 

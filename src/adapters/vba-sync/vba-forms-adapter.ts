@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
 import {
   createDysflowError,
   failureResult,
@@ -255,7 +255,16 @@ export class VbaFormsAdapter {
       return listFormControls(this.fileSystem, params, this.orchestrator);
     }
     if (toolName === "generate_erd") {
-      return this.orchestrator.executeMappedTool(toolName, params, FORMS_MAPPINGS.generate_erd);
+      const erdPath = typeof params.erdPath === "string" ? params.erdPath : undefined;
+      const normalizedParams =
+        erdPath !== undefined && erdPath.length > 0 && extname(erdPath) === ""
+          ? { ...params, erdPath: `${erdPath}.md` }
+          : params;
+      return this.orchestrator.executeMappedTool(
+        toolName,
+        normalizedParams,
+        FORMS_MAPPINGS.generate_erd,
+      );
     }
     return failureResult(
       createDysflowError(
