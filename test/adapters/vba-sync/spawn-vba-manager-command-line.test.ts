@@ -32,8 +32,10 @@ vi.mock("../../../src/adapters/powershell/default-executor.js", async () => {
  *
  * This launches a real `powershell.exe` (no child_process mock), so it is gated to
  * Windows. It needs no Access COM: the dummy script accepts the manager's params
- * and exits 0. Pre-fix, this spawn throws/reports ENAMETOOLONG; post-fix the plan
- * is offloaded to a temp file and the process starts cleanly.
+ * and deliberately runs past the executor timeout. Pre-fix, this spawn reports
+ * ENAMETOOLONG; post-fix, the plan is offloaded and the running child is terminated
+ * by the ordinary timeout. This distinguishes command-line overflow from process
+ * execution without making CI success depend on PowerShell startup latency.
  */
 describe("spawnVbaManager — command line stays within the OS limit (real spawn)", () => {
   let workDir: string;
@@ -55,6 +57,7 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
         "  [string]$ProceduresJson,",
         "  [string]$ProceduresJsonFile",
         ")",
+        "Start-Sleep -Seconds 5",
         "Write-Output 'DYSFLOW_RESULT {\"ok\":true}'",
         "exit 0",
       ].join("\r\n"),
@@ -67,7 +70,7 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
   });
 
   it.skipIf(process.platform !== "win32")(
-    "launches the process with a huge proceduresJson instead of failing with ENAMETOOLONG",
+    "starts a bounded process with a huge proceduresJson instead of failing with ENAMETOOLONG",
     async () => {
       // ~60K chars — comfortably past the Windows command-line limit if inlined.
       const hugePlan = JSON.stringify(
@@ -86,26 +89,20 @@ describe("spawnVbaManager — command line stays within the OS limit (real spawn
         moduleNames: [],
         json: true,
         extra: { proceduresJson: hugePlan },
-        // Generous on purpose. What this test pins is that a huge proceduresJson
-        // is handed over by file instead of inlined on the command line — not how
-        // fast PowerShell starts. A GitHub Windows runner needs far longer than a
-        // developer machine for the same spawn (this exact call finishes in about
-        // a second locally and exceeded 30s on CI), and a latency bound here would
-        // be testing the runner rather than the product.
-        timeoutMs: 120_000,
+        // The dummy process intentionally exceeds this bound. A timeout proves
+        // that spawn succeeded while keeping a real hang bounded; ENAMETOOLONG
+        // instead resolves through `spawnError` before a child can run.
+        timeoutMs: 250,
         cwd: workDir,
       });
 
       expect(result.stderr).not.toContain("ENAMETOOLONG");
-      expect(result.timedOut).toBe(false);
-      expect(result.exitCode).toBe(0);
+      expect(result.spawnError).toBeUndefined();
+      expect(result.timedOut).toBe(true);
+      expect(result.exitCode).toBeNull();
     },
-    // Must stay above the spawn budget granted above, so a spawn that finishes
-    // inside its own allowance is never killed by the harness instead. This test is
-    // Windows-only, so it never ran while the quality gate lived on Linux and the
-    // inversion stayed hidden: vitest's 15s default was killing the harness at half
-    // the time the spawn itself was allowed (#1147).
-    180_000,
+    // Leave enough room for the executor's bounded Windows process-tree cleanup.
+    15_000,
   );
 });
 
