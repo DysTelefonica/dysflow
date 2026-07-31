@@ -30,7 +30,7 @@
 
 // @ts-nocheck — pure source-file lint against a `.mjs`; no runtime contract.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXPECTED_ADVERTISED_TOOL_COUNT } from "../../E2E_testing/_helpers/advertised-tool-count.mjs";
@@ -153,6 +153,17 @@ describe("mcp-e2e.mjs — sandbox isolation", () => {
         `export_all call appears to point at the fixture source: ${call.slice(0, 200)}`,
       ).not.toMatch(/E2E_testing[\\/]src/);
     }
+  });
+});
+
+describe("mcp-e2e.mjs — sync_binary plan fixture (#1280)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("keeps the mandated Anexo record backed by a source fixture", () => {
+    expect(src).toMatch(
+      /record\(\s*"vba-sync"\s*,\s*"sync_binary:plan-mode"\s*,\s*\{[^}]*moduleNames:\s*\["Anexo"\][^}]*\}\s*\)/,
+    );
+    expect(existsSync(resolve(process.cwd(), "E2E_testing/src/modules/Anexo.bas"))).toBe(true);
   });
 });
 
