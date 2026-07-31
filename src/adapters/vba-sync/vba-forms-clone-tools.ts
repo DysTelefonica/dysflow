@@ -268,6 +268,7 @@ export async function cloneFormFromTemplate(args: {
     const outputMode = stringValue(params.outputMode) ?? "full";
     if (outputMode === "summary") {
       return successResult({
+        dryRun: true,
         mode: "dry-run",
         sourcePath,
         targetPath,
@@ -280,12 +281,14 @@ export async function cloneFormFromTemplate(args: {
       });
     } else if (outputMode === "file") {
       return successResult({
+        dryRun: true,
         sourcePath,
         targetPath,
         targetSource: cloneResult.source,
       });
     } else {
       return successResult({
+        dryRun: true,
         mode: "dry-run",
         sourcePath,
         targetPath,
