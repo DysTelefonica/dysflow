@@ -9,6 +9,7 @@ import {
 import { isRecord, stringValue } from "../utils/index.js";
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import { isPathInside } from "../utils/path-containment.js";
+import { collectControls, parseFormTxt } from "./form-ir-service.js";
 
 // ---------------------------------------------------------------------------
 // I/O Port interfaces — owned by core, implemented by adapters
@@ -269,35 +270,56 @@ export class VbaFormService {
     const formsDir = resolve(destinationRoot, "forms");
     const reportsDir = resolve(destinationRoot, "reports");
     const catalog: Array<Record<string, unknown>> = [];
+    const catalogKeys = new Set<string>();
     for (const folder of [formsDir, reportsDir]) {
       const kind = folder === reportsDir ? "Report" : "Form";
-      const entries = await this.safeReadDir(folder);
+      const entries = (await this.safeReadDir(folder)).sort((left, right) => {
+        const leftIsJson = /\.(?:form|report)\.json$/i.test(left);
+        const rightIsJson = /\.(?:form|report)\.json$/i.test(right);
+        return Number(rightIsJson) - Number(leftIsJson) || left.localeCompare(right);
+      });
       for (const entry of entries) {
-        if (!entry.toLowerCase().endsWith(".json")) continue;
-        if (
-          !entry.toLowerCase().endsWith(".form.json") &&
-          !entry.toLowerCase().endsWith(".report.json")
-        )
-          continue;
-        let spec: Record<string, unknown> | undefined;
-        try {
-          spec = await this.fileSystem.readJson<Record<string, unknown>>(resolve(folder, entry));
-        } catch (err) {
-          if (isMissingPathError(err)) {
-            spec = undefined;
-          } else {
-            logSwallowedIoError("vba-form-service:spec-read", err);
-            spec = undefined;
+        const entryPath = resolve(folder, entry);
+        if (/\.(?:form|report)\.json$/i.test(entry)) {
+          let spec: Record<string, unknown> | undefined;
+          try {
+            spec = await this.fileSystem.readJson<Record<string, unknown>>(entryPath);
+          } catch (err) {
+            if (!isMissingPathError(err)) logSwallowedIoError("vba-form-service:spec-read", err);
           }
+          if (spec === undefined) continue;
+          const name = stringValue(spec.name) ?? entry.replace(/\.(form|report)\.json$/i, "");
+          const resolvedKind = stringValue(spec.kind) ?? kind;
+          const controls = Array.isArray(spec.controls) ? spec.controls : [];
+          catalog.push({
+            name,
+            kind: resolvedKind,
+            controls: controls.length,
+            specPath: entryPath,
+          });
+          catalogKeys.add(`${resolvedKind.toLowerCase()}:${name.toLowerCase()}`);
+          continue;
         }
-        if (spec === undefined) continue;
-        const controls = Array.isArray(spec.controls) ? spec.controls : [];
-        catalog.push({
-          name: stringValue(spec.name) ?? entry.replace(/\.(form|report)\.json$/i, ""),
-          kind: stringValue(spec.kind) ?? kind,
-          controls: controls.length,
-          specPath: resolve(folder, entry),
-        });
+
+        if (!/\.(?:form|report)\.txt$/i.test(entry)) continue;
+        const fallbackName = entry.replace(/\.(form|report)\.txt$/i, "");
+        try {
+          const ir = parseFormTxt(await this.fileSystem.readFile(entryPath), {
+            name: fallbackName,
+          });
+          const key = `${ir.kind.toLowerCase()}:${ir.name.toLowerCase()}`;
+          if (catalogKeys.has(key)) continue;
+          catalog.push({
+            name: ir.name,
+            kind: ir.kind,
+            controls: collectControls(ir.root).length,
+            specPath: entryPath,
+          });
+          catalogKeys.add(key);
+        } catch (err) {
+          if (!isMissingPathError(err))
+            logSwallowedIoError("vba-form-service:form-source-read", err);
+        }
       }
     }
 

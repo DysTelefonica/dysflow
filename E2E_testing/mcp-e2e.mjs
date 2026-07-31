@@ -122,6 +122,14 @@ const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = "ZZZ_DysflowMcpE2E";
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
+const uiFormSrcRoot = sandboxPlan.sandbox.destinationRoot;
+const uiFormCatalogPath = sandboxPlan.sandbox.catalogPath;
+const formEventEntrySource = [
+  "Option Explicit",
+  "",
+  "Public Sub CmdSave_Click()",
+  "End Sub",
+].join("\r\n");
 const sourcePath = uiFormPath;
 function baselineArgsFor(tool) {
   const shared = { projectId, sourcePath: uiFormPath };
@@ -1116,6 +1124,41 @@ await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
 await recordContract("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", apply: false, replace: true }, {}, ["forms", "plan"]);
 await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
 await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
+const formEventDeadCodeResult = await record("vba", "detect_dead_code:form-event-false-positive", {
+  scope: "source",
+  modules: { FormEntryModule: formEventEntrySource },
+});
+// assertion: CmdSave_Click either not flagged OR flagged with calledByFormEvent:true, risk:Low
+const formEventDeadCode = safeJsonParse(formEventDeadCodeResult.text);
+const formEventFinding = formEventDeadCode?.findings?.find(
+  (finding) => finding.symbol === "CmdSave_Click",
+);
+const formEventPass =
+  formEventFinding === undefined ||
+  (formEventFinding.calledByFormEvent === true && formEventFinding.risk === "Low");
+addFailFastResult({
+  area: "vba",
+  tool: "detect_dead_code:form-event-false-positive:assertion",
+  pass: formEventPass,
+  expected: "CmdSave_Click omitted or marked calledByFormEvent=true with Low risk",
+  ms: 0,
+  summary: formEventPass ? "form event entry point is not a dead-code false positive" : "unexpected form event finding",
+});
+
+const realSourceTreeCatalogResult = await record("forms", "harvest_form_catalog:real-source-tree", {
+  projectId, destinationRoot: uiFormSrcRoot, catalogPath: uiFormCatalogPath,
+});
+// assertion: result.total > 0 against 100+ .form.txt files
+const realSourceTreeCatalog = safeJsonParse(realSourceTreeCatalogResult.text);
+const realSourceTreePass = Number(realSourceTreeCatalog?.total) > 0;
+addFailFastResult({
+  area: "forms",
+  tool: "harvest_form_catalog:real-source-tree:assertion",
+  pass: realSourceTreePass,
+  expected: "total > 0 for a source tree containing .form.txt files",
+  ms: 0,
+  summary: realSourceTreePass ? `harvested=${realSourceTreeCatalog.total}` : "catalog was empty",
+});
 const missingFormUiTools = [
   "analyze_form_ui",
   "map_form_behavior",
