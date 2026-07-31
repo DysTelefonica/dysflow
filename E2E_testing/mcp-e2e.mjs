@@ -1838,7 +1838,7 @@ await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {
 
 // Issue #1256 — schema/runtime drift release records. Keep these literals in
 // sync with the issue so release evidence remains directly traceable.
-await record("protocol", "data-schema-coverage", { projectId });
+await record("protocol", "data-schema-coverage", { projectId, view: "compact" });
 // cross-check: list_objects, list_vba_modules, exists have non-empty dataSchema documenting all returned fields
 
 await record("vba", "find_references:1018-schema-leak", {
