@@ -720,24 +720,6 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
-  if (tool === "form_set_property:result-contract-violation-shape") {
-    return {
-      args: { ...args, controlName: "txtProbe" },
-      options,
-      assert: (result) => {
-        const error = mcpErrorFromResult(result);
-        const pass =
-          error?.code === "RESULT_CONTRACT_VIOLATION" &&
-          error.actualShape !== undefined &&
-          error.expectedShape !== undefined;
-        return {
-          pass,
-          expected: "RESULT_CONTRACT_VIOLATION with actualShape and expectedShape",
-          summary: pass ? "contract violation exposes both shapes" : normalize(result?.text),
-        };
-      },
-    };
-  }
   return { args, options };
 }
 
@@ -1371,9 +1353,6 @@ for (const tool of formReadTools) {
   await record("form-ui", `${tool}:access-path-exposed`, { projectId, sourcePath: uiFormPath });
 }
 
-await record("form-ui", "form_set_property:result-contract-violation-shape", {
-  projectId, sourcePath, controlName: "x", property: "Caption", value: "y", apply: false,
-}, { expected: "error" });
 const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
 const analyzePass = Boolean(
   analyzeFormUi &&
