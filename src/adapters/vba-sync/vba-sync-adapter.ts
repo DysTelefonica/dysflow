@@ -392,6 +392,24 @@ export const VBA_MANAGER_TIMEOUT_REMEDIATION =
   "If orphans persist, repeat with an explicit confirmPid. " +
   "Consider raising timeoutMs for large projects.";
 
+const POWERSHELL_CLR_EXCEPTION_EXIT_CODES = new Set([3_762_504_530, -532_462_766]);
+
+function isGenerateErdTransientPowerShellOom(
+  toolName: string,
+  result: VbaManagerExecutionResult,
+): boolean {
+  if (
+    toolName !== "generate_erd" ||
+    result.timedOut ||
+    result.spawnError !== undefined ||
+    result.exitCode === null ||
+    !POWERSHELL_CLR_EXCEPTION_EXIT_CODES.has(result.exitCode)
+  ) {
+    return false;
+  }
+  return `${result.stderr}\n${result.stdout}`.includes("OutOfMemoryException");
+}
+
 export class VbaSyncAdapter implements VbaSyncPort {
   public readonly executor: VbaManagerExecutor;
   public readonly scriptPath: string;
@@ -797,6 +815,20 @@ export class VbaSyncAdapter implements VbaSyncPort {
     let result: VbaManagerExecutionResult;
     try {
       result = await this.executor(trackedRequest);
+      // Issue #1294 — Windows PowerShell 5.1 may terminate while its DLR
+      // background compiler promotes a hot loop, surfacing CLR exit
+      // 0xE0434352 plus OutOfMemoryException before DYSFLOW_RESULT is emitted.
+      // generate_erd only overwrites one derived Markdown file, so replaying
+      // this exact request once is safe. Keep every other tool/failure
+      // terminal to avoid duplicating arbitrary Access mutations.
+      if (isGenerateErdTransientPowerShellOom(toolName, result)) {
+        const firstAttemptDurationMs = result.durationMs;
+        const retryResult = await this.executor(trackedRequest);
+        result = {
+          ...retryResult,
+          durationMs: firstAttemptDurationMs + retryResult.durationMs,
+        };
+      }
     } catch (error) {
       await this.finishTrackedOperation(trackedOperation, { status: "failed" });
       try {
