@@ -434,6 +434,8 @@ function validateMcpResultBeforeSerialization(
       errorCode: RESULT_CONTRACT_VIOLATION,
       message,
       errorMessage: message,
+      actualShape: validation.diagnostic.actualShape,
+      expectedShape: validation.diagnostic.expectedShape,
       details: {
         toolName: validation.diagnostic.toolName,
         schemaPaths: validation.diagnostic.issues.map((issue) => issue.path),

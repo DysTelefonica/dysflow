@@ -56,6 +56,8 @@ describe("executable result-contract foundation", () => {
           rejectedFlags: { type: "array", optional: true, items: { type: "string" } },
           toolCommitFlag: { type: "string", optional: true },
           remediation: { type: "string", optional: true },
+          actualShape: { type: "object", optional: true },
+          expectedShape: { type: "object", optional: true },
         },
       },
     });

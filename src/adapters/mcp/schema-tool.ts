@@ -185,6 +185,8 @@ export type ToolErrorEnvelopeShape = {
   rejectedFlags?: { type: "array"; optional: true; items: { type: "string" } };
   toolCommitFlag?: { type: "string"; optional: true };
   remediation?: { type: "string"; optional: true };
+  actualShape?: { type: "object"; optional: true };
+  expectedShape?: { type: "object"; optional: true };
 };
 
 /**
@@ -1005,20 +1007,27 @@ function isWriteClassAccess(access: McpToolAccess): boolean {
   return access === "read-write" || access === "conditional-write";
 }
 
-function errorCodesForTool(_name: string, access: McpToolAccess): ToolErrorCodeSchema[] {
-  if (!isWriteClassAccess(access)) {
-    return READ_ONLY_ERROR_CODES.map((entry) => ({ ...entry }));
+function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSchema[] {
+  const writeClass = isWriteClassAccess(access);
+  const codes = !writeClass
+    ? READ_ONLY_ERROR_CODES.map((entry) => ({ ...entry }))
+    : WRITE_GATE_ERROR_CODES.map((entry) => ({ ...entry }));
+  if (name === "query_execute") {
+    codes.push({
+      code: "INVALID_READ_ONLY_QUERY",
+      description:
+        'mode:"read" rejected SQL that can mutate the database. Retry with read-only SQL or explicitly select mode:"write".',
+      recoverable: true,
+    });
   }
-  // Write-class tools carry the full gate envelope plus MCP_INPUT_INVALID.
-  const codes = WRITE_GATE_ERROR_CODES.map((entry) => ({ ...entry }));
-  if (_name === "run_script" || _name === "vba_inline_execution") {
+  if (writeClass && (name === "run_script" || name === "vba_inline_execution")) {
     codes.push({
       code: "SANDBOX_ONLY",
       description: "The explicit Access target is outside the active worktree sandbox.",
       recoverable: true,
     });
   }
-  if (_name === "vba_inline_execution" || _name === "access_force_cleanup_orphaned") {
+  if (writeClass && (name === "vba_inline_execution" || name === "access_force_cleanup_orphaned")) {
     codes.push({
       code: "CONFIRMATION_REQUIRED",
       description: "The operation requires explicit human confirmation before it can execute.",

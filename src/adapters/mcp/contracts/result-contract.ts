@@ -15,6 +15,8 @@ const STANDARD_ERROR_ENVELOPE_SHAPE = {
   rejectedFlags: { type: "array", optional: true, items: { type: "string" } },
   toolCommitFlag: { type: "string", optional: true },
   remediation: { type: "string", optional: true },
+  actualShape: { type: "object", optional: true },
+  expectedShape: { type: "object", optional: true },
 } as const satisfies ToolErrorEnvelopeShape;
 
 export type ResultContractMetadata = {

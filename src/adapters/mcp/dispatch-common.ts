@@ -261,6 +261,12 @@ function buildWriteGateErrorEnvelope(
   });
   const specificMessage = diagnostics[0]?.message ?? "Project config is not write-ready.";
   const message = `${specificMessage} [legacy: ${PROJECT_CONFIG_NOT_WRITE_READY}]`;
+  const remediation =
+    diagnostic.remediation === null
+      ? structureRemediation(
+          "Make the project write-ready by setting capabilities.allowWrites:true in .dysflow/project.json, resolving the configured target paths, or selecting a different projectId.",
+        )
+      : diagnostic.remediation;
   return withSchemaVersion({
     content: [{ type: "text", text: `${code}: ${message}` }],
     isError: true,
@@ -270,7 +276,7 @@ function buildWriteGateErrorEnvelope(
         code,
         message,
         diagnostics,
-        ...(diagnostic.remediation === null ? {} : { remediation: diagnostic.remediation }),
+        remediation: remediation as unknown as string,
         details: {
           operation: toolName,
           status: diagnostic.status,
@@ -279,7 +285,7 @@ function buildWriteGateErrorEnvelope(
             ? { destinationRoot: diagnostic.destinationRoot }
             : {}),
           ...(diagnostic.accessPath !== null ? { accessPath: diagnostic.accessPath } : {}),
-          remediation: diagnostic.remediation,
+          remediation,
           projectId: diagnostic.projectId,
         },
       },

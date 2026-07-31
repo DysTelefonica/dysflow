@@ -16,10 +16,27 @@ export function wrapWithErrorAbsorber(
       return await handler(input, context);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const record =
+        typeof err === "object" && err !== null ? (err as Record<string, unknown>) : undefined;
+      const code =
+        typeof record?.code === "string" && record.code.length > 0 ? record.code : "MCP_TOOL_ERROR";
+      const remediation =
+        typeof record?.remediation === "string" && record.remediation.length > 0
+          ? record.remediation
+          : "Inspect the typed error code and message, correct the reported condition, then retry.";
+      const error = {
+        code,
+        errorCode: code,
+        message,
+        errorMessage: message,
+        remediation,
+        diagnostics: [{ code, severity: "error", message, remediation }],
+      };
       return {
-        content: [{ type: "text", text: `MCP_TOOL_ERROR: ${message}` }],
+        content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
         isError: true,
         ok: false,
+        error,
       };
     }
   };
