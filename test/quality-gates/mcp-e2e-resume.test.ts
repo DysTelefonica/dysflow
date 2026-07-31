@@ -5,11 +5,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  assertReleaseRuntimeIdentity,
   createPhaseSnapshots,
   createResultRows,
   createResumeController,
   hashRunIdentity,
   parseResumeArgs,
+  prepareReleaseRuntime,
   readCheckpoint,
   runtimeIdentityPaths,
   validateCheckpoint,
@@ -30,6 +32,57 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "dysflow-mcp-e2e-"));
 });
 describe("MCP E2E resumable cursor", () => {
+  it("rejects stale or mislabeled repository test-runtime bytes", async () => {
+    const repo = join(root, "repo");
+    const runtime = join(repo, "test-runtime", "app");
+    await mkdir(join(repo, "dist"), { recursive: true });
+    await mkdir(join(runtime, "dist"), { recursive: true });
+    await writeFile(join(repo, "dist", "validator.js"), "nullable-pid");
+    await writeFile(join(runtime, "dist", "validator.js"), "number-only");
+    await writeFile(join(repo, "package.json"), '{"version":"2.31.0"}');
+    await writeFile(join(runtime, "package.json"), '{"version":"2.31.0"}');
+
+    await expect(assertReleaseRuntimeIdentity(repo)).rejects.toThrow(/compiled bytes mismatch/);
+
+    await writeFile(join(runtime, "dist", "validator.js"), "nullable-pid");
+    await writeFile(join(runtime, "package.json"), '{"version":"2.30.0"}');
+    await expect(assertReleaseRuntimeIdentity(repo)).rejects.toThrow(/package metadata mismatch/);
+
+    await writeFile(join(runtime, "package.json"), '{"version":"2.31.0"}');
+    await expect(assertReleaseRuntimeIdentity(repo)).resolves.toBeUndefined();
+  });
+  it("constructs the release runtime from the current candidate and refuses overrides", async () => {
+    const repo = join(root, "repo");
+    const runtime = join(repo, "test-runtime", "app");
+    await mkdir(join(repo, "dist"), { recursive: true });
+    await mkdir(join(runtime, "dist"), { recursive: true });
+    await writeFile(join(repo, "dist", "index.js"), "candidate");
+    await writeFile(join(runtime, "dist", "index.js"), "candidate");
+    await writeFile(join(repo, "package.json"), '{"version":"2.31.0"}');
+    await writeFile(join(runtime, "package.json"), '{"version":"2.31.0"}');
+    const execute = vi.fn();
+
+    await prepareReleaseRuntime(repo, { env: {}, execute });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[0][1]).toEqual(
+      process.platform === "win32" ? ["/d", "/s", "/c", "pnpm build"] : ["build"],
+    );
+    expect(execute.mock.calls[1][1]).toEqual([
+      join(repo, "dist", "cli", "index.js"),
+      "install",
+      "--runtime-dir",
+      join(repo, "test-runtime"),
+      "--no-tui",
+    ]);
+    await expect(
+      prepareReleaseRuntime(repo, {
+        env: { DYSFLOW_E2E_COMMAND: "C:\\production\\dysflow.cmd" },
+        execute,
+      }),
+    ).rejects.toThrow(/repository test-runtime is required/);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
   it("binds installed runtime identity to the canonical app/dist tree", async () => {
     const runtime = join(root, "test-runtime");
     const launcher = join(runtime, "bin", "dysflow.cmd");
