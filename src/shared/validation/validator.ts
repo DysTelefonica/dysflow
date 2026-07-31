@@ -37,6 +37,7 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   for (const [key, property] of Object.entries(schema.properties)) {
     const value = params[key];
     if (value === undefined) continue;
+    if (value === null && property.nullable === true) continue;
     for (const companion of property.requiredWith ?? []) {
       if (params[companion] === undefined) {
         return `${companion} is required when ${key} is provided.`;
@@ -87,6 +88,7 @@ function validateJsonSchemaProperty(
   property: JsonSchemaProperty,
   path: string,
 ): string | undefined {
+  if (value === null && property.nullable === true) return undefined;
   // `enum` without `type` is still enforceable (string-by-default per
   // the existing enum branch below). Skip the early-return only when
   // neither guard is set.

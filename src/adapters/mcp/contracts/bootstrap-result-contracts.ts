@@ -103,6 +103,20 @@ export const stateResultContract = defineResultContract({
       markers: z.array(unknownRecord),
       locks: z.array(unknownRecord),
       counters: unknownRecord,
+      orphans: z
+        .object({
+          msaccess: z.array(
+            z
+              .object({
+                pid: z.number().int().positive(),
+                ageSeconds: z.number().int().nonnegative().nullable(),
+              })
+              .strict(),
+          ),
+          scanStatus: z.enum(["ok", "unavailable"]),
+          error: z.string().optional(),
+        })
+        .strict(),
     })
     .strict(),
 });
@@ -149,6 +163,7 @@ const orphanCandidate = z
     accessPath: z.string(),
     kind: z.enum(["access", "powershell-worker"]),
     startTime: z.string().optional(),
+    ageSeconds: z.number().int().nonnegative().optional(),
     mainWindowHandle: z.number().optional(),
   })
   .strict();
@@ -156,7 +171,12 @@ const orphanCandidate = z
 export const orphanCleanupResultContract = defineResultContract({
   modes: ["plan", "apply"],
   schema: z.union([
-    z.array(orphanCandidate),
+    z
+      .object({
+        orphans: z.array(orphanCandidate),
+        totalCount: z.number().int().nonnegative(),
+      })
+      .strict(),
     z
       .object({
         killed: z.array(z.number().int()),

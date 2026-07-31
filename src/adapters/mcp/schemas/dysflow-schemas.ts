@@ -331,8 +331,10 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
     ...CONFIRMATION_OVERRIDE_BLOCK,
     pid: {
       type: "number",
+      nullable: true,
       minimum: 1,
-      description: "Positive process id selected from the preceding orphan listing.",
+      description:
+        "Positive process id selected from the preceding orphan listing. Pass null to request the complete read-only listing.",
       requiredWith: ["confirmedRequiresConfirmation"],
     },
   },

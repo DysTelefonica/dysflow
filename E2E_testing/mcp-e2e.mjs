@@ -530,6 +530,14 @@ await record("operations", "access_force_cleanup_orphaned", {
   implements_check: "orphans_msaccess",
   confirmedRequiresConfirmation: true,
 }, { expected: "ok" });
+// Setup: spawn 2 real MSACCESS orphans, wait 60s, then test.
+await record("operations", "access_force_cleanup_orphaned:complete-enumeration", {
+  pid: null, // list all
+});
+// assertions: orphans.length === totalCount; cleanup succeeds for each
+
+await record("recovery", "state:orphans-msaccess-accurate", {});
+await record("recovery", "logs:orphans-msaccess-recent", {});
 await record("operations", "access_force_cleanup_orphaned:pid-no-confirm-refused", {
   pid: 999999, implements_check: "orphans_msaccess",
 }, { expected: "error" });

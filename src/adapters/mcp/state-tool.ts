@@ -124,8 +124,19 @@ export type Counters = {
   abandonedLast24h: number;
 };
 
+export type MsAccessOrphanEntry = {
+  pid: number;
+  ageSeconds: number | null;
+};
+
+export type OrphanState = {
+  msaccess: MsAccessOrphanEntry[];
+  scanStatus: "ok" | "unavailable";
+  error?: string;
+};
+
 /**
- * Top-level result envelope. The four top-level fields are required;
+ * Top-level result envelope. The five top-level fields are required;
  * each is populated by a deterministic source so the consumer can rely
  * on the shape without consulting docs.
  */
@@ -134,6 +145,7 @@ export type StateResult = {
   markers: MarkerEntry[];
   locks: LockEntry[];
   counters: Counters;
+  orphans: OrphanState;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -272,6 +284,8 @@ export type BuildStateOptions = {
   registry: AccessOperationRegistry;
   /** Inject the wall clock. Defaults to `Date.now()`. */
   nowMs?: number;
+  /** Read-only provider for the live MSACCESS orphan inventory. */
+  orphanProvider?: (input?: unknown) => Promise<MsAccessOrphanEntry[]>;
 };
 
 /**
@@ -285,15 +299,34 @@ export type BuildStateOptions = {
  */
 export async function buildStateResult(opts: BuildStateOptions): Promise<StateResult> {
   const nowMs = opts.nowMs ?? Date.now();
-  const [records, markers] = await Promise.all([
+  const [records, markers, orphans] = await Promise.all([
     opts.registry.listRecent({ limit: DEFAULT_RECENT_ACCESS_OPERATION_LIMIT }),
     readMarkers(opts.cwd, nowMs),
+    (async (): Promise<OrphanState> => {
+      if (opts.orphanProvider === undefined) {
+        return {
+          msaccess: [],
+          scanStatus: "unavailable",
+          error: "MSACCESS orphan scanner is not configured.",
+        };
+      }
+      try {
+        return { msaccess: await opts.orphanProvider(), scanStatus: "ok" };
+      } catch (error) {
+        return {
+          msaccess: [],
+          scanStatus: "unavailable",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })(),
   ]);
   return {
     operations: records.map(operationRecordToEntry),
     markers,
     locks: [],
     counters: computeCounters(records, nowMs),
+    orphans,
   };
 }
 
@@ -334,7 +367,7 @@ export function createStateTool(opts: BuildStateOptions): DysflowMcpTool {
     name: "state",
     resultContract: stateResultContract,
     description:
-      "Return the runtime operational state of a dysflow project: `{ operations, markers, locks, counters }`. `operations` lists every record from the access operation registry (cross-ref `list_access_operations`) normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`. `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock. `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices. `locks` is reserved for a future lock-registry split (#967 follow-up); today it is empty. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `resolve_project` (config), `diagnose` (health), `logs` (event timeline). " +
+      "Return the runtime operational state of a dysflow project: `{ operations, markers, locks, counters, orphans }`. `operations` lists every record from the access operation registry (cross-ref `list_access_operations`) normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`. `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock. `orphans.msaccess` lists every live unowned headless MSACCESS process with PID and age; `orphans.scanStatus` is `unavailable` instead of silently reporting zero when the OS scan cannot run. `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices. `locks` is reserved for a future lock-registry split (#967 follow-up); today it is empty. Read-only — never opens Access, never mutates state. Pairs with `resolve_project` (config), `diagnose` (health), `logs` (event timeline). " +
       MCP_TOOL_CONTRACTS.state.summary,
     inputSchema: STATE_TOOL_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
@@ -348,10 +381,13 @@ export function createStateTool(opts: BuildStateOptions): DysflowMcpTool {
       // factory cwd (backwards compatible).
       const cwdResolution = resolveCwdOverride(input, opts.cwd);
       if (!cwdResolution.ok) return cwdResolution.error;
+      const orphanProvider = opts.orphanProvider;
       const result = await buildStateResult({
         cwd: cwdResolution.cwd,
         registry,
         nowMs: opts.nowMs,
+        orphanProvider:
+          orphanProvider === undefined ? undefined : async () => orphanProvider(input),
       });
       // Echo projectId for symmetry with `schema` and `resolve_project` —
       // the global state is unaffected by `projectId` today but the
