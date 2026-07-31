@@ -18,6 +18,35 @@
 // logic so the integration test in test/e2e/ can drive it with a
 // fake child that never emits 'close'.
 
+import { spawn } from "node:child_process";
+
+const PROCESS_TREE_KILL_BOUND_MS = 3_000;
+
+async function terminateHarnessChild(child) {
+  if (process.platform !== "win32" || !Number.isSafeInteger(child.pid) || child.pid <= 0) {
+    try {
+      child.kill();
+    } catch {
+      /* best-effort */
+    }
+    return;
+  }
+
+  const taskkill = spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  await new Promise((resolve) => {
+    const guard = setTimeout(resolve, PROCESS_TREE_KILL_BOUND_MS);
+    const settle = () => {
+      clearTimeout(guard);
+      resolve();
+    };
+    taskkill.once("close", settle);
+    taskkill.once("error", settle);
+  });
+}
+
 /**
  * @typedef {{
  *   pid?: number;
@@ -60,6 +89,7 @@ export function runMcpHarness(options) {
 
   return new Promise((resolve) => {
     let settled = false;
+    let finishing = false;
     let response = null;
     let resultPending = null;
     let stdout = "";
@@ -69,10 +99,17 @@ export function runMcpHarness(options) {
     let primaryTimer = null;
     /** @type {NodeJS.Timeout | null} */
     let closeWatchdog = null;
+    /** @type {Promise<void> | null} */
+    let terminationPromise = null;
 
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
+    const startTermination = () => {
+      terminationPromise ??= terminateHarnessChild(child);
+      return terminationPromise;
+    };
+
+    const finish = async (result) => {
+      if (settled || finishing) return;
+      finishing = true;
       if (primaryTimer !== null) {
         clearTimeout(primaryTimer);
         primaryTimer = null;
@@ -86,16 +123,13 @@ export function runMcpHarness(options) {
       } catch {
         /* best-effort */
       }
-      try {
-        child.kill();
-      } catch {
-        /* best-effort */
-      }
+      await startTermination();
+      settled = true;
       resolve({ ...result, childPid: child.pid });
     };
 
     primaryTimer = setTimeout(() => {
-      finish({
+      void finish({
         response,
         exit: { code: null, signal: "TIMEOUT" },
         stdout,
@@ -145,17 +179,13 @@ export function runMcpHarness(options) {
         } catch {
           /* best-effort */
         }
-        try {
-          child.kill();
-        } catch {
-          /* best-effort */
-        }
+        void startTermination();
         // #583: if the child never emits 'close' (some hosts do not when the
         // process is killed by signal), force a settle after a bounded
         // watchdog window. The close handler clears this timer first, so
         // a natural close is a no-op.
         closeWatchdog = setTimeout(() => {
-          finish({ ...resultPending, closeWatchdogFired: true });
+          void finish({ ...resultPending, closeWatchdogFired: true });
         }, closeWatchdogMs);
       }
     });
@@ -165,7 +195,7 @@ export function runMcpHarness(options) {
     });
 
     child.on("error", (error) => {
-      finish({
+      void finish({
         response,
         exit: { code: null, signal: "SPAWN_ERROR" },
         stdout,
@@ -176,12 +206,14 @@ export function runMcpHarness(options) {
       });
     });
 
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       if (closeWatchdog !== null) {
         clearTimeout(closeWatchdog);
         closeWatchdog = null;
       }
-      if (settled) return;
+      if (settled || finishing) return;
+      finishing = true;
+      if (terminationPromise !== null) await terminationPromise;
       settled = true;
       if (primaryTimer !== null) {
         clearTimeout(primaryTimer);

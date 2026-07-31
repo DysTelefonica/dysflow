@@ -167,6 +167,19 @@ describe("mcp-e2e.mjs — sync_binary plan fixture (#1280)", () => {
   });
 });
 
+describe("mcp-e2e.mjs — whole-project sync_binary timeout budget (#1286)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("gives the whole-project plan the same 180s runtime and harness budget as verify_code", () => {
+    const call = src.match(
+      /record\(\s*"vba-sync"\s*,\s*"sync_binary:empty-moduleNames"[\s\S]*?\);/,
+    )?.[0];
+    expect(call, "no sync_binary:empty-moduleNames record() call found").toBeDefined();
+    expect(call).toMatch(/moduleNames\s*:\s*\[\]/);
+    expect(call?.match(/timeoutMs\s*:\s*180000/g)).toHaveLength(2);
+  });
+});
+
 describe("mcp-e2e.mjs — linked-table target selection (#924)", () => {
   const src = readSource(MCP_E2E_PATH);
 
