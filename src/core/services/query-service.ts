@@ -5,6 +5,7 @@ import {
   failureResult,
   type OperationResult,
   type RelinkDirectoryReport,
+  successResult,
 } from "../contracts/index.js";
 import {
   type AccessRunner,
@@ -14,6 +15,12 @@ import {
 import { detectWriteSqlKeyword, isRecord, looksLikeReadOnlySql } from "../utils/index.js";
 
 export type AccessQueryResult = {
+  dryRun?: true;
+  willExecute?: false;
+  willModifyAccess?: false;
+  action?: AccessQueryRequest["action"];
+  mode?: AccessQueryRequest["mode"];
+  sql?: string;
   /** Absolute database path selected by the runner for query_sql. */
   resolvedAccessPath?: string;
   rows?: readonly Record<string, unknown>[];
@@ -53,6 +60,17 @@ export class AccessQueryService {
         const forbiddenMessage = `${keyword} statements are not allowed in read-only queries. Use exec_sql or query_execute with mode "write" for write operations.`;
         return failureResult(createDysflowError("INVALID_READ_ONLY_QUERY", forbiddenMessage));
       }
+    }
+
+    if (request.mode === "write" && request.dryRun === true) {
+      return successResult({
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        action: request.action,
+        mode: request.mode,
+        sql: request.sql,
+      });
     }
 
     const result = await this.runner.run<AccessQueryResult>(
