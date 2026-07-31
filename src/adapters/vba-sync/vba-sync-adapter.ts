@@ -1178,6 +1178,7 @@ function validateVbaManagerExtra(
 const SYNC_BINARY_OWN_PARAMS = new Set([
   "direction",
   "scope",
+  "moduleNames",
   "directoryPath",
   "recursive",
   "includeTests",
