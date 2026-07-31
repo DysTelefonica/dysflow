@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { buildMissingProjectConfigRemediation } from "../config/missing-project-guidance.js";
 import type { McpToolResult } from "./result-translation.js";
 
 /**
@@ -48,18 +49,26 @@ export function resolveCwdOverride(input: unknown, factoryCwd: string): CwdOverr
       ok: false,
       error: cwdOverrideInvalid(
         `${resolved} is not a dysflow project (missing .dysflow/project.json)`,
+        buildMissingProjectConfigRemediation(resolved),
       ),
     };
   }
   return { ok: true, cwd: resolved };
 }
 
-function cwdOverrideInvalid(reason: string): McpToolResult {
+function cwdOverrideInvalid(
+  reason: string,
+  remediation?: ReturnType<typeof buildMissingProjectConfigRemediation>,
+): McpToolResult {
   const message = `cwd override rejected: ${reason}. Pass the root of a worktree that contains .dysflow/project.json, or omit cwd to use the MCP's startup directory.`;
   return {
     content: [{ type: "text", text: `MCP_INPUT_INVALID: ${message}` }],
     isError: true,
     ok: false,
-    error: { code: "MCP_INPUT_INVALID", message },
+    error: {
+      code: "MCP_INPUT_INVALID",
+      message,
+      ...(remediation ? { remediation: remediation as unknown as string } : {}),
+    },
   };
 }

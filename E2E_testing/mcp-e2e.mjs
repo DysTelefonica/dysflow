@@ -113,6 +113,8 @@ if (!resumeRoot) {
   await mkdir(sandboxPlan.sandbox.pruneExportPath, { recursive: true });
   await mkdir(sandboxPlan.sandbox.erdPath, { recursive: true });
 }
+const noDysflowWorktree = join(tempRoot, "no-dysflow-worktree");
+await mkdir(noDysflowWorktree, { recursive: true });
 
 const sqlScript = sandboxPlan.sandbox.sqlScript;
 const formSpec = sandboxPlan.sandbox.formSpec;
@@ -285,7 +287,11 @@ async function record(area, tool, args = {}, options = {}) {
     return step.cached;
   }
   try {
-    const result = await recordImpl(recordCtx, { area, tool, args, options });
+    const effectiveArgs =
+      tool === "dysflow_resolve_project_no_dysflow_field_guidance"
+        ? { ...args, cwd: noDysflowWorktree }
+        : args;
+    const result = await recordImpl(recordCtx, { area, tool, args: effectiveArgs, options });
     await resumeController.pass(step.id, area, result);
     return result;
   } catch (error) {
@@ -360,6 +366,15 @@ addFailFastResult({
     ? "all #713 merged VBA tools advertised"
     : `missing=${missingIssue713Tools.join(",")}`,
 });
+
+await record("protocol", "dysflow_resolve_project_no_dysflow_field_guidance", {
+  projectId: "no-dysflow-worktree",
+  cwd: "<absolute-path-to-worktree-without-dysflow>",
+}, { expected: "error" });
+
+await record("protocol", "get_capabilities_status_missing_semantics", { projectId });
+
+await record("protocol", "discovered_projects_isolation", { projectId: "A" });
 
 await recordContract("diagnostics", "doctor", { projectId, includeEnvironment: true }, {}, ["bootstrap", "success"]);
 await recordContract("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath }, {}, ["sql"]);
