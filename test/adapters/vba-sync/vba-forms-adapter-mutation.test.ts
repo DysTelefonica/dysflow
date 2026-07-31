@@ -19,6 +19,16 @@ Begin Form
 End
 `;
 
+const LOCALIZED_DETAIL_FORM = `Version =21
+Begin Form
+    Begin Section
+        Name ="Detalle"
+        Begin
+        End
+    End
+End
+`;
+
 function makeOrchestrator(importResult = successResult({ imported: true })): VbaFormsOrchestrator {
   return {
     executor: vi.fn(),
@@ -75,6 +85,32 @@ describe("VbaFormsAdapter — form mutation tools", () => {
       expect(result.data).toMatchObject({ mode: "dry-run", changedControlName: "cmdSave" });
       expect(String((result.data as { source: string }).source)).toContain('Name ="cmdSave"');
     }
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
+
+  it("plans add-control for canonical Detail against a localized Detalle section", async () => {
+    const orchestrator = makeOrchestrator();
+    const writeFile = vi.fn();
+    const fs = mockFs({ readFile: vi.fn().mockResolvedValue(LOCALIZED_DETAIL_FORM), writeFile });
+    const adapter = new VbaFormsAdapter(orchestrator, fs);
+
+    const result = await adapter.execute("form_add_control", {
+      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+      targetSectionName: "Detail",
+      controlName: "txtPlanContract",
+      controlType: "TextBox",
+      properties: {},
+      apply: false,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { mode: "dry-run", changedControlName: "txtPlanContract" },
+    });
+    expect(String(result.ok ? (result.data as { source: string }).source : "")).toContain(
+      'Name ="txtPlanContract"',
+    );
     expect(writeFile).not.toHaveBeenCalled();
     expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
   });
