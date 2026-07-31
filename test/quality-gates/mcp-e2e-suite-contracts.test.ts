@@ -282,6 +282,14 @@ describe("mcp-e2e.mjs — write-readiness error contract (#1272)", () => {
   });
 });
 
+describe("mcp-e2e.mjs — form plan result contract (#1292)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("does not require a valid form_set_property dry-run to violate its result contract", () => {
+    expect(src).not.toContain("form_set_property:result-contract-violation-shape");
+  });
+});
+
 describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
   const src = readSource(MCP_E2E_PATH);
 
