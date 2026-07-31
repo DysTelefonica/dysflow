@@ -13,6 +13,7 @@ import {
   listAccessOperationsResultContract,
 } from "./contracts/bootstrap-result-contracts.js";
 import {
+  enforceSandboxOnlyAccess,
   handleValidatedMcpWrite,
   invalidInput,
   mcpSchemaFor,
@@ -249,6 +250,7 @@ export function buildAliasTools(
   writesEnabled: boolean,
   writeAccessResolver: McpWriteAccessResolver | undefined,
   allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined,
+  accessContextResolver?: import("./result-translation.js").McpAccessContextResolver,
 ): DysflowMcpTool[] {
   const cleanupSchema = mcpSchemaFor("cleanup_access_operation");
   const runVbaSchema = mcpSchemaFor("run_vba");
@@ -380,8 +382,12 @@ export function buildAliasTools(
       name: "run_script",
       description: TOOL_DESCRIPTIONS.run_script,
       inputSchema: runScriptSchema,
-      handler: async (input) =>
-        handleValidatedMcpWrite(
+      handler: async (input) => {
+        const context = await accessContextResolver?.(input);
+        const sandboxRoot = context?.ok ? context.data.projectRoot : undefined;
+        const sandboxViolation = enforceSandboxOnlyAccess(input, "run_script", sandboxRoot);
+        if (sandboxViolation !== undefined) return sandboxViolation;
+        return handleValidatedMcpWrite(
           input,
           runScriptSchema,
           writesEnabled,
@@ -391,7 +397,8 @@ export function buildAliasTools(
               buildWriteFixtureRequest(MCP_TOOL_QUERY_ACTIONS.run_script, input),
             ),
           "run_script",
-        ),
+        );
+      },
     },
     {
       name: "create_table",

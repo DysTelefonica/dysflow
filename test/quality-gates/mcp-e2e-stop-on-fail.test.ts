@@ -98,6 +98,27 @@ function makeCtx(
 }
 
 describe("mcp-e2e record() — extracted helper exercises the real driver", () => {
+  it("dispatches a scenario label through the canonical tool name", async () => {
+    const { ctx, harness } = makeCtx();
+    let dispatched: unknown;
+    ctx.callMcp = async (_method: string, params: unknown) => {
+      dispatched = params;
+      return harness;
+    };
+
+    await record(ctx, {
+      area: "operations",
+      tool: "access_force_cleanup_orphaned:pid-no-confirm-refused",
+      args: { pid: 999_999 },
+      options: { expected: "success" },
+    });
+
+    expect(dispatched).toEqual({
+      name: "access_force_cleanup_orphaned",
+      arguments: { pid: 999_999 },
+    });
+  });
+
   it("H3a — expected:'error' + isError:false throws STOP-ON-FAIL after the tool", async () => {
     const { ctx, rows, processObj, errors } = makeCtx({
       harness: { childPid: 0, isError: false, timedOut: false, text: "ok-but-expected-error" },

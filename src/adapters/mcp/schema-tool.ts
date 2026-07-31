@@ -115,6 +115,9 @@ export type ToolParameterSchema = {
   conflictsWith?: string[];
   precedence?: "canonical" | "alias" | "deprecated";
   sensitive?: boolean;
+  compositionConstraints?: {
+    requiredWith?: string[];
+  };
 };
 
 /**
@@ -953,9 +956,19 @@ function parametersFromInputSchema(
   for (const [name, raw] of Object.entries(properties)) {
     out[name] = parameterFromJsonSchema(
       name,
-      raw as { type?: string; enum?: unknown[]; description?: string; default?: unknown },
+      raw as {
+        type?: string;
+        enum?: unknown[];
+        description?: string;
+        default?: unknown;
+        requiredWith?: readonly string[];
+      },
       requiredSet.has(name),
     );
+    const requiredWith = (raw as { requiredWith?: readonly string[] }).requiredWith;
+    if (requiredWith !== undefined && requiredWith.length > 0) {
+      out[name].compositionConstraints = { requiredWith: [...requiredWith] };
+    }
   }
   enrichParameterMetadata(toolName, schema, out);
   return out;
@@ -997,7 +1010,22 @@ function errorCodesForTool(_name: string, access: McpToolAccess): ToolErrorCodeS
     return READ_ONLY_ERROR_CODES.map((entry) => ({ ...entry }));
   }
   // Write-class tools carry the full gate envelope plus MCP_INPUT_INVALID.
-  return WRITE_GATE_ERROR_CODES.map((entry) => ({ ...entry }));
+  const codes = WRITE_GATE_ERROR_CODES.map((entry) => ({ ...entry }));
+  if (_name === "run_script" || _name === "vba_inline_execution") {
+    codes.push({
+      code: "SANDBOX_ONLY",
+      description: "The explicit Access target is outside the active worktree sandbox.",
+      recoverable: true,
+    });
+  }
+  if (_name === "vba_inline_execution" || _name === "access_force_cleanup_orphaned") {
+    codes.push({
+      code: "CONFIRMATION_REQUIRED",
+      description: "The operation requires explicit human confirmation before it can execute.",
+      recoverable: true,
+    });
+  }
+  return codes;
 }
 
 function requiredCapabilitiesForTool(access: McpToolAccess): string[] {

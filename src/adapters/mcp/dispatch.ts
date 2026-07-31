@@ -80,6 +80,7 @@ export function registerMcpTools(
     writesEnabled,
     writeAccessResolver,
     allowedProcedures,
+    accessContextResolver,
   );
   const aliasToolsWithContracts = aliasTools.map((tool) => ({
     ...tool,

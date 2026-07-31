@@ -333,6 +333,7 @@ export const ORPHAN_CLEANUP_SCHEMA: JsonObjectSchema = {
       type: "number",
       minimum: 1,
       description: "Positive process id selected from the preceding orphan listing.",
+      requiredWith: ["confirmedRequiresConfirmation"],
     },
   },
 };

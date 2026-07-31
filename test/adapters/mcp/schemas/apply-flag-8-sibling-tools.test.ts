@@ -139,6 +139,8 @@ function generatedHandlerFor(toolName: GeneratedSiblingTool) {
     /* writesEnabled */ true,
     undefined,
     {},
+    "safe-by-default",
+    async () => successResult({ accessPath: "C:/project/Foo.accdb", projectRoot: "C:/project" }),
   );
   return { handler: tool.handler, ...harness };
 }

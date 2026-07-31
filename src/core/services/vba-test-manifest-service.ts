@@ -6,6 +6,7 @@ export type VbaTestManifestErrorCode =
   | "PROCEDURE_NOT_FOUND"
   | "ARG_COUNT_MISMATCH"
   | "ARG_TYPE_MISMATCH"
+  | "ALLOWLIST_EMPTY"
   // Issue #1046 (Bug D) — `validate_manifest` allowlist coherence. When the
   // caller passes `validateManifestIncludesAllowlistCheck: true`, every
   // atom whose procedure is not in the resolved allowlist is surfaced as
@@ -113,6 +114,7 @@ export function validateVbaTestManifest(
   } = {},
 ): VbaTestManifestReport {
   const errors: VbaTestManifestDiagnostic[] = [];
+  const warnings: VbaTestManifestDiagnostic[] = [];
   const invalid: VbaTestManifestInvalidAtom[] = [];
   const { tests, totalTests } = normalizeManifest(manifest, errors);
   const catalog = buildProcedureCatalog(modules);
@@ -120,7 +122,16 @@ export function validateVbaTestManifest(
   const includeAllowlistCheck = options.includeAllowlistCheck === true;
   const allowlist = options.allowedProcedures;
   const allowSet =
-    includeAllowlistCheck && Array.isArray(allowlist) ? new Set(allowlist) : undefined;
+    includeAllowlistCheck && Array.isArray(allowlist) && allowlist.length > 0
+      ? new Set(allowlist)
+      : undefined;
+  if (includeAllowlistCheck && allowSet === undefined) {
+    warnings.push({
+      code: "ALLOWLIST_EMPTY",
+      message:
+        "The allowlist coherence check was requested, but allowedProcedures is empty; manifest definitions remain authoritative and no procedures were rejected.",
+    });
+  }
 
   for (const test of tests) {
     for (let i = 0; i < test.tags.length; i += 1) {
@@ -168,13 +179,13 @@ export function validateVbaTestManifest(
   return {
     valid: errors.length === 0 && invalid.length === 0,
     errors,
-    warnings: [],
+    warnings,
     invalid,
     summary: {
       totalTests,
       validTests: Math.max(0, totalTests - new Set(errors.map((e) => e.testIndex)).size),
       errorCount: errors.length,
-      warningCount: 0,
+      warningCount: warnings.length,
       invalidCount: invalid.length,
     },
   };
