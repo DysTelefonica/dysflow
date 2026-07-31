@@ -122,6 +122,7 @@ const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = "ZZZ_DysflowMcpE2E";
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
+const sourcePath = uiFormPath;
 // Deterministic UI fixture for the form-UI battery, derived from the
 // production Form_FormCPV.form.txt so the test exercises real form
 // structure (header / detail / footer sections, the typical set of
@@ -281,6 +282,7 @@ const recordCtx = {
 };
 
 async function record(area, tool, args = {}, options = {}) {
+  const frictionScenario = resolveEnvelopeFrictionScenario(tool, args, options);
   const step = await resumeController.before(area, tool);
   if (step.cached) {
     console.log(`RESUME-SKIP\t${step.id}\tcheckpoint PASS`);
@@ -289,15 +291,152 @@ async function record(area, tool, args = {}, options = {}) {
   try {
     const effectiveArgs =
       tool === "dysflow_resolve_project_no_dysflow_field_guidance"
-        ? { ...args, cwd: noDysflowWorktree }
-        : args;
-    const result = await recordImpl(recordCtx, { area, tool, args: effectiveArgs, options });
+        ? { ...frictionScenario.args, cwd: noDysflowWorktree }
+        : frictionScenario.args;
+    const result = await recordImpl(recordCtx, {
+      area,
+      tool,
+      args: effectiveArgs,
+      options: frictionScenario.options,
+    });
+    if (frictionScenario.assert !== undefined) {
+      const assertion = frictionScenario.assert(result);
+      addFailFastResult({
+        area,
+        tool,
+        pass: assertion.pass,
+        expected: assertion.expected,
+        ms: 0,
+        summary: assertion.summary,
+      });
+      console.log(`${assertion.pass ? "PASS" : "FAIL"}\t${tool}\t0ms\t${assertion.summary}`);
+      if (!assertion.pass) {
+        process.exitCode = 1;
+        throw new Error(`mcp-e2e: envelope friction assertion failed for ${tool}`);
+      }
+    }
     await resumeController.pass(step.id, area, result);
     return result;
   } catch (error) {
     await resumeController.fail(step.id, area, suiteOwnPids);
     throw error;
   }
+}
+
+function mcpErrorFromResult(result) {
+  const parsed = safeJsonParse(result?.text);
+  return (
+    parsed?.error ??
+    result?.response?.result?.error ??
+    (parsed && typeof parsed.code === "string" ? parsed : undefined)
+  );
+}
+
+function resolveEnvelopeFrictionScenario(tool, args, options) {
+  if (tool === "project_config_not_write_ready_has_remediation") {
+    return {
+      args: { ...args, moduleNames: ["DysflowEnvelopeProbe"], apply: true },
+      options,
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          error?.code === "PROJECT_CONFIG_NOT_WRITE_READY" &&
+          error.remediation !== undefined &&
+          error.remediation !== null;
+        return {
+          pass,
+          expected: "PROJECT_CONFIG_NOT_WRITE_READY with error.remediation",
+          summary: pass ? "typed write gate includes remediation" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "migrate_project_config") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass =
+          parsed?.error?.code === "PROJECT_CONFIG_NOT_FOUND" &&
+          typeof parsed.error.message === "string" &&
+          parsed.error.remediation !== undefined;
+        return {
+          pass,
+          expected: "parseable structured PROJECT_CONFIG_NOT_FOUND envelope",
+          summary: pass ? "structured migration error envelope" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool.endsWith(":error-envelope-code")) {
+    return {
+      args: { ...args, __forceTypedEnvelopeError: true },
+      options,
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass = typeof error?.code === "string" && !/^Error \d+/.test(error.code);
+        return {
+          pass,
+          expected: "typed error.code",
+          summary: pass ? `error.code=${error.code}` : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "list_access_files:remediation-actionable") {
+    return {
+      args: { name: "list_access_files" },
+      options: {},
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const parameters = parsed?.parameters ?? parsed?.tool?.parameters;
+        const pass =
+          parameters !== null &&
+          typeof parameters === "object" &&
+          Object.hasOwn(parameters, "accessPath");
+        return {
+          pass,
+          expected: "list_access_files remediation target exists in live parameters",
+          summary: pass ? "accessPath is accepted by list_access_files" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "query_execute:read-only-mode-write-rejected") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass = error?.code === "INVALID_READ_ONLY_QUERY";
+        return {
+          pass,
+          expected: "INVALID_READ_ONLY_QUERY",
+          summary: pass ? "typed read-only SQL rejection" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "form_set_property:result-contract-violation-shape") {
+    return {
+      args: { ...args, controlName: "txtProbe" },
+      options,
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          error?.code === "RESULT_CONTRACT_VIOLATION" &&
+          error.actualShape !== undefined &&
+          error.expectedShape !== undefined;
+        return {
+          pass,
+          expected: "RESULT_CONTRACT_VIOLATION with actualShape and expectedShape",
+          summary: pass ? "contract violation exposes both shapes" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  return { args, options };
 }
 
 const resultContractCoverage = new Set();
@@ -403,6 +542,16 @@ await record("capabilities", "get_capabilities", { projectId });
 // #1057 (F5/F6) — single-tool introspection sibling of `schema`. Read-only;
 // returns delete_module's params + description + useCases.
 await record("capabilities", "describe_tool", { name: "delete_module" });
+
+await record("capabilities", "migrate_project_config", {
+  cwd: "/no/such/dir",
+}, { expected: "error" });
+
+const tools = ["run_script", "vba_inline_execution", "list_procedures",
+               "get_procedure", "find_references", "detect_dead_code"];
+for (const tool of tools) {
+  await record("vba", `${tool}:error-envelope-code`, { projectId }, { expected: "error" });
+}
 // #1057 (F1/F4) — unknown-key rejection lists valid params + suggests the
 // nearest match ("Did you mean 'moduleName'?"). Validation fires before any
 // write gate, so no Access mutation is possible on this row.
@@ -418,6 +567,20 @@ const telemetrySecret = "DYSFLOW_E2E_TELEMETRY_SECRET";
 const telemetrySqlSecret = "DYSFLOW_E2E_TELEMETRY_SQL_SECRET";
 const projectConfigPath = join(tempRoot, ".dysflow", "project.json");
 const invocationSinkPath = join(tempRoot, ".dysflow", "runtime", "invocations.jsonl");
+const writeReadyConfig = await readFile(projectConfigPath, "utf8");
+const notWriteReadyConfig = JSON.parse(writeReadyConfig);
+notWriteReadyConfig.capabilities = {
+  ...(notWriteReadyConfig.capabilities ?? {}),
+  allowWrites: false,
+};
+await writeFile(projectConfigPath, `${JSON.stringify(notWriteReadyConfig, null, 2)}\n`, "utf8");
+try {
+  await record("protocol", "project_config_not_write_ready_has_remediation", {
+    projectId,
+  }, { expected: "error" });
+} finally {
+  await writeFile(projectConfigPath, writeReadyConfig, "utf8");
+}
 const unknownToolResult = await record(
   "release-telemetry",
   "DysflowMcpE2EUnknownTool",
@@ -590,6 +753,9 @@ console.log(`${projectConfigRestored ? "PASS" : "FAIL"}\tinvocation-sink:opt-out
 await record("query", "query_sql", { projectId, ...backendTarget, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades" });
 await record("security", "query_sql", { projectId, sql: "DROP TABLE TbConfiguracion" }, { expected: "error" });
 await record("security", "query_execute", { projectId, sql: "DELETE FROM TbNoConformidades", mode: "read" }, { expected: "error" });
+await record("query", "query_execute:read-only-mode-write-rejected", {
+  projectId, mode: "read", sql: "DROP TABLE test",
+}, { expected: "error" });
 await record("query", "list_tables", { projectId, ...backendTarget });
 await record("query", "get_schema", { projectId, ...backendTarget, tableName: "TbNoConformidades" });
 await record("query", "count_rows", { projectId, accessPath, backendPath, tableName: "TbNoConformidades" });
@@ -599,6 +765,7 @@ await record("query", "list_links", { projectId, accessPath });
 await record("query", "get_relationships", { projectId, ...backendTarget });
 await record("query", "compare_backends", { projectId, accessPath, backendPath, comparePath: backendPath });
 await record("query", "list_access_files", { projectId, rootPath: tempRoot });
+await record("operations", "list_access_files:remediation-actionable", { projectId: "non-existent" });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], apply: true });
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, apply: false, backupFirst: false });
@@ -812,6 +979,9 @@ console.log(`${missingFormUiTools.length === 0 ? "PASS" : "FAIL"}\tform-ui-tools
 
 // form-ui (issue #795) — offline analysis + plan/verify surface for AI-assisted UI work.
 const analyzeFormUiResult = await record("form-ui", "analyze_form_ui", { projectId, sourcePath: uiFormPath });
+await record("form-ui", "form_set_property:result-contract-violation-shape", {
+  projectId, sourcePath, controlName: "x", property: "Caption", value: "y", apply: false,
+}, { expected: "error" });
 const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
 const analyzePass = Boolean(
   analyzeFormUi &&

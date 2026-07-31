@@ -235,6 +235,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      accessPath: SCHEMA_PROPS.accessPath,
       rootPath: SCHEMA_PROPS.rootPath,
       directory: SCHEMA_PROPS.directory,
     },

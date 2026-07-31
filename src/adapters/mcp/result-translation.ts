@@ -76,6 +76,10 @@ export type McpToolError = {
    * (e.g. "call get_capabilities to introspect the allowlist").
    */
   remediation?: string;
+  /** Redacted structural summary of the payload rejected by result validation. */
+  actualShape?: Record<string, unknown>;
+  /** Redacted structural summary of the executable result contract. */
+  expectedShape?: Record<string, unknown>;
   diagnostics?: readonly {
     code: string;
     severity: string;

@@ -389,19 +389,20 @@ export function createMigrateProjectConfigTool(
       if (migration.outcome === "error") {
         const code = migration.error.code;
         const message = migration.error.message;
+        const error = {
+          code,
+          message,
+          errorCode: code,
+          errorMessage: message,
+          ...(migration.error.remediation !== undefined
+            ? { remediation: migration.error.remediation }
+            : {}),
+        };
         return {
-          content: [{ type: "text", text: `${code}: ${message}` }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
           isError: true,
           ok: false,
-          error: {
-            code,
-            message,
-            errorCode: code,
-            errorMessage: message,
-            ...(migration.error.remediation !== undefined
-              ? { remediation: migration.error.remediation }
-              : {}),
-          },
+          error,
         };
       }
 

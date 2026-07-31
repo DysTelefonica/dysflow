@@ -33,9 +33,13 @@ describe("wrapWithErrorAbsorber", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content).toHaveLength(1);
-    expect(result.content[0]).toEqual({
-      type: "text",
-      text: "MCP_TOOL_ERROR: something went wrong",
+    expect(JSON.parse(result.content[0]?.text ?? "")).toMatchObject({
+      ok: false,
+      error: {
+        code: "MCP_TOOL_ERROR",
+        message: "something went wrong",
+        remediation: expect.any(String),
+      },
     });
   });
 
@@ -48,9 +52,13 @@ describe("wrapWithErrorAbsorber", () => {
     const result = await handler(undefined, undefined);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]).toEqual({
-      type: "text",
-      text: "MCP_TOOL_ERROR: a raw string error",
+    expect(JSON.parse(result.content[0]?.text ?? "")).toMatchObject({
+      ok: false,
+      error: {
+        code: "MCP_TOOL_ERROR",
+        message: "a raw string error",
+        remediation: expect.any(String),
+      },
     });
   });
 
