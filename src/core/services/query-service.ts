@@ -41,6 +41,19 @@ export type AccessQueryServiceOptions = {
   config: DysflowConfig;
 };
 
+const INLINE_WRITE_PLAN_ACTIONS: ReadonlySet<AccessQueryRequest["action"]> = new Set([
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+]);
+
+function usesInlineWritePlan(request: AccessQueryRequest): boolean {
+  return request.action === undefined || INLINE_WRITE_PLAN_ACTIONS.has(request.action);
+}
+
 export class AccessQueryService {
   private readonly runner: AccessRunner;
   private readonly config: DysflowConfig;
@@ -62,7 +75,7 @@ export class AccessQueryService {
       }
     }
 
-    if (request.mode === "write" && request.dryRun === true) {
+    if (request.mode === "write" && request.dryRun === true && usesInlineWritePlan(request)) {
       return successResult({
         dryRun: true,
         willExecute: false,

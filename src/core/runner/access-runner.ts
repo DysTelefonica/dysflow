@@ -31,7 +31,7 @@ import {
   type CrossDbTableRunner,
   lookupTableAcrossDatabases,
 } from "../runtime/cross-db-table-lookup.js";
-import { isRecord, sanitizeSecrets } from "../utils/index.js";
+import { isRecord, normalizePathForMatching, sanitizeSecrets } from "../utils/index.js";
 import { parseSimpleSelectShape } from "../utils/simple-select-shape.js";
 import { classifyInvalidPasswordFailure } from "./runner-failure-classifier.js";
 
@@ -175,6 +175,25 @@ const noopPreflightCleanup: AccessOperationPreflightCleanup = {
     return { cleaned: [], killed: [], orphanedKilled: [], errors: [] };
   },
 };
+
+function resolveCompactRepairTarget(
+  request: AccessQueryRequest,
+  config: DysflowConfig,
+): "frontend" | "backend" | undefined {
+  const explicitPath = request.databasePath ?? request.backendPath;
+  if (explicitPath !== undefined) {
+    const normalizedPath = normalizePathForMatching(explicitPath);
+    if (
+      config.backendPath !== undefined &&
+      normalizedPath === normalizePathForMatching(config.backendPath)
+    ) {
+      return "backend";
+    }
+    if (normalizedPath === normalizePathForMatching(config.accessDbPath)) return "frontend";
+    return undefined;
+  }
+  return request.target === "frontend" || request.target === "backend" ? request.target : undefined;
+}
 
 export class AccessPowerShellRunner implements AccessRunner {
   private readonly executor: PowerShellExecutor;
@@ -358,9 +377,7 @@ export class AccessPowerShellRunner implements AccessRunner {
     let finalOperation = operation;
     let compactRepairTarget: "frontend" | "backend" | undefined =
       operation.kind === "query" && operation.request.action === "compact_repair"
-        ? operation.request.target === "frontend" || operation.request.target === "backend"
-          ? operation.request.target
-          : undefined
+        ? resolveCompactRepairTarget(operation.request, config)
         : undefined;
     if (operation.kind === "query") {
       if (
