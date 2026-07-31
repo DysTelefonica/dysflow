@@ -290,6 +290,24 @@ describe("mcp-e2e.mjs — form plan result contract (#1292)", () => {
   });
 });
 
+describe("mcp-e2e.mjs — validate_manifest allowlist rejection (#1296)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("treats the intentional allowlist miss as typed evidence, not a harness failure", () => {
+    const scenario = src.match(
+      /if \(tool === "validate_manifest:allowlist-check-not-noop"\) \{([\s\S]*?)\n {2}\}/,
+    );
+
+    expect(scenario, "validate_manifest allowlist release policy not found").not.toBeNull();
+    expect(scenario?.[1]).toContain('expected: "error"');
+    expect(scenario?.[1]).toContain("parsed?.valid === false");
+    expect(scenario?.[1]).toContain('candidate?.procedure === "GetMaxOrdinalE2E"');
+    expect(scenario?.[1]).toContain('entry?.reason === "allowlist_miss"');
+    expect(src.match(/validate_manifest:allowlist-check-not-noop/g)).toHaveLength(2);
+    expect(src).not.toContain('"validate_manifest:allowlist-check"');
+  });
+});
+
 describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
   const src = readSource(MCP_E2E_PATH);
 

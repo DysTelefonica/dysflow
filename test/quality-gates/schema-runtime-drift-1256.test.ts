@@ -12,7 +12,7 @@ describe("issue #1256 release E2E records", () => {
     'await record("vba-sync", "delete_module:bad-backendPath", {',
     'await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: false });',
     'await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempRoot + "/ERD" });',
-    'await record("vba-sync", "validate_manifest:allowlist-check", {',
+    'await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {',
     'await record("query", `' +
       "$" +
       '{tool}:error-envelope-remediation`, {}, { expected: "error" });',

@@ -491,17 +491,20 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
-  if (tool === "validate_manifest:allowlist-check") {
+  if (tool === "validate_manifest:allowlist-check-not-noop") {
     return {
       args,
-      options,
+      options: { ...options, expected: "error" },
       assert: (result) => {
         const parsed = safeJsonParse(result?.text);
-        const pass = Array.isArray(parsed?.warnings) && parsed.warnings.length > 0;
+        const entry = Array.isArray(parsed?.invalid)
+          ? parsed.invalid.find((candidate) => candidate?.procedure === "GetMaxOrdinalE2E")
+          : undefined;
+        const pass = parsed?.valid === false && entry?.reason === "allowlist_miss";
         return {
           pass,
-          expected: "observable allowlist warning",
-          summary: pass ? "allowlist check observable" : normalize(result?.text),
+          expected: "typed allowlist_miss for GetMaxOrdinalE2E",
+          summary: pass ? "intentional allowlist rejection observed" : normalize(result?.text),
         };
       },
     };
@@ -1858,12 +1861,6 @@ await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: fals
 
 await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempRoot + "/ERD" });
 // assertion: result.markdownFile ends in .md; isFile() === true
-
-await record("vba-sync", "validate_manifest:allowlist-check", {
-  ...ctx, testsPath: "tests/vba/tests.vba.json",
-  validateManifestIncludesAllowlistCheck: true,
-});
-// cross-check: output MUST differ from validateManifestIncludesAllowlistCheck:false
 
 const sqlTools = ["query_execute", "create_table", "drop_table", "list_access_files",
                   "seed_fixture", "teardown_fixture", "list_tables"];
