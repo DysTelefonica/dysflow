@@ -371,6 +371,155 @@ function mcpErrorFromResult(result) {
 }
 
 function resolveEnvelopeFrictionScenario(tool, args, options) {
+  if (tool === "data-schema-coverage") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const required = ["list_objects", "list_vba_modules", "exists"];
+        const entries = new Map((parsed?.tools ?? []).map((entry) => [entry.name, entry]));
+        const pass = required.every((name) => {
+          const fields = entries.get(name)?.primaryResult?.fields;
+          return Array.isArray(fields) && fields.length > 0;
+        });
+        return {
+          pass,
+          expected: "non-empty result fields for list_objects, list_vba_modules, exists",
+          summary: pass ? "schema coverage present" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "find_references:1018-schema-leak") {
+    return {
+      args: { ...args, symbol: "MouseCursor" },
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass =
+          Array.isArray(parsed?.binaryReferences) &&
+          typeof parsed?.hasDifferences === "boolean" &&
+          parsed.hasDifferences ===
+            ((parsed?.differences?.onlyInSource?.length ?? 0) > 0 ||
+              (parsed?.differences?.onlyInBinary?.length ?? 0) > 0);
+        return {
+          pass,
+          expected: "binaryReferences and hasDifferences are present and coupled",
+          summary: pass ? "reference drift fields coupled" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "fix_encoding:plan-drift-visibility") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = Array.isArray(parsed?.filesInspected) && Array.isArray(parsed?.detectedDrift);
+        return {
+          pass,
+          expected: "filesInspected[] and detectedDrift[]",
+          summary: pass ? "encoding plan exposes drift" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "delete_module:bad-backendPath") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const code = mcpErrorFromResult(result)?.code;
+        const pass = code === "BACKEND_PATH_INVALID" || code === "FILE_NOT_FOUND";
+        return {
+          pass,
+          expected: "BACKEND_PATH_INVALID or FILE_NOT_FOUND",
+          summary: pass ? `typed missing backend: ${code}` : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "verify_code:timeout-remediation") {
+    return {
+      args: { ...args, timeoutMs: 1000 },
+      options: { ...options, expected: "error", timeoutMs: 5000 },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          (error?.code === "VBA_MANAGER_TIMEOUT" || error?.code === "VERIFY_CODE_PHASE_TIMEOUT") &&
+          typeof error?.remediation !== "undefined";
+        return {
+          pass,
+          expected: "typed timeout envelope with remediation",
+          summary: pass ? `typed timeout: ${error.code}` : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "generate_erd:path-semantics") {
+    return {
+      args: { ...args, backendPath },
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = typeof parsed?.markdownFile === "string" && parsed.markdownFile.endsWith(".md");
+        return {
+          pass,
+          expected: "markdownFile ending in .md",
+          summary: pass ? parsed.markdownFile : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "validate_manifest:allowlist-check") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = Array.isArray(parsed?.warnings) && parsed.warnings.length > 0;
+        return {
+          pass,
+          expected: "observable allowlist warning",
+          summary: pass ? "allowlist check observable" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool.endsWith(":error-envelope-remediation")) {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const remediation = mcpErrorFromResult(result)?.remediation;
+        const pass = typeof remediation === "string" || typeof remediation === "object";
+        return {
+          pass,
+          expected: "error.remediation",
+          summary: pass ? "error remediation present" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "effective-dry-run-default-coherence") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const failures = Object.entries(parsed?.effectiveDryRunDefault ?? {}).filter(
+          ([name, effective]) => effective !== (parsed?.tools?.[name]?.defaultBehavior !== "writes"),
+        );
+        return {
+          pass: failures.length === 0,
+          expected: "effectiveDryRunDefault===true iff defaultBehavior!==writes",
+          summary: failures.length === 0 ? "dry-run defaults coherent" : JSON.stringify(failures),
+        };
+      },
+    };
+  }
   if (tool === "test_vba:plan-mode") {
     return {
       args: {
@@ -1640,6 +1789,47 @@ await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {
   validateManifestIncludesAllowlistCheck: true,
 });
 // cross-check: output MUST differ from validateManifestIncludesAllowlistCheck:false
+
+// Issue #1256 — schema/runtime drift release records. Keep these literals in
+// sync with the issue so release evidence remains directly traceable.
+await record("protocol", "data-schema-coverage", { projectId });
+// cross-check: list_objects, list_vba_modules, exists have non-empty dataSchema documenting all returned fields
+
+await record("vba", "find_references:1018-schema-leak", {
+  symbol: "<popular>", scope: "all", limit: 5,
+});
+// cross-check: if both binaryReferences and hasDifferences exist, they're coupled
+
+await record("vba-sync", "fix_encoding:plan-drift-visibility", {
+  ...ctx, location: "src", apply: false,
+});
+// assertions: filesInspected array + detectedDrift array populated
+
+await record("vba-sync", "delete_module:bad-backendPath", {
+  ...ctx, backendPath: "C:/bad/path.accdb", moduleName: "X", apply: false,
+}, { expected: "error" });
+// assertion: error.code in {BACKEND_PATH_INVALID, FILE_NOT_FOUND}
+
+await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: false });
+// assertion: error envelope typed with error.remediation (not raw VBA_MANAGER_TIMEOUT)
+
+await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempRoot + "/ERD" });
+// assertion: result.markdownFile ends in .md; isFile() === true
+
+await record("vba-sync", "validate_manifest:allowlist-check", {
+  ...ctx, testsPath: "tests/vba/tests.vba.json",
+  validateManifestIncludesAllowlistCheck: true,
+});
+// cross-check: output MUST differ from validateManifestIncludesAllowlistCheck:false
+
+const sqlTools = ["query_execute", "create_table", "drop_table", "list_access_files",
+                  "seed_fixture", "teardown_fixture", "list_tables"];
+for (const tool of sqlTools) {
+  await record("query", `${tool}:error-envelope-remediation`, {}, { expected: "error" });
+}
+
+await record("protocol", "effective-dry-run-default-coherence", { projectId });
+// cross-check: for every tool, effectiveDryRunDefault===true ↔ defaultBehavior !== "writes"
 
 // Phase 4 — real projectId resolution E2E against the existing
 // `E2E_testing/.dysflow/project.json` fixture (id: noconformidades-e2e,

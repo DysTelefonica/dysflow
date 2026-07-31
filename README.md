@@ -1080,7 +1080,7 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
 * **`compare_backends`**: Compare structural differences between two backends.
   - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional), `target` (optional)
 * **`generate_erd`**: Generate an entity-relationship document for the database schema.
-  - Parameters: `erdPath` (string, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional)
+  - Parameters: `erdPath` (Markdown output file; `.md` is appended when omitted), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional)
 * **`get_relationships`**: List foreign keys and relation constraints.
   - Parameters: `accessPath` (optional), `target` (optional)
 * **`list_access_files`**: Search for `.accdb` files recursively in a directory.

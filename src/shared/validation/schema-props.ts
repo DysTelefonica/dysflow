@@ -273,7 +273,11 @@ export const SCHEMA_PROPS = {
   replace: { type: "boolean", description: "Replace existing resources." } as JsonSchemaProperty,
   strict_write: { type: "boolean", description: "Use strict write guards." } as JsonSchemaProperty,
   // ERD / form
-  erdPath: { type: "string", description: "ERD output path." } as JsonSchemaProperty,
+  erdPath: {
+    type: "string",
+    description:
+      "ERD Markdown output file. When the path has no extension, Dysflow appends .md; it is never interpreted as a directory.",
+  } as JsonSchemaProperty,
   catalogPath: { type: "string", description: "Form control catalog path." } as JsonSchemaProperty,
   specPath: {
     type: "string",

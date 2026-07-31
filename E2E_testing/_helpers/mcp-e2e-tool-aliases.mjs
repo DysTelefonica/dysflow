@@ -7,6 +7,8 @@ export const MCP_E2E_TOOL_ALIASES = Object.freeze({
   "access_force_cleanup_orphaned:complete-enumeration": "access_force_cleanup_orphaned",
   "state:orphans-msaccess-accurate": "state",
   "logs:orphans-msaccess-recent": "logs",
+  "data-schema-coverage": "schema",
+  "effective-dry-run-default-coherence": "get_capabilities",
 });
 
 export function resolveMcpE2eToolName(label) {

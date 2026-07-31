@@ -24,6 +24,9 @@ describe("dispatch-family executable result contracts — #1098", () => {
           "localize_backend_links",
           "relink_directory",
           "apply_form_design_plan",
+          "fix_encoding",
+          "delete_module",
+          "generate_erd",
         ].includes(name)
       )
         expect(derived, name).toBe(contract);
