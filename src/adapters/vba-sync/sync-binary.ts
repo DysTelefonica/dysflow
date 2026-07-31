@@ -393,11 +393,15 @@ export async function runSyncBinary(args: {
   const willExecute = !isDryRun && input.apply === true;
 
   const forward: Record<string, unknown> = { ...(input.forward ?? {}) };
+  const focusedModuleNames =
+    input.moduleNames !== undefined && input.moduleNames.length > 0
+      ? [...input.moduleNames]
+      : undefined;
 
   // Step 1: pre-verify
   const preOutcome = await adapter.runVerify({
     ...forward,
-    ...(input.moduleNames !== undefined ? { moduleNames: [...input.moduleNames] } : {}),
+    ...(focusedModuleNames !== undefined ? { moduleNames: focusedModuleNames } : {}),
     ...(input.directoryPath !== undefined ? { directoryPath: input.directoryPath } : {}),
     ...(input.recursive !== undefined ? { recursive: input.recursive } : {}),
     ...(input.includeTests !== undefined ? { includeTests: input.includeTests } : {}),
@@ -512,7 +516,7 @@ export async function runSyncBinary(args: {
   if (willExecute) {
     const postOutcome = await adapter.runVerify({
       ...forward,
-      ...(input.moduleNames !== undefined ? { moduleNames: [...input.moduleNames] } : {}),
+      ...(focusedModuleNames !== undefined ? { moduleNames: focusedModuleNames } : {}),
       ...(input.directoryPath !== undefined ? { directoryPath: input.directoryPath } : {}),
       ...(input.recursive !== undefined ? { recursive: input.recursive } : {}),
       ...(input.includeTests !== undefined ? { includeTests: input.includeTests } : {}),

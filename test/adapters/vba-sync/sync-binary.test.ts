@@ -84,16 +84,19 @@ function makeFakeAdapter(
 ): {
   adapter: SyncBinaryAdapterLike;
   verifyCalls: number;
+  verifyParams: Array<Record<string, unknown>>;
   importCalls: Array<{ moduleNames: readonly string[] }>;
   exportCalls: Array<{ moduleNames: readonly string[] }>;
 } {
   let verifyCalls = 0;
+  const verifyParams: Array<Record<string, unknown>> = [];
   const importCalls: Array<{ moduleNames: readonly string[] }> = [];
   const exportCalls: Array<{ moduleNames: readonly string[] }> = [];
 
   const adapter: SyncBinaryAdapterLike = {
-    async runVerify() {
+    async runVerify(params) {
       verifyCalls += 1;
+      verifyParams.push(params);
       // First call -> pre, second call -> post. Subsequent calls reuse post.
       const summary =
         verifyCalls === 1
@@ -147,12 +150,37 @@ function makeFakeAdapter(
     get verifyCalls() {
       return verifyCalls;
     },
+    verifyParams,
     importCalls,
     exportCalls,
   };
 }
 
 // ─── 1. Plan-only path (AC1) ────────────────────────────────────────────────
+
+describe("runSyncBinary — verify_code module selection (#1282)", () => {
+  it("omits an empty moduleNames selection for whole-project verification", async () => {
+    const fake = makeFakeAdapter();
+
+    await runSyncBinary({
+      adapter: fake.adapter,
+      input: { moduleNames: [], apply: true },
+    });
+
+    expect(fake.verifyParams).toEqual([{}, {}]);
+  });
+
+  it("preserves a non-empty moduleNames selection for focused verification", async () => {
+    const fake = makeFakeAdapter();
+
+    await runSyncBinary({
+      adapter: fake.adapter,
+      input: { moduleNames: ["ModuleA"], apply: true },
+    });
+
+    expect(fake.verifyParams).toEqual([{ moduleNames: ["ModuleA"] }, { moduleNames: ["ModuleA"] }]);
+  });
+});
 
 describe("runSyncBinary — plan-only path (AC1)", () => {
   it("dryRun:true (default) populates plan.toImport without dispatching any import/export", async () => {
