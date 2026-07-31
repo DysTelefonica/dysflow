@@ -688,17 +688,53 @@ function findDefaultControlContainer(node: FormNode): FormNode {
   return childControlContainer(node);
 }
 
-function findTargetContainer(node: FormNode, targetSectionName?: string): FormNode | undefined {
-  if (targetSectionName === undefined) return findDefaultControlContainer(node);
+type AccessSectionBlockType = "Section" | "FormHeader" | "FormFooter";
+
+const ACCESS_SECTION_ALIASES = new Map<string, AccessSectionBlockType>([
+  ["detail", "Section"],
+  ["formheader", "FormHeader"],
+  ["formfooter", "FormFooter"],
+]);
+
+function normalizeAccessSectionAlias(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f\s_-]/g, "")
+    .toLowerCase();
+}
+
+function findNamedTargetContainer(node: FormNode, targetSectionName: string): FormNode | undefined {
   const nameEntry = findNameEntry(node);
   if (nameEntry !== undefined && unquoteScalar(nameEntry.value) === targetSectionName) {
     return childControlContainer(node);
   }
   for (const child of node.children) {
-    const found = findTargetContainer(child, targetSectionName);
+    const found = findNamedTargetContainer(child, targetSectionName);
     if (found !== undefined) return found;
   }
   return undefined;
+}
+
+function findSectionContainerByBlockType(
+  node: FormNode,
+  blockType: AccessSectionBlockType,
+): FormNode | undefined {
+  if (node.blockType === blockType) return childControlContainer(node);
+  for (const child of node.children) {
+    const found = findSectionContainerByBlockType(child, blockType);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function findTargetContainer(node: FormNode, targetSectionName?: string): FormNode | undefined {
+  if (targetSectionName === undefined) return findDefaultControlContainer(node);
+
+  const blockType = ACCESS_SECTION_ALIASES.get(normalizeAccessSectionAlias(targetSectionName));
+  if (blockType !== undefined) return findSectionContainerByBlockType(node, blockType);
+
+  const exact = findNamedTargetContainer(node, targetSectionName);
+  return exact;
 }
 
 type FormPropertySemanticGroup = 1 | 2 | 3 | 4 | 5 | 6;
