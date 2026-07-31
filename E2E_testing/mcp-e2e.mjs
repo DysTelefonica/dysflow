@@ -287,22 +287,7 @@ async function record(area, tool, args = {}, options = {}) {
     return step.cached;
   }
   try {
-    // Issue #1254 regression records use descriptive scenario names so the
-    // release report stays stable even though each scenario delegates to a
-    // concrete introspection tool.
-    const scenario =
-      tool === "dysflow_resolve_project_no_dysflow_field_guidance"
-        ? { tool: "resolve_project", args: { ...args, cwd: noDysflowWorktree } }
-        : tool === "get_capabilities_status_missing_semantics" ||
-            tool === "discovered_projects_isolation"
-          ? { tool: "get_capabilities", args: { projectId } }
-          : { tool, args };
-    const result = await recordImpl(recordCtx, {
-      area,
-      tool: scenario.tool,
-      args: scenario.args,
-      options,
-    });
+    const result = await recordImpl(recordCtx, { area, tool, args, options });
     await resumeController.pass(step.id, area, result);
     return result;
   } catch (error) {
@@ -378,14 +363,17 @@ addFailFastResult({
     : `missing=${missingIssue713Tools.join(",")}`,
 });
 
-await record("protocol", "dysflow_resolve_project_no_dysflow_field_guidance", {
+// #1254: dysflow_resolve_project_no_dysflow_field_guidance
+await record("protocol", "resolve_project", {
   projectId: "no-dysflow-worktree",
-  cwd: "<absolute-path-to-worktree-without-dysflow>",
+  cwd: noDysflowWorktree,
 }, { expected: "error" });
 
-await record("protocol", "get_capabilities_status_missing_semantics", { projectId });
+// #1254: get_capabilities_status_missing_semantics
+await record("protocol", "get_capabilities", { projectId });
 
-await record("protocol", "discovered_projects_isolation", { projectId: "A" });
+// #1254: discovered_projects_isolation
+await record("protocol", "get_capabilities", { projectId });
 
 await recordContract("diagnostics", "doctor", { projectId, includeEnvironment: true }, {}, ["bootstrap", "success"]);
 await recordContract("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath }, {}, ["sql"]);

@@ -335,7 +335,7 @@ export function diagnoseProjectConfig(
     parsed = value as Record<string, unknown>;
   } catch {
     return fail(
-      "invalid-schema",
+      "ambiguous",
       "The project config is not valid JSON.",
       `Run \`dysflow doctor --cwd ${cwd}\` and repair ${normalize(selectedConfig)}.`,
     );
