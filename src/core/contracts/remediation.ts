@@ -55,7 +55,19 @@ export type MigrationRemediation = {
   rationale: string;
 };
 
-export type StructuredRemediation = Remediation | MigrationRemediation;
+export type WorktreeConfigRemediation = {
+  kind: "worktree-config";
+  description: string;
+  command: { value: string; cwd: string };
+  platform: RemediationPlatform;
+  safeToAutoExecute: false;
+  fieldChecklist: readonly string[];
+  fieldDescriptions: Readonly<Record<string, string>>;
+  recoveryCommands: readonly string[];
+  originReference?: string;
+};
+
+export type StructuredRemediation = Remediation | MigrationRemediation | WorktreeConfigRemediation;
 export type DiagnosticRemediation = string | StructuredRemediation;
 
 export function remediationForConfigMigration(input: {

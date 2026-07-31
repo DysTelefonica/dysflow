@@ -6,7 +6,6 @@ import {
   remediationForCapabilitiesDisallowWrite,
   remediationForConfigMigration,
   remediationForDestinationRootNotFound,
-  remediationForMissingProjectConfig,
   remediationForProjectIdMismatch,
   remediationForWriteLockedByRunningOp,
   remediationText,
@@ -14,10 +13,12 @@ import {
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
 import { resolveActiveWorktreeRoot } from "../runtime/worktree-resolver.js";
 import { nodeConfigFileSystem } from "./dysflow-config-node.js";
+import { buildMissingProjectConfigRemediation } from "./missing-project-guidance.js";
 
 export type ProjectConfigStatus =
   | "valid"
   | "missing"
+  | "invalid-schema"
   | "id-mismatch"
   | "path-mismatch"
   | "outside-project-root"
@@ -274,7 +275,9 @@ export function diagnoseProjectConfig(
     accessPath: null,
     backendPath: null,
     destinationRoot: null,
-    discoveredProjects,
+    discoveredProjects: discoveredProjects?.filter(
+      (project) => identity(project.projectRoot) === identity(projectRoot),
+    ),
   };
   const fail = (
     status: ProjectConfigStatus,
@@ -301,7 +304,7 @@ export function diagnoseProjectConfig(
     return fail(
       "missing",
       "No per-worktree .dysflow/project.json was found.",
-      remediationForMissingProjectConfig(cwd),
+      buildMissingProjectConfigRemediation(cwd),
     );
   if (present.length > 1)
     return fail(
@@ -332,7 +335,7 @@ export function diagnoseProjectConfig(
     parsed = value as Record<string, unknown>;
   } catch {
     return fail(
-      "ambiguous",
+      "invalid-schema",
       "The project config is not valid JSON.",
       `Run \`dysflow doctor --cwd ${cwd}\` and repair ${normalize(selectedConfig)}.`,
     );
@@ -385,10 +388,10 @@ export function diagnoseProjectConfig(
   if (configuredFrontend === null && localCandidates.length === 0)
     return failWith(
       base,
-      "target-not-found",
-      `No eligible frontend exists at worktree root '${projectRoot}'.`,
+      "invalid-schema",
+      `The project config exists but does not declare frontendFile and no local .accdb can be selected.`,
       "Configure frontendFile with the local .accdb filename.",
-      "FRONTEND_TARGET_MISSING",
+      "PROJECT_CONFIG_INVALID_SCHEMA",
     );
   if (configuredFrontend === null && localCandidates.length > 1)
     return failWith(
