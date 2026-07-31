@@ -906,6 +906,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       formName: {
@@ -923,6 +924,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       targetPath: {
@@ -958,7 +960,9 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       destinationRoot: SCHEMA_PROPS.destinationRoot,
+      sourcePath: SCHEMA_PROPS.sourcePath,
       sourceRoot: {
         type: "string",
         description:
@@ -1124,6 +1128,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       outputMode: SCHEMA_PROPS.outputMode,
@@ -1145,6 +1150,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       codegraphEvidence: {
@@ -1355,6 +1361,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       output: {
@@ -1384,6 +1391,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       alignmentThresholdTwips: {
@@ -1509,6 +1517,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       // The schema aggregate. Two shapes are accepted (the adapter
@@ -1544,6 +1553,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       formName: {
@@ -1579,6 +1589,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
+      ...ACCESS_OVERRIDE,
       sourcePath: SCHEMA_PROPS.sourcePath,
       path: SCHEMA_PROPS.path,
       formName: {

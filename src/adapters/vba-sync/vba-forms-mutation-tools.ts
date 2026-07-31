@@ -209,6 +209,7 @@ export async function mutateForm(args: {
       const outputMode = stringValue(params.outputMode) ?? "full";
       if (outputMode === "summary") {
         return successResult({
+          dryRun: true,
           mode: "dry-run",
           sourcePath: source.data.sourcePath,
           changedControlName: mutation.changedControlName,
@@ -220,11 +221,13 @@ export async function mutateForm(args: {
         });
       } else if (outputMode === "file") {
         return successResult({
+          dryRun: true,
           sourcePath: source.data.sourcePath,
           source: mutation.source,
         });
       } else {
         return successResult({
+          dryRun: true,
           mode: "dry-run",
           sourcePath: source.data.sourcePath,
           source: mutation.source,

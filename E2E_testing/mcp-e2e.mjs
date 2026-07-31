@@ -123,6 +123,44 @@ const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = "ZZZ_DysflowMcpE2E";
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
 const sourcePath = uiFormPath;
+function baselineArgsFor(tool) {
+  const shared = { projectId, sourcePath: uiFormPath };
+  return {
+    form_set_property: { ...shared, controlName: "txtProbe", propertyName: "Caption", value: "Plan" },
+    form_add_control: {
+      ...shared,
+      targetSectionName: "Detail",
+      controlName: "txtPlanContract",
+      controlType: "TextBox",
+      properties: {},
+    },
+    form_move_control: { ...shared, controlName: "txtProbe", left: 100, top: 100 },
+    form_rename_control: { ...shared, controlName: "txtRename", newName: "txtRenamePlan" },
+    form_delete_control: { ...shared, controlName: "txtDelete" },
+    form_set_properties: { ...shared, controlName: "txtSet", properties: { Caption: "Plan" } },
+    form_duplicate_control: {
+      ...shared,
+      sourceControlName: "txtProbe",
+      newName: "txtProbePlan",
+    },
+    form_align_controls: {
+      ...shared,
+      controlNames: ["txtProbe", "cmdApply"],
+      edge: "left",
+    },
+    form_distribute_controls: {
+      ...shared,
+      controlNames: ["txtProbe", "cmdApply", "txtRename"],
+      axis: "horizontal",
+    },
+    create_form_from_template: {
+      projectId,
+      sourceForm: "Form_DysflowMcpE2E",
+      targetForm: "Form_DysflowMcpE2EPlan",
+      tokenMap: {},
+    },
+  }[tool];
+}
 // Deterministic UI fixture for the form-UI battery, derived from the
 // production Form_FormCPV.form.txt so the test exercises real form
 // structure (header / detail / footer sections, the typical set of
@@ -333,6 +371,22 @@ function mcpErrorFromResult(result) {
 }
 
 function resolveEnvelopeFrictionScenario(tool, args, options) {
+  if (tool === "test_vba:plan-mode") {
+    return {
+      args: {
+        ...args,
+        proceduresJson: JSON.stringify([{ procedure: "GetMaxOrdinalE2E", args: [] }]),
+        apply: false,
+      },
+      options,
+    };
+  }
+  if (tool === "form_get_geometry:access-path-exposed") {
+    return {
+      args: { ...args, controlName: "txtProbe" },
+      options,
+    };
+  }
   if (tool === "project_config_not_write_ready_has_remediation") {
     return {
       args: { ...args, moduleNames: ["DysflowEnvelopeProbe"], apply: true },
@@ -835,6 +889,10 @@ await record("vba-sync", "import_all", { ...ctx, importMode: "code", apply: fals
 // mojibake is still real but no longer surfaces as a structured
 // runtime failure.
 await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expected: "error" });
+
+await record("vba-sync", "sync_binary:plan-mode", { ...ctx, apply: false, moduleNames: ["Anexo"] });
+await record("vba-sync", "sync_binary:empty-moduleNames", { ...ctx, apply: false, moduleNames: [] });
+await record("vba", "test_vba:plan-mode", { ...ctx, proceduresJson: "[{...}]" });
 // verify_code exports every requested module to a temp dir and compares line
 // by line against the binary's VBA source. On the 131-component fixture
 // (`E2E_testing/NoConformidades.accdb`) the round-trip plus 131 module
@@ -979,6 +1037,26 @@ console.log(`${missingFormUiTools.length === 0 ? "PASS" : "FAIL"}\tform-ui-tools
 
 // form-ui (issue #795) — offline analysis + plan/verify surface for AI-assisted UI work.
 const analyzeFormUiResult = await record("form-ui", "analyze_form_ui", { projectId, sourcePath: uiFormPath });
+
+const formTools = [
+  "form_set_property", "form_add_control", "form_move_control",
+  "form_rename_control", "form_delete_control", "form_set_properties",
+  "form_duplicate_control", "form_align_controls", "form_distribute_controls",
+  "create_form_from_template",
+];
+for (const tool of formTools) {
+  await record("form-ui", `${tool}:plan-mode-contract`, { ...baselineArgsFor(tool), apply: false });
+  // assertion: result.ok === true OR error.code !== "RESULT_CONTRACT_VIOLATION"
+}
+
+const formReadTools = [
+  "lint_form_code", "inspect_form", "form_list_controls",
+  "analyze_form_ui", "form_get_geometry",
+];
+for (const tool of formReadTools) {
+  await record("form-ui", `${tool}:access-path-exposed`, { projectId, sourcePath: uiFormPath });
+}
+
 await record("form-ui", "form_set_property:result-contract-violation-shape", {
   projectId, sourcePath, controlName: "x", property: "Caption", value: "y", apply: false,
 }, { expected: "error" });

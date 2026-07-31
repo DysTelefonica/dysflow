@@ -174,14 +174,31 @@ const CONTRACTS = {
   "vba-test": defineResultContract({
     description: "VBA test execution result.",
     modes: ["plan", "apply"],
-    schema: z
-      .object({
-        mode: planApplyMode,
-        passed: z.number().optional(),
-        failed: z.number().optional(),
-        tests: z.array(z.unknown()).optional(),
-      })
-      .loose(),
+    schema: z.union([
+      z
+        .object({
+          dryRun: z.literal(true),
+          willExecute: z.literal(false),
+          willModifyAccess: z.literal(false),
+          plan: z
+            .object({
+              procedureName: z.array(z.string()),
+              proceduresCount: z.number().int().nonnegative(),
+              warnings: z.array(z.unknown()),
+              errors: z.array(z.unknown()),
+            })
+            .loose(),
+        })
+        .loose(),
+      z
+        .object({
+          mode: planApplyMode,
+          passed: z.number().optional(),
+          failed: z.number().optional(),
+          tests: z.array(z.unknown()).optional(),
+        })
+        .loose(),
+    ]),
   }),
   "verify-code": defineResultContract({
     description: "Source-to-binary drift report.",
@@ -211,22 +228,42 @@ const CONTRACTS = {
     description: "Binary synchronization workflow result.",
     modes: ["plan", "apply"],
     outputModes: ["summary", "full"],
-    schema: z.discriminatedUnion("mode", [
+    schema: z.union([
       z
         .object({
-          mode: z.literal("plan"),
-          direction: z.enum(["src-to-binary", "binary-to-src", "both"]),
-          conflicts: stringArray.optional(),
+          ok: z.boolean(),
+          dryRun: z.boolean(),
+          preSync: passthroughObject,
+          plan: z
+            .object({
+              toImport: stringArray,
+              toExport: stringArray,
+              skipped: z.array(z.unknown()),
+              totalActionable: z.number().int().nonnegative(),
+            })
+            .loose(),
+          execution: z.unknown().nullable(),
+          postSync: z.unknown().nullable(),
+          recommendation: z.string(),
         })
         .loose(),
-      z
-        .object({
-          mode: z.literal("apply"),
-          direction: z.enum(["src-to-binary", "binary-to-src"]),
-          applied: stringArray.optional(),
-          conflicts: stringArray.optional(),
-        })
-        .loose(),
+      z.discriminatedUnion("mode", [
+        z
+          .object({
+            mode: z.literal("plan"),
+            direction: z.enum(["src-to-binary", "binary-to-src", "both"]),
+            conflicts: stringArray.optional(),
+          })
+          .loose(),
+        z
+          .object({
+            mode: z.literal("apply"),
+            direction: z.enum(["src-to-binary", "binary-to-src"]),
+            applied: stringArray.optional(),
+            conflicts: stringArray.optional(),
+          })
+          .loose(),
+      ]),
     ]),
   }),
 } as const satisfies Record<DispatchResultFamily, AnyExecutableResultContract>;
