@@ -360,7 +360,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
         type: "string",
         enum: ["frontend", "backend"],
         description:
-          "Database role to compact. Defaults to frontend. backend resolves to the configured backendPath. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.",
+          "Database role to compact. Required when both frontend and backend are configured. When only one role is configured, the runtime selects it and returns the selected target. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.",
       } as JsonSchemaProperty,
       backupFirst: SCHEMA_PROPS.backupFirst,
       ...WRITE_INTENT_BLOCK,

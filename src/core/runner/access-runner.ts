@@ -356,7 +356,38 @@ export class AccessPowerShellRunner implements AccessRunner {
     heartbeatErrors?: unknown[],
   ): Promise<OperationResult<TData>> {
     let finalOperation = operation;
+    let compactRepairTarget: "frontend" | "backend" | undefined =
+      operation.kind === "query" && operation.request.action === "compact_repair"
+        ? operation.request.target === "frontend" || operation.request.target === "backend"
+          ? operation.request.target
+          : undefined
+        : undefined;
     if (operation.kind === "query") {
+      if (
+        operation.request.action === "compact_repair" &&
+        operation.request.target === undefined &&
+        operation.request.databasePath === undefined &&
+        operation.request.backendPath === undefined
+      ) {
+        if (config.accessDbPath && config.backendPath) {
+          return failureResult(
+            createDysflowError(
+              "CONFIG_TARGET_AMBIGUOUS",
+              "compact_repair cannot choose between the configured frontend and backend databases.",
+              {
+                details: { targets: ["frontend", "backend"] },
+                remediation:
+                  "Pass target:'frontend' or target:'backend' explicitly before retrying compact_repair.",
+              },
+            ),
+          );
+        }
+        compactRepairTarget = config.backendPath
+          ? "backend"
+          : config.accessDbPath
+            ? "frontend"
+            : undefined;
+      }
       // #870 — linked-table and saved-query operations act on the frontend
       // database even when backendPath is also present as auxiliary input.
       // Resolve their forced semantic role before the generic target logic,
@@ -878,14 +909,17 @@ export class AccessPowerShellRunner implements AccessRunner {
     try {
       const parsed = parseRunnerData<TData>(execution.stdout, secrets);
       const data =
-        finalOperation.kind === "query" &&
-        finalOperation.request.action === "query_sql" &&
-        isRecord(parsed)
-          ? ({
-              ...parsed,
-              resolvedAccessPath:
-                finalOperation.request.databasePath ?? finalOperation.request.backendPath,
-            } as TData)
+        finalOperation.kind === "query" && isRecord(parsed)
+          ? finalOperation.request.action === "query_sql"
+            ? ({
+                ...parsed,
+                resolvedAccessPath:
+                  finalOperation.request.databasePath ?? finalOperation.request.backendPath,
+              } as TData)
+            : finalOperation.request.action === "compact_repair" &&
+                compactRepairTarget !== undefined
+              ? ({ ...parsed, target: compactRepairTarget } as TData)
+              : parsed
           : parsed;
       return successResult(data, {
         diagnostics,

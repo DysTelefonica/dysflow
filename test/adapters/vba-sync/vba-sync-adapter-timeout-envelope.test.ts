@@ -67,6 +67,7 @@ describe("VbaSyncAdapter — VBA_MANAGER_TIMEOUT envelope (#757 C3)", () => {
 
     const service = buildAdapterWithCleanup(preflight);
     const result = await service.execute("export_all", {
+      apply: true,
       accessPath: "C:/db/front.accdb",
       projectRoot: "C:/repo",
     });
@@ -121,6 +122,7 @@ describe("VbaSyncAdapter — VBA_MANAGER_TIMEOUT envelope (#757 C3)", () => {
     };
     const service = buildAdapterWithCleanup(preflight);
     const result = await service.execute("export_all", {
+      apply: true,
       accessPath: "C:/db/front.accdb",
       projectRoot: "C:/repo",
     });
@@ -182,6 +184,7 @@ describe("VbaSyncAdapter — VBA_MANAGER_TIMEOUT envelope (#757 C3)", () => {
     };
     const service = buildAdapterWithCleanup(preflight);
     const result = await service.execute("export_all", {
+      apply: true,
       accessPath: "C:/db/front.accdb",
       projectRoot: "C:/repo",
     });

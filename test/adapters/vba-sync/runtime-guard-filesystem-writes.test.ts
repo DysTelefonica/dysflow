@@ -92,6 +92,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
     const result = await adapter.execute("export_modules", {
       exportPath: "C:/projects/myapp/src",
       moduleNames: ["Module1"],
+      apply: true,
     });
 
     // Guard passed; execution reached the runner. The runner may return anything;
@@ -142,6 +143,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
 
     const result = await adapter.execute("export_modules", {
       moduleNames: ["Module1"],
+      apply: true,
     });
 
     expect(result.ok).toBe(false);
@@ -177,6 +179,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
 
     const result = await adapter.execute("export_modules", {
       moduleNames: ["Module1"],
+      apply: true,
     });
 
     // Guard passed; execution reached the runner. The runner may return anything;
@@ -211,6 +214,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
     const result = await adapter.execute("export_modules", {
       exportPath: "C:/projects/myapp/src",
       moduleNames: ["Module1"],
+      apply: true,
     });
 
     // Contract: guard did NOT block — execution reached the runner.
@@ -231,6 +235,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath 
 
     const result = await adapter.execute("export_all", {
       exportPath: "C:/projects/myapp/src",
+      apply: true,
     });
 
     // Contract: guard did NOT block — execution reached the runner.
@@ -275,7 +280,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.exportAllWithPrune"
       "C:/runtime/dysflow/app/scripts",
     );
 
-    const result = await adapter.execute("export_all", { prune: true });
+    const result = await adapter.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected rejection");
@@ -289,7 +294,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.exportAllWithPrune"
   it("allows export_all prune when destinationRoot resolves outside the production runtime", async () => {
     const { adapter } = makeAdapter(runtimeEnv, "C:/projects/myapp/src");
 
-    const result = await adapter.execute("export_all", { prune: true });
+    const result = await adapter.execute("export_all", { prune: true, apply: true });
 
     // The guard did NOT block; the runner returned a normal prune result.
     // (We mocked the runner's executeMappedTool to return success with empty exported list.)

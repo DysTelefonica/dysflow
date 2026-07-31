@@ -28,7 +28,11 @@ describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => 
     });
 
     const exportPath = join(tmpdir(), "nc_export_check");
-    await service.execute("export_modules", { exportPath, moduleNames: ["TestModule"] });
+    await service.execute("export_modules", {
+      exportPath,
+      moduleNames: ["TestModule"],
+      apply: true,
+    });
 
     expect(capturedRequests).toHaveLength(1);
     // exportPath must be reflected as destinationRoot (the PS -DestinationRoot flag)
@@ -51,7 +55,7 @@ describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => 
       preflightCleanup: noOpPreflightCleanup,
     });
 
-    await service.execute("export_modules", { moduleNames: ["TestModule"] });
+    await service.execute("export_modules", { moduleNames: ["TestModule"], apply: true });
 
     expect(capturedRequests).toHaveLength(1);
     expect(capturedRequests[0]?.destinationRoot).toBe(configDestinationRoot);
@@ -73,7 +77,7 @@ describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => 
     });
 
     const tempExportPath = join(tmpdir(), "opencode", "nc_export_check");
-    await service.execute("export_modules", { exportPath: tempExportPath });
+    await service.execute("export_modules", { exportPath: tempExportPath, apply: true });
 
     expect(capturedRequests).toHaveLength(1);
     // Must use tempExportPath, NOT "src"

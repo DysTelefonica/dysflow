@@ -279,7 +279,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     expect(calls).toHaveLength(0);
   });
 
-  it("export_modules with apply:false → runner receives readOnly:true", async () => {
+  it("export_modules with apply:false returns a plan without invoking the runner", async () => {
     const calls: Array<{ readOnly?: boolean }> = [];
     const service = new VbaSyncAdapter({
       executor: async (request) => {
@@ -305,7 +305,14 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     });
 
     expect(result.ok).toBe(true);
-    expect(calls).toEqual([{ readOnly: true }]);
+    expect(calls).toEqual([]);
+    if (!result.ok) throw new Error("expected plan success");
+    expect(result.data).toMatchObject({
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      willModifyFilesystem: false,
+    });
   });
 
   // ---------- apply:true precedence ----------

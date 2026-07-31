@@ -42,10 +42,8 @@
  * - **`defaultBehavior`** — what the tool does when the caller passes
  *   NEITHER `apply` nor `noWriteAlias` and there is no policy override:
  *
- *     - `"writes"` — legacy default-write tools (`export_all`,
- *       `export_modules`). After #757 they keep writing when neither
- *       flag is supplied, so existing orchestrator briefs that omit
- *       `apply` keep working unchanged.
+ *     - `"writes"` — legacy default-write tools. New write contracts
+ *       must not use this mode: omission is a plan, never consent to write.
  *
  *     - `"plan"` — `safe-by-default` family (`import_modules`,
  *       `import_all`, `delete_module`, `fix_encoding`, …). When the
@@ -98,11 +96,10 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   delete_module: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   fix_encoding: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   vba_inline_execution: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
-  // #757 (C1): export_* now join the apply family. Historical `diff:true`
-  // is preserved as the noWriteAlias; the adapter keeps it working with
-  // a deprecation warning pointing at `apply`.
-  export_modules: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "writes" },
-  export_all: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "writes" },
+  // #1250: omission is an explicit plan default. Historical `diff:true`
+  // remains a deprecated no-write alias; only `apply:true` commits.
+  export_modules: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "plan" },
+  export_all: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "plan" },
   // Form / catalog mutation family (`applyGuardedFormWrite` seam).
   form_add_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   form_move_control: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },

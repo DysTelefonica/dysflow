@@ -108,7 +108,7 @@ function buildAdapterWithSpy(): {
 }
 
 describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", () => {
-  it("export_all({}) with no flags keeps the legacy default-write behavior (write still happens)", async () => {
+  it("export_all({}) with no flags returns a plan without writing", async () => {
     const { adapter, executeCalls } = buildAdapterWithSpy();
     const result = await adapter.execute("export_all", {
       destinationRoot: "C:/repo/src",
@@ -117,9 +117,13 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success, got failure");
-    // Default-write is preserved: the runner IS invoked.
-    expect(executeCalls).toHaveLength(1);
-    expect(executeCalls[0]?.toolName).toBe("export_all");
+    expect(executeCalls).toHaveLength(0);
+    expect(result.data).toMatchObject({
+      dryRun: true,
+      willExecute: false,
+      willModifyAccess: false,
+      willModifyFilesystem: false,
+    });
   });
 
   it("export_all({apply:true}) commits (writes) — same behavior as the legacy default-write", async () => {
@@ -151,8 +155,7 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
-    expect(executeCalls).toHaveLength(1);
-    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    expect(executeCalls).toHaveLength(0);
     expect(rmCalls).toEqual([]);
     expect(result.data).toMatchObject({
       prune: { applied: false, reason: "preview", deleted: [] },
@@ -171,8 +174,7 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
-    expect(executeCalls).toHaveLength(1);
-    expect(executeCalls[0]?.params.readOnly).toBe(true);
+    expect(executeCalls).toHaveLength(0);
     expect(rmCalls).toEqual([]);
     expect(result.data).toMatchObject({
       prune: { applied: false, reason: "preview", deleted: [] },

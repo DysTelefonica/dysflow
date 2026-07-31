@@ -658,9 +658,9 @@ export class VbaModulesAdapter {
     //   - `dryRun === true`           → plan.
     //   - `dryRun === false`          → execute.
     //   - `apply === true`            → execute (commit signal; legacy contract).
-    //   - absent (caller omitted both) → execute.
-    // Direct adapter callers (no dispatch seam) MUST pass an explicit flag
-    // to plan; the seam is the policy authority.
+    //   - absent (caller omitted both) → execute for the routine tools handled
+    //     by this shared branch. The export family is normalized separately
+    //     below and defaults to a no-write plan (#1250).
     const dryRun = params.dryRun === true || params.apply === false;
     if (dryRun && (toolName === "import_all" || toolName === "import_modules")) {
       return this.planImport(toolName, params);
@@ -715,23 +715,17 @@ export class VbaModulesAdapter {
     // `metadata.deprecated = { flag: "diff", since: "<runtime>", use: "apply" }`
     // so an AI consumer can migrate without a manual source-tree audit.
     //
-    // `apply:true` overrides `diff:true` (apply wins). When the caller
-    // omits both the default-write behavior is preserved for `export_*`
-    // (legacy orchestrator briefs that never passed `apply` keep
-    // writing). The flag routing happens BEFORE the mapping lookup /
-    // exportPath guard / target resolution so this branch never touches
-    // the orchestrator.
+    // `apply:true` overrides `diff:true` (apply wins). Issue #1250 makes
+    // omission plan-only: consent to export must be explicit. The flag
+    // routing happens BEFORE the mapping lookup / exportPath guard / target
+    // resolution so this branch never touches the orchestrator.
     //
     // Issue #1055: `apply:false` or `dryRun:true` on export_modules / export_all
     // routes as no-write (readOnly:true) unless apply:true is also present.
     let effectiveExportReadOnly: boolean | undefined;
     let deprecationNotice: { metadata: OperationMetadata; diagnostic: Diagnostic } | undefined;
-    if (
-      (toolName === "export_all" || toolName === "export_modules") &&
-      (params.apply === false || params.dryRun === true) &&
-      params.apply !== true
-    ) {
-      effectiveExportReadOnly = true;
+    if (toolName === "export_all" || toolName === "export_modules") {
+      effectiveExportReadOnly = resolveIsDryRun(params);
     }
     const isExportWithDeprecationAlias =
       (toolName === "export_all" || toolName === "export_modules") && params.diff === true;
@@ -831,15 +825,43 @@ export class VbaModulesAdapter {
       }
     }
 
+    if (
+      toolName === "export_all" &&
+      truthy(params.prune) &&
+      stringValue(params.filter) !== undefined
+    ) {
+      return failureResult(
+        createDysflowError(
+          "INVALID_INPUT",
+          "export_all prune is incompatible with filter: a filtered export only lists the matching modules, so pruning would delete every other on-disk file. Run an unfiltered export_all to prune.",
+        ),
+      );
+    }
+
+    if (
+      (toolName === "export_modules" || toolName === "export_all") &&
+      effectiveExportReadOnly === true &&
+      params.diff !== true
+    ) {
+      return successResult({
+        operation: toolName,
+        dryRun: true,
+        willExecute: false,
+        willModifyAccess: false,
+        willModifyFilesystem: false,
+        destinationRoot: resolvedExportTarget?.ok
+          ? resolvedExportTarget.data.destinationRoot
+          : stringValue(effectiveParams.destinationRoot),
+        ...(toolName === "export_modules"
+          ? { moduleNames: stringArray(params.moduleNames) }
+          : { filter: stringValue(params.filter) }),
+        ...(toolName === "export_all" && truthy(params.prune)
+          ? { prune: { applied: false, reason: "preview", deleted: [] } }
+          : {}),
+      });
+    }
+
     if (toolName === "export_all" && truthy(params.prune)) {
-      if (stringValue(params.filter) !== undefined) {
-        return failureResult(
-          createDysflowError(
-            "INVALID_INPUT",
-            "export_all prune is incompatible with filter: a filtered export only lists the matching modules, so pruning would delete every other on-disk file. Run an unfiltered export_all to prune.",
-          ),
-        );
-      }
       return this.exportAllWithPrune(effectiveParams, resolvedExportTarget);
     }
 

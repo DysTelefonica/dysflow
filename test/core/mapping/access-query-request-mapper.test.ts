@@ -306,9 +306,9 @@ describe("access-query-request-mapper", () => {
       expect(off.backupFirst).toBeUndefined();
     });
 
-    it("defaults compact_repair to the frontend and accepts an explicit backend target", () => {
+    it("leaves compact_repair unresolved and accepts an explicit backend target", () => {
       expect(buildMaintenanceRequest("compact_repair", "write", {}, () => undefined).target).toBe(
-        "frontend",
+        undefined,
       );
       expect(
         buildMaintenanceRequest("compact_repair", "write", { target: "backend" }, () => undefined)

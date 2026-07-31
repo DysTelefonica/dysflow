@@ -65,6 +65,7 @@ const COMPACT_REPAIR_CONTRACT = defineResultContract({
   schema: z
     .object({
       dryRun: z.boolean(),
+      target: z.enum(["frontend", "backend"]).optional(),
       sourcePath: z.string(),
       targetPath: z.string(),
       backupFirst: z.boolean().optional(),

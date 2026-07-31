@@ -357,6 +357,7 @@ describe("VbaModulesAdapter", () => {
       service.execute("export_modules", {
         moduleNames: ["Module1"],
         destinationRoot: "C:/repo/src",
+        apply: true,
       }),
     ).resolves.toMatchObject({
       ok: true,
@@ -1571,7 +1572,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1611,7 +1612,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1699,7 +1700,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1733,7 +1734,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1767,7 +1768,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1803,7 +1804,7 @@ describe("VbaModulesAdapter", () => {
       env: {},
     });
 
-    const result = await service.execute("export_all", { prune: true });
+    const result = await service.execute("export_all", { prune: true, apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -1838,7 +1839,7 @@ describe("VbaModulesAdapter", () => {
         env: {},
       });
 
-      const result = await service.execute("export_all", { prune: true });
+      const result = await service.execute("export_all", { prune: true, apply: true });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");
@@ -1874,7 +1875,7 @@ describe("VbaModulesAdapter", () => {
         env: {},
       });
 
-      const result = await service.execute("export_all", { prune: true });
+      const result = await service.execute("export_all", { prune: true, apply: true });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");
@@ -1914,7 +1915,7 @@ describe("VbaModulesAdapter", () => {
         env: {},
       });
 
-      const result = await service.execute("export_all", { prune: true });
+      const result = await service.execute("export_all", { prune: true, apply: true });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");
@@ -1950,7 +1951,7 @@ describe("VbaModulesAdapter", () => {
         env: {},
       });
 
-      const result = await service.execute("export_all", { prune: true });
+      const result = await service.execute("export_all", { prune: true, apply: true });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected success");
