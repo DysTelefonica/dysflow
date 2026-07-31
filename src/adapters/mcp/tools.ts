@@ -221,10 +221,10 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           writesEnabled,
           writeAccessResolver,
           async (validatedInput) => {
-            const request = validatedInput as { pid?: number };
+            const request = validatedInput as { pid?: number | null };
             const context = await accessContextResolver(validatedInput);
             if (!context.ok) return translateCoreResultToMcpContent(context);
-            if (request.pid === undefined) return context.data;
+            if (request.pid == null) return context.data;
             return {
               ...context.data,
               confirmPid: request.pid,
@@ -314,6 +314,28 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     createStateTool({
       cwd,
       registry: resolveAccessOperationRegistry(services.operationRegistry),
+      orphanProvider:
+        services.orphanCleanupService === undefined
+          ? undefined
+          : async (input) => {
+              const context = await accessContextResolver(input);
+              if (!context.ok) {
+                throw new Error(`${context.error.code}: ${context.error.message}`);
+              }
+              const listing = await services.orphanCleanupService?.listOrphans(context.data);
+              if (listing === undefined) {
+                throw new Error("ORPHAN_CLEANUP_NOT_CONFIGURED");
+              }
+              if (!listing.ok) {
+                throw new Error(`${listing.error.code}: ${listing.error.message}`);
+              }
+              return listing.data
+                .filter((candidate) => candidate.kind === "access")
+                .map((candidate) => ({
+                  pid: candidate.pid,
+                  ageSeconds: candidate.ageSeconds ?? null,
+                }));
+            },
     }),
     // Issue #973 — AI-aware log access. Pure read-only surface over
     // <cwd>/.dysflow/runtime/. Reads operations.json + markers/*.json,

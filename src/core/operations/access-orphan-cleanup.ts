@@ -71,6 +71,7 @@ export type AccessOrphanCandidate = {
   accessPath: string;
   kind: "access" | "powershell-worker";
   startTime?: string;
+  ageSeconds?: number;
   mainWindowHandle?: number;
 };
 
@@ -103,6 +104,13 @@ export class AccessOrphanCleanupService {
 
   constructor(private readonly options: AccessOrphanCleanupServiceOptions) {
     this.clock = options.clock ?? (() => new Date());
+  }
+
+  private ageSeconds(startTime: string | undefined): number | undefined {
+    if (startTime === undefined) return undefined;
+    const startedAtMs = Date.parse(startTime);
+    if (!Number.isFinite(startedAtMs)) return undefined;
+    return Math.max(0, Math.floor((this.clock().getTime() - startedAtMs) / 1000));
   }
 
   async listOrphans(
@@ -152,6 +160,33 @@ export class AccessOrphanCleanupService {
         accessPath: request.accessPath,
         kind: "access",
         startTime: proc.startTime,
+        ageSeconds: this.ageSeconds(proc.startTime),
+        mainWindowHandle: proc.mainWindowHandle,
+      });
+    }
+
+    // #1255 / T18 — COM-launched Access instances do not carry an .accdb
+    // path in their command line. The old path-only pass silently dropped
+    // untracked `MSACCESS.EXE -Embedding` zombies, which made the recovery
+    // tool report zero candidates even though live headless processes
+    // remained. Surface every unowned headless COM child. Cleanup remains
+    // safe: this listing is read-only and the write path still requires one
+    // exact PID plus the MCP typed confirmation gate.
+    const pathListed = new Set(candidates.map((candidate) => candidate.pid));
+    for (const proc of processes) {
+      if (proc.name.toUpperCase() !== "MSACCESS.EXE") continue;
+      if (ownedPids.has(proc.pid)) continue;
+      if (pathListed.has(proc.pid)) continue;
+      if (proc.mainWindowHandle !== 0) continue;
+      if (!looksLikeDysflowComChild(proc)) continue;
+
+      pathListed.add(proc.pid);
+      candidates.push({
+        pid: proc.pid,
+        accessPath: request.accessPath,
+        kind: "access",
+        startTime: proc.startTime,
+        ageSeconds: this.ageSeconds(proc.startTime),
         mainWindowHandle: proc.mainWindowHandle,
       });
     }
@@ -187,6 +222,7 @@ export class AccessOrphanCleanupService {
         accessPath: request.accessPath,
         kind: "powershell-worker",
         startTime: workerProc.startTime,
+        ageSeconds: this.ageSeconds(workerProc.startTime),
         mainWindowHandle: workerProc.mainWindowHandle,
       });
     }
@@ -222,6 +258,7 @@ export class AccessOrphanCleanupService {
         accessPath: request.accessPath,
         kind: "access",
         startTime: proc.startTime,
+        ageSeconds: this.ageSeconds(proc.startTime),
         mainWindowHandle: proc.mainWindowHandle,
       });
     }

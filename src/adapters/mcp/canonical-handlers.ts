@@ -286,7 +286,7 @@ export async function handleMcpAccessOrphanCleanup(
     | McpToolResult,
 ): Promise<McpToolResult> {
   const confirmationInput =
-    isRecord(input) && input.pid !== undefined
+    isRecord(input) && typeof input.pid === "number"
       ? { ...input, implements_check: "orphans_msaccess" }
       : input;
   const confirmation = enforceRequiresConfirmation(
@@ -323,8 +323,13 @@ export async function handleMcpAccessOrphanCleanup(
   if (isMcpToolResult(request)) return request;
 
   if (request.confirmPid === undefined) {
+    const listing = await services.orphanCleanupService.listOrphans(request);
+    if (!listing.ok) return translateCoreResultToMcpContent(listing);
     return translateCoreResultToMcpContent(
-      await services.orphanCleanupService.listOrphans(request),
+      successResult({
+        orphans: listing.data,
+        totalCount: listing.data.length,
+      }),
     );
   }
 

@@ -72,9 +72,18 @@ describe("bootstrap/recovery executable result contracts", () => {
     ).not.toThrow();
 
     expect(() =>
-      orphanCleanupResultContract.schema.parse([
-        { pid: 42, accessPath: "C:\\work\\app.accdb", kind: "access", mainWindowHandle: 0 },
-      ]),
+      orphanCleanupResultContract.schema.parse({
+        orphans: [
+          {
+            pid: 42,
+            accessPath: "C:\\work\\app.accdb",
+            kind: "access",
+            ageSeconds: 60,
+            mainWindowHandle: 0,
+          },
+        ],
+        totalCount: 1,
+      }),
     ).not.toThrow();
     expect(() =>
       orphanCleanupResultContract.schema.parse({

@@ -10,6 +10,8 @@ export type JsonSchemaProperty = {
   maxLength?: number;
   minimum?: number;
   maximum?: number;
+  /** Accept JSON null in addition to the declared primitive type. */
+  nullable?: boolean;
   pattern?: string;
   items?: JsonSchemaProperty;
   maxItems?: number;

@@ -614,7 +614,9 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        // This test exercises warning propagation, not timeout behavior. Keep
+        // enough budget for filesystem setup on slower Windows CI runners.
+        data: { destinationRoot: sourceRoot, timeoutMs: 10_000 },
         diagnostics: [],
         durationMs: 0,
       }),
