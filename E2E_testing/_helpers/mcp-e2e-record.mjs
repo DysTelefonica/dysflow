@@ -6,6 +6,7 @@
 // version; only the dependency surface becomes explicit.
 
 import { execSync } from "node:child_process";
+import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
 //
 // The hard rules pinned here:
 //   1. REFUSE-START before every tool — refuse to start a new tool when
@@ -110,7 +111,7 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // Regression records use `tool:scenario` labels so multiple assertions for
   // one MCP tool remain distinguishable in the report. Dispatch only the
   // canonical tool-name prefix while preserving the full label in result rows.
-  const dispatchTool = tool.split(":", 1)[0];
+  const dispatchTool = resolveMcpE2eToolName(tool);
   const params = tool === "tools/list" ? {} : { name: dispatchTool, arguments: args };
   const result = await ctx.callMcp(method, params, options);
   const ms = DateNow() - started;

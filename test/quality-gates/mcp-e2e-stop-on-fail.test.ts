@@ -119,6 +119,27 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
     });
   });
 
+  it("dispatches an explicit scenario alias through its advertised tool", async () => {
+    const { ctx, harness } = makeCtx();
+    let dispatched: unknown;
+    ctx.callMcp = async (_method: string, params: unknown) => {
+      dispatched = params;
+      return harness;
+    };
+
+    await record(ctx, {
+      area: "protocol",
+      tool: "dysflow_resolve_project_no_dysflow_field_guidance",
+      args: { cwd: "C:/fixture" },
+      options: { expected: "success" },
+    });
+
+    expect(dispatched).toEqual({
+      name: "resolve_project",
+      arguments: { cwd: "C:/fixture" },
+    });
+  });
+
   it("H3a — expected:'error' + isError:false throws STOP-ON-FAIL after the tool", async () => {
     const { ctx, rows, processObj, errors } = makeCtx({
       harness: { childPid: 0, isError: false, timedOut: false, text: "ok-but-expected-error" },

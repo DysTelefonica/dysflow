@@ -24,6 +24,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MCP_E2E_TOOL_ALIASES } from "../../E2E_testing/_helpers/mcp-e2e-tool-aliases.mjs";
 import { buildHiddenToolRegistry } from "../../src/adapters/mcp/stdio-wrappers.js";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools.js";
 import { successResult } from "../../src/core/contracts/index.js";
@@ -75,6 +76,18 @@ describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools({ 
     const failures: { area: string; tool: string; index: number; reason: string }[] = [];
 
     for (const call of calls) {
+      const aliasedTool = MCP_E2E_TOOL_ALIASES[call.tool as keyof typeof MCP_E2E_TOOL_ALIASES];
+      if (aliasedTool !== undefined) {
+        if (!advertised.has(aliasedTool)) {
+          failures.push({
+            area: call.area,
+            tool: call.tool,
+            index: call.index,
+            reason: `scenario alias target '${aliasedTool}' is not advertised`,
+          });
+        }
+        continue;
+      }
       // Skip non-tool pseudo-rows: anything that starts with `dysflow_` is a
       // real MCP tool; anything else (e.g. `tools/list`, `lingering-access-check`,
       // `compile_vba:zombie-check`, `export_all:semantic-fields`) is either a
@@ -111,6 +124,11 @@ describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools({ 
     const failures: { tool: string; index: number }[] = [];
 
     for (const call of calls) {
+      const aliasedTool = MCP_E2E_TOOL_ALIASES[call.tool as keyof typeof MCP_E2E_TOOL_ALIASES];
+      if (aliasedTool !== undefined) {
+        if (!allKnown.has(aliasedTool)) failures.push({ tool: call.tool, index: call.index });
+        continue;
+      }
       if (!call.tool.startsWith("dysflow_")) continue;
       if (!allKnown.has(call.tool)) {
         failures.push({ tool: call.tool, index: call.index });
