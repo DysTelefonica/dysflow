@@ -213,7 +213,7 @@ describe("form UI design plan service", () => {
     // biome-ignore format: Keep the independent literal contract within the review budget.
     const expected: FormUiBehaviorMap = { formName: "Customer", formEvents: [], unmappedEvidence: [], warnings: [], controls: [
       { name: "cmdCommit", type: "CommandButton", role: "action", events: ["OnClick"], bindings: [], codegraphEvidence: [{ handler: "cmdSave_Click", callPath: ["cmdSave_Click", "SaveCustomer"] }], properties: { Left: "30", Top: "40", Caption: "Commit" } },
-      { name: "txtName", type: "TextBox", role: "unknown", events: [], bindings: [], codegraphEvidence: [], properties: { Left: "100" } },
+      { name: "txtName", type: "TextBox", role: "unknown", events: [], bindings: [], codegraphEvidence: [], properties: { Left: "100", Top: "0", Width: "1440", Height: "300" } },
     ] };
     expect([application.advisories, application.appliedContract]).toEqual([["note"], expected]);
     expect(verifyPlanAlignment(plan, expected)).toEqual([]);

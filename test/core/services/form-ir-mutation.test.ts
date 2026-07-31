@@ -130,6 +130,34 @@ describe("FormIR mutation primitives", () => {
     );
   });
 
+  it("adds round-trip-safe geometry when control properties are omitted (issue #1300)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    const result = addControl(ir, {
+      control: { name: "txtAdded", type: "TextBox" },
+    });
+
+    expect(result.source).toContain(
+      'Name ="txtAdded"\n            Left =0\n            Top =0\n            Width =1440\n            Height =300',
+    );
+  });
+
+  it("preserves explicit geometry when adding a control (issue #1300)", () => {
+    const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
+
+    const result = addControl(ir, {
+      control: {
+        name: "txtPositioned",
+        type: "TextBox",
+        properties: { Left: 111, Top: 222, Width: 333, Height: 444 },
+      },
+    });
+
+    expect(result.source).toContain(
+      'Name ="txtPositioned"\n            Left =111\n            Top =222\n            Width =333\n            Height =444',
+    );
+  });
+
   it("rejects add-control when a control with the same name already exists", () => {
     const ir = parseFormTxt(FORM_WITH_METADATA, { name: "CustomerForm" });
 

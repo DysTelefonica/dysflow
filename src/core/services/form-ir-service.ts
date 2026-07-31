@@ -908,9 +908,15 @@ export function addControl(ir: FormIR, input: AddControlInput): FormMutationResu
     );
   }
 
+  const properties = input.control.properties ?? {};
+  const geometryDefaults = { Left: 0, Top: 0, Width: 1440, Height: 300 } as const;
   const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: quoteName(name) }];
-  for (const [key, value] of Object.entries(input.control.properties ?? {})) {
-    if (key === "Name") continue;
+  for (const [key, defaultValue] of Object.entries(geometryDefaults)) {
+    const value = properties[key] ?? defaultValue;
+    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
+  }
+  for (const [key, value] of Object.entries(properties)) {
+    if (key === "Name" || Object.hasOwn(geometryDefaults, key)) continue;
     entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
   }
   target.children.push({ blockType: type, entries, children: [] });
