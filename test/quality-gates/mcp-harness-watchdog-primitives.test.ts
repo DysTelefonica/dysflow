@@ -34,12 +34,15 @@ describe("MCP harness watchdog primitives (#583)", () => {
 
   it("the harness finish is settle-guarded", () => {
     const text = readText(HARNESS);
-    expect(text).toMatch(/const\s+finish\s*=\s*\([\s\S]*?if\s*\(\s*settled\s*\)\s*return/);
+    expect(text).toMatch(
+      /const\s+finish\s*=\s*async\s*\([\s\S]*?if\s*\(\s*settled\s*\|\|\s*finishing\s*\)\s*return/,
+    );
   });
 
-  it("the harness finish calls child.kill() (best-effort)", () => {
+  it("the harness terminates the owned Windows process tree and bounds taskkill", () => {
     const text = readText(HARNESS);
-    expect(text).toMatch(/finish[\s\S]{0,500}?child\.kill\(\)/);
+    expect(text).toMatch(/taskkill[\s\S]{0,200}?["']\/T["'][\s\S]{0,100}?["']\/PID["']/);
+    expect(text).toMatch(/PROCESS_TREE_KILL_BOUND_MS\s*=\s*3_000/);
   });
 
   it("the close handler clears the close watchdog so a natural close is a no-op", () => {

@@ -1162,7 +1162,15 @@ await record("vba-sync", "import_all", { ...ctx, importMode: "code", apply: fals
 await record("vba-sync", "test_vba", { ...ctx, proceduresJson: "[]" }, { expected: "error" });
 
 await record("vba-sync", "sync_binary:plan-mode", { ...ctx, apply: false, moduleNames: ["Anexo"] });
-await record("vba-sync", "sync_binary:empty-moduleNames", { ...ctx, apply: false, moduleNames: [] });
+// A whole-project sync plan performs the same 131-component Access export as
+// verify_code. Keep the operation and outer MCP harness budgets aligned so the
+// adapter owns timeout cleanup instead of the harness killing the server first.
+await record(
+  "vba-sync",
+  "sync_binary:empty-moduleNames",
+  { ...ctx, apply: false, moduleNames: [], timeoutMs: 180000 },
+  { timeoutMs: 180000 },
+);
 await record("vba", "test_vba:plan-mode", { ...ctx, proceduresJson: "[{...}]" });
 // verify_code exports every requested module to a temp dir and compares line
 // by line against the binary's VBA source. On the 131-component fixture

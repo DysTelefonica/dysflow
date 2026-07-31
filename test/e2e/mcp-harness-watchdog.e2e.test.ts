@@ -16,7 +16,9 @@ class FakeChild extends EventEmitter {
   stdin = new EventEmitter() as EventEmitter & { end: () => void; write: (s: string) => void };
   stdout = new EventEmitter() as EventEmitter;
   stderr = new EventEmitter() as EventEmitter;
-  pid = 4242;
+  // Deliberately omit a real PID: these atoms exercise watchdog settlement,
+  // while the Windows integration test owns the real process-tree contract.
+  pid: number | undefined;
   killCalls = 0;
   stdinEndCalls = 0;
   stdinWrites: string[] = [];
