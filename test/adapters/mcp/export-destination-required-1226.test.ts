@@ -32,8 +32,6 @@ import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-syn
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
-/* biome-ignore-start lint/suspicious/noExplicitAny: test mocks and type casts */
-
 class FakeVbaService {
   public requests: Array<{ toolName: string; input: unknown }> = [];
   async execute(...args: unknown[]) {
