@@ -125,6 +125,7 @@ describe("Issue #644 — runtime guard allow-case: exportPath safe path through 
     const result = (await tool.handler({
       exportPath: SAFE_EXPORT_PATH,
       moduleNames: ["Module1"],
+      apply: true,
     })) as McpToolResult;
 
     // Contract: the dispatch handler returned success (or a non-guard
@@ -154,6 +155,7 @@ describe("Issue #644 — runtime guard allow-case: exportPath safe path through 
 
     const result = (await tool.handler({
       exportPath: SAFE_EXPORT_PATH,
+      apply: true,
     })) as McpToolResult;
 
     expect(result.isError).toBe(false);

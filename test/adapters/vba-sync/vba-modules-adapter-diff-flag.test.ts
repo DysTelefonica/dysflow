@@ -175,9 +175,7 @@ describe("VbaModulesAdapter — diff:true deprecation contract (#802 -> #757 C1)
     }
   });
 
-  it("export_all without diff is unchanged — runner is still invoked (regression guard for the alias path)", async () => {
-    // The diff alias must NOT block the normal export path. Without `diff:true`,
-    // `export_all` reaches the orchestrator's executeMappedTool exactly once.
+  it("export_all without diff defaults to a plan", async () => {
     const { adapter, executeCalls } = buildAdapterWithSpy();
 
     const result = await adapter.execute("export_all", {
@@ -186,7 +184,8 @@ describe("VbaModulesAdapter — diff:true deprecation contract (#802 -> #757 C1)
     });
 
     expect(result.ok).toBe(true);
-    expect(executeCalls).toHaveLength(1);
-    expect(executeCalls[0]?.toolName).toBe("export_all");
+    expect(executeCalls).toHaveLength(0);
+    if (!result.ok) throw new Error("expected plan success");
+    expect(result.data).toMatchObject({ dryRun: true, willExecute: false });
   });
 });

@@ -176,7 +176,7 @@ describe("schema compact and full introspection views (#1079)", () => {
     expect(compact.tools.find((tool) => tool.name === "export_modules")?.writeIntent).toEqual({
       canonicalCommitFlag: "apply",
       noWriteAlias: "diff",
-      defaultBehavior: "writes",
+      defaultBehavior: "plan",
       legacyAliases: ["diff"],
     });
     expect(compact.tools.find((tool) => tool.name === "resolve_project")?.writeIntent).toBeNull();

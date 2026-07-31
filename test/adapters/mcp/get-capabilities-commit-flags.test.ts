@@ -110,7 +110,7 @@ describe("getCapabilitiesAll() — per-tool commit metadata (#757 C2)", () => {
     expect(tools.export_all).toEqual({
       commitFlag: "apply",
       noWriteAlias: "diff",
-      defaultBehavior: "writes",
+      defaultBehavior: "plan",
       canonicalCommitFlag: "apply",
       legacyAliases: ["diff"],
     });

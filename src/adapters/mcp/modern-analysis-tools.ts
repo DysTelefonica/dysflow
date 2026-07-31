@@ -12,6 +12,7 @@ import {
   type VbaModuleLintReport,
   type VbaModuleLintRule,
 } from "../../core/services/vba-module-lint-service.js";
+import { parseProcedureName } from "../../core/services/vba-procedure-name-parser.js";
 import {
   detectDeadCode,
   findVbaReferences,
@@ -22,6 +23,7 @@ import {
   lintVbaProjectOpenArgs,
   type OpenArgsContractMismatchDiagnostic,
 } from "../../core/services/vba-project-openargs-lint-service.js";
+import { extractVbName } from "../../core/services/vba-semantic-classifier.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import {
   removeTemporaryDirectoryWithRetry,
@@ -579,6 +581,22 @@ export type CreateModernAnalysisToolsOptions = {
   lintIdentifierSafetyStrict: boolean;
 };
 
+function moduleMismatch(module: string, sourceModule: string): McpToolResult {
+  const message = `Module '${module}' does not match source VB_Name '${sourceModule}'.`;
+  return {
+    content: [{ type: "text", text: `MODULE_MISMATCH: ${message}` }],
+    isError: true,
+    ok: false,
+    error: {
+      code: "MODULE_MISMATCH",
+      message,
+      details: { module, sourceModule },
+      remediation:
+        "Pass the source's VB_Name in module, or provide source for the requested module.",
+    },
+  };
+}
+
 /** Build the cohesive read-only VBA source-analysis tool family. */
 export function createModernAnalysisTools(
   options: CreateModernAnalysisToolsOptions,
@@ -627,6 +645,10 @@ export function createModernAnalysisTools(
             ok: false,
           };
         }
+        const sourceModule = extractVbName(resolvedSource);
+        if (sourceModule !== null && sourceModule.toLowerCase() !== module.toLowerCase()) {
+          return moduleMismatch(module, sourceModule);
+        }
         const all = listVbaProcedures(resolvedSource, kind ?? "both");
         const filtered = filter ? all.filter((p) => p.name.includes(filter)) : all;
         return {
@@ -650,6 +672,18 @@ export function createModernAnalysisTools(
           source?: string;
           destinationRoot?: string;
         };
+        const parsedProcedure = parseProcedureName(procedure);
+        if (!parsedProcedure.ok) {
+          return invalidInput(
+            `${parsedProcedure.message} Split the value into module + procedure fields.`,
+          );
+        }
+        if (
+          parsedProcedure.moduleName.length > 0 &&
+          parsedProcedure.moduleName.toLowerCase() !== module.toLowerCase()
+        ) {
+          return moduleMismatch(module, parsedProcedure.moduleName);
+        }
         const resolvedSource = await resolveVbaSourceFile(
           input,
           module,
@@ -669,7 +703,11 @@ export function createModernAnalysisTools(
             ok: false,
           };
         }
-        const detail = getVbaProcedure(resolvedSource, procedure);
+        const sourceModule = extractVbName(resolvedSource);
+        if (sourceModule !== null && sourceModule.toLowerCase() !== module.toLowerCase()) {
+          return moduleMismatch(module, sourceModule);
+        }
+        const detail = getVbaProcedure(resolvedSource, parsedProcedure.procName);
         if (detail === undefined) {
           return {
             content: [

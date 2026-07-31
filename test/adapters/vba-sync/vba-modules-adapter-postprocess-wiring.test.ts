@@ -138,7 +138,7 @@ describe("VbaModulesAdapter — export pipeline control-property postprocess wir
       controlPropertyReader: stubReader,
     });
 
-    const result = await adapter.execute("export_all", {});
+    const result = await adapter.execute("export_all", { apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected export_all success");
@@ -164,7 +164,7 @@ describe("VbaModulesAdapter — export pipeline control-property postprocess wir
       // No controlPropertyReader injection → default NoopControlPropertyReader.
     });
 
-    const result = await adapter.execute("export_all", {});
+    const result = await adapter.execute("export_all", { apply: true });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected export_all success");

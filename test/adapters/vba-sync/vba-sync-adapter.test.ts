@@ -333,6 +333,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
     });
 
     const result = await service.execute("export_all", {
+      apply: true,
       accessPath: "C:/db/front.accdb",
       projectRoot: "C:/repo",
     });

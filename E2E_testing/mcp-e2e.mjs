@@ -387,6 +387,84 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       options,
     };
   }
+  if (tool === "export_modules:default-safety" || tool === "export_all:default-safety") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = parsed?.dryRun === true || parsed?.willModifyAccess === false;
+        return {
+          pass,
+          expected: "omitted apply defaults to a non-writing plan",
+          summary: pass ? "defaulted to plan" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "query_execute:mode-write-default-plan") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = parsed?.dryRun === true || parsed?.willModifyAccess === false;
+        return {
+          pass,
+          expected: "mode:write with omitted apply defaults to plan",
+          summary: pass ? "write SQL defaulted to plan" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "list_procedures:module-validation") {
+    return {
+      args,
+      options: { ...options, expected: "error" },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass = error?.code === "MODULE_MISMATCH";
+        return {
+          pass,
+          expected: "MODULE_MISMATCH",
+          summary: pass ? "inline source module validated" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "get_procedure:module-dot-proc-parsing") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass = parsed?.module === "mdlCursor" && parsed?.procedure === "MouseCursor";
+        return {
+          pass,
+          expected: "module.proc is normalized to the bare procedure",
+          summary: pass ? "qualified procedure parsed" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "compact_repair:target-precedence") {
+    return {
+      args,
+      options: { ...options, expected: "error" },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          error?.code === "CONFIG_TARGET_AMBIGUOUS" &&
+          typeof error?.remediation === "string" &&
+          error.remediation.includes("target");
+        return {
+          pass,
+          expected: "ambiguous target refusal with explicit-target remediation",
+          summary: pass ? "ambiguous target refused" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool === "project_config_not_write_ready_has_remediation") {
     return {
       args: { ...args, moduleNames: ["DysflowEnvelopeProbe"], apply: true },
@@ -818,6 +896,10 @@ await record("security", "query_execute", { projectId, sql: "DELETE FROM TbNoCon
 await record("query", "query_execute:read-only-mode-write-rejected", {
   projectId, mode: "read", sql: "DROP TABLE test",
 }, { expected: "error" });
+await record("query", "query_execute:mode-write-default-plan", {
+  projectId, mode: "write", sql: "UPDATE test SET x = 1",
+  // NOTE: NO apply field — must default to PLAN
+});
 await record("query", "list_tables", { projectId, ...backendTarget });
 await record("query", "get_schema", { projectId, ...backendTarget, tableName: "TbNoConformidades" });
 await record("query", "count_rows", { projectId, accessPath, backendPath, tableName: "TbNoConformidades" });
@@ -831,6 +913,9 @@ await record("operations", "list_access_files:remediation-actionable", { project
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], apply: true });
 await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, apply: false, backupFirst: false });
+await record("maintenance", "compact_repair:target-precedence", {
+  projectId, apply: false,
+});
 // compact_repair APPLY on the sandbox's password-protected frontend. The source
 // fixture remains untouched, while the configured sandbox target stays inside
 // the write-ready ownership boundary.
@@ -870,6 +955,14 @@ await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });
 await recordContract("vba-sync", "export_modules", { ...ctx, moduleNames: [existingModuleName], destinationRoot }, {}, ["vba-sync", "file-backed", "plan"]);
 await record("vba-sync", "export_all", { ...ctx, filter: existingModuleName, destinationRoot, apply: false });
+await record("vba-sync", "export_modules:default-safety", {
+  projectId, moduleNames: ["Constantes"], destinationRoot,
+  // NOTE: NO apply field — must default to PLAN, not write
+});
+await record("vba-sync", "export_all:default-safety", {
+  projectId, destinationRoot, filter: existingModuleName,
+  // NOTE: NO apply field — must default to PLAN, not write
+});
 // export_all --prune: full export to an isolated temp dir, then mirror it to the binary.
 // The temp dir receives a fresh full export, so nothing is orphaned (deleted: []); this
 // exercises the prune path end-to-end without touching the project's real src/.
@@ -1491,6 +1584,14 @@ await record("vba-introspection", "list_procedures", {
   projectId,
   module: "DysflowMcpE2EInline",
   source: inlineSourceFixture,
+});
+await record("vba", "list_procedures:module-validation", {
+  projectId, module: "ZZZ_NonExistent_Module",
+  source: 'Attribute VB_Name = "mdlCursor"\nOption Explicit\nPublic Sub Foo()\nEnd Sub\n',
+}, { expected: "error" });
+await record("vba", "get_procedure:module-dot-proc-parsing", {
+  projectId, module: "mdlCursor", procedure: "mdlCursor.MouseCursor",
+  source: await readFile(join(destinationRoot, "modules", "mdlCursor.bas"), "utf8"),
 });
 await record("vba-introspection", "get_procedure", {
   projectId,

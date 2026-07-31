@@ -578,7 +578,7 @@ describe("Dysflow MCP tool parity inventory", () => {
       },
       {
         action: "compact_repair",
-        target: "frontend",
+        target: undefined,
         mode: "write",
         sql: "",
         tableName: undefined,

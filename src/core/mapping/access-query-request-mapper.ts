@@ -235,7 +235,6 @@ export function isFrontendOnlyAction(action: AccessQueryAction | undefined): boo
 
 function targetForAction(action: AccessQueryAction, overrides: OverrideShape): OverrideShape {
   if (isFrontendOnlyAction(action)) return { ...overrides, target: "frontend" };
-  if (action === "compact_repair") return { ...overrides, target: overrides.target ?? "frontend" };
   return overrides;
 }
 
