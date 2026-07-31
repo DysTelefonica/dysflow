@@ -639,12 +639,15 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       assert: (result) => {
         const error = mcpErrorFromResult(result);
         const pass =
-          error?.code === "PROJECT_CONFIG_NOT_WRITE_READY" &&
+          error?.code === "CAPABILITIES_DISALLOW_WRITE" &&
+          typeof error?.message === "string" &&
+          error.message.includes("[legacy: PROJECT_CONFIG_NOT_WRITE_READY]") &&
           error.remediation !== undefined &&
           error.remediation !== null;
         return {
           pass,
-          expected: "PROJECT_CONFIG_NOT_WRITE_READY with error.remediation",
+          expected:
+            "CAPABILITIES_DISALLOW_WRITE with PROJECT_CONFIG_NOT_WRITE_READY legacy alias and error.remediation",
           summary: pass ? "typed write gate includes remediation" : normalize(result?.text),
         };
       },
