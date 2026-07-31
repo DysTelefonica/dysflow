@@ -240,6 +240,24 @@ describe("mcp-e2e.mjs — ACCESS_VBA_PASSWORD pre-flight", () => {
   });
 });
 
+describe("mcp-e2e.mjs — write-readiness error contract (#1272)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("pins the typed primary code, legacy alias, and remediation", () => {
+    const scenario = src.match(
+      /if \(tool === "project_config_not_write_ready_has_remediation"\) \{([\s\S]*?)\n {2}\}\n {2}if \(tool === "migrate_project_config"\)/,
+    );
+    expect(scenario, "write-readiness release scenario not found").not.toBeNull();
+    expect(scenario?.[1]).toContain('error?.code === "CAPABILITIES_DISALLOW_WRITE"');
+    expect(scenario?.[1]).toContain(
+      'error.message.includes("[legacy: PROJECT_CONFIG_NOT_WRITE_READY]")',
+    );
+    expect(scenario?.[1]).toMatch(
+      /error\.remediation !== undefined\s*&&\s*error\.remediation !== null/,
+    );
+  });
+});
+
 describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
   const src = readSource(MCP_E2E_PATH);
 
