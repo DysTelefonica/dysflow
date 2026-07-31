@@ -837,6 +837,8 @@ export class VbaModulesAdapter {
     ) {
       return successResult({
         operation: toolName,
+        mode: "plan",
+        exportedPaths: [],
         dryRun: true,
         willExecute: false,
         willModifyAccess: false,
