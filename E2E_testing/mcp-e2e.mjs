@@ -13,6 +13,7 @@ import {
   hashRunIdentity,
   runtimeIdentityPaths,
   parseResumeArgs,
+  prepareReleaseRuntime,
   readCheckpoint,
   validateCheckpoint,
 } from "./_helpers/mcp-e2e-resume.mjs";
@@ -62,6 +63,15 @@ const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
 // settle after this many milliseconds so the suite cannot hang indefinitely.
 const closeWatchdogMs = Number(process.env.DYSFLOW_E2E_CLOSE_WATCHDOG_MS ?? 5000);
 const password = process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_ACCESS_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD;
+
+if (process.env.DYSFLOW_E2E_RELEASE_GATE === "1") {
+  try {
+    await prepareReleaseRuntime(repoRoot);
+  } catch (error) {
+    console.error(`[mcp-e2e] Failed to construct exact repository test-runtime: ${(error && error.message) || error}`);
+    process.exit(1);
+  }
+}
 
 // Resolve the dysflow command the E2E harness is allowed to spawn (#582).
 // The default is the repo-local test-runtime; the production install under

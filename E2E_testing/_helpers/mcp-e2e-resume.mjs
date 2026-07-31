@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cp,
@@ -51,6 +52,70 @@ export async function hashRunIdentity(paths) {
 export function runtimeIdentityPaths(cliCommand) {
   const runtimeRoot = dirname(dirname(resolve(cliCommand)));
   return [resolve(cliCommand), join(runtimeRoot, "app", "dist")];
+}
+
+async function hashPortableTree(root) {
+  const hash = createHash("sha256");
+  async function add(current, relativePath) {
+    const info = await lstat(current);
+    if (info.isDirectory()) {
+      hash.update(`directory:${relativePath}\0`);
+      for (const name of (await readdir(current)).sort()) {
+        await add(join(current, name), join(relativePath, name));
+      }
+      return;
+    }
+    hash.update(`file:${relativePath}\0`);
+    hash.update(await readFile(current));
+  }
+  await add(resolve(root), ".");
+  return hash.digest("hex");
+}
+
+export async function assertReleaseRuntimeIdentity(repoRoot) {
+  const candidateDist = join(repoRoot, "dist");
+  const runtimeApp = join(repoRoot, "test-runtime", "app");
+  if (
+    (await hashPortableTree(candidateDist)) !== (await hashPortableTree(join(runtimeApp, "dist")))
+  ) {
+    throw new Error("Repository test-runtime compiled bytes mismatch the release candidate");
+  }
+  const candidatePackage = await readFile(join(repoRoot, "package.json"));
+  const runtimePackage = await readFile(join(runtimeApp, "package.json"));
+  if (!candidatePackage.equals(runtimePackage)) {
+    throw new Error("Repository test-runtime package metadata mismatch the release candidate");
+  }
+}
+
+export async function prepareReleaseRuntime(
+  repoRoot,
+  { env = process.env, execute = execFileSync } = {},
+) {
+  if (env.DYSFLOW_E2E_COMMAND) {
+    throw new Error(
+      "Release-gate E2E refuses DYSFLOW_E2E_COMMAND; repository test-runtime is required",
+    );
+  }
+  if (process.platform === "win32") {
+    execute(env.ComSpec ?? process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "pnpm build"], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    });
+  } else {
+    execute("pnpm", ["build"], { cwd: repoRoot, stdio: "inherit" });
+  }
+  execute(
+    process.execPath,
+    [
+      join(repoRoot, "dist", "cli", "index.js"),
+      "install",
+      "--runtime-dir",
+      join(repoRoot, "test-runtime"),
+      "--no-tui",
+    ],
+    { cwd: repoRoot, stdio: "inherit" },
+  );
+  await assertReleaseRuntimeIdentity(repoRoot);
 }
 export function assertSafeResumeRoot(root, { repoRoot, scriptDir }) {
   const resolved = resolve(root);
