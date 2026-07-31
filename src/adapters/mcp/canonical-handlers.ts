@@ -285,6 +285,16 @@ export async function handleMcpAccessOrphanCleanup(
     | { accessPath: string; projectRoot: string; confirmPid?: number }
     | McpToolResult,
 ): Promise<McpToolResult> {
+  const confirmationInput =
+    isRecord(input) && input.pid !== undefined
+      ? { ...input, implements_check: "orphans_msaccess" }
+      : input;
+  const confirmation = enforceRequiresConfirmation(
+    confirmationInput,
+    "access_force_cleanup_orphaned",
+  );
+  if (confirmation !== undefined) return confirmation;
+
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope.
@@ -296,15 +306,6 @@ export async function handleMcpAccessOrphanCleanup(
     if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
     return invalidInput(validation);
   }
-  const confirmationInput =
-    isRecord(input) && input.pid !== undefined
-      ? { ...input, implements_check: "orphans_msaccess" }
-      : input;
-  const confirmation = enforceRequiresConfirmation(
-    confirmationInput,
-    "access_force_cleanup_orphaned",
-  );
-  if (confirmation !== undefined) return confirmation;
   if (services.orphanCleanupService === undefined) {
     return {
       content: [

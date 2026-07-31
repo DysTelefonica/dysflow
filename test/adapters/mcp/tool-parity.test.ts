@@ -410,7 +410,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await tools
       .find((tool) => tool.name === "run_script")
       ?.handler({
-        accessPath: "C:/frontend.accdb",
+        accessPath: `${process.cwd()}/frontend.accdb`,
         backendPath: "C:/script-backend.accdb",
         path: "fixtures/backend-ddl.sql",
         apply: true,

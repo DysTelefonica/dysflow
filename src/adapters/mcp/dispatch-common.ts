@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { doctorCheckMetadata } from "../../cli/commands/doctor/checks/types.js";
 import type { CheckId } from "../../core/contracts/diagnostic-check.js";
 import type { OperationResult } from "../../core/contracts/index.js";
@@ -53,6 +55,81 @@ function applyUniformEnvelope(
     });
   }
   return out;
+}
+
+function typedRuleViolation(code: string, message: string, remediation: string): McpToolResult {
+  return withSchemaVersion({
+    content: [{ type: "text", text: `${code}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope({ code, message, remediation }),
+  });
+}
+
+function pathApiFor(...values: string[]): typeof path.win32 | typeof path.posix {
+  return values.some((value) => /^[A-Za-z]:[\\/]/.test(value)) ? path.win32 : path.posix;
+}
+
+function isPathWithinRoot(candidate: string, root: string): boolean {
+  const pathApi = pathApiFor(candidate, root);
+  const resolvedRoot = pathApi.resolve(root);
+  const resolvedCandidate = pathApi.resolve(root, candidate);
+  const relative = pathApi.relative(resolvedRoot, resolvedCandidate);
+  return relative === "" || (!relative.startsWith("..") && !pathApi.isAbsolute(relative));
+}
+
+/**
+ * HR-3: an explicit Access target must stay inside the active worktree.
+ * The caller-provided projectRoot is never trusted as the boundary; production
+ * dispatch passes the root resolved from the physical project configuration.
+ */
+export function enforceSandboxOnlyAccess(
+  input: unknown,
+  toolName: string,
+  sandboxRoot: string = process.cwd(),
+): McpToolResult | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const request = input as Record<string, unknown>;
+  const accessPath = request.accessPath;
+  if (typeof accessPath !== "string" || accessPath.length === 0) return undefined;
+  if (isPathWithinRoot(accessPath, sandboxRoot)) return undefined;
+  return typedRuleViolation(
+    "SANDBOX_ONLY",
+    `${toolName} refused Access target '${accessPath}' because it is outside the active worktree '${sandboxRoot}'.`,
+    "Copy the database into the current worktree sandbox or pass an accessPath inside projectRoot.",
+  );
+}
+
+const INLINE_RUNTIME_MUTATION =
+  /\b(?:Application|Access\.Application|DoCmd)\s*\.\s*(?:Quit|CloseDatabase)\b/i;
+
+export function isInlineRuntimeMutation(input: unknown): boolean {
+  if (typeof input !== "object" || input === null) return false;
+  const request = input as Record<string, unknown>;
+  return (
+    request.apply === true &&
+    typeof request.code === "string" &&
+    INLINE_RUNTIME_MUTATION.test(request.code)
+  );
+}
+
+/**
+ * HR-1: inline code that can terminate or replace the active Access runtime
+ * needs explicit human confirmation before the apply path can execute.
+ */
+export function enforceInlineRuntimeMutationConfirmation(
+  input: unknown,
+): McpToolResult | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const request = input as Record<string, unknown>;
+  if (!isInlineRuntimeMutation(input) || request.confirmedRequiresConfirmation === true) {
+    return undefined;
+  }
+  return typedRuleViolation(
+    "CONFIRMATION_REQUIRED",
+    "vba_inline_execution contains runtime-mutating code and requires explicit human confirmation.",
+    "After the human explicitly approves the runtime mutation, retry with confirmedRequiresConfirmation: true.",
+  );
 }
 
 /**

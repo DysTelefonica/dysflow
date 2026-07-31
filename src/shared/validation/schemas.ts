@@ -27,6 +27,8 @@ export type JsonSchemaProperty = {
   required?: readonly string[];
   properties?: Record<string, JsonSchemaProperty>;
   deprecated?: boolean;
+  /** Parameters that must accompany this property when it is supplied. */
+  requiredWith?: readonly string[];
 };
 
 export type JsonObjectSchema = {

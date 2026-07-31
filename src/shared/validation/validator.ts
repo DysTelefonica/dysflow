@@ -37,6 +37,11 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   for (const [key, property] of Object.entries(schema.properties)) {
     const value = params[key];
     if (value === undefined) continue;
+    for (const companion of property.requiredWith ?? []) {
+      if (params[companion] === undefined) {
+        return `${companion} is required when ${key} is provided.`;
+      }
+    }
     const validation = validateJsonSchemaProperty(value, property, key);
     if (validation !== undefined) return validation;
   }

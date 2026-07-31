@@ -1854,6 +1854,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       code: SCHEMA_PROPS.code,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
       ...WRITE_INTENT_BLOCK,
+      ...CONFIRMATION_OVERRIDE_BLOCK,
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

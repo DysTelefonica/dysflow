@@ -103,6 +103,12 @@ if (!resumeRoot) {
   await cp(sandboxPlan.source.accessPath, accessPath);
   await cp(sandboxPlan.source.backendPath, backendPath);
   await cp(sandboxPlan.source.destinationRoot, destinationRoot, { recursive: true });
+  await mkdir(join(tempRoot, "tests", "vba"), { recursive: true });
+  await writeFile(
+    join(tempRoot, "tests", "vba", "tests.vba.json"),
+    `${JSON.stringify({ tests: [{ procedure: "GetMaxOrdinalE2E", args: [], tags: ["e2e"] }] }, null, 2)}\n`,
+    "utf8",
+  );
   await mkdir(sandboxPlan.sandbox.exportsRoot, { recursive: true });
   await mkdir(sandboxPlan.sandbox.pruneExportPath, { recursive: true });
   await mkdir(sandboxPlan.sandbox.erdPath, { recursive: true });
@@ -370,6 +376,10 @@ await record("operations", "access_force_cleanup_orphaned", {
   implements_check: "orphans_msaccess",
   confirmedRequiresConfirmation: true,
 }, { expected: "ok" });
+await record("operations", "access_force_cleanup_orphaned:pid-no-confirm-refused", {
+  pid: 999999, implements_check: "orphans_msaccess",
+}, { expected: "error" });
+// assertion: error.code in {CONFIRMATION_REQUIRED, HR2_VIOLATION, KILL_BAN}
 // dysflow-gate-introspection-v1 (epic #655, PR #661): the read-only capabilities snapshot.
 // Same harness shape as every other tool — record() runs the call through the suite-owned
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
@@ -600,6 +610,14 @@ await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", apply: true });
 await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, apply: true, allowTable: probeTable });
 await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, apply: true, allowTable: probeTable });
+await record("vba", "run_script:sandbox-only", {
+  accessPath: "C:/Production/real.accdb", scriptPath: "/path/to/anything.sql", apply: false,
+}, { expected: "error" });
+// assertion: error.code in {SANDBOX_ONLY, RUNNING_PRODUCTION, HR3_VIOLATION}
+await record("vba", "vba_inline_execution:runtime-mutating-code-needs-confirmation", {
+  code: "Application.Quit", apply: true,
+}, { expected: "error" });
+// assertion: error.code in {HR1_VIOLATION, COMPILE_REQUIRED, CONFIRMATION_REQUIRED}
 await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: 3, Name: "seed" }], apply: true, allowTable: probeTable });
 await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, allowTable: probeTable });
 await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true });
@@ -1245,6 +1263,11 @@ await record("vba-manifest", "validate_manifest", {
   manifest: { tests: [{ procedure: "DysflowMcpE2E_DoWork", args: [] }] },
   modules: { DysflowMcpE2EInline: inlineSourceFixture },
 });
+await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {
+  ...ctx, testsPath: "tests/vba/tests.vba.json",
+  validateManifestIncludesAllowlistCheck: true,
+});
+// cross-check: output MUST differ from validateManifestIncludesAllowlistCheck:false
 
 // Phase 4 — real projectId resolution E2E against the existing
 // `E2E_testing/.dysflow/project.json` fixture (id: noconformidades-e2e,

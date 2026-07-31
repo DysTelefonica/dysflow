@@ -107,7 +107,11 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
 
   const started = DateNow();
   const method = tool === "tools/list" ? "tools/list" : "tools/call";
-  const params = tool === "tools/list" ? {} : { name: tool, arguments: args };
+  // Regression records use `tool:scenario` labels so multiple assertions for
+  // one MCP tool remain distinguishable in the report. Dispatch only the
+  // canonical tool-name prefix while preserving the full label in result rows.
+  const dispatchTool = tool.split(":", 1)[0];
+  const params = tool === "tools/list" ? {} : { name: dispatchTool, arguments: args };
   const result = await ctx.callMcp(method, params, options);
   const ms = DateNow() - started;
   // Track the child PID as suite-owned. The harness may spawn MSACCESS.EXE
