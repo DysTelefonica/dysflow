@@ -76,6 +76,26 @@ function readInstalledVersion(): string {
   return m?.[1] ?? "";
 }
 
+function normalizeCommandPath(value: string): string {
+  return value.replaceAll("\\", "/").replace(/\/+/g, "/").replace(/\/$/, "").toLowerCase();
+}
+
+function pointsAtInstalledRuntime(command: readonly string[]): boolean {
+  const installedHome = normalizeCommandPath(INSTALLED_HOME);
+  const executable = normalizeCommandPath(command[0] ?? "");
+  const wrapper = `${installedHome}/bin/dysflow.cmd`;
+  if (executable === wrapper) return true;
+
+  const nodeEntryPoint = `${installedHome}/app/dist/cli/index.js`;
+  const nodeExecutable = executable.split("/").at(-1);
+  return (
+    command.length === 3 &&
+    (nodeExecutable === "node" || nodeExecutable === "node.exe") &&
+    normalizeCommandPath(command[1] ?? "") === nodeEntryPoint &&
+    command[2]?.toLowerCase() === "mcp"
+  );
+}
+
 describe("runtime drift guards (CI required)", () => {
   it.skipIf(!installedRuntimeAvailable)(
     "installed dysflow runtime is at v1.2.32 or newer (catches the v1.2.28-silently-shipped regression)",
@@ -122,26 +142,36 @@ describe("runtime drift guards (CI required)", () => {
     } catch (err) {
       throw new Error(`opencode.json is not valid JSON: ${(err as Error).message}`);
     }
-    const cmd = parsed.mcp?.dysflow?.command?.[0];
-    if (cmd === undefined) {
+    const command = parsed.mcp?.dysflow?.command;
+    if (command === undefined || command.length === 0) {
       console.warn(
         "[dysflow-quality] dysflow MCP server not configured in opencode.json; skipping.",
       );
       return;
     }
-    if (cmd.includes("test-runtime")) {
+    if (command.some((argument) => argument.includes("test-runtime"))) {
       throw new Error(
-        `opencode.json points the dysflow MCP server at the in-tree test-runtime (${cmd}). ` +
+        `opencode.json points the dysflow MCP server at the in-tree test-runtime (${command.join(" ")}). ` +
           "The test-runtime is for CI E2E only and ships older code. " +
           "Point the command at the installed runtime instead (e.g. C:/Users/adm1/AppData/Local/dysflow/bin/dysflow.cmd).",
       );
     }
-    // The installed runtime path is the canonical one.
-    const isInstalledPath =
-      cmd.toLowerCase().includes("\\appdata\\local\\dysflow\\bin\\dysflow.cmd") ||
-      cmd.toLowerCase().includes("/appdata/local/dysflow/bin/dysflow.cmd");
-    expect(isInstalledPath, `expected command to point at the installed runtime, got: ${cmd}`).toBe(
-      true,
+    expect(
+      pointsAtInstalledRuntime(command),
+      `expected command to point at the installed runtime, got: ${command.join(" ")}`,
+    ).toBe(true);
+  });
+
+  it("recognizes only canonical installed-runtime launcher forms", () => {
+    expect(pointsAtInstalledRuntime([`${INSTALLED_HOME}\\bin\\dysflow.cmd`])).toBe(true);
+    expect(
+      pointsAtInstalledRuntime(["node", `${INSTALLED_HOME}\\app\\dist\\cli\\index.js`, "mcp"]),
+    ).toBe(true);
+    expect(pointsAtInstalledRuntime(["node", `${REPO_ROOT}\\dist\\cli\\index.js`, "mcp"])).toBe(
+      false,
+    );
+    expect(pointsAtInstalledRuntime(["node", `${INSTALLED_HOME}\\app\\dist\\cli\\index.js`])).toBe(
+      false,
     );
   });
 
