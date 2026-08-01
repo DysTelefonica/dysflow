@@ -40,6 +40,7 @@ BeforeAll {
     Import-ReleaseFunction "Test-ReleaseChangelogQuality"
     Import-ReleaseFunction "Assert-ReleaseChangelogQuality"
     Import-ReleaseFunction "Invoke-ReleasePrepare"
+    Import-ReleaseFunction "Invoke-ReleasePrepareEntryPoint"
 
     function Add-ReleaseSectionToFixture([string]$Section, [string]$Path) {
         $marker = "# Changelog"
@@ -270,6 +271,20 @@ Describe "release safety behavior" {
         Should -Invoke gh -ParameterFilter { ($args -join " ") -match "^run list " } -Times 1
         $script:gitCalls | Where-Object { $_ -match "^(tag|push origin v)\b" } |
             Should -BeNullOrEmpty
+    }
+}
+
+Describe "release command-line dispatch" {
+    It "forwards an explicit version without binding an empty bump" {
+        $script:capturedBoundParameters = $null
+        Mock Invoke-ReleasePrepare {
+            $script:capturedBoundParameters = @{} + $PesterBoundParameters
+        }
+
+        Invoke-ReleasePrepareEntryPoint -BoundParameters @{ Version = "2.33.0" }
+
+        $script:capturedBoundParameters.Version | Should -Be "2.33.0"
+        $script:capturedBoundParameters.ContainsKey("Bump") | Should -BeFalse
     }
 }
 

@@ -305,6 +305,24 @@ Write-Host ""
 Write-Host "Watch progress: gh run watch --workflow release.yml"
 }
 
+function Invoke-ReleasePrepareEntryPoint {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [hashtable]$BoundParameters
+    )
+
+    $releaseParameters = @{}
+    if ($BoundParameters.ContainsKey("Bump")) {
+        $releaseParameters.Bump = $BoundParameters.Bump
+    }
+    if ($BoundParameters.ContainsKey("Version")) {
+        $releaseParameters.Version = $BoundParameters.Version
+    }
+
+    Invoke-ReleasePrepare @releaseParameters
+}
+
 if ($MyInvocation.InvocationName -ne ".") {
-    Invoke-ReleasePrepare -Bump $Bump -Version $Version
+    Invoke-ReleasePrepareEntryPoint -BoundParameters $PSBoundParameters
 }
