@@ -1899,6 +1899,21 @@ function Resolve-AccessDocumentObjectName {
     return $objectName
 }
 
+function Resolve-AccessDocumentModuleName {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$ModuleName,
+        [Parameter(Mandatory = $true)][string]$ObjectName,
+        [Parameter(Mandatory = $true)][int]$ObjectType
+    )
+
+    $prefix = if ($ObjectType -eq 3) { 'Report_' } else { 'Form_' }
+    if ($ModuleName -match ('^' + [regex]::Escape($prefix))) {
+        return $ModuleName
+    }
+    return ($prefix + $ObjectName)
+}
+
 function Assert-AccessDocumentTextLooksLoadable {
     [CmdletBinding()]
     Param(
@@ -3360,6 +3375,7 @@ function Import-VbaModule {
             # tipado FORM_NAME_RESOLUTION_FAILED identificando módulo y fuente.
             $objectName = Resolve-AccessDocumentObjectName -ModuleName $ModuleName -SourcePath $src
             $objectType = if ($isReportTxt -or $ModuleName -match '^Report_') { 3 } else { 2 } # acReport=3, acForm=2
+            $documentModuleName = Resolve-AccessDocumentModuleName -ModuleName $ModuleName -ObjectName $objectName -ObjectType $objectType
 
             # issue #1040 — pre-import guard for Auto mode on full-form source
             # (`.cls` + `.form.txt` together) where the basename lacks the
@@ -3478,7 +3494,7 @@ function Import-VbaModule {
             } else {
                 Write-Status -Message ("WARN: '{0}' no existe en Access; se importará como documento nuevo usando el .form.txt/.report.txt local." -f $objectName) -Color DarkYellow
             }
-            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText -ModuleName $ModuleName
+            $importDocumentText = Normalize-AccessDocumentTextForLoadFromText -DocumentText $importDocumentText -ModuleName $documentModuleName
             $documentKindLabel = if ($objectType -eq 3) { "Report" } else { "Form" }
             Assert-AccessDocumentTextLooksLoadable -DocumentText $importDocumentText -Kind $documentKindLabel -SourcePath $src
 
@@ -3521,7 +3537,7 @@ function Import-VbaModule {
             # deprecated Form alias now normalizes to Auto, so it syncs too.
             $codeBehindSrc = Resolve-FormCodeBehindFile -ModulesPath $ModulesPath -ModuleName $ModuleName
             if ($codeBehindSrc) {
-                Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $ModuleName -SourcePath $codeBehindSrc
+                Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $documentModuleName -SourcePath $codeBehindSrc
             }
 
             return [pscustomobject]@{

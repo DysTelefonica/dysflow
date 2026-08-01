@@ -5326,6 +5326,7 @@ Describe "Import-VbaModule — FORM_VBNAME_PREFIX_MISMATCH guard (issue #1040)" 
             'Resolve-FormCodeBehindFile',
             'Get-FormCodeBehindCandidateNames',
             'Resolve-AccessDocumentObjectName',
+            'Resolve-AccessDocumentModuleName',
             'Assert-AccessDocumentTextLooksLoadable',
             'Normalize-AccessDocumentTextForLoadFromText',
             'Merge-AccessDocumentWithCanonicalHeader',
