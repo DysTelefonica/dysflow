@@ -26,10 +26,6 @@ import {
 import { extractVbName } from "../../core/services/vba-semantic-classifier.js";
 import { validateVbaTestManifest } from "../../core/services/vba-test-manifest-service.js";
 import {
-  removeTemporaryDirectoryWithRetry,
-  TemporaryDirectoryCleanupError,
-} from "../../core/utils/temporary-directory-cleanup.js";
-import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
 } from "./allowed-procedures-resolver.js";
@@ -802,37 +798,61 @@ export function createModernAnalysisTools(
                 params.destinationRoot === undefined ||
                 pathsAreEquivalent(params.destinationRoot as string, configuredRoot)
               ) {
-                const { mkdtemp, readdir, readFile, rm } = await import("node:fs/promises");
-                const { tmpdir } = await import("node:os");
-                const { resolve } = await import("node:path");
-                const tempRoot = await mkdtemp(resolve(tmpdir(), "dysflow-vba-findrefs-"));
-
                 let binaryInspectionFailure: McpToolResult | undefined;
-                let unexpectedCleanupError: unknown;
-                try {
-                  if (services.vbaSyncToolService === undefined) {
+                if (services.vbaSyncToolService === undefined) {
+                  binaryInspectionFailure = {
+                    content: [
+                      {
+                        type: "text",
+                        text: `SERVICE_UNAVAILABLE: vbaSyncToolService is not configured.`,
+                      },
+                    ],
+                    isError: true,
+                    ok: false,
+                  };
+                } else {
+                  // #1019 follow-up — a full export performs SaveAsText for every form/report,
+                  // writes a disposable source tree, then reads it back before scanning. That
+                  // path exceeded the 30 s MCP transport budget even for a five-result page.
+                  // list_vba_modules' internal includeSource mode reads every live
+                  // VBComponent.CodeModule in one password-aware Access session instead. It is
+                  // still a complete binary-corpus scan, so real source/binary drift remains
+                  // visible; only the irrelevant layout/filesystem export is removed.
+                  const inspectionResult = await services.vbaSyncToolService.execute(
+                    "list_vba_modules",
+                    { ...params, includeSource: true },
+                  );
+
+                  if (!inspectionResult.ok) {
+                    const message = `Binary reference scan failed: ${inspectionResult.error.message}`;
                     binaryInspectionFailure = {
                       content: [
                         {
                           type: "text",
-                          text: `SERVICE_UNAVAILABLE: vbaSyncToolService is not configured.`,
+                          text: `BINARY_INSPECTION_UNAVAILABLE: ${message}`,
                         },
                       ],
                       isError: true,
                       ok: false,
+                      error: {
+                        code: "BINARY_INSPECTION_UNAVAILABLE",
+                        message,
+                        errorCode: "BINARY_INSPECTION_UNAVAILABLE",
+                        errorMessage: message,
+                      },
                     };
                   } else {
-                    const exportResult = await services.vbaSyncToolService.execute("export_all", {
-                      ...params,
-                      exportPath: tempRoot,
-                      prune: false,
-                      // The export targets a disposable directory and must materialize files for
-                      // the binary walker; a plan-only export yields phantom source-only drift.
-                      apply: true,
-                    });
-
-                    if (!exportResult.ok) {
-                      const message = `Binary reference export failed: ${exportResult.error.message}`;
+                    const inspectedModules = (
+                      inspectionResult.data as {
+                        modules?: readonly {
+                          name?: unknown;
+                          binaryExists?: unknown;
+                          binarySource?: unknown;
+                        }[];
+                      }
+                    ).modules;
+                    if (!Array.isArray(inspectedModules)) {
+                      const message = "Binary reference scan returned no modules array.";
                       binaryInspectionFailure = {
                         content: [
                           {
@@ -850,47 +870,18 @@ export function createModernAnalysisTools(
                         },
                       };
                     } else {
-                      const subfolders = ["modules", "classes", "forms", "reports"];
-                      for (const folder of subfolders) {
-                        const folderPath = resolve(tempRoot, folder);
-                        try {
-                          const files = await readdir(folderPath);
-                          for (const file of files) {
-                            if (file.endsWith(".bas") || file.endsWith(".cls")) {
-                              const name = file.slice(0, -4);
-                              const content = await readFile(resolve(folderPath, file), "utf-8");
-                              binaryModules[name] = content;
-                            }
-                          }
-                        } catch {
-                          // Ignore missing subfolders
+                      for (const module of inspectedModules) {
+                        if (
+                          module.binaryExists === true &&
+                          typeof module.name === "string" &&
+                          typeof module.binarySource === "string"
+                        ) {
+                          binaryModules[module.name] = module.binarySource;
                         }
                       }
                     }
                   }
-                } finally {
-                  try {
-                    await removeTemporaryDirectoryWithRetry(tempRoot, { remove: rm });
-                  } catch (error) {
-                    if (error instanceof TemporaryDirectoryCleanupError) {
-                      const message = error.message;
-                      binaryInspectionFailure = {
-                        content: [{ type: "text", text: message }],
-                        isError: true,
-                        ok: false,
-                        error: {
-                          code: error.code,
-                          message,
-                          errorCode: error.code,
-                          errorMessage: message,
-                        },
-                      };
-                    } else {
-                      unexpectedCleanupError = error;
-                    }
-                  }
                 }
-                if (unexpectedCleanupError !== undefined) throw unexpectedCleanupError;
                 if (binaryInspectionFailure !== undefined) return binaryInspectionFailure;
               }
             }

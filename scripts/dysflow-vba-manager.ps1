@@ -100,7 +100,13 @@ Param(
     [switch]$ApplyTypeFilter,
 
     [Parameter()]
-    [switch]$ApplyNamePattern
+    [switch]$ApplyNamePattern,
+
+    # Internal code-only binary inspection used by find_references. Reading
+    # VBComponent.CodeModule avoids the much slower full SaveAsText export and
+    # does not write source files or mutate the Access binary.
+    [Parameter()]
+    [switch]$IncludeSource
 )
 
 # issue #752 — wire the script-scope verbose flags consumed by Import-VbaModule
@@ -4777,6 +4783,7 @@ function Invoke-ListVbaModulesAction {
         [string]$NamePattern = "",
         [switch]$ApplyTypeFilter,
         [switch]$ApplyNamePattern,
+        [switch]$IncludeSource,
         [switch]$Json
     )
 
@@ -4831,11 +4838,28 @@ function Invoke-ListVbaModulesAction {
                     100 { "report.txt" }
                     default { "cls" }
                 }
-                $rows.Add([ordered]@{
+                $row = [ordered]@{
                     name = $name
                     type = $vbType
                     fileType = $fileType
-                })
+                }
+                if ($IncludeSource) {
+                    $codeModule = $null
+                    try {
+                        $codeModule = $component.CodeModule
+                        $lineCount = [int]$codeModule.CountOfLines
+                        $row.binarySource = if ($lineCount -gt 0) {
+                            [string]$codeModule.Lines(1, $lineCount)
+                        } else {
+                            ""
+                        }
+                    } finally {
+                        if ($codeModule) {
+                            try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($codeModule) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+                        }
+                    }
+                }
+                $rows.Add($row)
             } finally {
                 if ($component) {
                     try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
@@ -5512,7 +5536,7 @@ try {
         # Issue #807 (Feature 1) - per-component binary enumeration. The TS
         # service layers the source-side cross-reference on top of this.
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
-        Invoke-ListVbaModulesAction -Session $session -TypeFilter $TypeFilter -NamePattern $NamePattern -ApplyTypeFilter:$ApplyTypeFilter -ApplyNamePattern:$ApplyNamePattern -Json:$Json
+        Invoke-ListVbaModulesAction -Session $session -TypeFilter $TypeFilter -NamePattern $NamePattern -ApplyTypeFilter:$ApplyTypeFilter -ApplyNamePattern:$ApplyNamePattern -IncludeSource:$IncludeSource -Json:$Json
 
     } elseif ($Action -eq "Exists") {
         if ($normalizedModules.Count -ne 1) {

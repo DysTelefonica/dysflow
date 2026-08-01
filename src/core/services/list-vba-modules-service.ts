@@ -51,6 +51,7 @@ export type ListVbaModulesRunnerRow = {
   type: VbaComponentType;
   fileType: VbaFileType;
   binaryPath?: string;
+  binarySource?: string;
 };
 
 /**
@@ -139,6 +140,8 @@ export type RunListVbaModulesInput = {
   typeFilter?: string;
   namePattern?: string;
   timeoutMs?: number;
+  /** Internal-only: read code directly from live VBComponents without SaveAsText. */
+  includeSource?: boolean;
 };
 
 /**
@@ -195,6 +198,7 @@ export async function runListVbaModules(
       namePattern: runnerNamePattern ?? undefined,
       applyTypeFilter: runnerTypeFilter !== null,
       applyNamePattern: runnerNamePattern !== null,
+      includeSource: params.includeSource === true,
     },
     password: ctx.accessPassword,
     timeoutMs: effectiveTimeoutMs,
@@ -277,6 +281,9 @@ export async function runListVbaModules(
       fileType: source?.fileType ?? row.fileType,
       sourcePath,
       binaryPath: row.binaryPath,
+      ...(params.includeSource === true && typeof row.binarySource === "string"
+        ? { binarySource: row.binarySource }
+        : {}),
       sourceExists,
       binaryExists: true,
       // contentMatch is intentionally undefined when the runner did not

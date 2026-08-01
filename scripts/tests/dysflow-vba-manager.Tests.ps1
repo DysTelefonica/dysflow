@@ -2503,6 +2503,36 @@ Describe "Invoke-ListVbaModulesAction - behavioral (#807 Feature 1)" {
             $byName["FormC"].fileType | Should -Be "form.txt"
         }
 
+        It "reads code directly from each VBComponent only when IncludeSource is requested" {
+            $script:CodeModule1019 = [PSCustomObject]@{ CountOfLines = 2 }
+            $script:CodeModule1019 | Add-Member -MemberType ScriptMethod -Name "Lines" -Value {
+                param($startLine, $lineCount)
+                return "Public Sub Target()`r`nEnd Sub"
+            } -Force
+            $script:Component1019 = [PSCustomObject]@{
+                Name = "ModuleA"
+                Type = 1
+                CodeModule = $script:CodeModule1019
+            }
+            $fakeComponents = [PSCustomObject]@{ Count = 1 }
+            $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+                param($i)
+                return $script:Component1019
+            } -Force
+            $script:FakeSession = [PSCustomObject]@{
+                VbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
+                AccessApplication = [PSCustomObject]@{ }
+            }
+
+            $withSource = Invoke-ListVbaModulesAction -Session $script:FakeSession -IncludeSource -Json |
+                ConvertFrom-Json
+            $withoutSource = Invoke-ListVbaModulesAction -Session $script:FakeSession -Json |
+                ConvertFrom-Json
+
+            $withSource.components[0].binarySource | Should -Be "Public Sub Target()`r`nEnd Sub"
+            $withoutSource.components[0].PSObject.Properties.Name | Should -Not -Contain "binarySource"
+        }
+
         It "releases every component COM reference via FinalReleaseComObject" {
             $r1 = [PSCustomObject]@{ Name = "M1"; Type = 1 }
             $r2 = [PSCustomObject]@{ Name = "M2"; Type = 1 }
