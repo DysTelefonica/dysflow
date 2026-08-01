@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -134,7 +134,8 @@ describe("cwd-aware worktree cache (#1321)", () => {
     });
     const tool = requiredTool(registered, "import_modules");
     await tool.handler({ cwd: sibling, moduleNames: ["Module1"], apply: true });
-    expect(calls.some((call) => call.cwd === sibling)).toBe(true);
+    const canonicalSibling = realpathSync.native(sibling);
+    expect(calls.some((call) => call.cwd === canonicalSibling)).toBe(true);
   });
 
   it("uses cwd when resolving the live service/access context", async () => {
@@ -176,10 +177,13 @@ describe("cwd-aware worktree cache (#1321)", () => {
 
   it("keeps a selector-specific fresh path when the selector names another project", async () => {
     let scans = 0;
+    const baseline = diagnoseProjectConfig(sibling, {});
     const cache = new WorktreeContextCache({
-      resolveDiagnostic: (cwd, input) => {
+      resolveDiagnostic: (_cwd, input) => {
         scans += 1;
-        return diagnoseProjectConfig(cwd, input as Record<string, unknown>);
+        return input.projectId === undefined
+          ? baseline
+          : { ...baseline, status: "id-mismatch", writeReady: false };
       },
     });
 
