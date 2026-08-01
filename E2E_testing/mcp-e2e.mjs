@@ -1864,8 +1864,9 @@ await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempR
 
 const sqlTools = ["query_execute", "create_table", "drop_table", "list_access_files",
                   "seed_fixture", "teardown_fixture", "list_tables"];
+const errorEnvelopeArgs = { list_access_files: { projectId: "non-existent" } };
 for (const tool of sqlTools) {
-  await record("query", `${tool}:error-envelope-remediation`, {}, { expected: "error" });
+  await record("query", `${tool}:error-envelope-remediation`, errorEnvelopeArgs[tool] ?? {}, { expected: "error" });
 }
 
 await record("protocol", "effective-dry-run-default-coherence", { projectId });

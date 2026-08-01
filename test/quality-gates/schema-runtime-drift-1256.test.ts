@@ -13,9 +13,10 @@ describe("issue #1256 release E2E records", () => {
     'await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: false });',
     'await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempRoot + "/ERD" });',
     'await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {',
+    'const errorEnvelopeArgs = { list_access_files: { projectId: "non-existent" } };',
     'await record("query", `' +
       "$" +
-      '{tool}:error-envelope-remediation`, {}, { expected: "error" });',
+      '{tool}:error-envelope-remediation`, errorEnvelopeArgs[tool] ?? {}, { expected: "error" });',
     'await record("protocol", "effective-dry-run-default-coherence", { projectId });',
   ])("contains the exact literal %s", (literal) => {
     expect(source).toContain(literal);
@@ -26,5 +27,11 @@ describe("issue #1256 release E2E records", () => {
       'const sqlTools = ["query_execute", "create_table", "drop_table", "list_access_files",',
     );
     expect(source).toContain('"seed_fixture", "teardown_fixture", "list_tables"];');
+  });
+
+  it("keeps list_access_files error coverage invalid after sandbox config resolution", () => {
+    expect(source).toContain(
+      'const errorEnvelopeArgs = { list_access_files: { projectId: "non-existent" } };',
+    );
   });
 });
