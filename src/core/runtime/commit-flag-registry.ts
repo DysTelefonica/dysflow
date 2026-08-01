@@ -245,6 +245,11 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
     noWriteAlias: null,
     defaultBehavior: "plan",
   },
+  setup_project: {
+    commitFlag: "apply",
+    noWriteAlias: null,
+    defaultBehavior: "plan",
+  },
   // Round-12 (#978) — `state` is pure read-only. The schema defensively
   // accepts `apply` for symmetry with every other advertised tool, but
   // `state` never writes — the handler ignores any commit signal and

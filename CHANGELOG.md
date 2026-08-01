@@ -5,6 +5,7 @@
 ### Added
 
 - Aggregate ordinary expected-success, expected-error, and semantic assertion failures across a release E2E run while preserving fail-fast stops for unsafe or indeterminate states (#1307).
+- Expose plan-by-default `setup_project` through MCP, sharing the CLI's atomic project-config publication path so pure-MCP clients can bootstrap fresh worktrees (#1312).
 
 ### Fixed
 
@@ -3406,4 +3407,3 @@ Initial production release focused on making Access automation safe, observable 
 - Added protocol maintenance guide: `docs/testing/mcp-protocol-maintenance.md`.
 - Added HTTP API reference: `docs/api/http-api.md`.
 - Added E2E MCP reference: `docs/testing/mcp-access-e2e.md`.
-

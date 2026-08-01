@@ -203,6 +203,33 @@ export const cleanStaleMarkersResultContract = defineResultContract({
     .strict(),
 });
 
+export const setupProjectResultContract = defineResultContract({
+  modes: ["plan", "apply"],
+  description: "Resolved project-config plan or atomic publication result.",
+  schema: z.union([
+    z
+      .object({
+        ok: z.literal(true),
+        mode: z.literal("plan"),
+        dryRun: z.literal(true),
+        willWrite: z.literal(true),
+        configPath: z.string(),
+        resolvedConfig: unknownRecord,
+        warnings: z.array(z.string()),
+      })
+      .strict(),
+    z
+      .object({
+        ok: z.literal(true),
+        mode: z.literal("apply"),
+        dryRun: z.literal(false),
+        configPath: z.string(),
+        writtenFields: z.array(z.string()),
+      })
+      .strict(),
+  ]),
+});
+
 // Issue #1177 — `migrate_project_config` result contract. The success
 // branch carries the full diff preview (current / proposed / diff /
 // remediation) plus an `applied` flag; the error branch is a typed
@@ -258,5 +285,6 @@ export const bootstrapRecoveryResultContracts = {
   cleanup_access_operation: cleanupAccessOperationResultContract,
   access_force_cleanup_orphaned: orphanCleanupResultContract,
   clean_stale_markers: cleanStaleMarkersResultContract,
+  setup_project: setupProjectResultContract,
   migrate_project_config: migrateProjectConfigResultContract,
 } as const;

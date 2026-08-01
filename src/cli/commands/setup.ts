@@ -1,9 +1,12 @@
-import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { loadDysflowConfigAsync } from "../../adapters/config/dysflow-config-node.js";
+import {
+  publishProjectConfig,
+  writeRelativeProjectConfig as writeRelativeProjectConfigShared,
+} from "../../adapters/config/project-config-bootstrap-service.js";
 import { diagnoseProjectConfig } from "../../adapters/config/project-config-diagnostic.js";
 import { type DysflowConfig, redactDysflowConfig } from "../../core/config/dysflow-config.js";
-import { isAbsolutePath } from "../../core/utils/index.js";
 import { parseNamedArgs } from "./install-utils.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
@@ -141,17 +144,6 @@ function parseSetupArgs(
   };
 }
 
-function toPortableProjectPath(value: string | undefined, projectRoot: string): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  const absolutePath = isAbsolutePath(value) ? resolve(value) : resolve(projectRoot, value);
-  const projectRelative = relative(projectRoot, absolutePath);
-  return projectRelative.length === 0
-    ? basename(absolutePath)
-    : projectRelative.replaceAll("\\", "/");
-}
-
 async function updateProjectConfigId(
   projectId: string,
   context: Pick<CliCommandContext, "cwd" | "env">,
@@ -181,7 +173,7 @@ async function updateProjectConfigId(
     throw new Error(`Invalid .dysflow/project.json: ${projectPath}. ${message}`);
   }
   parsed.id = projectId;
-  await publishProjectConfig(projectRoot, parsed);
+  await publishProjectConfig(projectRoot, parsed, undefined, undefined, assertWriteReady);
   return `Updated project id in .dysflow/project.json: ${projectId}`;
 }
 
@@ -191,103 +183,14 @@ export async function writeRelativeProjectConfig(
   beforeRename?: () => void | Promise<void>,
   afterRename?: () => void | Promise<void>,
 ): Promise<{ message: string; projectPath: string }> {
-  const projectRoot = cwd ?? process.cwd();
-  const projectPath = join(projectRoot, ".dysflow", "project.json");
-  const projectId = config.projectId ?? basename(projectRoot);
-  const frontendFile = basename(config.accessDbPath);
-  const frontendRelative = toPortableProjectPath(config.accessDbPath, projectRoot);
-  if (frontendRelative !== frontendFile) {
-    throw new Error(
-      `Frontend must be at the worktree root before writing portable config. Move it to ${join(projectRoot, frontendFile)} or pass a root frontend.`,
-    );
-  }
-  const projectJson = {
-    id: projectId,
-    frontendFile,
-    ...(config.backendPath === undefined
-      ? {}
-      : {
-          backendPath: toPortableProjectPath(config.backendPath, projectRoot),
-        }),
-    destinationRoot: "src",
-    // Scaffold the per-project timeout as an explicit, editable knob. Heavy
-    // whole-project operations (verify_code / export_all)
-    // on large databases can exceed the generic default; surfacing it here lets
-    // the user tune it instead of silently false-timing out.
-    timeoutMs: config.timeoutMs,
-  };
-
-  await mkdir(dirname(projectPath), { recursive: true });
-  await publishProjectConfig(projectRoot, projectJson, beforeRename, afterRename);
-  return {
-    message: [
-      `Wrote portable project config to ${projectPath}`,
-      `Recommended: tune "timeoutMs" in .dysflow/project.json for this project — large databases and heavy whole-project operations may need more than the current ${config.timeoutMs}ms.`,
-    ].join("\n"),
-    projectPath,
-  };
+  return writeRelativeProjectConfigShared(config, cwd, beforeRename, afterRename, assertWriteReady);
 }
 
-async function publishProjectConfig(
-  projectRoot: string,
-  projectJson: Record<string, unknown>,
-  beforeRename?: () => void | Promise<void>,
-  afterRename?: () => void | Promise<void>,
-): Promise<void> {
-  const projectPath = join(projectRoot, ".dysflow", "project.json");
+function assertWriteReady(projectRoot: string, projectJson: Record<string, unknown>): void {
   const diagnostic = diagnoseProjectConfig(projectRoot, {}, projectJson);
-  if (!diagnostic.writeReady)
+  if (!diagnostic.writeReady) {
     throw new Error(
       `Project config is not write-ready (${diagnostic.status}). ${diagnostic.remediation ?? ""}`.trim(),
     );
-  const temporaryPath = `${projectPath}.${process.pid}.${Date.now()}.tmp`;
-  const canonicalRoot = await realpath(projectRoot);
-  const canonicalParent = await realpath(dirname(projectPath));
-  const owns = (candidate: string) => {
-    const rel = relative(canonicalRoot, candidate);
-    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-  };
-  if (!owns(canonicalParent)) throw new Error("Project config directory is outside the worktree.");
-  const previous = await readFile(projectPath, "utf8").catch(() => undefined);
-  const handle = await open(temporaryPath, "wx");
-  let canonicalTemporary = temporaryPath;
-  let renamed = false;
-  try {
-    canonicalTemporary = await realpath(temporaryPath);
-    if (dirname(canonicalTemporary) !== canonicalParent || !owns(canonicalTemporary))
-      throw new Error("Temporary project config escaped the owned directory.");
-    await handle.writeFile(`${JSON.stringify(projectJson, null, 2)}\n`, "utf8");
-    await handle.sync();
-    await beforeRename?.();
-    if ((await realpath(dirname(projectPath))) !== canonicalParent)
-      throw new Error("Project config directory ownership changed before publication.");
-    await handle.close();
-    await rename(temporaryPath, projectPath);
-    renamed = true;
-    await afterRename?.();
-    if ((await realpath(projectPath)) !== join(canonicalParent, "project.json"))
-      throw new Error("Published project config escaped the owned directory.");
-  } catch (error) {
-    await handle.close().catch(() => undefined);
-    await rm(canonicalTemporary, { force: true });
-    const ownedProjectPath = join(canonicalParent, "project.json");
-    if (renamed) {
-      if (previous === undefined) {
-        await rm(ownedProjectPath, { force: true });
-      } else {
-        const recoveryPath = `${ownedProjectPath}.${process.pid}.${Date.now()}.recovery.tmp`;
-        const recovery = await open(recoveryPath, "wx");
-        try {
-          await recovery.writeFile(previous, "utf8");
-          await recovery.sync();
-          await recovery.close();
-          await rename(recoveryPath, ownedProjectPath);
-        } finally {
-          await recovery.close().catch(() => undefined);
-          await rm(recoveryPath, { force: true });
-        }
-      }
-    }
-    throw error;
   }
 }

@@ -715,6 +715,26 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
+  if (tool === "setup_project") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass =
+          parsed?.ok === true &&
+          parsed?.mode === "plan" &&
+          parsed?.dryRun === true &&
+          parsed?.willWrite === true &&
+          parsed?.resolvedConfig?.frontendFile === "DysflowSetupProbe.accdb";
+        return {
+          pass,
+          expected: "non-mutating setup_project plan with resolved config",
+          summary: pass ? "setup plan returned without writing" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool.endsWith(":error-envelope-code")) {
     return {
       args: { ...args, __forceTypedEnvelopeError: true },
@@ -896,6 +916,10 @@ await record("capabilities", "describe_tool", { name: "delete_module" });
 await record("capabilities", "migrate_project_config", {
   cwd: "/no/such/dir",
 }, { expected: "error" });
+await record("capabilities", "setup_project", {
+  cwd: repoRoot,
+  frontendFile: "DysflowSetupProbe.accdb",
+});
 
 const tools = ["run_script", "vba_inline_execution", "list_procedures",
                "get_procedure", "find_references", "detect_dead_code"];

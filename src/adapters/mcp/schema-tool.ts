@@ -77,6 +77,7 @@ import {
   VALIDATE_MANIFEST_SCHEMA,
 } from "./schemas/dysflow-schemas.js";
 import { MCP_TOOL_SCHEMAS, NO_INPUT_SCHEMA } from "./schemas/index.js";
+import { SETUP_PROJECT_SCHEMA } from "./schemas/setup-project-schema.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import { STATE_TOOL_SCHEMA } from "./state-tool.js";
 
@@ -593,6 +594,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   // introspect the read-only vs apply branching without re-reading the
   // factory.
   migrate_project_config: MIGRATE_PROJECT_CONFIG_SCHEMA,
+  setup_project: SETUP_PROJECT_SCHEMA,
 };
 
 /**

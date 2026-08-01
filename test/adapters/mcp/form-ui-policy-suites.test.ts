@@ -514,7 +514,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     );
   });
 
-  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77 -> 78 -> 79 -> 80 -> 84 -> 85 -> 86 -> 87 -> 88 -> 89 -> 90 -> 91)", () => {
+  it("visible tool count step (cascade 71 -> 73 -> 74 -> 75 -> 77 -> 78 -> 79 -> 80 -> 84 -> 85 -> 86 -> 87 -> 88 -> 89 -> 90 -> 91; #1312 setup_project: 91 -> 92)", () => {
     // Issue #807 (Feature 1) added `list_vba_modules`: visible 70 -> 71.
     // Phase 6 adds 2 more (form_set_property + form_delete_control):
     // 71 -> 73.
@@ -542,7 +542,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     // #1177 adds migrate_project_config (one-shot legacy config
     // migration tool — default `{}` is a pure read-class diff preview,
     // apply:true rewrites `.dysflow/project.json` atomically and is
-    // write-gated through MCP_WRITES_DISABLED): 90 -> 91.
+    // write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
@@ -551,6 +551,6 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     expect(
       visible,
       "visible tool count after #872 + #971 + #965 + #976 + #973 + #978 + #1057 + #1177",
-    ).toBe(91);
+    ).toBe(92);
   });
 });

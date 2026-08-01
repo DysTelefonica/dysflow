@@ -28,7 +28,7 @@ export type PreferredAgentWorkflow = {
 export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
   {
     phase: "bootstrap",
-    tools: ["get_capabilities", "schema", "describe_tool"],
+    tools: ["get_capabilities", "schema", "describe_tool", "setup_project", "resolve_project"],
   },
   {
     phase: "sync",
@@ -104,6 +104,10 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
     "Discover all tools with view:'compact'; request view:'full' only for catalog-wide contract analysis.",
   ],
   describe_tool: ["Inspect one selected tool's complete contract after compact discovery."],
+  setup_project: [
+    "Bootstrap a missing per-worktree project config through MCP when shell access is unavailable.",
+  ],
+  resolve_project: ["Resolve and verify the selected worktree project after bootstrap."],
   sync_binary: [
     "Run the preferred source-to-binary or binary-to-source verify, plan, apply, and re-verify workflow.",
   ],

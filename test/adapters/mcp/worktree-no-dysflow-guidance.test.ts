@@ -31,6 +31,7 @@ describe("worktree-without-.dysflow field-level guidance", () => {
     const remediation = result.error?.remediation as unknown as {
       fieldChecklist: string[];
       command: { cwd: string };
+      mcpTool: { name: string; input: { cwd: string; apply: boolean } };
     };
     expect(remediation.fieldChecklist).toEqual(
       expect.arrayContaining([
@@ -43,6 +44,10 @@ describe("worktree-without-.dysflow field-level guidance", () => {
       ]),
     );
     expect(remediation.command.cwd).toBe(target);
+    expect(remediation.mcpTool).toMatchObject({
+      name: "setup_project",
+      input: { cwd: target, apply: false },
+    });
   });
 
   it("offers restoration when .dysflow.bak exists", async () => {

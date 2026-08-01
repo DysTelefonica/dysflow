@@ -98,6 +98,14 @@ for **how to behave** when calling those tools.
   `projectId` or its configured `accessPath`. Confirm each shape with
   `describe_tool({name:"<tool>"})`. Never weaken the guard or edit configs.
 
+- **HR-10 — Bootstrap missing project config before any other write.** When
+  `get_capabilities({}).projectConfig.status === "missing"`, call
+  `setup_project({cwd,frontendFile,apply:false})`, review `resolvedConfig`, then
+  call the same tool with `apply:true`. The bootstrap apply enforces the process
+  write gate and candidate `capabilities.allowWrites`; it intentionally does
+  not require an existing write-ready config because that would deadlock first
+  use. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -105,6 +113,8 @@ For any feature that touches dysflow-managed artifacts:
 - **Step 0** — `get_capabilities({})`. Capture `adapterVersion`,
   `writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
   `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
+  If status is `missing`, bootstrap with `setup_project` before any other
+  write-class tool, then re-run `resolve_project` and `get_capabilities`.
 - **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
   `src/modules/` + entry in `tests/tests.vba.json`. Change → identify the
   failing test or write one.

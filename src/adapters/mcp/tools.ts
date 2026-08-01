@@ -25,6 +25,7 @@ import { createModernAnalysisTools } from "./modern-analysis-tools.js";
 import { withSharedOutputModes } from "./output-mode.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
+import { createSetupProjectTool } from "./setup-project-tool.js";
 import { createStateTool } from "./state-tool.js";
 
 export {
@@ -344,6 +345,10 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // never spawns PowerShell, never mutates state. Pairs with
     // get_capabilities (live state) and schema (static contract catalog).
     createLogsTool({ cwd }),
+    // Issue #1312 — bootstrap is intentionally registered before the
+    // existing-config write-ready wrapper. The wrapper exempts this tool
+    // below because requiring an existing config would deadlock bootstrap.
+    createSetupProjectTool({ cwd, writesEnabled }),
     // Issue #1177 — `migrate_project_config`. Drives legacy
     // `.dysflow/project.json` migrations (absolute accessPath →
     // basename frontendFile, top-level allowWrites →
@@ -377,6 +382,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
   return registered.map((tool) => {
     const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
     if (contract === undefined || contract.access === "read-only") return tool;
+    if (tool.name === "setup_project") return tool;
     // Issue #968 — read `mutatesBinary` from the dispatch route table once
     // per tool so `projectConfigResolver → diagnoseProjectConfig` can decide
     // whether the caller's `allowExternalAccessPath` opt-in should bypass

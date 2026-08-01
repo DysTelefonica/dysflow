@@ -156,6 +156,8 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
       "get_capabilities",
       "schema",
       "describe_tool",
+      "setup_project",
+      "resolve_project",
     ]);
     expect(workflows.find((workflow) => workflow.phase === "sync")?.tools).toContain("sync_binary");
     expect(workflows.find((workflow) => workflow.phase === "tests")?.tools).toEqual([

@@ -83,6 +83,7 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // risk family as `clean_stale_markers` (filesystem control under an
   // explicit confirm gate).
   migrate_project_config: "routine-dev-write",
+  setup_project: "routine-dev-write",
 };
 
 /**
@@ -207,6 +208,8 @@ export const STRICT_CONTEXT_EXCEPTIONS = {
     "Offline form-spec generation; it resolves no Access or managed-source execution target.",
   migrate_project_config:
     "Project-config migration validates its explicit cwd-bound config path and resolves no Access target.",
+  setup_project:
+    "Project bootstrap validates the selected Git worktree and candidate config before atomic publication.",
 } as const satisfies Readonly<Record<string, string>>;
 
 /**

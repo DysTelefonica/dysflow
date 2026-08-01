@@ -36,6 +36,10 @@ export function buildMissingProjectConfigRemediation(
       `No per-worktree .dysflow/project.json was found. Run \`dysflow setup --cwd ${displayCwd} --apply --access-path <path>\` ` +
       "or restore the config, then fill the required project fields.",
     command: { value: setup, cwd },
+    mcpTool: {
+      name: "setup_project",
+      input: { cwd, frontendFile: "<basename.accdb>", apply: false },
+    },
     platform: "cross-platform",
     safeToAutoExecute: false,
     fieldChecklist: Object.keys(FIELD_DESCRIPTIONS),
