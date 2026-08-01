@@ -14,6 +14,9 @@ export type AgentWorkflowMetadata = {
   status: AgentWorkflowStatus;
   supersededBy?: string;
   preferFor: string[];
+  /** Complete phase classification. Always contains at least one phase. */
+  workflowPhases: AgentWorkflowPhase[];
+  /** Backward-compatible primary phase for consumers predating multi-phase metadata. */
   workflowPhase?: AgentWorkflowPhase;
   specializedWhen?: string;
   migrationGuidance?: string;
@@ -23,6 +26,29 @@ export type AgentWorkflowMetadata = {
 export type PreferredAgentWorkflow = {
   phase: AgentWorkflowPhase;
   tools: string[];
+};
+
+export const DYSFLOW_WORKFLOW_META_KEY = "dysflow/workflow" as const;
+
+export type McpStandardToolAnnotations = {
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+};
+
+export type DysflowWorkflowAdvertisement = {
+  phases: AgentWorkflowPhase[];
+  preferredFor: string[];
+  status: AgentWorkflowStatus;
+};
+
+export type ToolAdvertisementMetadata = {
+  annotations: McpStandardToolAnnotations;
+  _meta: {
+    [DYSFLOW_WORKFLOW_META_KEY]: DysflowWorkflowAdvertisement;
+  };
 };
 
 export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
@@ -53,7 +79,7 @@ export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
   },
   {
     phase: "recovery",
-    tools: ["diagnose", "state", "logs", "cleanup_access_operation"],
+    tools: ["resolve_project", "diagnose", "state", "logs", "cleanup_access_operation"],
   },
 ];
 
@@ -63,12 +89,60 @@ const ADDITIONAL_PREFERRED_TOOLS = new Set([
   "form_distribute_controls",
 ]);
 
-const PREFERRED_PHASE_BY_TOOL = new Map<string, AgentWorkflowPhase>(
-  PREFERRED_AGENT_WORKFLOWS.flatMap((workflow) =>
-    workflow.tools.map((tool) => [tool, workflow.phase] as const),
-  ),
-);
+const PREFERRED_PHASES_BY_TOOL = new Map<string, AgentWorkflowPhase[]>();
+for (const workflow of PREFERRED_AGENT_WORKFLOWS) {
+  for (const tool of workflow.tools) {
+    const phases = PREFERRED_PHASES_BY_TOOL.get(tool) ?? [];
+    if (!phases.includes(workflow.phase)) phases.push(workflow.phase);
+    PREFERRED_PHASES_BY_TOOL.set(tool, phases);
+  }
+}
 
+const BOOTSTRAP_TOOLS = new Set([
+  "get_capabilities",
+  "schema",
+  "describe_tool",
+  "setup_project",
+  "migrate_project_config",
+]);
+const TEST_TOOLS = new Set(["validate_manifest", "test_vba"]);
+const RECOVERY_TOOLS = new Set([
+  "list_access_operations",
+  "cleanup_access_operation",
+  "doctor",
+  "access_force_cleanup_orphaned",
+  "diagnose",
+  "clean_stale_markers",
+  "state",
+  "logs",
+]);
+const SQL_TOOLS = new Set([
+  "query_sql",
+  "list_tables",
+  "list_linked_tables",
+  "get_schema",
+  "count_rows",
+  "distinct_values",
+  "compare_backends",
+  "list_access_files",
+  "exec_sql",
+  "run_script",
+  "create_table",
+  "drop_table",
+  "seed_fixture",
+  "teardown_fixture",
+  "list_links",
+  "link_tables",
+  "relink_tables",
+  "localize_backend_links",
+  "unlink_table",
+  "export_queries",
+  "import_queries",
+  "get_relationships",
+  "compact_repair",
+  "relink_directory",
+  "query_execute",
+]);
 const DEPRECATION_POLICY =
   "Compatibility-only in the v2.x line; removal requires a documented deprecation window and migration release note.";
 
@@ -157,31 +231,83 @@ function preferFor(name: string): string[] {
   return [...(CURATED_PREFER_FOR[name] ?? [`Use ${name} when its focused contract is required.`])];
 }
 
+function classifyWorkflowPhases(name: string): AgentWorkflowPhase[] {
+  const preferred = PREFERRED_PHASES_BY_TOOL.get(name);
+  if (preferred !== undefined) return [...preferred];
+  if (BOOTSTRAP_TOOLS.has(name)) return ["bootstrap"];
+  if (TEST_TOOLS.has(name)) return ["tests"];
+  if (RECOVERY_TOOLS.has(name)) return ["recovery"];
+  if (SQL_TOOLS.has(name)) return ["sql"];
+  if (name.includes("form") || name.includes("control")) return ["forms"];
+  return ["sync"];
+}
+
+function toolTitle(name: string): string {
+  return name
+    .split("_")
+    .filter((part) => part.length > 0)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
 export function buildAgentWorkflowMetadata(name: string): AgentWorkflowMetadata {
+  const workflowPhases = classifyWorkflowPhases(name);
   const legacy = LEGACY_METADATA[name];
   if (legacy !== undefined) {
     return {
       status: "legacy",
       supersededBy: legacy.supersededBy,
       preferFor: [...legacy.preferFor],
+      workflowPhases,
+      workflowPhase: workflowPhases[0],
       migrationGuidance: legacy.migrationGuidance,
       deprecationPolicy: DEPRECATION_POLICY,
     };
   }
 
   const useCases = preferFor(name);
-  const workflowPhase = PREFERRED_PHASE_BY_TOOL.get(name);
-  if (workflowPhase !== undefined || ADDITIONAL_PREFERRED_TOOLS.has(name)) {
+  const preferredPhases = PREFERRED_PHASES_BY_TOOL.get(name);
+  if (preferredPhases !== undefined || ADDITIONAL_PREFERRED_TOOLS.has(name)) {
     return {
       status: "preferred",
       preferFor: useCases,
-      ...(workflowPhase === undefined ? {} : { workflowPhase }),
+      workflowPhases,
+      workflowPhase: workflowPhases[0],
     };
   }
 
   return {
     status: "specialized",
     preferFor: useCases,
+    workflowPhases,
+    workflowPhase: workflowPhases[0],
     specializedWhen: `Choose ${name} over a preferred wrapper when ${useCases[0]}`,
+  };
+}
+
+export function buildToolAdvertisementMetadata(
+  name: string,
+  access: "read-only" | "read-write" | "conditional-write",
+): ToolAdvertisementMetadata {
+  const workflow = buildAgentWorkflowMetadata(name);
+  const readOnly = access === "read-only";
+  return {
+    annotations: {
+      title: toolTitle(name),
+      readOnlyHint: readOnly,
+      // MCP defaults this hint to true when omitted. Keep the same conservative
+      // contract for every write-capable tool because apply mode may overwrite
+      // Access objects, data, or project files even when the default call plans.
+      destructiveHint: !readOnly,
+      idempotentHint: readOnly,
+      openWorldHint: false,
+    },
+    _meta: {
+      [DYSFLOW_WORKFLOW_META_KEY]: {
+        phases: [...workflow.workflowPhases],
+        preferredFor: [...workflow.preferFor],
+        status: workflow.status,
+      },
+    },
   };
 }

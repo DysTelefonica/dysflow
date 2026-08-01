@@ -174,6 +174,7 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
       "verify_form_ui",
     ]);
     expect(workflows.find((workflow) => workflow.phase === "recovery")?.tools).toEqual([
+      "resolve_project",
       "diagnose",
       "state",
       "logs",

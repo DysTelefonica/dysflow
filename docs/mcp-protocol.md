@@ -19,6 +19,49 @@ protocol-version negotiation, and JSON-RPC framing.
 - **Tool surface**: the server exposes tools; unsupported capabilities are kept
   absent from `capabilities` until implemented.
 
+## Tool behavior and workflow metadata
+
+Every `tools/list` entry exposes the five interoperable behavior hints defined
+by MCP 2025-06-18 `ToolAnnotations`: `title`, `readOnlyHint`,
+`destructiveHint`, `idempotentHint`, and `openWorldHint`. Dysflow derives these
+from its canonical tool contracts. Write-capable tools conservatively advertise
+`destructiveHint: true` because apply mode may overwrite Access objects, data,
+or project files even when the default call is a non-mutating plan.
+
+Workflow phase and usage guidance are Dysflow product metadata, not standard
+MCP annotations. They live under the Tool `_meta` extension point:
+
+```json
+{
+  "annotations": {
+    "title": "Resolve Project",
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "dysflow/workflow": {
+      "phases": ["bootstrap", "recovery"],
+      "preferredFor": ["Resolve and verify the selected worktree project after bootstrap."],
+      "status": "preferred"
+    }
+  }
+}
+```
+
+The mapping is total: every advertised tool has at least one of `bootstrap`,
+`sync`, `tests`, `sql`, `forms`, or `recovery`; multi-phase tools retain every
+phase. The same `annotations` and `_meta` values are mirrored by compact/full
+`schema`, `describe_tool`, and `get_capabilities.tools`.
+
+MCP 2025-06-18 does not define `annotations.category` or
+`annotations.preferredFor`. Dysflow therefore does not emit those nonstandard
+keys and does not claim that generic MCP clients group tools automatically.
+Clients that understand `_meta["dysflow/workflow"]` can group, filter, or sort;
+other clients safely ignore it. See the official
+[ToolAnnotations schema](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations).
+
 > Historical note: an earlier product slice used a light hand-rolled
 > JSON-RPC-over-stdio transport with a manually pinned protocol version
 > (`2024-11-05`). That migration to the official SDK has already been completed;

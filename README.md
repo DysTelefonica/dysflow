@@ -824,7 +824,8 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 #### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, canonical commit flags, and six machine-readable `preferredAgentWorkflows`. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
-* **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog.
+* **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
+* **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
 
 #### `setup_project`
 Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
@@ -925,8 +926,8 @@ Return static tool contracts in one of two views. Use `compact` for low-context 
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
   - `view` (`"compact" | "full"`, optional, default `"full"`): Select low-context discovery or the complete backward-compatible contract.
-* **Compact returns**: `{ projectId, tools: [{ name, purpose, access, agentWorkflow, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
-* **Full returns**: `{ projectId, tools: [{ name, description, access, agentWorkflow, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
+* **Compact returns**: `{ projectId, tools: [{ name, purpose, access, annotations, _meta, agentWorkflow, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
+* **Full returns**: `{ projectId, tools: [{ name, description, access, annotations, _meta, agentWorkflow, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
 * **Workflow classification**:
   - `preferred`: belongs to a declared golden path or is the preferred batch wrapper.
   - `specialized`: `specializedWhen` states when its focused contract is better than a broader preferred wrapper.
@@ -944,7 +945,7 @@ Preferred one-tool deep introspection view. It returns the same complete entry g
   - `name` (string): Tool name to describe (canonical param).
   - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
-* **Returns**: the full single-tool contract — `{ name, description, access, agentWorkflow, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
+* **Returns**: the full single-tool contract — `{ name, description, access, annotations, _meta, agentWorkflow, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
 * **Result validation policy**: the stdio runtime validates every successful JSON payload against this executable `resultContract` before serialization. The active policy is reported by `get_capabilities.resultValidationPolicy` and defaults to `"enforce"`. A handler/contract mismatch fails closed with `RESULT_CONTRACT_VIOLATION`; the invalid payload is not returned or included in diagnostics. Typed tool errors continue to use the published `errorEnvelope`, and callable compatibility aliases project the canonical tool's payload contract.
 * **Consumer pattern**: obtain `describe_tool({ "name": "<tool>" })`, call the tool, then validate success against `resultContract.dataSchema` or failure against `resultContract.errorEnvelope.shape`. Do not maintain a second result-schema registry in the consumer.
 

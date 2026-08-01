@@ -44,6 +44,8 @@ import {
 import {
   type AgentWorkflowMetadata,
   buildAgentWorkflowMetadata,
+  buildToolAdvertisementMetadata,
+  type ToolAdvertisementMetadata,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { executableResultContractForTool } from "./contracts/executable-result-contract-registry.js";
@@ -284,7 +286,7 @@ export type ToolResultContract =
  * Runtime contract for a single MCP tool. Returned inside the `tools`
  * array from `buildToolSchemaCatalog` / `dysflow.schema`.
  */
-export type ToolSchema = {
+export type ToolSchema = ToolAdvertisementMetadata & {
   name: string;
   description: string;
   access: McpToolAccess;
@@ -340,7 +342,7 @@ export type CompactToolPrimaryResult = {
   outputModes: ToolOutputMode[];
 };
 
-export type CompactToolSchema = {
+export type CompactToolSchema = ToolAdvertisementMetadata & {
   name: string;
   purpose: string;
   access: McpToolAccess;
@@ -1133,6 +1135,7 @@ function buildSchemaForTool(name: string): ToolSchema {
   const crossReferences = [...(TOOL_CROSS_REFERENCES[name] ?? [])];
   const description = descriptionForTool(name);
   const agentWorkflow = buildAgentWorkflowMetadata(name);
+  const advertisement = buildToolAdvertisementMetadata(name, access);
   const executableResultContract = executableResultContractForTool(name);
   if (executableResultContract === undefined) {
     throw new Error(`Advertised MCP tool '${name}' is missing an executable result contract.`);
@@ -1143,6 +1146,7 @@ function buildSchemaForTool(name: string): ToolSchema {
       ? { ...resultContract, outputModes: ["summary", "file", "full"] as const }
       : resultContract;
   return {
+    ...advertisement,
     name,
     description,
     access,
@@ -1257,6 +1261,15 @@ function compactSchemaForTool(tool: ToolSchema): CompactToolSchema {
   const primaryResult = primaryResultForTool(tool);
   const commitMetadata = commitFlagMetadataForOrNoop(tool.name);
   return {
+    annotations: { ...tool.annotations },
+    _meta: {
+      ...tool._meta,
+      "dysflow/workflow": {
+        ...tool._meta["dysflow/workflow"],
+        phases: [...tool._meta["dysflow/workflow"].phases],
+        preferredFor: [...tool._meta["dysflow/workflow"].preferredFor],
+      },
+    },
     name: tool.name,
     purpose: tool.useCases[0] ?? primaryResult.summary,
     access: tool.access,

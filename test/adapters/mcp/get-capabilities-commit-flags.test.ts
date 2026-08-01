@@ -107,21 +107,21 @@ describe("getCapabilitiesAll() — per-tool commit metadata (#757 C2)", () => {
 
     // Issue acceptance: export_all, import_modules, delete_module.
     // #1057 (F7) — canonicalCommitFlag + legacyAliases are additive.
-    expect(tools.export_all).toEqual({
+    expect(tools.export_all).toMatchObject({
       commitFlag: "apply",
       noWriteAlias: "diff",
       defaultBehavior: "plan",
       canonicalCommitFlag: "apply",
       legacyAliases: ["diff"],
     });
-    expect(tools.import_modules).toEqual({
+    expect(tools.import_modules).toMatchObject({
       commitFlag: "apply",
       noWriteAlias: null,
       defaultBehavior: "plan",
       canonicalCommitFlag: "apply",
       legacyAliases: [],
     });
-    expect(tools.delete_module).toEqual({
+    expect(tools.delete_module).toMatchObject({
       commitFlag: "apply",
       noWriteAlias: null,
       defaultBehavior: "plan",
