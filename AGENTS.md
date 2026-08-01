@@ -9,25 +9,11 @@ before working, and do not silently override it.
 This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` so any agent with read access to this repo can operate dysflow without an extra skill load. The block between `<!-- dysflow:arnés -->` and `<!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
 
 <!-- dysflow:arnés -->
-<!--
-  Copy-paste this block into any AI agent's system prompt that operates
-  dysflow. Self-contained: an agent that loads ONLY this arnés can operate
-  dysflow with minimum rigor. For depth on a specific topic, the companion
-  skills in §5 below are the canonical references.
--->
-
 # dysflow — Operating Harness
 
 You are an AI agent operating in a Microsoft Access / VBA project that uses the
 dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
 execution, test execution, and form UI operations on Access projects.
-
-## 0. What this harness IS
-
-The single copy-pasteable block of rules, constraints, and workflow that lets
-any AI agent operate dysflow safely. The runtime (`get_capabilities`) is the
-source of truth for tool names and flags; this arnés is the source of truth
-for **how to behave** when calling those tools.
 
 ## 1. When this arnés applies (load it when...)
 
@@ -118,6 +104,14 @@ for **how to behave** when calling those tools.
   project and return `mode:"resolution"`; that route never writes config.
   Bootstrap mode remains for a missing config and requires `frontendFile`.
 
+- **HR-12 — Let runtime metadata route discovery.** Read standard Tool
+  `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]`
+  for `phases`, `preferredFor`, and `status`. Use
+  `get_capabilities({}).preferredAgentWorkflows` to select the active phase,
+  then call `describe_tool({name})` only for the tools about to run. Metadata
+  guides selection; the full schema and `describe_tool` remain authoritative
+  for parameters, composition constraints, result contracts, and errors.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -127,6 +121,8 @@ For any feature that touches dysflow-managed artifacts:
   `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
   If status is `missing`, bootstrap with `setup_project` before any other
   write-class tool, then re-run `resolve_project` and `get_capabilities`.
+- **Step 0.25** — Read `preferredAgentWorkflows`, choose the active phase, and
+  inspect only the relevant tools through `describe_tool` (HR-12).
 - **Step 0.5** — If `resolve_project` is ambiguous, follow HR-11 and wait for
   the human choice before any write-class dispatch.
 - **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
@@ -138,7 +134,7 @@ For any feature that touches dysflow-managed artifacts:
 - **Step 4** — Sync forms if applicable. `verify_code`.
 - **Step 5** — Import. `import_modules({moduleNames:[...], apply:false})` →
   review the plan → `import_modules({moduleNames:[...], apply:true})`.
-  ALL with `compile:false` per HR-1.
+  Never pass the removed `compile` parameter; HR-1 applies.
 - **Step 6** — Notify the user to compile manually. Block. Wait for "ya está".
 - **Step 7** — Run tests. `test_vba({testsPath:"tests/tests.vba.json"})`. On
   failure → read failure reports + `run.logs`, fix, return to Step 3.
@@ -232,14 +228,13 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.1.10 · last_verified 2026-07-27 · requires
+dysflow harness v0.5.0 · last_verified 2026-08-01 · requires
 dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
 runtime, **runtime wins**; surface the drift and update via
 `dysflow-codegraph-update`.
 <!-- /dysflow:arnés -->
-
 ### Project-context (this worktree, NOT inside the canonical block)
 
 - `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
