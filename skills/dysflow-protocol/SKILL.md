@@ -84,6 +84,14 @@ The allowlist is a runtime gate, not a test registry. Adding test names to allow
 
 Each worktree owns a unique `.dysflow/project.json`. For a sibling worktree, call `resolve_project({cwd: "<worktree>", projectId: "<id>"})`. Project-scoped read tools may accept that `cwd`; write tools select the discovered sibling with `projectId` or its configured `accessPath`. Confirm each shape with `describe_tool({name: "<tool>"})`.
 
+### HR-10 — Discover progressively.
+
+Call `get_capabilities({})`, select the relevant `preferredAgentWorkflows` phase, then call `describe_tool` only for the tools about to run. Do not preload or guess the full surface.
+
+### HR-11 — Bootstrap and ambiguity recovery are different operations.
+
+When `projectConfig.status === "missing"`, use `setup_project` (or the canonical CLI setup command) with explicit human-provided frontend input. When `resolve_project` returns `outcome: "ambiguous"`, do not guess: ask the human to choose one `availableProjects` entry, then retry `resolve_project`, the intended write-class tool, or `setup_project` with that exact `projectId`, `projectChoiceReason: "user_selected_after_ambiguous_project"`, and the returned `recoveryToken`. In recovery mode, `setup_project` only caches the selected existing project and returns `mode: "resolution"`; it never creates or overwrites config. Bootstrap mode is separate and requires `frontendFile`. The one-shot choice is cached only in the current MCP process; use `resolve_project({clearResolution:true})` to drop it.
+
 ## 2. The 8-step canonical loop
 
 For any dysflow-managed feature:
@@ -167,7 +175,8 @@ If a call returns an error envelope, branch on `error.code`:
 | `PROJECT_CONFIG_NOT_WRITE_READY` | project config missing fields | Run `dysflow setup` to bootstrap |
 | `CONFIG_MISSING_ACCESS_PATH` | no `.dysflow/project.json` | Run `dysflow setup --cwd <repo> --apply --access-path <path>` |
 | `humanCompilePending` warning (advisory) | post-write reminder | Wait for human compile before `test_vba` |
-| `FRONTEND_TARGET_MISSING` / `FRONTEND_TARGET_AMBIGUOUS` | workspace resolution failed | Run `resolve_project` first |
+| `FRONTEND_TARGET_MISSING` | workspace resolution failed | Run `resolve_project` first |
+| `FRONTEND_TARGET_AMBIGUOUS` / `outcome: "ambiguous"` | more than one project is eligible | Ask the human to choose from `availableProjects`; retry once with the exact recovery trio |
 | `CWD_NOT_IN_WORKTREE` / `TARGET_MISMATCH_WARNING` | cwd not in worktree | Pass explicit `projectId` / `cwd` per call |
 
 ## 7. Session lifecycle

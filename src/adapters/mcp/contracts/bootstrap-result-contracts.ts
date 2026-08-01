@@ -75,6 +75,24 @@ export const resolveProjectResultContract = defineResultContract({
     }),
     z.object({
       projectId: z.null(),
+      outcome: z.literal("ambiguous"),
+      reason: z.literal("ambiguous project"),
+      accessPath: z.null(),
+      projectRoot: z.null(),
+      sourceRoot: z.null(),
+      availableProjects: z.array(
+        z.object({
+          projectId: z.string(),
+          projectRoot: z.string(),
+          accessPath: z.string().nullable(),
+        }),
+      ),
+      recoveryToken: z.string(),
+      recoveryInstruction: z.string(),
+      projectConfig: unknownRecord,
+    }),
+    z.object({
+      projectId: z.null(),
       outcome: z.literal("unresolved"),
       reason: z.enum(["project.json not found", "id mismatch", "unknown"]),
       accessPath: z.null(),
@@ -204,8 +222,9 @@ export const cleanStaleMarkersResultContract = defineResultContract({
 });
 
 export const setupProjectResultContract = defineResultContract({
-  modes: ["plan", "apply"],
-  description: "Resolved project-config plan or atomic publication result.",
+  modes: ["plan", "apply", "resolution"],
+  description:
+    "Resolved project-config plan, atomic publication result, or non-mutating cached project resolution.",
   schema: z.union([
     z
       .object({
@@ -225,6 +244,19 @@ export const setupProjectResultContract = defineResultContract({
         dryRun: z.literal(false),
         configPath: z.string(),
         writtenFields: z.array(z.string()),
+      })
+      .strict(),
+    z
+      .object({
+        ok: z.literal(true),
+        mode: z.literal("resolution"),
+        dryRun: z.literal(true),
+        cached: z.literal(true),
+        projectId: z.string(),
+        projectRoot: z.string(),
+        accessPath: z.string().nullable(),
+        configPath: z.string(),
+        nextAction: z.string(),
       })
       .strict(),
   ]),

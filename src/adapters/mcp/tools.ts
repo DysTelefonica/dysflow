@@ -1,3 +1,5 @@
+import { join } from "node:path";
+
 import { createDysflowError, failureResult } from "../../core/contracts/index.js";
 import { buildQueryExecuteRequest } from "../../core/mapping/access-query-request-mapper.js";
 import { resolveAccessOperationRegistry } from "../../core/operations/access-operation-registry.js";
@@ -23,6 +25,11 @@ import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createMigrateProjectConfigTool } from "./migrate-project-config-tool.js";
 import { createModernAnalysisTools } from "./modern-analysis-tools.js";
 import { withSharedOutputModes } from "./output-mode.js";
+import {
+  createProjectResolutionRecovery,
+  PROJECT_RECOVERY_SCHEMA_BLOCK,
+  type ProjectResolutionRecovery,
+} from "./project-resolution-recovery.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
 import { createSetupProjectTool } from "./setup-project-tool.js";
@@ -59,6 +66,7 @@ import type {
   DysflowMcpServices,
   DysflowMcpTool,
   McpAccessContextResolver,
+  McpToolResult,
   McpWriteAccessResolver,
 } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -68,6 +76,7 @@ import {
   ORPHAN_CLEANUP_SCHEMA,
   QUERY_EXECUTE_SCHEMA,
 } from "./schemas.js";
+import type { McpToolContext } from "./types.js";
 import { validateInput } from "./validator.js";
 
 export {
@@ -135,6 +144,7 @@ export type CreateDysflowMcpToolsOptions = {
   lintIdentifierSafetyStrict?: boolean;
   projectConfigResolver?: (
     input: unknown,
+    cwd?: string,
   ) => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
   // Issue #940 — optional resolver for the runtime documentation bundle
   // status. When omitted, the snapshot reports fail-closed defaults. The
@@ -163,6 +173,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     documentationBundleResolver,
     cwd = process.cwd(),
   } = options;
+  const projectResolutionRecovery = createProjectResolutionRecovery({ env });
   const accessContextResolver: McpAccessContextResolver =
     accessContextResolverInput ??
     (async () =>
@@ -283,7 +294,14 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       lintIdentifierSafetyStrict,
     }),
     // Round-3 Item 1 — project config re-resolution companion tool
-    createResolveProjectTool({ cwd }),
+    createResolveProjectTool({
+      cwd,
+      recovery: projectResolutionRecovery,
+      projectConfigResolver:
+        projectConfigResolver === undefined
+          ? undefined
+          : (effectiveCwd, input) => projectConfigResolver(input, effectiveCwd),
+    }),
     // Issue #971 — runtime contract discovery. Read-only tool that
     // surfaces the documented schema for every advertised MCP tool. Pure
     // catalog: never opens Access, never spawns PowerShell, never mutates
@@ -378,8 +396,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       accessContextResolver,
     ),
   );
-  if (projectConfigResolver === undefined) return registered;
-  return registered.map((tool) => {
+  if (projectConfigResolver === undefined)
+    return withProjectResolutionRecovery(registered, projectResolutionRecovery);
+  const gated = registered.map((tool) => {
     const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
     if (contract === undefined || contract.access === "read-only") return tool;
     if (tool.name === "setup_project") return tool;
@@ -393,7 +412,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     const routeMutatesBinary = route?.kind === "vba-sync" ? route.mutatesBinary : undefined;
     return {
       ...tool,
-      handler: async (input, context) => {
+      handler: async (input: unknown, context?: McpToolContext): Promise<McpToolResult> => {
         // Issue #977 — dryRunWithPreflight intercept. Mutually exclusive
         // with `dryRun` (set when both flags present → MCP_INPUT_INVALID)
         // and applied BEFORE the standard requestRequiresWriteReady path.
@@ -486,7 +505,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify({
                   ok: true,
                   dryRun: true,
@@ -522,4 +541,107 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       },
     };
   });
+  return withProjectResolutionRecovery(gated, projectResolutionRecovery);
+}
+
+function withProjectResolutionRecovery(
+  tools: readonly DysflowMcpTool[],
+  recovery: ProjectResolutionRecovery,
+): DysflowMcpTool[] {
+  return tools.map((tool) => {
+    const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
+    if (contract === undefined || contract.access === "read-only") return tool;
+    return {
+      ...tool,
+      inputSchema: {
+        type: "object",
+        ...tool.inputSchema,
+        additionalProperties: tool.inputSchema?.additionalProperties ?? false,
+        properties: {
+          ...(tool.inputSchema?.properties ?? {}),
+          ...PROJECT_RECOVERY_SCHEMA_BLOCK,
+        },
+      },
+      handler: async (input: unknown, context?: McpToolContext): Promise<McpToolResult> => {
+        const record =
+          typeof input === "object" && input !== null
+            ? { ...(input as Record<string, unknown>) }
+            : {};
+        const hasChoiceReason = record.projectChoiceReason !== undefined;
+        const hasToken = record.recoveryToken !== undefined;
+        if (hasChoiceReason || hasToken) {
+          if (tool.name === "setup_project") {
+            const selected = recovery.consume({
+              projectId: typeof record.projectId === "string" ? record.projectId : undefined,
+              projectChoiceReason:
+                typeof record.projectChoiceReason === "string"
+                  ? record.projectChoiceReason
+                  : undefined,
+              recoveryToken:
+                typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
+            });
+            if (!selected.ok) return projectRecoveryFailure(selected);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    ok: true,
+                    mode: "resolution",
+                    dryRun: true,
+                    cached: true,
+                    projectId: selected.project.projectId,
+                    projectRoot: selected.project.projectRoot,
+                    accessPath: selected.project.accessPath,
+                    configPath: join(selected.project.projectRoot, ".dysflow", "project.json"),
+                    nextAction:
+                      "Call the intended write-class tool; setup_project did not modify the existing config.",
+                  }),
+                },
+              ],
+              isError: false,
+              ok: true,
+            };
+          }
+          const selected = recovery.consume({
+            projectId: typeof record.projectId === "string" ? record.projectId : undefined,
+            projectChoiceReason:
+              typeof record.projectChoiceReason === "string"
+                ? record.projectChoiceReason
+                : undefined,
+            recoveryToken:
+              typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
+          });
+          if (!selected.ok) return projectRecoveryFailure(selected);
+          record.projectId = selected.project.projectId;
+        } else if (record.projectId === undefined) {
+          const cached = recovery.getCached();
+          if (cached !== null) record.projectId = cached.projectId;
+        }
+        delete record.projectChoiceReason;
+        delete record.recoveryToken;
+        return tool.handler(record, context);
+      },
+    };
+  });
+}
+
+function projectRecoveryFailure(failure: {
+  code: "MCP_INPUT_INVALID" | "PROJECT_ID_COLLISION";
+  message: string;
+  remediation: string;
+}) {
+  const error = {
+    code: failure.code,
+    message: failure.message,
+    errorCode: failure.code,
+    errorMessage: failure.message,
+    remediation: failure.remediation,
+  };
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify({ ok: false, error }) }],
+    isError: true,
+    ok: false,
+    error,
+  };
 }

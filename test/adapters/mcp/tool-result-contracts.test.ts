@@ -161,6 +161,26 @@ describe("Tool-specific result contracts — #1077", () => {
     }
   });
 
+  it("setup_project advertises its non-mutating resolution result mode", () => {
+    const entry = buildToolSchemaCatalog({ toolName: "setup_project" }).tools[0];
+    expect(entry).toBeDefined();
+    const contract = (entry as Record<string, unknown>).resultContract as
+      | Record<string, unknown>
+      | undefined;
+
+    expect(contract?.kind).toBe("dataSchema");
+    expect((contract as { modes?: unknown }).modes).toEqual(["plan", "apply", "resolution"]);
+    expect(contract?.dataSchema).toMatchObject({
+      anyOf: expect.arrayContaining([
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            mode: expect.objectContaining({ const: "resolution" }),
+          }),
+        }),
+      ]),
+    });
+  });
+
   it("tools with large outputs declare supported outputModes (summary | file | full)", () => {
     // `export_modules` may write a whole directory to disk and `render_form_preview`
     // can produce either an SVG string or ASCII. Both ship a multi-mode

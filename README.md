@@ -533,6 +533,7 @@ Call-level path/root fields are still supported as explicit one-off overrides, a
 | `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_ACCESS_PWD` | Access DB password fallback                                      |
 | `DYSFLOW_BACKEND_PASSWORD`                       | Backend DB password fallback                                     |
 | `ACCESS_VBA_PASSWORD`                            | Alternative Access password env (alias for VBA runner scripts)   |
+| `DYSFLOW_RESOLUTION_CACHE_TTL_MS`                | Integer TTL from `1000` through `3600000` milliseconds for process-local project recovery tokens and cached choices; invalid values fall back to `600000` |
 
 Runtime directory resolution order:
 
@@ -830,10 +831,14 @@ Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
 Omitting `apply` returns the resolved config without writing. `apply:true`
 requires process writes to be enabled and the candidate
 `capabilities.allowWrites` to be true; unlike ordinary write tools, bootstrap
-does not require a pre-existing write-ready project config.
-* **Parameters**: `frontendFile` (required basename), plus optional `cwd`,
-  `backendPath`, `projectId`, `destinationRoot`, `capabilities`, `timeoutMs`,
-  and `apply`.
+does not require a pre-existing write-ready project config. The tool also
+accepts the complete `projectId` + `projectChoiceReason` + `recoveryToken` trio
+after an ambiguous `resolve_project` result. Recovery mode only caches the
+selected existing project and returns `mode: "resolution"`; it never creates or
+overwrites project config, regardless of `apply`.
+* **Parameters**: bootstrap mode requires `frontendFile` (basename) and accepts
+  optional `cwd`, `backendPath`, `projectId`, `destinationRoot`, `capabilities`,
+  `timeoutMs`, and `apply`. Recovery mode requires the complete recovery trio.
 
 #### `list_procedures`
 List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
@@ -887,11 +892,14 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
 
 #### `resolve_project`
-Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis of how a hypothetical `projectId` would resolve. Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the `project.json` on disk. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis. Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the project config on disk. It never writes files, opens Access, or spawns PowerShell. On ambiguity it creates a short-lived, process-local recovery token so an exact human choice can be cached without editing project config.
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
-* **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`, where `outcome` is `resolved` or `unresolved`, and `reason` is one of: `explicit id match`, `single project config found`, `project.json not found`, `id mismatch`, `unknown`.
+  - `projectChoiceReason` (`"user_selected_after_ambiguous_project"`, optional): Exact acknowledgement that a human selected the supplied project from the recovery envelope.
+  - `recoveryToken` (string, optional): Opaque one-shot token returned by the ambiguous call. Supply it only with `projectId` and `projectChoiceReason`.
+  - `clearResolution` (boolean, optional): Drop cached choice and outstanding tokens before resolving again.
+* **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`. `outcome` is `resolved`, `unresolved`, or `ambiguous`. The ambiguous branch additionally returns `{ availableProjects, recoveryToken, recoveryInstruction }`. A valid trio passed to `resolve_project` commits the in-memory choice even though the tool remains filesystem-read-only; every write-class dispatcher accepts the same trio. See [`assets/examples/resolve-project-recovery.md`](assets/examples/resolve-project-recovery.md).
 
 #### `clean_stale_markers`
 Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transitions of stale `status: "running"` markers (and, when `keepFailed` is false, stale `status: "failed"` markers) to `status: "abandoned"`. User-callable companion to the #967 auto-cleanup. Safe-by-default: dry-run is the default; any apply call requires `options.confirm: true` AND writes enabled (returns `MCP_WRITES_DISABLED` when writes are off).
