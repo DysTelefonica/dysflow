@@ -11,8 +11,10 @@ import { successResult } from "../../../src/core/contracts/index.js";
 import { validateInput } from "../../../src/shared/validation/index.js";
 
 const COMPACT_TOOL_KEYS = [
+  "_meta",
   "access",
   "agentWorkflow",
+  "annotations",
   "defaults",
   "name",
   "primaryResult",

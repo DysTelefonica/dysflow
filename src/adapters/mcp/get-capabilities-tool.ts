@@ -14,8 +14,10 @@ import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-po
 import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
 import {
+  buildToolAdvertisementMetadata,
   PREFERRED_AGENT_WORKFLOWS,
   type PreferredAgentWorkflow,
+  type ToolAdvertisementMetadata,
 } from "./agent-workflow-registry.js";
 import { getCapabilitiesResultContract } from "./contracts/bootstrap-result-contracts.js";
 import {
@@ -213,20 +215,21 @@ export type McpCapabilitySnapshot = {
   tools: Readonly<
     Record<
       string,
-      import("../../core/runtime/commit-flag-registry.js").CommitFlagMetadata & {
-        /**
-         * v2.22.0 (#1057 F7) — the ONE flag whose `true` value commits.
-         * Mirror of `commitFlag`, named for the homogenized single-flag
-         * design so consumers stop reasoning about per-tool polarity.
-         */
-        canonicalCommitFlag: import("../../core/runtime/commit-flag-registry.js").CommitFlagName;
-        /**
-         * v2.22.0 (#1057 F7) — deprecated aliases still honored and
-         * desugared by the adapter (`dryRun` ≡ `!apply`; export_* also
-         * keeps the historic `diff`). Empty for read-only tools.
-         */
-        legacyAliases: readonly string[];
-      }
+      import("../../core/runtime/commit-flag-registry.js").CommitFlagMetadata &
+        ToolAdvertisementMetadata & {
+          /**
+           * v2.22.0 (#1057 F7) — the ONE flag whose `true` value commits.
+           * Mirror of `commitFlag`, named for the homogenized single-flag
+           * design so consumers stop reasoning about per-tool polarity.
+           */
+          canonicalCommitFlag: import("../../core/runtime/commit-flag-registry.js").CommitFlagName;
+          /**
+           * v2.22.0 (#1057 F7) — deprecated aliases still honored and
+           * desugared by the adapter (`dryRun` ≡ `!apply`; export_* also
+           * keeps the historic `diff`). Empty for read-only tools.
+           */
+          legacyAliases: readonly string[];
+        }
     >
   >;
 };
@@ -320,6 +323,10 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     // #1057 (F7) — additive fields for the homogenized single-flag design.
     tools[name] = {
       ...metadata,
+      ...buildToolAdvertisementMetadata(
+        name,
+        MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS].access,
+      ),
       canonicalCommitFlag: metadata.commitFlag,
       legacyAliases: legacyAliasesFor(name),
     };

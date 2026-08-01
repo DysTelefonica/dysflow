@@ -6,6 +6,39 @@
 `tools` map. See `dysflow-usage` SKILL.md for the full schema and the
 write-flag matrix.
 
+## Workflow advertisement (issue #1314)
+
+The per-tool `tools` map mirrors the same metadata sent by MCP `tools/list`,
+`schema`, and `describe_tool`:
+
+```json
+{
+  "tools": {
+    "resolve_project": {
+      "annotations": {
+        "title": "Resolve Project",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "dysflow/workflow": {
+          "phases": ["bootstrap", "recovery"],
+          "preferredFor": ["Resolve and verify the selected worktree project after bootstrap."],
+          "status": "preferred"
+        }
+      }
+    }
+  }
+}
+```
+
+Only the five behavior hints above belong to standard MCP
+`ToolAnnotations`. Phase and `preferredFor` are intentionally namespaced under
+Tool `_meta`; generic clients do not group automatically unless they understand
+the Dysflow extension.
+
 ## Response contract — `schemaVersion` discriminator (issue #1168)
 
 Every dysflow MCP tool response — `get_capabilities` included — carries a

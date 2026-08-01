@@ -131,7 +131,7 @@ describe("Issue #1046 / Test 1 — test_vba registry entry agrees with the schem
       allowWrites: true,
     });
     const tools = snapshot.tools as Readonly<Record<string, CommitFlagMetadata>>;
-    expect(tools.test_vba).toEqual({
+    expect(tools.test_vba).toMatchObject({
       commitFlag: "apply",
       noWriteAlias: null,
       defaultBehavior: "plan",

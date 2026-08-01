@@ -41,6 +41,7 @@ import {
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
+import { buildToolAdvertisementMetadata } from "./agent-workflow-registry.js";
 import {
   RESULT_CONTRACT_VIOLATION,
   type ResultContractViolationDiagnostic,
@@ -55,6 +56,7 @@ import {
   type InvocationTelemetryRecorder,
   resolveInvocationWriteIntent,
 } from "./invocation-telemetry.js";
+import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { McpToolResult } from "./result-translation.js";
 import { withSchemaVersion } from "./result-translation.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
@@ -284,15 +286,20 @@ export async function startWithSdkServer(
   server.server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: tools
       .filter((t) => !hiddenRegistry.has(t.name))
-      .map((t) => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema ?? {
-          type: "object" as const,
-          additionalProperties: false,
-          properties: {},
-        },
-      })),
+      .map((t) => {
+        const access =
+          MCP_TOOL_CONTRACTS[t.name as keyof typeof MCP_TOOL_CONTRACTS]?.access ?? "read-only";
+        return {
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema ?? {
+            type: "object" as const,
+            additionalProperties: false,
+            properties: {},
+          },
+          ...buildToolAdvertisementMetadata(t.name, access),
+        };
+      }),
   }));
 
   server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
