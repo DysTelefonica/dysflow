@@ -57,6 +57,12 @@ export type VbaModuleInfo = {
   sourcePath?: string;
   /** Re-export path relative to the temp export root of a recent run, if any. */
   binaryPath?: string;
+  /**
+   * Internal code-only snapshot read directly from the live VBComponent.
+   * Present only when a repository service explicitly requests it; the
+   * public list_vba_modules schema never exposes that opt-in.
+   */
+  binarySource?: string;
   sourceExists: boolean;
   binaryExists: boolean;
   /**

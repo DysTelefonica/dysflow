@@ -43,6 +43,7 @@ interface CapturedRunnerCall {
   namePattern: string | null;
   applyTypeFilter: boolean;
   applyNamePattern: boolean;
+  includeSource: boolean;
 }
 
 function buildServiceHarness(input: {
@@ -50,6 +51,7 @@ function buildServiceHarness(input: {
     name: string;
     type: 1 | 2 | 3 | 100;
     fileType: "bas" | "cls" | "frm" | "form.txt";
+    binarySource?: string;
   }[];
   sourceFiles?: FakeEntry[];
   emptyDirs?: string[];
@@ -105,6 +107,7 @@ function buildServiceHarness(input: {
         namePattern: (request.extra.namePattern as string | undefined) ?? null,
         applyTypeFilter: Boolean(request.extra.applyTypeFilter),
         applyNamePattern: Boolean(request.extra.applyNamePattern),
+        includeSource: Boolean(request.extra.includeSource),
       };
       calls.push(callEntry);
       if (input.injectTimeout) {
@@ -122,6 +125,7 @@ function buildServiceHarness(input: {
           name: row.name,
           type: row.type,
           fileType: row.fileType,
+          ...(row.binarySource === undefined ? {} : { binarySource: row.binarySource }),
         })),
         appliedFilters: {
           typeFilter: callEntry.applyTypeFilter
@@ -161,6 +165,32 @@ function buildServiceHarness(input: {
 }
 
 describe("runListVbaModules (#807 Feature 1)", () => {
+  it("forwards the internal code-only snapshot without exposing it by default", async () => {
+    const { ctx, fs, calls } = buildServiceHarness({
+      binaryRows: [
+        {
+          name: "ModuleA",
+          type: 1,
+          fileType: "bas",
+          binarySource: "Public Sub Target()\r\nEnd Sub",
+        },
+      ],
+      sourceFiles: [{ name: "ModuleA.bas", kind: "file" }],
+    });
+
+    const internalResult = await runListVbaModules({ includeSource: true }, ctx, fs);
+    expect(internalResult.ok).toBe(true);
+    if (!internalResult.ok) throw new Error("expected success");
+    expect(calls[0]?.includeSource).toBe(true);
+    expect(internalResult.data.modules[0]?.binarySource).toBe("Public Sub Target()\r\nEnd Sub");
+
+    const publicResult = await runListVbaModules({}, ctx, fs);
+    expect(publicResult.ok).toBe(true);
+    if (!publicResult.ok) throw new Error("expected success");
+    expect(calls[1]?.includeSource).toBe(false);
+    expect(publicResult.data.modules[0]).not.toHaveProperty("binarySource");
+  });
+
   it("empty VBProject → empty modules + summary { total: 0 }", async () => {
     const { ctx, fs } = buildServiceHarness({
       binaryRows: [],
