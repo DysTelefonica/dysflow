@@ -62,6 +62,7 @@ import { LOGS_TOOL_SCHEMA } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { MIGRATE_PROJECT_CONFIG_SCHEMA } from "./migrate-project-config-tool.js";
+import { PROJECT_RECOVERY_SCHEMA_BLOCK } from "./project-resolution-recovery.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
 import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
 import {
@@ -200,13 +201,15 @@ export type ToolErrorEnvelopeShape = {
 export type ToolOutputMode = "summary" | "file" | "full";
 
 /**
- * Plan / apply discriminator for write-class tools. `plan` means the
+ * Result discriminator for write-class tools. `plan` means the
  * runtime computed the change but did not commit; `apply` means the
  * runtime persisted the change. A consumer can refuse a result that
  * claims `apply:true` but returned a `plan`-shaped payload — the modes
- * field is what makes that refusal safe.
+ * field is what makes that refusal safe. `resolution` is the
+ * non-mutating setup_project branch that only caches an existing project
+ * selected through the ambiguity-recovery contract.
  */
-export type ToolResultMode = "plan" | "apply";
+export type ToolResultMode = "plan" | "apply" | "resolution";
 
 /**
  * Minimal JSON-Schema-like fragment for a tool's primary payload. The
@@ -1055,13 +1058,21 @@ function safeByDefaultForTool(name: string, access: McpToolAccess): boolean {
 }
 
 export function inputSchemaForTool(name: string): JsonObjectSchema {
+  const contract = MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS];
+  const withRecovery = (schema: JsonObjectSchema): JsonObjectSchema =>
+    contract !== undefined && isWriteClassAccess(contract.access)
+      ? {
+          ...schema,
+          properties: { ...(schema.properties ?? {}), ...PROJECT_RECOVERY_SCHEMA_BLOCK },
+        }
+      : schema;
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
-  if (modern !== undefined) return modern;
+  if (modern !== undefined) return withRecovery(modern);
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
-  if (alias !== undefined) return alias;
+  if (alias !== undefined) return withRecovery(alias);
   const dispatch = (MCP_TOOL_SCHEMAS as Record<string, JsonObjectSchema>)[name];
-  if (dispatch !== undefined) return dispatch;
-  return NO_INPUT_SCHEMA;
+  if (dispatch !== undefined) return withRecovery(dispatch);
+  return withRecovery(NO_INPUT_SCHEMA);
 }
 
 function descriptionForTool(name: string): string {

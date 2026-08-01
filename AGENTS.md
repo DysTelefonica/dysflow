@@ -106,6 +106,18 @@ for **how to behave** when calling those tools.
   not require an existing write-ready config because that would deadlock first
   use. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
 
+- **HR-11 — Recover ambiguity without overwriting config.** When
+  `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose
+  exactly one entry from `availableProjects`; never guess. Retry
+  `resolve_project` or the intended write-class tool with that entry's
+  `projectId`, `projectChoiceReason:"user_selected_after_ambiguous_project"`,
+  and the returned `recoveryToken`. The one-shot choice is cached only in the
+  current MCP process and expires or invalidates on config/worktree changes.
+  Use `resolve_project({clearResolution:true})` to drop it. `setup_project` may
+  consume the complete recovery trio only to cache the selected existing
+  project and return `mode:"resolution"`; that route never writes config.
+  Bootstrap mode remains for a missing config and requires `frontendFile`.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -115,6 +127,8 @@ For any feature that touches dysflow-managed artifacts:
   `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
   If status is `missing`, bootstrap with `setup_project` before any other
   write-class tool, then re-run `resolve_project` and `get_capabilities`.
+- **Step 0.5** — If `resolve_project` is ambiguous, follow HR-11 and wait for
+  the human choice before any write-class dispatch.
 - **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
   `src/modules/` + entry in `tests/tests.vba.json`. Change → identify the
   failing test or write one.

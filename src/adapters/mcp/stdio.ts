@@ -143,9 +143,9 @@ export async function startMcpStdioAdapter(
       return configResult.data.allowedProcedures;
     },
     accessContextResolver: async (input) => resolveMcpAccessContextForInput(input, startupConfig),
-    projectConfigResolver: (input) =>
+    projectConfigResolver: (input, cwd = process.cwd()) =>
       diagnoseProjectConfig(
-        process.cwd(),
+        cwd,
         typeof input === "object" && input !== null ? (input as Record<string, string>) : {},
       ),
     // Issue #940 — documentation bundle resolver. Probes the live install
