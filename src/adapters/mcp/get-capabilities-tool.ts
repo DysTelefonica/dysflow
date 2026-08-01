@@ -13,6 +13,7 @@ import { isHumanCompilePending } from "../../core/runtime/human-compile-state.js
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { DocumentationBundleStatus } from "../../shared/install-docs.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import type { WorktreeCacheTelemetry } from "../config/worktree-context-cache.js";
 import {
   buildToolAdvertisementMetadata,
   PREFERRED_AGENT_WORKFLOWS,
@@ -35,6 +36,7 @@ import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translatio
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import { inputSchemaForTool } from "./schema-tool.js";
 import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
+import { WORKTREE_CWD_SCHEMA_PROP } from "./worktree-cwd.js";
 
 export const ESCAPE_HATCH_MIGRATION_NOTES = {
   dryRun: {
@@ -139,6 +141,7 @@ export type McpCapabilitySnapshot = {
     outcome: "resolved" | "unresolved" | "ambiguous";
   };
   projectConfig?: ProjectConfigDiagnostic;
+  worktreeCache?: WorktreeCacheTelemetry;
   allowedProcedures: readonly string[] | undefined;
   dryRunDefault: boolean;
   /**
@@ -483,7 +486,11 @@ export function createGetCapabilitiesTool(opts: {
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
   resultValidationPolicy?: ResultValidationPolicy;
-  projectConfigResolver?: () => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
+  projectConfigResolver?: (
+    input: unknown,
+    cwd?: string,
+  ) => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
+  worktreeCacheTelemetry?: () => WorktreeCacheTelemetry;
   /**
    * v2.14.1 (#940) — optional resolver for the runtime documentation
    * bundle status. When omitted, the snapshot reports every flag as
@@ -513,15 +520,22 @@ export function createGetCapabilitiesTool(opts: {
     name: "get_capabilities",
     resultContract: getCapabilitiesResultContract,
     description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
-    inputSchema: NO_INPUT_SCHEMA,
-    handler: async (): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
-      const projectConfig = await opts.projectConfigResolver?.();
+    inputSchema: {
+      ...NO_INPUT_SCHEMA,
+      properties: { cwd: WORKTREE_CWD_SCHEMA_PROP },
+    },
+    handler: async (input): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
+      const params =
+        typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+      const cwd = typeof params.cwd === "string" ? params.cwd : undefined;
+      const projectConfig = await opts.projectConfigResolver?.(input, cwd);
       const result: OperationResult<McpCapabilitySnapshot> = successResult(
         projectConfig === undefined
           ? snapshot
           : {
               ...snapshot,
               projectConfig,
+              worktreeCache: opts.worktreeCacheTelemetry?.(),
               projectIdResolution: projectIdResolutionFromConfig(projectConfig),
             },
       );

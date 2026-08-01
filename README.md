@@ -23,7 +23,7 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**92 visible MCP tools · Windows / Node 20-26**
+**94 visible MCP tools · Windows / Node 20-26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -61,7 +61,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 92 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 94 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -823,7 +823,7 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 
 #### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, canonical commit flags, and six machine-readable `preferredAgentWorkflows`. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
-* **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
+* **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
 * **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
 
@@ -840,6 +840,18 @@ overwrites project config, regardless of `apply`.
 * **Parameters**: bootstrap mode requires `frontendFile` (basename) and accepts
   optional `cwd`, `backendPath`, `projectId`, `destinationRoot`, `capabilities`,
   `timeoutMs`, and `apply`. Recovery mode requires the complete recovery trio.
+
+#### `register_worktree`
+Eagerly scan and cache one canonical worktree context without changing files or
+opening Access. The result exposes `cache.status` (`hit` or `miss`) plus bounded
+cache telemetry.
+* **Parameters**: `cwd` (string, **required**).
+
+#### `clear_worktree_cache`
+Clear one canonical worktree cache entry or every process-local entry. The next
+cwd-bound operation performs a fresh scan; project files and Access are never
+modified.
+* **Parameters**: optional `cwd`; omit it to clear all entries.
 
 #### `list_procedures`
 List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
@@ -921,7 +933,7 @@ Read `.dysflow/project.json` and (optionally with `apply:true`) rewrite it in pl
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
 
 #### `schema`
-Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 92 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 94 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.

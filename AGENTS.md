@@ -79,9 +79,10 @@ execution, test execution, and form UI operations on Access projects.
 
 - **HR-9 — Select worktrees per call, never by restarting the MCP.** Each worktree
   owns a unique `.dysflow/project.json`. For a sibling worktree, call
-  `resolve_project({cwd:"<worktree>",projectId:"<id>"})`. Project-scoped read
-  tools may accept that `cwd`; write tools select the discovered sibling with
-  `projectId` or its configured `accessPath`. Confirm each shape with
+  `register_worktree({cwd:"<worktree>"})` or
+  `resolve_project({cwd:"<worktree>",projectId:"<id>"})`. Every tool that
+  consults project configuration accepts that optional `cwd`; omitting it keeps
+  the startup cwd. Write tools retain the same containment and write gates. Confirm each shape with
   `describe_tool({name:"<tool>"})`. Never weaken the guard or edit configs.
 
 - **HR-10 — Bootstrap missing project config before any other write.** When
@@ -91,6 +92,8 @@ execution, test execution, and form UI operations on Access projects.
   write gate and candidate `capabilities.allowWrites`; it intentionally does
   not require an existing write-ready config because that would deadlock first
   use. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
+  A successful apply refreshes the worktree cache immediately, so the next
+  cwd-bound call uses the new config without restarting the MCP.
 
 - **HR-11 — Recover ambiguity without overwriting config.** When
   `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose

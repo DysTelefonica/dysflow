@@ -20,6 +20,7 @@ export const getCapabilitiesResultContract = defineResultContract({
         outcome: z.enum(["resolved", "unresolved", "ambiguous"]),
       }),
       projectConfig: unknownRecord.optional(),
+      worktreeCache: unknownRecord.optional(),
       allowedProcedures: z.array(z.string()).optional(),
       dryRunDefault: z.boolean(),
       writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
@@ -262,6 +263,41 @@ export const setupProjectResultContract = defineResultContract({
   ]),
 });
 
+const worktreeCacheTelemetry = z
+  .object({
+    hits: z.number().int().nonnegative(),
+    misses: z.number().int().nonnegative(),
+    invalidations: z.number().int().nonnegative(),
+    evictions: z.number().int().nonnegative(),
+    entries: z.number().int().nonnegative(),
+    watchers: z.number().int().nonnegative(),
+    maxEntries: z.number().int().positive(),
+    ttlMs: z.number().int().positive(),
+  })
+  .strict();
+
+export const registerWorktreeResultContract = defineResultContract({
+  schema: z
+    .object({
+      ok: z.literal(true),
+      context: unknownRecord,
+      cache: z.object({ status: z.enum(["hit", "miss"]) }).strict(),
+      telemetry: worktreeCacheTelemetry,
+    })
+    .strict(),
+});
+
+export const clearWorktreeCacheResultContract = defineResultContract({
+  schema: z
+    .object({
+      ok: z.literal(true),
+      cleared: z.number().int().nonnegative(),
+      scope: z.enum(["cwd", "all"]),
+      telemetry: worktreeCacheTelemetry,
+    })
+    .strict(),
+});
+
 // Issue #1177 — `migrate_project_config` result contract. The success
 // branch carries the full diff preview (current / proposed / diff /
 // remediation) plus an `applied` flag; the error branch is a typed
@@ -318,5 +354,7 @@ export const bootstrapRecoveryResultContracts = {
   access_force_cleanup_orphaned: orphanCleanupResultContract,
   clean_stale_markers: cleanStaleMarkersResultContract,
   setup_project: setupProjectResultContract,
+  register_worktree: registerWorktreeResultContract,
+  clear_worktree_cache: clearWorktreeCacheResultContract,
   migrate_project_config: migrateProjectConfigResultContract,
 } as const;

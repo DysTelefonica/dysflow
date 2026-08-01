@@ -75,8 +75,9 @@
  * #1177 adds `migrate_project_config` (conditional-write one-shot
  * legacy config migration tool — default `{}` is a pure read-class
  * diff preview, `apply:true` rewrites .dysflow/project.json atomically
- * and is write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 92;
+ * and is write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92;
+ * #1321 worktree cache controls: 92 -> 94. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 94;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

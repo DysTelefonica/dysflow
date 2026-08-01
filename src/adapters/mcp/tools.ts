@@ -34,6 +34,8 @@ import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
 import { createSetupProjectTool } from "./setup-project-tool.js";
 import { createStateTool } from "./state-tool.js";
+import { createWorktreeCacheTools } from "./worktree-cache-tools.js";
+import { withWorktreeCwdSchema } from "./worktree-cwd.js";
 
 export {
   ALIAS_TOOL_NAMES,
@@ -52,7 +54,11 @@ export {
 } from "./result-translation.js";
 export { type JsonObjectSchema, MCP_TOOL_SCHEMAS } from "./schemas.js";
 
-import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import {
+  diagnoseProjectConfig,
+  type ProjectConfigDiagnostic,
+} from "../config/project-config-diagnostic.js";
+import { WorktreeContextCache } from "../config/worktree-context-cache.js";
 import {
   doctorResultContract,
   queryExecuteResultContract,
@@ -152,6 +158,7 @@ export type CreateDysflowMcpToolsOptions = {
   // for `references/error-codes.md` and `docs/diagnostics/hresult-guide.md`.
   documentationBundleResolver?: () => import("../../shared/install-docs.js").DocumentationBundleStatus;
   cwd?: string;
+  worktreeCache?: WorktreeContextCache;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -172,7 +179,32 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     projectConfigResolver,
     documentationBundleResolver,
     cwd = process.cwd(),
+    worktreeCache: worktreeCacheInput,
   } = options;
+  const rawProjectConfigResolver =
+    projectConfigResolver ??
+    ((input: unknown, effectiveCwd = cwd) =>
+      diagnoseProjectConfig(
+        effectiveCwd,
+        typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {},
+      ));
+  const worktreeCache =
+    worktreeCacheInput ??
+    new WorktreeContextCache({
+      resolveDiagnostic: (effectiveCwd, input) => rawProjectConfigResolver(input, effectiveCwd),
+    });
+  const resolveProjectConfig = (input: unknown, cwdOverride?: string) => {
+    const params =
+      typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+    const explicitCwd =
+      typeof params.cwd === "string" && params.cwd.trim().length > 0 ? params.cwd : undefined;
+    const effectiveCwd = cwdOverride ?? explicitCwd ?? cwd;
+    return worktreeCache.resolveDiagnostic(
+      effectiveCwd,
+      params,
+      effectiveCwd === cwd ? "startup" : "cwd-param",
+    );
+  };
   const projectResolutionRecovery = createProjectResolutionRecovery({ env });
   const accessContextResolver: McpAccessContextResolver =
     accessContextResolverInput ??
@@ -280,8 +312,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       accessDbPath,
       writeExecutionPolicy,
       resultValidationPolicy,
-      projectConfigResolver:
-        projectConfigResolver === undefined ? undefined : () => projectConfigResolver({}),
+      projectConfigResolver: resolveProjectConfig,
+      worktreeCacheTelemetry: () => worktreeCache.telemetry(),
       // Issue #940 — forward the documentation bundle resolver so the
       // snapshot reports the live on-disk verdict for the runtime docs.
       documentationBundleResolver,
@@ -297,10 +329,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     createResolveProjectTool({
       cwd,
       recovery: projectResolutionRecovery,
-      projectConfigResolver:
-        projectConfigResolver === undefined
-          ? undefined
-          : (effectiveCwd, input) => projectConfigResolver(input, effectiveCwd),
+      projectConfigResolver: (effectiveCwd, input) => resolveProjectConfig(input, effectiveCwd),
     }),
     // Issue #971 — runtime contract discovery. Read-only tool that
     // surfaces the documented schema for every advertised MCP tool. Pure
@@ -366,7 +395,15 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // Issue #1312 — bootstrap is intentionally registered before the
     // existing-config write-ready wrapper. The wrapper exempts this tool
     // below because requiring an existing config would deadlock bootstrap.
-    createSetupProjectTool({ cwd, writesEnabled }),
+    createSetupProjectTool({
+      cwd,
+      writesEnabled,
+      onPublished: async (projectRoot) => {
+        worktreeCache.clear(projectRoot);
+        await worktreeCache.getContext(projectRoot, "register");
+      },
+    }),
+    ...createWorktreeCacheTools(worktreeCache),
     // Issue #1177 — `migrate_project_config`. Drives legacy
     // `.dysflow/project.json` migrations (absolute accessPath →
     // basename frontendFile, top-level allowWrites →
@@ -395,7 +432,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // project's active source root before forwarding to vbaSyncToolService.
       accessContextResolver,
     ),
-  );
+  ).map((tool) => ({
+    ...tool,
+    inputSchema: withWorktreeCwdSchema(
+      tool.name,
+      tool.inputSchema ?? { type: "object", additionalProperties: false, properties: {} },
+    ),
+  }));
   if (projectConfigResolver === undefined)
     return withProjectResolutionRecovery(registered, projectResolutionRecovery);
   const gated = registered.map((tool) => {
@@ -450,7 +493,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           // and bypass the gate). Force the gate by appending
           // apply:true behind the scenes for the gate check, but never
           // forward that synthetic apply to the handler.
-          const diagnostic = await projectConfigResolver({
+          const diagnostic = await resolveProjectConfig({
             ...inputRecord,
             operation: tool.name,
             ...(routeMutatesBinary !== undefined ? { mutatesBinary: routeMutatesBinary } : {}),
@@ -527,7 +570,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           ))
         )
           return tool.handler(input, context);
-        const diagnostic = await projectConfigResolver({
+        const diagnostic = await resolveProjectConfig({
           ...inputRecord,
           operation: tool.name,
           // Issue #968 — forward `mutatesBinary` from the dispatch route so

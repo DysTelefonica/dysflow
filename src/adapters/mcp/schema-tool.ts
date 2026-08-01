@@ -83,6 +83,8 @@ import { MCP_TOOL_SCHEMAS, NO_INPUT_SCHEMA } from "./schemas/index.js";
 import { SETUP_PROJECT_SCHEMA } from "./schemas/setup-project-schema.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import { STATE_TOOL_SCHEMA } from "./state-tool.js";
+import { CLEAR_WORKTREE_CACHE_SCHEMA, REGISTER_WORKTREE_SCHEMA } from "./worktree-cache-schemas.js";
+import { withWorktreeCwdSchema } from "./worktree-cwd.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -600,6 +602,8 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   // factory.
   migrate_project_config: MIGRATE_PROJECT_CONFIG_SCHEMA,
   setup_project: SETUP_PROJECT_SCHEMA,
+  register_worktree: REGISTER_WORKTREE_SCHEMA,
+  clear_worktree_cache: CLEAR_WORKTREE_CACHE_SCHEMA,
 };
 
 /**
@@ -1069,12 +1073,12 @@ export function inputSchemaForTool(name: string): JsonObjectSchema {
         }
       : schema;
   const modern = MODERN_TOOL_INPUT_SCHEMAS[name];
-  if (modern !== undefined) return withRecovery(modern);
+  if (modern !== undefined) return withWorktreeCwdSchema(name, withRecovery(modern));
   const alias = ALIAS_INPUT_SCHEMA_OVERRIDES[name];
-  if (alias !== undefined) return withRecovery(alias);
+  if (alias !== undefined) return withWorktreeCwdSchema(name, withRecovery(alias));
   const dispatch = (MCP_TOOL_SCHEMAS as Record<string, JsonObjectSchema>)[name];
-  if (dispatch !== undefined) return withRecovery(dispatch);
-  return withRecovery(NO_INPUT_SCHEMA);
+  if (dispatch !== undefined) return withWorktreeCwdSchema(name, withRecovery(dispatch));
+  return withWorktreeCwdSchema(name, withRecovery(NO_INPUT_SCHEMA));
 }
 
 function descriptionForTool(name: string): string {

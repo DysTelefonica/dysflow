@@ -280,6 +280,8 @@ describe("MCP tool registration over core services", () => {
       "state",
       "logs",
       "setup_project",
+      "register_worktree",
+      "clear_worktree_cache",
       "migrate_project_config",
     ];
 

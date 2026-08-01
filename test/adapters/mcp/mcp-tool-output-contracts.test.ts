@@ -65,6 +65,9 @@ const OUTPUT_CONTRACT_GROUPS = {
     // #1312 — local project-config bootstrap; plan/apply service that
     // bypasses Access and the generated dispatch routes.
     "setup_project",
+    // #1321 — process-local cache controls; no Access or runner output.
+    "register_worktree",
+    "clear_worktree_cache",
     // Issue #1177 — `migrate_project_config` drives legacy config
     // migrations (read-class diff preview by default, apply:true
     // rewrites `.dysflow/project.json` atomically). Bypasses the

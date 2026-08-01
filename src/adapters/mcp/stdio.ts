@@ -851,6 +851,7 @@ async function resolveConfigForInput(
 ) {
   const params = isRecord(input) ? input : {};
   const projectRoot = stringOrUndefined(params.projectRoot);
+  const cwd = stringOrUndefined(params.cwd);
   const preferProjectConfig = resolutionOptions.preferProjectConfig === true;
   const timeoutMs =
     typeof params.timeoutMs === "number"
@@ -860,7 +861,7 @@ async function resolveConfigForInput(
         : undefined;
 
   return await loadDysflowConfigAsync({
-    cwd: projectRoot ?? options.cwd,
+    cwd: projectRoot ?? cwd ?? options.cwd,
     env: options.env,
     projectId: stringOrUndefined(params.projectId),
     contextId: stringOrUndefined(params.contextId),

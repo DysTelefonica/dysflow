@@ -25,6 +25,8 @@ export const MODERN_TOOL_NAMES = [
   // Issue #1312 — zero-friction project bootstrap. Plan by default;
   // apply atomically publishes the candidate project config.
   "setup_project",
+  "register_worktree",
+  "clear_worktree_cache",
   // Issue #1177 — `migrate_project_config` drives legacy config
   // migrations (absolute accessPath → basename frontendFile,
   // top-level allowWrites → capabilities.allowWrites). Conditional-write

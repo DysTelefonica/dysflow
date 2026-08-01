@@ -54,7 +54,15 @@ export type ToolAdvertisementMetadata = {
 export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
   {
     phase: "bootstrap",
-    tools: ["get_capabilities", "schema", "describe_tool", "setup_project", "resolve_project"],
+    tools: [
+      "get_capabilities",
+      "schema",
+      "describe_tool",
+      "register_worktree",
+      "setup_project",
+      "resolve_project",
+      "clear_worktree_cache",
+    ],
   },
   {
     phase: "sync",
@@ -103,6 +111,8 @@ const BOOTSTRAP_TOOLS = new Set([
   "schema",
   "describe_tool",
   "setup_project",
+  "register_worktree",
+  "clear_worktree_cache",
   "migrate_project_config",
 ]);
 const TEST_TOOLS = new Set(["validate_manifest", "test_vba"]);
@@ -180,6 +190,10 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
   describe_tool: ["Inspect one selected tool's complete contract after compact discovery."],
   setup_project: [
     "Bootstrap a missing per-worktree project config through MCP when shell access is unavailable.",
+  ],
+  register_worktree: ["Pre-warm a sibling worktree context and inspect cache hit/miss telemetry."],
+  clear_worktree_cache: [
+    "Force one worktree or the complete process-local cache to rescan on the next call.",
   ],
   resolve_project: ["Resolve and verify the selected worktree project after bootstrap."],
   sync_binary: [
