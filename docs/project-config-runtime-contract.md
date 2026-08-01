@@ -1,6 +1,13 @@
 # Project config runtime contract
 
-Every MCP process resolves `.dysflow/project.json` inside its current Git worktree on every call. `get_capabilities.projectConfig` is the canonical read-only diagnostic and includes normalized `cwd`, `configPath`, `projectRoot`, `projectId`, `accessPath`, `backendPath`, and `destinationRoot`, plus `status`, `writeReady`, `diagnostics`, and exact `remediation`. When the resolved owning tree is recognized as a sibling Git worktree (v2.12.0, issue #873) the diagnostic also carries `owningWorktree`.
+Every MCP process resolves `.dysflow/project.json` through a bounded canonical-cwd worktree cache. The cache holds at most 32 contexts, watches each cached config for change/rename invalidation, and falls back to a five-minute TTL. `get_capabilities.projectConfig` is the canonical read-only diagnostic and includes normalized `cwd`, `configPath`, `projectRoot`, `projectId`, `accessPath`, `backendPath`, and `destinationRoot`, plus `status`, `writeReady`, `diagnostics`, and exact `remediation`. `get_capabilities.worktreeCache` exposes hit/miss, invalidation, eviction, entry, watcher, bound, and TTL telemetry. When the resolved owning tree is recognized as a sibling Git worktree (v2.12.0, issue #873) the diagnostic also carries `owningWorktree`.
+
+Every operational tool that consults project configuration accepts optional `cwd`. An explicit value selects that canonical worktree; omission preserves the MCP startup cwd. `register_worktree({cwd})` eagerly scans one context, while `clear_worktree_cache({cwd?})` clears one or all entries. `setup_project({cwd,...,apply:true})` refreshes the same cache after atomic publication, so subsequent cwd-bound calls see the config without restarting the MCP. These routing changes do not relax canonical containment, process write gates, project `allowWrites`, or per-tool confirmation policy.
+
+Selectors that identify the cached worktree (`projectId`, frontend aliases,
+`backendPath`, `destinationRoot`, or `projectRoot`) reuse its context. A
+selector that identifies another candidate keeps the existing selector-specific
+diagnostic path, so cross-worktree selection remains fail-closed.
 
 Write-class tools fail before Access or PowerShell execution with `PROJECT_CONFIG_NOT_WRITE_READY` unless `status` is `valid`. Explicit path overrides and dry-run calls do not bypass ownership checks. There is intentionally no `allowUnconfiguredTarget` escape hatch.
 

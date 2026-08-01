@@ -18,7 +18,11 @@ export type SetupProjectInput = SetupProjectConfigInput & {
   apply?: boolean;
 };
 
-export type SetupProjectToolOptions = { cwd: string; writesEnabled: boolean };
+export type SetupProjectToolOptions = {
+  cwd: string;
+  writesEnabled: boolean;
+  onPublished?: (cwd: string) => void | Promise<void>;
+};
 
 export { SETUP_PROJECT_SCHEMA } from "./schemas/setup-project-schema.js";
 
@@ -122,6 +126,7 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
           undefined,
           assertCandidateWriteReady,
         );
+        await options.onPublished?.(projectRoot);
         return {
           content: [
             {

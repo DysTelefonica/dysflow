@@ -250,6 +250,8 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
     noWriteAlias: null,
     defaultBehavior: "plan",
   },
+  register_worktree: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  clear_worktree_cache: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Round-12 (#978) — `state` is pure read-only. The schema defensively
   // accepts `apply` for symmetry with every other advertised tool, but
   // `state` never writes — the handler ignores any commit signal and

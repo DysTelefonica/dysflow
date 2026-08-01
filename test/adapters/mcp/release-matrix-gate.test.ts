@@ -118,7 +118,8 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // write-gated through MCP_WRITES_DISABLED). Net: dispatch unchanged
     // (it bypasses MCP_TOOL_ROUTES and is registered directly in
     // tools.ts), modern 17 -> 18, visible 90 -> 91. #1312 adds
-    // setup_project: modern 18 -> 19, visible 91 -> 92.
+    // setup_project: modern 18 -> 19, visible 91 -> 92; #1321 adds two
+    // read-only cache controls: modern 19 -> 21, visible 92 -> 94.
     //   Expected breakdown:
     //     73 dispatch names (DYSFLOW_MCP_TOOL_NAMES)
     //     - 0 hidden stubs (zero-hidden-tools policy)
@@ -126,11 +127,11 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // +1 for #965 diagnose, +1 for #976 clean_stale_markers, +1 for #978 state,
     // +1 for #973 logs, +1 for #1057 describe_tool, +1 for #1177 migrate_project_config,
     // +1 for #1312 setup_project)
-    //     = 92 visible (was 64 before #795).
+    //     = 94 visible (was 64 before #795).
     expect(toolCount).toBe(73);
     expect(stubCount).toBe(0);
-    expect(modernCount).toBe(19);
-    expect(visibleCount).toBe(92);
+    expect(modernCount).toBe(21);
+    expect(visibleCount).toBe(94);
   });
 
   it("verifies split-mode coverage explicitly", () => {

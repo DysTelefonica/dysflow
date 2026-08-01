@@ -84,6 +84,8 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // explicit confirm gate).
   migrate_project_config: "routine-dev-write",
   setup_project: "routine-dev-write",
+  register_worktree: "read-only",
+  clear_worktree_cache: "read-only",
 };
 
 /**

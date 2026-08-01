@@ -96,6 +96,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add a bounded cwd-aware MCP worktree-context cache with file invalidation, TTL fallback, telemetry, universal project-tool `cwd`, and `register_worktree` / `clear_worktree_cache` controls (#1321).
+
 ### Fixed
 
 - Resolve an absolute compatible PowerShell executable when the MCP host PATH is degraded, and retry Windows `EBUSY`/`EPERM` cleanup for disposable export databases (#1233).

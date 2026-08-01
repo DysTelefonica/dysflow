@@ -408,9 +408,9 @@ describe("advertised MCP tool surface — sync_binary cascade (#809)", () => {
     expect(advertised).toContain("sync_binary");
   });
 
-  it(`advertises exactly ${EXPECTED_ADVERTISED_TOOL_COUNT} non-hidden tools (issue #809: 79 -> 80; #872: 80 -> 84; #971: 84 -> 85; #965: 85 -> 86; #976: 86 -> 87; #978: 87 -> 88; rebased-on-main + #973: 88 -> 89; #1057: 89 -> 90; #1177: 90 -> 91; #1312 setup_project: 91 -> 92)`, () => {
+  it(`advertises exactly ${EXPECTED_ADVERTISED_TOOL_COUNT} non-hidden tools (#1321: 92 -> 94)`, () => {
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
-    expect(EXPECTED_ADVERTISED_TOOL_COUNT).toBe(92);
+    expect(EXPECTED_ADVERTISED_TOOL_COUNT).toBe(94);
   });
 });
 

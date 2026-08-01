@@ -278,7 +278,7 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
     expect(tool, "tool must be registered").toBeDefined();
   });
 
-  it("uses NO_INPUT_SCHEMA (read-only, no required input)", () => {
+  it("accepts only the optional cwd worktree selector", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(),
     });
@@ -286,7 +286,14 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
     expect(tool?.inputSchema).toEqual({
       type: "object",
       additionalProperties: false,
-      properties: {},
+      properties: {
+        cwd: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Optional per-call worktree cwd. Paths are canonicalized and resolved through the bounded worktree-context cache. Omit to use the MCP startup cwd.",
+        },
+      },
     });
   });
 

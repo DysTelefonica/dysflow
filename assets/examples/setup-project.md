@@ -29,6 +29,8 @@ candidate and publishes `.dysflow/project.json` with the same containment,
 atomic rename, and rollback service used by `dysflow setup`.
 
 After applying, call `resolve_project({ cwd, projectId })` and then refresh
-`get_capabilities({})`. Never bootstrap outside a Git worktree, and never pass
+`get_capabilities({ cwd })`. The new config is available immediately through
+the shared worktree cache; an MCP restart is neither required nor recommended.
+Never bootstrap outside a Git worktree, and never pass
 an absolute path as `frontendFile`; it must be the frontend basename at the
 worktree root.
