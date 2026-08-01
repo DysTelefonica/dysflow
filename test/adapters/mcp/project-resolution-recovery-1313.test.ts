@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -245,9 +246,12 @@ describe("issue #1313 project recovery token", () => {
         projectId: fixture.siblingId,
         projectConfig: expect.objectContaining({
           status: "valid",
-          projectRoot: fixture.sibling.replaceAll("\\", "/"),
         }),
       });
+      const selectedProjectConfig = selected.projectConfig as { projectRoot: string };
+      expect(realpathSync.native(selectedProjectConfig.projectRoot).toLowerCase()).toBe(
+        realpathSync.native(fixture.sibling).toLowerCase(),
+      );
     } finally {
       await removeRealSiblingWorktrees(fixture);
     }
