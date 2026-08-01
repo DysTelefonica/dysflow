@@ -13,10 +13,13 @@ describe("issue #1256 release E2E records", () => {
     'await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: false });',
     'await record("vba-sync", "generate_erd:path-semantics", { ...ctx, erdPath: tempRoot + "/ERD" });',
     'await record("vba-sync", "validate_manifest:allowlist-check-not-noop", {',
-    'const errorEnvelopeArgs = { list_access_files: { projectId: "non-existent" } };',
+    "const errorEnvelopeArgs = {",
+    'query_execute: { mode: "read", sql: "DROP TABLE [ZZZ_DysflowErrorProbe]" },',
+    'list_tables: { projectId: "non-existent" },',
+    "throw new Error(`Missing deterministic error-envelope probe args for " + "$" + "{tool}`);",
     'await record("query", `' +
       "$" +
-      '{tool}:error-envelope-remediation`, errorEnvelopeArgs[tool] ?? {}, { expected: "error" });',
+      '{tool}:error-envelope-remediation`, args, { expected: "error" });',
     'await record("protocol", "effective-dry-run-default-coherence", { projectId });',
   ])("contains the exact literal %s", (literal) => {
     expect(source).toContain(literal);
@@ -29,9 +32,32 @@ describe("issue #1256 release E2E records", () => {
     expect(source).toContain('"seed_fixture", "teardown_fixture", "list_tables"];');
   });
 
-  it("keeps list_access_files error coverage invalid after sandbox config resolution", () => {
-    expect(source).toContain(
-      'const errorEnvelopeArgs = { list_access_files: { projectId: "non-existent" } };',
+  it.each([
+    "query_execute",
+    "create_table",
+    "drop_table",
+    "list_access_files",
+    "seed_fixture",
+    "teardown_fixture",
+    "list_tables",
+  ])("pins deterministic invalid input for %s", (tool) => {
+    const argsBlock = source.slice(
+      source.indexOf("const errorEnvelopeArgs = {"),
+      source.indexOf("for (const tool of sqlTools)"),
     );
+
+    expect(argsBlock).toMatch(new RegExp(`(?:^|\\n)\\s*${tool}:\\s*\\{`));
+  });
+
+  it("makes every probe invalid without relying on missing parameters", () => {
+    const argsBlock = source.slice(
+      source.indexOf("const errorEnvelopeArgs = {"),
+      source.indexOf("for (const tool of sqlTools)"),
+    );
+
+    expect(argsBlock).toContain(
+      'query_execute: { mode: "read", sql: "DROP TABLE [ZZZ_DysflowErrorProbe]" }',
+    );
+    expect(argsBlock.match(/projectId: "non-existent"/g)).toHaveLength(6);
   });
 });
