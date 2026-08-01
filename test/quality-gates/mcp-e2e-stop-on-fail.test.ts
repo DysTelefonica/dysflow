@@ -12,15 +12,15 @@
 // real `record()` and inject fakes for its dependencies. The hard rules
 // are:
 //
-//   H3a — `expected: "error"` + harness `isError: false` must throw
-//         STOP-ON-FAIL (the tool returned `ok: true` unexpectedly).
+//   H3a — `expected: "error"` + harness `isError: false` records FAIL
+//         and returns so the battery can continue.
 //   H3b — `expected: "error"` + harness `isError: true` must continue
 //         and push a PASS row.
-//   H3c — `expected: "success"` + harness `isError: true` must throw
-//         STOP-ON-FAIL (the tool returned `ok: false` unexpectedly).
+//   H3c — `expected: "success"` + harness `isError: true` records FAIL
+//         and returns so the battery can continue.
 //   H7  — post-tool zombie check pushes a `${tool}:zombie-check` row
 //         whose pass reflects `isOwnPidAlive(result.childPid)`. A live
-//         child triggers STOP-ON-FAIL; a dead child removes the PID
+//         child triggers UNSAFE-STOP; a dead child removes the PID
 //         from `suiteOwnPids` so the next preflight does not wait on a
 //         dead PID.
 
@@ -140,7 +140,7 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
     });
   });
 
-  it("H3a — expected:'error' + isError:false throws STOP-ON-FAIL after the tool", async () => {
+  it("H3a — expected:'error' + isError:false records FAIL and continues", async () => {
     const { ctx, rows, processObj, errors } = makeCtx({
       harness: { childPid: 0, isError: false, timedOut: false, text: "ok-but-expected-error" },
     });
@@ -152,16 +152,16 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
         args: { sql: "DROP TABLE TbConfiguracion" },
         options: { expected: "error" },
       }),
-    ).rejects.toThrow(/mcp-e2e: STOP-ON-FAIL after query_sql/);
+    ).resolves.toMatchObject({ isError: false });
 
-    // The harness returned ok:true but we expected error — pass=false, STOP-ON-FAIL.
-    // Two rows are pushed before the throw: the tool row + the zombie-check row.
+    // The harness returned ok:true but we expected error. The mismatch is
+    // evidence, not an unsafe harness state, so the next record remains eligible.
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(rows[0]?.pass).toBe(false);
     expect(rows[0]?.tool).toBe("query_sql");
     expect(rows[0]?.expected).toBe("error");
     expect(processObj.exitCode).toBe(1);
-    expect(errors.some((e) => e.includes("STOP-ON-FAIL after query_sql"))).toBe(true);
+    expect(errors.some((e) => e.includes("continuing after ordinary failure"))).toBe(true);
   });
 
   it("H3b — expected:'error' + isError:true resolves and pushes a PASS row", async () => {
@@ -186,7 +186,7 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
     expect(processObj.exitCode).toBeNull();
   });
 
-  it("H3c — expected:'success' + isError:true throws STOP-ON-FAIL after the tool", async () => {
+  it("H3c — expected:'success' + isError:true records FAIL and continues", async () => {
     const { ctx, rows, processObj } = makeCtx({
       harness: { childPid: 0, isError: true, timedOut: false, text: "unexpected error" },
     });
@@ -198,12 +198,23 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
         args: {},
         options: { expected: "success" },
       }),
-    ).rejects.toThrow(/mcp-e2e: STOP-ON-FAIL after tools\/list|STOP-ON-FAIL/);
+    ).resolves.toMatchObject({ isError: true });
 
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(rows[0]?.pass).toBe(false);
     expect(rows[0]?.tool).toBe("tools/list");
     expect(processObj.exitCode).toBe(1);
+  });
+
+  it("aggregates multiple ordinary mismatches in one run", async () => {
+    const { ctx, rows } = makeCtx({
+      harness: { childPid: 0, isError: true, timedOut: false, text: "unexpected error" },
+    });
+
+    await record(ctx, { area: "diagnostics", tool: "first", options: { expected: "success" } });
+    await record(ctx, { area: "diagnostics", tool: "second", options: { expected: "success" } });
+
+    expect(rows.filter((row) => !row.pass).map((row) => row.tool)).toEqual(["first", "second"]);
   });
 
   it("H7a — child exits cleanly: pushes PASS zombie-check row and removes PID from suiteOwnPids", async () => {
@@ -226,7 +237,7 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
     expect(rows[1]?.pass).toBe(true);
   });
 
-  it("H7b — child lingers after the tool: throws STOP-ON-FAIL and leaves PID in suiteOwnPids", async () => {
+  it("H7b — child lingers after the tool: throws UNSAFE-STOP and leaves PID in suiteOwnPids", async () => {
     const { ctx, rows, suiteOwnPids } = makeCtx({
       harness: { childPid: 9999, isError: false, timedOut: false, text: "ok" },
       childAlive: true,
@@ -239,7 +250,7 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
         args: {},
         options: { expected: "success" },
       }),
-    ).rejects.toThrow(/STOP-ON-FAIL/);
+    ).rejects.toThrow(/UNSAFE-STOP/);
 
     // The child lingered, so the zombie-check row must be FAIL and the
     // PID must remain in the watchlist (the next preflight will retry).

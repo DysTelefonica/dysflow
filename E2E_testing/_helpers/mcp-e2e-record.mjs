@@ -13,10 +13,8 @@ import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
 //      a suite-owned MSACCESS.EXE child survived the previous step.
 //   2. Per-tool PASS/FAIL row (expected vs isError/timedOut).
 //   3. Per-tool zombie check (this tool's childPid must exit cleanly).
-//   4. STOP-ON-FAIL — any FAIL row aborts the battery immediately with
-//      process.exitCode=1 + a thrown error. The user established this as
-//      a hard rule on 2026-06-29: "que no empiece un test nuevo si se
-//      queda un huerfano".
+//   4. Ordinary expectation mismatches aggregate; unsafe process state
+//      remains fail-fast so later evidence cannot be contaminated.
 
 /**
  * @typedef {Object} RecordRow
@@ -62,7 +60,8 @@ import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
 
 /**
  * Run one MCP tool through the E2E suite's record() loop. Returns the
- * harness result on success; throws on REFUSE-START or STOP-ON-FAIL.
+ * harness result after ordinary mismatches; throws only when process state
+ * makes continuation unsafe (REFUSE-START or a post-tool zombie).
  *
  * @param {RecordCtx} ctx
  * @param {RecordCall} call
@@ -95,6 +94,7 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
       expected: "no leftover suite-owned MSACCESS.EXE before tool start",
       ms: preFlight.elapsed,
       summary: `Refusing to start: suite-owned MSACCESS.EXE pids=${preFlight.pids.join(",")} still alive`,
+      failureClass: "safety-critical",
     };
     ctx.rows.push(failRow);
     consoleLog(`FAIL\t${failRow.tool}\t${failRow.ms}ms\t${failRow.summary}`);
@@ -129,6 +129,7 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
     expected: options.expected ?? "success",
     ms,
     summary: normalize(result.text || result.stderr || JSON.stringify(result.exit)),
+    ...(!pass ? { failureClass: "ordinary" } : {}),
   });
   consoleLog(`${pass ? "PASS" : "FAIL"}\t${tool}\t${ms}ms\t${ctx.rows.at(-1).summary}`);
 
@@ -151,6 +152,7 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
     summary: toolChildAlive
       ? `Suite-owned MSACCESS.EXE pid=${result.childPid} lingered after ${tool}`
       : "clean",
+    ...(!zombiePass ? { failureClass: "safety-critical" } : {}),
   });
   consoleLog(
     `${zombiePass ? "PASS" : "FAIL"}\t${zombieTool}\t${postToolZombie.elapsed}ms\t${ctx.rows.at(-1).summary}`,
@@ -160,17 +162,22 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
     ctx.suiteOwnPids.delete(result.childPid);
   }
 
-  // Stop-on-fail: a FAIL row aborts the suite immediately. The user
-  // established this as a hard rule: "que no empiece un test nuevo si
-  // se queda un huerfano". Do NOT let later tools run; they will only
-  // orphan more MSACCESS.EXE.
-  if (!pass || !zombiePass) {
+  if (!pass) {
     consoleError(
-      `mcp-e2e: STOP-ON-FAIL after ${tool} (tool.pass=${pass}, zombie.pass=${zombiePass}). ` +
-        `Aborting battery. Fix the root cause before re-running.`,
+      `mcp-e2e: continuing after ordinary failure for ${tool}; final exit will remain non-zero.`,
     );
     processObj.exitCode = 1;
-    throw new Error(`mcp-e2e: STOP-ON-FAIL after ${tool}`);
+  }
+
+  // A live harness-owned child is NOT an ordinary assertion failure. Later
+  // records would be unsafe and could multiply leaked Access processes.
+  if (!zombiePass) {
+    consoleError(
+      `mcp-e2e: UNSAFE-STOP after ${tool} (zombie.pass=${zombiePass}). ` +
+        `Aborting battery because the harness-owned child did not exit.`,
+    );
+    processObj.exitCode = 1;
+    throw new Error(`mcp-e2e: UNSAFE-STOP after ${tool}`);
   }
 
   return result;

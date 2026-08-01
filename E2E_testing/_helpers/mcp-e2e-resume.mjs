@@ -18,14 +18,23 @@ export const CHECKPOINT_VERSION = 1;
 
 export function createResultRows() {
   const rows = [];
-  const appendUnchecked = (row) => rows.push(row);
-  const addFailFastResult = (row) => {
-    const length = appendUnchecked(row);
-    if (!row.pass) throw new Error(`mcp-e2e: STOP-ON-FAIL after ${row.tool}`);
-    return length;
+  const occurrences = new Map();
+  const appendUnchecked = (row) => {
+    const area = row.area ?? "unknown";
+    const key = `${area}/${row.tool}`;
+    const occurrence = (occurrences.get(key) ?? 0) + 1;
+    occurrences.set(key, occurrence);
+    return rows.push({
+      ...row,
+      id: row.id ?? `${key}#${occurrence}`,
+      ...(!row.pass && row.failureClass === undefined ? { failureClass: "ordinary" } : {}),
+    });
   };
-  // recordImpl must append its tool + zombie rows before it decides to throw.
-  return { rows, addFailFastResult, appendUnchecked };
+  const addResult = (row) => appendUnchecked(row);
+  return { rows, addResult, appendUnchecked };
+}
+export function computeE2eExitCode(rows, abortedDueToUnsafeFailure) {
+  return abortedDueToUnsafeFailure || rows.some((row) => !row.pass) ? 1 : 0;
 }
 export function parseResumeArgs(argv, env = process.env) {
   const index = argv.indexOf("--resume");
@@ -170,6 +179,7 @@ export function createResumeController({
     failedStepId: null,
     failedArea: null,
     ownedPids: [],
+    failures: [],
   };
   const occurrences = new Map();
   const snapshottedAreas = new Set();
@@ -224,6 +234,14 @@ export function createResumeController({
     state.inProgress = null;
     await writeCheckpointAtomic(root, state);
   }
+  async function continueAfterFailure(id) {
+    delete state.completed[id];
+    state.failedStepId = null;
+    state.failedArea = null;
+    state.ownedPids = [];
+    state.inProgress = null;
+    await writeCheckpointAtomic(root, state);
+  }
   async function fail(id, area, ownedPids, { invalidateLast = false } = {}) {
     if (invalidateLast && state.lastCompletedId) {
       delete state.completed[state.lastCompletedId];
@@ -242,7 +260,20 @@ export function createResumeController({
     state.ownedPids = (state.ownedPids ?? []).filter((ownedPid) => ownedPid !== pid);
     await writeCheckpointAtomic(root, state);
   }
-  return { before, pass, fail, registerOwnedPid, clearOwnedPid, state };
+  async function syncFailures(failures) {
+    state.failures = failures.map((failure) => ({ ...failure }));
+    await writeCheckpointAtomic(root, state);
+  }
+  return {
+    before,
+    pass,
+    continueAfterFailure,
+    fail,
+    registerOwnedPid,
+    clearOwnedPid,
+    syncFailures,
+    state,
+  };
 }
 async function copyExisting(source, destination) {
   try {

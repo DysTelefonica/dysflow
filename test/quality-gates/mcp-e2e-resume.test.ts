@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertReleaseRuntimeIdentity,
+  computeE2eExitCode,
   createPhaseSnapshots,
   createResultRows,
   createResumeController,
@@ -97,11 +98,22 @@ describe("MCP E2E resumable cursor", () => {
     await writeFile(join(dist, "index.js"), "tampered");
     expect(await hashRunIdentity(runtimeIdentityPaths(launcher))).not.toBe(first);
   });
-  it("aborts immediately on a failed semantic row", () => {
-    const { rows, addFailFastResult, appendUnchecked } = createResultRows();
+  it("aggregates semantic failures with stable IDs", () => {
+    const { rows, addResult, appendUnchecked } = createResultRows();
     expect(Object.hasOwn(rows, "push")).toBe(false);
-    expect(() => addFailFastResult({ pass: false, tool: "shape" })).toThrow(/STOP-ON-FAIL/);
+    expect(() => addResult({ area: "contract", pass: false, tool: "shape" })).not.toThrow();
+    expect(() => addResult({ area: "contract", pass: false, tool: "shape" })).not.toThrow();
     expect(() => appendUnchecked({ pass: false, tool: "zombie" })).not.toThrow();
+    expect(rows.map((row) => row.id)).toEqual([
+      "contract/shape#1",
+      "contract/shape#2",
+      "unknown/zombie#1",
+    ]);
+  });
+  it("returns a non-zero final exit code after aggregated failures", () => {
+    expect(computeE2eExitCode([{ pass: true }, { pass: false }], false)).toBe(1);
+    expect(computeE2eExitCode([{ pass: true }], false)).toBe(0);
+    expect(computeE2eExitCode([{ pass: true }], true)).toBe(1);
   });
   it("refuses resume for release gates", () => {
     expect(() =>
@@ -140,6 +152,15 @@ describe("MCP E2E resumable cursor", () => {
     const step = await run.before("query", "list_tables");
     await run.pass(step.id, "query", { text: "ok" });
     expect((await readCheckpoint(root)).completed[step.id].result).toEqual({ text: "ok" });
+  });
+  it("does not cache an ordinary failed result, so resume retries it", async () => {
+    const run = controller();
+    const step = await run.before("query", "list_tables");
+    await run.continueAfterFailure(step.id);
+    expect((await readCheckpoint(root)).completed[step.id]).toBeUndefined();
+
+    const resumed = controller({ resumedCheckpoint: await readCheckpoint(root) });
+    expect((await resumed.before("query", "list_tables")).cached).toBeUndefined();
   });
   it("restores and replays only the failed mutating phase", async () => {
     const restore = vi.fn();
@@ -288,5 +309,16 @@ describe("MCP E2E resumable cursor", () => {
       failedStepId: "zombies/lingering-access-check",
       ownedPids: [4242],
     });
+  });
+  it("persists every aggregated failure in the checkpoint", async () => {
+    const run = controller();
+    await run.syncFailures([
+      { id: "query/first#1", area: "query", tool: "first", pass: false, summary: "one" },
+      { id: "vba/second#1", area: "vba", tool: "second", pass: false, summary: "two" },
+    ]);
+    expect((await readCheckpoint(root)).failures).toEqual([
+      { id: "query/first#1", area: "query", tool: "first", pass: false, summary: "one" },
+      { id: "vba/second#1", area: "vba", tool: "second", pass: false, summary: "two" },
+    ]);
   });
 });
