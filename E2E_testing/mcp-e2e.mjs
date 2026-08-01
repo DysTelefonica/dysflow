@@ -7,6 +7,7 @@ import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
 import {
   assertSafeResumeRoot,
+  computeE2eExitCode,
   createResultRows,
   createPhaseSnapshots,
   createResumeController,
@@ -209,7 +210,36 @@ if (!resumeRoot) {
 // ambiguous; individual scenarios add only the one explicit override they test.
 const ctx = { projectId };
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
-const { rows, addFailFastResult, appendUnchecked } = createResultRows();
+const implicitlyMutatingSteps = new Set([
+  "query/import_queries",
+  "vba-sync/test_vba",
+  "vba-sync/generate_erd",
+  "forms/catalog_add_control",
+  "forms/harvest_form_catalog",
+]);
+const mutatingAssertionSteps = new Set([
+  "release-telemetry/invocation-sink:opt-out-config-restore",
+  "vba-sync/export_all:prune-report",
+  "vba-sync/verify_code:bulkImportable:import_modules",
+  "form-ui/apply_form_design_plan:contract",
+]);
+const resultRows = createResultRows();
+const { rows, appendUnchecked } = resultRows;
+function addResult(row) {
+  const length = resultRows.addResult(row);
+  if (!row.pass && mutatingAssertionSteps.has(`${row.area}/${row.tool}`)) {
+    rows.at(-1).failureClass = "safety-critical";
+    throw new Error(
+      `mcp-e2e: UNSAFE-STOP after ${row.tool}; mutating postcondition is unknown`,
+    );
+  }
+  return length;
+}
+function hasUnknownMutatingPostcondition(area, tool, args) {
+  if (args.apply === false || args.dryRun === true) return false;
+  if (args.apply === true || args.dryRun === false) return true;
+  return implicitlyMutatingSteps.has(`${area}/${resolveMcpE2eToolName(tool)}`);
+}
 const existingModuleName = "Funciones Generales";
 
 // Stop-on-fail scope: the E2E only watches MSACCESS.EXE processes it
@@ -345,6 +375,7 @@ async function record(area, tool, args = {}, options = {}) {
     return step.cached;
   }
   try {
+    const rowStart = rows.length;
     const effectiveArgs =
       tool === "dysflow_resolve_project_no_dysflow_field_guidance"
         ? { ...frictionScenario.args, cwd: noDysflowWorktree }
@@ -355,9 +386,16 @@ async function record(area, tool, args = {}, options = {}) {
       args: effectiveArgs,
       options: frictionScenario.options,
     });
+    const toolRow = rows.slice(rowStart).find((row) => row.tool === tool);
+    if (toolRow && !toolRow.pass && hasUnknownMutatingPostcondition(area, tool, effectiveArgs)) {
+      toolRow.failureClass = "safety-critical";
+      throw new Error(
+        `mcp-e2e: UNSAFE-STOP after ${tool}; mutating postcondition is unknown`,
+      );
+    }
     if (frictionScenario.assert !== undefined) {
       const assertion = frictionScenario.assert(result);
-      addFailFastResult({
+      addResult({
         area,
         tool,
         pass: assertion.pass,
@@ -366,14 +404,17 @@ async function record(area, tool, args = {}, options = {}) {
         summary: assertion.summary,
       });
       console.log(`${assertion.pass ? "PASS" : "FAIL"}\t${tool}\t0ms\t${assertion.summary}`);
-      if (!assertion.pass) {
-        process.exitCode = 1;
-        throw new Error(`mcp-e2e: envelope friction assertion failed for ${tool}`);
-      }
     }
-    await resumeController.pass(step.id, area, result);
+    const recordHasFailure = rows.slice(rowStart).some((row) => !row.pass);
+    if (recordHasFailure) {
+      await resumeController.continueAfterFailure(step.id);
+    } else {
+      await resumeController.pass(step.id, area, result);
+    }
+    await resumeController.syncFailures(rows.filter((row) => !row.pass));
     return result;
   } catch (error) {
+    await resumeController.syncFailures(rows.filter((row) => !row.pass));
     await resumeController.fail(step.id, area, suiteOwnPids);
     throw error;
   }
@@ -734,21 +775,34 @@ async function recordContract(area, tool, args = {}, options = {}, coverage = []
     arguments: { name: tool },
   });
   const executionResult = await record(area, tool, args, options);
-  validateMcpResultAgainstDescription({
-    tool,
-    descriptionResult,
-    executionResult,
-    expectError: options.expected === "error",
-  });
-  for (const category of coverage) resultContractCoverage.add(category);
-  addFailFastResult({
+  let contractError;
+  try {
+    validateMcpResultAgainstDescription({
+      tool,
+      descriptionResult,
+      executionResult,
+      expectError: options.expected === "error",
+    });
+  } catch (error) {
+    contractError = error;
+  }
+  if (!contractError) {
+    for (const category of coverage) resultContractCoverage.add(category);
+  }
+  addResult({
     area: "result-contract",
     tool,
-    pass: true,
+    pass: contractError === undefined,
     expected: "actual MCP payload matches describe_tool.resultContract",
     ms: 0,
-    summary: coverage.join(","),
+    summary: contractError ? normalize(contractError.message ?? contractError) : coverage.join(","),
   });
+  if (contractError && hasUnknownMutatingPostcondition(area, tool, args)) {
+    rows.at(-1).failureClass = "safety-critical";
+    throw new Error(
+      `mcp-e2e: UNSAFE-STOP after ${tool}; mutating result contract is unverifiable`,
+    );
+  }
   return executionResult;
 }
 
@@ -766,6 +820,7 @@ try {
       { invalidateLast: true },
     );
   }
+  await resumeController.syncFailures(rows.filter((row) => !row.pass));
   console.error(`[mcp-e2e] Battery aborted: ${(err && err.message) || err}`);
 }
 
@@ -780,9 +835,9 @@ try { advertised = list.response.result.tools.map((tool) => tool.name).sort(); }
 // Advertised (non-hidden) tool count. Pinned at unit speed by
 // test/adapters/mcp/advertised-tool-count.test.ts — both import the same constant
 // from _helpers/advertised-tool-count.mjs, so a future add/remove flips one place.
-addFailFastResult({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
+addResult({ area: "protocol", tool: "advertised-tool-count", pass: advertised.length === EXPECTED_ADVERTISED_TOOL_COUNT, expected: EXPECTED_ADVERTISED_TOOL_COUNT_LABEL, ms: 0, summary: `advertised=${advertised.length}` });
 const missingIssue713Tools = ISSUE_713_REQUIRED_TOOLS.filter((name) => !advertised.includes(name));
-addFailFastResult({
+addResult({
   area: "protocol",
   tool: "issue-713-required-tools-advertised",
   pass: missingIssue713Tools.length === 0,
@@ -893,7 +948,7 @@ const expectedReleaseErrorsPass =
   extractMcpErrorCode(unknownToolResult.text) === "MCP_TOOL_NOT_FOUND" &&
   extractMcpErrorCode(missingParamResult.text) === "MCP_INPUT_INVALID" &&
   extractMcpErrorCode(conflictingFlagsResult.text) === "MCP_INPUT_INVALID";
-addFailFastResult({
+addResult({
   area: "release-telemetry",
   tool: "error-codes",
   pass: expectedReleaseErrorsPass,
@@ -952,7 +1007,7 @@ const telemetryLogsPass = Boolean(
       (parameter) => parameter.parameter === "module" && parameter.count >= 1,
     ),
 );
-addFailFastResult({
+addResult({
   area: "release-telemetry",
   tool: "logs:filters-and-aggregate",
   pass: telemetryLogsPass,
@@ -968,7 +1023,7 @@ const invocationSinkBeforeOptOut = await readFile(invocationSinkPath);
 const telemetryPrivacyPass =
   !invocationSinkBeforeOptOut.includes(Buffer.from(telemetrySecret)) &&
   !invocationSinkBeforeOptOut.includes(Buffer.from(telemetrySqlSecret));
-addFailFastResult({
+addResult({
   area: "release-telemetry",
   tool: "invocation-sink:privacy",
   pass: telemetryPrivacyPass,
@@ -991,7 +1046,7 @@ try {
   const telemetryOptOutCall = await record("release-telemetry", "schema", { projectId });
   const invocationSinkAfterOptOut = await readFile(invocationSinkPath);
   const telemetryOptOutPass = Buffer.compare(invocationSinkBeforeOptOut, invocationSinkAfterOptOut) === 0;
-  addFailFastResult({
+  addResult({
     area: "release-telemetry",
     tool: "invocation-sink:opt-out",
     pass: telemetryOptOutPass,
@@ -1009,7 +1064,7 @@ const projectConfigRestored = Buffer.compare(
   Buffer.from(projectConfigBefore),
   await readFile(projectConfigPath),
 ) === 0;
-addFailFastResult({
+addResult({
   area: "release-telemetry",
   tool: "invocation-sink:opt-out-config-restore",
   pass: projectConfigRestored,
@@ -1041,7 +1096,7 @@ console.log(`${projectConfigRestored ? "PASS" : "FAIL"}\tinvocation-sink:opt-out
         : `drift: toolsVisible=${snapshot.toolsVisible} advertised=${advertised.length} resultValidationPolicy=${snapshot.resultValidationPolicy}`,
     };
   })();
-  addFailFastResult({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
+  addResult({ area: "capabilities", tool: "get_capabilities:toolsVisible-matches-advertised", pass: crossRow.pass, expected: `toolsVisible==${advertised.length}`, ms: crossMs, summary: crossRow.summary });
   console.log(`${crossRow.pass ? "PASS" : "FAIL"}\tget_capabilities:toolsVisible-matches-advertised\t${crossMs}ms\t${crossRow.summary}`);
 }
 
@@ -1127,10 +1182,10 @@ const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath:
 try {
   const pruneData = JSON.parse(pruneResult.text ?? "{}");
   const ok = pruneData.prune !== undefined && typeof pruneData.prune.applied === "boolean";
-  addFailFastResult({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
+  addResult({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
   console.log(`${ok ? "PASS" : "FAIL"}\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  addFailFastResult({ area: "vba-sync", tool: "export_all:prune-report", pass: false, expected: "parseable JSON with prune report", ms: 0, summary: String(err) });
+  addResult({ area: "vba-sync", tool: "export_all:prune-report", pass: false, expected: "parseable JSON with prune report", ms: 0, summary: String(err) });
   console.log(`FAIL\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
 }
 // Guard: prune + filter must be rejected (a filtered prune would delete everything else).
@@ -1168,10 +1223,10 @@ const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNam
 try {
   const verifyData = JSON.parse(verifyResult.text ?? "{}");
   const hasSemanticFields = "summary" in verifyData && "hasFunctionalDifferences" in verifyData && "actionableOk" in verifyData;
-  addFailFastResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: hasSemanticFields, expected: "summary+hasFunctionalDifferences+actionableOk present", ms: 0, summary: hasSemanticFields ? "semantic fields present" : `missing fields in: ${Object.keys(verifyData).join(",")}` });
+  addResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: hasSemanticFields, expected: "summary+hasFunctionalDifferences+actionableOk present", ms: 0, summary: hasSemanticFields ? "semantic fields present" : `missing fields in: ${Object.keys(verifyData).join(",")}` });
   console.log(`${hasSemanticFields ? "PASS" : "FAIL"}\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  addFailFastResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: false, expected: "parseable JSON with semantic fields", ms: 0, summary: String(err) });
+  addResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: false, expected: "parseable JSON with semantic fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
 }
 // verify_code single-module: the unified tool covers the old compare_module via a moduleNames filter.
@@ -1183,10 +1238,10 @@ const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, mod
 try {
   const smData = JSON.parse(singleModuleResult.text ?? "{}");
   const hasModuleFields = smData.operation === "verify_code" && "ok" in smData && "recommendedAction" in smData;
-  addFailFastResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
+  addResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
   console.log(`${hasModuleFields ? "PASS" : "FAIL"}\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 } catch (err) {
-  addFailFastResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
+  addResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: false, expected: "parseable JSON with verify_code fields", ms: 0, summary: String(err) });
   console.log(`FAIL\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
 }
 
@@ -1239,7 +1294,7 @@ let bulkImportableFlowSummary = "DEFERRED: frontend .accdb fixture not present i
     }
   }
 }
-addFailFastResult({
+addResult({
   area: "vba-sync",
   tool: "verify_code:bulkImportable:import_modules",
   pass: bulkImportableFlowPass,
@@ -1259,7 +1314,7 @@ const hasDeletePlanForMissing = Boolean(
     Array.isArray(deleteModuleMissingPlan.modulesPlanned) &&
     deleteModuleMissingPlan.modulesPlanned.includes("DysflowMcpE2EMissing"),
 );
-addFailFastResult({
+addResult({
   area: "vba-sync",
   tool: "delete_module:missing-module-plan",
   pass: hasDeletePlanForMissing,
@@ -1291,7 +1346,7 @@ const formEventFinding = formEventDeadCode?.findings?.find(
 const formEventPass =
   formEventFinding === undefined ||
   (formEventFinding.calledByFormEvent === true && formEventFinding.risk === "Low");
-addFailFastResult({
+addResult({
   area: "vba",
   tool: "detect_dead_code:form-event-false-positive:assertion",
   pass: formEventPass,
@@ -1306,7 +1361,7 @@ const realSourceTreeCatalogResult = await record("forms", "harvest_form_catalog:
 // assertion: result.total > 0 against 100+ .form.txt files
 const realSourceTreeCatalog = safeJsonParse(realSourceTreeCatalogResult.text);
 const realSourceTreePass = Number(realSourceTreeCatalog?.total) > 0;
-addFailFastResult({
+addResult({
   area: "forms",
   tool: "harvest_form_catalog:real-source-tree:assertion",
   pass: realSourceTreePass,
@@ -1322,7 +1377,7 @@ const missingFormUiTools = [
   "copy_form_ui_pattern",
   "verify_form_ui",
 ].filter((name) => !advertised.includes(name));
-addFailFastResult({
+addResult({
   area: "protocol",
   tool: "form-ui-tools-advertised",
   pass: missingFormUiTools.length === 0,
@@ -1365,7 +1420,7 @@ const analyzePass = Boolean(
     analyzeFormUi.controls.every((control) => control.name) &&
     analyzeFormUi.source === "FormIR",
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "analyze_form_ui:shape",
   pass: analyzePass,
@@ -1384,7 +1439,7 @@ const analyzeAliasPass = Boolean(
     Array.isArray(analyzeFormUiAlias.controls) &&
     analyzeFormUiAlias.controls.length === analyzeFormUi?.controls?.length,
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "analyze_form_ui:path-alias",
   pass: analyzeAliasPass,
@@ -1463,7 +1518,7 @@ const mapPass = Boolean(
     behaviorMap.unmappedEvidence.length === 1 &&
     behaviorMap.unmappedEvidence[0]?.handler === "orphan_Handler",
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "map_form_behavior:mapping-shape",
   pass: mapPass,
@@ -1499,7 +1554,7 @@ const generatePass = Boolean(
     designPlan.operations.length === 6 &&
     designPlan.operations.map(({ kind }) => kind).join(",") === "add-control,move-control,rename-control,set-property,delete-control,note",
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "generate_form_design_plan:shape",
   pass: generatePass,
@@ -1546,7 +1601,7 @@ const applyPass = Boolean(
     /Name\s*=\s*"Etiqueta240"[\s\S]{0,1500}?Caption\s*=\s*"Probe input"/.test(appliedFormText) &&
     !/Name\s*=\s*"lblTitulo"/.test(appliedFormText),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "apply_form_design_plan:contract",
   pass: applyPass,
@@ -1578,7 +1633,7 @@ const copyPass = Boolean(
     copyPlan.operations.length === 1 &&
     copyPlan.operations[0].kind === "note",
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "copy_form_ui_pattern:shape",
   pass: copyPass,
@@ -1614,7 +1669,7 @@ const verifyCleanPass = Boolean(
     verifyClean.findings.some(({ code, controlName }) =>
       code === "FORM_UI_CONTROL_MISSING" && (controlName === "txtDelete" || controlName === "txtRename")),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "verify_form_ui:applied-drift",
   pass: verifyCleanPass,
@@ -1638,7 +1693,7 @@ const missingPathPass = Boolean(
       analyzeMissingErrorCode === undefined &&
         String(analyzeMissingPath.text ?? "").toLowerCase().includes("form_ui_analysis_failed")),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "analyze_form_ui:error-path",
   pass: Boolean(missingPathPass),
@@ -1665,7 +1720,7 @@ const emptyEvidencePass = Boolean(
     Array.isArray(emptyEvidenceMap.unmappedEvidence) &&
     emptyEvidenceMap.unmappedEvidence.length === 0,
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "map_form_behavior:empty-evidence",
   pass: emptyEvidencePass,
@@ -1687,7 +1742,7 @@ const generateMissingPass = Boolean(
     (generateMissingErrorCode === "FORM_SPEC_MISSING" ||
       generateMissingErrorCode === "MCP_INPUT_INVALID"),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "generate_form_design_plan:error-path",
   pass: Boolean(generateMissingPass),
@@ -1712,7 +1767,7 @@ const applyDryRunPass = Boolean(
     applyDryRun.importGate === "not-run" &&
     Array.isArray(applyDryRun.operationsApplied),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "apply_form_design_plan:dry-run",
   pass: applyDryRunPass,
@@ -1737,7 +1792,7 @@ const verifyPass = Boolean(
     Array.isArray(formUiVerifyResult.findings) &&
     formUiVerifyResult.findings.some((finding) => finding.code === "FORM_UI_EVENT_DRIFT"),
 );
-addFailFastResult({
+addResult({
   area: "form-ui",
   tool: "verify_form_ui:drift-detection",
   pass: verifyPass,
@@ -1916,7 +1971,7 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
   });
   const innerData = safeJsonParse(inspectResult.text);
   const inspectPass = Boolean(innerData && innerData.name === "FormCPV");
-  addFailFastResult({
+  addResult({
     area: "project-resolution",
     tool: "inspect_form:resolved-projectId",
     pass: inspectPass,
@@ -1940,7 +1995,7 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
   const remediationMsg =
     badData?.message ?? badData?.error?.message ?? badData?.result?.content?.[0]?.text ?? badResult.text ?? "";
   const pathScrubbedPass = remediationMsg && !remediationMsg.includes("[PATH]");
-  addFailFastResult({
+  addResult({
     area: "project-resolution",
     tool: "inspect_form:miss-remediation-no-path-scrub",
     pass: pathScrubbedPass,
@@ -1966,7 +2021,7 @@ const requiredContractCoverage = [
 const missingContractCoverage = requiredContractCoverage.filter(
   (category) => !resultContractCoverage.has(category),
 );
-addFailFastResult({
+addResult({
   area: "result-contract",
   tool: "coverage-matrix",
   pass: missingContractCoverage.length === 0,
@@ -2070,7 +2125,11 @@ appendUnchecked({
     }
     return "No suite-owned MSACCESS.EXE lingering; no global MSACCESS.EXE leak.";
   })(),
+  ...((hasLingeringAccess || globalMsAccessLeak > 0)
+    ? { failureClass: "safety-critical" }
+    : {}),
 });
+await resumeController.syncFailures(rows.filter((row) => !row.pass));
 if (hasLingeringAccess || globalMsAccessLeak > 0) {
   await resumeController.fail(
     "zombies/lingering-access-check",
@@ -2086,7 +2145,7 @@ if (hasLingeringAccess) {
 
 const passed = rows.filter((row) => row.pass).length;
 const failed = rows.filter((row) => !row.pass);
-const report = `# Dysflow MCP E2E Report\n\nProject: ${projectId}\nFrontend: ${accessPath}\nBackend: ${backendPath}\nTools advertised: ${advertised.length}\nPassed: ${passed}\nFailed: ${failed.length}\nAborted due to failure: ${abortedDueToFailure}\n\n| Result | Area | Tool | Expected | ms | Summary |\n|---|---|---|---|---:|---|\n${rows.map((row) => `| ${row.pass ? "PASS" : "FAIL"} | ${row.area} | ${row.tool} | ${row.expected} | ${row.ms} | ${String(row.summary).replace(/\|/g, "\\|")} |`).join("\n")}\n\n## Advertised tools\n${advertised.map((name) => `- ${name}`).join("\n")}\n`;
+const report = `# Dysflow MCP E2E Report\n\nProject: ${projectId}\nFrontend: ${accessPath}\nBackend: ${backendPath}\nTools advertised: ${advertised.length}\nPassed: ${passed}\nFailed: ${failed.length}\nAborted due to unsafe failure: ${abortedDueToFailure}\n\n| Result | ID | Class | Area | Tool | Expected | ms | Summary |\n|---|---|---|---|---|---|---:|---|\n${rows.map((row) => `| ${row.pass ? "PASS" : "FAIL"} | ${row.id} | ${row.failureClass ?? ""} | ${row.area} | ${row.tool} | ${row.expected} | ${row.ms} | ${String(row.summary).replace(/\|/g, "\\|")} |`).join("\n")}\n\n## Advertised tools\n${advertised.map((name) => `- ${name}`).join("\n")}\n`;
 await writeFile(reportPath, report, "utf8");
 console.log(`\nReport: ${reportPath}`);
 // When the battery was aborted early we PRESERVE the sandbox unconditionally
@@ -2099,4 +2158,4 @@ if (abortedDueToFailure || failed.length > 0 || process.env.DYSFLOW_E2E_PRESERVE
   await rm(phaseSnapshots.root, { recursive: true, force: true });
   console.log("Sandbox cleaned after successful MCP E2E run. Set DYSFLOW_E2E_PRESERVE_SANDBOX=1 to keep it for inspection.");
 }
-process.exitCode = failed.length > 0 || abortedDueToFailure ? 1 : 0;
+process.exitCode = computeE2eExitCode(rows, abortedDueToFailure);

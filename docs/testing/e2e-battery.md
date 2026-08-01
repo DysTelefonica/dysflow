@@ -9,8 +9,8 @@
 
 La batería E2E es el **gate de release**: lanza el servidor MCP real (`dysflow mcp`) contra
 un `.accdb` real y ejecuta cada herramienta visible. Coste: 5–15 minutos en una máquina
-Windows con Access. **Una sola fila FAIL aborta la batería** — la regla STOP-ON-FAIL existe
-para que una herramienta rota no acumule procesos `MSACCESS.EXE` huérfanos.
+Windows con Access. Los fallos ordinarios se agregan hasta completar la batería; los fallos
+que dejan un estado inseguro o no verificable abortan para no contaminar la evidencia posterior.
 
 | Capa | Comando | Coste | Cuándo |
 |---|---|---|---|
@@ -37,7 +37,7 @@ E2E_testing/
 ├── NoConformidades_Datos.accdb         # Backend fixture (copia → sandbox)
 ├── src/                                # Árbol fuente VBA fixture (copy → sandbox)
 ├── _helpers/
-│   ├── mcp-e2e-record.mjs              # Driver `record()` con REFUSE-START + STOP-ON-FAIL
+│   ├── mcp-e2e-record.mjs              # Driver `record()` con agregación + parada segura
 │   ├── mcp-harness.mjs                 # Cliente JSON-RPC por llamada (timeout + close watchdog)
 │   ├── mcp-e2e-sandbox.mjs             # Plan de sandbox (%TEMP%\dysflow-mcp-e2e-{pid}-{ts}\)
 │   └── resolve-mcp-e2e-command.mjs     # Qué `dysflow.cmd` puede spawnear (ver § Runtime)
@@ -144,7 +144,7 @@ del repositorio.
 | Estado de la batería | Sandbox |
 |---|---|
 | Éxito (sin FAIL, sin abortar) | Borrado automáticamente al final. |
-| Cualquier fila FAIL o STOP-ON-FAIL | **Preservado** y se imprime la ruta. |
+| Cualquier fila FAIL o parada segura | **Preservado** y se imprime la ruta. |
 | Siempre quieres conservarlo | `DYSFLOW_E2E_PRESERVE_SANDBOX=1`. |
 
 ### Knobs de runtime
@@ -226,9 +226,9 @@ await record("capabilities", "dysflow_new_tool", { projectId, ...badArgs }, { ex
 Si la herramienta es visible (no la ocultas con `buildHiddenToolRegistry`), también debes
 actualizar el pin de **61 herramientas** (ver [§ Pin de herramientas advertised](#pin-de-herramientas-advertised)).
 
-## Contrato STOP-ON-FAIL
+## Contrato de agregación y parada segura
 
-La batería implementa tres invariantes duras que viven en
+La batería implementa cuatro invariantes duras que viven en
 `E2E_testing/_helpers/mcp-e2e-record.mjs`:
 
 1. **REFUSE-START** antes de cada herramienta — si hay un `MSACCESS.EXE` del suite todavía
@@ -237,11 +237,14 @@ La batería implementa tres invariantes duras que viven en
    estado ya corrupto.
 2. **Zombie-check por herramienta** — tras cada `record()`, se añade automáticamente una
    fila `${tool}:zombie-check` cuyo `pass` refleja `isOwnPidAlive(result.childPid)`. Si
-   el hijo queda vivo, esa fila es FAIL y dispara STOP-ON-FAIL.
-3. **STOP-ON-FAIL** — si la fila de la herramienta es FAIL **o** el zombie-check es FAIL,
-   la batería lanza `mcp-e2e: STOP-ON-FAIL after <tool>`, fija `process.exitCode = 1` y
-   aborta. **No continúa con la siguiente herramienta.** Esto es por regla del usuario:
-   continuar solo acumularía más huérfanos.
+   el hijo queda vivo, esa fila es FAIL y dispara `UNSAFE-STOP`.
+3. **Agregación ordinaria** — un desajuste `expected: success/error` o una aserción semántica
+   registra una fila FAIL con ID estable, se persiste en el checkpoint y continúa cuando el
+   harness conserva una línea base limpia. El proceso termina con código distinto de cero si
+   existe al menos un FAIL.
+4. **UNSAFE-STOP** — un zombie propio, una identidad de runtime/checkpoint inválida, la pérdida
+   de la ruta soportada con contraseña, un preflight global fallido o una postcondición mutante
+   desconocida abortan inmediatamente. Esos fallos se clasifican como `safety-critical`.
 
 > **Por qué abortar, no parchear.** Una herramienta rota que deja un zombie vivo significa
 > que el control de PID del suite está comprometido. Seguir invocando herramientas solo
@@ -398,7 +401,7 @@ redirija al install de producción (issue #475). Si necesitas otra, usa
 3. **Revisa los cheap gates** (`pnpm test -- test/quality-gates/mcp-e2e`). Si han
    quedado obsoletos (un cambio en el harness los rompe), el contrato real es lo que
    ejecuta el harness, no lo que los tests afirman.
-4. **No "arregles" STOP-ON-FAIL** relajando el driver. La regla existe porque una
+4. **No relajes `UNSAFE-STOP`.** La regla existe porque una
    herramienta rota puede acumular zombies; la solución es arreglar la herramienta.
 5. **No elimines `MSACCESS.EXE` huérfanos con `Stop-Process -Name MSACCESS`.** Si
    necesitas forzar, usa `access_force_cleanup_orphaned` con el `confirmPid`
@@ -425,11 +428,11 @@ redirija al install de producción (issue #475). Si necesitas otra, usa
   real, ejecutando cada herramienta visible y midiendo zombies por llamada.
 - **Cuándo correrla.** Solo en release. Durante feature/bug, usa `pnpm test`,
   `pnpm test:integration` y los cheap-gates `test/quality-gates/mcp-e2e-*.test.ts`.
-- **Cómo se aborta.** STOP-ON-FAIL: cualquier fila FAIL (herramienta o zombie-check)
-  lanza y termina el proceso. REFUSE-START: si un zombie del suite sobrevive al
-  preflight, no se inicia la siguiente herramienta.
+- **Cómo se completa o aborta.** Los FAIL ordinarios se agregan y producen salida final no cero.
+  `UNSAFE-STOP` aborta cuando continuar invalidaría la evidencia. `REFUSE-START` evita iniciar
+  otra herramienta si sobrevive un zombie propio.
 - **Qué pinan los cheap gates.** Versión de protocolo (90 días), 61 herramientas
-  advertised, secuencia de invocaciones, sandbox aislado, contrato STOP-ON-FAIL,
+  advertised, secuencia de invocaciones, sandbox aislado, agregación y parada segura,
   retardo prudente de 1 s, delta global de MSACCESS.EXE.
 - **Qué pasa si los cheap gates quedan obsoletos.** El E2E los descubre en 5–15 min;
   toca los tres pines en el mismo commit cuando muevas un número de contrato.

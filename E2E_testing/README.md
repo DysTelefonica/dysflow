@@ -8,7 +8,7 @@ tests alone: `dysflow mcp` must work end-to-end against Access before a release 
 
 Use this AI/debug loop; do not replay the full battery after every fix:
 
-1. Run `pnpm test:e2e:mcp`. It stops at the first tool, semantic, or owned-process failure.
+1. Run `pnpm test:e2e:mcp`. Ordinary expectation failures aggregate; unsafe harness state stops immediately.
 2. Keep the printed sandbox path; `mcp-e2e-checkpoint.json` is its cursor.
 3. Fix the defect. Never kill `MSACCESS.EXE` by process name.
 4. Resume: `pnpm test:e2e:mcp:resume -- "C:\absolute\path\to\dysflow-mcp-e2e-..."`.
@@ -21,8 +21,8 @@ Resume is diagnostic only. Release requires the fresh full gate, which refuses `
 
 ## Testing strategy — when to run what
 
-E2E is **expensive**: it spawns real `MSACCESS.EXE` processes, holds Access locks for several
-minutes, and gates on `STOP-ON-FAIL` (one bad tool aborts the battery). Run cheap tests first;
+E2E is **expensive**: it spawns real `MSACCESS.EXE` processes and holds Access locks for several
+minutes. Ordinary failures aggregate, while process leaks and unverifiable mutation state abort. Run cheap tests first;
 pay the E2E cost only when you need it.
 
 | Stage | What runs | Cost | When |
@@ -157,8 +157,9 @@ node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui
 pnpm test:e2e:mcp:release
 ```
 
-Report lands at `%TEMP%\dysflow-mcp-e2e-*\mcp-e2e-report.md`. The battery's `STOP-ON-FAIL`
-behavior means **one failure aborts the rest** — fix the root cause, don't patch around it.
+Report lands at `%TEMP%\dysflow-mcp-e2e-*\mcp-e2e-report.md`. Ordinary expected-success,
+expected-error, and semantic assertion failures continue and appear together with stable IDs.
+The terminal exit remains non-zero when any row fails.
 On success the sandbox is auto-removed; on failure it is preserved (path printed at the end).
 Set `DYSFLOW_E2E_PRESERVE_SANDBOX=1` to keep it on success too.
 
@@ -188,9 +189,9 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
 - **Advertised tool count is hardcoded twice.** `mcp-e2e.mjs` and
   `test/adapters/mcp/advertised-tool-count.test.ts` must agree. When you add a visible tool,
   bump both, in the same PR, or the protocol preflight flips red.
-- **STOP-ON-FAIL aborts on the first failing tool.** That is intentional — a leftover zombie
-  means the suite's own PID tracking is corrupted, so continuing would orphan more processes.
-  The fix is the tool that orphaned the child, not a workaround in the harness.
+- **Unsafe state still aborts immediately.** A leftover zombie, invalid runtime/checkpoint
+  identity, missing password-aware path, failed global preflight, or unknown mutating
+  postcondition makes later evidence untrustworthy. Fix that boundary instead of bypassing it.
 - **`record()` is mandatory**, not optional. Direct `callMcp()` bypasses preflight, PID
   tracking, and the `:zombie-check` row. A user-facing IA agent calling tools in production
   goes through the same wiring the harness tests — keep the suite close to that reality.

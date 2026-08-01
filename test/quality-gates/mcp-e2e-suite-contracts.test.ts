@@ -87,7 +87,7 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
     // file (which would catch comments too).
     const toolsListCallRegex = /record\(\s*"protocol"\s*,\s*"tools\/list"\s*\)/;
     const advertisedResultRegex =
-      /addFailFastResult\(\{\s*area:\s*"protocol"\s*,\s*tool:\s*"advertised-tool-count"/;
+      /addResult\(\{\s*area:\s*"protocol"\s*,\s*tool:\s*"advertised-tool-count"/;
 
     const toolsListMatch = src.match(toolsListCallRegex);
     const advertisedMatch = src.match(advertisedResultRegex);
@@ -226,15 +226,13 @@ describe("mcp-e2e.mjs — orphan-detection invariants", () => {
   });
 });
 
-describe("mcp-e2e-record.mjs — STOP-ON-FAIL invariant", () => {
+describe("mcp-e2e-record.mjs — aggregate ordinary failures and preserve safety stops", () => {
   const src = readSource(RECORD_PATH);
 
-  it("throws on FAIL row (tool.pass=false || zombie.pass=false) so the battery aborts", () => {
-    // The STOP-ON-FAIL gate is what keeps a single failed tool from
-    // orphaning N MSACCESS.EXE processes. Disabling it lets zombies
-    // escape. The contract: a FAIL row throws and sets process.exitCode.
-    expect(src).toContain("STOP-ON-FAIL");
-    expect(src).toMatch(/throw new Error\(`mcp-e2e: STOP-ON-FAIL/);
+  it("continues after an ordinary expectation mismatch but throws for unsafe zombie state", () => {
+    expect(src).toContain("continuing after ordinary failure");
+    expect(src).toMatch(/if \(!zombiePass\)/);
+    expect(src).toMatch(/throw new Error\(`mcp-e2e: UNSAFE-STOP/);
     expect(src).toContain("processObj.exitCode = 1");
   });
 
@@ -245,6 +243,28 @@ describe("mcp-e2e-record.mjs — STOP-ON-FAIL invariant", () => {
     // would be a no-op. Pin that the registration exists and is not gated
     // behind a conditional.
     expect(src).toMatch(/ctx\.suiteOwnPids\.add\(result\.childPid\)/);
+  });
+});
+
+describe("mcp-e2e.mjs — failure aggregation safety boundary (#1305)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("fails fast when an ordinary mismatch leaves a mutating postcondition unknown", () => {
+    expect(src).toMatch(/!toolRow\.pass\s*&&\s*hasUnknownMutatingPostcondition/);
+    expect(src).toContain("mutating postcondition is unknown");
+  });
+
+  it("does not treat an entire mixed read/write area as mutating", () => {
+    expect(src).toContain("args.apply === false || args.dryRun === true");
+    expect(src).not.toMatch(/!toolRow\.pass\s*&&\s*mutatingAreas\.has\(area\)/);
+  });
+
+  it("persists all failures and computes the terminal exit after the final cleanup audit", () => {
+    expect(src).toMatch(/resumeController\.syncFailures\(rows\.filter\(\(row\) => !row\.pass\)\)/);
+    expect(src).toMatch(/process\.exitCode = computeE2eExitCode\(rows, abortedDueToFailure\)/);
+    expect(src.indexOf("lingering-access-check")).toBeLessThan(
+      src.lastIndexOf("computeE2eExitCode"),
+    );
   });
 });
 
