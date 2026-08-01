@@ -1,5 +1,20 @@
 # Changelog
 
+## [v2.32.0] - 2026-08-01
+
+### Added
+
+- Aggregate ordinary expected-success, expected-error, and semantic assertion failures across a release E2E run while preserving fail-fast stops for unsafe or indeterminate states (#1307).
+
+### Fixed
+
+- Strengthen MCP diagnostics, human-safety gates, structured error and plan-mode contracts, orphan visibility, safe implicit defaults, and schema/runtime alignment (#1258, #1259, #1260, #1261, #1262, #1263, #1268).
+- Improve Access form/report detection and localized section resolution, and make newly added controls and document-module identities safe across Access round trips (#1267, #1290, #1301, #1302).
+- Keep query, compact-repair, export, and whole-project sync plans non-mutating and contract-valid when module selections are omitted or empty (#1275, #1277, #1279, #1281, #1283, #1285, #1287).
+- Make release validation reproducible by rebuilding the exact repository runtime, bounding the real-spawn regression, and correcting stale or nondeterministic E2E probes and fixtures (#1271, #1273, #1291, #1293, #1297, #1299, #1304, #1306).
+- Improve Windows/Access reliability by retrying the narrow transient PowerShell ERD out-of-memory failure and scanning live VBA code for references without a full layout export (#1295, #1303).
+- Remove a stale Biome suppression and accept canonical installed Node launchers in runtime-drift checks (#1266, #1269).
+
 ## [v2.31.0] - 2026-07-30
 
 ### Changes
