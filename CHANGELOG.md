@@ -1,5 +1,16 @@
 # Changelog
 
+## [v2.33.0] - 2026-08-01
+
+### Changes
+
+- fix(release): preserve explicit version dispatch (#1319)
+- feat(mcp): advertise tool workflow metadata (#1317)
+- feat(mcp): add project resolution recovery tokens (#1316)
+- feat(mcp): expose setup_project bootstrap (#1315)
+- docs(agents): align embedded dysflow harness (#1311)
+
+
 ## [v2.32.0] - 2026-08-01
 
 ### Added
