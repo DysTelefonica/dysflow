@@ -23,7 +23,7 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**91 visible MCP tools · Windows / Node 20-26**
+**92 visible MCP tools · Windows / Node 20-26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -61,7 +61,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 - A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
 - A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 91 visible MCP tools covering VBA, SQL, schema, form
+- A platform with 92 visible MCP tools covering VBA, SQL, schema, form
   operations, AI-assisted form UI workflows, source-level VBA procedure
   introspection, dead-code detection, VBA test manifest validation, pre-import
   module linting, geometric form layout rendering (`render_form_preview`),
@@ -825,6 +825,16 @@ Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Ca
 * **Parameters**: none. The tool accepts an empty `{}` body and returns a structured JSON snapshot.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog.
 
+#### `setup_project`
+Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
+Omitting `apply` returns the resolved config without writing. `apply:true`
+requires process writes to be enabled and the candidate
+`capabilities.allowWrites` to be true; unlike ordinary write tools, bootstrap
+does not require a pre-existing write-ready project config.
+* **Parameters**: `frontendFile` (required basename), plus optional `cwd`,
+  `backendPath`, `projectId`, `destinationRoot`, `capabilities`, `timeoutMs`,
+  and `apply`.
+
 #### `list_procedures`
 List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
 * **Parameters**:
@@ -902,7 +912,7 @@ Read `.dysflow/project.json` and (optionally with `apply:true`) rewrite it in pl
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
 
 #### `schema`
-Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 91 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 92 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.

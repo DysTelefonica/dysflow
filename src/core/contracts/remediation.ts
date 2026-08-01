@@ -59,6 +59,10 @@ export type WorktreeConfigRemediation = {
   kind: "worktree-config";
   description: string;
   command: { value: string; cwd: string };
+  mcpTool: {
+    name: "setup_project";
+    input: { cwd: string; frontendFile: string; apply: false };
+  };
   platform: RemediationPlatform;
   safeToAutoExecute: false;
   fieldChecklist: readonly string[];

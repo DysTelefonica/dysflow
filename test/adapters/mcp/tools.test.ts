@@ -279,6 +279,7 @@ describe("MCP tool registration over core services", () => {
       "clean_stale_markers",
       "state",
       "logs",
+      "setup_project",
       "migrate_project_config",
     ];
 

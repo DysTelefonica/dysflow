@@ -62,6 +62,9 @@ const OUTPUT_CONTRACT_GROUPS = {
     // (operations.json + markers/*.json) and returns structured log
     // entries; never opens Access, never mutates state.
     "logs",
+    // #1312 — local project-config bootstrap; plan/apply service that
+    // bypasses Access and the generated dispatch routes.
+    "setup_project",
     // Issue #1177 — `migrate_project_config` drives legacy config
     // migrations (read-class diff preview by default, apply:true
     // rewrites `.dysflow/project.json` atomically). Bypasses the

@@ -101,6 +101,8 @@ describe("shared-block class coverage (#1192)", () => {
         "Offline form-spec generation; it resolves no Access or managed-source execution target.",
       migrate_project_config:
         "Project-config migration validates its explicit cwd-bound config path and resolves no Access target.",
+      setup_project:
+        "Project bootstrap validates the selected Git worktree and candidate config before atomic publication.",
     });
     expect(TIMEOUT_EXCEPTIONS).toMatchObject({
       catalog_add_control: expect.stringContaining("offline"),
