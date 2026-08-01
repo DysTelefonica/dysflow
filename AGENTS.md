@@ -36,7 +36,7 @@ for **how to behave** when calling those tools.
 - You are about to call any dysflow MCP tool.
 - You receive an MCP error envelope from dysflow.
 - You are about to write a new test, helper, fixture, or form handler.
-- You are deciding whether a write should happen (`dryRun` vs `apply`).
+- You are deciding whether a write should happen (`apply:false` vs `apply:true`).
 
 ## 2. Hard rules (NEVER violate)
 
@@ -55,8 +55,8 @@ for **how to behave** when calling those tools.
   `Get-Process | Stop-Process -Force`,
   `kill -9` on `Get-Process` results.
   Use ONLY dysflow-owned cleanup: `list_access_operations` →
-  `access_force_cleanup_orphaned({confirmPid:null})` →
-  `access_force_cleanup_orphaned({confirmPid:<real pid>})` → OR
+  `access_force_cleanup_orphaned({pid:null})` →
+  `access_force_cleanup_orphaned({pid:<real pid>,implements_check:"orphans_msaccess",confirmedRequiresConfirmation:true})` → OR
   `cleanup_access_operation({operationId:<real id>})`.
 
 - **HR-3 — NEVER write to production backend.** `m_TestingMode=True` is the
@@ -84,7 +84,7 @@ for **how to behave** when calling those tools.
   assert a process exists from cached / registry / prior-turn state.
   Read-only checks: `list_access_operations`,
   `cleanup_access_operation({force:false})`,
-  `access_force_cleanup_orphaned({confirmPid:null})`. Never fabricate
+  `access_force_cleanup_orphaned({pid:null})`. Never fabricate
   process details a tool did not return.
 
 - **HR-8 — Writes are serialized per process.** Never batch dysflow write
@@ -148,12 +148,11 @@ load `access-vba-e2e-methodology`.
 - **AP-3** — Using a legacy flag as the primary commit contract. The live
   registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool —
   `test_vba` included, which was the last holdout. Use `apply:true` to commit
-  and `apply:false` to preview. `diff` and `dryRun` are compatibility aliases
-  only when the live `legacyAliases[]` reports them; never hard-code an alias
+  and `apply:false` to preview. `diff` is the only live compatibility alias,
+  and only for export tools when `legacyAliases[]` reports it; never hard-code an alias
   as canonical, and never assume a tool is the exception — read the registry.
-- **AP-4** — Forgetting that `export_*` defaults to WRITE behavior. When no flag
-  is passed, `defaultBehavior:"writes"` means the call writes. Explicit intent
-  (`apply:true`/`apply:false`) is required in agent-authored calls.
+- **AP-4** — Omitting explicit export intent. The live registry reports
+  `defaultBehavior:"plan"`; still pass `apply:true` or `apply:false` explicitly in agent-authored calls.
   `export_modules` uses a disposable binary copy by default;
   `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
@@ -185,7 +184,7 @@ The arnés is the LEAN pointer. Depth lives in:
 ## 7. Memory (dysflow-specific)
 
 The runtime (`get_capabilities`) IS the memory. Do NOT cache tool names,
-write-flags, default `dryRun` values, or error codes across sessions.
+write-flags, plan defaults, or error codes across sessions.
 Re-fetch at session start and after any `adapterVersion` bump.
 
 Engram IS useful for project-level facts (sandbox URLs, project conventions,
