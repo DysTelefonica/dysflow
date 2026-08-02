@@ -4,56 +4,34 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      force_full_validation:
+        description: Ignore a fresh CI receipt and run lint/tests again
+        required: false
+        type: boolean
+        default: false
 
 jobs:
-  # The product runtime is Windows-only: exercise its full release validation
-  # there. The publishing job below stays on Linux solely for portable archive,
-  # checksum, signing, and GitHub-release tooling.
-  release-validation:
-    name: Windows release validation
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Enable pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test
-
-  release:
-    name: Build & Release Artifacts
-    needs: release-validation
+  # This job is deliberately independent from release validation: it creates
+  # the immutable, run-scoped build once while Windows validates the tag.
+  build:
+    name: Build release artifact
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.sha }}
+      dist_sha256: ${{ steps.bundle.outputs.sha256 }}
     permissions:
-      contents: write
-
-    # Safe to expose: this is the boolean "is a signing key configured?", not the key
-    # itself. Used to gate the signing step. The actual secret is only injected into the
-    # signing step's own env, never into build/install steps.
-    env:
-      HAS_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Resolve tagged commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Enable pnpm
         uses: pnpm/action-setup@v6
@@ -75,12 +53,133 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Tar before upload so executable modes and symlinks survive GitHub's ZIP
+      # artifact transport. The digest also travels independently as a job output.
+      - name: Bundle exact build output
+        id: bundle
+        run: |
+          tar -cf dist-build.tar dist
+          SHA256="$(sha256sum dist-build.tar | cut -d ' ' -f 1)"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload run-scoped build artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ steps.commit.outputs.sha }}
+          path: dist-build.tar
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Record artifact identity
+        run: echo "Uploaded dist-${{ steps.commit.outputs.sha }} with digest ${{ steps.upload.outputs.artifact-digest }}"
+
+  # The product runtime is Windows-only. A recent successful main-push Quality
+  # gates job for these exact bytes is accepted as its receipt; any uncertainty
+  # (API errors included) falls through to the complete historical validation.
+  release-validation:
+    name: Windows release validation
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # `github.sha` can describe the pushed ref. Resolve the checked-out commit
+      # so annotated tags are compared with the CI run's commit SHA.
+      - name: Resolve tagged commit
+        id: commit
+        shell: pwsh
+        run: '"sha=$(git rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8'
+
+      - name: Verify CI receipt
+        id: receipt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_RELEASE_SHA: ${{ steps.commit.outputs.sha }}
+          FORCE_FULL_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_validation && 'true' || 'false' }}
+        run: node .github/scripts/verify-ci-receipt.mjs
+
+      - name: Enable pnpm
+        if: steps.receipt.outputs.decision != 'skip'
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        if: steps.receipt.outputs.decision != 'skip'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm lint
+
+      - name: Test
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm test
+
+      - name: Receipt-skip summary
+        if: steps.receipt.outputs.decision == 'skip'
+        run: echo "Skipping lint+test for exact tag SHA ${{ github.sha }}; authoritative CI run ${{ steps.receipt.outputs.run_id }}, quality job ${{ steps.receipt.outputs.job_id }}."
+
+  release:
+    name: Build & Release Artifacts
+    needs: [build, release-validation]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: write
+
+    # Safe to expose: this is the boolean "is a signing key configured?", not the key
+    # itself. Used to gate the signing step. The actual secret is only injected into the
+    # signing step's own env, never into archive preparation.
+    env:
+      HAS_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Verify checkout matches build input
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit_sha }}
+        run: test -n "$EXPECTED_COMMIT_SHA" && test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA"
+
+      - name: Stamp release version
+        run: node .github/scripts/set-release-package-version.mjs "${{ github.ref_name }}"
+
+      - name: Download exact-SHA build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.build.outputs.commit_sha }}
+          path: .release-build
+
+      - name: Verify and install build output
+        env:
+          EXPECTED_DIST_SHA256: ${{ needs.build.outputs.dist_sha256 }}
+        run: |
+          cd .release-build
+          test -n "$EXPECTED_DIST_SHA256"
+          echo "$EXPECTED_DIST_SHA256  dist-build.tar" | sha256sum --check -
+          tar -xf dist-build.tar -C ..
+
       - name: Create release tarball
         # pnpm-lock.yaml is required so the self-updater can verify the
-        # transitive dep graph with --frozen-lockfile (#666). Without it,
-        # `pnpm install --prod` re-resolves from the public registry on every
-        # `dysflow update`, defeating the trust model that says we ship
-        # exactly the graph we built and signed.
+        # transitive dep graph with --frozen-lockfile (#666). The downloaded
+        # dist tree is bound to this run and verified before entering the archive.
         run: |
           tar -czf dysflow-${{ github.ref_name }}.tar.gz dist scripts plugin references/error-codes.md docs/diagnostics/hresult-guide.md docs/diagnostics/form-import-gate-failures.md package.json pnpm-lock.yaml README.md CHANGELOG.md
 
@@ -97,7 +196,6 @@ jobs:
       # Authenticity: sign SHA256SUMS with the Ed25519 release key and publish a
       # detached base64 signature (SHA256SUMS.sig). The self-updater verifies it
       # fail-closed against RELEASE_SIGNING_PUBLIC_KEY_PEM before trusting checksums.
-      # See docs/security/update-trust-model.md.
       - name: Sign checksums (Ed25519)
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
@@ -108,8 +206,6 @@ jobs:
           umask 077
           printf '%s' "$RELEASE_SIGNING_KEY" > "$KEYFILE"
           openssl pkeyutl -sign -inkey "$KEYFILE" -rawin -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
-          # Self-verify the produced signature so a broken signing step fails the release
-          # instead of publishing an invalid SHA256SUMS.sig.
           openssl pkey -in "$KEYFILE" -pubout -out "$PUBFILE"
           base64 -d SHA256SUMS.sig > "$RAWSIG"
           openssl pkeyutl -verify -pubin -inkey "$PUBFILE" -rawin -in SHA256SUMS -sigfile "$RAWSIG"
@@ -120,13 +216,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           # AGENTS.md hard rule: the release title MUST equal the tag name.
-          # Pass the ref (e.g. "v1.13.0") as the release name so the artifact
-          # is born matching the tag. The assert-release-name step below
-          # verifies the invariant immediately after creation — replaces the
-          # previous release-title-guard.yml workflow, which was doubly dead:
-          # it used the wrong field (`.title` instead of `.name`) AND its
-          # `release: [created, edited]` trigger never fired for releases
-          # created with GITHUB_TOKEN.
           name: ${{ github.ref_name }}
           files: |
             dysflow-*.tar.gz
@@ -138,18 +227,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # #668 — replaces the dead release-title-guard.yml. Verifies the
-      # published release's `name` matches the tag immediately after
-      # creation, protecting against a future softprops action change. Later
-      # human edits are checked independently by release-title-guard.yml.
+      # #668 protects the title invariant immediately after publication. Human
+      # edits remain covered independently by release-title-guard.yml.
       - name: Assert release name == tag (#668)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Resolve the tag name from the ref (refs/tags/vX.Y.Z → vX.Y.Z).
           TAG="${GITHUB_REF_NAME}"
-          # Fetch the release that softprops just created.
           RELEASE_NAME="$(gh release view "${TAG}" --json name --jq .name)"
           if [ "${RELEASE_NAME}" != "${TAG}" ]; then
             echo "Release name must equal tag_name." >&2

@@ -9,6 +9,7 @@ export default defineConfig({
       "test/adapters/**/*.test.ts",
       "test/architecture/**/*.test.ts",
       "test/quality-gates/**/*.test.ts",
+      "test/ci/**/*.test.ts",
       "test/docs/**/*.test.ts",
       // Real-Access integration tests live in vitest.integration.config.ts so the
       // default unit run never spawns MSACCESS/PowerShell in parallel — concurrent
