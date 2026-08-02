@@ -54,9 +54,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Audit dependencies
+        # The main-push receipt is authoritative and fail-closed. PRs already
+        # exercise lint, tests, coverage and build; a warn-only audit there
+        # consumed runner time without gating the change.
+        if: github.event_name == 'push'
         env:
           AUDIT_SOURCE: https://registry.npmjs.org
-          AUDIT_UNAVAILABLE_POLICY: ${{ github.event_name == 'pull_request' && 'warn' || 'fail' }}
+          AUDIT_UNAVAILABLE_POLICY: fail
         run: node scripts/dependency-audit-evidence.mjs
 
       - name: Lint
@@ -83,6 +87,9 @@ jobs:
 
   windows-integration-smoke:
     name: Windows PowerShell/Access smoke
+    # The PR proves these integration paths before merge. The main-push
+    # quality receipt remains the exact-SHA authority used by releases.
+    if: github.event_name == 'pull_request'
     runs-on: windows-latest
 
     steps:

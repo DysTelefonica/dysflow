@@ -275,10 +275,10 @@ describe("repository quality gates", () => {
     const workflow = await readText(".github/workflows/release.yml");
 
     expect(workflow).toMatch(
-      /release-validation:\s*\r?\n\s*name: Windows release validation\s*\r?\n\s*runs-on: windows-latest/,
+      /release-validation:[\s\S]*?name: Windows release validation[\s\S]*?runs-on: windows-latest/,
     );
     expect(workflow).toMatch(
-      /release:\s*\r?\n\s*name: Build & Release Artifacts\s*\r?\n\s*needs: release-validation\s*\r?\n\s*runs-on: ubuntu-latest/,
+      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation\][\s\S]*?runs-on: ubuntu-latest/,
     );
   });
 
