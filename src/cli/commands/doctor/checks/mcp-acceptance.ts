@@ -1,3 +1,4 @@
+import { statSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -66,10 +67,15 @@ function payload(result: { content: readonly { text: string }[] }): Record<strin
 }
 
 function sameFilesystemPath(left: unknown, right: string): boolean {
-  return (
-    typeof left === "string" &&
-    path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase()
-  );
+  if (typeof left !== "string") return false;
+  if (path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase()) return true;
+  try {
+    const leftStat = statSync(left, { bigint: true });
+    const rightStat = statSync(right, { bigint: true });
+    return leftStat.ino !== 0n && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+  } catch {
+    return false;
+  }
 }
 
 async function withFixture<T>(prefix: string, run: (root: string) => Promise<T>): Promise<T> {
@@ -160,10 +166,7 @@ async function probeAmbiguityRecovery(): Promise<McpAcceptanceProbeResult> {
       });
       const candidates = [candidate(worktreeA, "a.accdb"), candidate(worktreeB, "b.accdb")];
       const projectConfigResolver = (_input: unknown, cwd = root): ProjectConfigDiagnostic => {
-        const selected = candidates.find(
-          (entry) =>
-            path.resolve(entry.projectRoot).toLowerCase() === path.resolve(cwd).toLowerCase(),
-        );
+        const selected = candidates.find((entry) => sameFilesystemPath(entry.projectRoot, cwd));
         if (selected !== undefined) {
           return {
             status: "valid",
