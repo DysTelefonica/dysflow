@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.34.0] - 2026-08-02
+
+### Changes
+
+- feat(mcp): add cwd-aware worktree cache (#1322)
+- docs(agents): align v2.33.0 runtime harness (#1320)
+
+
 ## [v2.33.0] - 2026-08-01
 
 ### Changes
