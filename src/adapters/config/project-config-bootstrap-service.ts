@@ -34,6 +34,10 @@ export function buildSetupProjectConfig(
   input: SetupProjectConfigInput,
   projectRoot: string,
 ): ProjectConfigCandidate {
+  const projectId = input.projectId?.trim();
+  if (projectId === undefined || projectId.length === 0) {
+    throw new Error("projectId is required when no existing worktree configuration can be reused.");
+  }
   const frontendFile = basename(input.frontendFile);
   if (frontendFile !== input.frontendFile) {
     throw new Error("frontendFile must be a basename located at the worktree root.");
@@ -45,7 +49,7 @@ export function buildSetupProjectConfig(
       : { writeExecutionPolicy: input.capabilities.writeExecutionPolicy }),
   };
   return {
-    id: input.projectId ?? basename(projectRoot),
+    id: projectId,
     frontendFile,
     ...(input.backendPath === undefined
       ? {}
@@ -60,7 +64,10 @@ export function buildRelativeProjectConfig(
   config: DysflowConfig,
   projectRoot: string,
 ): ProjectConfigCandidate {
-  const projectId = config.projectId ?? basename(projectRoot);
+  const projectId = config.projectId?.trim();
+  if (projectId === undefined || projectId.length === 0) {
+    throw new Error("projectId is required when no existing project configuration can be reused.");
+  }
   const frontendFile = basename(config.accessDbPath);
   const frontendRelative = toPortableProjectPath(config.accessDbPath, projectRoot);
   if (frontendRelative !== frontendFile) {

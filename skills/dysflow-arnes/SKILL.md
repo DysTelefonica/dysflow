@@ -94,11 +94,15 @@ execution, test execution, and form UI operations on Access projects.
 
 - **HR-10 ÔÇö Bootstrap missing project config before any other write.** When
   `get_capabilities({}).projectConfig.status === "missing"`, call
-  `setup_project({cwd,frontendFile,apply:false})`, review `resolvedConfig`, then
+  `setup_project({cwd,projectId,frontendFile,apply:false})`, review `resolvedConfig`, then
   call the same tool with `apply:true`. The bootstrap apply enforces the process
   write gate and candidate `capabilities.allowWrites`; it intentionally does
   not require an existing write-ready config because that would deadlock first
   use. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
+  Bootstrap requires an explicit `projectId` unless the selected
+  WorktreeContext already has a configured id; omission reuses that id or
+  fails closed with `MCP_INPUT_INVALID` and `projectId is required`. It never
+  derives an id from the cwd basename.
 
 - **HR-11 ÔÇö Recover ambiguity without overwriting config.** When
   `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose

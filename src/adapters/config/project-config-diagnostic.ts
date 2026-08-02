@@ -317,7 +317,7 @@ export function diagnoseProjectConfig(
     return fail(
       "missing",
       "No project config selected.",
-      `Run \`dysflow setup --cwd ${cwd} --apply --access-path <path>\`.`,
+      `Run \`dysflow setup --cwd ${cwd} --apply --project-id <id> --access-path <path>\`.`,
     );
   try {
     if (!within(canonical(dirname(selectedConfig)), canonicalProjectRoot)) throw new Error();

@@ -21,6 +21,7 @@ export type SetupProjectInput = SetupProjectConfigInput & {
 export type SetupProjectToolOptions = {
   cwd: string;
   writesEnabled: boolean;
+  resolveExistingProjectId?: (cwd: string) => string | null | Promise<string | null>;
   onPublished?: (cwd: string) => void | Promise<void>;
 };
 
@@ -52,7 +53,7 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
     name: "setup_project",
     resultContract: setupProjectResultContract,
     description:
-      "Plan or atomically create .dysflow/project.json in a fresh Git worktree without requiring shell access. Omitted apply plans only; apply:true requires the process write gate and candidate capabilities.allowWrites:true. " +
+      "Plan or atomically create .dysflow/project.json in a fresh Git worktree without requiring shell access. A fresh bootstrap requires projectId; omission reuses an existing WorktreeContext id or fails closed. Omitted apply plans only; apply:true requires the process write gate and candidate capabilities.allowWrites:true. " +
       MCP_TOOL_CONTRACTS.setup_project.summary,
     inputSchema: SETUP_PROJECT_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
@@ -77,13 +78,37 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
       }
 
       let resolvedConfig: Record<string, unknown>;
+      const warnings: string[] = [];
       try {
-        resolvedConfig = buildSetupProjectConfig(params, projectRoot);
+        const explicitProjectId = params.projectId?.trim();
+        const existingProjectId =
+          explicitProjectId === undefined || explicitProjectId.length === 0
+            ? await options.resolveExistingProjectId?.(projectRoot)
+            : null;
+        if (
+          (explicitProjectId === undefined || explicitProjectId.length === 0) &&
+          existingProjectId !== null &&
+          existingProjectId !== undefined
+        ) {
+          warnings.push(
+            `projectId was omitted; reused existing WorktreeContext projectId "${existingProjectId}".`,
+          );
+        }
+        resolvedConfig = buildSetupProjectConfig(
+          {
+            ...params,
+            projectId:
+              explicitProjectId === undefined || explicitProjectId.length === 0
+                ? (existingProjectId ?? undefined)
+                : explicitProjectId,
+          },
+          projectRoot,
+        );
       } catch (error) {
         return failure(
           "MCP_INPUT_INVALID",
           error instanceof Error ? error.message : String(error),
-          "Pass a frontendFile basename located at the selected worktree root.",
+          "Pass an explicit projectId for a fresh bootstrap, or select a WorktreeContext with an existing configured id. Also pass frontendFile as a basename at that worktree root.",
         );
       }
 
@@ -100,7 +125,7 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
                 willWrite: true,
                 configPath: join(projectRoot, ".dysflow", "project.json"),
                 resolvedConfig,
-                warnings: [],
+                warnings,
               }),
             },
           ],
@@ -137,6 +162,7 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
                 dryRun: false,
                 configPath,
                 writtenFields: Object.keys(resolvedConfig),
+                warnings,
               }),
             },
           ],

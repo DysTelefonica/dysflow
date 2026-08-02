@@ -61,7 +61,7 @@ export type WorktreeConfigRemediation = {
   command: { value: string; cwd: string };
   mcpTool: {
     name: "setup_project";
-    input: { cwd: string; frontendFile: string; apply: false };
+    input: { cwd: string; projectId: string; frontendFile: string; apply: false };
   };
   platform: RemediationPlatform;
   safeToAutoExecute: false;
@@ -213,8 +213,8 @@ export function remediationForProjectIdMismatch(configuredId: string | null): Re
  */
 export function remediationForMissingProjectConfig(cwd: string): Remediation {
   return {
-    description: `No per-worktree .dysflow/project.json was found. Run \`dysflow setup --cwd ${cwd} --apply --access-path <path>\` to bootstrap a per-worktree .dysflow/project.json. No write operation was performed.`,
-    command: `dysflow setup --cwd '${cwd}' --apply --access-path '<path>'`,
+    description: `No per-worktree .dysflow/project.json was found. Run \`dysflow setup --cwd ${cwd} --apply --project-id <id> --access-path <path>\` to bootstrap a per-worktree .dysflow/project.json. No write operation was performed.`,
+    command: `dysflow setup --cwd '${cwd}' --apply --project-id '<id>' --access-path '<path>'`,
     platform: "cross-platform",
     // Setup writes the config — not safe to auto-execute without user confirmation.
     safeToAutoExecute: false,

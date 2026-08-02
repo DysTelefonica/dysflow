@@ -282,7 +282,12 @@ describe("cwd-aware worktree cache (#1321)", () => {
     const setup = requiredTool(registered, "setup_project");
     const getCapabilities = requiredTool(registered, "get_capabilities");
     const applied = payload(
-      await setup.handler({ cwd: sibling, frontendFile: "Frontend.accdb", apply: true }),
+      await setup.handler({
+        cwd: sibling,
+        projectId: "sibling",
+        frontendFile: "Frontend.accdb",
+        apply: true,
+      }),
     );
     expect(applied.mode).toBe("apply");
     const capabilities = payload(await getCapabilities.handler({ cwd: sibling }));
@@ -301,7 +306,12 @@ describe("cwd-aware worktree cache (#1321)", () => {
     const getCapabilities = requiredTool(registered, "get_capabilities");
 
     const applied = payload(
-      await setup.handler({ cwd: sibling, frontendFile: "Frontend.accdb", apply: true }),
+      await setup.handler({
+        cwd: sibling,
+        projectId: "sibling",
+        frontendFile: "Frontend.accdb",
+        apply: true,
+      }),
     );
     expect(applied.mode).toBe("apply");
 

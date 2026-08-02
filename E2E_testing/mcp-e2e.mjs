@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
@@ -908,6 +908,47 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
+  if (tool === "setup_project:reuse-existing-id") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = safeJsonParse(result?.text);
+        const pass =
+          parsed?.ok === true &&
+          parsed?.mode === "plan" &&
+          parsed?.resolvedConfig?.id === projectId &&
+          parsed?.warnings?.some(
+            (warning) =>
+              typeof warning === "string" &&
+              warning.includes("reused existing WorktreeContext projectId"),
+          );
+        return {
+          pass,
+          expected: "omitted projectId reuses the selected WorktreeContext id",
+          summary: pass ? `reused projectId=${projectId}` : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "setup_project:missing-id-refused") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          result?.isError === true &&
+          error?.code === "MCP_INPUT_INVALID" &&
+          error?.message?.includes("projectId is required");
+        return {
+          pass,
+          expected: "MCP_INPUT_INVALID with projectId is required",
+          summary: pass ? "fresh worktree id invention refused" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool === "setup_project") {
     return {
       args,
@@ -1117,7 +1158,26 @@ await record("capabilities", "migrate_project_config", {
 await record("capabilities", "setup_project", {
   cwd: repoRoot,
   frontendFile: "DysflowSetupProbe.accdb",
+  projectId: "dysflow-setup-probe",
 });
+
+// v2.34-regressions — #1325 / bench R-S04. An omitted id may reuse the
+// selected worktree's existing config, but a fresh worktree must fail closed;
+// cwd basename invention is never an allowed fallback.
+await record("v2.34-regressions", "setup_project:reuse-existing-id", {
+  cwd: tempRoot,
+  frontendFile: basename(accessPath),
+  apply: false,
+});
+const setupMissingIdRoot = join(tempRoot, "setup-project-missing-id");
+await mkdir(setupMissingIdRoot, { recursive: true });
+await writeFile(join(setupMissingIdRoot, ".git"), "gitdir: fixture", "utf8");
+await writeFile(join(setupMissingIdRoot, "Fresh.accdb"), "", "utf8");
+await record("v2.34-regressions", "setup_project:missing-id-refused", {
+  cwd: setupMissingIdRoot,
+  frontendFile: "Fresh.accdb",
+  apply: false,
+}, { expected: "error" });
 
 // v2.34-regressions — #1327 recovery-token trio. Unlike ordinary record()
 // rows, this journey deliberately keeps one MCP process alive: the token is

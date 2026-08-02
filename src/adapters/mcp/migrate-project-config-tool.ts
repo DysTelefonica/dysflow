@@ -158,8 +158,8 @@ export async function tryMigrateProjectConfig(
       outcome: "error",
       error: {
         code: ERR_PROJECT_CONFIG_NOT_FOUND,
-        message: `No project config found at ${configPath}. Run \`dysflow setup --cwd ${cwd}\` to create one.`,
-        remediation: `Run \`dysflow setup --cwd ${cwd}\` to create .dysflow/project.json, then re-run \`migrate_project_config\`.`,
+        message: `No project config found at ${configPath}. Run \`dysflow setup --cwd ${cwd} --write-project --project-id <id> --access-path <frontend.accdb>\` to create one.`,
+        remediation: `Run \`dysflow setup --cwd ${cwd} --write-project --project-id <id> --access-path <frontend.accdb>\` to create .dysflow/project.json, then re-run \`migrate_project_config\`.`,
       },
     };
   }

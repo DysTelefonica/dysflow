@@ -28,7 +28,7 @@ Every Dysflow call returns an envelope. Read the envelope, not the prose:
 | Error code prefix | Category | First action |
 | --- | --- | --- |
 | `MCP_*` (e.g. `MCP_WRITES_DISABLED`, `MCP_ALLOWLIST_NOT_CONFIGURED`, `MCP_PROCEDURE_NOT_ALLOWED`) | Configuration / gate | `dysflow doctor` → read `get_capabilities.writesProcess.enabled` and `.dysflow/project.json.capabilities`. |
-| `PROJECT_CONFIG_*` (`PROJECT_CONFIG_NOT_WRITE_READY`, `ACCESS_PATH_NOT_FOUND`, `BACKEND_PATH_NOT_FOUND`, `DESTINATION_ROOT_NOT_FOUND`, `OUTSIDE_PROJECT_ROOT`, `PROJECT_ID_MISMATCH`) | Project unwired | `dysflow resolve_project` → read `diagnostics[]` → re-run `dysflow setup --write-project` if needed. |
+| `PROJECT_CONFIG_*` (`PROJECT_CONFIG_NOT_WRITE_READY`, `ACCESS_PATH_NOT_FOUND`, `BACKEND_PATH_NOT_FOUND`, `DESTINATION_ROOT_NOT_FOUND`, `OUTSIDE_PROJECT_ROOT`, `PROJECT_ID_MISMATCH`) | Project unwired | `dysflow resolve_project` → read `diagnostics[]` → for missing config run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>`. |
 | `*_LOCKED_BY_RUNNING_OP` / `OPERATION_ALREADY_RUNNING` / `LACCDB_*` | Runtime contention | `list_access_operations` → `cleanup_access_operation` on the specific `operationId`. For stale markers: `clean_stale_markers` with `confirm: true`. |
 | `RUNNER_INVALID_JSON` / `CONFIG_TARGET_NOT_FOUND` / `VBA_MANAGER_TIMEOUT` | PowerShell runner | `dysflow doctor` → verify Access install + runner binary path. |
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` / `INVALID_INPUT` (prune + filter) | Export-source guard | Re-target export to a sibling directory or pass `confirmOverwriteSource: true` explicitly. |
