@@ -255,9 +255,11 @@ export const setupProjectResultContract = defineResultContract({
         dryRun: z.literal(true),
         cached: z.literal(true),
         projectId: z.string(),
+        resolvedProjectId: z.string(),
         projectRoot: z.string(),
         accessPath: z.string().nullable(),
         configPath: z.string(),
+        resolvedConfig: unknownRecord,
         nextAction: z.string(),
       })
       .strict(),
