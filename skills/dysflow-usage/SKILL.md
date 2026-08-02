@@ -378,6 +378,13 @@ Run these in your head before every call. One fail = stop and resolve.
 
    See `assets/examples/run-vba.md` for the canonical procedureName parsing contract and the three typed error envelopes (`MCP_PROCEDURE_NOT_ALLOWED` / `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE`).
 
+9. **Project-config plan/apply agreement (#1324)** — for identical explicit
+   project arguments, `apply:false` and `apply:true` MUST resolve the same
+   `WorktreeContext`. If plan succeeds but apply returns
+   `PROJECT_CONFIG_NOT_WRITE_READY`, file a dysflow bug: the dispatch seam has
+   diverged. Do not bypass the write gate or remove explicit selectors to make
+   the call pass.
+
 Full rationale and per-item recovery: `assets/examples/preflight-checklist.md`.
 Composition recipes (TDD loop, drift + act, recovery, exploration): `assets/examples/composition-patterns.md`.
 

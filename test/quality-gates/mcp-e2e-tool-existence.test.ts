@@ -24,17 +24,22 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MCP_E2E_TOOL_ALIASES } from "../../E2E_testing/_helpers/mcp-e2e-tool-aliases.mjs";
+import {
+  MCP_E2E_TOOL_ALIASES,
+  resolveMcpE2eToolName,
+} from "../../E2E_testing/_helpers/mcp-e2e-tool-aliases.mjs";
 import { buildHiddenToolRegistry } from "../../src/adapters/mcp/stdio-wrappers.js";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools.js";
 import { successResult } from "../../src/core/contracts/index.js";
 
 const MCP_E2E_PATH = resolve(process.cwd(), "E2E_testing/mcp-e2e.mjs");
+const INTENTIONALLY_UNKNOWN_TOOL_LABELS = new Set(["DysflowMcpE2EUnknownTool"]);
 
 interface ParsedCall {
   area: string;
   tool: string;
   index: number;
+  literalTool: boolean;
 }
 
 function extractRecordCalls(source: string): ParsedCall[] {
@@ -47,7 +52,12 @@ function extractRecordCalls(source: string): ParsedCall[] {
   for (let m = re.exec(source); m !== null; m = re.exec(source)) {
     const area = m[1] ?? m[2] ?? m[3] ?? "";
     const tool = m[4] ?? m[5] ?? m[6] ?? "";
-    calls.push({ area, tool, index: m.index });
+    calls.push({
+      area,
+      tool,
+      index: m.index,
+      literalTool: m[4] !== undefined || m[5] !== undefined,
+    });
   }
   return calls;
 }
@@ -76,31 +86,20 @@ describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools({ 
     const failures: { area: string; tool: string; index: number; reason: string }[] = [];
 
     for (const call of calls) {
+      if (!call.literalTool) continue;
+      if (call.tool === "tools/list") continue;
+      if (INTENTIONALLY_UNKNOWN_TOOL_LABELS.has(call.tool)) continue;
       const aliasedTool = MCP_E2E_TOOL_ALIASES[call.tool as keyof typeof MCP_E2E_TOOL_ALIASES];
-      if (aliasedTool !== undefined) {
-        if (!advertised.has(aliasedTool)) {
-          failures.push({
-            area: call.area,
-            tool: call.tool,
-            index: call.index,
-            reason: `scenario alias target '${aliasedTool}' is not advertised`,
-          });
-        }
-        continue;
-      }
-      // Skip non-tool pseudo-rows: anything that starts with `dysflow_` is a
-      // real MCP tool; anything else (e.g. `tools/list`, `lingering-access-check`,
-      // `compile_vba:zombie-check`, `export_all:semantic-fields`) is either a
-      // meta-tool or a synthetic row suffix.
-      if (!call.tool.startsWith("dysflow_")) continue;
-      if (!advertised.has(call.tool)) {
+      const dispatchTool = resolveMcpE2eToolName(call.tool);
+      if (!advertised.has(dispatchTool)) {
         failures.push({
           area: call.area,
           tool: call.tool,
           index: call.index,
-          reason: advertised.has(call.tool)
-            ? ""
-            : `not in advertised tool surface (advertised: ${[...advertised].sort().join(", ")})`,
+          reason:
+            aliasedTool !== undefined
+              ? `scenario alias target '${dispatchTool}' is not advertised`
+              : `label dispatches '${dispatchTool}', which is not advertised`,
         });
       }
     }
@@ -124,13 +123,11 @@ describe("mcp-e2e.mjs — every record() tool exists in createDysflowMcpTools({ 
     const failures: { tool: string; index: number }[] = [];
 
     for (const call of calls) {
-      const aliasedTool = MCP_E2E_TOOL_ALIASES[call.tool as keyof typeof MCP_E2E_TOOL_ALIASES];
-      if (aliasedTool !== undefined) {
-        if (!allKnown.has(aliasedTool)) failures.push({ tool: call.tool, index: call.index });
-        continue;
-      }
-      if (!call.tool.startsWith("dysflow_")) continue;
-      if (!allKnown.has(call.tool)) {
+      if (!call.literalTool) continue;
+      if (call.tool === "tools/list") continue;
+      if (INTENTIONALLY_UNKNOWN_TOOL_LABELS.has(call.tool)) continue;
+      const dispatchTool = resolveMcpE2eToolName(call.tool);
+      if (!allKnown.has(dispatchTool)) {
         failures.push({ tool: call.tool, index: call.index });
       }
     }

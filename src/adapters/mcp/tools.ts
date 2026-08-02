@@ -194,7 +194,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     new WorktreeContextCache({
       resolveDiagnostic: (effectiveCwd, input) => rawProjectConfigResolver(input, effectiveCwd),
     });
-  const resolveProjectConfig = (input: unknown, cwdOverride?: string) => {
+  const resolveCachedProjectConfig = (input: unknown, cwdOverride?: string) => {
     const params =
       typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
     const explicitCwd =
@@ -216,6 +216,23 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           "accessPath must be provided or .dysflow/project.json must declare one.",
         ),
       ));
+  const resolveProjectConfig = async (input: unknown, cwdOverride?: string) => {
+    const params =
+      typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+    const diagnostic = await resolveCachedProjectConfig(params, cwdOverride);
+    if (diagnostic.writeReady || !hasExplicitProjectTarget(params)) return diagnostic;
+
+    // Issue #1324 — plan and apply must resolve through the same live project
+    // context. The dynamic plan path already resolves explicit per-call
+    // selectors through accessContextResolver. When the startup cwd has no
+    // config, reuse that resolved worktree root for the write-ready diagnostic
+    // instead of incorrectly failing against the MCP process cwd.
+    const liveContext = await accessContextResolver(params);
+    if (!liveContext.ok) return diagnostic;
+    const projectRoot = liveContext.data.projectRoot;
+    if (typeof projectRoot !== "string" || projectRoot.trim().length === 0) return diagnostic;
+    return await resolveCachedProjectConfig(params, projectRoot);
+  };
   const writesAllowedForCapabilities = allowWrites ?? writesEnabled;
   const currentTools: DysflowMcpTool[] = [
     {
@@ -562,15 +579,29 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
             ok: true,
           };
         }
-        if (
-          !(await requestRequiresWriteReady(
-            tool.name,
-            contract.access,
-            input,
-            writeExecutionPolicy,
-          ))
-        )
+        const requiresWriteReady = await requestRequiresWriteReady(
+          tool.name,
+          contract.access,
+          input,
+          writeExecutionPolicy,
+        );
+        if (!requiresWriteReady) {
+          // Issue #1324 — an explicit apply:false comparison call must use
+          // the same resolver and typed missing-state envelope as apply:true.
+          // Omitted apply keeps the established lightweight/degraded preview.
+          if (inputRecord.apply !== false || !hasExplicitProjectTarget(inputRecord)) {
+            return tool.handler(input, context);
+          }
+          const planDiagnostic = await resolveProjectConfig({
+            ...inputRecord,
+            operation: tool.name,
+            ...(routeMutatesBinary !== undefined ? { mutatesBinary: routeMutatesBinary } : {}),
+          });
+          if (!planDiagnostic.writeReady) {
+            return projectConfigNotWriteReady(tool.name, planDiagnostic);
+          }
           return tool.handler(input, context);
+        }
         const diagnostic = await resolveProjectConfig({
           ...inputRecord,
           operation: tool.name,
@@ -592,6 +623,18 @@ const RECOVERY_ENABLED_READ_TOOLS = new Set([
   "migrate_project_config",
   "access_force_cleanup_orphaned",
 ]);
+
+function hasExplicitProjectTarget(input: Record<string, unknown>): boolean {
+  return [
+    "projectId",
+    "accessPath",
+    "accessDbPath",
+    "databasePath",
+    "backendPath",
+    "destinationRoot",
+    "projectRoot",
+  ].some((key) => typeof input[key] === "string" && (input[key] as string).trim().length > 0);
+}
 
 function withProjectResolutionRecovery(
   tools: readonly DysflowMcpTool[],

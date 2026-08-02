@@ -575,6 +575,38 @@ function mcpErrorFromResult(result) {
   );
 }
 
+function assertPlanApplyResolverPair(tool, planResult, applyResult, assertPayloads) {
+  const plan = safeJsonParse(planResult?.text);
+  const apply = safeJsonParse(applyResult?.text);
+  const errorParity = Boolean(planResult?.isError) === Boolean(applyResult?.isError);
+  const resolvedProjectParity =
+    plan?.resolvedProjectId === undefined && apply?.resolvedProjectId === undefined
+      ? true
+      : plan?.resolvedProjectId === apply?.resolvedProjectId &&
+        plan?.resolvedProjectId === projectId;
+  const payloadAssertion = assertPayloads(plan, apply);
+  const pass =
+    errorParity &&
+    !planResult?.isError &&
+    !applyResult?.isError &&
+    resolvedProjectParity &&
+    payloadAssertion.pass;
+  addResult({
+    area: "v2.34-regressions",
+    tool: `${tool}:plan-apply-semantic-parity`,
+    pass,
+    expected:
+      "same error state; equal resolvedProjectId when surfaced; plan/apply semantic outputs",
+    ms: 0,
+    summary: pass
+      ? payloadAssertion.summary
+      : `plan=${normalize(planResult?.text)} apply=${normalize(applyResult?.text)}`,
+  });
+  console.log(
+    `${pass ? "PASS" : "FAIL"}\t${tool}:plan-apply-semantic-parity\t0ms\t${rows.at(-1).summary}`,
+  );
+}
+
 function resolveEnvelopeFrictionScenario(tool, args, options) {
   if (tool === "data-schema-coverage") {
     return {
@@ -2201,6 +2233,105 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
   });
   console.log(`${pathScrubbedPass ? "PASS" : "FAIL"}\tinspect_form:miss-remediation-no-path-scrub\t0ms\t${rows.at(-1).summary}`);
 }
+
+// v2.34-regressions — #1324 / R-S02. Every label starts with the real
+// canonical MCP tool so the harness dispatches the tool being asserted.
+// Each pair differs only by apply intent and receives a semantic parity row.
+const regressionConfigText = await readFile(projectConfigPath, "utf8");
+const regressionConfig = JSON.parse(regressionConfigText);
+regressionConfig.capabilities = {
+  ...(regressionConfig.capabilities ?? {}),
+  allowedProcedures: ["GetMaxOrdinalE2E"],
+};
+await writeFile(projectConfigPath, `${JSON.stringify(regressionConfig, null, 2)}\n`, "utf8");
+let testVbaPlan;
+let testVbaApply;
+try {
+  testVbaPlan = await record("v2.34-regressions", "test_vba:plan-vs-apply-plan", {
+    ...ctx,
+    proceduresJson: JSON.stringify([{ procedure: "GetMaxOrdinalE2E", args: [] }]),
+    apply: false,
+  }, { expected: "ok" });
+  testVbaApply = await record("v2.34-regressions", "test_vba:plan-vs-apply-apply", {
+    ...ctx,
+    proceduresJson: JSON.stringify([{ procedure: "GetMaxOrdinalE2E", args: [] }]),
+    apply: true,
+  }, { expected: "ok" });
+} finally {
+  await writeFile(projectConfigPath, regressionConfigText, "utf8");
+}
+assertPlanApplyResolverPair("test_vba", testVbaPlan, testVbaApply, (plan, apply) => ({
+  pass:
+    plan?.dryRun === true &&
+    Array.isArray(apply) &&
+    apply.length === 1 &&
+    apply.every((entry) => entry?.ok !== false),
+  summary: `plan dryRun=true; apply results=${Array.isArray(apply) ? apply.length : "invalid"}`,
+}));
+
+const syncPlan = await record("v2.34-regressions", "sync_binary:plan-vs-apply-plan", {
+  ...ctx,
+  direction: "src-to-binary",
+  moduleNames: ["Constantes"],
+  apply: false,
+}, { expected: "ok", timeoutMs: 180000 });
+const syncApply = await record("v2.34-regressions", "sync_binary:plan-vs-apply-apply", {
+  ...ctx,
+  direction: "src-to-binary",
+  moduleNames: ["Constantes"],
+  apply: true,
+}, { expected: "ok", timeoutMs: 180000 });
+assertPlanApplyResolverPair("sync_binary", syncPlan, syncApply, (plan, apply) => ({
+  pass:
+    plan?.dryRun === true &&
+    apply?.dryRun === false &&
+    Array.isArray(plan?.plan?.toImport) &&
+    Array.isArray(apply?.plan?.toImport) &&
+    apply?.postSync !== undefined,
+  summary: `plan/apply actions=${plan?.plan?.totalActionable}/${apply?.plan?.totalActionable}`,
+}));
+
+const formArgs = {
+  ...baselineArgsFor("form_set_property"),
+  value: '"Plan/apply resolver"',
+  commitScope: "source",
+};
+const formPlan = await record("v2.34-regressions", "form_set_property:plan-vs-apply-plan", {
+  ...formArgs,
+  apply: false,
+}, { expected: "ok" });
+const formApply = await record("v2.34-regressions", "form_set_property:plan-vs-apply-apply", {
+  ...formArgs,
+  apply: true,
+}, { expected: "ok" });
+assertPlanApplyResolverPair("form_set_property", formPlan, formApply, (plan, apply) => ({
+  pass:
+    (plan?.mode === "dry-run" || plan?.dryRun === true) &&
+    apply?.mode === "apply" &&
+    apply?.importGate === "skipped" &&
+    plan?.sourcePath === apply?.sourcePath,
+  summary: `plan=${plan?.mode ?? "dry-run"}; apply=${apply?.mode}; import=${apply?.importGate}`,
+}));
+
+const importArgs = { ...ctx, moduleNames: ["Constantes"] };
+const importPlan = await record("v2.34-regressions", "import_modules:plan-vs-apply-plan", {
+  ...importArgs,
+  apply: false,
+}, { expected: "ok" });
+const importApply = await record("v2.34-regressions", "import_modules:plan-vs-apply-apply", {
+  ...importArgs,
+  apply: true,
+}, { expected: "ok" });
+assertPlanApplyResolverPair("import_modules", importPlan, importApply, (plan, apply) => ({
+  pass:
+    plan?.dryRun === true &&
+    apply?.dryRun === false &&
+    plan?.resolvedProjectId === projectId &&
+    apply?.resolvedProjectId === projectId &&
+    apply?.result !== undefined,
+  summary: `resolvedProjectId=${apply?.resolvedProjectId}; apply result captured`,
+}));
+
 const requiredContractCoverage = [
   "bootstrap",
   "recovery",
