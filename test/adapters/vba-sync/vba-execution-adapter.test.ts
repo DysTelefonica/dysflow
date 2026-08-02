@@ -473,7 +473,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_RunAll" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_RunAll" }],
+      },
     });
     expect(executeMappedTool).toHaveBeenCalledWith(
       "test_vba",
@@ -501,7 +506,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_X" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_X" }],
+      },
     });
     expect(executeMappedTool).toHaveBeenCalledWith(
       "test_vba",
@@ -551,7 +561,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_Import" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_Import" }],
+      },
     });
     expect(executeMappedTool).toHaveBeenCalledWith(
       "test_vba",
@@ -587,7 +602,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_ProjectRoot" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_ProjectRoot" }],
+      },
     });
   });
 
@@ -729,9 +749,9 @@ describe("VbaExecutionAdapter", () => {
   // fails during test_vba" test was deleted because compile is gone.
   // No runner call is made before test_vba anymore.
 
-  it("returns result unchanged from orchestrator when test data is not an array (non-array result shape)", async () => {
-    // inspectTestResult: when result.ok=true but result.data is not an array, returns result as-is
-    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ summary: "all passed" })); // not an array
+  it("normalizes a legacy singleton record returned by the orchestrator", async () => {
+    const runnerResult = { summary: "all passed" };
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(runnerResult));
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool,
       cwd: "C:/repo",
@@ -741,7 +761,12 @@ describe("VbaExecutionAdapter", () => {
     const result = await adapter.execute("test_vba", { procedureName: "Test_Run" });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.data).toMatchObject({ summary: "all passed" });
+      expect(result.data).toEqual({
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [runnerResult],
+      });
     }
   });
 
@@ -887,6 +912,131 @@ describe("VbaExecutionAdapter", () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it("normalizes a singleton successful runner result without dropping observable fields", async () => {
+    const runnerResult = {
+      ok: true,
+      procedure: "Test_A",
+      argsCount: 2,
+      returnValue: "done",
+      returnType: "String",
+      byref_values: { 0: "changed" },
+      payload: { custom: true },
+      logs: ["ran"],
+      error: null,
+      durationMs: 17,
+      futureField: "preserved",
+    };
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(runnerResult));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_A" });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { mode: "apply", passed: 1, failed: 0, tests: [runnerResult] },
+    });
+    if (!result.ok) throw new Error("expected normalized test success");
+    expect((result.data as { tests: unknown[] }).tests[0]).toBe(runnerResult);
+  });
+
+  it("normalizes an array result while preserving order and every runner object", async () => {
+    const tests = [
+      { ok: true, procedure: "Test_A", durationMs: 4, marker: "first" },
+      { ok: true, procedure: "Test_C", durationMs: 7, marker: "second" },
+    ];
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult(tests));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify([{ procedure: "Test_A" }, { procedure: "Test_C" }]),
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { mode: "apply", passed: 2, failed: 0, tests },
+    });
+    if (!result.ok) throw new Error("expected normalized test success");
+    expect((result.data as { tests: unknown[] }).tests).toEqual(tests);
+  });
+
+  it("fails closed when the runner returns neither a singleton record nor an array", async () => {
+    const diagnostics = [{ level: "warning" as const, source: "runner", message: "shape drift" }];
+    const operation = {
+      operationId: "op-invalid-output",
+      accessPath: "C:/repo/front.accdb",
+      accessPid: 1234,
+      processStartTime: "2026-08-02T20:00:00.000Z",
+      status: "failed" as const,
+    };
+    const metadata = { deprecated: { flag: "dryRun", since: "v2.34.0", use: "apply" } };
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(
+        successResult("unexpected", { diagnostics, durationMs: 41, operation, metadata }),
+      );
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_A" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "VBA_MANAGER_INVALID_OUTPUT" },
+      durationMs: 41,
+    });
+    expect(result.diagnostics).toBe(diagnostics);
+    expect(result.operation).toBe(operation);
+    expect(result.metadata).toBe(metadata);
+  });
+
+  it("returns VBA_TESTS_FAILED for a singleton ok:false result and preserves its full report", async () => {
+    const runnerResult = {
+      ok: false,
+      procedure: "Test_B",
+      argsCount: 0,
+      returnValue: null,
+      returnType: null,
+      byref_values: {},
+      payload: null,
+      logs: [],
+      error: "Run-time error '35': Sub or Function not defined",
+      durationMs: 2375,
+      futureField: "preserved",
+    };
+    const diagnostics = [{ level: "error" as const, source: "runner", message: "test failed" }];
+    const operation = {
+      operationId: "op-test-failure",
+      accessPath: "C:/repo/front.accdb",
+      accessPid: 5678,
+      processStartTime: "2026-08-02T20:01:00.000Z",
+      status: "failed" as const,
+    };
+    const metadata = { deprecated: { flag: "dryRun", since: "v2.34.0", use: "apply" } };
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(
+        successResult(runnerResult, { diagnostics, durationMs: 2375, operation, metadata }),
+      );
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "VBA_TESTS_FAILED",
+        details: { failedCount: 1, results: [runnerResult] },
+      },
+      durationMs: 2375,
+    });
+    expect(result.diagnostics).toBe(diagnostics);
+    expect(result.operation).toBe(operation);
+    expect(result.metadata).toBe(metadata);
   });
 
   it("returns VBA_TESTS_FAILED when any test result has ok: false", async () => {
@@ -1056,7 +1206,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_FromTestsSubdir" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_FromTestsSubdir" }],
+      },
     });
   });
 
@@ -1078,7 +1233,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_FromRootManifest" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_FromRootManifest" }],
+      },
     });
   });
 
@@ -1174,7 +1334,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_FromCwd" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_FromCwd" }],
+      },
     });
   });
 
@@ -1231,7 +1396,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_FromAbsolutePath" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_FromAbsolutePath" }],
+      },
     });
     // The proceduresJson MUST derive from the absolute manifest — if the
     // adapter had silently fallen back to default discovery at projectRoot,
@@ -1281,7 +1451,12 @@ describe("VbaExecutionAdapter", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: [{ ok: true, procedure: "Test_FromDestinationRoot" }],
+      data: {
+        mode: "apply",
+        passed: 1,
+        failed: 0,
+        tests: [{ ok: true, procedure: "Test_FromDestinationRoot" }],
+      },
     });
     expect(executeMappedTool).toHaveBeenCalledWith(
       "test_vba",

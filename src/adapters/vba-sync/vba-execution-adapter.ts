@@ -1072,9 +1072,10 @@ function buildTestsFailedMessage(failures: readonly VbaTestFailureDetail[]): str
 }
 
 /**
- * Collapses an array of per-procedure runner results into a single failure when
- * any procedure reported `ok: false`, while PRESERVING the structured detail the
- * runner already produced. The runner returns one object per procedure
+ * Normalizes singleton and array runner results into the documented apply
+ * envelope, then collapses them into a single failure when any procedure
+ * reported `ok: false`, while PRESERVING the structured detail the runner
+ * already produced. The runner returns one object per procedure
  * (`ok`, `procedure`, `error`, `logs`, `payload`, `durationMs`); a consuming
  * agent decides what to do next, so dropping that detail blinds it to WHICH
  * test failed and why.
@@ -1091,15 +1092,43 @@ function buildTestsFailedMessage(failures: readonly VbaTestFailureDetail[]): str
  */
 function inspectTestResult(result: OperationResult<unknown>): OperationResult<unknown> {
   if (!result.ok) return result;
-  const tests = Array.isArray(result.data) ? result.data : undefined;
-  if (tests === undefined) return result;
+  const tests = Array.isArray(result.data)
+    ? result.data
+    : isRecord(result.data)
+      ? [result.data]
+      : undefined;
+  if (tests === undefined) {
+    const failure = failureResult(
+      createDysflowError(
+        "VBA_MANAGER_INVALID_OUTPUT",
+        "test_vba runner returned neither a per-procedure result nor an array of results.",
+      ),
+      {
+        diagnostics: result.diagnostics,
+        durationMs: result.durationMs,
+        operation: result.operation,
+        metadata: result.metadata,
+      },
+    );
+    return result.metadata === undefined ? failure : { ...failure, metadata: result.metadata };
+  }
 
   const failures = tests
     .filter((test): test is Record<string, unknown> => isRecord(test) && test.ok === false)
     .map(toTestFailureDetail);
-  if (failures.length === 0) return result;
+  if (failures.length === 0) {
+    return {
+      ...result,
+      data: {
+        mode: "apply",
+        passed: tests.length,
+        failed: 0,
+        tests,
+      },
+    };
+  }
 
-  return failureResult(
+  const failure = failureResult(
     createDysflowError("VBA_TESTS_FAILED", buildTestsFailedMessage(failures), {
       details: {
         failedCount: failures.length,
@@ -1107,6 +1136,12 @@ function inspectTestResult(result: OperationResult<unknown>): OperationResult<un
         results: tests,
       },
     }),
-    { diagnostics: result.diagnostics, durationMs: result.durationMs },
+    {
+      diagnostics: result.diagnostics,
+      durationMs: result.durationMs,
+      operation: result.operation,
+      metadata: result.metadata,
+    },
   );
+  return result.metadata === undefined ? failure : { ...failure, metadata: result.metadata };
 }
