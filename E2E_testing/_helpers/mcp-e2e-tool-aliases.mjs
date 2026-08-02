@@ -9,6 +9,7 @@ export const MCP_E2E_TOOL_ALIASES = Object.freeze({
   "logs:orphans-msaccess-recent": "logs",
   "data-schema-coverage": "schema",
   "effective-dry-run-default-coherence": "get_capabilities",
+  "response-schema-version-discriminator": "get_capabilities",
 });
 
 export function resolveMcpE2eToolName(label) {

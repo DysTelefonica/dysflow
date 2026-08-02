@@ -124,6 +124,11 @@ describe("SDK path — tools/call success", () => {
       const result = await client.callTool({ name: "echo_tool", arguments: { hello: "world" } });
       expect(result.isError).toBeFalsy();
       expect(result.content).toEqual([{ type: "text", text: '{"hello":"world"}' }]);
+      expect(result.structuredContent).toMatchObject({
+        hello: "world",
+        schemaVersion: "dysflow.result/v1",
+        isError: false,
+      });
     } finally {
       await close();
     }

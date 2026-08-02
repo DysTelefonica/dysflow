@@ -50,6 +50,10 @@ describe("SDK pre-serialization result validation seam", () => {
     expect(result.content).toEqual([
       { type: "text", text: '{"ok":true,"count":"password-value"}' },
     ]);
+    expect(result.structuredContent).toMatchObject({
+      schemaVersion: "dysflow.result/v1",
+      isError: false,
+    });
     expect(report).toHaveBeenCalledOnce();
     expect(JSON.stringify(report.mock.calls)).not.toContain("password-value");
   });
