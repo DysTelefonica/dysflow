@@ -77,6 +77,7 @@ describe("dysflow command modules", () => {
       // only; the drift check is covered separately in
       // `codegraph-supplement-drift-check.test.ts`.
       checkSupplementDrift: false,
+      checkSkillsInstallation: false,
     });
 
     expect(frames.at(-1)).toContain("▸ Doctor");

@@ -22,3 +22,7 @@
 *.zip binary
 *.png binary
 *.ico binary
+
+# Bundled agent skills are migrated byte-for-byte from the canonical skills
+# repository. Preserve their source bytes so release hashes remain identical.
+skills/**/SKILL.md -text whitespace=cr-at-eol

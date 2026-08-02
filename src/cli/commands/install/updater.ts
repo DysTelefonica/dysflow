@@ -18,23 +18,75 @@ import {
 import { resolvePackageRoot } from "./package-root.js";
 import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
 import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
+import {
+  discoverSkillTargets,
+  formatSkillInstallReport,
+  installBundledSkills,
+  SKILL_AGENT_IDS,
+  type SkillAgentId,
+} from "./skills-installer.js";
 
 export const INSTALL_USAGE =
-  "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--no-tui] [--verbose]";
-const UPDATE_USAGE = "Usage: dysflow update [--runtime-dir <dir>] [--force]";
+  "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] [--no-tui] [--verbose]";
+const UPDATE_USAGE =
+  "Usage: dysflow update [--runtime-dir <dir>] [--force] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>]";
 
 export type InstallOptions = {
   runtimeDir?: string;
   agentNames: AgentName[];
   interactive: boolean;
   verbose: boolean;
+  onlySkills: SkillAgentId[];
+  excludeSkills: SkillAgentId[];
 };
 
 type UpdateOptions = {
   runtimeDir?: string;
   force: boolean;
   skipChecksum: boolean;
+  onlySkills: SkillAgentId[];
+  excludeSkills: SkillAgentId[];
 };
+
+function expandEqualsOptions(args: readonly string[]): string[] {
+  return args.flatMap((arg) => {
+    for (const name of ["--only", "--exclude"] as const) {
+      const prefix = `${name}=`;
+      if (arg.startsWith(prefix)) return [name, arg.slice(prefix.length)];
+    }
+    return [arg];
+  });
+}
+
+function parseSkillAgentList(
+  raw: string | undefined,
+): { ok: true; agents: SkillAgentId[] } | { ok: false; message: string } {
+  if (raw === undefined) return { ok: true, agents: [] };
+  const names = raw
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => name.length > 0);
+  const unknown = names.filter((name) => !SKILL_AGENT_IDS.includes(name as SkillAgentId));
+  if (unknown.length > 0) {
+    return { ok: false, message: `Unknown skill adapter(s): ${unknown.join(", ")}.` };
+  }
+  return { ok: true, agents: Array.from(new Set(names as SkillAgentId[])) };
+}
+
+function parseSkillFilters(
+  values: Record<string, unknown>,
+):
+  | { ok: true; onlySkills: SkillAgentId[]; excludeSkills: SkillAgentId[] }
+  | { ok: false; message: string } {
+  const only = parseSkillAgentList(values["--only"] as string | undefined);
+  if (!only.ok) return only;
+  const exclude = parseSkillAgentList(values["--exclude"] as string | undefined);
+  if (!exclude.ok) return exclude;
+  if (only.agents.length > 0 && exclude.agents.length > 0) {
+    return { ok: false, message: "--only and --exclude cannot be combined." };
+  }
+  return { ok: true, onlySkills: only.agents, excludeSkills: exclude.agents };
+}
 
 export function parseAgentList(
   raw: string | undefined,
@@ -70,8 +122,10 @@ export function parseInstallArgs(
       { name: "--agent-all", type: "boolean" },
       { name: "--no-tui", type: "boolean" },
       { name: "--verbose", type: "boolean" },
+      { name: "--only", type: "string" },
+      { name: "--exclude", type: "string" },
     ],
-    args,
+    args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported install option: ${arg}`,
     onMissing: (arg) => `Missing value for ${arg}.`,
   });
@@ -79,6 +133,8 @@ export function parseInstallArgs(
   if (!parsed.ok) {
     return { ok: false, message: parsed.message };
   }
+  const skillFilters = parseSkillFilters(parsed.values);
+  if (!skillFilters.ok) return skillFilters;
 
   const agentAll = parsed.values["--agent-all"] === true;
   const noTui = parsed.values["--no-tui"] === true;
@@ -112,6 +168,8 @@ export function parseInstallArgs(
       agentNames,
       interactive,
       verbose: parsed.values["--verbose"] === true,
+      onlySkills: skillFilters.onlySkills,
+      excludeSkills: skillFilters.excludeSkills,
     },
   };
 }
@@ -128,8 +186,10 @@ export function parseUpdateArgs(
       { name: "--runtime-dir", type: "string" },
       { name: "--force", type: "boolean" },
       { name: "--skip-checksum", type: "boolean" },
+      { name: "--only", type: "string" },
+      { name: "--exclude", type: "string" },
     ],
-    args,
+    args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported update option: ${arg}`,
     onMissing: (arg) => `Missing value for ${arg}.`,
   });
@@ -137,6 +197,8 @@ export function parseUpdateArgs(
   if (!parsed.ok) {
     return { ok: false, message: parsed.message };
   }
+  const skillFilters = parseSkillFilters(parsed.values);
+  if (!skillFilters.ok) return skillFilters;
 
   return {
     ok: true,
@@ -144,6 +206,8 @@ export function parseUpdateArgs(
       runtimeDir: parsed.values["--runtime-dir"] as string | undefined,
       force: parsed.values["--force"] === true,
       skipChecksum: parsed.values["--skip-checksum"] === true,
+      onlySkills: skillFilters.onlySkills,
+      excludeSkills: skillFilters.excludeSkills,
     },
   };
 }
@@ -239,12 +303,24 @@ export async function handleUpdateCommand(
   if (!isUpdateNeeded) {
     // Even when up to date, persist the marker so that future update calls
     // (without --runtime-dir) can still discover this runtime directory.
-    await writeRuntimeMarker(getSystemMarkerPath(env), runtimeDir);
-    return {
-      exitCode: 0,
-      stdout: createNoUpdateReport(runtimeDir, latestRelease.version),
-      stderr: "",
-    };
+    try {
+      await writeRuntimeMarker(getSystemMarkerPath(env), runtimeDir);
+      const skillInstall = await installBundledSkills({
+        bundleRoot: localPackageRoot,
+        targets: discoverSkillTargets(getHome(env), {
+          only: parsed.options.onlySkills,
+          exclude: parsed.options.excludeSkills,
+        }),
+      });
+      return {
+        exitCode: 0,
+        stdout: `${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}`,
+        stderr: "",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to refresh bundled skills.";
+      return { exitCode: 1, stdout: "", stderr: `Failed to update Dysflow runtime: ${message}` };
+    }
   }
 
   const previousVersion = installedVersion ?? "not installed";
@@ -260,6 +336,13 @@ export async function handleUpdateCommand(
       preparedPackage.packageRoot,
       env,
     );
+    const skillInstall = await installBundledSkills({
+      bundleRoot: preparedPackage.packageRoot,
+      targets: discoverSkillTargets(getHome(env), {
+        only: parsed.options.onlySkills,
+        exclude: parsed.options.excludeSkills,
+      }),
+    });
     const pluginRefresh = await refreshBundledAgentPlugins(
       preparedPackage.packageRoot,
       getHome(env),
@@ -276,6 +359,7 @@ export async function handleUpdateCommand(
           ? ""
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
         createInstallReport(runtimeDir, [], { copiedFiles: runtimeInstall.copiedFiles }) +
+        `\n${formatSkillInstallReport(skillInstall)}` +
         (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
       stderr: "",
     };

@@ -7,6 +7,11 @@ import {
   createPluginRefreshReport,
   refreshBundledAgentPlugins,
 } from "./install/plugin-refresher.js";
+import {
+  discoverSkillTargets,
+  formatSkillInstallReport,
+  installBundledSkills,
+} from "./install/skills-installer.js";
 import { INSTALL_USAGE, parseInstallArgs } from "./install/updater.js";
 import {
   type AgentConfigPaths,
@@ -86,6 +91,10 @@ export async function applyIntegrationSelection(
         // Ignore cleanup failures for unselected agents
       }
     }
+    const skillInstall = await installBundledSkills({
+      bundleRoot: packageRoot,
+      targets: discoverSkillTargets(getHome(env), { only: selectedAgents, exclude: [] }),
+    });
     const pluginRefresh = await refreshBundledAgentPlugins(
       packageRoot,
       getHome(env),
@@ -100,6 +109,7 @@ export async function applyIntegrationSelection(
           verbose: true,
         }),
         createPluginRefreshReport(pluginRefresh, { verbose: true }),
+        formatSkillInstallReport(skillInstall),
       ]
         .filter((section) => section.length > 0)
         .join("\n"),
@@ -133,6 +143,11 @@ async function selectAgentsInteractive(allowList: readonly AgentName[]): Promise
 }
 
 export { writeRuntimeLaunchers } from "./install/path-configurator.js";
+export {
+  DYSSKILL_NAMES,
+  MCP_HARNESS_VERSION,
+  SKILL_AGENT_IDS,
+} from "./install/skills-installer.js";
 
 export async function handleInstallCommand(
   args: readonly string[],
@@ -169,6 +184,13 @@ export async function handleInstallCommand(
         await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir),
       );
     }
+    const skillInstall = await installBundledSkills({
+      bundleRoot: packageRoot,
+      targets: discoverSkillTargets(getHome(env), {
+        only: parsed.options.onlySkills,
+        exclude: parsed.options.excludeSkills,
+      }),
+    });
     const pluginRefresh = await refreshBundledAgentPlugins(
       packageRoot,
       getHome(env),
@@ -184,6 +206,7 @@ export async function handleInstallCommand(
           verbose: parsed.options.verbose,
         }),
         createPluginRefreshReport(pluginRefresh, { verbose: parsed.options.verbose }),
+        formatSkillInstallReport(skillInstall),
       ]
         .filter((section) => section.length > 0)
         .join("\n"),

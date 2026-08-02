@@ -16,6 +16,8 @@ export type RuntimePaths = {
   scriptsDest: string;
   packageJsonSource: string;
   packageJsonDest: string;
+  skillsSource: string;
+  skillsDest: string;
 };
 
 export function resolveRuntimePaths(runtimeDir: string, packageRoot: string): RuntimePaths {
@@ -32,6 +34,8 @@ export function resolveRuntimePaths(runtimeDir: string, packageRoot: string): Ru
     scriptsDest: path.join(appDir, "scripts"),
     packageJsonSource: path.join(packageRoot, "package.json"),
     packageJsonDest: path.join(appDir, "package.json"),
+    skillsSource: path.join(packageRoot, "skills"),
+    skillsDest: path.join(appDir, "skills"),
   };
 }
 
@@ -139,6 +143,21 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
     await runCommand("pnpm", installArgs, runtimePaths.appDir, {
       timeoutMs: 120_000,
     });
+  }
+
+  // Issue #1323 — retain the canonical harness bundle in the installed
+  // runtime so update/doctor can compare and republish the exact release bytes.
+  if (await fileExists(runtimePaths.skillsSource)) {
+    if (
+      await copyIfDifferent(runtimePaths.skillsSource, runtimePaths.skillsDest, {
+        recursive: true,
+        force: true,
+      })
+    ) {
+      copiedFiles.push(
+        ...(await listDestinationFiles(runtimePaths.skillsSource, runtimePaths.skillsDest)),
+      );
+    }
   }
   return copiedFiles;
 }

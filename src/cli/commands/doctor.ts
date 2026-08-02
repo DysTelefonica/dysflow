@@ -29,6 +29,12 @@ import {
 import { runVbaStructureChecks } from "./doctor/checks/vba-structure.js";
 import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
 import { ensureObject } from "./install/file-utils.js";
+import { resolvePackageRoot } from "./install/package-root.js";
+import {
+  diagnoseBundledSkills,
+  discoverSkillTargets,
+  type SkillDoctorStatus,
+} from "./install/skills-installer.js";
 import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
@@ -43,16 +49,28 @@ export async function handleDoctorCommand(
     return {
       exitCode: 0,
       stdout:
-        "Usage: dysflow doctor [--cwd <path>] [--category A|B|C|D|all]\n\n" +
+        "Usage: dysflow doctor [--cwd <path>] [--category A|B|C|D|all] [--skills]\n\n" +
         "Check local Dysflow requirements without modifying the target worktree.\n\n" +
         "Categories (#1057 — read-only, no PowerShell, no Access):\n" +
         "  A  .dysflow/project.json schema, path resolution, conventions\n" +
         "  B  VBA source structure (Attribute VB_Name, Option Explicit)\n" +
         "  C  runtime consumer contract (apply polarity, param naming)\n" +
         "  D  external dependencies (.laccdb locks, .codegraph freshness)\n" +
-        "  all  run every category; exit code reflects critical findings only",
+        "  all  run every category; exit code reflects critical findings only\n" +
+        "  --skills  compare bundled skill hashes/version in detected adapter SkillsDir targets",
       stderr: "",
     };
+  }
+
+  if (args.includes("--skills")) {
+    try {
+      const statuses = await runSkillsInstallationCheck(context);
+      const formatted = formatSkillsInstallationStatuses(statuses);
+      return { exitCode: formatted.ok ? 0 : 1, stdout: formatted.lines.join("\n"), stderr: "" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to diagnose bundled skills.";
+      return { exitCode: 1, stdout: "", stderr: message };
+    }
   }
 
   // Issue #1057 (F9) — categorized read-only checks. When `--category` is
@@ -98,8 +116,14 @@ export async function handleDoctorCommand(
 
     const wiringCheck = await runWiringCheck(effectiveContext);
     const supplementDriftCheck = await runSupplementDriftCheck(effectiveContext);
+    const skillsInstallation = await runSkillsInstallationCheck(effectiveContext);
 
-    const formatted = formatDiagnosticsResult(result, wiringCheck, supplementDriftCheck);
+    const formatted = formatDiagnosticsResult(
+      result,
+      wiringCheck,
+      supplementDriftCheck,
+      skillsInstallation,
+    );
     return projectConfig === undefined
       ? formatted
       : { ...formatted, stdout: `${JSON.stringify({ projectConfig })}\n${formatted.stdout}` };
@@ -107,6 +131,17 @@ export async function handleDoctorCommand(
     const message = error instanceof Error ? error.message : "Failed to run Dysflow diagnostics.";
     return { exitCode: 1, stdout: "", stderr: message };
   }
+}
+
+async function runSkillsInstallationCheck(
+  context: CliCommandContext,
+): Promise<SkillDoctorStatus[]> {
+  if (context.checkSkillsInstallation === false) return [];
+  if (context.checkSkillsInstallation) return [...(await context.checkSkillsInstallation())];
+  const env = context.env ?? (process.env as Record<string, string | undefined>);
+  const targets = discoverSkillTargets(getHome(env));
+  if (targets.length === 0) return [];
+  return diagnoseBundledSkills({ bundleRoot: resolvePackageRoot(), targets });
 }
 
 /**
@@ -231,6 +266,7 @@ function formatDiagnosticsResult(
   result: OperationResult<AccessDiagnosticsResult>,
   wiringCheck: McpWiringCheck | null,
   supplementDriftCheck: SupplementDriftDiagnostic | null,
+  skillsInstallation: readonly SkillDoctorStatus[],
 ): CliResult {
   if (!result.ok) {
     return { exitCode: 1, stdout: "", stderr: `${result.error.code}: ${result.error.message}` };
@@ -254,10 +290,47 @@ function formatDiagnosticsResult(
     lines.push(`${symbol} ${supplementDriftCheck.name}: ${supplementDriftCheck.message}`);
   }
 
+  const formattedSkills = formatSkillsInstallationStatuses(skillsInstallation);
+  if (skillsInstallation.length > 0) lines.push(...formattedSkills.lines);
+
   const stdout = lines.join("\n");
-  // Exit code is driven by core diagnostics checks only — wiring + drift
-  // are warn-only so the doctor can be safely run in CI without flipping
-  // the exit code on a stale supplement block.
-  const exitCode = result.data.checks.every((check) => check.ok) ? 0 : 1;
+  // Wiring + supplement drift remain warn-only. Bundled skill version/hash
+  // drift is severe because it can make an agent execute stale safety rules.
+  const exitCode = result.data.checks.every((check) => check.ok) && formattedSkills.ok ? 0 : 1;
   return { exitCode, stdout, stderr: "" };
+}
+
+function formatSkillsInstallationStatuses(statuses: readonly SkillDoctorStatus[]): {
+  ok: boolean;
+  lines: string[];
+} {
+  if (statuses.length === 0) {
+    return {
+      ok: true,
+      lines: ["✓ skills-installation: no discovered adapter SkillsDir targets."],
+    };
+  }
+  const lines: string[] = [];
+  for (const status of statuses) {
+    const ok = status.skillsDirExists && status.versionMatch && status.hashesMatch;
+    const details = ok
+      ? `harness v${status.installedVersion}; ${Object.keys(status.expectedHashes).length}/${Object.keys(status.expectedHashes).length} hashes current at ${status.skillsDir}`
+      : [
+          status.skillsDirExists ? undefined : "SkillsDir missing",
+          status.versionMatch
+            ? undefined
+            : `harness version ${status.installedVersion ?? "missing"} (expected current product version)`,
+          status.hashesMatch ? undefined : `stale skills: ${status.staleSkills.join(", ")}`,
+          status.skillsDir,
+        ]
+          .filter((part): part is string => part !== undefined)
+          .join("; ");
+    lines.push(`${ok ? "✓" : "✗"} skills-installation[${status.agentId}]: ${details}`);
+  }
+  return {
+    lines,
+    ok: statuses.every(
+      (status) => status.skillsDirExists && status.versionMatch && status.hashesMatch,
+    ),
+  };
 }
