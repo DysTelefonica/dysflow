@@ -367,3 +367,74 @@ describe("mcp-e2e.mjs — release telemetry regressions (#1212)", () => {
     );
   });
 });
+
+describe("mcp-e2e.mjs — release harness runtime contracts (#1343)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("uses one canonical Access target for the ordinary compact_repair plan", () => {
+    expect(src).toContain(
+      'await record("maintenance", "compact_repair", { projectId, accessPath, apply: false, backupFirst: false });',
+    );
+    expect(src).not.toContain(
+      'await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, apply: false, backupFirst: false });',
+    );
+  });
+
+  it("accepts the stricter project-root guard for the bad backend probe", () => {
+    const scenario = src.match(
+      /if \(tool === "delete_module:bad-backendPath"\) \{([\s\S]*?)\n {2}\}/,
+    );
+
+    expect(scenario, "delete_module bad-backendPath policy not found").not.toBeNull();
+    expect(scenario?.[1]).toContain('code === "OUTSIDE_PROJECT_ROOT"');
+    expect(scenario?.[1]).toContain(
+      'expected: "OUTSIDE_PROJECT_ROOT, BACKEND_PATH_INVALID, or FILE_NOT_FOUND"',
+    );
+  });
+
+  it("invalidates the worktree cache after the allowlist edit and its restoration", () => {
+    const start = src.indexOf("// v2.34-regressions — #1324 / R-S02");
+    const end = src.indexOf("const syncPlan =", start);
+    const block = src.slice(start, end);
+    const clearCall =
+      'await record("v2.34-regressions", "clear_worktree_cache", { cwd: tempRoot });';
+    const temporaryWrite = block.search(
+      /await writeFile\(projectConfigPath, `\$\{JSON\.stringify\(regressionConfig/,
+    );
+    const firstClear = block.indexOf(clearCall);
+    const testVbaPlan = block.indexOf("testVbaPlan =");
+    const finallyStart = block.indexOf("} finally {");
+    const restoreWrite = block.indexOf(
+      'await writeFile(projectConfigPath, regressionConfigText, "utf8");',
+    );
+    const secondClear = block.lastIndexOf(clearCall);
+    const finallyClose = block.indexOf('\n}\nassertPlanApplyResolverPair("test_vba"', finallyStart);
+    const parityAssertion = block.indexOf('assertPlanApplyResolverPair("test_vba"');
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(block).toContain("regressionConfig.capabilities = {");
+    expect(block).toContain("...(regressionConfig.capabilities ?? {}),");
+    expect(block).toContain("procedures: {");
+    expect(block).toContain("...(regressionConfig.capabilities?.procedures ?? {}),");
+    expect(block).toContain('allow: ["Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic"],');
+    expect(block.match(/Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic/g)).toHaveLength(
+      3,
+    );
+    expect(block).not.toContain("GetMaxOrdinalE2E");
+    expect(block).not.toContain("allowedProcedures:");
+    expect(block).toContain('apply?.mode === "apply"');
+    expect(block).toContain("Array.isArray(apply?.tests)");
+    expect(
+      block.match(new RegExp(clearCall.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")),
+    ).toHaveLength(2);
+    expect(temporaryWrite).toBeGreaterThanOrEqual(0);
+    expect(firstClear).toBeGreaterThan(temporaryWrite);
+    expect(testVbaPlan).toBeGreaterThan(firstClear);
+    expect(finallyStart).toBeGreaterThan(testVbaPlan);
+    expect(restoreWrite).toBeGreaterThan(finallyStart);
+    expect(secondClear).toBeGreaterThan(restoreWrite);
+    expect(finallyClose).toBeGreaterThan(secondClear);
+    expect(parityAssertion).toBeGreaterThan(finallyClose);
+  });
+});

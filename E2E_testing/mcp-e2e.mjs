@@ -669,10 +669,13 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       options,
       assert: (result) => {
         const code = mcpErrorFromResult(result)?.code;
-        const pass = code === "BACKEND_PATH_INVALID" || code === "FILE_NOT_FOUND";
+        const pass =
+          code === "OUTSIDE_PROJECT_ROOT" ||
+          code === "BACKEND_PATH_INVALID" ||
+          code === "FILE_NOT_FOUND";
         return {
           pass,
-          expected: "BACKEND_PATH_INVALID or FILE_NOT_FOUND",
+          expected: "OUTSIDE_PROJECT_ROOT, BACKEND_PATH_INVALID, or FILE_NOT_FOUND",
           summary: pass ? `typed missing backend: ${code}` : normalize(result?.text),
         };
       },
@@ -1410,7 +1413,7 @@ await record("query", "list_access_files", { projectId, rootPath: tempRoot });
 await record("operations", "list_access_files:remediation-actionable", { projectId: "non-existent" });
 await record("query", "export_queries", { projectId, accessPath, exportPath: queriesExportPath });
 await record("query", "import_queries", { projectId, accessPath, queryDefinitions: [{ name: "Q_DysflowMcpE2E", sql: "SELECT 1 AS One" }], apply: true });
-await record("maintenance", "compact_repair", { projectId, accessPath, databasePath: backendPath, apply: false, backupFirst: false });
+await record("maintenance", "compact_repair", { projectId, accessPath, apply: false, backupFirst: false });
 await record("maintenance", "compact_repair:target-precedence", {
   projectId, apply: false,
 });
@@ -2197,7 +2200,7 @@ await record("vba-sync", "fix_encoding:plan-drift-visibility", {
 await record("vba-sync", "delete_module:bad-backendPath", {
   ...ctx, backendPath: "C:/bad/path.accdb", moduleName: "X", apply: false,
 }, { expected: "error" });
-// assertion: error.code in {BACKEND_PATH_INVALID, FILE_NOT_FOUND}
+// assertion: error.code in {OUTSIDE_PROJECT_ROOT, BACKEND_PATH_INVALID, FILE_NOT_FOUND}
 
 await record("vba-sync", "verify_code:timeout-remediation", { ...ctx, diff: false });
 // assertion: error envelope typed with error.remediation (not raw VBA_MANAGER_TIMEOUT)
@@ -2301,32 +2304,44 @@ const regressionConfigText = await readFile(projectConfigPath, "utf8");
 const regressionConfig = JSON.parse(regressionConfigText);
 regressionConfig.capabilities = {
   ...(regressionConfig.capabilities ?? {}),
-  allowedProcedures: ["GetMaxOrdinalE2E"],
+  procedures: {
+    ...(regressionConfig.capabilities?.procedures ?? {}),
+    allow: ["Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic"],
+  },
 };
 await writeFile(projectConfigPath, `${JSON.stringify(regressionConfig, null, 2)}\n`, "utf8");
 let testVbaPlan;
 let testVbaApply;
 try {
+  await record("v2.34-regressions", "clear_worktree_cache", { cwd: tempRoot });
   testVbaPlan = await record("v2.34-regressions", "test_vba:plan-vs-apply-plan", {
     ...ctx,
-    proceduresJson: JSON.stringify([{ procedure: "GetMaxOrdinalE2E", args: [] }]),
+    proceduresJson: JSON.stringify([
+      { procedure: "Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic", args: [] },
+    ]),
     apply: false,
   }, { expected: "ok" });
   testVbaApply = await record("v2.34-regressions", "test_vba:plan-vs-apply-apply", {
     ...ctx,
-    proceduresJson: JSON.stringify([{ procedure: "GetMaxOrdinalE2E", args: [] }]),
+    proceduresJson: JSON.stringify([
+      { procedure: "Test_MotivoNoRequiereControlEficacia_DomainFields_Atomic", args: [] },
+    ]),
     apply: true,
   }, { expected: "ok" });
 } finally {
   await writeFile(projectConfigPath, regressionConfigText, "utf8");
+  await record("v2.34-regressions", "clear_worktree_cache", { cwd: tempRoot });
 }
 assertPlanApplyResolverPair("test_vba", testVbaPlan, testVbaApply, (plan, apply) => ({
   pass:
     plan?.dryRun === true &&
-    Array.isArray(apply) &&
-    apply.length === 1 &&
-    apply.every((entry) => entry?.ok !== false),
-  summary: `plan dryRun=true; apply results=${Array.isArray(apply) ? apply.length : "invalid"}`,
+    apply?.mode === "apply" &&
+    apply?.passed === 1 &&
+    apply?.failed === 0 &&
+    Array.isArray(apply?.tests) &&
+    apply.tests.length === 1 &&
+    apply.tests.every((entry) => entry?.ok !== false),
+  summary: `plan dryRun=true; apply results=${Array.isArray(apply?.tests) ? apply.tests.length : "invalid"}`,
 }));
 
 const syncPlan = await record("v2.34-regressions", "sync_binary:plan-vs-apply-plan", {
