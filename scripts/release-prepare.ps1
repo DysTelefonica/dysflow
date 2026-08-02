@@ -90,7 +90,22 @@ function Test-ReleaseChangelogQuality {
         $env:DYSFLOW_CHANGELOG_PATH = $resolvedChangelog
         Push-Location $RepoRoot
         try {
-            $process = Start-Process -FilePath "pnpm" `
+            $pnpmFilePath = "pnpm"
+            if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+                $pnpmCommand = @(
+                    @("pnpm.exe", "pnpm.cmd") |
+                        ForEach-Object {
+                            Get-Command $_ -CommandType Application -ErrorAction SilentlyContinue |
+                                Select-Object -First 1
+                        }
+                ) | Select-Object -First 1
+                if ($null -eq $pnpmCommand) {
+                    throw "pnpm executable not found. Install pnpm and ensure pnpm.exe or pnpm.cmd is on PATH."
+                }
+                $pnpmFilePath = $pnpmCommand.Source
+            }
+
+            $process = Start-Process -FilePath $pnpmFilePath `
                 -ArgumentList @("exec", "vitest", "run", $QualityGatePath) `
                 -PassThru -NoNewWindow
             if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
