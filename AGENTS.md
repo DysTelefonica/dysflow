@@ -78,34 +78,36 @@ execution, test execution, and form UI operations on Access projects.
   To batch related ops, use List-shape arguments in ONE call.
 
 - **HR-9 — Select worktrees per call, never by restarting the MCP.** Each worktree
-  owns a unique `.dysflow/project.json`. For a sibling worktree, call
-  `register_worktree({cwd:"<worktree>"})` or
-  `resolve_project({cwd:"<worktree>",projectId:"<id>"})`. Every tool that
-  consults project configuration accepts that optional `cwd`; omitting it keeps
-  the startup cwd. Write tools retain the same containment and write gates. Confirm each shape with
-  `describe_tool({name:"<tool>"})`. Never weaken the guard or edit configs.
+  owns a unique `.dysflow/project.json`. Every project-config-consuming tool
+  accepts optional `cwd`; omit it for the startup worktree or pass the intended
+  worktree root. Use `register_worktree({cwd})` to pre-warm a sibling,
+  `resolve_project({cwd,projectId})` to verify it, and
+  `clear_worktree_cache({cwd})` only when a forced rescan is needed. Never
+  weaken the guard or edit configs to switch worktrees.
 
 - **HR-10 — Bootstrap missing project config before any other write.** When
   `get_capabilities({}).projectConfig.status === "missing"`, call
-  `setup_project({cwd,frontendFile,apply:false})`, review `resolvedConfig`, then
-  call the same tool with `apply:true`. The bootstrap apply enforces the process
-  write gate and candidate `capabilities.allowWrites`; it intentionally does
-  not require an existing write-ready config because that would deadlock first
-  use. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
-  A successful apply refreshes the worktree cache immediately, so the next
-  cwd-bound call uses the new config without restarting the MCP.
+  `setup_project({cwd,projectId,frontendFile,apply:false})`, review
+  `resolvedConfig`, then repeat with `apply:true`. A fresh worktree MUST provide
+  an explicit `projectId`; `setup_project` may reuse an existing
+  `WorktreeContext` id, but never invent one from the `cwd` basename. The
+  bootstrap apply enforces the process write gate and candidate
+  `capabilities.allowWrites`; the same `cwd` is immediately usable without an
+  MCP restart. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
 
 - **HR-11 — Recover ambiguity without overwriting config.** When
   `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose
   exactly one entry from `availableProjects`; never guess. Retry
-  `resolve_project` or the intended write-class tool with that entry's
-  `projectId`, `projectChoiceReason:"user_selected_after_ambiguous_project"`,
-  and the returned `recoveryToken`. The one-shot choice is cached only in the
-  current MCP process and expires or invalidates on config/worktree changes.
-  Use `resolve_project({clearResolution:true})` to drop it. `setup_project` may
-  consume the complete recovery trio only to cache the selected existing
-  project and return `mode:"resolution"`; that route never writes config.
-  Bootstrap mode remains for a missing config and requires `frontendFile`.
+  `resolve_project` or the intended project-config-consuming tool with that
+  entry's `projectId`,
+  `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque
+  `recoveryToken`. The dispatch seam consumes this complete trio BEFORE any
+  fresh collision check and routes through the cached chosen project root.
+  Tokens are one-shot, process-local, and invalidated by config/worktree
+  changes; a consumed or missing token MUST fail closed. Use
+  `resolve_project({clearResolution:true})` to drop a pending choice.
+  `setup_project` may consume the trio only to return `mode:"resolution"` for
+  the selected existing project; that route never writes config.
 
 - **HR-12 — Let runtime metadata route discovery.** Read standard Tool
   `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]`
@@ -115,6 +117,12 @@ execution, test execution, and form UI operations on Access projects.
   guides selection; the full schema and `describe_tool` remain authoritative
   for parameters, composition constraints, result contracts, and errors.
 
+- **HR-13 — Parse MCP envelopes defensively.** Every dysflow response carries
+  top-level `schemaVersion:"dysflow.result/v1"`. A host wrapper may return the
+  entire envelope as a JSON string, so parse once when `typeof raw === "string"`
+  and then require the discriminator. Missing or different `schemaVersion`
+  fails closed; never continue by guessing a payload shape.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -122,8 +130,9 @@ For any feature that touches dysflow-managed artifacts:
 - **Step 0** — `get_capabilities({})`. Capture `adapterVersion`,
   `writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
   `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
-  If status is `missing`, bootstrap with `setup_project` before any other
-  write-class tool, then re-run `resolve_project` and `get_capabilities`.
+  If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and
+  `frontendFile` through `setup_project` before any other write-class tool,
+  then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
 - **Step 0.25** — Read `preferredAgentWorkflows`, choose the active phase, and
   inspect only the relevant tools through `describe_tool` (HR-12).
 - **Step 0.5** — If `resolve_project` is ambiguous, follow HR-11 and wait for
@@ -231,7 +240,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.5.0 · last_verified 2026-08-01 · requires
+dysflow harness v0.6.0 · last_verified 2026-08-02 · requires
 dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with

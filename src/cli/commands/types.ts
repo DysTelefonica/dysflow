@@ -3,6 +3,7 @@ import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryService } from "../../core/services/query-service.js";
 import type { SupplementDriftDiagnostic } from "./codegraph-supplement-drift-check.js";
+import type { DoctorCategoryCheck } from "./doctor/checks/types.js";
 import type { SkillDoctorStatus } from "./install/skills-installer.js";
 import type { AgentName } from "./install-utils.js";
 import type { McpWiringCheck } from "./opencode-mcp-wiring.js";
@@ -38,6 +39,8 @@ export type CliCommandContext = {
   checkSupplementDrift?: (() => Promise<SupplementDriftDiagnostic | null>) | false;
   /** Injectable/disableable bundled-skills doctor check. */
   checkSkillsInstallation?: (() => Promise<readonly SkillDoctorStatus[]>) | false;
+  /** Injectable/disableable executable MCP acceptance checks for doctor category C. */
+  checkMcpAcceptanceContracts?: (() => Promise<readonly DoctorCategoryCheck[]>) | false;
   accessQueryService?: Pick<AccessQueryService, "execute">;
   startHttpAdapter?: StartHttpAdapter;
   runTui?: (args: readonly string[], context?: CliCommandContext) => Promise<CliResult> | CliResult;

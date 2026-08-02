@@ -4,10 +4,11 @@ description: "Trigger: dysflow MCP call, dysflow tool, MCP error code, write fla
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "1.14.0"
+  version: "1.15.0"
   status: active
-  last_verified: "2026-08-01"
-  last_dysflow_version: "2.33.0"
+  source: "DysTelefonica/dysflow release bundle"
+  last_verified: "2026-08-02"
+  last_dysflow_version: "2.34.1"
   requires: "dysflow MCP"
   scope:
     in_scope: "canonical dysflow tool names, write-flags matrix, error codes, write-execution-policy, human-compile contract"
@@ -30,7 +31,10 @@ Use this skill when ANY of:
 
 The `dysflow` MCP declares `get_capabilities: Promise<unknown>` (and every other tool: `Promise<unknown>`), but the **OpenCode Code Mode wrapper can deliver these as JSON-encoded `string` literals instead of parsed objects**. Accessing `.adapterVersion` on a `string` returns `undefined`, which the JSON-RPC bridge surfaces as `null` — making every `caps.adapterVersion` / `caps.toolsVisible` / etc. read appear empty even though the underlying MCP responded correctly.
 
-As of **issue #1168**, every dysflow MCP response is JSON-encodable and carries a top-level `schemaVersion: "dysflow.result/v1"` discriminator so consumers can branch on a single field. The defensive parse collapses to:
+Every dysflow MCP response is JSON-encodable and carries a top-level
+`schemaVersion: "dysflow.result/v1"` discriminator, so consumers can branch on
+a single field. This is a guaranteed response contract, not an in-flight
+caveat. The defensive parse collapses to:
 
 ```js
 // Issue #1168 — universal MCP response contract. Branch on the
@@ -45,7 +49,11 @@ if (env?.schemaVersion !== "dysflow.result/v1") {
 // env.error.code (when isError === true) is the typed error code.
 ```
 
-The discriminator is a single source of truth (`RESULT_SCHEMA_VERSION` constant in `src/adapters/mcp/result-translation.ts`); the stdio central seam and every helper envelope builder run every response through `withSchemaVersion`. Use `env.schemaVersion === "dysflow.result/v1"` as the branch signal — never invent your own literal.
+The discriminator is defined once by `RESULT_SCHEMA_VERSION` in
+`src/adapters/mcp/response-envelope.ts`; the stdio central seam and every
+success/error envelope builder stamp it. Use
+`env.schemaVersion === "dysflow.result/v1"` as the branch signal — never invent
+your own literal.
 
 If you call the dysflow MCP from a host that DOES parse JSON correctly (Claude/Cursor/Cline with a real MCP bridge, the `dysflow` CLI directly, `gh`-style REST adapters), the response is the parsed object and the `typeof raw === "string"` branch is dead code. The discriminator check is still useful as a defensive sanity gate. The break is specifically in the OpenCode Code Mode `execute` tool.
 
@@ -244,8 +252,12 @@ Use `resolve_project({cwd:"<absolute-worktree>", projectId:"<id>"})` to inspect 
 require `outcome:"resolved"`. If the outcome is `ambiguous`, ask the human to choose one
 `availableProjects` entry and retry with that exact `projectId`,
 `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque
-`recoveryToken`. The token is one-shot and process-local; the cached choice expires or
-invalidates when config/worktree evidence changes. Clear it with
+`recoveryToken`. The dispatch seam consumes the complete trio before any fresh
+collision check and routes through the cached chosen project root. This applies
+equally to `setup_project`, `resolve_project`, `migrate_project_config`,
+`test_vba`, and `access_force_cleanup_orphaned`. The token is one-shot and
+process-local; a consumed or absent token fails closed, and the cached choice
+expires or invalidates when config/worktree evidence changes. Clear it with
 `resolve_project({clearResolution:true})`. Confirm each target parameter with
 `describe_tool({name:"<tool>"})`. Never restart MCP or edit one worktree's config to
 point at another. See `assets/examples/resolve-project.md` and
@@ -387,7 +399,7 @@ Run these in your head before every call. One fail = stop and resolve.
 
 9. **Project-config plan/apply agreement (#1324)** — for identical explicit
    project arguments, `apply:false` and `apply:true` MUST resolve the same
-   `WorktreeContext`. If plan succeeds but apply returns
+   `WorktreeContext` from the same cwd-aware cache. If plan succeeds but apply returns
    `PROJECT_CONFIG_NOT_WRITE_READY`, file a dysflow bug: the dispatch seam has
    diverged. Do not bypass the write gate or remove explicit selectors to make
    the call pass.

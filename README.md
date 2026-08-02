@@ -831,6 +831,9 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 
 #### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, canonical commit flags, and six machine-readable `preferredAgentWorkflows`. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+Every MCP response, including this one, carries top-level
+`schemaVersion: "dysflow.result/v1"`; consumers must defensively parse a
+stringified host-wrapper result before requiring that discriminator.
 * **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
 * **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
@@ -845,9 +848,13 @@ accepts the complete `projectId` + `projectChoiceReason` + `recoveryToken` trio
 after an ambiguous `resolve_project` result. Recovery mode only caches the
 selected existing project and returns `mode: "resolution"`; it never creates or
 overwrites project config, regardless of `apply`.
-* **Parameters**: bootstrap mode requires `frontendFile` (basename) and accepts
-  optional `cwd`, `backendPath`, `projectId`, `destinationRoot`, `capabilities`,
-  `timeoutMs`, and `apply`. Recovery mode requires the complete recovery trio.
+* **Parameters**: bootstrap mode requires `frontendFile` (basename), plus an
+  explicit `projectId` unless the selected WorktreeContext already has an id
+  that can be reused. It accepts optional `cwd`, `backendPath`,
+  `destinationRoot`, `capabilities`, `timeoutMs`, and `apply`. With no explicit
+  or reusable id it returns `MCP_INPUT_INVALID` (`projectId is required`) and
+  never derives one from the cwd basename. Recovery mode requires the complete
+  recovery trio, which is consumed before collision detection.
 
 #### `register_worktree`
 Eagerly scan and cache one canonical worktree context without changing files or

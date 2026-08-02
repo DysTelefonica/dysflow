@@ -52,9 +52,9 @@ describe("DoctorCategoryCheck PR 2 migration", () => {
     ]);
   });
 
-  it("marks the other twenty checks as advisory", () => {
+  it("marks the other twenty-three checks as advisory", () => {
     const advisory = DOCTOR_CHECK_METADATA.filter((check) => !check.requires_confirmation);
-    expect(advisory).toHaveLength(20);
+    expect(advisory).toHaveLength(23);
     expect(advisory.every((check) => check.requires_confirmation === false)).toBe(true);
   });
 

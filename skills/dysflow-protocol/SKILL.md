@@ -82,7 +82,7 @@ The allowlist is a runtime gate, not a test registry. Adding test names to allow
 
 ### HR-9 — Select worktrees per call, never by restarting the MCP.
 
-Each worktree owns a unique `.dysflow/project.json`. For a sibling worktree, call `resolve_project({cwd: "<worktree>", projectId: "<id>"})`. Project-scoped read tools may accept that `cwd`; write tools select the discovered sibling with `projectId` or its configured `accessPath`. Confirm each shape with `describe_tool({name: "<tool>"})`.
+Each worktree owns a unique `.dysflow/project.json`. Every project-config-consuming tool accepts optional `cwd`; pass the intended sibling root per call. Pre-warm with `register_worktree({cwd})`, verify with `resolve_project({cwd, projectId})`, and clear only stale entries with `clear_worktree_cache({cwd})`. Confirm each shape with `describe_tool({name: "<tool>"})`.
 
 ### HR-10 — Discover progressively.
 
@@ -90,7 +90,11 @@ Call `get_capabilities({})`, select the relevant `preferredAgentWorkflows` phase
 
 ### HR-11 — Bootstrap and ambiguity recovery are different operations.
 
-When `projectConfig.status === "missing"`, use `setup_project` (or the canonical CLI setup command) with explicit human-provided `projectId` and frontend input. Omitting `projectId` is valid only when the selected WorktreeContext already has a configured id to reuse; otherwise the runtime fails closed with `MCP_INPUT_INVALID` and `projectId is required`. It never invents an id from the cwd basename. When `resolve_project` returns `outcome: "ambiguous"`, do not guess: ask the human to choose one `availableProjects` entry, then retry `resolve_project`, the intended write-class tool, or `setup_project` with that exact `projectId`, `projectChoiceReason: "user_selected_after_ambiguous_project"`, and the returned `recoveryToken`. In recovery mode, `setup_project` only caches the selected existing project and returns `mode: "resolution"`; it never creates or overwrites config. Bootstrap mode is separate and requires `frontendFile`. The one-shot choice is cached only in the current MCP process; use `resolve_project({clearResolution:true})` to drop it.
+When `projectConfig.status === "missing"`, use `setup_project` (or the canonical CLI setup command) with explicit human-provided `projectId` and frontend input. Omitting `projectId` is valid only when the selected WorktreeContext already has a configured id to reuse; otherwise the runtime fails closed with `MCP_INPUT_INVALID` and `projectId is required`. It never invents an id from the cwd basename. When `resolve_project` returns `outcome: "ambiguous"`, do not guess: ask the human to choose one `availableProjects` entry, then retry `resolve_project`, the intended project-config-consuming tool, or `setup_project` with that exact `projectId`, `projectChoiceReason: "user_selected_after_ambiguous_project"`, and the returned `recoveryToken`. The dispatch seam consumes the complete trio before a fresh collision check and routes through the cached chosen project root. In recovery mode, `setup_project` only caches the selected existing project and returns `mode: "resolution"`; it never creates or overwrites config. Bootstrap mode is separate and requires `frontendFile`. The token is one-shot and process-local; consumed or absent tokens fail closed. Use `resolve_project({clearResolution:true})` to drop a pending choice.
+
+### HR-12 — Parse response envelopes defensively.
+
+Every response has top-level `schemaVersion: "dysflow.result/v1"`. A host may stringify the whole envelope, so parse once when `typeof raw === "string"`, then require that discriminator. Missing or different versions fail closed.
 
 ## 2. The 8-step canonical loop
 

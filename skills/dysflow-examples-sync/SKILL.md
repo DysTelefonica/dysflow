@@ -5,10 +5,11 @@ description: >
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "0.1.5"
+  version: "0.2.0"
   status: active
-  last_verified: "2026-07-30"
-  last_dysflow_version: "2.30.0"
+  source: "DysTelefonica/dysflow release bundle"
+  last_verified: "2026-08-02"
+  last_dysflow_version: "2.34.1"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-usage skill, dysflow-codegraph-update (ARN-1 upstream)"
   in_scope: "dysflow-usage/assets/examples/<tool>.md scaffolding + gap reporting + hash tracking of each example file vs runtime schema"
@@ -37,7 +38,7 @@ Drift direction = the canonical surface grows (new tools ship, get listed in SKI
 Use when:
 - `dysflow-codegraph-update` ARN-1 just regenerated `dysflow-usage` (chain trigger ARN-1 → ARN-3).
 - The user says "faltan ejemplos" / "tools sin ejemplo" / "examples drift".
-- Session-start enumeration: any tool name mentioned in `dysflow-usage/SKILL.md` lacks its corresponding `assets/examples/<tool>.md`.
+- Session-start enumeration: any tool name mentioned in `dysflow-usage/SKILL.md` lacks its corresponding `C:\Proyectos\skills\skills\dysflow-usage\assets\examples\<tool>.md`.
 
 Do NOT use for:
 - Authoring example content (scaffolds only; content is human).
@@ -46,27 +47,34 @@ Do NOT use for:
 
 ## Hard Rules
 
-1. **Source of truth is `C:\Proyectos\skills\skills\`.** Edit there. Same junction rule.
+1. **Source of truth is the released `skills/dysflow-usage/SKILL.md`.** Installed
+   agent copies and `C:\Proyectos\skills` are downstream mirrors, never upstream
+   runtime-contract input. Tooling-only scripts and example assets not distributed
+   by v2.34.1 remain under the full team-skills checkout.
 2. **Scaffold only — never invent content.** A scaffolded file has TODO placeholders for: real `projectId`, real `accessPath`, real `formName` or whatever the tool's live signature is. NEVER fabricate values.
 3. **Fail closed on missing tool in `get_capabilities`.** If a tool name in `dysflow-usage/SKILL.md` does NOT appear in the live `get_capabilities.tools` keys enumeration, surface upstream drift; do not scaffold a phantom. `toolsVisible` is a numeric count — DO NOT iterate it.
 4. **Verify `dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1` runs cleanly** on each scaffolded file (HR-10 of `dysflow-codegraph-update` carries over; this is the dysflow-usage verify script).
-5. **Run the semantic audit** (`assets/scripts/Invoke-DysflowSemanticAudit.ps1` from
+5. **Run the semantic audit** (`C:\Proyectos\skills\skills\dysflow-codegraph-update\assets\scripts\Invoke-DysflowSemanticAudit.ps1` from
    `dysflow-codegraph-update`) on the captured runtime. Scaffolds must reference real
    canonical parameters; the audit enforces that. Scaffold presence alone is not enough.
-6. **Hash tracking.** Maintain `C:\Proyectos\skills\skills\dysflow-usage\assets\example-hashes.json` (created on first run if absent) mapping `tool-name -> SHA256` of the example file's content. The example verifier consumes this authoritative tracker for drift detection.
+6. **Hash tracking.** Maintain `C:\Proyectos\skills\skills\dysflow-usage\assets\example-hashes.json`
+   (created on first run if absent) mapping `tool-name -> SHA256` of the example file's content.
+   The example verifier consumes this authoritative tracker for drift detection.
 7. **Append a CHANGELOG entry to `dysflow-usage`** on each scaffold batch: `docs(consumer-skills): scaffold N example files for tools <list>`. (One entry per run, not one per file.) Convention: edit `dysflow-usage/CHANGELOG.md` if it exists; otherwise create with a minimal header.
 8. **Never edit gentle-ai-owned skills.** `dysflow-usage` is user-owned (`author: "Andrés Román"`); the verify script lives there. Do not touch anything else.
 
 ## Procedure
 
-Full pre-flight + per-section enumeration logic + scaffolding recipe + verification: `references/procedure.md`. In short:
+Full pre-flight + per-section enumeration logic + scaffolding recipe + verification: `C:\Proyectos\skills\skills\dysflow-examples-sync\references\procedure.md`. In short:
 
-1. Step 0 — Pre-flight: load `C:\Proyectos\skills\skills\dysflow-usage\SKILL.md`; call `get_capabilities({})`; enumerate tool names from `get_capabilities.tools` keys (the integer count lives in `toolsVisible`).
+1. Step 0 — Pre-flight: load `skills/dysflow-usage/SKILL.md` from the release
+   checkout; call `get_capabilities({})`; enumerate tool names from
+   `get_capabilities.tools` keys (the integer count lives in `toolsVisible`).
 2. Step 1 — Parse `dysflow-usage/SKILL.md` for per-tool sections. For each section, the referenced tool names become the "expected" set.
-3. Step 2 — Compare to existing `assets/examples/*.md` filenames (kebab-cased). Compute the gap.
+3. Step 2 — Compare to existing `C:\Proyectos\skills\skills\dysflow-usage\assets\examples\*.md` filenames (kebab-cased). Compute the gap.
 4. Step 3 — For each missing file: scaffold from `create-form-from-template.md` structure with TODO placeholders. Write to disk. Update `dysflow-usage/assets/example-hashes.json`. Append CHANGELOG entry in `dysflow-usage`.
 5. Step 4 — Run `dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1`; on failure, halt and surface which scaffolded file is rejected.
-6. Step 5 — Run the semantic audit (`assets/scripts/Invoke-DysflowSemanticAudit.ps1` from `dysflow-codegraph-update`) on the captured runtime. Halt on any DRIFT finding; report RUNTIME GAP findings without failing the run.
+6. Step 5 — Run the semantic audit (`C:\Proyectos\skills\skills\dysflow-codegraph-update\assets\scripts\Invoke-DysflowSemanticAudit.ps1` from `dysflow-codegraph-update`) on the captured runtime. Halt on any DRIFT finding; report RUNTIME GAP findings without failing the run.
 
 ## Output Contract
 
@@ -74,8 +82,8 @@ Return, in order: (1) expected-tool set size (from `get_capabilities.tools` keys
 
 ## References
 
-- `references/procedure.md` — full procedure + per-tool section parser.
-- `C:\Proyectos\skills\skills\dysflow-usage\SKILL.md` — source of truth for expected tools.
+- `C:\Proyectos\skills\skills\dysflow-examples-sync\references\procedure.md` — tooling-only procedure + per-tool section parser.
+- `skills/dysflow-usage/SKILL.md` — source of truth for expected tools.
 - `C:\Proyectos\skills\skills\dysflow-usage\assets\examples\create-form-from-template.md` — template scaffold source.
 - `C:\Proyectos\skills\skills\dysflow-usage\assets\scripts\verify-examples-vs-runtime.ps1` — name+error verifier.
 - `C:\Proyectos\skills\skills\dysflow-codegraph-update\assets\scripts\Invoke-DysflowSemanticAudit.ps1` — semantic audit (mandatory second pass).
