@@ -4,6 +4,8 @@ import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic.js";
+import { setupProjectResultContract } from "../../../src/adapters/mcp/contracts/bootstrap-result-contracts.js";
+import { validateToolResult } from "../../../src/adapters/mcp/contracts/result-validation.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import type { McpToolContext } from "../../../src/adapters/mcp/types.js";
@@ -245,14 +247,22 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
     if (firstResolve === undefined || setupProject === undefined)
       throw new Error("Missing MCP tools");
     const setupToken = payload(await firstResolve.handler({ cwd: repoRoot })).recoveryToken;
-    const setup = payload(
-      await setupProject.handler({
-        cwd: worktreeB,
-        projectId: "shared-id",
-        projectChoiceReason: "user_selected_after_ambiguous_project",
-        recoveryToken: setupToken,
+    const recoveryInput = {
+      cwd: worktreeB,
+      projectId: "shared-id",
+      projectChoiceReason: "user_selected_after_ambiguous_project",
+      recoveryToken: setupToken,
+    };
+    const setupResult = await setupProject.handler(recoveryInput);
+    const setup = payload(setupResult);
+    expect(
+      validateToolResult({
+        toolName: "setup_project",
+        contract: setupProjectResultContract,
+        payload: setup,
+        policy: "enforce",
       }),
-    );
+    ).toEqual({ ok: true });
     expect(setup).toMatchObject({
       ok: true,
       mode: "resolution",
@@ -261,6 +271,10 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
       resolvedConfig: expect.objectContaining({ id: "shared-id" }),
     });
     expect(sameFilesystemPath(String(setup.projectRoot), worktreeB)).toBe(true);
+
+    const replay = await setupProject.handler(recoveryInput);
+    expect(replay.isError).toBe(true);
+    expect(replay.error?.code).toBe("MCP_INPUT_INVALID");
 
     const second = makeTools().tools;
     const secondResolve = second.find((tool) => tool.name === "resolve_project");
