@@ -1,0 +1,384 @@
+---
+name: dysflow-usage
+description: "Trigger: dysflow MCP call, dysflow tool, MCP error code, write flag, dryRun question, runtime capabilities, verify against live runtime. Operational guide for the dysflow MCP: canonical tool names (no spurious `dysflow_` prefix), write-flags matrix, error codes, write-execution-policy, and the human-compile contract. Single source of truth for every other skill that touches dysflow."
+license: Apache-2.0
+metadata:
+  author: "Andrés Román"
+  version: "1.14.0"
+  status: active
+  last_verified: "2026-08-01"
+  last_dysflow_version: "2.33.0"
+  requires: "dysflow MCP"
+  scope:
+    in_scope: "canonical dysflow tool names, write-flags matrix, error codes, write-execution-policy, human-compile contract"
+    out_of_scope: "high-level workflow (dysflow-codegraph-update), single-tool usage examples (skills per feature)"
+  supersedes: "n/a (initial version)"
+  changelog: "CHANGELOG.md (in this skill directory)"
+---
+
+## Activation Contract
+
+Use this skill when ANY of:
+
+- Calling a dysflow MCP tool (or about to call one).
+- Choosing between flags, defaults, or aliases for a dysflow write call.
+- Reading a typed error envelope from a dysflow MCP call.
+- Updating another skill that touches dysflow — point to this skill instead of duplicating tables.
+- Verifying whether a tool name, flag, or error code still exists in the live runtime.
+
+### ⚠️ Code Mode JSON-wrapping workaround (OpenCode Code Mode bug)
+
+The `dysflow` MCP declares `get_capabilities: Promise<unknown>` (and every other tool: `Promise<unknown>`), but the **OpenCode Code Mode wrapper can deliver these as JSON-encoded `string` literals instead of parsed objects**. Accessing `.adapterVersion` on a `string` returns `undefined`, which the JSON-RPC bridge surfaces as `null` — making every `caps.adapterVersion` / `caps.toolsVisible` / etc. read appear empty even though the underlying MCP responded correctly.
+
+As of **issue #1168**, every dysflow MCP response is JSON-encodable and carries a top-level `schemaVersion: "dysflow.result/v1"` discriminator so consumers can branch on a single field. The defensive parse collapses to:
+
+```js
+// Issue #1168 — universal MCP response contract. Branch on the
+// schemaVersion discriminator instead of trusting `typeof === "object"`,
+// because the OpenCode Code Mode wrapper may stringify the whole envelope.
+const raw = await tools.dysflow.someTool(args);
+const env = typeof raw === "string" ? JSON.parse(raw) : raw;
+if (env?.schemaVersion !== "dysflow.result/v1") {
+  throw new Error("not a dysflow MCP envelope — possibly flattened by the transport wrapper");
+}
+// env.content[0].text is the JSON-encoded tool payload (parse it as needed).
+// env.error.code (when isError === true) is the typed error code.
+```
+
+The discriminator is a single source of truth (`RESULT_SCHEMA_VERSION` constant in `src/adapters/mcp/result-translation.ts`); the stdio central seam and every helper envelope builder run every response through `withSchemaVersion`. Use `env.schemaVersion === "dysflow.result/v1"` as the branch signal — never invent your own literal.
+
+If you call the dysflow MCP from a host that DOES parse JSON correctly (Claude/Cursor/Cline with a real MCP bridge, the `dysflow` CLI directly, `gh`-style REST adapters), the response is the parsed object and the `typeof raw === "string"` branch is dead code. The discriminator check is still useful as a defensive sanity gate. The break is specifically in the OpenCode Code Mode `execute` tool.
+
+**Detecting the bug at runtime** (use in tools that expect object results):
+
+```js
+const snap = await tools.dysflow.get_capabilities({});
+if (typeof snap === 'string') {
+  // OpenCode Code Mode wrapper is delivering a JSON string instead of the parsed object.
+  // File an issue against OpenCode (or hard-restart the MCP client). Skill contract says
+  // Promise<object>; the wrapper currently returns Promise<string>.
+}
+```
+
+Do NOT use when:
+
+- The question is workflow-level ("how do I sync binaries", "what's the test loop"). Use the workflow skill (`vba-binary-sync`, `vba-run-tests`, etc.) — they point here for tool/flag/error tables.
+- The question is about `codegraph-vba`. Use `codegraph-vba` skill if installed, or the meta-skill `dysflow-codegraph-update`.
+- The question is only about CLI installation or shell setup. For pure-MCP project bootstrap, use `setup_project`; for config migration, use `migrate_project_config`.
+
+## Quick start
+
+> **First call:** `get_capabilities({})` — that snapshot is the truth for every other example in this skill.
+> If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
+
+> **Stale `.laccdb` files do not block imports.** The runtime probes live-handle ownership. It removes an unowned stale lock and emits `LACCDB_STALE_DETECTED`; a real holder emits `LIVE_PROCESS_HOLDS_LACCDB` with its PID. Consumers must use only dysflow-owned cleanup paths (`cleanup_access_operation`, or `access_force_cleanup_orphaned` with a listed `pid` plus `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true`) — never a generic process killer or consumer-side lock-file deletion. See `references/error-codes.md` and `assets/examples/import-modules.md#stale-laccdb-recovery-v291`.
+
+The response carries:
+
+| Field | Meaning |
+|---|---|
+| `adapterVersion` | Live runtime version. Quote it literally in any skill/AGENTS that needs a floor. |
+| `writesProcess.enabled` | Whether writes are enabled at process level. `false` ⇒ every write tool returns `MCP_WRITES_DISABLED`. |
+| `writesProject.allowWrites` | Whether the active `.dysflow/project.json` allows writes. Same envelope. |
+| `dryRunDefault` | Compatibility-named global plan default. Input intent is canonical `apply`; the per-tool `effectiveDryRunDefault` map is what the dispatch seam consults. |
+| `toolsVisible` | Total MCP tool count exposed by the live adapter. |
+| `documentationBundle` | Installed diagnostic-doc availability (`errorCodesMd`, `hresultGuideMd`) and the bundle version. Treat missing or version-skewed diagnostics as an installation defect before following local remediation docs. |
+| `writeClassToolsPermitted` | The allowlist of tools capable of mutating state. Cross-reference before documenting any tool name. |
+| `humanCompilePending` | Whether the human has compiled the project since last persistence. Test runs block on it. |
+| `writeExecutionPolicy` | Active risk-based write execution policy. `"safe-by-default"` (default) or `"developer"` (zero-friction routine dev loop). Resolved from `.dysflow/project.json` `capabilities.writeExecutionPolicy`. |
+| `effectiveDryRunDefault` | Per-tool effective plan default under the active policy. Keys are contract tool names; values are booleans. Check it with `canonicalCommitFlag` and pass explicit `apply` intent. |
+| `projectIdResolution` | Resolved project identity for the current `cwd`: `{ projectId, outcome }`. `outcome` is `"resolved"` when a unique project config was found, otherwise `"unresolved"`. Use this together with `projectConfig` to confirm the active target before any write-class call. |
+| `surface` | Transport type the MCP server bound (e.g. `"stdio"`). Diagnostic-only — consumers do not branch on this; the live contract surface is the same regardless of transport. |
+| `preferredAgentWorkflows` | Phase-indexed tool guidance for the canonical agent loop: `bootstrap:[get_capabilities,schema,describe_tool,setup_project,resolve_project]`, `sync:[sync_binary]`, `tests:[validate_manifest,test_vba]`, `sql:[query_execute]`, `forms:[analyze_form_ui,generate_form_design_plan,apply_form_design_plan,verify_form_ui]`, `recovery:[resolve_project,diagnose,state,logs,cleanup_access_operation]`. Derived from the same source of truth as introspection views; no hand-maintained registry — read this rather than guessing the next tool. |
+| `projectConfig` | Normalized project-config diagnosis: `cwd`, `configPath`, config-owning `projectRoot`, `projectId`, effective `accessPath`, optional shared `backendPath`, local `destinationRoot`, `discoveredProjects[]`, typed `status`, boolean `writeReady`, `diagnostics[]`, and exact `remediation`. Persistent config stores only `frontendFile` (or a basename-only legacy `accessPath`); the effective frontend is always resolved under the worktree that physically owns `.dysflow/project.json`. Another worktree is selected only by an explicit per-call `projectId`, absolute `accessPath`, `backendPath`, or `cwd`. Explicit target provenance is call-local and never persisted. `cwd` is the **active git worktree toplevel**, not the process spawn cwd — see the two typed warnings below. |
+
+#### `projectConfig.cwd` is the worktree, not the spawn cwd (#1179)
+
+The MCP process is spawned from one fixed directory; the session consuming it
+may be operating in a sibling worktree of the same repo. The resolver
+therefore walks up to the git worktree toplevel before deciding which
+`.dysflow/project.json` to consult, so the implicit target is the worktree.
+
+Two typed entries can appear in `projectConfig.diagnostics[]` at
+`severity: "warning"`. Both are additive — the pre-existing error codes and
+the `writeReady` verdict are unchanged, so a consumer that ignores them keeps
+working:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `CWD_NOT_IN_WORKTREE` | The process cwd is not inside any git worktree, so `projectConfig.cwd` fell back to the spawn cwd. | Expected when the runtime is driven from a temp directory or a bare checkout. Surface it; do not treat it as a failure. |
+| `TARGET_MISMATCH_WARNING` | The auto-detected worktree's configured `projectId` differs from the one the request asked for. Accompanies the existing `PROJECT_ID_MISMATCH` error. | Pass the intended worktree explicitly (`projectId`, or `cwd` on read tools) instead of relying on auto-detection. |
+
+Read `projectConfig.cwd` rather than assuming the value you passed comes back
+verbatim: outside the per-tool gate it now reports the worktree root.
+| `tools` | Per-tool commit-flag and workflow metadata. Keys are contract tool names; values include `canonicalCommitFlag`, `legacyAliases[]`, `commitFlag`, `noWriteAlias`, `defaultBehavior`, standard `annotations`, and namespaced `_meta["dysflow/workflow"]`. Composition metadata is not sourced here; read full schema or `describe_tool`. |
+
+### Workflow metadata and introspection
+
+Every advertised tool exposes standard MCP `annotations` (`title`, `readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`) and namespaced
+`_meta["dysflow/workflow"]` (`phases`, `preferredFor`, `status`). These fields
+are projected consistently through `tools/list`, compact/full `schema`,
+`describe_tool`, and `get_capabilities.tools`. Use them to select a tool; use
+full schema or `describe_tool` for its exact parameters, constraints, result
+contract, and errors.
+
+### When a tool rejects your flag (#757 C4)
+
+`get_capabilities` + `get_capabilities.tools` is the AUTHORITATIVE source for
+which flag commits a tool. As of [issue #1167](https://github.com/DysTelefonica/dysflow/issues/1167)
+**every advertised MCP tool reports `canonicalCommitFlag: "apply"`** — the
+single canonical commit signal across the toolset. There is no longer a
+per-tool polarity to memorize; the same lookup pattern works for every
+write-class tool.
+
+- `canonicalCommitFlag: "apply"` — pass `apply: true` to commit. This is
+  the canonical contract for every advertised MCP tool, including
+  `test_vba` (unified in #1167).
+- `legacyAliases[]` — compatibility flags still accepted by the runtime.
+  Never treat an alias as preferred. The live runtime reports only `diff`
+  for `export_modules` and `export_all`; all other tools report an empty list.
+- `noWriteAlias: "diff"` (`export_all`, `export_modules` only) — pass
+  `diff: true` to plan. **Prefer `apply: false` for new code.**
+- `noWriteAlias: null` — no compatibility alias; use the canonical `apply`
+  field for write intent.
+- `defaultBehavior: "plan"` — every write-class tool. No flag = plan.
+- `defaultBehavior: "noop"` — read-only tools and conditional operations
+  that require a separate explicit confirmation. No flag, no mutation.
+
+When conflicting write intent is rejected, the
+`MCP_INPUT_INVALID` envelope now carries `rejectedFlag`,
+`rejectedFlags[]` (the full list of conflicting flags raised by the
+truth table), `toolCommitFlag`, and `remediation` so an AI consumer
+can switch without parsing the legacy text body. Since v2.23.0,
+contradictory flag combinations (for example `apply:true` together
+with legacy `diff:true` on an export tool) fail loud with `MCP_INPUT_INVALID` rather than
+silently picking one intent — always read
+`get_capabilities.tools[toolName]` first and pass the registry's
+`commitFlag` / `noWriteAlias`. Contradictory combinations are modeled in two layers: full schema / `describe_tool` expose `compositionConstraints` and matching schema `anyOf` required groups; individual `parameters[*].conflictsWith` entries describe direct parameter conflicts. Do not attribute either layer to `get_capabilities.tools`.
+
+## How to read this skill
+
+1. **Examples** (`assets/examples/`) — one `.md` per common MCP action. Each has the canonical JSON call, anti-patterns for that call, and the result fields worth reading.
+2. **Anti-patterns** (`assets/anti-patterns.md`) — curated list of dysflow-specific footguns.
+3. **Write-flag matrix** (`assets/write-flags-matrix.md`) — table of write-class tools and the flag that commits them.
+4. **Error codes** (`references/error-codes.md`) — typed envelope codes, verified live.
+5. **Agent contract map** (`references/agent-friction-map.md`) — functionality-by-functionality zero-friction behavior.
+
+## Examples (index)
+
+| File | Action |
+|---|---|
+| `assets/examples/get-capabilities.md` | `get_capabilities` — the bootstrap call |
+| `assets/examples/describe-tool.md` | `describe_tool` — one-tool on-demand introspection |
+| `assets/examples/setup-project.md` | `setup_project` — plan/apply bootstrap for a missing worktree config |
+| `assets/examples/resolve-project.md` | `resolve_project` — select and verify a worktree without restarting MCP |
+| `assets/examples/resolve-project-recovery.md` | `resolve_project` / `setup_project` — consume an opaque ambiguity recovery token |
+| `assets/examples/doctor.md` | `dysflow doctor` — category-based project/runtime diagnosis |
+| `assets/examples/import-modules.md` | `import_modules` — disk source → Access binary |
+| `assets/examples/export-modules.md` | `export_modules` — Access binary → disk source |
+| `assets/examples/export-all.md` | `export_all` — full project export, optional `prune:true` |
+| `assets/examples/verify-code.md` | `verify_code` — drift detection (read-only) |
+| `assets/examples/run-vba.md` | `run_vba` — invoke a public VBA procedure |
+| `assets/examples/vba-inline-execution.md` | `vba_inline_execution` — execute a guarded throwaway snippet |
+| `assets/examples/test-vba.md` | `test_vba` — run a JSON manifest of test atoms |
+| `assets/examples/lint-module.md` | `lint_module` — parse-error hint per module |
+| `assets/examples/query-execute.md` | `query_execute` — read/write SQL |
+| `assets/examples/link-tables.md` | `link_tables` — plan or create/relink backend TableDefs |
+| `assets/examples/list-objects.md` | `list_objects` — inventory of the binary |
+| `assets/examples/access-force-cleanup-orphaned.md` | `access_force_cleanup_orphaned` — safely retire stuck Access processes |
+| `assets/examples/create-form-from-template.md` | `create_form_from_template` — scaffold a form from a spec |
+| `assets/examples/sync-binary.md` | `sync_binary` — verify → plan → import/export → re-verify → recommend in one call |
+| `assets/examples/migrate-project-config.md` | `migrate_project_config` — drive legacy `.dysflow/project.json` migrations deterministically (#1177) |
+| `assets/examples/logs.md` | `logs` — local invocation filters and names-only friction aggregates |
+
+## Form UI tools — perceive → act → verify
+
+The form-UI builder surface treats an Access form like a web page: perceive it, act with rich verbs, re-verify. All operate on `FormIR` (parsed `.form.txt`); the write tools go through the same guarded write + import gate. Full workflow in the **`access-form-ui-builder`** skill; canonical flags/errors stay here.
+
+| Phase | Tools | Class |
+|---|---|---|
+| **Perceive** | `analyze_form_ui` (roles), `analyze_form_layout` (geometry lint: overlap/alignment/tab-order), `render_form_preview` (SVG/ASCII from twips), `map_form_behavior` (control→handler→callpath; consumes codegraph-vba evidence) | read |
+| **Plan** | `generate_form_design_plan`, `copy_form_ui_pattern` | read |
+| **Act** | `apply_form_design_plan` (execute plan — WRITE), `form_align_controls`, `form_distribute_controls` (batch geometry — WRITE) | write |
+| **Verify** | `verify_form_ui` (contract + geometry/tab-order/property), `verify_form_bindings` (ControlSource/RowSource vs real schema), `diff_form_preview` (before/after visual) | read |
+
+Write tools follow the live matrix: prefer `apply:false` to preview and `apply:true` to commit;
+use `diff` only when reported as a compatibility alias. `apply_form_design_plan`'s
+`mode`/`filesystemApplied` reflect the real write; the pure planning preview is always
+`mode:"dry-run"`.
+
+`form_set_property` uses `propertyName` as the canonical field (`property` remains a compatibility alias) and rejects unknown property names or invalid value types before opening a guarded write. Every form mutation is transactional: when the import gate fails, dysflow restores the original source instead of leaving a partial filesystem mutation.
+
+`compact_repair` defaults to the frontend. Pass its explicit target selector only when the intended database is the backend; never rely on path fallback when the target matters.
+
+
+## Multi-worktree operation — explicit target per call
+
+Git creates worktrees; Dysflow resolves targets safely. The current Git worktree is always the
+implicit/default context. Its `.dysflow/project.json` stores `frontendFile` as a filename only
+(or accepts a basename-only legacy `accessPath`), derives `projectRoot` from the config's physical
+owner, and keeps `destinationRoot` relative/local. An absolute or shared `backendPath` remains
+unchanged and is never rebased with the frontend.
+
+To operate on another worktree, select it explicitly in that individual call with a unique
+`projectId`, absolute `accessPath`, `backendPath`, or supported `cwd`. Successful explicit
+resolution returns target provenance such as `explicit-project-id` or `explicit-access-path`;
+that provenance is for the call only and MUST NOT be written into the current worktree's config.
+Duplicate sibling ids fail with `PROJECT_ID_COLLISION` rather than first-match behavior.
+
+When no frontend filename is configured, only one root `.accdb` may be auto-selected. Zero
+candidates returns `FRONTEND_TARGET_MISSING`; multiple candidates return
+`FRONTEND_TARGET_AMBIGUOUS`. Absolute or separator-containing legacy `accessPath` values return
+`FRONTEND_PATH_NOT_BASENAME`; inherited sibling paths without an explicit target cannot authorize
+writes and may return `INHERITED_WORKTREE_MISMATCH`.
+
+Use `resolve_project({cwd:"<absolute-worktree>", projectId:"<id>"})` to inspect a sibling and
+require `outcome:"resolved"`. If the outcome is `ambiguous`, ask the human to choose one
+`availableProjects` entry and retry with that exact `projectId`,
+`projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque
+`recoveryToken`. The token is one-shot and process-local; the cached choice expires or
+invalidates when config/worktree evidence changes. Clear it with
+`resolve_project({clearResolution:true})`. Confirm each target parameter with
+`describe_tool({name:"<tool>"})`. Never restart MCP or edit one worktree's config to
+point at another. See `assets/examples/resolve-project.md` and
+`assets/examples/resolve-project-recovery.md`.
+
+For one-tool introspection, call `describe_tool({name:"<tool>"})` before inventing a
+parameter. The canonical parameter is `name`; `toolName` is only an alias.
+
+### Redirecting where a write lands — `destinationRoot` (#1169, #1226)
+
+Every write-class tool accepts a `destinationRoot` override, and the project
+root follows it, so the path-containment guards accept the override as the
+authoritative root instead of rejecting a `sourcePath` that sits inside it.
+Use it to write into a scratch tree without touching the configured source
+root. Precedence is `projectRoot` (explicit) → `destinationRoot` (this
+override) → the configured value → `cwd`; omitting the override leaves the
+configured contract exactly as before.
+
+**Issue #1226 (`export_modules` / `export_all`) — pre-resolve destinationRoot
+gate.** The two export tools require an EXPLICIT declaration of where bytes
+land before the dispatch seam engages the runner. Pass ONE of:
+
+- `destinationRoot: "<path>"` — explicit override (preferred).
+- `exportPath: "<path>"` — legacy alias. Forwarded to `destinationRoot` by
+  the adapter; both reach the post-resolve export-source guard (#785).
+- `allowConfiguredDestinationRoot: true` — opt-in to the configured value
+  in `.dysflow/project.json` when the caller wants the historical
+  silent-config-fallback behavior. Default is `false`.
+
+If the call passes NONE of these three, the dispatch seam short-circuits
+with the typed error code `DESTINATION_ROOT_REQUIRED` (`error.missingFields`
+enumerates what to set; `error.toolName` names the offending tool). The
+post-resolve #785 guard then fires normally once the destination IS
+declared — after explicit approval, use `implements_check:"export_overwrites_source_precheck"` with `confirmedRequiresConfirmation:true` to bypass an overlap refusal.
+
+`destinationRoot` chooses **where bytes land**, not which database is opened —
+that is still `projectId` / `accessPath` / `backendPath`. Confirm the
+parameter is accepted with `describe_tool({name:"<tool>"})` before relying on
+it for a given tool.
+
+### Migrating a legacy project config — `migrate_project_config`
+
+The default call is a read-only diff preview of what the migration would
+rewrite. Committing it is write-gated like any other write-class tool, and it
+rewrites `.dysflow/project.json` atomically. Reach for it instead of
+hand-editing a config that predates the current contract; see
+`assets/examples/migrate-project-config.md`.
+
+## VBA-sync workflow — `sync_binary`
+
+When an AI agent needs to sync source ⇄ binary in one shot, prefer `sync_binary` over the manual 5-step loop. `sync_binary` composes `verify_code` + `import_modules` + `export_modules` + re-verify into a single round-trip. Workflow pattern lives in the **`vba-binary-sync`** skill; this is its MCP one-shot wrapper.
+
+| Direction | What it does |
+|---|---|
+| `"src-to-binary"` | verify → plan import → (if `apply:true`) chunked `import_modules` → re-verify → recommend |
+| `"binary-to-src"` | verify → plan export → (if `apply:true`) chunked `export_modules` → re-verify → recommend |
+| `"both"` | verify + plan both directions; **plan-only even with `apply:true`**. Detect drift without committing either side. |
+
+`apply:false` is the explicit preview shape and omitted intent plans. The consumer must explicitly opt into `apply:true`. `effectiveDryRunDefault.sync_binary` remains `true` as compatibility-named plan metadata. The four-list lockstep preserves plan-by-default semantics in developer mode. Hard rules honored: NO `compile:true`, Round 2/3/4 invariants preserved (no abort on missing module; ASCII-only runner-bound strings; chunked COM-safe imports).
+
+Conflicting `bothChanged` entries remain `manual_merge` by default. A caller that has made an
+explicit one-way decision may pass `acceptBothChanged:true` together with `direction:
+"src-to-binary"` or `"binary-to-src"`; `direction:"both"` never resolves the conflict.
+
+`export_modules` opens a disposable copy of the `.accdb` by default so the
+original binary is not mutated by Access bookkeeping. Read `binaryMutated:false` as the normal
+result. Pass `mutateBinary:true` only when the legacy direct-binary behavior is intentional.
+
+Use `sync_binary` whenever the agent would otherwise script the 5-step loop manually. Use the manual primitives (`verify_code` + `import_modules` + `export_modules`) only when you need the granular control (single-step inspection, partial commits, custom chunking).
+
+## Write-execution-policy — `developer` vs `safe-by-default`
+
+`get_capabilities.writeExecutionPolicy` reports the active mode. The dispatch layer consults the resolver per call; **the per-tool `effectiveDryRunDefault` map is the source of truth** (NOT a hardcoded input alias).
+
+| Mode | Omitted write intent resolves to | When to use |
+|---|---|---|
+| `"developer"` | commit for `routine-dev-write`; plan for `destructive-write` and `critical-write` | zero-friction local dev loop |
+| `"safe-by-default"` | plan for all write-class tools | shared CI, public agents, anything where the agent is not the human |
+
+**Resolution rules** (the dispatch layer enforces these — DO NOT bypass):
+- A `risk: "routine-dev-write"` tool in `developer` mode with omitted `apply` resolves to commit.
+- A `risk: "destructive-write"` or `risk: "critical-write"` tool with omitted `apply` ALWAYS plans, regardless of mode. Explicit `apply: true` is required to commit.
+- A `risk: "read-only"` tool ignores both flags (no-op either way).
+
+**Per-call gating is authoritative and never bypassed** (independent of policy):
+- `cleanup_access_operation` with `force: true` requires explicit confirmation regardless of mode.
+- `access_force_cleanup_orphaned` with a positive `pid` requires `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` after explicit human approval.
+- The `test_vba` / `run_vba` allowlist gate (`allowedProcedures`) is enforced in both modes.
+- The `allowWrites: false` write-gate is enforced in both modes (the policy does NOT bypass it).
+
+**Export-source guard** (both modes reach it once the destination is
+explicitly declared — see Issue #1226 for the pre-resolve
+`DESTINATION_ROOT_REQUIRED` gate that fires BEFORE this guard when
+`destinationRoot` is never declared):
+- `export_modules` / `export_all` with a destination that overlaps the
+  source root → refused with `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION`.
+- After explicit human approval, re-call with
+  `implements_check:"export_overwrites_source_precheck"` and
+  `confirmedRequiresConfirmation:true`.
+- Exact source root match → refused.
+- Nested managed folder → refused.
+- External path → allowed (subject to the existing write-gate).
+- Case-insensitive Windows path matching.
+
+**Practical rule for AI agents**: when in doubt, set the policy explicitly. If `.dysflow/project.json` is not configured, the runtime defaults to `"safe-by-default"` — every write call without an explicit `apply: true` plans. The `developer` mode is opt-in per-project (set `capabilities.writeExecutionPolicy: "developer"` in `.dysflow/project.json`).
+
+## Cross-reference
+
+- **Anti-patterns:** `assets/anti-patterns.md`
+- **Write-flag matrix:** `assets/write-flags-matrix.md`
+- **Error codes:** `references/error-codes.md`
+- **Verification script:** `assets/scripts/verify-examples-vs-runtime.ps1`
+
+## Self-check before any dysflow call
+
+Run these in your head before every call. One fail = stop and resolve.
+
+1. `adapterVersion` is current (from the latest `get_capabilities`).
+2. The per-tool effective dry-run default (`effectiveDryRunDefault[toolName]`) matches your intent. Default behavior depends on the active policy — see `assets/examples/get-capabilities.md` for the truth table. Read `canonicalCommitFlag` and pass explicit canonical intent when committing.
+3. Writes are enabled for write-class calls (`writesProcess.enabled` and `writesProject.allowWrites` both `true`).
+4. `humanCompilePending:false` before any `test_vba` / `run_vba` call.
+5. `toolsVisible` is consistent with anything you cite. Compare against the live registry (`tools` map) — both fields come from the same source of truth.
+6. For `query_execute` — `mode: "read" | "write"` is REQUIRED (issue #1164). `apply: true` alone does NOT pick a write path; it only commits. Omitting `mode` returns `MCP_INPUT_INVALID` with `error.missingParam: "mode"` and exact remediation. `missingParam` is distinct from rejected write flags: it does not include `rejectedFlag` or `toolCommitFlag`. See `assets/examples/query-execute.md`.
+7. **Legacy `accessPath` in `.dysflow/project.json`** — the runtime joins `frontendFile` to the worktree that physically owns the config (contract introduced in #1092, shipped in v2.23.1). If your config still carries an absolute legacy `accessPath`, migrate it with a one-line replacement:
+
+   ```diff
+   - "accessPath": "../../Users/.../frontend.accdb",
+   + "frontendFile": "frontend.accdb",
+   ```
+
+   `frontendFile` is a basename: the runtime resolves it against the active worktree root, so the same config works across every worktree without edits. Per-call override (`accessPath`) still wins when a genuinely different frontend is needed (for example, to inspect a binary that lives outside the worktree) — never bake a sibling path into `.dysflow/project.json`. When the MCP exposes it, drive the migration deterministically with the `migrate_project_config` tool (#1177) instead of editing by hand; for the structured-diagnostic path see #1176.
+
+8. **`run_vba` plan/apply agreement (#1174)** — `run_vba` parses `procedureName` into `<module>.<procedure>` once and threads the parsed `moduleName` + `procName` through both the `apply:false` plan and the `apply:true` preflight. The two paths therefore MUST agree on procedure resolution for the same input. If you observe a divergence:
+   - `apply: false` succeeds with `moduleName` / `procedureName` populated, but `apply: true` fails with `PROCEDURE_NOT_FOUND` for the same input → the adapter forwarded a stale `moduleName` OR the binary's compiled p-code is out of sync with the on-disk source. Force a re-compile in Access VBE (Debug → Compile) and retry. Do NOT chase a phantom import issue.
+   - `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is present in the binary's `VBComponents` but Access COM cannot invoke it (stale p-code). The typed envelope's `error.remediation` says "Recompile in Access VBE then retry"; follow it.
+   - `apply: true` fails with `RUNNER_FAILED` whose message matches `Excepción al llamar a "Run"` → the reclassifier should have caught it. If you see the raw `RUNNER_FAILED`, file an issue against the reclassifier at `src/core/services/vba-service.ts::reclassifyRunnerFailure`.
+
+   See `assets/examples/run-vba.md` for the canonical procedureName parsing contract and the three typed error envelopes (`MCP_PROCEDURE_NOT_ALLOWED` / `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE`).
+
+Full rationale and per-item recovery: `assets/examples/preflight-checklist.md`.
+Composition recipes (TDD loop, drift + act, recovery, exploration): `assets/examples/composition-patterns.md`.
+
+> **Error codes in this skill are verified live against the runtime.** If `get_capabilities` doesn't list an error, it doesn't exist in `references/error-codes.md`. Period.

@@ -7,7 +7,7 @@
  * and the install report must surface them by name.
  */
 
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -144,6 +144,20 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
       join(runtimeDir, "docs", "diagnostics", "hresult-guide.md"),
     );
     expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
+  });
+
+  it("retains bundled skills in the installed runtime for update and doctor", async () => {
+    const packageRoot = join(root, "pkg");
+    const source = join(packageRoot, "skills", "dysflow-arnes", "SKILL.md");
+    await mkdir(join(packageRoot, "skills", "dysflow-arnes"), { recursive: true });
+    await writeFile(source, "canonical harness bytes\n", "utf8");
+
+    const { installRuntime } = await importExtractor();
+    const report = await installRuntime(runtimePaths, packageRoot);
+    const destination = join(runtimePaths.appDir, "skills", "dysflow-arnes", "SKILL.md");
+
+    expect(await readFile(destination)).toEqual(await readFile(source));
+    expect(report.copiedFiles).toContain(destination);
   });
 
   it("installReport mentions all three new docs by name", () => {

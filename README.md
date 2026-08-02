@@ -300,6 +300,14 @@ dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
 
 `dysflow install` persists the resolved runtime directory in a machine-level marker so future `dysflow update` calls can reuse the same installed runtime instead of falling back to the current user's `%LOCALAPPDATA%` path.
 
+The release also owns five Dysflow agent skills under `skills/`. Install and
+update copy only to detected adapter `SkillsDir` locations and publish all five
+skills as one transaction. Use `--only=opencode,codex` to opt in explicit
+adapters (and create their canonical skill directories), or
+`--exclude=claude,pi` to leave selected detected adapters untouched. `dysflow
+doctor` compares each detected adapter's installed hashes and harness version
+against the running product release.
+
 ### Layout (profile install)
 
 ```text
@@ -1282,6 +1290,10 @@ dysflow update
 
 `dysflow update` checks the latest GitHub release, skips reinstall when the
 installed runtime is current, and installs the newer release when available.
+It refreshes bundled Dysflow skills even when the runtime version is already
+current, so repaired or newly discovered adapter targets converge without a
+manual file copy. The same `--only` and `--exclude` filters accepted by install
+are available on update.
 Use `--force` to reinstall the latest release even when versions match:
 
 ```powershell

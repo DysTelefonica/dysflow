@@ -1,5 +1,6 @@
 import {
   access,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -11,7 +12,25 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+let isolatedProcessHome: string;
+const originalUserProfile = process.env.USERPROFILE;
+const originalHome = process.env.HOME;
+
+beforeAll(async () => {
+  isolatedProcessHome = await mkdtemp(join(tmpdir(), "dysflow-install-suite-home-"));
+  process.env.USERPROFILE = isolatedProcessHome;
+  process.env.HOME = isolatedProcessHome;
+});
+
+afterAll(async () => {
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  await rm(isolatedProcessHome, { recursive: true, force: true });
+});
 
 const mockCreateInterface = vi.fn();
 vi.mock("node:readline/promises", () => ({
@@ -86,6 +105,7 @@ async function createPackageRoot(root: string, version: string, marker: string):
     JSON.stringify({ name: "dysflow", version, type: "module" }, null, 2),
     "utf8",
   );
+  await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
   return packageRoot;
 }
 
@@ -135,6 +155,8 @@ describe("install arg parsing", () => {
         agentNames: ["codex", "opencode", "claude", "pi"],
         interactive: false,
         verbose: false,
+        onlySkills: [],
+        excludeSkills: [],
       },
     });
   });
@@ -147,6 +169,8 @@ describe("install arg parsing", () => {
         agentNames: ["opencode"],
         interactive: false,
         verbose: true,
+        onlySkills: [],
+        excludeSkills: [],
       },
     });
   });
@@ -158,6 +182,8 @@ describe("install arg parsing", () => {
         runtimeDir: "C:/tmp/runtime",
         force: true,
         skipChecksum: false,
+        onlySkills: [],
+        excludeSkills: [],
       },
     });
   });
@@ -356,6 +382,7 @@ describe("Dysflow MCP config state", () => {
         '{"name":"dysflow","version":"0.2.0"}\n',
         "utf8",
       );
+      await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
       await mkdir(join(home, ".codex"), { recursive: true });
       await writeFile(
         codexConfig,
@@ -435,6 +462,31 @@ describe("resolvePackageRoot", () => {
 });
 
 describe("handleInstallCommand end-to-end", () => {
+  it("creates an explicitly selected skill-only adapter target without configuring its MCP", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-cursor-skills-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "CURSOR_SKILL_RUNTIME");
+
+    try {
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--no-tui", "--only=cursor"],
+        { env: { USERPROFILE: home }, packageRoot },
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("- cursor:");
+      expect(await readFile(join(home, ".cursor", "skills", "dysflow-arnes", "SKILL.md"))).toEqual(
+        await readFile(join(packageRoot, "skills", "dysflow-arnes", "SKILL.md")),
+      );
+      await expect(
+        access(join(home, ".codex", "skills", "dysflow-arnes", "SKILL.md")),
+      ).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("reinstalling from the installed runtime app refreshes integrations without self-copy failure", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-self-install-"));
     const home = join(root, "home");
@@ -454,6 +506,7 @@ describe("handleInstallCommand end-to-end", () => {
         '{"name":"dysflow","version":"0.1.3"}\n',
         "utf8",
       );
+      await cp(join(process.cwd(), "skills"), join(appDir, "skills"), { recursive: true });
 
       const result = await handleInstallCommand(
         ["--runtime-dir", runtimeDir, "--agents", "opencode", "--no-tui"],
@@ -547,6 +600,23 @@ describe("handleInstallCommand end-to-end", () => {
       const piDysflow = piMcpServers.dysflow as Record<string, unknown>;
       expect(piDysflow.command).toBe(expectedCmd);
       expect(piDysflow.args).toEqual(["mcp"]);
+
+      const installedSkillDirs = [
+        join(home, ".codex", "skills"),
+        join(home, ".config", "opencode", "skills"),
+        join(home, ".claude", "skills"),
+        join(home, ".pi", "skills"),
+      ];
+      for (const skillsDir of installedSkillDirs) {
+        expect(await readFile(join(skillsDir, "dysflow-arnes", "SKILL.md"))).toEqual(
+          await readFile(join(packageRoot, "skills", "dysflow-arnes", "SKILL.md")),
+        );
+        const metadata = await readJson(join(skillsDir, ".dysflow-harness.json"));
+        expect(metadata.mcpHarnessVersion).toBe("0.1.0");
+      }
+      await expect(
+        access(join(home, ".cursor", "skills", "dysflow-arnes", "SKILL.md")),
+      ).rejects.toThrow();
 
       const cmdLauncher = await readFile(join(runtimeDir, "bin", "dysflow.cmd"), "utf8");
       expect(cmdLauncher).toContain("%DYSFLOW_HOME%\\app\\dist\\cli\\index.js");
@@ -760,6 +830,7 @@ describe("handleUpdateCommand end-to-end", () => {
 
   it("updates runtime from a newer GitHub release package provider", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-update-release-"));
+    const home = join(root, "home");
     const runtimeDir = join(root, "runtime");
     const appDir = join(runtimeDir, "app");
     const installedPackageJson = join(appDir, "package.json");
@@ -771,7 +842,8 @@ describe("handleUpdateCommand end-to-end", () => {
       "utf8",
     );
 
-    const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+    const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--only=codex"], {
+      env: { USERPROFILE: home },
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: "9.9.9" }),
         preparePackage: async () => ({
@@ -795,6 +867,13 @@ describe("handleUpdateCommand end-to-end", () => {
     expect(await readFile(join(appDir, "scripts", "dysflow-access-runner.ps1"), "utf8")).toBe(
       "RELEASE_RUNTIME_ACCESS_RUNNER",
     );
+    expect(await readFile(join(home, ".codex", "skills", "dysflow-arnes", "SKILL.md"))).toEqual(
+      await readFile(join(releasePackageRoot, "skills", "dysflow-arnes", "SKILL.md")),
+    );
+    const installedMetadata = await readJson(
+      join(home, ".codex", "skills", ".dysflow-harness.json"),
+    );
+    expect(installedMetadata.mcpHarnessVersion).toBe("9.9.9");
 
     await rm(root, { recursive: true, force: true });
   });
@@ -814,7 +893,10 @@ describe("handleUpdateCommand end-to-end", () => {
     );
     await writeFile(join(appCli, "index.js"), "OLD_RUNTIME", "utf8");
 
-    const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+    const home = join(root, "home");
+    const result = await handleUpdateCommand(["--runtime-dir", runtimeDir, "--only=codex"], {
+      env: { USERPROFILE: home },
+      packageRoot: releasePackageRoot,
       releaseUpdateProvider: {
         resolveLatestRelease: async () => ({ version: "9.9.9" }),
         preparePackage: async () => ({
@@ -826,6 +908,9 @@ describe("handleUpdateCommand end-to-end", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Dysflow runtime is up to date");
     expect(await readFile(join(appCli, "index.js"), "utf8")).toBe("OLD_RUNTIME");
+    expect(await readFile(join(home, ".codex", "skills", "dysflow-arnes", "SKILL.md"))).toEqual(
+      await readFile(join(releasePackageRoot, "skills", "dysflow-arnes", "SKILL.md")),
+    );
 
     await rm(root, { recursive: true, force: true });
   });
@@ -1522,6 +1607,8 @@ describe("update arg parsing with skip-checksum", () => {
         runtimeDir: "C:/tmp/runtime",
         force: false,
         skipChecksum: true,
+        onlySkills: [],
+        excludeSkills: [],
       },
     });
   });
