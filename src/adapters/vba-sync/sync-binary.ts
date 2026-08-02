@@ -385,12 +385,11 @@ export async function runSyncBinary(args: {
   const scope = effectiveScope(input);
   const batchSize = effectiveBatchSize(input);
   const onChunkError = input.onChunkError ?? "continue";
-  const isDryRun = input.dryRun === true;
-  // `apply` is the commit signal; absent apply:true AND absent dryRun:true
-  // is treated as dry-run (safe-by-default). This mirrors the dispatch
-  // seam's `resolveIsDryRun` semantics for routine-dev-write tools where
-  // POLICY_EXEMPT_TOOLS keeps the policy helper from injecting dryRun:false.
-  const willExecute = !isDryRun && input.apply === true;
+  // Derive mutation and the reported mode from one decision. `apply:true`
+  // is the only commit signal, while an explicit `dryRun:true` remains a
+  // defensive veto. Omitted or false `apply` therefore stays fail-closed.
+  const willExecute = input.apply === true && input.dryRun !== true;
+  const isDryRun = !willExecute;
 
   const forward: Record<string, unknown> = { ...(input.forward ?? {}) };
   const focusedModuleNames =
