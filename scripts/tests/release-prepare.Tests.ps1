@@ -289,6 +289,24 @@ Describe "release command-line dispatch" {
 }
 
 Describe "owned changelog gate process" {
+    It "selects a Windows-launchable pnpm command when the quality gate process starts" `
+        -Skip:([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+        $process = [pscustomobject]@{ ExitCode = 0 }
+        $process | Add-Member ScriptMethod WaitForExit { param($Milliseconds); return $true }
+        Mock Start-Process { $process }
+        $fixturePath = Join-Path $TestDrive "launcher-CHANGELOG.md"
+        Set-Content $fixturePath $script:baseChangelog
+
+        Test-ReleaseChangelogQuality `
+            -ChangelogPath $fixturePath `
+            -RepoRoot $script:repoRoot `
+            -TimeoutSeconds 1 | Should -BeTrue
+
+        Should -Invoke Start-Process -Times 1 -ParameterFilter {
+            $FilePath -match '\.(?:cmd|exe)$'
+        }
+    }
+
     It "kills only its returned process tree when the timeout expires" {
         $process = [pscustomobject]@{ ExitCode = 0; Killed = $false }
         $process | Add-Member ScriptMethod WaitForExit { param($Milliseconds); $null -eq $Milliseconds }
