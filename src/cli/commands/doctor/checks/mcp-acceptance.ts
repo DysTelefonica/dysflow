@@ -35,7 +35,15 @@ function services(vbaRequests: unknown[] = []): DysflowMcpServices {
   const vbaSyncToolService = {
     execute: async (_name: unknown, request?: unknown) => {
       vbaRequests.push(request);
-      return successResult({ ok: true, mode: "plan", dryRun: true });
+      const record =
+        typeof request === "object" && request !== null ? (request as Record<string, unknown>) : {};
+      return successResult({
+        ok: true,
+        mode: "plan",
+        dryRun: true,
+        resolvedProjectId: record.projectId ?? null,
+        resolvedCwd: record.cwd ?? null,
+      });
     },
   };
   return {
@@ -48,6 +56,20 @@ function services(vbaRequests: unknown[] = []): DysflowMcpServices {
       cleanupOrphan: async () => successResult({ killed: [], refused: [], errors: [] }),
     },
   } as unknown as DysflowMcpServices;
+}
+
+function payload(result: { content: readonly { text: string }[] }): Record<string, unknown> {
+  return JSON.parse(result.content.map((entry) => entry.text).join("\n")) as Record<
+    string,
+    unknown
+  >;
+}
+
+function sameFilesystemPath(left: unknown, right: string): boolean {
+  return (
+    typeof left === "string" &&
+    path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase()
+  );
 }
 
 async function withFixture<T>(prefix: string, run: (root: string) => Promise<T>): Promise<T> {
@@ -198,12 +220,13 @@ async function probeAmbiguityRecovery(): Promise<McpAcceptanceProbeResult> {
       )
         return { status: "fail", message: "recovery probe tools are not registered" };
 
-      return withMcpClient(tools, async (client) => {
-        const ambiguousResult = await client.callTool({
-          name: "resolve_project",
-          arguments: { cwd: root },
-        });
-        const ambiguous = ambiguousResult.structuredContent as Record<string, unknown> | undefined;
+      const resolveProject = tools.find((tool) => tool.name === "resolve_project");
+      const testVba = tools.find((tool) => tool.name === "test_vba");
+      if (resolveProject === undefined || testVba === undefined)
+        return { status: "fail", message: "recovery probe tools are not registered" };
+
+      {
+        const ambiguous = payload(await resolveProject.handler({ cwd: root }));
         const recoveryToken = ambiguous?.recoveryToken;
         if (ambiguous?.outcome !== "ambiguous" || typeof recoveryToken !== "string")
           return { status: "fail", message: "sibling ambiguity did not issue a recovery token" };
@@ -216,16 +239,17 @@ async function probeAmbiguityRecovery(): Promise<McpAcceptanceProbeResult> {
           proceduresJson: JSON.stringify([{ procedure: "Test_Doctor", args: [] }]),
           apply: false,
         };
-        const consumed = await client.callTool({ name: "test_vba", arguments: recoveryArgs });
-        const replay = await client.callTool({ name: "test_vba", arguments: recoveryArgs });
-        const replayEnvelope = replay.structuredContent as Record<string, unknown> | undefined;
-        const replayError = replayEnvelope?.error as Record<string, unknown> | undefined;
+        const consumed = await testVba.handler(recoveryArgs);
+        const consumedPayload = payload(consumed);
+        const replay = await testVba.handler(recoveryArgs);
         const routed = requests.at(-1) as Record<string, unknown> | undefined;
         const ok =
           consumed.isError !== true &&
-          routed?.cwd === worktreeA &&
+          consumedPayload.resolvedProjectId === "shared-id" &&
+          sameFilesystemPath(consumedPayload.resolvedCwd, worktreeA) &&
+          sameFilesystemPath(routed?.cwd, worktreeA) &&
           replay.isError === true &&
-          replayError?.code === "MCP_INPUT_INVALID";
+          replay.error?.code === "MCP_INPUT_INVALID";
         return ok
           ? {
               status: "pass",
@@ -235,7 +259,7 @@ async function probeAmbiguityRecovery(): Promise<McpAcceptanceProbeResult> {
               status: "fail",
               message: "recovery trio was not consumed exactly once by the dispatch seam",
             };
-      });
+      }
     });
   } catch (error) {
     return unavailable(error);
