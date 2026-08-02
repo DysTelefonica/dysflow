@@ -5,10 +5,11 @@ description: >
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "0.2.3"
+  version: "0.3.0"
   status: active
-  last_verified: "2026-07-30"
-  last_dysflow_version: "2.30.0"
+  source: "DysTelefonica/dysflow release bundle"
+  last_verified: "2026-08-02"
+  last_dysflow_version: "2.34.1"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream)"
   in_scope: "8 user-global agent instruction files + dysflow project AGENTS.md embedded harness (9 active targets total). The dysflow project AGENTS.md is dynamically discovered under C:\\Proyectos\\dysflow\\<worktree>\\AGENTS.md — never hardcoded. The legacy C:\\Proyectos\\workflow\\ path was retired 2026-07-19 by the path-migration cycle that consolidated workflow into C:\\Proyectos\\skills\\; ARN-2 no longer targets it."
@@ -28,7 +29,7 @@ The pointer is the LIGHTER variant of the harness — a compact current-contract
 
 Drift is the enemy. Run on demand after the arnés regenerates (ARN-1 → ARN-2 chain). Run rarely otherwise. But when you run, run completely across the 9 active targets.
 
-1. **Single source of truth = `dysflow-arnes/SKILL.md` marker-delimited harness plus `assets/pointer.md`.** The delimited harness block is the canonical payload. The pointer is the lighter reference; the embedded block is the heavier payload (only in the home file `dysflow/AGENTS.md`).
+1. **Single source of truth = `dysflow-arnes/SKILL.md` marker-delimited harness plus `C:\Proyectos\skills\skills\dysflow-pointer-rollout\assets\pointer.md`.** The delimited harness block is the canonical payload. The pointer is the lighter reference; the embedded block is the heavier payload (only in the home file `dysflow/AGENTS.md`).
 2. **Markers are sacrosanct.** `<!-- user-supplement:dysflow:pointer -->...<!-- /user-supplement:dysflow:pointer -->` in user-globals; `<!-- dysflow:arnés -->...<!-- /dysflow:arnés -->` in `dysflow/AGENTS.md`. Operations only touch content INSIDE these markers. Outside content is read-only.
 3. **The 9-target active list is fixed.** Adding a new instruction file requires user sign-off — the deployment surface does not grow by drift.
 4. **Fail closed on missing delimiters.** If `dysflow-arnes/SKILL.md` lacks its `<!-- dysflow:arnés -->...<!-- /dysflow:arnés -->` pair, abort the run; surface the upstream defect to the user.
@@ -49,7 +50,10 @@ Do NOT use for:
 
 ## Hard Rules
 
-1. **Source of truth is `C:\Proyectos\skills\skills\`** (junction of `~/.config/opencode/skills/`). Edit there. Never edit the opencode/Claude copies directly.
+1. **Source of truth is the released `skills/dysflow-arnes/SKILL.md`.** Installed
+   agent copies and `C:\Proyectos\skills` are downstream mirrors, never upstream
+   runtime-contract input. The rollout procedure remains a tooling-only dependency
+   in the full team-skills checkout until Dysflow distributes complete skill directories.
 2. **Edit only inside marker pairs.** `<!-- user-supplement:dysflow:pointer -->` for user-globals; `<!-- dysflow:arnés -->` for `dysflow/AGENTS.md` (literate embed). Outside-marker content is read-only.
 3. **Back up before write.** Snapshot each touched file to `C:\Users\adm1\AppData\Local\Temp\dysflow-pointer-backup-<timestamp>\<relative-path>.bak` preserving the directory tree.
 4. **Hash before write.** SHA256 of canonical block vs inlined content; only write on mismatch. Skip-skip-noop if hashes match.
@@ -60,7 +64,7 @@ Do NOT use for:
 9. **Append-only for the 8 user-globals.** When a user-global does NOT yet have a pointer, append at end. When it does, replace inside markers only.
 10. **HR-13 of `dysflow-codegraph-update` carries over.** Owner signal `author: "Andrés Román"` applies; do not touch anything outside the user's owned scope.
 11. **SEPARATE `POINTER_HASH` from `HARNESS_HASH`.** The lighter pointer template
-    (`assets/pointer.md`) is for user-globals (targets 1–8); the dysflow-arnés
+    (`C:\Proyectos\skills\skills\dysflow-pointer-rollout\assets\pointer.md`) is for user-globals (targets 1–8); the dysflow-arnés
     delimited block is for the per-project AGENTS.md (target 9). These are DIFFERENT
     payloads with DIFFERENT hashes. Targets 1–8 are validated against `POINTER_HASH`;
     target 9 is validated against `HARNESS_HASH`. The skill MUST NEVER compare a
@@ -70,9 +74,9 @@ Do NOT use for:
 
 ## Procedure
 
-Full pre-flight, per-file recipes, and aggregate output: `references/procedure.md`. In short:
+Full pre-flight, per-file recipes, and aggregate output: `C:\Proyectos\skills\skills\dysflow-pointer-rollout\references\procedure.md`. In short:
 
-1. Step 0 — Pre-flight: load canonical block from `dysflow-arnes/SKILL.md` marker-delimited harness plus `assets/pointer.md`; compute SHA256; verify delimiters present.
+1. Step 0 — Pre-flight: load canonical block from `dysflow-arnes/SKILL.md` marker-delimited harness plus `C:\Proyectos\skills\skills\dysflow-pointer-rollout\assets\pointer.md`; compute SHA256; verify delimiters present.
 2. Step 1 — Enumerate the 9 active targets (8 user-globals + dysflow/AGENTS.md).
 3. Step 2 — Per file: read → extract inlined block via marker pair → hash compare → back up → replace inside markers → read-back verify → diff summary.
 4. Step 3 — Aggregate: list touched / skipped / failed; deliver output contract.
@@ -83,7 +87,7 @@ Return, in order: (1) canonical-block SHA256 (12-char prefix); (2) per-file stat
 
 ## References
 
-- `references/procedure.md` — full procedure + 9-target table.
-- `C:\Proyectos\skills\skills\dysflow-arnes\SKILL.md` marker-delimited block — canonical block.
-- `C:\Proyectos\skills\skills\dysflow-codegraph-update\SKILL.md` ARN-1 — upstream trigger.
+- `C:\Proyectos\skills\skills\dysflow-pointer-rollout\references\procedure.md` — tooling-only procedure + 9-target table.
+- `skills/dysflow-arnes/SKILL.md` marker-delimited block — canonical release block.
+- `skills/dysflow-codegraph-update/SKILL.md` ARN-1 — upstream trigger.
 - HR-13 of `dysflow-codegraph-update` — owner-boundary for "do not touch gentle-ai-owned skills".

@@ -19,6 +19,7 @@ import {
   type SupplementDriftDiagnostic,
 } from "./codegraph-supplement-drift-check.js";
 import { runExternalDepsChecks } from "./doctor/checks/external-deps.js";
+import { runMcpAcceptanceContractChecks } from "./doctor/checks/mcp-acceptance.js";
 import { runProjectConfigChecks } from "./doctor/checks/project-config.js";
 import { runRuntimeConsumerChecks } from "./doctor/checks/runtime-consumer.js";
 import {
@@ -96,7 +97,7 @@ export async function handleDoctorCommand(
       requestedCwd === undefined ? (context.cwd ?? process.cwd()) : path.resolve(requestedCwd);
     const categories: DoctorCategoryId[] =
       normalized === "ALL" ? ["A", "B", "C", "D"] : [normalized as DoctorCategoryId];
-    return runCategorizedDoctor(categories, effectiveCwd);
+    return runCategorizedDoctor(categories, effectiveCwd, context);
   }
 
   try {
@@ -150,12 +151,24 @@ async function runSkillsInstallationCheck(
  * category whose runner throws surfaces one failed entry instead of
  * aborting the run. Exit code reflects CRITICAL findings only.
  */
-function runCategorizedDoctor(categories: readonly DoctorCategoryId[], cwd: string): CliResult {
-  const runners: Record<DoctorCategoryId, () => DoctorCategoryCheck[]> = {
-    A: () => runProjectConfigChecks(cwd),
-    B: () => runVbaStructureChecks(cwd),
-    C: () => runRuntimeConsumerChecks(),
-    D: () => runExternalDepsChecks(cwd),
+async function runCategorizedDoctor(
+  categories: readonly DoctorCategoryId[],
+  cwd: string,
+  context: CliCommandContext,
+): Promise<CliResult> {
+  const runners: Record<DoctorCategoryId, () => Promise<DoctorCategoryCheck[]>> = {
+    A: async () => runProjectConfigChecks(cwd),
+    B: async () => runVbaStructureChecks(cwd),
+    C: async () => {
+      const acceptanceChecks =
+        context.checkMcpAcceptanceContracts === false
+          ? []
+          : context.checkMcpAcceptanceContracts
+            ? [...(await context.checkMcpAcceptanceContracts())]
+            : await runMcpAcceptanceContractChecks();
+      return [...runRuntimeConsumerChecks(), ...acceptanceChecks];
+    },
+    D: async () => runExternalDepsChecks(cwd),
   };
 
   const lines: string[] = [];
@@ -165,7 +178,7 @@ function runCategorizedDoctor(categories: readonly DoctorCategoryId[], cwd: stri
     lines.push(DOCTOR_CATEGORY_LABELS[category]);
     let checks: DoctorCategoryCheck[];
     try {
-      checks = runners[category]();
+      checks = await runners[category]();
     } catch (error) {
       checks = [
         {

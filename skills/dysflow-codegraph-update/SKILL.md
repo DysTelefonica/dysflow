@@ -5,10 +5,11 @@ description: >
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "2.5.4"
+  version: "2.6.0"
   status: active
-  last_verified: "2026-08-01"
-  last_dysflow_version: "2.33.0"
+  source: "DysTelefonica/dysflow release bundle"
+  last_verified: "2026-08-02"
+  last_dysflow_version: "2.34.1"
   last_codegraph_vba_version: "1.15.0"
   requires: "dysflow MCP, codegraph-vba MCP"
   supersedes: "v2.0 (2026-06-30; añade Hard Rule 13 owner-boundary y frontmatter rico)"
@@ -22,7 +23,7 @@ metadata:
     - "ARN-2 — dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across the 9 active instruction files (8 user-globals + dysflow/AGENTS.md) (chain from ARN-1) or dysflow/AGENTS.md lost its embedded harness block"
     - "ARN-3 — dysflow-usage/SKILL.md per-tool section lists a tool name for which assets/examples/<tool>.md is missing (chain from ARN-1)"
   scope:
-    in_scope: "skills under C:\\Proyectos\\skills\\skills\\ (the canonical workflow source-of-truth; the legacy workflow/ checkout was retired 2026-07-19) + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (ARN-2) + dysflow-examples-sync invocation (ARN-3) + AGENTS.md core + rules/*.md dysflow/codegraph sections + Access/VBA skills index table"
+    in_scope: "release-owned skills under the DysTelefonica/dysflow skills/ bundle + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (ARN-2) + dysflow-examples-sync invocation (ARN-3) + repository AGENTS.md marker block + downstream installed-skill drift reporting"
     out_of_scope: "internal VBA module changes (sdd-apply), single-skill doc fixes unrelated to runtime (skill-improver), gentle-ai-owned skills (sdd-*, issue-creation, branch-pr, chained-pr, comment-writer, cognitive-doc-design, work-unit-commits, go-testing, hermes-ephemeral-delegation, judgment-day, skill-creator, skill-improver, skill-registry, _shared)"
   changelog: "CHANGELOG.md (in this skill directory)"
 ---
@@ -47,7 +48,7 @@ behaves RIGHT NOW.
    short (optimal for retention) and every line useful now; grow `rules/*.md`, not the core. The
    Access/VBA skills index table and the dysflow/codegraph sections are the friction-reducers —
    keep them current, runtime-accurate, and history-free. Same standard applies to every
-   **user-owned** `SKILL.md`: a lean contract, detail in `assets/`/`references/` (never to
+   **user-owned** `SKILL.md`: a lean contract, detail in `C:\Proyectos\skills\skills\<name>\assets\` / `references\` (never to
    gentle-ai-owned skills — see Hard Rule 13).
 
 ## Activation
@@ -62,20 +63,11 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
 
 ## Hard Rules
 
-1. **Canonical source = `C:\Proyectos\skills\skills\`.** Edit there. The destination copies have
-   different propagation rules per path:
-   - **`~/.config/opencode/skills/<name>/`** (opencode personal copy) — CAN be an NTFS junction
-     to the canonical; `npx skills update` does NOT walk this path, so the junction survives.
-   - **`~/.agents/skills/<name>/`** (skills-package real-directory copy) — CANNOT be an NTFS
-     junction. `npx skills update` walks this path, detects the reparse point, REMOVES the
-     junction, and replaces it with a real directory containing the remote copy. Verified
-     empirically (skills package v1.5.19, 2026-07-21). Use `Copy-Item -Recurse -Force` after
-     every ARN-1 instead.
-   - After Copy-Item, `Get-FileHash` both copies and confirm match — if opencode still shows
-     stale text, restart the MCP client (Hard Rule 11). The `~/.agents` copy is the
-     final, late-merge step run by the parent orchestrator after independent review; this
-     skill does NOT propagate to it.
-   - Do not maintain or reference retired deployment checkouts.
+1. **Canonical source = the `skills/` bytes in a DysTelefonica/dysflow release.** Edit the
+   repository bundle, validate it, and publish it with the release. Installed SkillsDir copies
+   are downstream mirrors and never upstream input. `C:\Proyectos\skills` is a deprecated mirror
+   tracked by issue #9; do not read its dirty working tree as authority or write it during release
+   preparation. The installer owns propagation to supported agent SkillsDir targets.
 2. **Trust the live runtime, not memory.** The authoritative chain is `get_capabilities`, compact schema, full schema, and `describe_tool` for every tool. Tool names come from the capability map and both schemas; parameter and composition semantics come from full schema and `describe_tool`. An unverifiable claim is deleted, not approximated.
 3. **No bitácoras in skills.** Delete changelog-only sections; do not duplicate the CHANGELOG.
 4. **Literal tool-name replacement** via Edit with exact `oldString` — never a free rewrite.
@@ -91,12 +83,15 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
    `rules/dysflow-codegraph.md` for operation, the AGENTS.md core as the short pointer — never
    duplicated with drift.
 10. **When runtime drift forces a `dysflow-usage` change**, run its
-    `assets/scripts/verify-examples-vs-runtime.ps1` and confirm it exits 0 before finishing.
+    `C:\Proyectos\skills\skills\dysflow-usage\assets\scripts\verify-examples-vs-runtime.ps1` and confirm it exits 0 before finishing.
 11. **After editing skills, verify the destination sees the change** (`Get-FileHash` on both
     copies); if opencode still shows the old text, restart the MCP client.
 12. **Deprecate, don't rewrite live surface** — for a skill whose surface moved to dysflow,
-    follow `references/deprecated-skills.md` (banner + migration table; git keeps the old body).
-13. **Never edit, compact, or restructure a skill you do not own.** Establish ownership from provenance in the canonical `C:\Proyectos\skills\skills\` repository, then apply the explicit gentle-ai denylist below and verify against the gentle-ai registry. `metadata.author` is supporting evidence only; its absence never transfers ownership. The authoritative gentle-ai set (NEVER touch) is: the **SDD
+    follow `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\deprecated-skills.md` (banner + migration table; git keeps the old body).
+13. **Never edit, compact, or restructure a skill you do not own.** Establish ownership from the
+    release bundle provenance, then apply the explicit gentle-ai denylist below and verify against
+    the gentle-ai registry. `metadata.author` is supporting evidence only; its absence never
+    transfers ownership. The authoritative gentle-ai set (NEVER touch) is: the **SDD
     family (`sdd-*`)**, `issue-creation`, `branch-pr`, `chained-pr`, `comment-writer`,
     `cognitive-doc-design`, `work-unit-commits`, `go-testing`, `hermes-ephemeral-delegation`,
     `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `_shared` — verify
@@ -105,8 +100,8 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
 14. **Use the four-tier introspection triad, not `get_capabilities` alone.** A semantic
     consumer must call `get_capabilities` + `schema({view:"compact"})` + `schema({view:"full"})`
     + `describe_tool({name:"<tool>"})` per tool. The verifier at
-    `assets/scripts/Invoke-DysflowSemanticAudit.ps1` is the canonical way to drive this chain
-    (it uses `assets/scripts/Invoke-DysflowJsonRpc.ps1` for read-only MCP introspection
+    `C:\Proyectos\skills\skills\dysflow-codegraph-update\assets\scripts\Invoke-DysflowSemanticAudit.ps1` is the canonical way to drive this chain
+    (it uses `C:\Proyectos\skills\skills\dysflow-codegraph-update\assets\scripts\Invoke-DysflowJsonRpc.ps1` for read-only MCP introspection
     without ever invoking Access). Manual tool/error lists are demoted to a secondary check
     — the runtime is the source of truth, not a hand-maintained registry.
 15. **Fail closed on semantic drift.** The semantic audit distinguishes DRIFT (docs/consumer
@@ -120,44 +115,45 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
   rules in `rules/dysflow-codegraph.md` or `dysflow-usage`, regenerate the
   arnés from the canonical sources.** The arnés is the system-prompt
   injection for ANY agent operating dysflow; it must stay current. Procedure
-  in `references/procedure.md` §"Arnés regeneration (ARN-1)".
+  in `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\procedure.md` §"Arnés regeneration (ARN-1)".
 
 - **ARN-2 — If `dysflow-arnes/SKILL.md` content drifted from inlined pointer
   blocks across the 8 user-global instruction files (or `dysflow/AGENTS.md`
   lost its embedded harness block), regenerate the pointers.** Chain trigger
   after ARN-1 succeeds. The sub-skill `dysflow-pointer-rollout` handles the
   per-file marker-bounded edits. Procedure in
-  `references/procedure.md` §"Pointer roll-out (ARN-2)".
+  `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\procedure.md` §"Pointer roll-out (ARN-2)".
 
 - **ARN-3 — If `dysflow-usage/SKILL.md` per-tool sections list a tool name
-  for which `assets/examples/<tool>.md` is missing (chain from ARN-1),
+  for which `C:\Proyectos\skills\skills\dysflow-usage\assets\examples\<tool>.md` is missing (chain from ARN-1),
   scaffold the missing example files.** The sub-skill `dysflow-examples-sync`
   scaffolds (with TODO placeholders; never invents content) and runs
   `verify-examples-vs-runtime.ps1` against each scaffolded file. Procedure
-  in `references/procedure.md` §"Examples sync (ARN-3)".
+  in `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\procedure.md` §"Examples sync (ARN-3)".
 
-The child sub-skills invoked by ARN-2 and ARN-3 each live under
-`C:\Proyectos\skills\` and carry their own SKILL.md + procedure:
+The child sub-skills invoked by ARN-2 and ARN-3 live in the release bundle.
+Their `SKILL.md` files are release-owned; procedural helper assets remain in the
+full team-skills checkout until Dysflow distributes complete skill directories:
 
-- `C:\Proyectos\skills\skills\dysflow-pointer-rollout\` — owns the 9-target pointer roll-out.
-- `C:\Proyectos\skills\skills\dysflow-examples-sync\` — owns the per-tool example scaffold gap.
+- `skills/dysflow-pointer-rollout/SKILL.md` — owns the pointer roll-out contract.
+- `skills/dysflow-examples-sync/SKILL.md` — owns the per-tool example scaffold contract.
 
 ## Procedure
 
-Full pre-flight, execution steps, and agent limitations: **`references/procedure.md`**. In short:
+Full pre-flight, execution steps, and agent limitations: **`C:\Proyectos\skills\skills\dysflow-codegraph-update\references\procedure.md`**. In short:
 run Step 0 pre-flight (write access + read-only version checks + live `get_capabilities` + `codegraph upgrade --check` + source↔dest
 hashes; stop and report on any failure) → read the release notes → enumerate the skills and the
 AGENTS.md dysflow/codegraph sections + `rules/*.md` + the Access/VBA skills index table → diff
 text vs runtime and fix or delete → update `dysflow-usage` and run its verify script → lint each
-touched skill → verify hashes → smoke-test → save the runtime snapshot → commit in `workflow`.
+touched skill → verify hashes → smoke-test → save the runtime snapshot → commit in dysflow.
 
-Deprecating a skill: **`references/deprecated-skills.md`**.
+Deprecating a skill: **`C:\Proyectos\skills\skills\dysflow-codegraph-update\references\deprecated-skills.md`**.
 
 ## Output Contract
 
 Return, in order: (1) live runtime state — literal `adapterVersion`, `dryRunDefault`,
 `writesProcess.enabled`, `writesProject.allowWrites`, `toolsVisible` count, codegraph-vba
-version; (2) files modified (skills under `C:\Proyectos\skills\skills\`, plus AGENTS.md core
+version; (2) files modified (release-bundled `skills/`, plus the repository AGENTS.md marker block
 / `rules/*.md`), each with SHA256 before/after and line delta; (3) diff summary per changed
 line (deleted-bitácora / rewrote / renamed); (4) hash verification for each touched skill;
 (5) AGENTS.md sections / `rules/*.md` touched, with the AGENTS.md core line count (must stay
@@ -167,10 +163,10 @@ needing the user; (8) smoke-test result; (9) runtime snapshot saved to engram.
 
 ## References
 
-- `references/procedure.md` — pre-flight, execution steps, agent limitations, and the ARN-1 / ARN-2 / ARN-3 chain procedures.
-- `references/deprecated-skills.md` — deprecation protocol + the current deprecated set.
-- `C:\Proyectos\skills\skills\dysflow-pointer-rollout\` — ARN-2 child sub-skill.
-- `C:\Proyectos\skills\skills\dysflow-examples-sync\` — ARN-3 child sub-skill.
+- `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\procedure.md` — tooling-only pre-flight and ARN procedures; runtime claims still come from the release-owned SKILL.md and live introspection.
+- `C:\Proyectos\skills\skills\dysflow-codegraph-update\references\deprecated-skills.md` — tooling-only deprecation protocol.
+- `skills/dysflow-pointer-rollout/SKILL.md` — ARN-2 child contract.
+- `skills/dysflow-examples-sync/SKILL.md` — ARN-3 child contract.
 - `C:\Users\adm1\.config\opencode\AGENTS.md` — the lean core; its dysflow/codegraph sections and
   the Access/VBA skills index table are what this skill keeps current.
 - `C:\Users\adm1\.config\opencode\rules\*.md` — the depth behind the core (notably

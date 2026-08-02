@@ -49,7 +49,7 @@ regex-parsing legacy text bodies.
 
 The discriminator is injected by `withSchemaVersion()` at the stdio central
 seam (`src/adapters/mcp/stdio.ts`) and re-applied by every helper envelope
-builder in `src/adapters/mcp/result-translation.ts` and
+builder in `src/adapters/mcp/response-envelope.ts` and
 `src/adapters/mcp/dispatch-common.ts`. The literal
 `dysflow.result/v1` is exported as the `RESULT_SCHEMA_VERSION` constant;
 treat that constant as the single source of truth — never inline the string

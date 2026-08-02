@@ -84,6 +84,24 @@ export const DOCTOR_CHECK_METADATA = [
     category: "runtimeConsumer",
   },
   {
+    check_id: "mcp_response_schema_version",
+    reason_code: "MCP_RESPONSE_SCHEMA_VERSION_MISSING",
+    requires_confirmation: false,
+    category: "runtimeConsumer",
+  },
+  {
+    check_id: "mcp_recovery_token_dispatch",
+    reason_code: "MCP_RECOVERY_TOKEN_DISPATCH_BROKEN",
+    requires_confirmation: false,
+    category: "runtimeConsumer",
+  },
+  {
+    check_id: "setup_project_id_fail_closed",
+    reason_code: "SETUP_PROJECT_ID_FAIL_CLOSED_BROKEN",
+    requires_confirmation: false,
+    category: "runtimeConsumer",
+  },
+  {
     check_id: "lacdb_locks",
     reason_code: "STALE_LACCDB_PRESENT",
     requires_confirmation: true,
