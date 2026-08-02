@@ -135,6 +135,36 @@ describe("stdio tools/call structural telemetry seam (#1197)", () => {
     });
   });
 
+  it("emits audit evidence accumulated by dispatch wrappers", async () => {
+    const recorded: InvocationTelemetryEntry[] = [];
+    const recorder: InvocationTelemetryRecorder = {
+      record: async (entry) => {
+        recorded.push(entry);
+      },
+    };
+    const tool: DysflowMcpTool = {
+      name: "test_vba",
+      description: "audit",
+      handler: async (_input, context) => {
+        context?.auditEvents?.push("trio-consumed:shared-id");
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+          isError: false,
+          ok: true,
+        };
+      },
+    };
+    const { client, close } = await harness([tool], recorder);
+    try {
+      await client.callTool({ name: tool.name, arguments: { projectId: "shared-id" } });
+    } finally {
+      await close();
+    }
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.auditEvents).toEqual(["trio-consumed:shared-id"]);
+  });
+
   it("observes handler validation failures and stores only argument names", async () => {
     const recorded: InvocationTelemetryEntry[] = [];
     const recorder: InvocationTelemetryRecorder = {

@@ -257,17 +257,28 @@ describe("issue #1313 project recovery token", () => {
     }
   });
 
-  it("preserves collision semantics for duplicate IDs in real sibling worktrees", async () => {
+  it("uses cwd to disambiguate duplicate IDs in real sibling worktrees", async () => {
     const fixture = createRealSiblingWorktrees({ duplicateIds: true });
     try {
       const resolveProject = createResolveProjectTool({ cwd: fixture.main });
       const ambiguous = payload(await resolveProject.handler({}));
-      const selected = await resolveProject.handler({
+      const selected = payload(
+        await resolveProject.handler({
+          projectId: "duplicate",
+          projectChoiceReason: "user_selected_after_ambiguous_project",
+          recoveryToken: String(ambiguous.recoveryToken),
+        }),
+      );
+      expect(selected).toMatchObject({
+        outcome: "resolved",
         projectId: "duplicate",
-        projectChoiceReason: "user_selected_after_ambiguous_project",
-        recoveryToken: String(ambiguous.recoveryToken),
+        projectConfig: expect.objectContaining({ status: "valid" }),
       });
-      expect(selected.error?.code).toBe("PROJECT_ID_COLLISION");
+      expect(
+        realpathSync
+          .native((selected.projectConfig as { projectRoot: string }).projectRoot)
+          .toLowerCase(),
+      ).toBe(realpathSync.native(fixture.main).toLowerCase());
     } finally {
       await removeRealSiblingWorktrees(fixture);
     }

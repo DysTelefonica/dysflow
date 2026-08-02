@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { createDysflowError, failureResult } from "../../core/contracts/index.js";
@@ -587,13 +588,22 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
   return withProjectResolutionRecovery(gated, projectResolutionRecovery);
 }
 
+const RECOVERY_ENABLED_READ_TOOLS = new Set([
+  "migrate_project_config",
+  "access_force_cleanup_orphaned",
+]);
+
 function withProjectResolutionRecovery(
   tools: readonly DysflowMcpTool[],
   recovery: ProjectResolutionRecovery,
 ): DysflowMcpTool[] {
   return tools.map((tool) => {
     const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
-    if (contract === undefined || contract.access === "read-only") return tool;
+    if (
+      contract === undefined ||
+      (contract.access === "read-only" && !RECOVERY_ENABLED_READ_TOOLS.has(tool.name))
+    )
+      return tool;
     return {
       ...tool,
       inputSchema: {
@@ -615,6 +625,7 @@ function withProjectResolutionRecovery(
         if (hasChoiceReason || hasToken) {
           if (tool.name === "setup_project") {
             const selected = recovery.consume({
+              cwd: typeof record.cwd === "string" ? record.cwd : undefined,
               projectId: typeof record.projectId === "string" ? record.projectId : undefined,
               projectChoiceReason:
                 typeof record.projectChoiceReason === "string"
@@ -624,6 +635,22 @@ function withProjectResolutionRecovery(
                 typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
             });
             if (!selected.ok) return projectRecoveryFailure(selected);
+            recordRecoveryConsumption(context, selected.project.projectId);
+            const configPath = join(selected.project.projectRoot, ".dysflow", "project.json");
+            let resolvedConfig: Record<string, unknown>;
+            try {
+              resolvedConfig = JSON.parse(readFileSync(configPath, "utf8")) as Record<
+                string,
+                unknown
+              >;
+            } catch {
+              return projectRecoveryFailure({
+                code: "MCP_INPUT_INVALID",
+                message: "The selected worktree no longer has a readable project config.",
+                remediation:
+                  "Call resolve_project again and consume a fresh recovery token after restoring the selected .dysflow/project.json.",
+              });
+            }
             return {
               content: [
                 {
@@ -634,9 +661,11 @@ function withProjectResolutionRecovery(
                     dryRun: true,
                     cached: true,
                     projectId: selected.project.projectId,
+                    resolvedProjectId: selected.project.projectId,
                     projectRoot: selected.project.projectRoot,
                     accessPath: selected.project.accessPath,
-                    configPath: join(selected.project.projectRoot, ".dysflow", "project.json"),
+                    configPath,
+                    resolvedConfig,
                     nextAction:
                       "Call the intended write-class tool; setup_project did not modify the existing config.",
                   }),
@@ -647,6 +676,7 @@ function withProjectResolutionRecovery(
             };
           }
           const selected = recovery.consume({
+            cwd: typeof record.cwd === "string" ? record.cwd : undefined,
             projectId: typeof record.projectId === "string" ? record.projectId : undefined,
             projectChoiceReason:
               typeof record.projectChoiceReason === "string"
@@ -656,10 +686,18 @@ function withProjectResolutionRecovery(
               typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
           });
           if (!selected.ok) return projectRecoveryFailure(selected);
+          recordRecoveryConsumption(context, selected.project.projectId);
           record.projectId = selected.project.projectId;
-        } else if (record.projectId === undefined) {
+          record.cwd = selected.project.projectRoot;
+        } else {
           const cached = recovery.getCached();
-          if (cached !== null) record.projectId = cached.projectId;
+          if (
+            cached !== null &&
+            (record.projectId === undefined || record.projectId === cached.projectId)
+          ) {
+            record.projectId = cached.projectId;
+            record.cwd = cached.projectRoot;
+          }
         }
         delete record.projectChoiceReason;
         delete record.recoveryToken;
@@ -667,6 +705,12 @@ function withProjectResolutionRecovery(
       },
     };
   });
+}
+
+function recordRecoveryConsumption(context: McpToolContext | undefined, projectId: string): void {
+  if (context === undefined) return;
+  context.auditEvents ??= [];
+  context.auditEvents.push(`trio-consumed:${projectId}`);
 }
 
 function projectRecoveryFailure(failure: {

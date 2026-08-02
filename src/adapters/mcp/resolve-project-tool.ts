@@ -281,6 +281,7 @@ export function createResolveProjectTool(opts: {
       let selectedRoot: string | undefined;
       if (hasRecoveryField) {
         const selection = recovery.consume({
+          cwd: effectiveCwd,
           projectId,
           projectChoiceReason:
             typeof params.projectChoiceReason === "string" ? params.projectChoiceReason : undefined,

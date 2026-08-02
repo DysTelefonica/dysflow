@@ -262,6 +262,103 @@ export function runMcpHarness(options) {
 }
 
 /**
+ * Run multiple dependent MCP calls against one child process. This is reserved
+ * for stateful contracts (for example one-shot recovery tokens); ordinary E2E
+ * rows should keep using runMcpHarness's process-per-call isolation.
+ *
+ * @param {{child: HarnessChild, timeoutMs: number, run: (session: {callTool: (name: string, args?: Record<string, unknown>) => Promise<any>}) => Promise<any>}} options
+ */
+export async function runMcpSession(options) {
+  const { child, timeoutMs, run } = options;
+  let nextId = 1;
+  let buffer = "";
+  let stderr = "";
+  let closed = false;
+  /** @type {Map<number, {resolve: (value: any) => void, reject: (error: Error) => void, timer: NodeJS.Timeout}>} */
+  const pending = new Map();
+
+  const rejectPending = (error) => {
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timer);
+      waiter.reject(error);
+    }
+    pending.clear();
+  };
+  child.stdout.on("data", (chunk) => {
+    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    for (;;) {
+      const newline = buffer.indexOf("\n");
+      if (newline < 0) break;
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const waiter = pending.get(message.id);
+      if (waiter === undefined) continue;
+      pending.delete(message.id);
+      clearTimeout(waiter.timer);
+      waiter.resolve(message);
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+  });
+  child.on("error", (error) => rejectPending(error));
+  child.on("close", (code, signal) => {
+    closed = true;
+    rejectPending(
+      new Error(`MCP session closed before response (code=${code}, signal=${signal}): ${stderr}`),
+    );
+  });
+
+  const request = (method, params) => {
+    if (closed) return Promise.reject(new Error("MCP session is closed"));
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`Timed out waiting for MCP session response to ${method}`));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+    });
+  };
+
+  try {
+    await request("initialize", {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "dysflow-mcp-e2e-session", version: "1" },
+    });
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`,
+    );
+    return await run({
+      callTool: async (name, args = {}) => {
+        const response = await request("tools/call", { name, arguments: args });
+        return {
+          response,
+          isError: Boolean(response?.error || response?.result?.isError),
+          text: toolText(response),
+        };
+      },
+    });
+  } finally {
+    try {
+      child.stdin.end();
+    } catch {
+      /* best-effort */
+    }
+    await terminateHarnessChild(child);
+  }
+}
+
+/**
  * @param {any} message
  */
 function toolText(message) {

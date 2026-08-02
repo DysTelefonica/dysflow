@@ -33,3 +33,22 @@ export type HarnessResult = {
 };
 
 export function runMcpHarness(options: HarnessOptions): Promise<HarnessResult>;
+
+export type McpSessionCallResult = {
+  response: unknown;
+  isError: boolean;
+  text: string;
+};
+
+export type McpSession = {
+  callTool(
+    name: string,
+    args?: Record<string, unknown>,
+  ): Promise<McpSessionCallResult>;
+};
+
+export function runMcpSession<T>(options: {
+  child: HarnessChild;
+  timeoutMs: number;
+  run: (session: McpSession) => Promise<T>;
+}): Promise<T>;

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import type {
@@ -42,6 +42,7 @@ export type AvailableProject = {
 };
 
 export type ProjectRecoveryInput = {
+  cwd?: string;
   projectId?: string;
   projectChoiceReason?: string;
   recoveryToken?: string;
@@ -138,7 +139,11 @@ export function createProjectResolutionRecovery(
         "The visible project configuration changed after the token was issued.",
       );
     }
-    const matches = pending.projects.filter((project) => project.projectId === input.projectId);
+    const idMatches = pending.projects.filter((project) => project.projectId === input.projectId);
+    const matches =
+      idMatches.length > 1 && typeof input.cwd === "string" && input.cwd.trim().length > 0
+        ? idMatches.filter((project) => sameProjectRoot(project.projectRoot, input.cwd as string))
+        : idMatches;
     if (matches.length > 1) {
       return {
         ok: false,
@@ -150,7 +155,11 @@ export function createProjectResolutionRecovery(
     }
     const project = matches[0];
     if (project === undefined) {
-      return invalidRecovery("The selected project is not part of the recovery envelope.");
+      return invalidRecovery(
+        idMatches.length > 1
+          ? "The selected cwd is not part of the recovery envelope for that projectId."
+          : "The selected project is not part of the recovery envelope.",
+      );
     }
     cached = {
       project,
@@ -176,6 +185,20 @@ export function createProjectResolutionRecovery(
   };
 
   return { clear, consume, getCached, issue, ttlMs };
+}
+
+function sameProjectRoot(left: string, right: string): boolean {
+  const canonical = (value: string): string => {
+    const absolute = resolve(value);
+    let result = absolute;
+    try {
+      result = realpathSync.native(absolute);
+    } catch {
+      // Missing/unreachable paths cannot gain authority; preserve their absolute identity.
+    }
+    return process.platform === "win32" ? result.toLowerCase() : result;
+  };
+  return canonical(left) === canonical(right);
 }
 
 function invalidRecovery(message: string): RecoveryFailure {
