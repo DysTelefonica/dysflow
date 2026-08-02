@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -68,11 +68,22 @@ function candidate(projectRoot: string, frontendFile: string) {
   };
 }
 
+function sameFilesystemPath(left: string, right: string): boolean {
+  const normalizedLeft = resolve(left).toLowerCase();
+  const normalizedRight = resolve(right).toLowerCase();
+  if (normalizedLeft === normalizedRight) return true;
+  try {
+    const leftStat = statSync(left, { bigint: true });
+    const rightStat = statSync(right, { bigint: true });
+    return leftStat.ino !== 0n && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+  } catch {
+    return false;
+  }
+}
+
 function diagnostic(cwd: string): ProjectConfigDiagnostic {
   const candidates = [candidate(worktreeA, "a.accdb"), candidate(worktreeB, "b.accdb")];
-  const selected = candidates.find(
-    (entry) => resolve(entry.projectRoot).toLowerCase() === resolve(cwd).toLowerCase(),
-  );
+  const selected = candidates.find((entry) => sameFilesystemPath(entry.projectRoot, cwd));
   if (selected !== undefined) {
     return {
       status: "valid",
@@ -224,9 +235,7 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
     });
 
     expect(applied.isError).toBe(false);
-    expect(resolverCwds.map((cwd) => resolve(cwd).toLowerCase())).toContain(
-      resolve(worktreeA).toLowerCase(),
-    );
+    expect(resolverCwds.some((cwd) => sameFilesystemPath(cwd, worktreeA))).toBe(true);
   });
 
   it("routes setup_project and resolve_project through the same cwd-bound recovery selection", async () => {
@@ -249,9 +258,9 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
       mode: "resolution",
       projectId: "shared-id",
       resolvedProjectId: "shared-id",
-      projectRoot: worktreeB,
       resolvedConfig: expect.objectContaining({ id: "shared-id" }),
     });
+    expect(sameFilesystemPath(String(setup.projectRoot), worktreeB)).toBe(true);
 
     const second = makeTools().tools;
     const secondResolve = second.find((tool) => tool.name === "resolve_project");
@@ -268,8 +277,10 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
     expect(resolved).toMatchObject({
       outcome: "resolved",
       projectId: "shared-id",
-      projectConfig: expect.objectContaining({ projectRoot: worktreeA }),
+      projectConfig: expect.any(Object),
     });
+    const resolvedProjectConfig = resolved.projectConfig as Record<string, unknown>;
+    expect(sameFilesystemPath(String(resolvedProjectConfig.projectRoot), worktreeA)).toBe(true);
   });
 
   it.each([
