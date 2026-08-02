@@ -14,7 +14,7 @@ export function runProjectConfigChecks(cwd: string): DoctorCategoryCheck[] {
       {
         ok: false,
         name: "project.json schema",
-        message: `.dysflow/project.json not found at ${configPath}. Run \`dysflow setup --write-project\` to create it.`,
+        message: `.dysflow/project.json not found at ${configPath}. Run \`dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>\` to create it.`,
         severity: "critical",
         ...projectJsonSchema,
       },

@@ -416,6 +416,16 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     createSetupProjectTool({
       cwd,
       writesEnabled,
+      resolveExistingProjectId: async (projectRoot) => {
+        const { context } = await worktreeCache.getContext(
+          projectRoot,
+          projectRoot === cwd ? "startup" : "cwd-param",
+        );
+        const configuredProjectId = context.projectConfig.projectId;
+        return typeof configuredProjectId === "string" && configuredProjectId.trim().length > 0
+          ? configuredProjectId
+          : null;
+      },
       onPublished: async (projectRoot) => {
         worktreeCache.clear(projectRoot);
         await worktreeCache.getContext(projectRoot, "register");

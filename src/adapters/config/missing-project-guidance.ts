@@ -20,7 +20,7 @@ export function buildMissingProjectConfigRemediation(
 ): WorktreeConfigRemediation {
   const cwd = resolve(cwdInput);
   const displayCwd = cwd.replaceAll("\\", "/");
-  const setup = `dysflow setup --cwd '${cwd}' --apply --access-path '<path>'`;
+  const setup = `dysflow setup --cwd '${cwd}' --apply --project-id '<id>' --access-path '<path>'`;
   const recoveryCommands: string[] = [];
 
   if (existsSync(join(cwd, ".dysflow.bak"))) {
@@ -33,12 +33,12 @@ export function buildMissingProjectConfigRemediation(
   return {
     kind: "worktree-config",
     description:
-      `No per-worktree .dysflow/project.json was found. Run \`dysflow setup --cwd ${displayCwd} --apply --access-path <path>\` ` +
+      `No per-worktree .dysflow/project.json was found. Run \`dysflow setup --cwd ${displayCwd} --apply --project-id <id> --access-path <path>\` ` +
       "or restore the config, then fill the required project fields.",
     command: { value: setup, cwd },
     mcpTool: {
       name: "setup_project",
-      input: { cwd, frontendFile: "<basename.accdb>", apply: false },
+      input: { cwd, projectId: "<id>", frontendFile: "<basename.accdb>", apply: false },
     },
     platform: "cross-platform",
     safeToAutoExecute: false,

@@ -245,6 +245,7 @@ export const setupProjectResultContract = defineResultContract({
         dryRun: z.literal(false),
         configPath: z.string(),
         writtenFields: z.array(z.string()),
+        warnings: z.array(z.string()),
       })
       .strict(),
     z

@@ -30,7 +30,7 @@ describe("worktree-without-.dysflow field-level guidance", () => {
     expect(result.error?.code).toMatch(/PROJECT_CONFIG_MISSING|MCP_INPUT_INVALID/);
     const remediation = result.error?.remediation as unknown as {
       fieldChecklist: string[];
-      command: { cwd: string };
+      command: { cwd: string; value: string };
       mcpTool: { name: string; input: { cwd: string; apply: boolean } };
     };
     expect(remediation.fieldChecklist).toEqual(
@@ -44,9 +44,10 @@ describe("worktree-without-.dysflow field-level guidance", () => {
       ]),
     );
     expect(remediation.command.cwd).toBe(target);
+    expect(remediation.command.value).toContain("--project-id '<id>'");
     expect(remediation.mcpTool).toMatchObject({
       name: "setup_project",
-      input: { cwd: target, apply: false },
+      input: { cwd: target, projectId: "<id>", apply: false },
     });
   });
 

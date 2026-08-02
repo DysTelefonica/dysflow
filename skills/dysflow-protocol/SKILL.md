@@ -90,7 +90,7 @@ Call `get_capabilities({})`, select the relevant `preferredAgentWorkflows` phase
 
 ### HR-11 — Bootstrap and ambiguity recovery are different operations.
 
-When `projectConfig.status === "missing"`, use `setup_project` (or the canonical CLI setup command) with explicit human-provided frontend input. When `resolve_project` returns `outcome: "ambiguous"`, do not guess: ask the human to choose one `availableProjects` entry, then retry `resolve_project`, the intended write-class tool, or `setup_project` with that exact `projectId`, `projectChoiceReason: "user_selected_after_ambiguous_project"`, and the returned `recoveryToken`. In recovery mode, `setup_project` only caches the selected existing project and returns `mode: "resolution"`; it never creates or overwrites config. Bootstrap mode is separate and requires `frontendFile`. The one-shot choice is cached only in the current MCP process; use `resolve_project({clearResolution:true})` to drop it.
+When `projectConfig.status === "missing"`, use `setup_project` (or the canonical CLI setup command) with explicit human-provided `projectId` and frontend input. Omitting `projectId` is valid only when the selected WorktreeContext already has a configured id to reuse; otherwise the runtime fails closed with `MCP_INPUT_INVALID` and `projectId is required`. It never invents an id from the cwd basename. When `resolve_project` returns `outcome: "ambiguous"`, do not guess: ask the human to choose one `availableProjects` entry, then retry `resolve_project`, the intended write-class tool, or `setup_project` with that exact `projectId`, `projectChoiceReason: "user_selected_after_ambiguous_project"`, and the returned `recoveryToken`. In recovery mode, `setup_project` only caches the selected existing project and returns `mode: "resolution"`; it never creates or overwrites config. Bootstrap mode is separate and requires `frontendFile`. The one-shot choice is cached only in the current MCP process; use `resolve_project({clearResolution:true})` to drop it.
 
 ## 2. The 8-step canonical loop
 
@@ -172,8 +172,8 @@ If a call returns an error envelope, branch on `error.code`:
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` | destination overlaps source | Pass `implements_check: 'export_overwrites_source_precheck'` + `confirmedRequiresConfirmation: true` |
 | `DESTINATION_ROOT_REQUIRED` | no destination declared | Set explicit `destinationRoot` / `exportPath` OR `allowConfiguredDestinationRoot: true` |
 | `MCP_WRITES_DISABLED` | runtime disabled | Surface to user; do not retry |
-| `PROJECT_CONFIG_NOT_WRITE_READY` | project config missing fields | Run `dysflow setup` to bootstrap |
-| `CONFIG_MISSING_ACCESS_PATH` | no `.dysflow/project.json` | Run `dysflow setup --cwd <repo> --apply --access-path <path>` |
+| `PROJECT_CONFIG_NOT_WRITE_READY` | project config missing fields | Run `dysflow setup --cwd <repo> --apply --project-id <id> --access-path <path>` to bootstrap |
+| `CONFIG_MISSING_ACCESS_PATH` | no `.dysflow/project.json` | Run `dysflow setup --cwd <repo> --apply --project-id <id> --access-path <path>` |
 | `humanCompilePending` warning (advisory) | post-write reminder | Wait for human compile before `test_vba` |
 | `FRONTEND_TARGET_MISSING` | workspace resolution failed | Run `resolve_project` first |
 | `FRONTEND_TARGET_AMBIGUOUS` / `outcome: "ambiguous"` | more than one project is eligible | Ask the human to choose from `availableProjects`; retry once with the exact recovery trio |
@@ -240,9 +240,9 @@ When `dysflow setup --install-hooks` was never run, or when the agent is on a CI
 2. **Read the parent's config** (any sibling worktree's `.dysflow/project.json`) to learn the `accessPath`.
 3. **Run the suggested command**:
    ```
-   dysflow setup --cwd <new-worktree-path> --apply --access-path <parent-access-path>
+   dysflow setup --cwd <new-worktree-path> --apply --project-id <id> --access-path <parent-access-path>
    ```
-   Use the SAME `accessPath` as the parent. The `id` is auto-minted.
+   Use the SAME `accessPath` as the parent. Provide a stable `id` explicitly, or reuse an existing configured id.
 4. **Verify** with `state({})`: `projectConfig.status` should be `valid` and `writeReady: true`.
 
 ### D. Recovery

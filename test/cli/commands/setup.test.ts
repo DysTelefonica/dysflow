@@ -28,7 +28,7 @@ function makeWorkspace(options?: { withProjectJson?: boolean; withAccessDb?: boo
     writeFileSync(join(root, "front.accdb"), "", "utf8");
     writeFileSync(
       join(root, ".dysflow", "project.json"),
-      `${JSON.stringify({ accessPath: "front.accdb" }, null, 2)}\n`,
+      `${JSON.stringify({ id: "fixture", accessPath: "front.accdb" }, null, 2)}\n`,
       "utf8",
     );
   }
@@ -106,6 +106,25 @@ describe("handleSetupCommand — parse errors", () => {
 // Config resolution errors
 // ---------------------------------------------------------------------------
 describe("handleSetupCommand — config resolution errors", () => {
+  it("fails closed when project config publication has no explicit or existing projectId", async () => {
+    const workspace = makeWorkspace({ withProjectJson: false });
+    const accessPath = join(workspace.root, "front.accdb");
+    writeFileSync(accessPath, "", "utf8");
+    try {
+      const result = await handleSetupCommand(["--write-project", "--access-path", accessPath], {
+        cwd: workspace.root,
+        env: {},
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("MCP_INPUT_INVALID");
+      expect(result.stderr).toContain("projectId is required");
+      expect(existsSync(join(workspace.root, ".dysflow", "project.json"))).toBe(false);
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
   it("returns exitCode 1 with CONFIG_MISSING error when no access path is configured", async () => {
     const workspace = makeWorkspace({ withProjectJson: false });
     try {
@@ -151,10 +170,13 @@ describe("handleSetupCommand — successful display", () => {
     try {
       const accessFile = join(external, "outside.accdb");
       writeFileSync(accessFile, "", "utf8");
-      const result = await handleSetupCommand(["--apply", "--access-path", accessFile], {
-        cwd: workspace.root,
-        env: {},
-      });
+      const result = await handleSetupCommand(
+        ["--apply", "--access-path", accessFile, "--project-id", "fixture"],
+        {
+          cwd: workspace.root,
+          env: {},
+        },
+      );
       expect(result.exitCode).toBe(1);
       // migrated to #1092 contract on 2026-07-24
       expect(result.stderr).toContain("Frontend must be at the worktree root");
@@ -210,6 +232,7 @@ describe("handleSetupCommand — successful display", () => {
       allowWrites: true,
       accessDbPath: join(workspace.root, "front.accdb"),
       projectRoot: workspace.root,
+      projectId: "fixture",
       timeoutMs: 30_000,
     };
     try {
@@ -238,6 +261,7 @@ describe("handleSetupCommand — successful display", () => {
       allowWrites: true,
       accessDbPath: join(workspace.root, "front.accdb"),
       projectRoot: workspace.root,
+      projectId: "fixture",
       timeoutMs: 30_000,
     };
     try {
@@ -265,6 +289,7 @@ describe("handleSetupCommand — successful display", () => {
       allowWrites: true,
       accessDbPath: join(workspace.root, "front.accdb"),
       projectRoot: workspace.root,
+      projectId: "fixture",
       timeoutMs: 30_000,
     };
     try {
@@ -330,7 +355,7 @@ describe("handleSetupCommand — successful display", () => {
   it("scaffolds a per-project timeoutMs and recommends tuning it", async () => {
     const workspace = makeWorkspace({ withAccessDb: true });
     try {
-      const result = await handleSetupCommand(["--write-project"], {
+      const result = await handleSetupCommand(["--write-project", "--project-id", "fixture"], {
         cwd: workspace.root,
         env: { DYSFLOW_ACCESS_PASSWORD: "top-secret" },
       });

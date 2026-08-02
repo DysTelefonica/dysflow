@@ -11,7 +11,7 @@ import { parseNamedArgs } from "./install-utils.js";
 import type { CliCommandContext, CliResult } from "./types.js";
 
 const HELP_TEXT =
-  "Usage: dysflow setup [--cwd <path>] [--apply] [--write-project --access-path <path> [--backend-path <path>] [--project-id <id>]] [--set-project-id <id>] [--help]";
+  "Usage: dysflow setup [--cwd <path>] [--apply] [--write-project --access-path <path> --project-id <id> [--backend-path <path>]] [--set-project-id <id>] [--help]";
 
 type SetupOptions = {
   writeProject: boolean;
@@ -86,10 +86,14 @@ export async function handleSetupCommand(
     try {
       writeResult = await writeRelativeProjectConfig(configResult.data, effectiveContext.cwd);
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Project config could not be written.";
       return {
         exitCode: 1,
         stdout: "",
-        stderr: error instanceof Error ? error.message : "Project config could not be written.",
+        stderr: message.includes("projectId is required")
+          ? `MCP_INPUT_INVALID: ${message}`
+          : message,
       };
     }
     extraOutput = [writeResult.message];

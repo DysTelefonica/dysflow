@@ -21,6 +21,8 @@ describe("per-worktree project config contract", () => {
       destinationRoot: null,
     });
     expect(r.remediation).toContain(`dysflow setup --cwd ${r.cwd}`);
+    expect(r.remediation).toContain("--project-id <id>");
+    expect(r.remediation).toContain("--access-path <path>");
   });
   it("fails closed when cwd is not inside a Git worktree", () => {
     const root = mkdtempSync(join(tmpdir(), "dysflow-non-git-"));

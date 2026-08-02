@@ -71,6 +71,13 @@ Do NOT use when:
 > **First call:** `get_capabilities({})` — that snapshot is the truth for every other example in this skill.
 > If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
 
+> **`setup_project` identity is fail-closed:** a fresh bootstrap requires an
+> explicit `projectId`. If it is omitted, the runtime may reuse only the
+> selected WorktreeContext's existing configured id and emits a warning that
+> names the reuse. With no existing id it returns `MCP_INPUT_INVALID` containing
+> `projectId is required`; it never derives an id from the cwd basename. See
+> `assets/examples/setup-project.md`.
+
 > **Stale `.laccdb` files do not block imports.** The runtime probes live-handle ownership. It removes an unowned stale lock and emits `LACCDB_STALE_DETECTED`; a real holder emits `LIVE_PROCESS_HOLDS_LACCDB` with its PID. Consumers must use only dysflow-owned cleanup paths (`cleanup_access_operation`, or `access_force_cleanup_orphaned` with a listed `pid` plus `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true`) — never a generic process killer or consumer-side lock-file deletion. See `references/error-codes.md` and `assets/examples/import-modules.md#stale-laccdb-recovery-v291`.
 
 The response carries:

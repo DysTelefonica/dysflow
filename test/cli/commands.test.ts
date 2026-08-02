@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { handleDoctorCommand } from "../../src/cli/commands/doctor";
 import { MCP_USAGE } from "../../src/cli/commands/mcp";
@@ -341,7 +341,15 @@ describe("dysflow command modules", () => {
       writeFileSync(backendPath, "", "utf8");
 
       const result = await handleSetupCommand(
-        ["--write-project", "--access-path", accessPath, "--backend-path", backendPath],
+        [
+          "--write-project",
+          "--access-path",
+          accessPath,
+          "--backend-path",
+          backendPath,
+          "--project-id",
+          "cli-fixture",
+        ],
         { env: {}, cwd: workspace },
       );
 
@@ -349,7 +357,7 @@ describe("dysflow command modules", () => {
       expect(result.stdout).toContain(`Wrote portable project config to ${projectPath}`);
       const written = JSON.parse(readFileSync(projectPath, "utf8"));
       expect(written).toMatchObject({
-        id: basename(workspace),
+        id: "cli-fixture",
         frontendFile: "front.accdb",
         backendPath: "E2E_testing/backend.accdb",
         destinationRoot: "src",

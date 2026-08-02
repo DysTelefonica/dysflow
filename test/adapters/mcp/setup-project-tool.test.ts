@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createSetupProjectTool } from "../../../src/adapters/mcp/setup-project-tool.js";
 import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools.js";
@@ -26,7 +26,7 @@ describe("setup_project MCP tool (#1312)", () => {
     expect(MODERN_TOOL_NAMES).toContain("setup_project");
     const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
 
-    const result = await tool.handler({ frontendFile: "Frontend.accdb" });
+    const result = await tool.handler({ frontendFile: "Frontend.accdb", projectId: "fixture" });
 
     expect(result.isError).toBe(false);
     expect(payload(result)).toMatchObject({
@@ -35,7 +35,7 @@ describe("setup_project MCP tool (#1312)", () => {
       dryRun: true,
       willWrite: true,
       resolvedConfig: {
-        id: basename(workdir),
+        id: "fixture",
         frontendFile: "Frontend.accdb",
         destinationRoot: "src",
         capabilities: { allowWrites: true },
@@ -47,7 +47,11 @@ describe("setup_project MCP tool (#1312)", () => {
   it("applies atomically and can replace the project id", async () => {
     const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
 
-    const first = await tool.handler({ frontendFile: "Frontend.accdb", apply: true });
+    const first = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "initial",
+      apply: true,
+    });
     expect(first.isError).toBe(false);
     expect(payload(first)).toMatchObject({ ok: true, mode: "apply" });
 
@@ -65,12 +69,17 @@ describe("setup_project MCP tool (#1312)", () => {
 
   it("requires both the process write gate and candidate allowWrites on apply", async () => {
     const disabled = createSetupProjectTool({ cwd: workdir, writesEnabled: false });
-    const processDenied = await disabled.handler({ frontendFile: "Frontend.accdb", apply: true });
+    const processDenied = await disabled.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      apply: true,
+    });
     expect(processDenied.error?.code).toBe("MCP_WRITES_DISABLED");
 
     const enabled = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
     const projectDenied = await enabled.handler({
       frontendFile: "Frontend.accdb",
+      projectId: "fixture",
       capabilities: { allowWrites: false },
       apply: true,
     });
@@ -104,7 +113,11 @@ describe("setup_project MCP tool (#1312)", () => {
     });
     const tool = tools.find((candidate) => candidate.name === "setup_project");
 
-    const result = await tool?.handler({ frontendFile: "Frontend.accdb", apply: true });
+    const result = await tool?.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      apply: true,
+    });
 
     expect(result?.isError).toBe(false);
     expect(existsSync(join(workdir, ".dysflow", "project.json"))).toBe(true);
@@ -114,7 +127,11 @@ describe("setup_project MCP tool (#1312)", () => {
     rmSync(join(workdir, ".git"), { force: true });
     const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
 
-    const result = await tool.handler({ frontendFile: "Frontend.accdb", apply: true });
+    const result = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      apply: true,
+    });
 
     expect(result.isError).toBe(true);
     expect(result.error?.code).toBe("OUTSIDE_PROJECT_ROOT");
