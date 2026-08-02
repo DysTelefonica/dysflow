@@ -688,7 +688,11 @@ function withProjectResolutionRecovery(
                 typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
             });
             if (!selected.ok) return projectRecoveryFailure(selected);
-            recordRecoveryConsumption(context, selected.project.projectId);
+            recordRecoveryConsumption(
+              context,
+              selected.project.projectId,
+              selected.project.projectRoot,
+            );
             const configPath = join(selected.project.projectRoot, ".dysflow", "project.json");
             let resolvedConfig: Record<string, unknown>;
             try {
@@ -739,7 +743,11 @@ function withProjectResolutionRecovery(
               typeof record.recoveryToken === "string" ? record.recoveryToken : undefined,
           });
           if (!selected.ok) return projectRecoveryFailure(selected);
-          recordRecoveryConsumption(context, selected.project.projectId);
+          recordRecoveryConsumption(
+            context,
+            selected.project.projectId,
+            selected.project.projectRoot,
+          );
           record.projectId = selected.project.projectId;
           record.cwd = selected.project.projectRoot;
         } else {
@@ -760,8 +768,13 @@ function withProjectResolutionRecovery(
   });
 }
 
-function recordRecoveryConsumption(context: McpToolContext | undefined, projectId: string): void {
+function recordRecoveryConsumption(
+  context: McpToolContext | undefined,
+  projectId: string,
+  projectRoot: string,
+): void {
   if (context === undefined) return;
+  context.authenticatedTelemetryProjectRoot = projectRoot;
   context.auditEvents ??= [];
   context.auditEvents.push(`trio-consumed:${projectId}`);
 }

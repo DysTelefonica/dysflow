@@ -40,9 +40,14 @@ export type InvocationTelemetryContext = {
   writeExecutionPolicy: WriteExecutionPolicy;
 };
 
-export type InvocationTelemetryContextResolver = (
+export type InvocationTelemetryContextResolver = ((
   args: unknown,
-) => Promise<InvocationTelemetryContext>;
+) => Promise<InvocationTelemetryContext>) & {
+  /** Resolve recorder evidence from a project root authenticated by a handler. */
+  resolveAuthenticatedProjectRoot?: (
+    projectRoot: string,
+  ) => Promise<InvocationTelemetryContext | undefined>;
+};
 
 const CONTRACT_FAILURE_CODES = new Set([
   "MCP_INPUT_INVALID",
@@ -305,7 +310,7 @@ export function createInvocationTelemetryContextResolver(options: {
       hasExplicitTelemetryTarget(args) ? { ...options.fallback, enabled: false } : options.fallback,
     );
 
-  return async (args) => {
+  const resolver: InvocationTelemetryContextResolver = async (args) => {
     if (hasInvalidExplicitContextId(args)) return fallbackFor(args);
     try {
       const target = await options.resolveTarget(args);
@@ -314,6 +319,25 @@ export function createInvocationTelemetryContextResolver(options: {
       return fallbackFor(args);
     }
   };
+  resolver.resolveAuthenticatedProjectRoot = async (projectRoot) => {
+    if (projectRoot.trim().length === 0) return undefined;
+    try {
+      const target = await options.resolveTarget({ cwd: projectRoot });
+      if (target === undefined || !sameResolvedPath(target.cwd, projectRoot)) return undefined;
+      return contextFor(target);
+    } catch {
+      return undefined;
+    }
+  };
+  return resolver;
+}
+
+function sameResolvedPath(left: string, right: string): boolean {
+  const resolvedLeft = resolve(left);
+  const resolvedRight = resolve(right);
+  return process.platform === "win32"
+    ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    : resolvedLeft === resolvedRight;
 }
 
 function hasInvalidExplicitContextId(args: unknown): boolean {
