@@ -10,6 +10,12 @@ export interface McpToolContext {
    */
   auditEvents?: string[];
   /**
+   * Project root authenticated by a successful one-shot recovery consume.
+   * The stdio seam may use this handler-only evidence to rebind telemetry;
+   * raw caller arguments must never populate it.
+   */
+  authenticatedTelemetryProjectRoot?: string;
+  /**
    * Writes a notifications/progress JSON-RPC frame to the runtime output.
    * No-op when progressToken is absent.
    */

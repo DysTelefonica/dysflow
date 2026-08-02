@@ -329,12 +329,17 @@ export async function startWithSdkServer(
     const context: McpToolContext = { progressToken, sendProgress, auditEvents: [] };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
     const result = await wrappedHandler(args, context);
+    const invocationRecorder = await resolvePostHandlerInvocationRecorder(
+      options,
+      context,
+      invocationContext.recorder,
+    );
     const validatedResult = validateMcpResultBeforeSerialization(tool, result, options);
     // Issue #1168 — the schemaVersion discriminator is injected at the
     // central MCP seam so every tool response (success, error, contract
     // violation, "tool not found") carries it without per-tool changes.
     const stamped = withWireResponseEnvelope(validatedResult);
-    await recordInvocationBestEffort(invocationContext.recorder, {
+    await recordInvocationBestEffort(invocationRecorder, {
       toolName: name,
       toolKnown: true,
       args,
@@ -362,6 +367,28 @@ export async function startWithSdkServer(
 
   const stdioTransport = new StdioServerTransport(sizeGuard, process.stdout);
   await server.connect(stdioTransport);
+}
+
+async function resolvePostHandlerInvocationRecorder(
+  options: {
+    invocationContextResolver?: InvocationTelemetryContextResolver;
+  },
+  context: McpToolContext,
+  originalRecorder: InvocationTelemetryRecorder | undefined,
+): Promise<InvocationTelemetryRecorder | undefined> {
+  const projectRoot = context.authenticatedTelemetryProjectRoot;
+  if (projectRoot === undefined) return originalRecorder;
+  const contextResolver = options.invocationContextResolver;
+  if (contextResolver === undefined) return originalRecorder;
+  const resolveAuthenticated = contextResolver.resolveAuthenticatedProjectRoot;
+  if (resolveAuthenticated === undefined) return undefined;
+  try {
+    return (await resolveAuthenticated(projectRoot))?.recorder;
+  } catch {
+    // Authenticated evidence supersedes any recorder selected from raw input.
+    // If rebinding fails, telemetry fails closed instead of misattributing it.
+    return undefined;
+  }
 }
 
 async function resolveInvocationContext(
