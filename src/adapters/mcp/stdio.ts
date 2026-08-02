@@ -57,8 +57,8 @@ import {
   resolveInvocationWriteIntent,
 } from "./invocation-telemetry.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
-import type { McpToolResult } from "./result-translation.js";
-import { withSchemaVersion } from "./result-translation.js";
+import { withWireResponseEnvelope } from "./response-envelope.js";
+import { type McpToolResult, withSchemaVersion } from "./result-translation.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
   buildHiddenToolRegistry,
@@ -317,7 +317,7 @@ export async function startWithSdkServer(
         durationMs: performance.now() - startedAt,
         writeIntent: "read",
       });
-      return result;
+      return withWireResponseEnvelope(result);
     }
 
     const progressToken = _meta?.progressToken;
@@ -333,7 +333,7 @@ export async function startWithSdkServer(
     // Issue #1168 — the schemaVersion discriminator is injected at the
     // central MCP seam so every tool response (success, error, contract
     // violation, "tool not found") carries it without per-tool changes.
-    const stamped = withSchemaVersion(validatedResult);
+    const stamped = withWireResponseEnvelope(validatedResult);
     await recordInvocationBestEffort(invocationContext.recorder, {
       toolName: name,
       toolKnown: true,

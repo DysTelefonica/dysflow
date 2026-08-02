@@ -28,11 +28,19 @@ import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
 import type { AnyExecutableResultContract } from "./contracts/result-contract.js";
 import type { ExplainObject } from "./explain-builder.js";
 import { relatedIssueNumbersForCode } from "./explain-builder.js";
+import {
+  errorResponseEnvelope,
+  RESULT_SCHEMA_VERSION,
+  type ResultSchemaVersion,
+  successResponseEnvelope,
+  withResponseEnvelope,
+} from "./response-envelope.js";
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
 
 // Re-export sanitizeMcpErrorMessage so the adapter layer can import it from here.
 export { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
+export { RESULT_SCHEMA_VERSION, type ResultSchemaVersion } from "./response-envelope.js";
 
 export type McpTextContent = {
   type: "text";
@@ -56,9 +64,6 @@ export type McpTextContent = {
  * must ship with a migration note in CHANGELOG.md. Additive additions do NOT
  * bump the literal — keep `v1` until the envelope shape itself changes.
  */
-export const RESULT_SCHEMA_VERSION = "dysflow.result/v1" as const;
-export type ResultSchemaVersion = typeof RESULT_SCHEMA_VERSION;
-
 export type McpToolError = {
   code: string;
   message: string;
@@ -223,6 +228,8 @@ export type McpToolResult = {
    * compile; the runtime seam is the contract, not the type.
    */
   schemaVersion?: ResultSchemaVersion;
+  /** Standard MCP projection retained by clients that flatten text content. */
+  structuredContent?: Record<string, unknown>;
   /** Trusted runtime metadata; never derived from result.data. */
   operation?: Pick<AccessOperationMetadata, "operationId">;
   content: readonly McpTextContent[];
@@ -254,8 +261,7 @@ export type McpToolResult = {
  * should call this rather than constructing the field inline.
  */
 export function withSchemaVersion(result: McpToolResult): McpToolResult {
-  if (result.schemaVersion === RESULT_SCHEMA_VERSION) return result;
-  return { ...result, schemaVersion: RESULT_SCHEMA_VERSION };
+  return withResponseEnvelope(result);
 }
 
 export type DysflowMcpTool = {
@@ -366,14 +372,13 @@ export function translateCoreResultToMcpContent<TData>(
           : {}),
       },
     ];
-    return withSchemaVersion({
+    return errorResponseEnvelope({
       content: [
         {
           type: "text",
           text: `${errorCode}: ${sanitizedMessage}`,
         },
       ],
-      isError: true,
       ok: false,
       ...(result.operation ? { operation: { operationId: result.operation.operationId } } : {}),
       error: {
@@ -395,9 +400,8 @@ export function translateCoreResultToMcpContent<TData>(
     });
   }
 
-  return withSchemaVersion({
+  return successResponseEnvelope({
     content: [{ type: "text", text: stringifyForMcp(result.data) }],
-    isError: false,
     ok: true,
     ...(result.operation ? { operation: { operationId: result.operation.operationId } } : {}),
   });

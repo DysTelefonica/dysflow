@@ -582,6 +582,21 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
+  if (tool === "response-schema-version-discriminator") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = result?.response?.result?.structuredContent ?? safeJsonParse(result?.text);
+        const pass = parsed?.schemaVersion === "dysflow.result/v1";
+        return {
+          pass,
+          expected: "schemaVersion:'dysflow.result/v1'",
+          summary: pass ? "response schema discriminator present" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool === "test_vba:plan-mode") {
     return {
       args: {
@@ -909,6 +924,11 @@ await record("operations", "access_force_cleanup_orphaned:pid-no-confirm-refused
 // child PID, with preflight + post-tool zombie check. The cross-check against `advertised`
 // is a separate row below (so each assertion stands on its own and the report stays scannable).
 await record("capabilities", "get_capabilities", { projectId });
+// v2.34 regressions — #1326 / R-S05. Code Mode flattens the MCP text
+// payload, so the discriminator must remain observable in that projection.
+await record("v2.34-regressions", "response-schema-version-discriminator", {
+  projectId,
+}, { expected: "ok" });
 // #1057 (F5/F6) — single-tool introspection sibling of `schema`. Read-only;
 // returns delete_module's params + description + useCases.
 await record("capabilities", "describe_tool", { name: "delete_module" });
