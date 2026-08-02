@@ -10,7 +10,7 @@
 
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
-import { runMcpHarness } from "../../E2E_testing/_helpers/mcp-harness.mjs";
+import { runMcpHarness, runMcpSession } from "../../E2E_testing/_helpers/mcp-harness.mjs";
 
 class FakeChild extends EventEmitter {
   stdin = new EventEmitter() as EventEmitter & { end: () => void; write: (s: string) => void };
@@ -152,5 +152,57 @@ describe("MCP harness watchdog (#583)", () => {
     expect(result.timedOut).toBe(true);
     expect(result.isError).toBe(true);
     expect(result.text).toContain("Timed out");
+  });
+});
+
+describe("MCP persistent session harness", () => {
+  it("keeps dependent calls in one child process", async () => {
+    const child = new FakeChild();
+    child.stdin.write = (serialized: string) => {
+      child.stdinWrites.push(serialized);
+      const request = JSON.parse(serialized) as {
+        id?: number;
+        method: string;
+        params?: { name?: string };
+      };
+      if (request.id === undefined) return true;
+      const text =
+        request.method === "initialize"
+          ? undefined
+          : request.params?.name === "issue-token"
+            ? JSON.stringify({ recoveryToken: "fresh-token" })
+            : JSON.stringify({ consumed: true });
+      queueMicrotask(() => {
+        child.stdout.emit(
+          "data",
+          `${JSON.stringify({
+            jsonrpc: "2.0",
+            id: request.id,
+            result:
+              text === undefined
+                ? { protocolVersion: "2024-11-05", capabilities: {}, serverInfo: {} }
+                : { content: [{ type: "text", text }], isError: false },
+          })}\n`,
+        );
+      });
+      return true;
+    };
+
+    const result = await runMcpSession({
+      child: child as unknown as Parameters<typeof runMcpSession>[0]["child"],
+      timeoutMs: 1_000,
+      run: async ({ callTool }) => {
+        const issued = await callTool("issue-token");
+        const token = (JSON.parse(issued.text) as { recoveryToken: string }).recoveryToken;
+        const consumed = await callTool("consume-token", { recoveryToken: token });
+        return JSON.parse(consumed.text) as { consumed: boolean };
+      },
+    });
+
+    expect(result).toEqual({ consumed: true });
+    expect(child.stdinWrites.filter((line) => line.includes('"method":"tools/call"'))).toHaveLength(
+      2,
+    );
+    expect(child.killCalls).toBeGreaterThanOrEqual(1);
   });
 });

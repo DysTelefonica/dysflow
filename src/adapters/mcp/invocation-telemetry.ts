@@ -26,6 +26,7 @@ const LOCK_RETRY_MS = 10;
 const PENDING_LOCK_REAP_LIMIT = 32;
 const MAX_NAME_LENGTH = 128;
 const MAX_PARAMETER_NAMES = 256;
+const MAX_AUDIT_EVENT_LENGTH = 256;
 const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
 export type InvocationTelemetryTarget = {
@@ -56,6 +57,22 @@ function boundedName(value: unknown): string | null {
   const normalized = value.trim();
   if (normalized.length === 0) return null;
   return normalized.slice(0, MAX_NAME_LENGTH);
+}
+
+function boundedAuditEvent(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (
+    normalized.length > MAX_AUDIT_EVENT_LENGTH ||
+    !normalized.startsWith("trio-consumed:") ||
+    normalized === "trio-consumed:" ||
+    [...normalized].some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })
+  )
+    return null;
+  return normalized;
 }
 
 function parameterNames(args: unknown): string[] {
@@ -164,6 +181,7 @@ export function buildInvocationTelemetryEntry(input: {
   result: McpToolResult;
   durationMs: number;
   writeIntent: InvocationWriteIntent;
+  auditEvents?: readonly string[];
   timestamp?: string;
 }): InvocationTelemetryEntry {
   const tool = boundedName(input.toolName) ?? "(invalid-tool-name)";
@@ -190,6 +208,13 @@ export function buildInvocationTelemetryEntry(input: {
     missingParams: missingParameterNames(input.result),
     rejectedParams: rejectedParameterNames(input.result),
     unknownToolName: input.toolKnown ? null : tool,
+    ...(input.auditEvents !== undefined && input.auditEvents.length > 0
+      ? {
+          auditEvents: input.auditEvents
+            .map((event) => boundedAuditEvent(event))
+            .filter((event): event is string => event !== null),
+        }
+      : {}),
   };
 }
 

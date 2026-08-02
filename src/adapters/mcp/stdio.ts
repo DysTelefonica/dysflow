@@ -326,7 +326,7 @@ export async function startWithSdkServer(
         extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
     });
 
-    const context: McpToolContext = { progressToken, sendProgress };
+    const context: McpToolContext = { progressToken, sendProgress, auditEvents: [] };
     const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
     const result = await wrappedHandler(args, context);
     const validatedResult = validateMcpResultBeforeSerialization(tool, result, options);
@@ -346,6 +346,7 @@ export async function startWithSdkServer(
         args,
         invocationContext.writeExecutionPolicy,
       ),
+      auditEvents: context.auditEvents,
     });
     // Spread readonly content[] into mutable array as required by the SDK's CallToolResult type.
     return { ...stamped, content: [...stamped.content] };

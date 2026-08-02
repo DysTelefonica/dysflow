@@ -29,6 +29,8 @@ export type InvocationTelemetryEntry = {
   missingParams: string[];
   rejectedParams: string[];
   unknownToolName: string | null;
+  /** Privacy-safe dispatch evidence; argument values never belong here. */
+  auditEvents?: string[];
 };
 
 export interface InvocationTelemetryRecorder {

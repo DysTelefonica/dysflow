@@ -5,6 +5,11 @@
 export interface McpToolContext {
   progressToken?: string | number;
   /**
+   * Privacy-safe audit evidence accumulated by dispatch wrappers and emitted
+   * with the invocation telemetry entry after the handler completes.
+   */
+  auditEvents?: string[];
+  /**
    * Writes a notifications/progress JSON-RPC frame to the runtime output.
    * No-op when progressToken is absent.
    */

@@ -178,6 +178,21 @@ describe("invocation telemetry privacy contract (#1197)", () => {
     expect(serialized).not.toContain("customer.accdb");
   });
 
+  it("records privacy-safe recovery trio consumption evidence", () => {
+    const entry = buildInvocationTelemetryEntry({
+      toolName: "test_vba",
+      toolKnown: true,
+      args: { projectId: "shared-id", recoveryToken: "secret-token" },
+      result: { content: [], isError: false },
+      durationMs: 1,
+      writeIntent: "dryRun",
+      auditEvents: ["trio-consumed:shared-id"],
+    });
+
+    expect(entry.auditEvents).toEqual(["trio-consumed:shared-id"]);
+    expect(JSON.stringify(entry)).not.toContain("secret-token");
+  });
+
   it("classifies unknown names and runtime failures separately", () => {
     const unknown = buildInvocationTelemetryEntry({
       toolName: "import_module",

@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
-import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
+import { runMcpHarness, runMcpSession } from "./_helpers/mcp-harness.mjs";
 import {
   assertSafeResumeRoot,
   computeE2eExitCode,
@@ -346,6 +346,152 @@ async function callMcp(method, params = {}, options = {}) {
       timeoutMs: options.timeoutMs ?? timeoutMs,
       closeWatchdogMs: options.closeWatchdogMs ?? closeWatchdogMs,
     });
+  } finally {
+    if (childPid && !isOwnPidAlive(childPid)) {
+      suiteOwnPids.delete(childPid);
+      await resumeController.clearOwnedPid(childPid);
+    }
+  }
+}
+
+function runCheckedGit(cwd, args) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr || result.stdout || `exit ${result.status}`}`,
+    );
+  }
+}
+
+async function recordRecoveryTokenTrioJourney() {
+  const area = "v2.34-regressions";
+  const tool = "recovery-token-trio-persistent-session";
+  const startedAt = Date.now();
+  const fixtureRoot = join(tempRoot, "recovery-token-trio");
+  const chosenRoot = join(fixtureRoot, "chosen");
+  const competingRoot = join(fixtureRoot, "competing");
+  const sharedProjectId = "recovery-token-trio-e2e";
+  let childPid;
+
+  try {
+    await rm(fixtureRoot, { recursive: true, force: true });
+    await mkdir(join(chosenRoot, ".dysflow"), { recursive: true });
+    await mkdir(join(chosenRoot, "src"), { recursive: true });
+    await writeFile(join(chosenRoot, "chosen.accdb"), "", "utf8");
+    await writeFile(
+      join(chosenRoot, ".dysflow", "project.json"),
+      `${JSON.stringify(
+        {
+          id: sharedProjectId,
+          frontendFile: "chosen.accdb",
+          destinationRoot: "src",
+          capabilities: { allowWrites: true, writeExecutionPolicy: "safe-by-default" },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    runCheckedGit(chosenRoot, ["init", "-b", "main"]);
+    runCheckedGit(chosenRoot, ["config", "user.email", "mcp-e2e@localhost"]);
+    runCheckedGit(chosenRoot, ["config", "user.name", "dysflow-mcp-e2e"]);
+    runCheckedGit(chosenRoot, ["add", "."]);
+    runCheckedGit(chosenRoot, ["commit", "-m", "test: recovery trio fixture"]);
+    runCheckedGit(chosenRoot, ["worktree", "add", "-b", "competing", competingRoot]);
+
+    const child = spawn(cliCommand, ["mcp"], {
+      cwd: chosenRoot,
+      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ACCESS_VBA_PASSWORD: password,
+        DYSFLOW_ACCESS_PASSWORD: password,
+        DYSFLOW_BACKEND_PASSWORD: password,
+      },
+    });
+    childPid = child.pid;
+    if (childPid) {
+      suiteOwnPids.add(childPid);
+      await resumeController.registerOwnedPid(childPid);
+    }
+
+    const journey = await runMcpSession({
+      child,
+      timeoutMs,
+      run: async ({ callTool }) => {
+        const ambiguous = await callTool("resolve_project", { cwd: chosenRoot });
+        const ambiguousPayload = safeJsonParse(ambiguous.text);
+        const recoveryToken = ambiguousPayload?.recoveryToken;
+        if (
+          ambiguous.isError ||
+          ambiguousPayload?.outcome !== "ambiguous" ||
+          typeof recoveryToken !== "string"
+        ) {
+          throw new Error(`resolve_project did not issue a fresh token: ${ambiguous.text}`);
+        }
+
+        const trio = {
+          cwd: chosenRoot,
+          projectId: sharedProjectId,
+          projectChoiceReason: "user_selected_after_ambiguous_project",
+          recoveryToken,
+          apply: false,
+        };
+        const consumed = await callTool("setup_project", trio);
+        const consumedPayload = safeJsonParse(consumed.text);
+        if (
+          consumed.isError ||
+          consumedPayload?.mode !== "resolution" ||
+          consumedPayload?.resolvedConfig?.id !== sharedProjectId ||
+          resolve(consumedPayload?.projectRoot ?? "") !== resolve(chosenRoot) ||
+          resolve(consumedPayload?.configPath ?? "") !==
+            resolve(join(chosenRoot, ".dysflow", "project.json"))
+        ) {
+          throw new Error(`setup_project did not route to the chosen worktree: ${consumed.text}`);
+        }
+
+        const replay = await callTool("setup_project", trio);
+        const replayError = mcpErrorFromResult(replay);
+        if (!replay.isError || replayError?.code !== "MCP_INPUT_INVALID") {
+          throw new Error(`consumed token replay was not rejected: ${replay.text}`);
+        }
+        return { consumedPayload, replayError };
+      },
+    });
+
+    const invocationLog = await readFile(
+      join(chosenRoot, ".dysflow", "runtime", "invocations.jsonl"),
+      "utf8",
+    );
+    const auditMarker = `trio-consumed:${sharedProjectId}`;
+    if (!invocationLog.includes(auditMarker)) {
+      throw new Error(`invocation telemetry did not contain ${auditMarker}`);
+    }
+
+    addResult({
+      area,
+      tool,
+      pass: true,
+      expected: "fresh token routes chosen config once; replay rejects; audit marker emitted",
+      ms: Date.now() - startedAt,
+      summary: `${journey.consumedPayload.mode}; replay=${journey.replayError.code}; ${auditMarker}`,
+    });
+    console.log(`PASS\t${tool}\t${Date.now() - startedAt}ms\tstateful recovery journey`);
+  } catch (error) {
+    addResult({
+      area,
+      tool,
+      pass: false,
+      expected: "fresh token routes chosen config once; replay rejects; audit marker emitted",
+      ms: Date.now() - startedAt,
+      summary: normalize(error?.message ?? error),
+    });
+    throw error;
   } finally {
     if (childPid && !isOwnPidAlive(childPid)) {
       suiteOwnPids.delete(childPid);
@@ -940,6 +1086,12 @@ await record("capabilities", "setup_project", {
   cwd: repoRoot,
   frontendFile: "DysflowSetupProbe.accdb",
 });
+
+// v2.34-regressions — #1327 recovery-token trio. Unlike ordinary record()
+// rows, this journey deliberately keeps one MCP process alive: the token is
+// issued, consumed to select a concrete worktree, and replayed in that same
+// process so the one-shot contract is exercised end-to-end.
+await recordRecoveryTokenTrioJourney();
 
 const tools = ["run_script", "vba_inline_execution", "list_procedures",
                "get_procedure", "find_references", "detect_dead_code"];
