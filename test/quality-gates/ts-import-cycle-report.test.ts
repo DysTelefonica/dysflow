@@ -261,11 +261,15 @@ describe("TypeScript import cycle report", () => {
     expect(result.stderr).toContain("--update-baseline and --files are mutually exclusive");
   });
 
-  it("keeps the MCP tools facade outside cyclic SCCs while accepting baseline reduction", () => {
+  it("keeps the MCP adapter acyclic while accepting baseline reduction", () => {
     const report = run(process.cwd()) as { cycles: string[][] };
     const cycleMembers = report.cycles.flat();
+    const mcpCycles = report.cycles.filter((cycle) =>
+      cycle.some((member) => member.startsWith("src/adapters/mcp/")),
+    );
 
     expect(cycleMembers).not.toContain("src/adapters/mcp/tools.ts");
+    expect(mcpCycles).toEqual([]);
 
     const baselineResult = spawnSync(
       process.execPath,
