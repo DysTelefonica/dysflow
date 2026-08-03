@@ -1,12 +1,15 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
-
 import {
   type DysflowMcpTool,
   RESULT_SCHEMA_VERSION,
   translateCoreResultToMcpContent,
 } from "../../../src/adapters/mcp/result-translation.js";
+import { createSetupProjectTool } from "../../../src/adapters/mcp/setup-project-tool.js";
 import { startWithSdkServer } from "../../../src/adapters/mcp/stdio.js";
 import {
   createDysflowError,
@@ -98,5 +101,33 @@ describe("MCP response carries schemaVersion:'dysflow.result/v1' discriminator (
       isError: true,
       error: { code: "MCP_INPUT_INVALID", message: "projectId is required" },
     });
+  });
+
+  it("setup_project preserves missing-target evidence over the public SDK transport", async () => {
+    const workdir = mkdtempSync(join(tmpdir(), "dysflow-setup-transport-"));
+    try {
+      writeFileSync(join(workdir, ".git"), "gitdir: fixture", "utf8");
+      mkdirSync(join(workdir, "src"));
+
+      const result = await callOverPublicSdk(
+        createSetupProjectTool({ cwd: workdir, writesEnabled: true }),
+        {
+          frontendFile: "Missing.accdb",
+          projectId: "missing-target-evidence",
+          apply: true,
+        },
+      );
+      const content = result.content as Array<{ type: string; text?: string }>;
+      const payload = JSON.parse(content[0]?.text ?? "{}");
+
+      expect(result.isError).toBe(true);
+      expect(payload.error).toMatchObject({
+        code: "TARGET_NOT_FOUND",
+        configPath: join(workdir, ".dysflow", "project.json"),
+        resolvedConfig: { id: "missing-target-evidence" },
+      });
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+    }
   });
 });

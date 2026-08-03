@@ -56,10 +56,48 @@ export function wrapWithSanitizer(handler: DysflowMcpTool["handler"]): DysflowMc
     return {
       ...result,
       content: result.content.map((item) =>
-        item.type === "text" ? { ...item, text: sanitizeMcpErrorMessage(item.text) } : item,
+        item.type === "text" ? { ...item, text: sanitizeMcpErrorContentText(item.text) } : item,
       ),
     };
   };
+}
+
+function sanitizeMcpErrorContentText(text: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return sanitizeMcpErrorMessage(text);
+  }
+
+  const error = errorObject(parsed);
+  if (error === undefined) return sanitizeMcpErrorMessage(text);
+
+  const configPath = error.configPath;
+  const resolvedConfig = error.resolvedConfig;
+  const sanitized = sanitizeMcpErrorMessage(text);
+
+  try {
+    const sanitizedPayload = JSON.parse(sanitized) as unknown;
+    const sanitizedError = errorObject(sanitizedPayload);
+    if (sanitizedError === undefined) return sanitized;
+    // setup_project intentionally publishes these typed, secret-free fields so
+    // callers can correct the accepted bootstrap candidate. Preserve them while
+    // the surrounding free-form message and remediation remain path-sanitized.
+    if (configPath !== undefined) sanitizedError.configPath = configPath;
+    if (resolvedConfig !== undefined) sanitizedError.resolvedConfig = resolvedConfig;
+    return JSON.stringify(sanitizedPayload);
+  } catch {
+    return sanitized;
+  }
+}
+
+function errorObject(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const error = (value as Record<string, unknown>).error;
+  return typeof error === "object" && error !== null && !Array.isArray(error)
+    ? (error as Record<string, unknown>)
+    : undefined;
 }
 
 /**
