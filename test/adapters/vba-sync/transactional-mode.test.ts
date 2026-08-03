@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { nodeTransactionalFileSystem } from "../../../src/adapters/vba-sync/node-transactional-file-system";
 import {
   cleanupOrphanedTransactionalCopies,
+  type TransactionalFileSystemPort,
   transactionalWrite,
 } from "../../../src/core/services/transactional-write";
 
@@ -37,6 +38,12 @@ async function sha256Of(path: string): Promise<string> {
 }
 
 const NOW_MS = Date.parse("2026-07-18T12:00:00.000Z");
+
+function fileSystemWith(
+  overrides: Partial<TransactionalFileSystemPort>,
+): TransactionalFileSystemPort {
+  return { ...nodeTransactionalFileSystem, ...overrides };
+}
 
 describe("transactional mode for write-tools (Round-12 #975)", () => {
   let workdir: string;
@@ -156,6 +163,301 @@ describe("transactional mode for write-tools (Round-12 #975)", () => {
     expect(await stat(stagingDir).catch(() => null)).toBeNull();
   });
 
+  it("reports an actionable rollback failure and retains diagnostics when cleanup fails", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-rollback-fail");
+    const stagingPath = join(stagingDir, "App.accdb");
+    const fileSystem = fileSystemWith({
+      rm: async (path, options) => {
+        if (path === stagingDir) throw new Error("staging directory is locked");
+        await nodeTransactionalFileSystem.rm(path, options);
+      },
+    });
+
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-rollback-fail",
+      execute: async (target) => {
+        await writeFile(target, "failed-mutation");
+        return {
+          ok: false,
+          error: { code: "VBA_IMPORT_FAILED", message: "import failed", retryable: false },
+        };
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "TRANSACTIONAL_ROLLBACK_FAILED",
+        retryable: false,
+        details: {
+          originalError: { code: "VBA_IMPORT_FAILED" },
+          rollbackError: { message: "staging directory is locked" },
+        },
+      },
+      stagingPath,
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+    expect((await readFile(stagingPath)).toString("utf8")).toBe("failed-mutation");
+  });
+
+  it("preserves a verification failure when its rollback also fails", async () => {
+    const fileSystem = fileSystemWith({
+      rm: async () => {
+        throw new Error("verification artifact is locked");
+      },
+    });
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      execute: async () => ({ ok: true, data: undefined }),
+      verify: async () => ({
+        ok: false,
+        error: {
+          code: "VERIFY_FAILED",
+          message: "contract mismatch",
+          retryable: false,
+          details: { module: "Example" },
+        },
+      }),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "TRANSACTIONAL_ROLLBACK_FAILED",
+        details: {
+          originalError: { code: "VERIFY_FAILED", details: { module: "Example" } },
+        },
+      },
+    });
+  });
+
+  it("turns an unexpected verification exception into a failure and removes its staging copy", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-verify-throws");
+
+    const result = await transactionalWrite({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-verify-throws",
+      execute: async (target) => {
+        await writeFile(target, "unverified-content");
+        return { ok: true, data: { imported: 1 } };
+      },
+      verify: async () => {
+        throw new Error("verification process exited unexpectedly");
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "TRANSACTIONAL_IO_ERROR",
+        message: "verification process exited unexpectedly",
+      },
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+    const { stat } = await import("node:fs/promises");
+    expect(await stat(stagingDir).catch(() => null)).toBeNull();
+  });
+
+  it("returns filesystem diagnostics when staging directory creation fails", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const fileSystem = fileSystemWith({
+      mkdir: async () => {
+        throw { code: "EACCES", message: "", retryable: true };
+      },
+    });
+
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-mkdir-fail",
+      execute: async () => ({ ok: true, data: undefined }),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "EACCES", message: "Filesystem operation failed.", retryable: true },
+      stagingPath: undefined,
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+  });
+
+  it("removes a partial staging directory when copying the original fails", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-copy-fail");
+    const fileSystem = fileSystemWith({
+      copyFile: async () => {
+        throw new Error("source became unavailable");
+      },
+    });
+
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-copy-fail",
+      execute: async () => ({ ok: true, data: undefined }),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "TRANSACTIONAL_COPY_FAILED" },
+      stagingPath: undefined,
+      originalSha256: originalSha,
+    });
+    const { stat } = await import("node:fs/promises");
+    expect(await stat(stagingDir).catch(() => null)).toBeNull();
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+  });
+
+  it("turns an unexpected execute exception into a failure and removes its staging copy", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-execute-throws");
+
+    const result = await transactionalWrite({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-execute-throws",
+      execute: async () => {
+        throw new Error("Access process exited unexpectedly");
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "TRANSACTIONAL_IO_ERROR",
+        message: "Access process exited unexpectedly",
+      },
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+    const { stat } = await import("node:fs/promises");
+    expect(await stat(stagingDir).catch(() => null)).toBeNull();
+  });
+
+  it("retains the staged artifact and original binary when atomic publication fails", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-commit-fail");
+    const stagingPath = join(stagingDir, "App.accdb");
+    const fileSystem = fileSystemWith({
+      rename: async () => {
+        throw new Error("destination is locked");
+      },
+    });
+
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-commit-fail",
+      execute: async (target) => {
+        await writeFile(target, "recoverable-content");
+        return { ok: true, data: { imported: 1 } };
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "TRANSACTIONAL_COMMIT_FAILED", retryable: true },
+      stagingPath,
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+    expect((await readFile(stagingPath)).toString("utf8")).toBe("recoverable-content");
+  });
+
+  it("keeps a committed result when empty-directory cleanup fails", async () => {
+    const fileSystem = fileSystemWith({
+      rm: async () => {
+        throw new Error("empty directory is temporarily locked");
+      },
+    });
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      execute: async (target) => {
+        await writeFile(target, "committed-content");
+        return { ok: true, data: { imported: 1 } };
+      },
+    });
+
+    expect(result).toMatchObject({ ok: true, data: { imported: 1 } });
+    expect((await readFile(binaryPath)).toString("utf8")).toBe("committed-content");
+  });
+
+  it("surfaces an actionable read failure before creating transactional state", async () => {
+    const fileSystem = fileSystemWith({
+      readFileBytes: async () => {
+        throw { code: "EIO", message: "cannot read original", retryable: true };
+      },
+    });
+
+    await expect(
+      transactionalWrite({
+        fileSystem,
+        stagingRoot,
+        binaryPath,
+        generateId: () => "uuid-read-fail",
+        execute: async () => ({ ok: true, data: undefined }),
+      }),
+    ).rejects.toEqual({ code: "EIO", message: "cannot read original", retryable: true });
+    const { stat } = await import("node:fs/promises");
+    expect(await stat(stagingRoot).catch(() => null)).toBeNull();
+  });
+
+  it("reports a failed copy cleanup and preserves its staging path for recovery", async () => {
+    const originalSha = await sha256Of(binaryPath);
+    const stagingDir = join(stagingRoot, "uuid-copy-cleanup-fail");
+    const stagingPath = join(stagingDir, "App.accdb");
+    const fileSystem = fileSystemWith({
+      copyFile: async (_source, target) => {
+        await writeFile(target, "partial-copy");
+        throw new Error("disk full");
+      },
+      rm: async () => {
+        throw new Error("cleanup denied");
+      },
+    });
+
+    const result = await transactionalWrite({
+      fileSystem,
+      stagingRoot,
+      binaryPath,
+      generateId: () => "uuid-copy-cleanup-fail",
+      execute: async () => ({ ok: true, data: undefined }),
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "TRANSACTIONAL_ROLLBACK_FAILED",
+        details: {
+          originalError: { code: "TRANSACTIONAL_COPY_FAILED" },
+          rollbackError: { message: "cleanup denied" },
+        },
+      },
+      stagingPath,
+      originalSha256: originalSha,
+    });
+    expect(await sha256Of(binaryPath)).toBe(originalSha);
+    expect((await readFile(stagingPath)).toString("utf8")).toBe("partial-copy");
+  });
+
   it("atomic commit is a single filesystem rename — no intermediate half-updated state", async () => {
     const originalSha = await sha256Of(binaryPath);
     const observations: Array<{ phase: string; sha: string }> = [];
@@ -215,6 +517,63 @@ describe("transactional mode for write-tools (Round-12 #975)", () => {
 
     expect(result.cleaned).toEqual([]);
     expect(result.errors).toEqual([]);
+  });
+
+  it("reports stale orphan inspection and removal failures without deleting valid state", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const statFailureDir = join(stagingRoot, "uuid-stat-fail");
+    const removalFailureDir = join(stagingRoot, "uuid-rm-fail");
+    await mkdir(statFailureDir, { recursive: true });
+    await mkdir(removalFailureDir, { recursive: true });
+    const fileSystem = fileSystemWith({
+      statMtimeMs: async (path) => {
+        if (path === statFailureDir) throw new Error("cannot inspect marker");
+        return NOW_MS - 2 * 60 * 60 * 1000;
+      },
+      rm: async (path, options) => {
+        if (path === removalFailureDir) throw new Error("directory is busy");
+        await nodeTransactionalFileSystem.rm(path, options);
+      },
+    });
+
+    const result = await cleanupOrphanedTransactionalCopies({
+      fileSystem,
+      stagingRoot,
+      thresholdMs: 60 * 60 * 1000,
+      nowMs: NOW_MS,
+    });
+
+    expect(result.cleaned).toEqual([]);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        { directory: statFailureDir, message: "stat failed: cannot inspect marker" },
+        { directory: removalFailureDir, message: "rm failed: directory is busy" },
+      ]),
+    );
+    expect(result.errors).toHaveLength(2);
+    expect(await readFile(binaryPath)).toHaveLength(4096);
+  });
+
+  it("orphan cleanup is idempotent after removing stale state", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const staleDir = join(stagingRoot, "uuid-idempotent");
+    await mkdir(staleDir, { recursive: true });
+
+    const first = await cleanupOrphanedTransactionalCopies({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+      thresholdMs: 0,
+      nowMs: Number.MAX_SAFE_INTEGER,
+    });
+    const second = await cleanupOrphanedTransactionalCopies({
+      fileSystem: nodeTransactionalFileSystem,
+      stagingRoot,
+      thresholdMs: 0,
+      nowMs: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(first).toEqual({ cleaned: ["uuid-idempotent"], errors: [] });
+    expect(second).toEqual({ cleaned: [], errors: [] });
   });
 
   it("transactional:false / omitted flag preserves current non-atomic behavior (the wrapper is opt-in)", async () => {
