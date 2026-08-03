@@ -1,26 +1,27 @@
 ---
 name: dysflow-pointer-rollout
 description: >
-  Trigger: dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across the 9 active agent instruction files, dysflow/AGENTS.md lost its embedded harness block, user says regen pointers / redistribuir arnés / los pointers quedaron viejos, ARN-2 of dysflow-codegraph-update chains after ARN-1. Detects drift between the canonical `dysflow-arnes` skill and the 9 active instruction files where the pointer lives, regenerates only the marked regions, preserves every other byte of those files.
+  Trigger: dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across the active agent instruction files, dysflow/AGENTS.md lost its embedded harness block, user says regen pointers / redistribuir arnés / los pointers quedaron viejos, ARN-2 of dysflow-codegraph-update chains after ARN-1, `dysflow install` / `dysflow update` could not reach an agent's AGENTS.md / CLAUDE.md. Detects drift between the canonical `dysflow-arnes` skill and the agent instruction files where the pointer lives, regenerates only the marked regions, preserves every other byte of those files. Companion to the `dysflow install` plugin layer that performs the same job during routine install/update; this skill is the manual fallback when the plugin cannot reach a target.
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
   version: "0.3.0"
   status: active
-  source: "DysTelefonica/dysflow release bundle"
-  last_verified: "2026-08-02"
-  last_dysflow_version: "2.34.1"
+  last_verified: "2026-08-03"
+  last_dysflow_version: "2.34.2"
   parent: "dysflow-codegraph-update"
-  requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream)"
-  in_scope: "8 user-global agent instruction files + dysflow project AGENTS.md embedded harness (9 active targets total). The dysflow project AGENTS.md is dynamically discovered under C:\\Proyectos\\dysflow\\<worktree>\\AGENTS.md — never hardcoded. The legacy C:\\Proyectos\\workflow\\ path was retired 2026-07-19 by the path-migration cycle that consolidated workflow into C:\\Proyectos\\skills\\; ARN-2 no longer targets it."
+  requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow-plugin` for routine install/update refresh"
+  managed_by: "`dysflow install` / `dysflow update` for routine pointer refresh; this skill is the manual fallback when those commands cannot reach a target (permissions, OS-specific path, agent not in the install matrix)."
+  in_scope: "user-global agent instruction files (OpenCode / Codex / Claude Code / Cursor / Kiro / Copilot / Gemini / Antigravity / Hermes / OpenClaw / Pi) + dysflow project AGENTS.md embedded harness. Targets are discovered dynamically from the agent config the user invokes; the legacy hardcoded 8+1 target list is preserved only as a fallback when discovery fails."
   out_of_scope: "dysflow-arnes itself (ARN-1 of dysflow-codegraph-update), per-tool example files in dysflow-usage/assets/examples/ (dysflow-examples-sync), gentle-ai-owned skills, anything outside the canonical skills repo + user-global config"
-  supersedes: "n/a (initial version)"
+  supersedes: "v0.2.3 (2026-07-30; explicit managed_by + fallback role; raised floor to 2.34)"
   trigger_patterns:
-    - "ARN-2 — dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across the 9 active instruction files"
+    - "ARN-2 — dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across agent instruction files"
     - "ARN-2 — dysflow/AGENTS.md lost the embedded harness block between <!-- dysflow:arnés --> and <!-- /dysflow:arnés -->"
     - "ARN-2 chain from dysflow-codegraph-update ARN-1 (post-arnés-regeneration)"
     - "user says regen pointers / redistribuir arnés / los pointers quedaron viejos"
-    - "session-start verification: hash compare canonical block vs inlined content across the 9 active targets"
+    - "`dysflow install` / `dysflow update` skipped an agent (no permission, missing config) and the pointer is stale"
+    - "session-start verification: hash compare canonical block vs inlined content across active targets"
 ---
 
 ## Philosophy

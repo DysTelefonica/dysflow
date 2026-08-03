@@ -1,31 +1,30 @@
 ---
 name: dysflow-codegraph-update
 description: >
-  ⚠️ Trigger: dysflow release ships, codegraph-vba release ships, user says actualiza dysflow / alineá skills / la skill y AGENTS.md no coinciden con dysflow, runtime drift. Keeps skills and the global AGENTS.md matching the live dysflow + codegraph-vba runtime (no bitácora), and keeps the AGENTS.md lean and index-first for minimum-friction use of dysflow + codegraph-vba.
+  Trigger: dysflow release ships, codegraph-vba release ships, user says actualiza dysflow / alineá skills / la skill y AGENTS.md no coinciden con dysflow, runtime drift, the `dysflow install` / `dysflow update` flow could not write back the pointer block. Keeps the dysflow consumer toolchain (skills + global AGENTS.md / CLAUDE.md sections + rules/*.md) aligned with the live runtime after `dysflow install` / `dysflow update` change the canonical source. Stays lean and index-first; relies on the runtime, the release pipeline, and the install/update flow for routine alignment.
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
   version: "2.6.0"
   status: active
-  source: "DysTelefonica/dysflow release bundle"
-  last_verified: "2026-08-02"
-  last_dysflow_version: "2.34.1"
+  last_verified: "2026-08-03"
+  last_dysflow_version: "2.34.2"
   last_codegraph_vba_version: "1.15.0"
-  requires: "dysflow MCP, codegraph-vba MCP"
-  supersedes: "v2.0 (2026-06-30; añade Hard Rule 13 owner-boundary y frontmatter rico)"
+  requires: "dysflow MCP >= 2.34, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
+  managed_by: "`dysflow install` (one-shot), `dysflow update` (release-driven refresh), `dysflow doctor` (runtime contract audit). This user-owned skill fires only when those commands cannot resolve the drift on their own."
+  supersedes: "v2.5.4 (2026-08-01; adds managed_by pointer + raises floor to 2.34, drops ARN-1/2/3 references that v2.34.2 absorbs into the install pipeline)"
   trigger_patterns:
-    - "dysflow release ships"
+    - "dysflow release ships and the canonical mirror needs review"
     - "codegraph-vba release ships"
     - "user says actualiza dysflow / alineá skills / la skill no coincide con dysflow"
-    - "get_capabilities disagrees with a claim in a skill/AGENTS.md/rules/*.md"
+    - "get_capabilities disagrees with a claim in a skill / AGENTS.md / rules/*.md"
     - "skill's requires: floor is older than live adapterVersion"
-    - "ARN-1 — dysflow-arnes/SKILL.md content disagrees with source rules in rules/dysflow-codegraph.md or dysflow-usage"
-    - "ARN-2 — dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across the 9 active instruction files (8 user-globals + dysflow/AGENTS.md) (chain from ARN-1) or dysflow/AGENTS.md lost its embedded harness block"
-    - "ARN-3 — dysflow-usage/SKILL.md per-tool section lists a tool name for which assets/examples/<tool>.md is missing (chain from ARN-1)"
+    - "`dysflow install` / `dysflow update` did not refresh the inlined pointer block on an agent's AGENTS.md / CLAUDE.md"
   scope:
-    in_scope: "release-owned skills under the DysTelefonica/dysflow skills/ bundle + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (ARN-2) + dysflow-examples-sync invocation (ARN-3) + repository AGENTS.md marker block + downstream installed-skill drift reporting"
-    out_of_scope: "internal VBA module changes (sdd-apply), single-skill doc fixes unrelated to runtime (skill-improver), gentle-ai-owned skills (sdd-*, issue-creation, branch-pr, chained-pr, comment-writer, cognitive-doc-design, work-unit-commits, go-testing, hermes-ephemeral-delegation, judgment-day, skill-creator, skill-improver, skill-registry, _shared)"
+    in_scope: "skills under C:\\Proyectos\\skills\\skills\\ + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (when the install pipeline can't reach an agent) + dysflow-examples-sync invocation (when the example gap detector flags a drift) + AGENTS.md core / rules/*.md dysflow/codegraph sections + Access/VBA skills index table"
+    out_of_scope: "internal VBA module changes (sdd-apply), single-skill doc fixes unrelated to runtime (skill-improver), gentle-ai-owned skills (sdd-*, issue-creation, branch-pr, chained-pr, comment-writer, cognitive-doc-design, work-unit-commits, go-testing, hermes-ephemeral-delegation, judgment-day, skill-creator, skill-improver, skill-registry, _shared), routine install/update work owned by `dysflow install` / `dysflow update` / `dysflow doctor`"
   changelog: "CHANGELOG.md (in this skill directory)"
+  pointer_marker: "<!-- user-supplement:dysflow:pointer --><!-- /user-supplement:dysflow:pointer --> is the canonical injection seam for the AGENTS.md / CLAUDE.md block rewritten by `dysflow install` / `dysflow update`."
 ---
 
 ## Philosophy

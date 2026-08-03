@@ -36,7 +36,7 @@ describe("bundled dysflow arnés release bytes (#1328)", () => {
     const skill = await readUtf8("skills/dysflow-arnes/SKILL.md");
 
     for (const sentinel of MOJIBAKE_SENTINELS) expect(skill).not.toContain(sentinel);
-    expect(skill).toContain('last_dysflow_version: "2.34.1"');
+    expect(skill).toContain('last_dysflow_version: "2.34.2"');
     expect(skill).toContain("dysflow harness v0.6.0");
   });
 

@@ -1,24 +1,25 @@
 ---
 name: dysflow-examples-sync
 description: >
-  Trigger: dysflow-usage/SKILL.md per-tool section lists tool names for which assets/examples/<tool>.md is missing, user says faltan ejemplos / hay tools sin ejemplo / examples drift, ARN-3 of dysflow-codegraph-update chains after ARN-1. Detects missing per-tool JSON-example files, scaffolds the missing files from create-form-from-template.md structure (with TODO placeholders so a human fills runtime values), runs verify-examples-vs-runtime.ps1 against each scaffolded file to catch schema drift early. Pure scaffolding + gap reporter — never invents content.
+  Trigger: dysflow-usage/SKILL.md per-tool section lists tool names for which assets/examples/<tool>.md is missing, user says faltan ejemplos / hay tools sin ejemplo / examples drift, ARN-3 of dysflow-codegraph-update chains after ARN-1, `dysflow doctor` reports an example gap. Detects missing per-tool JSON-example files, scaffolds the missing files from create-form-from-template.md structure (with TODO placeholders so a human fills runtime values), runs verify-examples-vs-runtime.ps1 against each scaffolded file to catch schema drift early. Pure scaffolding + gap reporter — never invents content. Companion to the bundled per-tool examples shipped by `dysflow install`; this skill is the manual fallback when the installer could not refresh a given tool's example.
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
   version: "0.2.0"
   status: active
-  source: "DysTelefonica/dysflow release bundle"
-  last_verified: "2026-08-02"
-  last_dysflow_version: "2.34.1"
+  last_verified: "2026-08-03"
+  last_dysflow_version: "2.34.2"
   parent: "dysflow-codegraph-update"
-  requires: "dysflow-usage skill, dysflow-codegraph-update (ARN-1 upstream)"
+  requires: "dysflow-usage skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow install` for routine example refresh, `dysflow doctor` for the gap audit"
+  managed_by: "`dysflow install` ships bundled per-tool examples; `dysflow doctor` audits the gap; this skill is the manual scaffolding fallback when the installer path is unavailable or a user wants a per-tool example added offline."
   in_scope: "dysflow-usage/assets/examples/<tool>.md scaffolding + gap reporting + hash tracking of each example file vs runtime schema"
   out_of_scope: "writing example *content* (that is a human + dysflow-usage session), modifying dysflow-usage/SKILL.md itself (ARN-1 of dysflow-codegraph-update), dysflow-pointer-rollout scope, gentle-ai-owned skills"
-  supersedes: "n/a (initial version)"
+  supersedes: "v0.1.5 (2026-07-30; added managed_by + raised floor to 2.34)"
   trigger_patterns:
     - "ARN-3 — dysflow-usage/SKILL.md lists a tool in any per-tool section but assets/examples/<tool>.md is missing"
     - "ARN-3 chain from dysflow-codegraph-update ARN-1 (post-arnés + post-usage regeneration)"
     - "user says faltan ejemplos / tools sin ejemplo / examples drift"
+    - "`dysflow doctor` reports a per-tool example gap that the installer could not refresh"
     - "session-start verification: enumerate tools named in dysflow-usage/SKILL.md vs files in dysflow-usage/assets/examples/"
 ---
 
