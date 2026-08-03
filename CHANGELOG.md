@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- Install bundled Pi skills into its global `~/.pi/agent/skills` directory instead of the inactive home-level `~/.pi/skills` path (#1372).
 - Synchronize all five release-bundled Dysflow skills with audited v2.34.2 metadata and ownership before v2.35.0 (#1368).
 - Surface resilient sync/async worktree discovery I/O and malformed-config failures as structured diagnostics instead of silently dropping candidates (#1354).
 - Derive MCP write intent from the exhaustive route table so adding a preview-capable tool cannot silently bypass plan-by-default behavior (#1353).
