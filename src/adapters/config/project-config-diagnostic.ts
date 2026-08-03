@@ -1,6 +1,9 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { discoverWorktreeProjectConfigs } from "../../core/config/dysflow-config.js";
+import {
+  discoverWorktreeProjectConfigs,
+  type WorktreeDiscoveryDiagnostic,
+} from "../../core/config/dysflow-config.js";
 import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import {
   remediationForCapabilitiesDisallowWrite,
@@ -53,6 +56,8 @@ export type ProjectConfigDiagnostic = {
     code: string;
     severity: "error" | "warning";
     message: string;
+    path?: string;
+    phase?: WorktreeDiscoveryDiagnostic["phase"];
     remediation?: DiagnosticRemediation;
   }[];
   remediation: string | null;
@@ -134,8 +139,19 @@ export function diagnoseProjectConfig(
     code: string;
     severity: "error" | "warning";
     message: string;
+    path?: string;
+    phase?: WorktreeDiscoveryDiagnostic["phase"];
     remediation?: DiagnosticRemediation;
   }[] = [];
+  const discoveryDiagnostics: WorktreeDiscoveryDiagnostic[] = [];
+  const discoverProjects = (cwd: string): DiscoveredProjectDiagnostic[] =>
+    discoverWorktreeProjectConfigs(
+      cwd,
+      nodeConfigFileSystem,
+      undefined,
+      undefined,
+      discoveryDiagnostics,
+    );
   if (detectedWorktreeRoot === null) {
     warnings.push({
       code: "CWD_NOT_IN_WORKTREE",
@@ -213,7 +229,7 @@ export function diagnoseProjectConfig(
   }
 
   if (!matchedInCwd) {
-    discoveredProjects = discoverWorktreeProjectConfigs(effectiveCwdInput, nodeConfigFileSystem);
+    discoveredProjects = discoverProjects(effectiveCwdInput);
     if (requestedId !== undefined && requestedId !== null) {
       const match = discoveredProjects.find((p) => p.id === requestedId);
       if (match) {
@@ -232,7 +248,20 @@ export function diagnoseProjectConfig(
     }
   }
 
-  discoveredProjects ??= discoverWorktreeProjectConfigs(targetCwdInput, nodeConfigFileSystem);
+  discoveredProjects ??= discoverProjects(targetCwdInput);
+  const seenDiscoveryDiagnostics = new Set<string>();
+  for (const diagnostic of discoveryDiagnostics) {
+    const key = `${diagnostic.phase}\0${diagnostic.path}\0${diagnostic.code}\0${diagnostic.message}`;
+    if (seenDiscoveryDiagnostics.has(key)) continue;
+    seenDiscoveryDiagnostics.add(key);
+    warnings.push({
+      code: diagnostic.code,
+      severity: "warning",
+      message: diagnostic.message,
+      path: normalize(diagnostic.path),
+      phase: diagnostic.phase,
+    });
+  }
 
   const cwd = normalize(targetCwdInput);
   const projectRootNative = worktreeRoot(targetCwdInput);
@@ -296,6 +325,7 @@ export function diagnoseProjectConfig(
           message,
           remediation,
         },
+        ...warnings,
       ],
       remediation: descText,
     };

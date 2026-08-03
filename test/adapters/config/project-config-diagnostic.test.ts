@@ -233,6 +233,40 @@ describe("per-worktree project config contract", () => {
     expect(diagnoseProjectConfig(root, { contextId: "request-context" }).status).toBe("valid");
   });
 
+  it("surfaces malformed sibling discovery through projectConfig diagnostics", () => {
+    const parent = mkdtempSync(join(tmpdir(), "dysflow-discovery-parent-"));
+    const active = join(parent, "active");
+    const malformed = join(parent, "malformed");
+    mkdirSync(join(active, ".dysflow"), { recursive: true });
+    mkdirSync(join(active, "src"));
+    mkdirSync(join(malformed, ".dysflow"), { recursive: true });
+    writeFileSync(join(active, ".git"), "gitdir: fixture");
+    writeFileSync(join(malformed, ".git"), "gitdir: fixture");
+    writeFileSync(join(active, "app.accdb"), "");
+    writeFileSync(
+      join(active, ".dysflow", "project.json"),
+      JSON.stringify({ id: "active", frontendFile: "app.accdb", destinationRoot: "src" }),
+    );
+    const malformedPath = join(malformed, ".dysflow", "project.json");
+    writeFileSync(malformedPath, "{");
+
+    try {
+      const result = diagnoseProjectConfig(active, { projectId: "missing" });
+      expect(result).toMatchObject({ status: "id-mismatch", writeReady: false });
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "INVALID_JSON",
+          severity: "warning",
+          phase: "parse",
+          path: malformedPath.replaceAll("\\", "/"),
+          message: expect.stringContaining("JSON"),
+        }),
+      );
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
   it("diagnoseProjectConfig returns destination-root-not-found when destinationRoot dir is missing", () => {
     const root = worktree();
     mkdirSync(join(root, ".dysflow"));

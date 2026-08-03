@@ -1,6 +1,7 @@
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   createDysflowError,
+  type Diagnostic,
   failureResult,
   type OperationResult,
   successResult,
@@ -155,6 +156,13 @@ export type DiscoveredProjectConfig = {
   destinationRoot: string;
   configPath: string;
   active: boolean;
+};
+
+export type WorktreeDiscoveryDiagnostic = {
+  path: string;
+  phase: "scan" | "read" | "parse";
+  code: string;
+  message: string;
 };
 
 export type DysflowConfig = {
@@ -334,6 +342,47 @@ function configFlowInstruction<T>(sync: () => T, async: () => Promise<T>): Confi
   return { sync, async };
 }
 
+function worktreeDiscoveryDiagnostic(
+  error: unknown,
+  path: string,
+  phase: "scan" | "read",
+): WorktreeDiscoveryDiagnostic {
+  const message = error instanceof Error ? error.message : String(error);
+  const isParseFailure = error instanceof SyntaxError || message.startsWith("Invalid JSON file:");
+  const code = isParseFailure
+    ? "INVALID_JSON"
+    : typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+      ? error.code
+      : "DISCOVERY_IO_ERROR";
+  return {
+    path,
+    phase: isParseFailure ? "parse" : phase,
+    code,
+    message,
+  };
+}
+
+function operationDiscoveryDiagnostics(
+  diagnostics: readonly WorktreeDiscoveryDiagnostic[],
+): Diagnostic[] {
+  const seen = new Set<string>();
+  return diagnostics.flatMap((diagnostic) => {
+    const key = `${diagnostic.phase}\0${diagnostic.path}\0${diagnostic.code}\0${diagnostic.message}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [
+      {
+        level: "warning" as const,
+        source: "worktree-config-discovery",
+        ...diagnostic,
+      },
+    ];
+  });
+}
+
 function runConfigFlowSync<T>(flow: ConfigFlow<T>): T {
   let step = flow.next();
   while (!step.done) {
@@ -364,6 +413,7 @@ function* discoverWorktreeProjectConfigsFlow(
   canReadDirectory: boolean,
   activeProjectId?: string | null,
   activeProjectRoot?: string | null,
+  diagnostics: WorktreeDiscoveryDiagnostic[] = [],
 ): ConfigFlow<DiscoveredProjectConfig[]> {
   const resolvedCwd = resolve(cwd);
   const activeRootInfo = (yield configFlowInstruction(
@@ -386,6 +436,7 @@ function* discoverWorktreeProjectConfigsFlow(
   const isOsTmp = systemTmp !== null && resolve(parentDir) === systemTmp;
 
   if (!isOsTmp) {
+    let scanPath = parentDir;
     try {
       if (
         canReadDirectory &&
@@ -400,26 +451,33 @@ function* discoverWorktreeProjectConfigsFlow(
         )) as string[];
         for (const entry of entries) {
           const fullPath = resolve(parentDir, entry);
-          if (
-            fullPath !== activeRoot &&
-            ((yield configFlowInstruction(
-              () => fileSystem.existsSync(resolve(fullPath, ".git")),
-              () => fileSystem.existsAsync(resolve(fullPath, ".git")),
-            )) as boolean) &&
-            (((yield configFlowInstruction(
-              () => fileSystem.existsSync(resolve(fullPath, ".dysflow")),
-              () => fileSystem.existsAsync(resolve(fullPath, ".dysflow")),
-            )) as boolean) ||
-              ((yield configFlowInstruction(
-                () => fileSystem.existsSync(resolve(fullPath, "dysflow.project.json")),
-                () => fileSystem.existsAsync(resolve(fullPath, "dysflow.project.json")),
-              )) as boolean))
-          ) {
+          if (fullPath === activeRoot) continue;
+          scanPath = resolve(fullPath, ".git");
+          const hasGit = (yield configFlowInstruction(
+            () => fileSystem.existsSync(scanPath),
+            () => fileSystem.existsAsync(scanPath),
+          )) as boolean;
+          if (!hasGit) continue;
+          scanPath = resolve(fullPath, ".dysflow");
+          const hasStandardConfig = (yield configFlowInstruction(
+            () => fileSystem.existsSync(scanPath),
+            () => fileSystem.existsAsync(scanPath),
+          )) as boolean;
+          scanPath = resolve(fullPath, "dysflow.project.json");
+          const hasLegacyConfig = hasStandardConfig
+            ? false
+            : ((yield configFlowInstruction(
+                () => fileSystem.existsSync(scanPath),
+                () => fileSystem.existsAsync(scanPath),
+              )) as boolean);
+          if (hasStandardConfig || hasLegacyConfig) {
             candidateDirs.push(fullPath);
           }
         }
       }
-    } catch {}
+    } catch (error) {
+      diagnostics.push(worktreeDiscoveryDiagnostic(error, scanPath, "scan"));
+    }
   }
 
   const discovered: DiscoveredProjectConfig[] = [];
@@ -450,7 +508,14 @@ function* discoverWorktreeProjectConfigsFlow(
           () => fileSystem.readJsonSync<DysflowProjectConfig>(info.path),
           () => fileSystem.readJsonAsync<DysflowProjectConfig>(info.path),
         )) as DysflowProjectConfig;
-        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+          diagnostics.push({
+            path: info.path,
+            phase: "parse",
+            code: "INVALID_CONFIG_SHAPE",
+            message: "Project config must be a JSON object.",
+          });
+        } else {
           const id = typeof raw.id === "string" && raw.id ? raw.id : null;
           const projRoot = candidateConfigDir;
           const frontendFile = resolveConfiguredFrontendFilename(raw);
@@ -474,7 +539,9 @@ function* discoverWorktreeProjectConfigsFlow(
             active: isActive,
           });
         }
-      } catch {}
+      } catch (error) {
+        diagnostics.push(worktreeDiscoveryDiagnostic(error, info.path, "read"));
+      }
     }
   }
 
@@ -487,6 +554,7 @@ export function discoverWorktreeProjectConfigs(
   fileSystem: ConfigFileSystemPort,
   activeProjectId?: string | null,
   activeProjectRoot?: string | null,
+  diagnostics: WorktreeDiscoveryDiagnostic[] = [],
 ): DiscoveredProjectConfig[] {
   return runConfigFlowSync(
     discoverWorktreeProjectConfigsFlow(
@@ -495,6 +563,7 @@ export function discoverWorktreeProjectConfigs(
       typeof fileSystem.readdirSync === "function",
       activeProjectId,
       activeProjectRoot,
+      diagnostics,
     ),
   );
 }
@@ -504,6 +573,7 @@ export async function discoverWorktreeProjectConfigsAsync(
   fileSystem: ConfigFileSystemPort,
   activeProjectId?: string | null,
   activeProjectRoot?: string | null,
+  diagnostics: WorktreeDiscoveryDiagnostic[] = [],
 ): Promise<DiscoveredProjectConfig[]> {
   return runConfigFlowAsync(
     discoverWorktreeProjectConfigsFlow(
@@ -512,6 +582,7 @@ export async function discoverWorktreeProjectConfigsAsync(
       typeof fileSystem.readdirAsync === "function",
       activeProjectId,
       activeProjectRoot,
+      diagnostics,
     ),
   );
 }
@@ -528,12 +599,27 @@ function* loadDysflowConfigFlow(
   const cwd = resolve(input.cwd ?? process.cwd());
   const requestedProjectId = stringValue(input.projectId);
   const explicitAccessDbPath = stringValue(input.accessDbPath);
+  const discoveryDiagnostics: WorktreeDiscoveryDiagnostic[] = [];
 
   if (requestedProjectId !== undefined) {
     const duplicateMatches = (
       (yield configFlowInstruction(
-        () => discoverWorktreeProjectConfigs(cwd, fileSystem),
-        () => discoverWorktreeProjectConfigsAsync(cwd, fileSystem),
+        () =>
+          discoverWorktreeProjectConfigs(
+            cwd,
+            fileSystem,
+            undefined,
+            undefined,
+            discoveryDiagnostics,
+          ),
+        () =>
+          discoverWorktreeProjectConfigsAsync(
+            cwd,
+            fileSystem,
+            undefined,
+            undefined,
+            discoveryDiagnostics,
+          ),
       )) as DiscoveredProjectConfig[]
     ).filter((project) => project.id === requestedProjectId);
     if (duplicateMatches.length > 1) {
@@ -543,6 +629,7 @@ function* loadDysflowConfigFlow(
           `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${duplicateMatches.map((project) => project.configPath).join(", ")}.`,
           { retryable: false },
         ),
+        { diagnostics: operationDiscoveryDiagnostics(discoveryDiagnostics) },
       );
     }
   }
@@ -571,7 +658,9 @@ function* loadDysflowConfigFlow(
       if (idOk && pathOk) {
         matchedInCwd = true;
       }
-    } catch {}
+    } catch (error) {
+      discoveryDiagnostics.push(worktreeDiscoveryDiagnostic(error, cwdConfig.path, "read"));
+    }
   }
 
   if (!matchedInCwd) {
@@ -586,8 +675,22 @@ function* loadDysflowConfigFlow(
       }
     } else if (requestedProjectId !== undefined) {
       const discovered = (yield configFlowInstruction(
-        () => discoverWorktreeProjectConfigs(cwd, fileSystem),
-        () => discoverWorktreeProjectConfigsAsync(cwd, fileSystem),
+        () =>
+          discoverWorktreeProjectConfigs(
+            cwd,
+            fileSystem,
+            undefined,
+            undefined,
+            discoveryDiagnostics,
+          ),
+        () =>
+          discoverWorktreeProjectConfigsAsync(
+            cwd,
+            fileSystem,
+            undefined,
+            undefined,
+            discoveryDiagnostics,
+          ),
       )) as DiscoveredProjectConfig[];
       const matches = discovered.filter((p) => p.id === requestedProjectId);
       if (matches.length > 1) {
@@ -597,6 +700,7 @@ function* loadDysflowConfigFlow(
             `Project id '${requestedProjectId}' is claimed by multiple sibling configs: ${matches.map((p) => p.configPath).join(", ")}.`,
             { retryable: false },
           ),
+          { diagnostics: operationDiscoveryDiagnostics(discoveryDiagnostics) },
         );
       }
       const match = matches[0];
@@ -650,6 +754,7 @@ function* loadDysflowConfigFlow(
                 fileSystem,
                 result.data.projectId,
                 result.data.projectRoot,
+                discoveryDiagnostics,
               ),
             () =>
               discoverWorktreeProjectConfigsAsync(
@@ -657,15 +762,27 @@ function* loadDysflowConfigFlow(
                 fileSystem,
                 result.data.projectId,
                 result.data.projectRoot,
+                discoveryDiagnostics,
               ),
           )) as DiscoveredProjectConfig[]);
-    return successResult({
-      ...result.data,
-      ...(discoveredProjects.length > 0 ? { discoveredProjects } : {}),
-    });
+    return successResult(
+      {
+        ...result.data,
+        ...(discoveredProjects.length > 0 ? { discoveredProjects } : {}),
+      },
+      {
+        diagnostics: [
+          ...result.diagnostics,
+          ...operationDiscoveryDiagnostics(discoveryDiagnostics),
+        ],
+      },
+    );
   }
 
-  return result;
+  return {
+    ...result,
+    diagnostics: [...result.diagnostics, ...operationDiscoveryDiagnostics(discoveryDiagnostics)],
+  };
 }
 
 export function loadDysflowConfigWith(

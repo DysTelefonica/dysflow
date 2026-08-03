@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Surface resilient sync/async worktree discovery I/O and malformed-config failures as structured diagnostics instead of silently dropping candidates (#1354).
 - Derive MCP write intent from the exhaustive route table so adding a preview-capable tool cannot silently bypass plan-by-default behavior (#1353).
 
 ### Changed
