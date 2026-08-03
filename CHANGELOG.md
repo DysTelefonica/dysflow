@@ -1,5 +1,24 @@
 # Changelog
 
+## [v2.34.1] - 2026-08-03
+
+### Changes
+
+- test(e2e): align release harness with runtime contracts
+- fix(mcp): preserve sync_binary apply polarity
+- fix(mcp): normalize test_vba apply result contract
+- fix(mcp): rebind recovery telemetry after authenticated consume
+- fix(mcp): align setup recovery result contract
+- fix(release): resolve native pnpm launcher in Pester (#1338)
+- fix(doctor): finalize v2.34 acceptance contracts (Refs #1328) (#1336)
+- perf(ci): reuse verified CI receipts for releases (#1335)
+- fix(mcp): setup_project refuses without projectId; re-uses existing config when present (HR-11) (#1334)
+- fix(mcp): unify plan-vs-apply resolver via shared WorktreeContext cache (#1333)
+- fix(mcp): consume recovery-token trio before collision checks (Closes #1327) (#1330)
+- fix(mcp): add schemaVersion:'dysflow.result/v1' discriminator to response envelopes (#1332)
+- feat(cli): bundle and install dysflow skills (#1331)
+
+
 ## [v2.34.0] - 2026-08-02
 
 ### Changes
