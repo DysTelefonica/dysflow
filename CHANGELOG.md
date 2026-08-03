@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.34.2] - 2026-08-03
+
+### Changes
+
+- fix(release): bundle skills in release archive
+
+
 ## [v2.34.1] - 2026-08-03
 
 ### Changes
