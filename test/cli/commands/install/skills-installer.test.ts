@@ -121,6 +121,17 @@ describe("bundled Dysflow skill installation (#1323)", () => {
     ).toEqual([]);
   });
 
+  it("targets Pi's documented global SkillsDir under the agent config root", async () => {
+    const home = await tempRoot("dysflow-skills-pi-home-");
+    await mkdir(join(home, ".pi", "agent"), { recursive: true });
+    await writeFile(join(home, ".pi", "agent", "mcp.json"), "{}\n", "utf8");
+
+    expect(discoverSkillTargets(home)).toContainEqual({
+      agentId: "pi",
+      skillsDir: join(home, ".pi", "agent", "skills"),
+    });
+  });
+
   it("does not touch nonselected adapter skill bytes", async () => {
     const root = await tempRoot("dysflow-skills-selection-");
     const bundleRoot = join(root, "bundle");

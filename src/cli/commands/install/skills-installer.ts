@@ -74,7 +74,7 @@ function canonicalSkillTargets(home: string): SkillTarget[] {
     { agentId: "claude", skillsDir: path.join(home, ".claude", "skills") },
     { agentId: "codex", skillsDir: path.join(home, ".codex", "skills") },
     { agentId: "cursor", skillsDir: path.join(home, ".cursor", "skills") },
-    { agentId: "pi", skillsDir: path.join(home, ".pi", "skills") },
+    { agentId: "pi", skillsDir: path.join(home, ".pi", "agent", "skills") },
   ];
 }
 

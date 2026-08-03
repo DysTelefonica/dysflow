@@ -609,7 +609,7 @@ describe("handleInstallCommand end-to-end", () => {
         join(home, ".codex", "skills"),
         join(home, ".config", "opencode", "skills"),
         join(home, ".claude", "skills"),
-        join(home, ".pi", "skills"),
+        join(home, ".pi", "agent", "skills"),
       ];
       for (const skillsDir of installedSkillDirs) {
         expect(await readFile(join(skillsDir, "dysflow-arnes", "SKILL.md"))).toEqual(
