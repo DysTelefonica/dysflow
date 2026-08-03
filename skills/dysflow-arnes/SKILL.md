@@ -6,15 +6,16 @@ metadata:
   author: "Andrés Román"
   version: "0.6.0"
   status: active
-  source: "DysTelefonica/dysflow release bundle"
-  last_verified: "2026-08-02"
-  last_dysflow_version: "2.34.1"
-  requires: "dysflow MCP >= 2.13, dysflow-usage skill"
+  last_verified: "2026-08-03"
+  last_dysflow_version: "2.34.2"
+  requires: "dysflow MCP >= 2.34, dysflow-usage skill"
+  managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
     in_scope: "operating rules, hard constraints, workflow loop, companion-skills matrix, anti-patterns for any AI agent using dysflow"
     out_of_scope: "canonical tool names / write-flags / error codes (dysflow-usage), TDD discipline details (access-vba-tdd-*), e2e methodology (access-vba-e2e-methodology), form UI perceive→act→verify details (access-form-ui-builder)"
-  supersedes: "n/a (initial version)"
+  supersedes: "v0.5.0 (2026-08-01; refresh against dysflow v2.34.2 contract — cwd-aware cache, fail-closed setup_project, schemaVersion discriminator, recovery-token trio, write-class tool count)"
   injection_format: "the literal markdown block delimited by <!-- dysflow:arnés --> ... <!-- /dysflow:arnés --> HTML comments at the top of SKILL.md, intended for copy-paste into any agent's system prompt"
+  pointer_marker: "<!-- user-supplement:dysflow:pointer --><!-- /user-supplement:dysflow:pointer --> in each AGENTS.md / CLAUDE.md of an installed agent; block is rewritten by `dysflow install` / `dysflow update`"
 ---
 
 <!-- dysflow:arnés -->
