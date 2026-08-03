@@ -150,6 +150,40 @@ describe("wrapWithSanitizer", () => {
 
     expect(result.content[0]?.text).toBe("generic failure message");
   });
+
+  it("preserves typed setup evidence while scrubbing free-form error paths", async () => {
+    const configPath = "C:\\Users\\alice\\project\\.dysflow\\project.json";
+    const targetPath = "C:\\Users\\alice\\project\\Missing.accdb";
+    const handler = wrapWithSanitizer(async () => ({
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({
+            ok: false,
+            error: {
+              code: "TARGET_NOT_FOUND",
+              message: `Configured accessPath does not exist: ${targetPath}.`,
+              configPath,
+              resolvedConfig: { id: "missing-target-evidence" },
+            },
+          }),
+        },
+      ],
+      isError: true,
+      ok: false,
+    }));
+
+    const result = await handler(undefined, undefined);
+    const payload = JSON.parse(result.content[0]?.text ?? "{}");
+
+    expect(payload.error).toMatchObject({
+      code: "TARGET_NOT_FOUND",
+      configPath,
+      resolvedConfig: { id: "missing-target-evidence" },
+    });
+    expect(payload.error.message).toContain("[PATH]");
+    expect(payload.error.message).not.toContain(targetPath);
+  });
 });
 
 // ---------------------------------------------------------------------------
