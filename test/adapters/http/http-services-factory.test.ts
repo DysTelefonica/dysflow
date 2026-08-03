@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createHttpServices,
   createUnavailableHttpServices,
@@ -45,13 +45,23 @@ describe("createHttpServices", () => {
 
     let services: Awaited<ReturnType<typeof createHttpServices>> | undefined;
     let threw = false;
+    const stderrWrites: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
     try {
       services = await createHttpServices({}, tempDir);
     } catch {
       threw = true;
+    } finally {
+      stderr.mockRestore();
     }
 
     expect(threw).toBe(false);
+    expect(stderrWrites).toContainEqual(
+      expect.stringContaining("[dysflow] HTTP server starting in degraded mode"),
+    );
     expect(services).toBeDefined();
     expect(services).not.toBeNull();
     if (services === undefined) {

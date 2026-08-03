@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getStringParam, startDysflowHttpServer } from "../../../src/adapters/http/server";
 import { nodeRegistryFileSystem } from "../../../src/adapters/operations/node-registry-file-system";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter";
@@ -152,14 +152,22 @@ describe("Dysflow HTTP adapter", () => {
 
   it("starts in degraded mode when project config is unavailable", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "dysflow-degraded-"));
+    const stderrWrites: string[] = [];
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
     const server = await startDysflowHttpServer({
       host: "127.0.0.1",
       port: 0,
       env: {},
       cwd: tempDir,
-    });
+    }).finally(() => stderr.mockRestore());
     startedServers.push(server.server);
 
+    expect(stderrWrites).toContainEqual(
+      expect.stringContaining("[dysflow] HTTP server starting in degraded mode"),
+    );
     const health = await readJson(`${server.url}/health`);
     const diagnostics = await readJson<HttpErrorBody>(`${server.url}/diagnostics`);
 

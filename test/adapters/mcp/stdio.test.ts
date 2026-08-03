@@ -1270,10 +1270,9 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
 
     const stderrWrites: string[] = [];
     const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    process.stderr.write = ((chunk: string | Uint8Array) => {
       stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
-      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
-      return (originalWrite as any)(chunk, ...rest);
+      return true;
     }) as typeof process.stderr.write;
 
     try {
@@ -1304,10 +1303,9 @@ describe("DELTA-008 — createProgressNotifier catches sendNotification rejectio
 
     const stderrWrites: string[] = [];
     const originalWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    process.stderr.write = ((chunk: string | Uint8Array) => {
       stderrWrites.push(typeof chunk === "string" ? chunk : chunk.toString());
-      // biome-ignore lint/suspicious/noExplicitAny: process.stderr.write has multiple overloads; spreading unknown[] requires a cast at the call site
-      return (originalWrite as any)(chunk, ...rest);
+      return true;
     }) as typeof process.stderr.write;
 
     try {
