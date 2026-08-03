@@ -241,6 +241,14 @@ async function readBundle(bundleRoot: string): Promise<{
   return { contents, hashes, harnessVersion };
 }
 
+/**
+ * Fail-closed release/install preflight. Every runtime install must carry the
+ * complete canonical skill bundle before any destination path is mutated.
+ */
+export async function assertBundledSkillsAvailable(bundleRoot: string): Promise<void> {
+  await readBundle(bundleRoot);
+}
+
 function metadataContent(hashes: Record<DysflowSkillName, string>, harnessVersion: string): string {
   return `${JSON.stringify(
     {

@@ -17,6 +17,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { resolveRuntimePaths } from "../../../../src/cli/commands/install/extractor";
+import { DYSSKILL_NAMES } from "../../../../src/cli/commands/install/skills-installer";
 
 type RuntimePaths = ReturnType<typeof resolveRuntimePaths>;
 
@@ -30,6 +31,10 @@ async function seedPackageRoot(packageRoot: string): Promise<void> {
     JSON.stringify({ name: "dysflow", version: "0.0.0" }),
     "utf8",
   );
+  for (const name of DYSSKILL_NAMES) {
+    await mkdir(join(packageRoot, "skills", name), { recursive: true });
+    await writeFile(join(packageRoot, "skills", name, "SKILL.md"), `${name} bytes\n`, "utf8");
+  }
 }
 
 async function seedLockfile(packageRoot: string, body: string): Promise<void> {
