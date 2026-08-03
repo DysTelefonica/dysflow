@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.35.1] - 2026-08-03
+
+### Changes
+
+- fix(installer): target Pi global skills directory (#1373)
+
+
 ## [v2.35.0] - 2026-08-03
 
 ### Changes
