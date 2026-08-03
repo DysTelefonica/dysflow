@@ -22,8 +22,9 @@ import type { DysflowError } from "../contracts/index.js";
  *     `MoveFileEx` / POSIX `rename`). No intermediate state where the
  *     original is partially updated is observable.
  *   - On failure (execute returns `ok:false`, OR post-write verify fails,
- *     OR the copy/rename/delete itself fails), the staging directory is
- *     recursively deleted and the original is left exactly as it was.
+ *     OR the copy/rename/delete itself fails), the original is left exactly
+ *     as it was. Cleanup failures retain the staging copy and surface both
+ *     the original failure and the recovery path to the caller.
  *
  * The function is pure with respect to I/O — all filesystem operations
  * go through `TransactionalFileSystemPort`. The production wiring injects
@@ -130,7 +131,6 @@ const TRANSACTIONAL_ROLLBACK_FAILED: DysflowError = {
     "Transactional write failed AND the rollback delete failed. The staging copy is preserved on disk for manual inspection.",
   retryable: false,
 };
-void TRANSACTIONAL_ROLLBACK_FAILED;
 
 function toErrorLike(err: unknown): DysflowError {
   if (
@@ -155,6 +155,27 @@ function toErrorLike(err: unknown): DysflowError {
     message: message.length > 0 ? message : "Filesystem operation failed.",
     retryable: false,
   };
+}
+
+function rollbackFailure(originalError: DysflowError, rollbackError: unknown): DysflowError {
+  return {
+    ...TRANSACTIONAL_ROLLBACK_FAILED,
+    details: {
+      originalError,
+      rollbackError: toErrorLike(rollbackError),
+    },
+  };
+}
+
+async function errorAfterRollback(
+  fileSystem: TransactionalFileSystemPort,
+  stagingDir: string,
+  originalError: DysflowError,
+): Promise<DysflowError> {
+  const rollbackError = await rollback(fileSystem, stagingDir);
+  return rollbackError === undefined
+    ? originalError
+    : rollbackFailure(originalError, rollbackError);
 }
 
 async function sha256OfBytes(bytes: Uint8Array): Promise<string> {
@@ -201,23 +222,36 @@ export async function transactionalWrite<T>(
   try {
     await fileSystem.copyFile(binaryPath, stagingPath);
   } catch (_err) {
-    await fileSystem.rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
+    const rollbackError = await rollback(fileSystem, stagingDir);
     return {
       ok: false,
-      error: TRANSACTIONAL_FAILED_COPY,
-      stagingPath: undefined,
+      error:
+        rollbackError === undefined
+          ? TRANSACTIONAL_FAILED_COPY
+          : rollbackFailure(TRANSACTIONAL_FAILED_COPY, rollbackError),
+      stagingPath: rollbackError === undefined ? undefined : stagingPath,
       originalSha256,
     };
   }
 
   // 4. Run the caller's write against the staging copy.
-  const executeResult = await execute(stagingPath);
-
-  if (!executeResult.ok) {
-    await rollback(fileSystem, stagingDir);
+  let executeResult: TransactionalExecuteResult<T>;
+  try {
+    executeResult = await execute(stagingPath);
+  } catch (err) {
+    const executeError = toErrorLike(err);
     return {
       ok: false,
-      error: executeResult.error,
+      error: await errorAfterRollback(fileSystem, stagingDir, executeError),
+      stagingPath,
+      originalSha256,
+    };
+  }
+
+  if (!executeResult.ok) {
+    return {
+      ok: false,
+      error: await errorAfterRollback(fileSystem, stagingDir, executeResult.error),
       stagingPath,
       originalSha256,
     };
@@ -225,19 +259,30 @@ export async function transactionalWrite<T>(
 
   // 5. Optional post-write verification.
   if (verify !== undefined) {
-    const verifyResult = await verify(stagingPath);
-    if (!verifyResult.ok) {
-      await rollback(fileSystem, stagingDir);
+    let verifyResult: TransactionalVerifyResult;
+    try {
+      verifyResult = await verify(stagingPath);
+    } catch (err) {
+      const verificationError = toErrorLike(err);
       return {
         ok: false,
-        error: {
-          code: verifyResult.error.code,
-          message: `${verifyResult.error.message} ${TRANSACTIONAL_VERIFY_FAILED.message}`,
-          retryable: verifyResult.error.retryable,
-          ...(verifyResult.error.details !== undefined
-            ? { details: verifyResult.error.details }
-            : {}),
-        },
+        error: await errorAfterRollback(fileSystem, stagingDir, verificationError),
+        stagingPath,
+        originalSha256,
+      };
+    }
+    if (!verifyResult.ok) {
+      const verificationError: DysflowError = {
+        code: verifyResult.error.code,
+        message: `${verifyResult.error.message} ${TRANSACTIONAL_VERIFY_FAILED.message}`,
+        retryable: verifyResult.error.retryable,
+        ...(verifyResult.error.details !== undefined
+          ? { details: verifyResult.error.details }
+          : {}),
+      };
+      return {
+        ok: false,
+        error: await errorAfterRollback(fileSystem, stagingDir, verificationError),
         stagingPath,
         originalSha256,
       };
@@ -276,14 +321,12 @@ export async function transactionalWrite<T>(
 async function rollback(
   fileSystem: TransactionalFileSystemPort,
   stagingDir: string,
-): Promise<void> {
+): Promise<unknown | undefined> {
   try {
     await fileSystem.rm(stagingDir, { recursive: true, force: true });
-  } catch {
-    // Rollback itself failed. Surface as a structured diagnostic by
-    // emitting a typed error to the consumer via the failure envelope —
-    // see `TRANSACTIONAL_ROLLBACK_FAILED`. We swallow here; the caller
-    // observes the rollback outcome via the failure envelope's details.
+    return undefined;
+  } catch (err) {
+    return err;
   }
 }
 
