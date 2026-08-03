@@ -6,7 +6,7 @@ import type {
   ToolOutputMode,
   ToolResultContract,
   ToolResultMode,
-} from "../schema-tool.js";
+} from "./result-contract-types.js";
 
 const STANDARD_ERROR_ENVELOPE_SHAPE = {
   code: { type: "string" },

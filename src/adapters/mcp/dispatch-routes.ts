@@ -1,6 +1,6 @@
 import type { AccessQueryAction } from "../../core/mapping/access-query-request-mapper.js";
 import type { ToolRisk } from "../../core/runtime/write-execution-policy.js";
-import type { AliasToolName } from "./alias-tools.js";
+import type { AliasToolName } from "./alias-tool-names.js";
 import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
 
 // ─── Route table ─────────────────────────────────────────────────────────────

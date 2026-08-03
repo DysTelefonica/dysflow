@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Break the 18-module MCP adapter import cycle by moving result-contract and alias identity types into leaf modules (#1356).
+
 ### Fixed
 
 - Derive MCP write intent from the exhaustive route table so adding a preview-capable tool cannot silently bypass plan-by-default behavior (#1353).
