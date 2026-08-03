@@ -38,9 +38,8 @@
  * #809 adds `sync_binary` (composes verify_code + import_modules +
  * export_modules into a single round-trip; mutatesBinary + mutatesFilesystem
  * both true so the dispatch write-gate fires for any direction;
- * dryRun-capable so a legitimate dryRun:true preview is not collapsed to
- * isDryRun===false; POLICY_EXEMPT_TOOLS keeps developer-mode from injecting
- * dryRun:false on plan-intended calls): 79 -> 80.
+ * route-declared service-plan intent preserves no-flags previews under every
+ * policy): 79 -> 80.
  * #872 adds form_set_properties + form_duplicate_control (write-gated
  * atomic batch property updates + control duplication, same
  * applyGuardedFormWrite seam as form_set_property / form_delete_control)

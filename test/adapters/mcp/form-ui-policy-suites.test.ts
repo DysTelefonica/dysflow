@@ -18,12 +18,12 @@
  *      must have a real description and status:"implemented".
  *   4. `MCP_TOOL_RISKS` (derived from routes) — risk classifications are
  *      published.
- *   5. `isDryRunCapableBinaryWrite` (dispatch-factory.ts:137-142) — the
+ *   5. route-declared `writeIntent` in dispatch-routes.ts — the
  *      first atomic-dryRun gating list.
  *   6. The second atomic-dryRun gating list (~224-233, inside `isDryRun`
  *      computation) — extends the same 3 tool names so a legitimate
  *      `dryRun: true` preview does NOT collapse to `isDryRun === false`.
- *   7. `POLICY_EXEMPT_TOOLS` (write-execution-dispatch.ts) — keeps the
+ *   7. `writeIntent: "service-plan"` (dispatch-routes.ts) — keeps the
  *      "form mutation family uses plan-by-default" semantics in developer
  *      mode.
  *   8. `apply_form_design_plan` schema — dead `targetPath` field REMOVED.
@@ -203,9 +203,9 @@ describe("tool parity registry — three-tool implemented (#813 phase 6)", () =>
 
 describe("effectiveDryRunDefaultForTool — three-tool plan-by-default (#813 phase 6)", () => {
   // The resolver reports the RISK-CLASS default (single source of truth).
-  // The form-mutation family is in POLICY_EXEMPT_TOOLS — the dispatch seam
+  // The form-mutation family declares service-plan write intent — the dispatch seam
   // does NOT inject that resolver value. The exemption is verified
-  // separately in the "POLICY_EXEMPT_TOOLS — three-tool exempt" block
+  // separately in the "route-declared service-plan family" block
   // below (resolveEffectiveDryRunInput test).
   for (const name of ["apply_form_design_plan", "form_set_property", "form_delete_control"]) {
     it(`${name} defaults to dry-run:true in safe-by-default mode`, () => {
@@ -229,9 +229,8 @@ describe("effectiveDryRunDefaultForTool — three-tool plan-by-default (#813 pha
         const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
           effectiveDryRunDefault: Record<string, boolean>;
         };
-        // The snapshot is the resolver's risk-class default. routine-dev-write
-        // (apply_form_design_plan + form_set_property) flips to false in
-        // developer mode; destructive-write (form_delete_control) stays true.
+        // The snapshot remains the resolver's risk-class default. Service-plan
+        // routing prevents that default from flattening the service preview.
         const resolverDeveloper = effectiveDryRunDefaultForTool(name, "developer");
         expect(payload.effectiveDryRunDefault[name], `snapshot for ${name} (developer mode)`).toBe(
           resolverDeveloper,
@@ -240,11 +239,7 @@ describe("effectiveDryRunDefaultForTool — three-tool plan-by-default (#813 pha
     });
   }
 
-  it("apply_form_design_plan + form_set_property flip to false in developer (routine-dev-write)", () => {
-    // Mirrors the existing capa-5 pin for import_modules / import_all /
-    // test_vba: routine-dev-write is the only risk that flips to false in
-    // developer mode. The exemption in POLICY_EXEMPT_TOOLS prevents the
-    // dispatch from INJECTING this value; the resolver still reports it.
+  it("apply_form_design_plan + form_set_property retain the routine risk default", () => {
     expect(effectiveDryRunDefaultForTool("apply_form_design_plan", "developer")).toBe(false);
     expect(effectiveDryRunDefaultForTool("form_set_property", "developer")).toBe(false);
   });
@@ -257,11 +252,11 @@ describe("effectiveDryRunDefaultForTool — three-tool plan-by-default (#813 pha
   });
 });
 
-// ─── 5. POLICY_EXEMPT_TOOLS — form mutation family keeps plan-by-default ──
+// ─── 5. Route write intent — form mutation family keeps plan-by-default ───
 
-describe("POLICY_EXEMPT_TOOLS — three-tool exempt in developer mode (#813 phase 6)", () => {
-  // The seam-level helper is the contract: in developer mode, exempt tools
-  // get NO policy-driven `dryRun` injection — the forwarded payload must
+describe("route write intent — form family plans in developer mode (#813 phase 6)", () => {
+  // The seam-level helper is the contract: in developer mode, service-plan
+  // tools get NO policy-driven `dryRun` injection — the forwarded payload must
   // not carry a `dryRun` key, mirroring the existing `catalog_add_control`
   // scenario in dispatch-write-policy-overrides.test.ts.
   for (const name of ["apply_form_design_plan", "form_set_property", "form_delete_control"]) {

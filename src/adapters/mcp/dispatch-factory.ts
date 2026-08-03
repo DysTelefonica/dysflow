@@ -148,58 +148,12 @@ export function createDispatchTool(
   const definition = getToolDefinition(name);
   const schema = mcpSchemaFor(name);
   const route = MCP_TOOL_ROUTES[name];
-  // VBA tools that mutate the binary always pass the write-gate. None has a real
-  // dry-run mode in the PowerShell manager (e.g. Invoke-ImportAction takes no
-  // -DryRun), so the gate MUST apply regardless of any caller-supplied dryRun
-  // flag — honoring resolveIsDryRun() for import_modules/import_all would let a
-  // caller bypass the gate by simply omitting dryRun (which defaults to true)
-  // while the import still writes to the binary. Which tools mutate the binary is
-  // declared on the route (`mutatesBinary`), not duplicated here (#405).
+  // Route metadata is the only write-intent declaration. Raw binary writers
+  // use `always-gated`; preview-capable and service-plan tools resolve the
+  // caller's canonical apply/dryRun input before the write gate.
   const isBinaryWrite = route.kind === "vba-sync" && route.mutatesBinary;
   const isFilesystemWrite = route.kind === "vba-sync" && route.mutatesFilesystem;
-  const isDryRunCapableBinaryWrite =
-    name === "fix_encoding" ||
-    name === "vba_inline_execution" ||
-    name === "form_add_control" ||
-    name === "form_move_control" ||
-    name === "form_rename_control" ||
-    name === "form_deserialize" ||
-    name === "create_form_from_template" ||
-    // Issue #813 phase 6 — the apply_form_design_plan family (plan-form +
-    // 2 net-new standalone tools) shares the applyGuardedFormWrite seam.
-    // The dispatch must consult resolveIsDryRun on these names so a
-    // legitimate dryRun:true preview is NOT collapsed to isDryRun===false
-    // by the hardcoded branch reserved for raw binary writers (import_*,
-    // vba_inline_execution, delete_module, fix_encoding).
-    name === "apply_form_design_plan" ||
-    name === "form_set_property" ||
-    name === "form_delete_control" ||
-    // Issue #872 F1 + F2 — form_set_properties (atomic batch property
-    // updates) + form_duplicate_control (clone a control under a new
-    // name) join the same applyGuardedFormWrite seam. Without this
-    // entry a legitimate dryRun:true preview collapses to
-    // isDryRun===false (the hardcoded branch reserved for raw binary
-    // writers) and is refused by MCP_WRITES_DISABLED — the same
-    // regression the form mutation family had before it joined this
-    // list.
-    name === "form_set_properties" ||
-    name === "form_duplicate_control" ||
-    // Issue #816 phase 3 — batch align/distribute. Same seam as
-    // form_set_property / form_delete_control. Without this entry a
-    // legitimate dryRun:true preview collapses to isDryRun===false (the
-    // hardcoded branch reserved for raw binary writers) and is refused
-    // by MCP_WRITES_DISABLED — a distinct regression from the write-gate
-    // bypass below, equally serious.
-    name === "form_align_controls" ||
-    name === "form_distribute_controls" ||
-    // Issue #809 — sync_binary is the workflow tool that composes
-    // verify_code + import_modules + export_modules. Its plan-only
-    // (dryRun:true) path is the safe-by-default behavior; its
-    // apply:true path performs the chunked execute. Without this entry
-    // a legitimate dryRun:true preview collapses to isDryRun===false
-    // and is refused by MCP_WRITES_DISABLED — the same regression the
-    // form mutation family had before it joined this list.
-    name === "sync_binary";
+  const isAlwaysGatedWrite = route.kind === "vba-sync" && route.writeIntent === "always-gated";
 
   const isWriteGated =
     (route.kind === "query-maintenance" && route.queryMode === "write") ||
@@ -266,7 +220,7 @@ export function createDispatchTool(
       // any policy application). `resolveEffectiveDryRunInput` returns
       // the input verbatim when the caller expressed explicit intent
       // (`dryRun` or `apply` key present) or when the tool is in the
-      // form mutation / catalog exempt family. Only
+      // route-declared service-plan family. Only
       // `routine-dev-write` tools in `developer` mode without explicit
       // flags receive `dryRun: false`.
       normalizedInput = resolveEffectiveDryRunInput(name, writeExecutionPolicy, normalizedInput);
@@ -304,47 +258,7 @@ export function createDispatchTool(
           );
         }
       }
-      const isDryRun =
-        isBinaryWrite && !isDryRunCapableBinaryWrite
-          ? false
-          : isDryRunCapableBinaryWrite || isFilesystemWrite
-            ? // Canonical public write intent is `apply`: false previews, true commits.
-              // All preview-capable filesystem tools must resolve it before the
-              // write gate; the public `dryRun` input was removed in v2.31.
-              // form_deserialize joins the slice-4 mutation family with
-              // the same plan/apply semantics (#616 slice 3).
-              // create_form_from_template (slice 5, #618) extends that
-              // family: default dry-run at the service level; apply:true is a
-              // binary mutation gated by MCP_WRITES_DISABLED.
-              // apply_form_design_plan + form_set_property + form_delete_control
-              // (#813 phase 6) share the same seam: apply:true is a binary
-              // mutation gated by MCP_WRITES_DISABLED; apply:false previews.
-              // form_align_controls + form_distribute_controls (#816 phase 3)
-              // join the same seam with the same plan/apply semantics.
-              // sync_binary (#809) joins the same seam: apply:false plans and
-              // apply:true performs the chunked execute.
-              // form_set_properties + form_duplicate_control (#872 F1, F2)
-              // join the same seam with the same plan/apply semantics.
-              name === "fix_encoding" ||
-              name === "vba_inline_execution" ||
-              name === "catalog_add_control" ||
-              name === "generate_form" ||
-              name === "form_add_control" ||
-              name === "form_move_control" ||
-              name === "form_rename_control" ||
-              name === "form_deserialize" ||
-              name === "create_form_from_template" ||
-              name === "apply_form_design_plan" ||
-              name === "form_set_property" ||
-              name === "form_delete_control" ||
-              name === "form_align_controls" ||
-              name === "form_distribute_controls" ||
-              name === "sync_binary" ||
-              name === "form_set_properties" ||
-              name === "form_duplicate_control"
-              ? resolveIsDryRun(normalizedInput)
-              : false
-            : resolveIsDryRun(normalizedInput);
+      const isDryRun = isAlwaysGatedWrite ? false : resolveIsDryRun(normalizedInput);
       if (
         isWriteGated &&
         !isDryRun &&

@@ -234,7 +234,7 @@ describe("policy default truth table (#785, capa 5)", () => {
 describe("form mutation / catalog family exempt (#785, capa 5)", () => {
   it("developer + catalog_add_control without flags → forwards dryRun defaults to true (exempt tool kept unchanged)", async () => {
     // catalog_add_control is in the form mutation / catalog exempt
-    // family: policy default is NOT applied (`POLICY_EXEMPT_TOOLS`).
+    // family: policy default is NOT applied (`writeIntent: "service-plan"`).
     // The dispatch forwards the input shape as-is, and the service's
     // own default (default-dry-run for catalog_add_control at the
     // service level) keeps it in plan mode. Capa 5 pins the

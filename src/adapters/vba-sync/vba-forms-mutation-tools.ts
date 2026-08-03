@@ -33,8 +33,7 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 // and `form_distribute_controls`. These are batch geometry verbs
 // (composites over `moveControl`) and reuse the same single-write +
 // single-guarded-import + single-rollback path. No new write seam — the
-// route table, the three-list lockstep, and the tool count cascade
-// (+2: 75 → 77) all extend in lockstep.
+// route table and the tool count cascade (+2: 75 → 77) extend together.
 //
 // Issue #872 F1 + F2 — `form_set_properties` (atomic batch property
 // updates against a single control) + `form_duplicate_control` (clone

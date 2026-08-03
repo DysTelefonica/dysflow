@@ -24,10 +24,8 @@
  * `sync_binary` is registered in `VBA_SYNC_TOOL_NAMES` (mcp-tool-registry.ts),
  * its schema lives in `vba-sync-schemas.ts` (`sync_binary`), its route in
  * `dispatch-routes.ts` (`mutatesBinary + mutatesFilesystem`, risk
- * routine-dev-write). The dispatch seam keeps `sync_binary` dryRun-capable
- * (`isDryRunCapableBinaryWrite`) AND exempt from the developer-mode policy
- * (`POLICY_EXEMPT_TOOLS`) so a preview-intended call does NOT silently
- * perform a real write in developer mode.
+ * routine-dev-write, service-plan). That route-owned write intent keeps a
+ * preview-intended call from silently writing in developer mode.
  *
  * This module is pure (no I/O). The actual calls to `verify_code`,
  * `import_modules`, and `export_modules` are made through the

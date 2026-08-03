@@ -8,10 +8,10 @@ import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
 /**
  * Closed union of dispatch route kinds.
  *
- * - `vba-sync` — VBA module sync tools (`mutatesBinary` / `mutatesFilesystem`
- *   are the single source of truth for whether the write-gate fires; both
- *   flags are REQUIRED so omitting either is a compile error, never a
- *   silently un-gated write).
+ * - `vba-sync` — VBA module sync tools. `mutatesBinary` /
+ *   `mutatesFilesystem` decide whether the write-gate fires, while the
+ *   required `writeIntent` declares how omitted `apply` / `dryRun` input is
+ *   interpreted. Omitting any of the three fields is a compile error.
  * - `query-read` — read-only query tools; never write-gated.
  * - `query-maintenance` — table/query maintenance tools; `queryMode` decides
  *   the write-gate.
@@ -41,8 +41,16 @@ import type { DysflowMcpToolName, QueryToolName } from "./mcp-tool-registry.js";
  * (`cleanup_access_operation`, `access_force_cleanup_orphaned`), NOT in
  * `MCP_TOOL_ROUTES`.
  */
+export type VbaSyncWriteIntent = "always-gated" | "policy-default" | "service-plan";
+
 type McpToolRouteBase =
-  | { kind: "vba-sync"; mutatesBinary: boolean; mutatesFilesystem: boolean; risk: ToolRisk }
+  | {
+      kind: "vba-sync";
+      mutatesBinary: boolean;
+      mutatesFilesystem: boolean;
+      writeIntent: VbaSyncWriteIntent;
+      risk: ToolRisk;
+    }
   | { kind: "query-read"; risk: ToolRisk }
   | { kind: "query-maintenance"; queryMode: "read" | "write"; risk: ToolRisk };
 
@@ -66,30 +74,35 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: true,
+    writeIntent: "always-gated",
     risk: "destructive-write",
   },
   export_all: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: true,
+    writeIntent: "always-gated",
     risk: "destructive-write",
   },
   import_modules: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: false,
+    writeIntent: "always-gated",
     risk: "routine-dev-write",
   },
   import_all: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: false,
+    writeIntent: "always-gated",
     risk: "routine-dev-write",
   },
   list_objects: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #807 (Feature 1) — list_vba_modules is the read-only sibling of
@@ -101,13 +114,21 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
-  exists: { kind: "vba-sync", mutatesBinary: false, mutatesFilesystem: false, risk: "read-only" },
+  exists: {
+    kind: "vba-sync",
+    mutatesBinary: false,
+    mutatesFilesystem: false,
+    writeIntent: "policy-default",
+    risk: "read-only",
+  },
   test_vba: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "routine-dev-write",
   },
   // verify_code is the single source/binary compare tool (read-only dry-run): it
@@ -118,48 +139,56 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   delete_module: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: false,
+    writeIntent: "always-gated",
     risk: "destructive-write",
   },
   generate_erd: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: true,
+    writeIntent: "always-gated",
     risk: "routine-dev-write",
   },
   fix_encoding: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "policy-default",
     risk: "protected-write",
   },
   validate_form_spec: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   generate_form: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   catalog_add_control: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   harvest_form_catalog: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // inspect_form reads from the version-controlled source tree; no binary or filesystem mutation.
@@ -167,6 +196,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // compare_form reads two version-controlled source trees and runs a pure IR-level
@@ -175,6 +205,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // lint_form_code is a static analyzer over the source tree. It opens no
@@ -184,24 +215,28 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   form_add_control: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   form_move_control: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   form_rename_control: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   // slice 3 — serialize (read-only) + deserialize (write-gated with LoadFromText gate).
@@ -211,12 +246,14 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   form_deserialize: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "destructive-write",
   },
   // slice 5 (#618) — clone a form from a template, apply `{{Token}}` placeholders, write
@@ -226,24 +263,28 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   analyze_form_ui: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   map_form_behavior: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   generate_form_design_plan: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #813 phase 6 — `apply_form_design_plan` is now an atomic
@@ -260,20 +301,18 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   copy_form_ui_pattern: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #813 phase 6 — net-new standalone tools sharing the same
-  // applyGuardedFormWrite seam as `apply_form_design_plan`. Both must
-  // join the three-list trio (route table + isDryRunCapableBinaryWrite +
-  // POLICY_EXEMPT_TOOLS) in lockstep or the write-gate either bypasses
-  // (route.mutatesBinary stays false) or refuses legitimate dry-run
-  // previews (the second isDryRun-gating list is not extended).
+  // applyGuardedFormWrite seam as `apply_form_design_plan`.
   //
   // Risk tier rationale (design.md):
   //   - form_set_property: routine-dev-write — a routine property edit
@@ -285,31 +324,31 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   form_delete_control: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "destructive-write",
   },
   // Issue #872 F1 + F2 — `form_set_properties` + `form_duplicate_control`
   // share the applyGuardedFormWrite seam with form_set_property /
-  // form_delete_control. Both MUST join the three-list trio (route table
-  // + isDryRunCapableBinaryWrite + POLICY_EXEMPT_TOOLS) in lockstep —
-  // see dispatch-factory.ts + write-execution-dispatch.ts. Both are
-  // routine-dev-write (a routine property / clone edit gated through the
-  // same seam, not destructive).
+  // form_delete_control. Both are routine-dev-write service-plan routes.
   form_set_properties: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   form_duplicate_control: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   // Issue #816 — Phase 3 (Ergonomic actions). Two batch geometry tools
@@ -319,27 +358,25 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
   // / `form_delete_control`. Risk tier rationale:
   //   - Both are routine-dev-write (same family as `form_move_control` —
   //     a routine position edit, not a destructive removal).
-  //   - They MUST join the three-list trio (route table +
-  //     isDryRunCapableBinaryWrite + POLICY_EXEMPT_TOOLS) in lockstep,
-  //     otherwise `MCP_WRITES_DISABLED` either bypasses the gate (route
-  //     stays read-only) or refuses a legitimate `dryRun: true` preview
-  //     (the second atomic-dryRun gating list is not extended).
   form_align_controls: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   form_distribute_controls: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   verify_form_ui: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #814 — `render_form_preview` is a pure read-class tool: it walks
@@ -352,6 +389,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #815 — `analyze_form_layout` is the geometry-lint sibling of
@@ -364,6 +402,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #817 — `diff_form_preview` is the before/after visual diff
@@ -377,6 +416,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #818 — `verify_form_bindings` validates a form's ControlSource +
@@ -392,6 +432,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #872 F5 — `form_get_geometry` + `form_list_controls` are pure
@@ -406,12 +447,14 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   form_list_controls: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   // Issue #809 — `sync_binary` workflow tool. Composes verify_code +
@@ -421,30 +464,28 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
   //   - `direction: 'binary-to-src'` -> export_modules -> mutatesFilesystem
   //   - `direction: 'both'` -> either or both
   // Both mutates flags stay true so the dispatch write-gate fires for any
-  // direction. Risk is routine-dev-write (same family as apply_form_design_plan
-  // / form_set_property / import_modules); POLICY_EXEMPT_TOOLS keeps the
-  // developer-mode policy helper from injecting dryRun:false on plan-intended
-  // calls. Both mutates flags must be true so the dispatch consults
-  // resolveIsDryRun (not the hardcoded false branch reserved for raw binary
-  // writers) — the second atomic-dryRun gating list in dispatch-factory.ts
-  // mirrors this. Accepts dryRun:true (preview path) AND apply:true
-  // (commit signal) with the same semantic the form mutation family uses.
+  // direction. Risk is routine-dev-write and `writeIntent: "service-plan"`
+  // preserves the workflow's no-flags preview under every policy. Accepts
+  // dryRun:true (preview path) and apply:true (commit signal).
   sync_binary: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: true,
+    writeIntent: "service-plan",
     risk: "routine-dev-write",
   },
   vba_orphan_audit: {
     kind: "vba-sync",
     mutatesBinary: false,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "read-only",
   },
   vba_inline_execution: {
     kind: "vba-sync",
     mutatesBinary: true,
     mutatesFilesystem: false,
+    writeIntent: "policy-default",
     risk: "arbitrary-write",
   },
   // query maintenance (9)
@@ -498,6 +539,11 @@ export const MCP_TOOL_ROUTES = Object.fromEntries(
     ([name, route]) => [name, { ...route, resultFamily: resultFamilyForRoute(name, route) }],
   ),
 ) as Record<GeneratedDispatchToolName, McpToolRoute>;
+
+export function vbaSyncWriteIntentForTool(name: string): VbaSyncWriteIntent | undefined {
+  const route = MCP_TOOL_ROUTES[name as GeneratedDispatchToolName];
+  return route?.kind === "vba-sync" ? route.writeIntent : undefined;
+}
 
 /**
  * Typed binding of MCP query tool names to their domain `AccessQueryRequest`

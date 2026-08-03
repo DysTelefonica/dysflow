@@ -97,10 +97,8 @@ export class VbaFormsAdapter {
       toolName === "form_duplicate_control" ||
       // Issue #816 phase 3 — batch geometry ergonomics. Sibling of
       // form_set_property / form_delete_control; same single-write +
-      // single-guarded-import + single-rollback seam. Both must join the
-      // three-list trio (route table + isDryRunCapableBinaryWrite +
-      // POLICY_EXEMPT_TOOLS) in lockstep — see dispatch-factory.ts +
-      // write-execution-dispatch.ts.
+      // single-guarded-import + single-rollback seam. Their write intent is
+      // declared once in dispatch-routes.ts.
       toolName === "form_align_controls" ||
       toolName === "form_distribute_controls" ||
       toolName === "form_serialize" ||
