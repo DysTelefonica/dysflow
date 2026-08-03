@@ -67,6 +67,11 @@ function runTar(args, cwd) {
   return result.stdout;
 }
 
+function forceLocalArgs(cwd) {
+  const version = spawnSync("tar", ["--version"], { cwd, encoding: "utf8" });
+  return version.status === 0 && version.stdout.includes("GNU tar") ? ["--force-local"] : [];
+}
+
 export async function createReleaseArchive({ packageRoot, outputPath }) {
   const resolvedRoot = path.resolve(packageRoot);
   const resolvedOutput = path.resolve(outputPath);
@@ -74,8 +79,9 @@ export async function createReleaseArchive({ packageRoot, outputPath }) {
   await mkdir(path.dirname(resolvedOutput), { recursive: true });
 
   try {
-    runTar(["-czf", resolvedOutput, ...RELEASE_ARCHIVE_ENTRIES], resolvedRoot);
-    const listing = runTar(["-tzf", resolvedOutput], resolvedRoot);
+    const forceLocal = forceLocalArgs(resolvedRoot);
+    runTar([...forceLocal, "-czf", resolvedOutput, ...RELEASE_ARCHIVE_ENTRIES], resolvedRoot);
+    const listing = runTar([...forceLocal, "-tzf", resolvedOutput], resolvedRoot);
     assertReleaseArchiveManifest(listing);
   } catch (error) {
     await rm(resolvedOutput, { force: true });
