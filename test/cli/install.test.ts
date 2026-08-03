@@ -109,6 +109,10 @@ async function createPackageRoot(root: string, version: string, marker: string):
   return packageRoot;
 }
 
+async function seedBundledSkills(packageRoot: string): Promise<void> {
+  await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
+}
+
 describe("install arg parsing", () => {
   it("rejects release tags that are not exact semantic version tags", () => {
     expect(validateReleaseTagName("v1.2.3")).toBe("v1.2.3");
@@ -1392,6 +1396,7 @@ describe("handleInstallCommand error catch", () => {
       await mkdir(join(badPackageRoot, "dist"), { recursive: true });
       await writeFile(join(badPackageRoot, "dist", "placeholder.js"), "missing cli", "utf8");
       await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+      await seedBundledSkills(badPackageRoot);
 
       const runtimeDir = join(root, "runtime");
       const result = await handleInstallCommand(
@@ -1417,6 +1422,7 @@ describe("handleInstallCommand error catch", () => {
       const badPackageRoot = join(root, "bad-package");
       await mkdir(badPackageRoot, { recursive: true });
       await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+      await seedBundledSkills(badPackageRoot);
 
       const result = await handleInstallCommand(
         ["--runtime-dir", join(root, "runtime"), "--agents", "codex", "--no-tui"],
@@ -1500,6 +1506,7 @@ describe("applyIntegrationSelection error catch", () => {
       const badPackageRoot = join(root, "no-dist");
       await mkdir(badPackageRoot, { recursive: true });
       await writeFile(join(badPackageRoot, "package.json"), '{"name":"dysflow","version":"0.1.0"}');
+      await seedBundledSkills(badPackageRoot);
 
       const result = await applyIntegrationSelection(["codex"], {
         env: { USERPROFILE: root },

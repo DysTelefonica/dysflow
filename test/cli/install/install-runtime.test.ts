@@ -23,6 +23,7 @@ import {
   createInstallReport,
   resolveRuntimePaths,
 } from "../../../src/cli/commands/install/extractor";
+import { DYSSKILL_NAMES } from "../../../src/cli/commands/install/skills-installer";
 
 type RuntimePaths = ReturnType<typeof resolveRuntimePaths>;
 
@@ -36,6 +37,10 @@ async function seedPackageRoot(packageRoot: string): Promise<void> {
     JSON.stringify({ name: "dysflow", version: "0.0.0" }),
     "utf8",
   );
+  for (const name of DYSSKILL_NAMES) {
+    await mkdir(join(packageRoot, "skills", name), { recursive: true });
+    await writeFile(join(packageRoot, "skills", name, "SKILL.md"), `${name} bytes\n`, "utf8");
+  }
   // Issue #940 — the three docs the install pipeline used to strip.
   await mkdir(join(packageRoot, "references"), { recursive: true });
   await writeFile(join(packageRoot, "references", "error-codes.md"), "# error codes\n", "utf8");
@@ -146,18 +151,35 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
   });
 
-  it("retains bundled skills in the installed runtime for update and doctor", async () => {
+  it("retains every bundled skill byte-exactly in the installed runtime for update and doctor", async () => {
     const packageRoot = join(root, "pkg");
-    const source = join(packageRoot, "skills", "dysflow-arnes", "SKILL.md");
-    await mkdir(join(packageRoot, "skills", "dysflow-arnes"), { recursive: true });
-    await writeFile(source, "canonical harness bytes\n", "utf8");
 
     const { installRuntime } = await importExtractor();
     const report = await installRuntime(runtimePaths, packageRoot);
-    const destination = join(runtimePaths.appDir, "skills", "dysflow-arnes", "SKILL.md");
 
-    expect(await readFile(destination)).toEqual(await readFile(source));
-    expect(report.copiedFiles).toContain(destination);
+    for (const name of DYSSKILL_NAMES) {
+      const source = join(packageRoot, "skills", name, "SKILL.md");
+      const destination = join(runtimePaths.appDir, "skills", name, "SKILL.md");
+      expect(await readFile(destination)).toEqual(await readFile(source));
+      expect(report.copiedFiles).toContain(destination);
+    }
+  });
+
+  it("fails before mutating the runtime when any required bundled skill is absent", async () => {
+    const packageRoot = join(root, "pkg");
+    const sentinel = join(runtimeDir, "existing-runtime.txt");
+    await mkdir(runtimeDir, { recursive: true });
+    await writeFile(sentinel, "unchanged\n", "utf8");
+    await rm(join(packageRoot, "skills", "dysflow-arnes", "SKILL.md"));
+
+    const { installRuntime } = await importExtractor();
+    await expect(installRuntime(runtimePaths, packageRoot)).rejects.toThrow(
+      /skills[\\/]dysflow-arnes[\\/]SKILL\.md/,
+    );
+
+    expect(await readFile(sentinel, "utf8")).toBe("unchanged\n");
+    await expect(stat(runtimePaths.appDir)).rejects.toThrow();
+    expect(execFileMock).not.toHaveBeenCalled();
   });
 
   it("installReport mentions all three new docs by name", () => {

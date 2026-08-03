@@ -4,6 +4,7 @@ import { runCommand } from "./command-runner.js";
 import { fileExists } from "./file-utils.js";
 import { writeRuntimeLaunchers } from "./path-configurator.js";
 import { getSystemMarkerPath, RUNTIME_MARKER_VERSION } from "./runtime-dir.js";
+import { assertBundledSkillsAvailable } from "./skills-installer.js";
 
 export type RuntimePaths = {
   runtimeDir: string;
@@ -278,6 +279,10 @@ export async function installRuntime(
   packageRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<RuntimeInstallReport> {
+  // Issue #1349 — validate the complete release-owned skill bundle before
+  // copyRuntime creates or replaces any destination byte. A partial release
+  // archive is not installable and must never leave a half-updated runtime.
+  await assertBundledSkillsAvailable(packageRoot);
   const copiedFiles = [
     ...(await copyRuntime(runtimePaths, packageRoot)),
     ...(await copyDocs(runtimePaths, packageRoot)),
