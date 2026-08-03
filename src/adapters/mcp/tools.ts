@@ -16,6 +16,7 @@ import {
   cleanStaleMarkersResultContract,
   orphanCleanupResultContract,
 } from "./contracts/bootstrap-result-contracts.js";
+import { projectPublicResolvedConfig } from "./contracts/public-project-config.js";
 import type { ResultValidationPolicy } from "./contracts/result-validation.js";
 import { createDiagnoseTool } from "./diagnose-tool.js";
 import { registerMcpTools } from "./dispatch.js";
@@ -722,7 +723,7 @@ function withProjectResolutionRecovery(
                     projectRoot: selected.project.projectRoot,
                     accessPath: selected.project.accessPath,
                     configPath,
-                    resolvedConfig,
+                    resolvedConfig: projectPublicResolvedConfig(resolvedConfig),
                     nextAction:
                       "Call the intended write-class tool; setup_project did not modify the existing config.",
                   }),

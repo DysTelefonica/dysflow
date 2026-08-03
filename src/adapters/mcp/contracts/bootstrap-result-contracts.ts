@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publicResolvedProjectConfigSchema } from "./public-project-config.js";
 
 import { defineResultContract } from "./result-contract.js";
 
@@ -234,7 +235,7 @@ export const setupProjectResultContract = defineResultContract({
         dryRun: z.literal(true),
         willWrite: z.literal(true),
         configPath: z.string(),
-        resolvedConfig: unknownRecord,
+        resolvedConfig: publicResolvedProjectConfigSchema,
         warnings: z.array(z.string()),
       })
       .strict(),
@@ -259,7 +260,7 @@ export const setupProjectResultContract = defineResultContract({
         projectRoot: z.string(),
         accessPath: z.string().nullable(),
         configPath: z.string(),
-        resolvedConfig: unknownRecord,
+        resolvedConfig: publicResolvedProjectConfigSchema,
         nextAction: z.string(),
       })
       .strict(),

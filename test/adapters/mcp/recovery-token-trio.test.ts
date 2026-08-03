@@ -1,12 +1,15 @@
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic.js";
 import { setupProjectResultContract } from "../../../src/adapters/mcp/contracts/bootstrap-result-contracts.js";
 import { validateToolResult } from "../../../src/adapters/mcp/contracts/result-validation.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/result-translation.js";
+import { startWithSdkServer } from "../../../src/adapters/mcp/stdio.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import type { McpToolContext } from "../../../src/adapters/mcp/types.js";
 import { successResult } from "../../../src/core/contracts/index.js";
@@ -169,6 +172,20 @@ function makeTools() {
   return { orphanListRequests, resolverCwds, tools, vbaSyncToolService };
 }
 
+async function createSdkHarness(tools: ReturnType<typeof createDysflowMcpTools>) {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const serverDone = startWithSdkServer(tools, serverTransport);
+  const client = new Client({ name: "recovery-security-test", version: "0.0.1" }, {});
+  await client.connect(clientTransport);
+  return {
+    client,
+    close: async () => {
+      await client.close();
+      await serverDone.catch(() => undefined);
+    },
+  };
+}
+
 describe("recovery_token trio disambiguates projectId at write-class tool sites", () => {
   it("consumes the recovery trio on test_vba before collision detection and routes by cwd", async () => {
     const { tools, vbaSyncToolService } = makeTools();
@@ -295,6 +312,67 @@ describe("recovery_token trio disambiguates projectId at write-class tool sites"
     });
     const resolvedProjectConfig = resolved.projectConfig as Record<string, unknown>;
     expect(sameFilesystemPath(String(resolvedProjectConfig.projectRoot), worktreeA)).toBe(true);
+  });
+
+  it("projects only public resolved config fields through the MCP transport", async () => {
+    writeFileSync(
+      join(worktreeB, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "shared-id",
+        frontendFile: "b.accdb",
+        destinationRoot: "src",
+        timeoutMs: 12_345,
+        httpToken: "literal-secret",
+        unknownExtension: "unknown-secret",
+        capabilities: {
+          allowWrites: true,
+          writeExecutionPolicy: "developer",
+          credentials: { token: "nested-secret" },
+          unknownNested: { value: "nested-extension-secret" },
+        },
+      }),
+    );
+    const { tools } = makeTools();
+    const { client, close } = await createSdkHarness(tools);
+
+    try {
+      const ambiguousResponse = await client.callTool({
+        name: "resolve_project",
+        arguments: { cwd: repoRoot },
+      });
+      const ambiguousText =
+        (ambiguousResponse.content as Array<{ text?: string }>)[0]?.text ?? "{}";
+      const ambiguous = JSON.parse(ambiguousText) as Record<string, unknown>;
+      const setupResponse = await client.callTool({
+        name: "setup_project",
+        arguments: {
+          cwd: worktreeB,
+          projectId: "shared-id",
+          projectChoiceReason: "user_selected_after_ambiguous_project",
+          recoveryToken: ambiguous.recoveryToken,
+        },
+      });
+      const setupText = (setupResponse.content as Array<{ text?: string }>)[0]?.text ?? "{}";
+      const setup = JSON.parse(setupText) as Record<string, unknown>;
+
+      expect(setupResponse.isError).toBeFalsy();
+      expect(setup.resolvedConfig).toEqual({
+        id: "shared-id",
+        frontendFile: "b.accdb",
+        destinationRoot: "src",
+        timeoutMs: 12_345,
+        capabilities: { allowWrites: true, writeExecutionPolicy: "developer" },
+      });
+      expect(JSON.stringify(setupResponse)).not.toMatch(
+        /literal-secret|unknown-secret|nested-secret|nested-extension-secret/,
+      );
+      expect(setup.resolvedConfig).not.toHaveProperty("httpToken");
+      expect(setup.resolvedConfig).not.toHaveProperty("unknownExtension");
+      expect(setup.resolvedConfig).not.toHaveProperty("capabilities.credentials");
+      expect(setup.resolvedConfig).not.toHaveProperty("capabilities.unknownNested");
+    } finally {
+      await close();
+    }
   });
 
   it.each([
