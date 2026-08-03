@@ -28,6 +28,24 @@ The apply path requires both the MCP process write gate and
 candidate and publishes `.dysflow/project.json` with the same containment,
 atomic rename, and rollback service used by `dysflow setup`.
 
+If the candidate frontend does not exist, validation returns `TARGET_NOT_FOUND`
+after accepting the identity and write policy. The error keeps both the planned
+config path and the resolved candidate so the caller can correct the right input:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "TARGET_NOT_FOUND",
+    "configPath": "C:/worktrees/my-project/.dysflow/project.json",
+    "resolvedConfig": {
+      "id": "my-project",
+      "frontendFile": "Frontend.accdb"
+    }
+  }
+}
+```
+
 After applying, call `resolve_project({ cwd, projectId })` and then refresh
 `get_capabilities({ cwd })`. The new config is available immediately through
 the shared worktree cache; an MCP restart is neither required nor recommended.

@@ -952,6 +952,25 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
+  if (tool === "setup_project:missing-target-evidence") {
+    return {
+      args,
+      options: { ...options, expected: "error" },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const pass =
+          error?.code === "TARGET_NOT_FOUND" &&
+          error?.resolvedConfig?.id === "missing-target-evidence" &&
+          typeof error?.configPath === "string" &&
+          error.configPath.endsWith(join(".dysflow", "project.json"));
+        return {
+          pass,
+          expected: "TARGET_NOT_FOUND with resolvedConfig.id and configPath",
+          summary: pass ? "missing target retained bootstrap evidence" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool === "setup_project") {
     return {
       args,
@@ -1181,6 +1200,19 @@ await record("v2.34-regressions", "setup_project:missing-id-refused", {
   frontendFile: "Fresh.accdb",
   apply: false,
 }, { expected: "error" });
+
+// v2.34.2-regressions — #1352 / bench R-S02. Identity and write-policy
+// validation precede target existence, whose failure retains the accepted
+// bootstrap identity and destination config path.
+const setupMissingTargetRoot = join(tempRoot, "setup-project-missing-target");
+await mkdir(join(setupMissingTargetRoot, "src"), { recursive: true });
+await writeFile(join(setupMissingTargetRoot, ".git"), "gitdir: fixture", "utf8");
+await record("v2.34.2-regressions", "setup_project:missing-target-evidence", {
+  cwd: setupMissingTargetRoot,
+  frontendFile: "Missing.accdb",
+  projectId: "missing-target-evidence",
+  apply: true,
+});
 
 // v2.34-regressions — #1327 recovery-token trio. Unlike ordinary record()
 // rows, this journey deliberately keeps one MCP process alive: the token is
