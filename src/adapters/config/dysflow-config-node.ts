@@ -28,20 +28,10 @@ export const nodeConfigFileSystem: ConfigFileSystemPort = {
   },
   readJsonSync: <T>(path: string): T => readJsonFileSync<T>(path),
   readJsonAsync: <T>(path: string): Promise<T> => readJsonFileAsync<T>(path),
-  readdirSync: (path) => {
-    try {
-      return readdirSync(path);
-    } catch {
-      return [];
-    }
-  },
-  readdirAsync: async (path) => {
-    try {
-      return await readdir(path);
-    } catch {
-      return [];
-    }
-  },
+  // Discovery owns best-effort recovery so it can retain the I/O reason as a
+  // structured diagnostic instead of losing it at the adapter boundary.
+  readdirSync: (path) => readdirSync(path),
+  readdirAsync: (path) => readdir(path),
   tmpdir: () => tmpdir(),
 };
 

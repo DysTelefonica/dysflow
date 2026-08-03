@@ -6,6 +6,12 @@ export type Diagnostic = {
   level: DiagnosticLevel;
   source: string;
   message: string;
+  /** Optional machine-readable classification for structured diagnostics. */
+  code?: string;
+  /** Filesystem location associated with the diagnostic, when applicable. */
+  path?: string;
+  /** Operation phase that produced the diagnostic, when applicable. */
+  phase?: string;
 };
 
 export type DysflowError = {
