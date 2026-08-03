@@ -6,6 +6,10 @@
 
 - Derive MCP write intent from the exhaustive route table so adding a preview-capable tool cannot silently bypass plan-by-default behavior (#1353).
 
+### Changed
+
+- Share one control-flow implementation between synchronous and asynchronous project-config discovery and loading while preserving both public APIs and result shapes (#1355).
+
 ## [v2.34.2] - 2026-08-03
 
 ### Changes
