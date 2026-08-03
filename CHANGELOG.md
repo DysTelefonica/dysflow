@@ -1,5 +1,20 @@
 # Changelog
 
+## [v2.35.0] - 2026-08-03
+
+### Changes
+
+- fix(mcp): preserve setup target evidence (#1371)
+- fix(skills): align bundled metadata for v2.35.0 (#1369)
+- fix(config): surface worktree discovery errors (#1367)
+- fix(test): contain expected stderr diagnostics (#1366)
+- refactor(mcp): break adapter import cycle (#1365)
+- refactor(config): deduplicate sync and async config orchestration (#1364)
+- fix(mcp): retain setup validation evidence (#1363)
+- fix(mcp): derive write intent from route metadata (#1362)
+- chore(repo): document git history migration plan (#1361)
+
+
 ## Unreleased
 
 ### Changed
