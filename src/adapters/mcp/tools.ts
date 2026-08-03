@@ -195,6 +195,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     new WorktreeContextCache({
       resolveDiagnostic: (effectiveCwd, input) => rawProjectConfigResolver(input, effectiveCwd),
     });
+  const onProjectConfigMutated = (projectRoot: string) => {
+    worktreeCache.clear(projectRoot);
+  };
   const resolveCachedProjectConfig = (input: unknown, cwdOverride?: string) => {
     const params =
       typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
@@ -427,10 +430,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           ? configuredProjectId
           : null;
       },
-      onPublished: async (projectRoot) => {
-        worktreeCache.clear(projectRoot);
-        await worktreeCache.getContext(projectRoot, "register");
-      },
+      onConfigMutated: onProjectConfigMutated,
     }),
     ...createWorktreeCacheTools(worktreeCache),
     // Issue #1177 — `migrate_project_config`. Drives legacy
@@ -439,7 +439,11 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // capabilities.allowWrites). Default empty call is a pure
     // read-class diff preview; `apply: true` atomically rewrites the
     // file and is write-gated.
-    createMigrateProjectConfigTool({ cwd, writesEnabled }),
+    createMigrateProjectConfigTool({
+      cwd,
+      writesEnabled,
+      onConfigMutated: onProjectConfigMutated,
+    }),
   ];
 
   const registered = withSharedOutputModes(

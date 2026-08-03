@@ -2,6 +2,7 @@ import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { isRecord } from "../../core/utils/index.js";
 import { PROJECT_IDENTITY_BLOCK, WRITE_INTENT_BLOCK } from "../../shared/validation/index.js";
+import type { ProjectConfigMutationObserver } from "../config/project-config-bootstrap-service.js";
 import { migrateProjectConfigResultContract } from "./contracts/bootstrap-result-contracts.js";
 import {
   enforceRequiresConfirmation,
@@ -324,6 +325,7 @@ export const MIGRATE_PROJECT_CONFIG_SCHEMA = {
 export type MigrateProjectConfigToolOptions = {
   cwd: string;
   writesEnabled: boolean;
+  onConfigMutated?: ProjectConfigMutationObserver;
 };
 
 /**
@@ -410,6 +412,7 @@ export function createMigrateProjectConfigTool(
       if (applyRequested && migration.diff.length > 0) {
         try {
           await writeProjectJsonAtomically(migration.configPath, migration.proposed);
+          await options.onConfigMutated?.(effectiveCwd);
           applied = true;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

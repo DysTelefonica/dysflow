@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
+import { WorktreeContextCache } from "../../../src/adapters/config/worktree-context-cache.js";
 import {
   createMigrateProjectConfigTool,
   type MigrateProjectConfigInput,
@@ -239,6 +241,64 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
     expect(tool).toBeDefined();
     expect(tool?.description).toMatch(/legacy config migration/i);
     expect(tool?.description).toContain("MCP_WRITES_DISABLED");
+  });
+
+  it("refreshes cached project resolution immediately after atomic migration", async () => {
+    writeFileSync(join(workdir, ".git"), "gitdir: fixture", "utf8");
+    writeFileSync(join(workdir, "frontend.accdb"), "", "utf8");
+    mkdirSync(join(workdir, "src"));
+    writeProjectConfig({
+      id: "legacy-cache",
+      frontendFile: "frontend.accdb",
+      destinationRoot: "src",
+      allowWrites: true,
+      capabilities: { allowWrites: true },
+    });
+    const worktreeCache = new WorktreeContextCache({
+      resolveDiagnostic: (cwd, input) => diagnoseProjectConfig(cwd, input),
+      watchConfig: () => {
+        throw new Error("watch unavailable");
+      },
+    });
+    const registered = createDysflowMcpTools({
+      services: {
+        vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
+        queryService: { execute: async () => successResult({ rows: [] }) },
+        diagnosticsService: { run: async () => successResult({ checks: [] }) },
+      },
+      writes: true,
+      allowWrites: true,
+      cwd: workdir,
+      worktreeCache,
+      projectConfigResolver: (input, cwd = workdir) =>
+        diagnoseProjectConfig(cwd, input as Record<string, unknown>),
+    });
+    const getCapabilities = registered.find((tool) => tool.name === "get_capabilities");
+    const migrate = registered.find((tool) => tool.name === "migrate_project_config");
+    if (getCapabilities === undefined || migrate === undefined) throw new Error("missing tool");
+
+    const before = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+      projectConfig?: { status?: string };
+      worktreeCache?: { misses?: number };
+    };
+    expect(before.projectConfig?.status).toBe("valid");
+
+    const migrated = await migrate.handler({ apply: true });
+    expect(migrated.isError).toBe(false);
+    const first = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+      projectConfig?: { status?: string; projectId?: string };
+      worktreeCache?: { hits?: number; misses?: number };
+    };
+    const repeated = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+      projectConfig?: { status?: string; projectId?: string };
+      worktreeCache?: { hits?: number; misses?: number };
+    };
+
+    expect(first.projectConfig).toMatchObject({ status: "valid", projectId: "legacy-cache" });
+    expect(repeated.projectConfig).toMatchObject({ status: "valid", projectId: "legacy-cache" });
+    expect(first.worktreeCache?.misses).toBeGreaterThan(before.worktreeCache?.misses ?? -1);
+    expect(repeated.worktreeCache?.hits).toBeGreaterThan(first.worktreeCache?.hits ?? -1);
+    worktreeCache.close();
   });
 });
 
