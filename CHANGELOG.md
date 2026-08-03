@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Derive MCP write intent from the exhaustive route table so adding a preview-capable tool cannot silently bypass plan-by-default behavior (#1353).
+
 ## [v2.34.2] - 2026-08-03
 
 ### Changes

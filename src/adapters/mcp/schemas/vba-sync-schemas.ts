@@ -612,8 +612,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
   // single round-trip: verify -> plan -> execute (chunked) -> re-verify
   // -> recommend. Default semantics: `dryRun: true` populates the plan
   // and skips execute; `apply: true` performs the import / export
-  // dispatch and re-runs verify_code; no flags follows the safe-by-default
-  // plan behavior (see POLICY_EXEMPT_TOOLS in write-execution-dispatch.ts).
+  // dispatch and re-runs verify_code; no flags follows the route-declared
+  // service-plan behavior.
   // The schema is ADDITIVE - every parameter except direction / scope /
   // dryRun / apply / batchSize / onChunkError / parallelChunks /
   // returnFullDiff / directoryPath / recursive / includeTests / includeForms
@@ -719,9 +719,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         },
       },
       // Plan / execute gating - apply:true is the commit signal, dryRun:true
-      // is the preview escape hatch. Absent both -> safe-by-default plan
-      // (POLICY_EXEMPT_TOOLS keeps developer mode from injecting dryRun:false
-      // on plan-intended calls).
+      // is the preview escape hatch. Absent both -> route-declared service plan.
       ...WRITE_INTENT_BLOCK,
       // Chunking - modules per inner dispatch chunk during apply:true.
       // The default is conservative (10) so a single Access COM failure

@@ -33,71 +33,18 @@ import {
   type WriteExecutionPolicy,
 } from "../../core/runtime/write-execution-policy.js";
 import { pathOverlapsSourceRoot } from "../../core/utils/path-overlap.js";
+import { vbaSyncWriteIntentForTool } from "./dispatch-routes.js";
 import { effectiveDryRunDefaultForTool, resolveRiskForTool } from "./mcp-tool-risks.js";
 
 // ─── (1) Dry-run default injection ──────────────────────────────────────────
-
-/**
- * Tools whose dispatch behavior intentionally never consults the per-tool
- * dryRun default. These have service-level default plans ("always plan by
- * default") that the policy helper must NOT flatten — the dispatch keeps
- * relying on the explicit caller intent (`dryRun: false` / `apply: true`)
- * for these tools, and the absence of those flags falls through to the
- * existing service-level plan path.
- *
- * The list mirrors the dispatch-factory's `isDryRunCapableBinaryWrite`
- * guard plus `catalog_add_control` and `generate_form` (the form mutation
- * family + the catalog/form generation surface).
- */
-const POLICY_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
-  "form_add_control",
-  "form_move_control",
-  "form_rename_control",
-  "form_deserialize",
-  "create_form_from_template",
-  // Issue #813 phase 6 — the apply_form_design_plan family shares the
-  // "form mutation family uses plan-by-default" contract. Without this
-  // exemption, a preview-intended `apply_form_design_plan({ plan })` call
-  // (no dryRun/apply key) would silently perform a REAL write in
-  // developer mode because the policy helper injects dryRun:false for
-  // any routine-dev-write tool NOT in this exempt set when the caller
-  // passes neither dryRun nor apply.
-  "apply_form_design_plan",
-  "form_set_property",
-  "form_delete_control",
-  // Issue #872 F1 + F2 — form_set_properties + form_duplicate_control
-  // share the form-mutation-family plan-by-default contract. Without this
-  // exemption a preview-intended call (no dryRun/apply key) would silently
-  // perform a REAL write in developer mode because the policy helper
-  // injects dryRun:false for any routine-dev-write tool NOT in this
-  // exempt set when the caller passes neither dryRun nor apply.
-  "form_set_properties",
-  "form_duplicate_control",
-  // Issue #816 phase 3 — the form_align_controls + form_distribute_controls
-  // tools share the same plan-by-default contract as the rest of the form
-  // mutation family. Without this exemption a preview-intended call (no
-  // dryRun/apply key) would silently perform a REAL write in developer
-  // mode for the same reason as the apply_form_design_plan family above.
-  "form_align_controls",
-  "form_distribute_controls",
-  // Issue #809 — sync_binary keeps the same plan-by-default contract as
-  // the form mutation family. Without this exemption a preview-intended
-  // sync_binary({ direction }) call (no dryRun/apply key) would silently
-  // perform a REAL import/export in developer mode because the policy
-  // helper injects dryRun:false for any routine-dev-write tool NOT in this
-  // exempt set when the caller passes neither dryRun nor apply.
-  "sync_binary",
-  "catalog_add_control",
-  "generate_form",
-]);
 
 /**
  * Returns a (possibly shallow-copied) input object with the policy-driven
  * `dryRun` default applied. Pure:
  *   - Caller intent (`dryRun` or `apply` key present) is preserved verbatim.
  *   - Non-object / null / undefined inputs return verbatim.
- *   - Form mutation / catalog family (`POLICY_EXEMPT_TOOLS`) returns the
- *     input verbatim regardless of mode.
+ *   - Routes with `writeIntent: "service-plan"` return the input verbatim
+ *     regardless of mode, preserving their service-owned preview default.
  *   - Otherwise, the helper injects `dryRun: <effective>` where
  *     `effective` comes from `effectiveDryRunDefaultForTool`.
  *
@@ -114,7 +61,7 @@ export function resolveEffectiveDryRunInput(
   const record = input as Record<string, unknown>;
   // Explicit caller intent — must not be overridden.
   if (Object.hasOwn(record, "dryRun") || Object.hasOwn(record, "apply")) return record;
-  if (POLICY_EXEMPT_TOOLS.has(toolName)) return record;
+  if (vbaSyncWriteIntentForTool(toolName) === "service-plan") return record;
   // Unknown tools: skip injection. The dispatcher rejects unknown tool
   // names well before reaching this helper, so this branch is defensive.
   if (resolveRiskForTool(toolName) === undefined) return record;

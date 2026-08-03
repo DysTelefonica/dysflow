@@ -12,10 +12,10 @@
  *      (mutatesBinary + mutatesFilesystem both true because apply:true
  *      can write either side).
  *   3. The MCP_TOOL_ROUTES cascade steps from 79 -> 80 advertised tools.
- *   4. sync_binary is isDryRunCapableBinaryWrite (the dispatch must consult
+ *   4. sync_binary declares service-plan write intent (the dispatch must consult
  *      resolveIsDryRun, not collapse to isDryRun===false on the raw-binary
  *      branch). This pins acceptance criterion #2 (dryRun by default).
- *   5. sync_binary is in POLICY_EXEMPT_TOOLS so the developer-mode policy
+ *   5. sync_binary service-plan intent ensures the developer-mode policy
  *      helper does NOT inject `dryRun: false` on plan-intended calls.
  *   6. The write-gate (MCP_WRITES_DISABLED) fires on apply:true when
  *      writes are disabled (acceptance criterion #8 backward compat).
@@ -256,9 +256,9 @@ describe("sync_binary schema (#809)", () => {
   });
 });
 
-// ─── 5. POLICY_EXEMPT_TOOLS — sync_binary must keep plan-by-default ─────────
+// ─── 5. Route write intent — sync_binary must keep plan-by-default ──────────
 
-describe("POLICY_EXEMPT_TOOLS — sync_binary exempt in developer mode (#809)", () => {
+describe("route write intent — sync_binary plans in developer mode (#809)", () => {
   it("developer mode without flags forwards input WITHOUT dryRun (exempt)", () => {
     const normalized = resolveEffectiveDryRunInput("sync_binary", "developer", {
       projectId: "test-809",
@@ -289,11 +289,7 @@ describe("POLICY_EXEMPT_TOOLS — sync_binary exempt in developer mode (#809)", 
     expect(effectiveDryRunDefaultForTool("sync_binary", "safe-by-default")).toBe(true);
   });
 
-  it("effectiveDryRunDefaultForTool resolves sync_binary to false in developer (routine-dev-write flips)", () => {
-    // routine-dev-write flips to false in developer (same family as
-    // apply_form_design_plan / form_set_property / import_modules). The
-    // POLICY_EXEMPT_TOOLS entry prevents the dispatch from INJECTING this
-    // value on plan-intended calls; the resolver still reports it.
+  it("keeps the routine risk default distinct from service-plan dispatch", () => {
     expect(effectiveDryRunDefaultForTool("sync_binary", "developer")).toBe(false);
   });
 });
