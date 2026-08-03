@@ -27,8 +27,20 @@ export type SetupProjectToolOptions = {
 
 export { SETUP_PROJECT_SCHEMA } from "./schemas/setup-project-schema.js";
 
-function failure(code: string, message: string, remediation: string): McpToolResult {
-  const error = { code, message, errorCode: code, errorMessage: message, remediation };
+function failure(
+  code: string,
+  message: string,
+  remediation: string,
+  evidence?: { configPath: string; resolvedConfig: Record<string, unknown> },
+): McpToolResult {
+  const error = {
+    code,
+    message,
+    errorCode: code,
+    errorMessage: message,
+    remediation,
+    ...evidence,
+  };
   return {
     content: [{ type: "text", text: JSON.stringify({ ok: false, error }) }],
     isError: true,
@@ -175,6 +187,10 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
           candidate.code ?? "PROJECT_CONFIG_WRITE_FAILED",
           candidate.message ?? String(error),
           candidate.remediation ?? "Verify the worktree paths and retry setup_project.",
+          {
+            configPath: join(projectRoot, ".dysflow", "project.json"),
+            resolvedConfig,
+          },
         );
       }
     },
