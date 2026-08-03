@@ -9,6 +9,8 @@ export type ProjectConfigCandidateValidator = (
   candidate: ProjectConfigCandidate,
 ) => void | Promise<void>;
 
+export type ProjectConfigMutationObserver = (projectRoot: string) => void | Promise<void>;
+
 export type SetupProjectConfigInput = {
   frontendFile: string;
   backendPath?: string;

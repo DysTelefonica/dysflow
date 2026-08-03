@@ -35,6 +35,7 @@ type DiagnosticResolver = (
 ) => ProjectConfigDiagnostic | Promise<ProjectConfigDiagnostic>;
 
 type CacheEntry = { context: WorktreeContext; watcher?: FSWatcher };
+type WatchConfig = (path: string, listener: () => void) => FSWatcher;
 
 const TARGET_KEYS = new Set([
   "projectId",
@@ -53,6 +54,8 @@ export class WorktreeContextCache {
   readonly #resolveDiagnostic: DiagnosticResolver;
   readonly #ttlMs: number;
   readonly #maxEntries: number;
+  readonly #watchConfig: WatchConfig;
+  readonly #now: () => number;
   #hits = 0;
   #misses = 0;
   #invalidations = 0;
@@ -62,10 +65,14 @@ export class WorktreeContextCache {
     resolveDiagnostic: DiagnosticResolver;
     ttlMs?: number;
     maxEntries?: number;
+    watchConfig?: WatchConfig;
+    now?: () => number;
   }) {
     this.#resolveDiagnostic = options.resolveDiagnostic;
     this.#ttlMs = options.ttlMs ?? DEFAULT_WORKTREE_CACHE_TTL_MS;
     this.#maxEntries = options.maxEntries ?? DEFAULT_WORKTREE_CACHE_MAX_ENTRIES;
+    this.#watchConfig = options.watchConfig ?? watch;
+    this.#now = options.now ?? Date.now;
   }
 
   async getContext(
@@ -74,8 +81,16 @@ export class WorktreeContextCache {
   ): Promise<{ context: WorktreeContext; status: "hit" | "miss" }> {
     const cwd = canonicalCwd(cwdInput);
     const key = identity(cwd);
-    const now = Date.now();
-    const cached = this.#entries.get(key);
+    const now = this.#now();
+    let cached = this.#entries.get(key);
+    if (
+      cached !== undefined &&
+      cached.context.configPath === null &&
+      existsSync(cached.context.projectConfig.configPath)
+    ) {
+      this.#invalidateKey(key);
+      cached = undefined;
+    }
     if (cached !== undefined && now - cached.context.scannedAt < this.#ttlMs) {
       this.#entries.delete(key);
       this.#entries.set(key, cached);
@@ -147,7 +162,7 @@ export class WorktreeContextCache {
     const entry: CacheEntry = { context };
     if (context.configPath !== null && existsSync(context.configPath)) {
       try {
-        entry.watcher = watch(context.configPath, () => this.#invalidateKey(key));
+        entry.watcher = this.#watchConfig(context.configPath, () => this.#invalidateKey(key));
         entry.watcher.on("error", () => this.#invalidateKey(key));
         entry.watcher.unref();
       } catch {

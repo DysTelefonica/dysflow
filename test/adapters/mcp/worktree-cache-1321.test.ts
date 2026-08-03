@@ -259,6 +259,59 @@ describe("cwd-aware worktree cache (#1321)", () => {
     expect(refreshed.telemetry?.invalidations).toEqual(expect.any(Number));
   });
 
+  it("observes externally created project.json after a cached missing result without a watcher", async () => {
+    rmSync(join(sibling, ".dysflow", "project.json"));
+    const cache = new WorktreeContextCache({
+      resolveDiagnostic: (cwd) => diagnoseProjectConfig(cwd),
+    });
+
+    const missing = await cache.getContext(sibling, "cwd-param");
+    expect(missing.context.projectConfig.status).toBe("missing");
+    expect(cache.telemetry()).toMatchObject({ watchers: 0, misses: 1 });
+
+    writeFileSync(
+      join(sibling, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "sibling-created-externally",
+        frontendFile: "Frontend.accdb",
+        destinationRoot: "src",
+        capabilities: { allowWrites: true },
+      }),
+      "utf8",
+    );
+
+    const created = await cache.getContext(sibling, "cwd-param");
+    const repeated = await cache.getContext(sibling, "cwd-param");
+    expect(created.status).toBe("miss");
+    expect(created.context.projectConfig.projectId).toBe("sibling-created-externally");
+    expect(repeated.status).toBe("hit");
+    expect(repeated.context.projectConfig.projectId).toBe("sibling-created-externally");
+    cache.close();
+  });
+
+  it("keeps bounded TTL fallback when the project.json watcher is unavailable", async () => {
+    let now = 0;
+    const cache = new WorktreeContextCache({
+      ttlMs: 10,
+      resolveDiagnostic: (cwd) => diagnoseProjectConfig(cwd),
+      watchConfig: () => {
+        throw new Error("watch unavailable");
+      },
+      now: () => now,
+    });
+
+    const first = await cache.getContext(sibling, "cwd-param");
+    const cached = await cache.getContext(sibling, "cwd-param");
+    now = 11;
+    const expired = await cache.getContext(sibling, "cwd-param");
+
+    expect(first.status).toBe("miss");
+    expect(cached.status).toBe("hit");
+    expect(expired.status).toBe("miss");
+    expect(cache.telemetry()).toMatchObject({ watchers: 0, ttlMs: 10, misses: 2, hits: 1 });
+    cache.close();
+  });
+
   it("uses the TTL fallback and keeps the cache bounded", async () => {
     const cache = new WorktreeContextCache({
       ttlMs: 1,

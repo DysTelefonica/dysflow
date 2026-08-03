@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   buildSetupProjectConfig,
+  type ProjectConfigMutationObserver,
   publishProjectConfig,
   type SetupProjectConfigInput,
 } from "../config/project-config-bootstrap-service.js";
@@ -22,7 +23,7 @@ export type SetupProjectToolOptions = {
   cwd: string;
   writesEnabled: boolean;
   resolveExistingProjectId?: (cwd: string) => string | null | Promise<string | null>;
-  onPublished?: (cwd: string) => void | Promise<void>;
+  onConfigMutated?: ProjectConfigMutationObserver;
 };
 
 export { SETUP_PROJECT_SCHEMA } from "./schemas/setup-project-schema.js";
@@ -163,7 +164,7 @@ export function createSetupProjectTool(options: SetupProjectToolOptions): Dysflo
           undefined,
           assertCandidateWriteReady,
         );
-        await options.onPublished?.(projectRoot);
+        await options.onConfigMutated?.(projectRoot);
         return {
           content: [
             {
