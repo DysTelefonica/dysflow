@@ -5,6 +5,7 @@ and one shared operating skill. Keep the runtime contract in Dysflow; use
 plugin manifests and hooks only for host integration.
 
 Start with the [setup guide](./SETUP.md) for installation and verification.
+See the [skill authoring guide](./skills-authoring.md) for skill metadata conventions.
 The [Dysflow README](../README.md) remains the canonical CLI and MCP tool
 reference.
 
