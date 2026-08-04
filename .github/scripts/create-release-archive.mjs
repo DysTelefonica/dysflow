@@ -4,6 +4,7 @@ import { access, mkdir, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { tarForceLocalArgsFromVersion } from "../../scripts/tar-force-local.mjs";
 
 export const RELEASE_SKILL_NAMES = [
   "dysflow-arnes",
@@ -67,14 +68,13 @@ function runTar(args, cwd) {
   return result.stdout;
 }
 
-// GNU tar reads a Windows drive-letter path (`C:\...`) as remote `host:path`
-// syntax and fails with "Cannot connect to C: resolve failed". bsdtar rejects
-// the flag outright, so it is only added for GNU tar. Exported because every
-// caller that shells out to `tar` with an absolute Windows path needs the same
-// probe — a second hand-maintained copy is how #1377 stayed half-fixed.
+
+// Sync probe for the CI-side callers (this script and the release-bundle test).
+// src/cli deliberately does NOT reuse this: it owns a command-runner seam and
+// must not spawn directly. Both paths share the decision in scripts/.
 export function tarForceLocalArgs(cwd) {
   const version = spawnSync("tar", ["--version"], { cwd, encoding: "utf8" });
-  return version.status === 0 && version.stdout.includes("GNU tar") ? ["--force-local"] : [];
+  return version.status === 0 ? tarForceLocalArgsFromVersion(version.stdout) : [];
 }
 
 export async function createReleaseArchive({ packageRoot, outputPath }) {
