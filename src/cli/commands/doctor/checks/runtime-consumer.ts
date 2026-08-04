@@ -2,18 +2,6 @@ import { COMMIT_FLAG_REGISTRY } from "../../../../core/runtime/commit-flag-regis
 import { type DoctorCategoryCheck, doctorCheckMetadata } from "./types.js";
 
 /**
- * Tools whose commit flag is deliberately NOT `apply` — documented
- * exceptions, not polarity defects. Issue #1167 unified `test_vba` to
- * `apply:true` so this set is now empty. The pre-#1167 entry
- * (`test_vba` commits with `dryRun:false` because its schema never
- * accepted `apply`) was a legacy contract (#1046) that the
- * homogenized single-flag design collapsed. A future tool that
- * intentionally reverts to `dryRun`/`diff` polarity MUST add a row
- * here with a one-line rationale and an issue link.
- */
-const DOCUMENTED_COMMIT_FLAG_EXCEPTIONS: ReadonlySet<string> = new Set();
-
-/**
  * Single-module tools whose param is `moduleName` while the introspection
  * family uses `module` — the Round-15 F1 inconsistency. Kept as a doctor
  * warning until a naming migration lands; the validator's "Did you mean"
@@ -34,11 +22,11 @@ const MODULE_PARAM_INCONSISTENCIES = [
 export function runRuntimeConsumerChecks(): DoctorCategoryCheck[] {
   const checks: DoctorCategoryCheck[] = [];
 
+  // Every advertised tool commits with `apply` since #1167 unified `test_vba`
+  // (the last `dryRun:false` holdout, AGENTS.md AP-3), so there is no documented
+  // exception to skip: any non-`apply` commitFlag is a polarity defect.
   const inverted = Object.entries(COMMIT_FLAG_REGISTRY)
-    .filter(([name, metadata]) => {
-      if (DOCUMENTED_COMMIT_FLAG_EXCEPTIONS.has(name)) return false;
-      return metadata.commitFlag !== "apply";
-    })
+    .filter(([, metadata]) => metadata.commitFlag !== "apply")
     .map(([name, metadata]) => `${name} (commitFlag: ${metadata.commitFlag})`);
   checks.push(
     inverted.length === 0
