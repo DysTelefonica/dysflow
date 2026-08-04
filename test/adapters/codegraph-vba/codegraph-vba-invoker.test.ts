@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import {
   createDefaultCodeGraphVbaInvoker,
@@ -346,7 +346,7 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
     expect(evidence).toEqual([{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }]);
   });
 
-  it("cleanup", () => {
+  afterAll(() => {
     // Best-effort cleanup of the shared projectRoot.
     if (existsSync(projectRoot)) {
       rmSync(projectRoot, { recursive: true, force: true });

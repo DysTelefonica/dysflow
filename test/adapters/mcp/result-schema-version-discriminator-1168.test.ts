@@ -377,12 +377,26 @@ describe("MCP envelope schemaVersion discriminator (#1168)", () => {
       const { client, close } = await runCentralSeam(tool);
       try {
         // Calling a tool that doesn't exist exercises the inline
-        // "tool not found" envelope in the central seam.
-        await client.callTool({ name: "smoke_nonexistent", arguments: {} });
-        // The SDK surfaces the envelope as `{ content: [...], isError: true }`.
-        // We assert the seam contract indirectly: the call must NOT throw,
-        // and the inline envelope the seam built must carry schemaVersion
-        // (verified by the unit-level tests of `withSchemaVersion` above).
+        // "tool not found" envelope in the central seam. The seam publishes
+        // the discriminator through the standard `structuredContent`
+        // projection precisely because some clients flatten the result and
+        // drop extension fields — so that projection is what we assert on.
+        // The unit tests of `withSchemaVersion` above cover the helper in
+        // isolation; only this test proves the SEAM applies it to THIS
+        // envelope.
+        const raw: unknown = await client.callTool({
+          name: "smoke_nonexistent",
+          arguments: {},
+        });
+        // HR-13 — a host wrapper may hand the whole envelope back as a JSON
+        // string. Parse once, then require the discriminator; never continue
+        // by guessing the payload shape.
+        const envelope = (typeof raw === "string" ? JSON.parse(raw) : raw) as {
+          isError?: unknown;
+          structuredContent?: { schemaVersion?: unknown };
+        };
+        expect(envelope.isError).toBe(true);
+        expect(envelope.structuredContent?.schemaVersion).toBe(RESULT_SCHEMA_VERSION);
       } finally {
         await close();
       }
