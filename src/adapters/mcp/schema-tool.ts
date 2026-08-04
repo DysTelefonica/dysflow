@@ -830,7 +830,7 @@ function enrichParameterMetadata(
       parameter.precedence = "canonical";
       continue;
     }
-    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "deprecated";
+    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "alias";
     if (legacyAliases.has(flag)) {
       parameter.deprecated = true;
       parameter.deprecatedSince = "2.23.0";
