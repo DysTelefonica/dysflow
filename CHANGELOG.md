@@ -1,5 +1,19 @@
 # Changelog
 
+## [v2.35.3] - 2026-08-04
+
+### Changes
+
+- docs(prompts): add round 18 maintainer prompt
+- fix(mcp): assign precedence 'alias' to non-legacy write flags (#1396) (#1401)
+- docs(skills): document frontmatter schema and last_dysflow_version semantics (#1388) (#1402)
+- test(hygiene): replace cleanup-as-test with afterAll and assert tool-not-found envelope (#1400)
+- fix(config): report project config recovery-path failures (#1399)
+- fix(installer): guard update-path tar calls against GNU tar on Windows (#1398)
+- refactor: remove a no-op ternary and a permanently empty exception set (#1397)
+- test(release): guard tar calls against GNU tar on Windows (#1391)
+
+
 ## [v2.35.2] - 2026-08-04
 
 ### Changes
