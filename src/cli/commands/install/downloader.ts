@@ -2,6 +2,11 @@ import { createHash, createPublicKey, verify as cryptoVerify } from "node:crypto
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+// Resolved out of the package root, not out of `src`. `outDir: dist` and
+// `rootDir: src` sit at the same depth, so this specifier points at
+// `<packageRoot>/scripts/` identically before and after compilation, and
+// `scripts/` ships inside the release archive.
+import { tarForceLocalArgsFromVersion } from "../../../../scripts/tar-force-local.mjs";
 import { runCommand, runCommandOutput } from "./command-runner.js";
 
 const GITHUB_LATEST_RELEASE_API =
@@ -303,14 +308,27 @@ export function createGitHubReleaseUpdateProvider(
         await writeFile(archivePath, archiveBuffer);
 
         // 4. Inspect archive entries and refuse traversal before extracting (zip/tar-slip).
-        const listing = await runCommandOutput("tar", ["-tzf", archivePath], tempRoot, {
-          timeoutMs: 60_000,
-        });
+        //    Both tar calls take absolute paths, so they need the GNU tar guard (#1390).
+        //    Probed through the same command-runner seam as every other subprocess
+        //    here, so tests that stub the process boundary keep stubbing one thing.
+        const forceLocal = tarForceLocalArgsFromVersion(
+          await runCommandOutput("tar", ["--version"], tempRoot, { timeoutMs: 10_000 }).catch(
+            () => "",
+          ),
+        );
+        const listing = await runCommandOutput(
+          "tar",
+          [...forceLocal, "-tzf", archivePath],
+          tempRoot,
+          { timeoutMs: 60_000 },
+        );
         assertSafeArchiveEntries(listing);
 
-        // 5. Extract archive
+        // 5. Extract archive. Runs with packageRoot as the child's cwd instead of
+        //    passing `-C packageRoot`: under --force-local GNU tar escapes the drive
+        //    colon in a -C argument too, so at most one absolute path may be passed.
         await mkdir(packageRoot, { recursive: true });
-        await runCommand("tar", ["-xzf", archivePath, "-C", packageRoot], tempRoot, {
+        await runCommand("tar", [...forceLocal, "-xzf", archivePath], packageRoot, {
           timeoutMs: 60_000,
         });
 
