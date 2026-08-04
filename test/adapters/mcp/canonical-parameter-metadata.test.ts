@@ -439,4 +439,19 @@ describe("canonical aliases/defaults/parameter constraints (#1075)", () => {
       }
     }
   });
+
+  it("every parameter marked precedence: 'deprecated' carries deprecated: true metadata (#1396)", () => {
+    for (const tool of TOOLS) {
+      const entry = catalogEntry(tool.name);
+      for (const [name, param] of Object.entries(entry.parameters)) {
+        const ext = getExtendedParam(param);
+        if (ext.precedence === "deprecated") {
+          expect(
+            ext.deprecated,
+            `tool '${tool.name}' parameter '${name}' has precedence: 'deprecated' but missing deprecated: true`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
 });

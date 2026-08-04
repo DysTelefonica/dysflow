@@ -821,7 +821,6 @@ function enrichParameterMetadata(
 
   const writeFlags = ["apply", "dryRun", "diff"].filter((name) => parameters[name] !== undefined);
   if (writeFlags.length < 2) return;
-  const legacyAliases = new Set(legacyAliasesFor(toolName));
   for (const flag of writeFlags) {
     const parameter = parameters[flag];
     if (parameter === undefined) continue;
@@ -830,13 +829,11 @@ function enrichParameterMetadata(
       parameter.precedence = "canonical";
       continue;
     }
-    parameter.precedence = legacyAliases.has(flag) ? "deprecated" : "deprecated";
-    if (legacyAliases.has(flag)) {
-      parameter.deprecated = true;
-      parameter.deprecatedSince = "2.23.0";
-      parameter.canonicalName = commitMetadata.commitFlag;
-      parameter.aliases = [...writeFlags];
-    }
+    parameter.precedence = "deprecated";
+    parameter.deprecated = true;
+    parameter.deprecatedSince = "2.23.0";
+    parameter.canonicalName = commitMetadata.commitFlag;
+    parameter.aliases = [...writeFlags];
   }
 }
 
