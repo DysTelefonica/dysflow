@@ -7,7 +7,7 @@ metadata:
   version: "0.6.0"
   status: active
   last_verified: "2026-08-03"
-  last_dysflow_version: "2.34.2"
+  last_dysflow_version: "2.35.3"
   requires: "dysflow MCP >= 2.34, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
