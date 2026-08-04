@@ -63,6 +63,13 @@ export type ProjectConfigDiagnostic = {
   remediation: string | null;
 };
 
+/**
+ * A single entry of {@link ProjectConfigDiagnostic.diagnostics}. Extracted so
+ * the recovery paths that accumulate warnings (issue #1179, extended by
+ * #1394) can be typed without restating the shape.
+ */
+type ProjectConfigDiagnosticEntry = ProjectConfigDiagnostic["diagnostics"][number];
+
 export type ProjectConfigRequest = {
   operation?: string;
   projectId?: string;
@@ -135,14 +142,7 @@ export function diagnoseProjectConfig(
   // Issue #1179 — typed warnings accumulate here. They are appended to the
   // diagnostic array on every exit path (success, failure, mismatch) so the
   // consumer can flag the gap without parsing the legacy error code.
-  const warnings: {
-    code: string;
-    severity: "error" | "warning";
-    message: string;
-    path?: string;
-    phase?: WorktreeDiscoveryDiagnostic["phase"];
-    remediation?: DiagnosticRemediation;
-  }[] = [];
+  const warnings: ProjectConfigDiagnosticEntry[] = [];
   const discoveryDiagnostics: WorktreeDiscoveryDiagnostic[] = [];
   const discoverProjects = (cwd: string): DiscoveredProjectDiagnostic[] =>
     discoverWorktreeProjectConfigs(
@@ -224,7 +224,18 @@ export function diagnoseProjectConfig(
             },
           ];
         }
-      } catch {}
+      } catch (err) {
+        // Issue #1394 — an unreadable or malformed cwd candidate used to be
+        // discarded here, so the verdict read as "no project matched in cwd"
+        // when the real cause was a broken config. Non-fatal by design: the
+        // resolver still falls through to worktree discovery.
+        warnings.push({
+          code: "PROJECT_CONFIG_CANDIDATE_UNREADABLE",
+          severity: "warning",
+          message: `Failed to read the worktree project config candidate: ${formatError(err)}`,
+          path: normalize(configCandidate),
+        });
+      }
     }
   }
 
@@ -766,13 +777,15 @@ export function diagnoseProjectConfig(
   const thresholdMs = resolveStaleMarkerThresholdMs(capabilities);
   reapStaleMarkerFiles(join(projectRootNative, ".dysflow", "runtime", "markers"), thresholdMs);
   reapStaleOperationsRegistry(projectRootNative, thresholdMs);
-  const blockingOperations = findRunningOperations(projectRootNative, accessPath);
+  const blockingOperations = findRunningOperations(projectRootNative, accessPath, warnings);
   if (blockingOperations.length > 0)
     return failWith(
       base,
       "write-locked-by-running-op",
       `Running Access operations block this write: ${blockingOperations.join(", ")}.`,
       remediationForWriteLockedByRunningOp(blockingOperations),
+      "WRITE_LOCKED_BY_RUNNING_OP",
+      warnings,
     );
   return {
     ...base,
@@ -879,7 +892,17 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function findRunningOperations(projectRoot: string, accessPath: string): string[] {
+/**
+ * Issue #1394 — `warnings` is the evidence sink. Every recovery path here is
+ * best-effort by contract (a corrupt file must never block the write gate),
+ * but the reason is now reported instead of discarded so a consumer can tell
+ * "no running operations" from "the sources could not be read".
+ */
+function findRunningOperations(
+  projectRoot: string,
+  accessPath: string,
+  warnings: ProjectConfigDiagnosticEntry[] = [],
+): string[] {
   const candidates: { value: unknown; fallbackId: string }[] = [];
   const registryPath = join(projectRoot, ".dysflow", "runtime", "operations.json");
   if (existsSync(registryPath)) {
@@ -896,21 +919,43 @@ function findRunningOperations(projectRoot: string, accessPath: string): string[
           : [];
       for (const record of records)
         candidates.push({ value: record, fallbackId: "operations.json" });
-    } catch {}
+    } catch (err) {
+      warnings.push({
+        code: "OPERATIONS_REGISTRY_UNREADABLE",
+        severity: "warning",
+        message: `Failed to read the running-operations registry: ${formatError(err)}`,
+        path: normalize(registryPath),
+      });
+    }
   }
   const markerRoot = join(projectRoot, ".dysflow", "runtime", "markers");
   if (existsSync(markerRoot)) {
     try {
       for (const name of readdirSync(markerRoot)) {
         if (!name.endsWith(".json")) continue;
+        const markerPath = join(markerRoot, name);
         try {
           candidates.push({
-            value: JSON.parse(readFileSync(join(markerRoot, name), "utf8")),
+            value: JSON.parse(readFileSync(markerPath, "utf8")),
             fallbackId: name,
           });
-        } catch {}
+        } catch (err) {
+          warnings.push({
+            code: "RUNTIME_MARKER_UNREADABLE",
+            severity: "warning",
+            message: `Failed to read the runtime operation marker: ${formatError(err)}`,
+            path: normalize(markerPath),
+          });
+        }
       }
-    } catch {}
+    } catch (err) {
+      warnings.push({
+        code: "RUNTIME_MARKERS_UNREADABLE",
+        severity: "warning",
+        message: `Failed to list the runtime markers directory: ${formatError(err)}`,
+        path: normalize(markerRoot),
+      });
+    }
   }
   return [
     ...new Set(
