@@ -272,9 +272,7 @@ export function validateFormPropertyValue(
 
   if (expected === "string") {
     // String expected — anything string-coercible passes.
-    return actualKind === "string"
-      ? { kind: "string", actualKind }
-      : { kind: "string", actualKind };
+    return { kind: "string", actualKind };
   }
 
   if (expected === "boolean") {
