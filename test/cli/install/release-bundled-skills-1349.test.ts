@@ -8,6 +8,7 @@ import {
   assertReleaseArchiveManifest,
   createReleaseArchive,
   RELEASE_SKILL_NAMES,
+  tarForceLocalArgs,
 } from "../../../.github/scripts/create-release-archive.mjs";
 import { DYSSKILL_NAMES } from "../../../src/cli/commands/install/skills-installer.js";
 
@@ -17,8 +18,13 @@ const repoRoot = process.cwd();
 let root: string;
 let archivePath: string;
 
+// Every path this suite hands to tar is absolute, so on Windows it must carry
+// the same GNU tar guard the release helper uses (#1377).
 async function tar(args: string[], cwd = repoRoot): Promise<string> {
-  const result = await execFileAsync("tar", args, { cwd, maxBuffer: 10 * 1024 * 1024 });
+  const result = await execFileAsync("tar", [...tarForceLocalArgs(cwd), ...args], {
+    cwd,
+    maxBuffer: 10 * 1024 * 1024,
+  });
   return result.stdout;
 }
 
@@ -71,7 +77,10 @@ describe("release bundled skills (#1349)", () => {
     const home = path.join(root, "home");
     const marker = path.join(root, "runtime.marker");
     await mkdir(extractedRoot, { recursive: true });
-    await tar(["-xzf", archivePath, "-C", extractedRoot]);
+    // Extract from the destination itself rather than passing it as a second
+    // absolute path: under --force-local GNU tar escapes the drive colon in a
+    // `-C` argument too, which turns the directory into an unopenable literal.
+    await tar(["-xzf", archivePath], extractedRoot);
     // Release archives intentionally exclude node_modules; the updater restores
     // the frozen dependency graph before launching the extracted CLI. Reuse the
     // test checkout's already-frozen install so this boundary test stays offline.

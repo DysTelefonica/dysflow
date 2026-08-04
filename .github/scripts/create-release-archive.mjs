@@ -67,7 +67,12 @@ function runTar(args, cwd) {
   return result.stdout;
 }
 
-function forceLocalArgs(cwd) {
+// GNU tar reads a Windows drive-letter path (`C:\...`) as remote `host:path`
+// syntax and fails with "Cannot connect to C: resolve failed". bsdtar rejects
+// the flag outright, so it is only added for GNU tar. Exported because every
+// caller that shells out to `tar` with an absolute Windows path needs the same
+// probe — a second hand-maintained copy is how #1377 stayed half-fixed.
+export function tarForceLocalArgs(cwd) {
   const version = spawnSync("tar", ["--version"], { cwd, encoding: "utf8" });
   return version.status === 0 && version.stdout.includes("GNU tar") ? ["--force-local"] : [];
 }
@@ -79,7 +84,7 @@ export async function createReleaseArchive({ packageRoot, outputPath }) {
   await mkdir(path.dirname(resolvedOutput), { recursive: true });
 
   try {
-    const forceLocal = forceLocalArgs(resolvedRoot);
+    const forceLocal = tarForceLocalArgs(resolvedRoot);
     runTar([...forceLocal, "-czf", resolvedOutput, ...RELEASE_ARCHIVE_ENTRIES], resolvedRoot);
     const listing = runTar([...forceLocal, "-tzf", resolvedOutput], resolvedRoot);
     assertReleaseArchiveManifest(listing);
