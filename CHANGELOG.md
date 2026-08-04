@@ -1,5 +1,17 @@
 # Changelog
 
+## [v2.35.2] - 2026-08-04
+
+### Changes
+
+- fix(mcp): prevent project configuration secrets from leaking through `setup_project` responses (#1374)
+- fix(transactional): surface rollback failures and cover transactional failure paths (#1375)
+- fix(config): keep worktree configuration caches coherent after creation and migration (#1376)
+- fix(release): support GNU tar with Windows drive-letter paths (#1377)
+- test(cleanup): cover stale marker cleanup failure and recovery paths (#1378)
+- fix(deps): patch high-severity `fast-uri` and `ip-address` advisories (#1384)
+
+
 ## [v2.35.1] - 2026-08-03
 
 ### Changes
