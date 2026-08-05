@@ -8,7 +8,7 @@ metadata:
   version: "0.3.0"
   status: active
   last_verified: "2026-08-03"
-  last_dysflow_version: "2.35.3"
+  last_dysflow_version: "2.36.0"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow-plugin` for routine install/update refresh"
   managed_by: "`dysflow install` / `dysflow update` for routine pointer refresh; this skill is the manual fallback when those commands cannot reach a target (permissions, OS-specific path, agent not in the install matrix)."
@@ -29,6 +29,24 @@ metadata:
 The pointer is the LIGHTER variant of the harness — a compact current-contract block, not the full harness. It exists in 8 user-global instruction files plus the dysflow project AGENTS.md, so every installed agent can discover the harness without forcing the agent to load the full block into context.
 
 Drift is the enemy. Run on demand after the arnés regenerates (ARN-1 → ARN-2 chain). Run rarely otherwise. But when you run, run completely across the 9 active targets.
+
+### Canonical consumer pointer template
+
+The installer ships this template inside the skill so every supported agent can
+materialize the pointer even when companion assets are unavailable:
+
+```markdown
+<!-- user-supplement:dysflow:pointer -->
+## Dysflow runtime-first rule
+
+When the cwd contains `.dysflow/project.json`, any `.dysflow/*` artifact,
+`*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, or `tests/*.json`, `dysflow-usage`
+and `dysflow-arnes` are **MUST-LOAD** skills. Load `dysflow-usage` first, then
+the arnés. Call `get_capabilities({})` before inspecting static project files,
+forming a diagnosis, or modifying configuration. The live runtime wins over
+cached documentation and assumptions.
+<!-- /user-supplement:dysflow:pointer -->
+```
 
 1. **Single source of truth = `dysflow-arnes/SKILL.md` marker-delimited harness plus `C:\Proyectos\skills\skills\dysflow-pointer-rollout\assets\pointer.md`.** The delimited harness block is the canonical payload. The pointer is the lighter reference; the embedded block is the heavier payload (only in the home file `dysflow/AGENTS.md`).
 2. **Markers are sacrosanct.** `<!-- user-supplement:dysflow:pointer -->...<!-- /user-supplement:dysflow:pointer -->` in user-globals; `<!-- dysflow:arnés -->...<!-- /dysflow:arnés -->` in `dysflow/AGENTS.md`. Operations only touch content INSIDE these markers. Outside content is read-only.

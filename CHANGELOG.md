@@ -1,5 +1,14 @@
 # Changelog
 
+## [v2.36.0] - 2026-08-05
+
+### Changes
+
+- Improve: dysflow-usage and dysflow-arnes skills surface as MUST-LOAD when .dysflow/ artifacts are in cwd. (#1403)
+- Improve: typed error envelopes include additive remediationHint.skill / remediationHint.tool hints pointing to the canonical skill. (#1403)
+- docs(prompts): record the round 1 maintainer evidence and repository-owned scope for skill discoverability (#1403)
+
+
 ## [v2.35.3] - 2026-08-04
 
 ### Changes
