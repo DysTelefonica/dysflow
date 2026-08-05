@@ -23,7 +23,9 @@ export type ToolFieldShape = {
  * Issue #1077 — typed error envelope shape. Mirrors the `McpToolError`
  * contract surfaced by `translateCoreResultToMcpContent`: every error
  * envelope carries a typed `code`, a human-readable `message`, and (for
- * gate refusals) a typed `remediation` string. The shape is pinned here
+ * gate refusals) a typed `remediation` string. Current runtimes also expose
+ * additive `remediationHint` skill/tool guidance without changing that legacy
+ * field. The shape is pinned here
  * so a future envelope simplification cannot silently drop the
  * remediation field that consumers rely on.
  */
@@ -34,6 +36,7 @@ export type ToolErrorEnvelopeShape = {
   rejectedFlags?: { type: "array"; optional: true; items: { type: "string" } };
   toolCommitFlag?: { type: "string"; optional: true };
   remediation?: { type: "string"; optional: true };
+  remediationHint?: { type: "object"; optional: true; description?: string };
   actualShape?: { type: "object"; optional: true };
   expectedShape?: { type: "object"; optional: true };
 };

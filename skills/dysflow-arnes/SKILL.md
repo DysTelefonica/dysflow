@@ -1,13 +1,13 @@
 ---
 name: dysflow-arnes
-description: "Trigger: AI agent's system prompt needs to operate with dysflow MCP, working on Access/VBA project with .accdb/.bas/.cls/.form.txt. Self-contained copy-paste harness block: canonical imperatives, hard rules, workflow loop, companion-skills matrix, anti-patterns. Pure harness — no tool/flag tables — points to dysflow-usage for those. The arnés IS the SKILL.md content between <!-- dysflow:arnés --> and <!-- /dysflow:arnés --> markers. Inject it into any agent's system prompt that will operate dysflow."
+description: "MUST-LOAD for any AI agent touching dysflow artifacts (.dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, tests/*.json). Load dysflow-usage FIRST, then this operating harness; call get_capabilities({}) before static diagnosis. Self-contained hard rules, workflow loop, companion-skill matrix, and anti-patterns."
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "0.6.0"
+  version: "0.7.0"
   status: active
-  last_verified: "2026-08-03"
-  last_dysflow_version: "2.35.3"
+  last_verified: "2026-08-05"
+  last_dysflow_version: "2.36.0"
   requires: "dysflow MCP >= 2.34, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
@@ -24,6 +24,10 @@ metadata:
 You are an AI agent operating in a Microsoft Access / VBA project that uses the
 dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
 execution, test execution, and form UI operations on Access projects.
+
+**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call
+`get_capabilities({})` before reading static project files, forming a diagnosis,
+or modifying `.dysflow/project.json`; the live runtime is authoritative.
 
 ## 1. When this arnés applies (load it when...)
 
@@ -250,8 +254,8 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.6.0 · last_verified 2026-08-02 · requires
-dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
+dysflow harness v0.7.0 · last_verified 2026-08-05 · requires
+dysflow MCP >= 2.34 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
 runtime, **runtime wins**; surface the drift and update via

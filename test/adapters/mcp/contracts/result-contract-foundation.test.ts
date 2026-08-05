@@ -56,6 +56,11 @@ describe("executable result-contract foundation", () => {
           rejectedFlags: { type: "array", optional: true, items: { type: "string" } },
           toolCommitFlag: { type: "string", optional: true },
           remediation: { type: "string", optional: true },
+          remediationHint: {
+            type: "object",
+            optional: true,
+            description: "Canonical dysflow-usage skill and runtime-tool recovery guidance.",
+          },
           actualShape: { type: "object", optional: true },
           expectedShape: { type: "object", optional: true },
         },

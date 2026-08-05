@@ -4,7 +4,7 @@ import type {
   OperationResult,
   VbaSyncPort,
 } from "../../core/contracts/index.js";
-import type { DiagnosticRemediation } from "../../core/contracts/remediation.js";
+import type { AgentRemediation, DiagnosticRemediation } from "../../core/contracts/remediation.js";
 import type { AccessCleanupResult } from "../../core/operations/access-operation-cleanup.js";
 import type {
   AccessOperationMetadata,
@@ -81,6 +81,8 @@ export type McpToolError = {
    * (e.g. "call get_capabilities to introspect the allowlist").
    */
   remediation?: string;
+  /** Additive AI recovery pointer; the legacy remediation string remains unchanged. */
+  remediationHint?: AgentRemediation;
   /** Redacted structural summary of the payload rejected by result validation. */
   actualShape?: Record<string, unknown>;
   /** Redacted structural summary of the executable result contract. */
@@ -261,7 +263,80 @@ export type McpToolResult = {
  * should call this rather than constructing the field inline.
  */
 export function withSchemaVersion(result: McpToolResult): McpToolResult {
-  return withResponseEnvelope(result);
+  if (!result.isError || result.error === undefined) return withResponseEnvelope(result);
+  return withResponseEnvelope({
+    ...result,
+    error: {
+      ...result.error,
+      remediationHint: agentRemediationFor(result.error.code, result.error.remediation),
+    },
+  });
+}
+
+function agentRemediationFor(code: string, existing?: DiagnosticRemediation): AgentRemediation {
+  const description =
+    typeof existing === "string" ? existing : "Follow the canonical Dysflow recovery guidance.";
+  if (code === "MCP_INPUT_INVALID") {
+    return {
+      kind: "agent-guidance",
+      description,
+      skill: "dysflow-usage",
+      section: "Tool contract introspection",
+      tool: "describe_tool",
+      hint: "Load dysflow-usage, then call describe_tool({ name: '<tool>' }) to verify exact parameters before retrying.",
+    };
+  }
+  if (/^(?:CONFIG_|FRONTEND_|INHERITED_WORKTREE_|PROJECT_ID_)/.test(code)) {
+    return {
+      kind: "agent-guidance",
+      description,
+      skill: "dysflow-usage",
+      section: "Multi-worktree project resolution and ambiguity recovery",
+      tool: "get_capabilities",
+      hint: "Load dysflow-usage, call get_capabilities({}) first, then follow resolve_project recovery without guessing a project.",
+    };
+  }
+  if (code === "LACCDB_STALE_DETECTED" || code === "LIVE_PROCESS_HOLDS_LACCDB") {
+    return {
+      kind: "agent-guidance",
+      description,
+      skill: "dysflow-usage",
+      section: "Access process and lock recovery",
+      tool: "list_access_operations",
+      hint: "Load dysflow-usage and verify process liveness with list_access_operations before any cleanup.",
+    };
+  }
+  if (/^(?:PROCEDURE_|MCP_PROCEDURE_)/.test(code)) {
+    return {
+      kind: "agent-guidance",
+      description,
+      skill: "dysflow-usage",
+      section: "VBA procedure execution",
+      tool: "describe_tool",
+      hint: "Load dysflow-usage and inspect the execution tool contract with describe_tool before retrying.",
+    };
+  }
+  if (
+    code === "EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION" ||
+    code === "DESTINATION_ROOT_REQUIRED"
+  ) {
+    return {
+      kind: "agent-guidance",
+      description,
+      skill: "dysflow-usage",
+      section: "Safe write and export paths",
+      tool: "describe_tool",
+      hint: "Load dysflow-usage and inspect the exact export contract with describe_tool before choosing a destination.",
+    };
+  }
+  return {
+    kind: "agent-guidance",
+    description,
+    skill: "dysflow-usage",
+    section: "Typed error envelopes and safe-by-default recovery",
+    tool: "get_capabilities",
+    hint: "Load dysflow-usage and call get_capabilities({}) before diagnosing or changing project files.",
+  };
 }
 
 export type DysflowMcpTool = {

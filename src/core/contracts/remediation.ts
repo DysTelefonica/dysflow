@@ -71,7 +71,25 @@ export type WorktreeConfigRemediation = {
   originReference?: string;
 };
 
-export type StructuredRemediation = Remediation | MigrationRemediation | WorktreeConfigRemediation;
+/**
+ * Agent-facing recovery pointer added in v2.36.0. It complements the
+ * human-readable description with the canonical skill and runtime tool an AI
+ * consumer must consult before diagnosing from static project files.
+ */
+export type AgentRemediation = {
+  kind: "agent-guidance";
+  description: string;
+  skill: "dysflow-usage";
+  section: string;
+  tool?: "get_capabilities" | "describe_tool" | "list_access_operations";
+  hint: string;
+};
+
+export type StructuredRemediation =
+  | Remediation
+  | MigrationRemediation
+  | WorktreeConfigRemediation
+  | AgentRemediation;
 export type DiagnosticRemediation = string | StructuredRemediation;
 
 export function remediationForConfigMigration(input: {

@@ -1,13 +1,13 @@
 ---
 name: dysflow-usage
-description: "Trigger: dysflow MCP call, dysflow tool, MCP error code, write flag, dryRun question, runtime capabilities, verify against live runtime. Operational guide for the dysflow MCP: canonical tool names (no spurious `dysflow_` prefix), write-flags matrix, error codes, write-execution-policy, and the human-compile contract. Single source of truth for every other skill that touches dysflow."
+description: "MUST-LOAD before any dysflow diagnosis or call when the cwd contains .dysflow/project.json, .dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, or tests/*.json. Load first and call get_capabilities({}) before inspecting static files or changing config. Canonical tool names, write flags, error codes, safe-by-default policy, and human-compile contract."
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "1.15.0"
+  version: "1.16.0"
   status: active
-  last_verified: "2026-08-03"
-  last_dysflow_version: "2.35.3"
+  last_verified: "2026-08-05"
+  last_dysflow_version: "2.36.0"
   requires: "dysflow MCP >= 2.34"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
@@ -18,6 +18,12 @@ metadata:
 ---
 
 ## Activation Contract
+
+**MUST-LOAD:** when a cwd contains `.dysflow/project.json`, any `.dysflow/*`
+artifact, `*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, or `tests/*.json`, load
+this skill BEFORE inspecting static project files, inventing a diagnosis, or
+modifying configuration. Call `get_capabilities({})` first; the live runtime
+owns tool names, flags, defaults, and recovery semantics.
 
 Use this skill when ANY of:
 

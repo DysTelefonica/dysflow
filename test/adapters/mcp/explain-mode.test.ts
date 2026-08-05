@@ -260,6 +260,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
       "message",
       "relatedIssueNumbers",
       "remediation",
+      "remediationHint",
     ];
     expect(keys).toEqual([...allowed].sort());
   });

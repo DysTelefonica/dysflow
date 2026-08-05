@@ -15,6 +15,10 @@ You are an AI agent operating in a Microsoft Access / VBA project that uses the
 dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
 execution, test execution, and form UI operations on Access projects.
 
+**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call
+`get_capabilities({})` before reading static project files, forming a diagnosis,
+or modifying `.dysflow/project.json`; the live runtime is authoritative.
+
 ## 1. When this arnés applies (load it when...)
 
 - The project contains `*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, `.dysflow/*`,
@@ -240,8 +244,8 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.6.0 · last_verified 2026-08-02 · requires
-dysflow MCP >= 2.13 · author: Andrés Román · license: Apache-2.0
+dysflow harness v0.7.0 · last_verified 2026-08-05 · requires
+dysflow MCP >= 2.34 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
 runtime, **runtime wins**; surface the drift and update via
