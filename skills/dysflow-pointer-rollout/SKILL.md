@@ -8,7 +8,7 @@ metadata:
   version: "0.3.0"
   status: active
   last_verified: "2026-08-03"
-  last_dysflow_version: "2.36.0"
+  last_dysflow_version: "2.36.1"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow-plugin` for routine install/update refresh"
   managed_by: "`dysflow install` / `dysflow update` for routine pointer refresh; this skill is the manual fallback when those commands cannot reach a target (permissions, OS-specific path, agent not in the install matrix)."

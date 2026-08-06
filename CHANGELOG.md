@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.36.1] - 2026-08-06
+
+### Changes
+
+- docs(skills): add HR-14 + AP-12 for unattended forms; expand `access-form-ui-builder` with the canonical recipe (`map_form_behavior` + `verify_form_bindings` + scoped grep fallback in the sibling `.cls`). Bump harness version to v0.8.0 and skill version to v1.4. (#1405)
+- chore(agents): document the never-delete-remote-branches rule. Local worktrees may be cleaned; remote refs persist for the life of the repo. (#1406)
+
+
 ## [v2.36.0] - 2026-08-05
 
 ### Changes
