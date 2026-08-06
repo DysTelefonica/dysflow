@@ -4,10 +4,10 @@ description: "MUST-LOAD for any AI agent touching dysflow artifacts (.dysflow/*,
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "0.7.0"
+  version: "0.8.0"
   status: active
-  last_verified: "2026-08-05"
-  last_dysflow_version: "2.36.0"
+  last_verified: "2026-08-06"
+  last_dysflow_version: "2.36.2"
   requires: "dysflow MCP >= 2.34, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
