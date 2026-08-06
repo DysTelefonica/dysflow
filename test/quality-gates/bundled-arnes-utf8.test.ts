@@ -36,8 +36,8 @@ describe("bundled dysflow arnés release bytes (#1328)", () => {
     const skill = await readUtf8("skills/dysflow-arnes/SKILL.md");
 
     for (const sentinel of MOJIBAKE_SENTINELS) expect(skill).not.toContain(sentinel);
-    expect(skill).toContain('last_dysflow_version: "2.36.0"');
-    expect(skill).toContain("dysflow harness v0.7.0");
+    expect(skill).toContain('last_dysflow_version: "2.36.2"');
+    expect(skill).toContain("dysflow harness v0.8.0");
   });
 
   it("embeds the canonical bundled marker block byte-for-byte in AGENTS.md", async () => {
