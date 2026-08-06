@@ -384,6 +384,16 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   `codegraph index C:\Proyectos\dysflow` (or `codegraph init` for a fresh index). Index drift is a
   P2 process defect; if you notice `codegraph_explore` returning answers that don't match the
   current source, re-index immediately.
+- **Never delete remote branches.** Once a branch is pushed to `origin`, the ref stays there for the
+  life of the repo. The PR is the merge artifact; the branch is the history (other contributors may
+  have referenced it, forks may have cloned it, CI may have cached artifacts against it). Concretely:
+  - Never pass `--delete-branch` to `gh pr merge` — leave the flag off.
+  - Never run `git push origin --delete <branch>` or `git push origin :<branch>`.
+  - Never ask `gh` to clean up the remote ref on merge, close, or reopen.
+  Local worktrees (`git worktree remove <path>`) and local-only branches with no `origin/<name>`
+  counterpart (`git branch -d <local>`) may be cleaned when no longer in active use to free disk,
+  but the remote ref persists. This applies to every branch type — `feat/*`, `fix/*`, `chore/*`,
+  `docs/*`, `refactor/*` — including branches whose PR was already merged into `main`.
 
 ## MCP workflow recipes
 
