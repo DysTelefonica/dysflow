@@ -460,6 +460,11 @@ function validateMcpResultBeforeSerialization(
   if (validation.ok || policy === "report") return result;
 
   const message = `Result from ${tool.name} did not satisfy its executable result contract.`;
+  const schemaPaths = validation.diagnostic.issues.map((issue) => issue.path);
+  const remediation =
+    `Inspect the actualShape/expectedShape fields and schemaPaths below to identify which keys differ. ` +
+    `The handler payload does not satisfy the resultContract at ${schemaPaths.join(", ") || "$"}. ` +
+    "Adjust the handler to emit a payload matching the contract, or adjust the contract schema if the new payload is intentional. See test/adapters/mcp/result-contract-violation-shape.test.ts for the synthetic repro.";
   return withSchemaVersion({
     content: [{ type: "text", text: `${RESULT_CONTRACT_VIOLATION}: ${message}` }],
     isError: true,
@@ -469,17 +474,27 @@ function validateMcpResultBeforeSerialization(
       errorCode: RESULT_CONTRACT_VIOLATION,
       message,
       errorMessage: message,
+      remediation,
+      remediationHint: {
+        kind: "agent-guidance",
+        description: remediation,
+        skill: "dysflow-usage",
+        section: "Executable result contract validation",
+        tool: "describe_tool",
+        hint: "Call describe_tool({ name: '<tool>' }) to inspect the executable result contract before changing the handler or contract.",
+      },
       actualShape: validation.diagnostic.actualShape,
       expectedShape: validation.diagnostic.expectedShape,
       details: {
         toolName: validation.diagnostic.toolName,
-        schemaPaths: validation.diagnostic.issues.map((issue) => issue.path),
+        schemaPaths,
       },
       diagnostics: [
         {
           code: RESULT_CONTRACT_VIOLATION,
           severity: "error",
           message,
+          remediation,
         },
       ],
       relatedIssueNumbers: ["#1096"],

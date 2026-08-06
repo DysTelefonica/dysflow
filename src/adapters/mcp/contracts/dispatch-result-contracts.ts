@@ -57,6 +57,18 @@ const vbaReadPayload = z
   })
   .loose();
 
+const ANALYZE_FORM_LAYOUT_CONTRACT = defineResultContract({
+  description: "Form layout analysis findings with aggregate control and section counts.",
+  schema: z
+    .object({
+      formName: z.string(),
+      controls: z.union([z.number().int().nonnegative(), z.array(z.unknown())]),
+      sections: z.number().int().nonnegative(),
+      findings: z.array(z.unknown()),
+    })
+    .loose(),
+});
+
 const RUN_VBA_CONTRACT = defineResultContract({
   description: "VBA procedure execution or dry-run plan.",
   modes: ["plan", "apply"],
@@ -371,6 +383,7 @@ export function resultContractForDispatchTool(
   if (name === "compact_repair") return COMPACT_REPAIR_CONTRACT;
   if (name === "relink_tables" || name === "localize_backend_links") return RELINK_TABLES_CONTRACT;
   if (name === "relink_directory") return RELINK_DIRECTORY_CONTRACT;
+  if (name === "analyze_form_layout") return ANALYZE_FORM_LAYOUT_CONTRACT;
   if (name === "apply_form_design_plan") return APPLY_FORM_DESIGN_PLAN_CONTRACT;
   return deriveDispatchResultContract(MCP_TOOL_ROUTES[name].resultFamily);
 }
