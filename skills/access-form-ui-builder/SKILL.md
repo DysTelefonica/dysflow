@@ -4,8 +4,8 @@ description: "Trigger: Access form UI builder, analyze form UI, behavior map, de
 license: Apache-2.0
 metadata:
   author: "gentleman-programming"
-  version: "1.3"
-  last_updated: "2026-07-11"
+  version: "1.4"
+  last_updated: "2026-08-06"
   requires_dysflow: ">=2.6.0"
 ---
 
@@ -41,6 +41,7 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 | Aligning N controls to a common edge | Use the standalone `form_align_controls` tool (issue #816, Phase 3 Ergonomic actions). Replaces N `form_move_control` calls with one batch geometry verb. Identity-preserving. |
 | Distributing N controls evenly along an axis | Use the standalone `form_distribute_controls` tool (issue #816, Phase 3 Ergonomic actions). Defaults to bounding-box distribution; pass `spacing` for exact gaps. Identity-preserving. |
 | Verifying output | Compare against the source contract and behavior map, then surface actionable drift. |
+| Working with **unattended forms** (bindings assigned in `Form_Open` / `Form_Load`) | `analyze_form_ui` will return `bindings: []` for every control — by design, the IR has nothing to report because the binding is created at runtime. The canonical recipe is `map_form_behavior({autoFetchCodeGraph:true})` → `verify_form_bindings({schema})` → grep `Me.X.(RowSource\|ControlSource)` in the sibling `.cls` as a last-resort fallback. Do not read the `.form.txt` with `Read` to "find" the bindings — see the **Forms desatendidos** section below and HR-14 / AP-12 in `dysflow-arnes`. |
 
 ## Execution Steps
 
@@ -53,6 +54,54 @@ Use this skill when designing, reviewing, or applying AI-assisted Microsoft Acce
 5. Dry-run first: `apply_form_design_plan({ plan, dryRun: true })` returns the would-be-written source + advisories + `appliedContract`. No filesystem write, no `import_modules` call.
 6. When ready to commit: `apply_form_design_plan({ plan, dryRun: false })` writes through the guarded seam (single write + single import + single rollback). Result includes `filesystemApplied: true` and `importGate: "passed"`. With writes disabled, this call refuses before any adapter dispatch.
 7. Verify applied output against the behavior map and source contract with `verify_form_ui`.
+
+## Forms desatendidos (bindings assigned at runtime)
+
+Many Access frontends — including the reference projects maintained by this
+project — use **unattended forms**: every `ControlSource` and `RowSource` is
+assigned in code inside `Form_Open` / `Form_Load` of the sibling `.cls`, not as
+a declared property on the control in the `.form.txt`. For these forms,
+`analyze_form_ui({sourcePath, outputMode:"full"})` **correctly** returns
+`bindings: []` for every control — the IR has nothing to report because nothing
+is declared. Reading the `.form.txt` with `Read` to extract bindings is the
+wrong shape: the binding is not in the file.
+
+### Canonical recipe
+
+1. **Trace the real handler** — `map_form_behavior({sourcePath, autoFetchCodeGraph:true, outputMode:"full"})`.
+   This merges FormIR with codegraph-vba evidence and surfaces the actual call
+   path of `Form_Open` / `Form_Load` plus the `tables[]` / `effects[]` each
+   handler reaches. Issue #830 opt-in: without `autoFetchCodeGraph:true` you
+   must supply `codegraphEvidence` arrays yourself.
+
+2. **Validate against schema** — `verify_form_bindings({sourcePath, schema, outputMode:"full"})`.
+   Pass either a multi-table `Record<tableName, ColumnSchema[]>` aggregate
+   (fan out one `get_schema` per table upstream) or a single-table
+   `get_schema` payload. Returns typed findings:
+   `FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN` /
+   `FORM_BINDING_EMPTY` / `FORM_BINDING_SQL_UNPARSEABLE` /
+   `FORM_BINDING_TYPE_MISMATCH`. Severity is always `warning` (informational;
+   never gating).
+
+3. **Fallback only if codegraph is stale** — grep the sibling `.cls`:
+   `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to the `Form_Open` and
+   `Form_Load` handlers of the form. This is a last-resort recovery, not the
+   primary path.
+
+### Anti-pattern
+
+Do **not** parse the `.form.txt` with `Read` looking for `ControlSource =`
+lines. For unattended forms there are no such lines by design — you will report
+a false "missing binding" defect on every control of every form and waste the
+budget on the wrong file. The IR is not lying; the binding lives in the `.cls`.
+
+### Cross-references
+
+- `dysflow-arnes` HR-14 — hard rule covering the same anti-pattern.
+- `dysflow-arnes` AP-12 — explicit forbidden action for reading `.form.txt`
+  by hand in this scenario.
+- `vba-handler-backtrace` skill — per-control handler trace from a control
+  event back to the SQL it eventually runs.
 
 ## Output Contract
 

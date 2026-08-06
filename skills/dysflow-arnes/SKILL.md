@@ -137,6 +137,17 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
   and then require the discriminator. Missing or different `schemaVersion`
   fails closed; never continue by guessing a payload shape.
 
+- **HR-14 — Bindings vacíos en `.form.txt` no son bug; son formularios desatendidos.**
+  When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the
+  IR is telling the truth: the `ControlSource` / `RowSource` are not declared as
+  properties on the controls, they are assigned in runtime code (typically inside
+  `Form_Open` / `Form_Load` of the sibling `.cls`). Before opening the `.form.txt`
+  with `Read` to "find" missing bindings, verify the form is not an unattended form
+  — the source of truth is the `.cls`, not the `.form.txt`. Route through
+  `map_form_behavior` (with `autoFetchCodeGraph:true`) for the real handler call
+  path, or `verify_form_bindings` for typed schema validation. See AP-12 and the
+  `access-form-ui-builder` skill §"Forms desatendidos".
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -214,6 +225,21 @@ load `access-vba-e2e-methodology`.
 - **AP-11** — Claiming "TDD-green" without BOTH user-confirmed compile AND
   all-green `test_vba` result.
 
+- **AP-12 — Reading `.form.txt` with `Read` to extract bindings that
+  `analyze_form_ui` reported empty.** The IR is not lying: empty `bindings[]`
+  on an unattended form means the `ControlSource` / `RowSource` are assigned at
+  runtime inside `Form_Open` / `Form_Load` of the sibling `.cls`. The canonical
+  recipe is: (1) `map_form_behavior({sourcePath, autoFetchCodeGraph:true,
+  outputMode:"full"})` to trace the real handler call path through codegraph-vba;
+  (2) `verify_form_bindings({sourcePath, schema, outputMode:"full"})` to
+  validate the runtime-assigned bindings against the real schema with typed
+  findings (`FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN`);
+  (3) only if codegraph is stale, grep the `.cls` for
+  `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to `Form_Open` /
+  `Form_Load`. Hand-parsing the `.form.txt` for `ControlSource =` is the wrong
+  shape for this form style and leads to false "missing binding" reports. See
+  the `access-form-ui-builder` skill §"Forms desatendidos".
+
 ## 6. Companion depth layer (where detail lives)
 
 The arnés is the LEAN pointer. Depth lives in:
@@ -254,7 +280,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.7.0 · last_verified 2026-08-05 · requires
+dysflow harness v0.8.0 · last_verified 2026-08-06 · requires
 dysflow MCP >= 2.34 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `get_capabilities`. If this arnés disagrees with
