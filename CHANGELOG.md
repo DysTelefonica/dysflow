@@ -61,6 +61,7 @@
 
 ### Changed
 
+- CI: switch Linux jobs (`release.yml` build+release, `release-title-guard.yml`, `verify-receipt-skip.yml`) from `ubuntu-latest` to self-hosted runner on Oracle VPS (Coolify-managed). Windows jobs (Access integration) remain on GitHub-hosted. Runner self-cleans logs every 30 min via sidecar.
 - Break the 18-module MCP adapter import cycle by moving result-contract and alias identity types into leaf modules (#1356).
 
 ### Fixed

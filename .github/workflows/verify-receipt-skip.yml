@@ -11,7 +11,8 @@ permissions:
 jobs:
   verify-receipt-skip:
     name: Verify receipt-skip contract
-    runs-on: ubuntu-latest
+    # Self-hosted Oracle VPS runner (Linux); Windows jobs stay on GitHub-hosted for MS Access.
+    runs-on: self-hosted
     steps:
       - name: Checkout main HEAD
         uses: actions/checkout@v5
