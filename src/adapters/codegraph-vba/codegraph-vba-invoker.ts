@@ -180,11 +180,18 @@ export type CreateDefaultCodeGraphVbaInvokerOptions = {
 
 /**
  * Default factory: returns a `CodeGraphVbaInvoker` that
- *   1. Checks for `<projectPath>/.codegraph/`. If absent, returns
- *      `{ evidence: [], warning: "<…> not initialized in <projectPath>" }`.
+ *   1. Checks for `<projectPath>/.codegraph-vba/` (fork) or
+ *      `<projectPath>/.codegraph/` (upstream). If neither is present,
+ *      returns `{ evidence: [], warning: "<…> not initialized in
+ *      <projectPath>" }`.
  *   2. If the index exists, shells out to `<command> explore <query>` with a
- *      bounded timeout.
- *   3. Parses the JSON-shaped output into `CodeGraphBehaviorEvidence[]`.
+ *      bounded timeout — WITHOUT the `--json` flag (issue #1408: the vba-aware
+ *      fork rejects `--json` with `error: unknown option '--json'`).
+ *   3. Parses stdout through BOTH {@link parseCodeGraphJson} (covers any
+ *      hypothetical upstream that emits JSON) AND
+ *      {@link parseCodeGraphExploreText} (covers the fork's text format).
+ *      Results are merged and de-duplicated by `handler` + `callPath` so the
+ *      downstream `buildFormUiBehaviorMap` layer sees a unified list.
  *   4. On any failure (ENOENT, non-zero exit, parse error, timeout), returns
  *      `{ evidence: [], warning: "<human-readable reason>" }`.
  *
@@ -239,14 +246,24 @@ export function createDefaultCodeGraphVbaInvoker(
       const query = queryParts.join(" ");
 
       try {
+        // Issue #1408 — do NOT pass `--json`. The codegraph-vba fork
+        // (vba-aware, the binary consumers actually install) rejects
+        // `--json` with `error: unknown option '--json'` and emits a
+        // human-readable text format instead. We try the JSON parser first
+        // (covers any hypothetical upstream that DOES emit JSON), then fall
+        // back to the text parser so the fork's structured **calls:** /
+        // **Dynamic-dispatch** sections become real call-path evidence.
         const { stdout } = await execFileWithWindowsFallback(
           command,
-          ["explore", "--json", "--path", projectPath, "--max-files", "16", query],
+          ["explore", "--path", projectPath, "--max-files", "16", query],
           { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
           platform,
           executeCommand,
         );
-        const evidence = parseCodeGraphJson(stdout, formName, controlNames);
+        const evidence = mergeUnique([
+          ...parseCodeGraphJson(stdout, formName, controlNames),
+          ...parseCodeGraphExploreText(stdout),
+        ]);
         if (evidence.length === 0) {
           return {
             evidence: [],
@@ -274,13 +291,15 @@ export function createDefaultCodeGraphVbaInvoker(
 // ---- helpers --------------------------------------------------------------
 
 /**
- * Parse the JSON output of `codegraph-vba explore --json` into a list of
+ * Parse the JSON output of `codegraph-vba explore` (when the CLI emits JSON
+ * instead of the fork's human-readable text format) into a list of
  * `CodeGraphBehaviorEvidence`. The CLI's shape is intentionally narrow: each
  * evidence record only needs `handler` + `callPath`. We pass `tables` and
  * `effects` when the CLI surfaces them, otherwise omit (both are optional).
  *
  * The parser is defensive: any malformed entry is dropped, never thrown. If
- * the stdout isn't JSON at all, return `[]` so the caller can fall back.
+ * the stdout isn't JSON at all, return `[]` so the caller can fall back to
+ * {@link parseCodeGraphExploreText}.
  *
  * `controlNames` is currently informational — we don't filter by it here.
  * `buildFormUiBehaviorMap` already buckets entries by `${controlName}_`
@@ -322,6 +341,102 @@ export function parseCodeGraphJson(
     const effects = asStringArray(entry.effects);
     if (effects) evidence.effects = effects;
     out.push(evidence);
+  }
+  return out;
+}
+
+/**
+ * Issue #1408 — parse the human-readable text output the codegraph-vba fork
+ * (vba-aware) emits when `--json` is rejected. The text has three structured
+ * sections we care about:
+ *
+ *   - `**Dynamic-dispatch links among your symbols**` — bullet lines of the
+ *     form `- <Symbol> → <other>   [dynamic: <type>]` become call-path
+ *     evidence with the dynamic-dispatch type surfaced as `effects[]`.
+ *
+ *   - `**Relationships** → **calls:**` — bullet lines of the form
+ *     `- <caller> → <callee>` become call-path evidence. Summary lines like
+ *     `- ... and 40 more` are dropped. The section ends at the next `**…**`
+ *     header (typically `**references:**`).
+ *
+ *   - `**Relationships** → **references:**` is intentionally NOT parsed:
+ *     references are not call paths, so they don't carry the dynamic-dispatch
+ *     semantics the merge layer relies on.
+ *
+ * The parser is defensive: any malformed line is dropped, never thrown. If
+ * the stdout doesn't contain the expected sections, return `[]` so the caller
+ * can fall back to the JSON parser's result.
+ *
+ * Each entry keeps the same `CodeGraphBehaviorEvidence` shape as
+ * `parseCodeGraphJson` so the merge layer (`buildFormUiBehaviorMap`) buckets
+ * entries by `${controlName}_` prefix uniformly across both parsers.
+ */
+export function parseCodeGraphExploreText(stdout: string): CodeGraphBehaviorEvidence[] {
+  if (typeof stdout !== "string" || stdout.length === 0) return [];
+  const out: CodeGraphBehaviorEvidence[] = [];
+
+  // ---- Dynamic-dispatch links ------------------------------------------------
+  const dynamicRegex = /\*\*Dynamic-dispatch[^*]*\*\*\s*\n([\s\S]*?)(?=\n\*\*[^*\n]|\n>|\n*$)/;
+  const dynamicMatch = stdout.match(dynamicRegex);
+  if (dynamicMatch !== null) {
+    const section = dynamicMatch[1] ?? "";
+    for (const line of section.split(/\r?\n/)) {
+      const arrowIdx = line.indexOf(" → ");
+      if (arrowIdx < 0 || !line.startsWith("- ")) continue;
+      const caller = line.slice(2, arrowIdx).trim();
+      const rest = line.slice(arrowIdx + " → ".length).trim();
+      // "- X → Y   [dynamic: type]"
+      const bracketMatch = rest.match(/^(.+?)\s+\[dynamic:\s+(.+?)\]\s*$/);
+      if (bracketMatch === null) continue;
+      const callee = bracketMatch[1]?.trim() ?? "";
+      const dynamicType = bracketMatch[2]?.trim() ?? "";
+      if (caller.length === 0 || callee.length === 0) continue;
+      out.push({
+        handler: caller,
+        callPath: [caller, callee],
+        effects: [dynamicType],
+      });
+    }
+  }
+
+  // ---- Calls section --------------------------------------------------------
+  const callsRegex = /\*\*calls:\*\*\s*\n([\s\S]*?)(?=\n\*\*[^*\n]|\n*$)/;
+  const callsMatch = stdout.match(callsRegex);
+  if (callsMatch !== null) {
+    const section = callsMatch[1] ?? "";
+    for (const line of section.split(/\r?\n/)) {
+      if (!line.startsWith("- ")) continue;
+      const arrowIdx = line.indexOf(" → ");
+      if (arrowIdx < 0) continue;
+      const caller = line.slice(2, arrowIdx).trim();
+      const callee = line.slice(arrowIdx + " → ".length).trim();
+      // Skip summary lines like "- ... and 40 more".
+      if (caller.startsWith("... and") || callee.startsWith("... and")) continue;
+      if (caller.length === 0 || callee.length === 0) continue;
+      out.push({ handler: caller, callPath: [caller, callee] });
+    }
+  }
+
+  return out;
+}
+
+/**
+ * De-duplicate evidence entries by `handler` + `callPath.join("→")`. When
+ * the JSON parser and the text parser both find the same call edge, we keep
+ * the first occurrence and drop the second. This makes the union robust to
+ * CLIs that mix JSON-shaped and text-shaped data on stdout without
+ * inflating the merged list.
+ */
+export function mergeUnique(
+  items: readonly CodeGraphBehaviorEvidence[],
+): CodeGraphBehaviorEvidence[] {
+  const seen = new Set<string>();
+  const out: CodeGraphBehaviorEvidence[] = [];
+  for (const item of items) {
+    const key = `${item.handler}|${item.callPath.join("→")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
   }
   return out;
 }

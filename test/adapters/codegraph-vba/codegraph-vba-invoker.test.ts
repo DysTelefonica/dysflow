@@ -20,6 +20,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import {
   createDefaultCodeGraphVbaInvoker,
+  parseCodeGraphExploreText,
   parseCodeGraphJson,
 } from "../../../src/adapters/codegraph-vba/codegraph-vba-invoker.js";
 
@@ -344,6 +345,131 @@ describe("createDefaultCodeGraphVbaInvoker", () => {
     });
     const evidence = parseCodeGraphJson(stdout, "Customer", ["cmdSave"]);
     expect(evidence).toEqual([{ handler: "cmdSave_Click", callPath: ["cmdSave_Click"] }]);
+  });
+
+  // Issue #1408 — the codegraph-vba fork (vba-aware) rejects `--json` and
+  // emits structured text output. The adapter must negotiate a compatible
+  // output format (drop `--json`) and parse the text output for call-path
+  // evidence.
+  describe("issue #1408 — fork-compatible text output", () => {
+    it("parseCodeGraphExploreText extracts call edges from the **calls:** section", () => {
+      const stdout = [
+        "**Exploration: form:Customer controls:cmdSave**",
+        "",
+        "Found 5 symbols across 2 files.",
+        "",
+        "**Relationships**",
+        "",
+        "**calls:**",
+        "- cmdSave_Click → SaveCustomer",
+        "- cmdSave_Click → ValidateForm",
+        "- SaveCustomer → getdb",
+        "- ... and 1 more",
+        "",
+        "**references:**",
+        "- Customer → Customers",
+      ].join("\n");
+
+      expect(parseCodeGraphExploreText(stdout)).toEqual([
+        { handler: "cmdSave_Click", callPath: ["cmdSave_Click", "SaveCustomer"] },
+        { handler: "cmdSave_Click", callPath: ["cmdSave_Click", "ValidateForm"] },
+        { handler: "SaveCustomer", callPath: ["SaveCustomer", "getdb"] },
+      ]);
+    });
+
+    it("parseCodeGraphExploreText extracts dynamic-dispatch edges from the **Dynamic-dispatch** section", () => {
+      const stdout = [
+        "**Dynamic-dispatch links among your symbols**",
+        "(synthesized — the indirect hops grep/Read would reconstruct)",
+        "",
+        "- Auditoria → getAuditoria   [dynamic: vba name resolution]",
+        "- Otro → otroMetodo   [dynamic: synthesized]",
+      ].join("\n");
+
+      expect(parseCodeGraphExploreText(stdout)).toEqual([
+        {
+          handler: "Auditoria",
+          callPath: ["Auditoria", "getAuditoria"],
+          effects: ["vba name resolution"],
+        },
+        { handler: "Otro", callPath: ["Otro", "otroMetodo"], effects: ["synthesized"] },
+      ]);
+    });
+
+    it("parseCodeGraphExploreText returns [] for stdout without the expected sections", () => {
+      expect(parseCodeGraphExploreText("")).toEqual([]);
+      expect(parseCodeGraphExploreText("not parseable text")).toEqual([]);
+    });
+
+    it("does not pass --json to the CLI and parses the fork's text output (#1408)", async () => {
+      // Stub simulates the vba-aware fork: rejects --json with
+      // "error: unknown option '--json'" and emits text format. We inject
+      // the fork's output via the executeCommand override so the test is
+      // deterministic and doesn't depend on a real subprocess.
+      const root = mkdtempSync(join(tmpdir(), "codegraph-vba-fork-text-"));
+      mkdirSync(join(root, ".codegraph-vba"));
+
+      const capturedArgs: string[][] = [];
+      const forkTextOutput = [
+        "**Exploration: form:Customer controls:cmdSave**",
+        "",
+        "Found 3 symbols across 1 files.",
+        "",
+        "**Relationships**",
+        "",
+        "**calls:**",
+        "- cmdSave_Click → SaveCustomer",
+        "- cmdSave_Click → ValidateForm",
+      ].join("\n");
+
+      try {
+        const result = await createDefaultCodeGraphVbaInvoker({
+          command: "fake-fork-cli",
+          platform: "win32",
+          executeCommand: async (_candidate, args) => {
+            capturedArgs.push(args);
+            return { stdout: forkTextOutput, stderr: "" };
+          },
+        }).fetchBehaviorEvidence({
+          formName: "Customer",
+          controlNames: ["cmdSave"],
+          projectPath: root,
+        });
+
+        // The adapter must not pass --json to the fork CLI.
+        expect(capturedArgs).toHaveLength(1);
+        expect(capturedArgs[0]).not.toContain("--json");
+
+        // The fork's text output is parsed into real call-path evidence.
+        expect(result.warning).toBeUndefined();
+        expect(result.evidence).toEqual([
+          { handler: "cmdSave_Click", callPath: ["cmdSave_Click", "SaveCustomer"] },
+          { handler: "cmdSave_Click", callPath: ["cmdSave_Click", "ValidateForm"] },
+        ]);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it("still falls back gracefully when the fork CLI is missing (no regression on graceful-fallback contract)", async () => {
+      // Pre-condition: projectRoot has `.codegraph/`. Stub command is
+      // guaranteed ENOENT. The adapter must still return the legacy
+      // .form.txt-declared events + warning, never throw.
+      const result = await createDefaultCodeGraphVbaInvoker({
+        command: "definitely-not-a-real-binary-xyz-1408",
+        timeoutMs: 2000,
+      }).fetchBehaviorEvidence({
+        formName: "Customer",
+        controlNames: ["cmdSave"],
+        projectPath: projectRoot,
+      });
+
+      expect(result.evidence).toEqual([]);
+      expect(result.warning).toMatch(/CodeGraph-VBA lookup failed/);
+      // Regression: must not mention the fork's --json rejection (the fix
+      // drops the flag entirely, so the rejection never happens).
+      expect(result.warning).not.toMatch(/unknown option '--json'/);
+    });
   });
 
   afterAll(() => {

@@ -4,5 +4,7 @@ export {
   type CodeGraphVbaInvoker,
   type CreateDefaultCodeGraphVbaInvokerOptions,
   createDefaultCodeGraphVbaInvoker,
+  mergeUnique,
+  parseCodeGraphExploreText,
   parseCodeGraphJson,
 } from "./codegraph-vba-invoker.js";
