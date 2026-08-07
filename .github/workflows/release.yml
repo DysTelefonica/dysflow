@@ -18,8 +18,8 @@ jobs:
   build:
     name: Build release artifact
     if: startsWith(github.ref, 'refs/tags/v')
-# Linux packaging job. Windows jobs stay on windows-latest for MS Access.
-      runs-on: ubuntu-latest
+    # Linux packaging job. Windows jobs stay on windows-latest for MS Access.
+    runs-on: ubuntu-latest
     outputs:
       commit_sha: ${{ steps.commit.outputs.sha }}
       dist_sha256: ${{ steps.bundle.outputs.sha256 }}
@@ -138,8 +138,8 @@ jobs:
     name: Build & Release Artifacts
     needs: [build, release-validation]
     if: startsWith(github.ref, 'refs/tags/v')
-# Linux packaging job. Windows jobs stay on windows-latest for MS Access.
-      runs-on: ubuntu-latest
+    # Linux packaging job. Windows jobs stay on windows-latest for MS Access.
+    runs-on: ubuntu-latest
 
     permissions:
       actions: read
