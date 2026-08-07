@@ -33,16 +33,16 @@ jobs:
         id: commit
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Enable pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -104,18 +104,18 @@ jobs:
           FORCE_FULL_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_validation && 'true' || 'false' }}
         run: node .github/scripts/verify-ci-receipt.mjs
 
-      - name: Enable pnpm
-        if: steps.receipt.outputs.decision != 'skip'
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
       - name: Setup Node.js
         if: steps.receipt.outputs.decision != 'skip'
         uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Enable pnpm
+        if: steps.receipt.outputs.decision != 'skip'
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
 
       - name: Install dependencies
         if: steps.receipt.outputs.decision != 'skip'
