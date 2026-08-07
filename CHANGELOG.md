@@ -67,6 +67,7 @@
 ### Fixed
 
 - Fix: verify_form_bindings fails with RESULT_CONTRACT_VIOLATION because the generic vba-read contract required `controls` as an array; added a route-scoped contract that accepts the actual numeric count. (#1409)
+- Fix: map_form_behavior autoFetchCodeGraph falls back to form-declared events due to codegraph-vba CLI rejecting --json flag; adapter now drops --json and parses the fork's text output (**calls:** / **Dynamic-dispatch links**) into real call-path evidence (#1408)
 - Fix: analyze_form_layout fails with opaque RESULT_CONTRACT_VIOLATION; result envelope now includes actualShape/expectedShape and remediation hint (#1407)
 - Install bundled Pi skills into its global `~/.pi/agent/skills` directory instead of the inactive home-level `~/.pi/skills` path (#1372).
 - Synchronize all five release-bundled Dysflow skills with audited v2.34.2 metadata and ownership before v2.35.0 (#1368).
