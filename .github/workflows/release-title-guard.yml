@@ -10,8 +10,8 @@ permissions:
 jobs:
   validate-release-title:
     name: Release title matches tag
-    # Self-hosted Oracle VPS runner (Linux); Windows jobs stay on GitHub-hosted for MS Access.
-    runs-on: self-hosted
+    # Linux title-validation job.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout guard script
         uses: actions/checkout@v5
