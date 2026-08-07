@@ -272,13 +272,17 @@ describe("repository quality gates", () => {
   });
 
   it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
+    // release-validation stays on `windows-latest` (MS Access receipt verification);
+    // the packaging jobs (build, release) run on Linux. The Linux runner may be
+    // either the GitHub-hosted `ubuntu-latest` or the self-hosted Oracle VPS runner
+    // (Coolify-managed, aarch64 Ubuntu); both preserve the platform-neutral invariant.
     const workflow = await readText(".github/workflows/release.yml");
 
     expect(workflow).toMatch(
       /release-validation:[\s\S]*?name: Windows release validation[\s\S]*?runs-on: windows-latest/,
     );
     expect(workflow).toMatch(
-      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation\][\s\S]*?runs-on: ubuntu-latest/,
+      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation\][\s\S]*?runs-on: (ubuntu-latest|self-hosted)/,
     );
   });
 
