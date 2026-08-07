@@ -25,6 +25,7 @@ describe("dispatch-family executable result contracts — #1098", () => {
           "relink_directory",
           "apply_form_design_plan",
           "analyze_form_layout",
+          "verify_form_bindings",
           "fix_encoding",
           "delete_module",
           "generate_erd",
