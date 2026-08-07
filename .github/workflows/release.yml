@@ -18,8 +18,8 @@ jobs:
   build:
     name: Build release artifact
     if: startsWith(github.ref, 'refs/tags/v')
-    # Self-hosted Oracle VPS runner (Linux); Windows jobs stay on GitHub-hosted for MS Access.
-    runs-on: self-hosted
+# Linux packaging job. Windows jobs stay on windows-latest for MS Access.
+      runs-on: ubuntu-latest
     outputs:
       commit_sha: ${{ steps.commit.outputs.sha }}
       dist_sha256: ${{ steps.bundle.outputs.sha256 }}
@@ -138,8 +138,8 @@ jobs:
     name: Build & Release Artifacts
     needs: [build, release-validation]
     if: startsWith(github.ref, 'refs/tags/v')
-    # Self-hosted Oracle VPS runner (Linux); Windows jobs stay on GitHub-hosted for MS Access.
-    runs-on: self-hosted
+# Linux packaging job. Windows jobs stay on windows-latest for MS Access.
+      runs-on: ubuntu-latest
 
     permissions:
       actions: read
