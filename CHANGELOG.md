@@ -62,6 +62,7 @@
 ### Changed
 
 - Route documentation-only pull requests to a dedicated, ratcheted documentation quality check while preserving stable fail-closed CI results (#1422).
+- Add task-oriented documentation and codebase entrypoints for contributors and maintainers (#1420).
 - CI: switch Linux jobs (`release.yml` build+release, `release-title-guard.yml`, `verify-receipt-skip.yml`) from `ubuntu-latest` to self-hosted runner on Oracle VPS (Coolify-managed). Windows jobs (Access integration) remain on GitHub-hosted. Runner self-cleans logs every 30 min via sidecar.
 - Break the 18-module MCP adapter import cycle by moving result-contract and alias identity types into leaf modules (#1356).
 
