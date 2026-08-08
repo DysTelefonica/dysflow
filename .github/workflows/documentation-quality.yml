@@ -1,0 +1,16 @@
+name: Documentation quality
+on:
+  pull_request:
+jobs:
+  documentation-quality:
+    name: Documentation quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: classify
+        run: node scripts/check-documentation-quality.mjs classify --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}" --github-output "$GITHUB_OUTPUT"
+      - name: Check changed documentation
+        if: steps.classify.outputs.docs_changed == 'true'
+        run: node scripts/check-documentation-quality.mjs check --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}"
