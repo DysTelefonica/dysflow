@@ -16,6 +16,13 @@ New installation? Follow [Install and verify Dysflow](./docs/SETUP.md).
 Building an agent integration? Read the
 [Dysflow plugin author guide](./docs/PLUGIN-AUTHORS.md).
 
+## Quick Navigation
+
+- [Documentation by task](./DOCS.md)
+- [Codebase guide for contributors](./CODEBASE-GUIDE.md)
+- [Install and verify Dysflow](./docs/SETUP.md)
+- [API and MCP references](./DOCS.md#quick-navigation)
+
 ---
 
 ## Versioning
@@ -1442,8 +1449,7 @@ Useful references:
 
 ## Relevant docs
 
+- [`DOCS.md`](DOCS.md)
+- [`CODEBASE-GUIDE.md`](CODEBASE-GUIDE.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`docs/architecture/dysflow-core-and-adapters.md`](docs/architecture/dysflow-core-and-adapters.md)
-- [`docs/api/http-api.md`](docs/api/http-api.md)
-- [`docs/testing/mcp-access-e2e.md`](docs/testing/mcp-access-e2e.md)
-- [`docs/testing/mcp-protocol-maintenance.md`](docs/testing/mcp-protocol-maintenance.md)
