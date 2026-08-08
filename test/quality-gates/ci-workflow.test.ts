@@ -133,6 +133,21 @@ function enginesNodeBoundaries(declared: string): { floor: number; ceiling: numb
 }
 
 describe("repository quality gates", () => {
+  it("keeps stable required checks while routing docs-only pull requests", async () => {
+    const [ci, docs] = await Promise.all([
+      readText(".github/workflows/ci.yml"),
+      readText(".github/workflows/documentation-quality.yml"),
+    ]);
+    expect(ci).toContain("changes:");
+    expect(workflowJobBlock(ci, "quality")).toContain(
+      "needs.changes.outputs.code_required == 'true'",
+    );
+    expect(workflowJobBlock(ci, "ci-result")).toMatch(/if: always\(\)/);
+    expect(workflowJobBlock(ci, "ci-result")).toContain("docs-only");
+    expect(docs).toContain("name: Documentation quality");
+    expect(docs).toContain("check-documentation-quality.mjs check");
+    expect(docs).not.toMatch(/^\s+paths:/m);
+  });
   it("runs install, lint, test, build, and coverage in CI", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
     const commands = workflowRunCommands(workflow);
@@ -151,9 +166,7 @@ describe("repository quality gates", () => {
   it("runs the complete quality-gate suite on the supported Windows platform", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
 
-    expect(workflow).toMatch(
-      /quality:\s*\r?\n\s*name: Quality gates\s*\r?\n\s*runs-on: windows-latest/,
-    );
+    expect(workflowJobBlock(workflow, "quality")).toMatch(/runs-on: windows-latest/);
     expect(workflow).toContain("windows-integration-smoke:");
     expect(workflow).toContain("runs-on: windows-latest");
     expect(workflow).toContain("Get-Command powershell.exe");

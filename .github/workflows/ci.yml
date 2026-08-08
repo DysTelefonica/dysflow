@@ -17,8 +17,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    outputs:
+      code_required: ${{ steps.classify.outputs.code_required }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: classify
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: node scripts/check-documentation-quality.mjs classify --base "$BASE" --head "$HEAD" --github-output "$GITHUB_OUTPUT"
   quality:
     name: Quality gates
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.code_required == 'true'
     runs-on: windows-latest
     # Pull requests exercise every Node major `engines.node` claims — a claimed
     # major that CI never runs is supported on paper only. A push to main
@@ -87,9 +103,10 @@ jobs:
 
   windows-integration-smoke:
     name: Windows PowerShell/Access smoke
+    needs: changes
     # The PR proves these integration paths before merge. The main-push
     # quality receipt remains the exact-SHA authority used by releases.
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code_required == 'true'
     runs-on: windows-latest
 
     steps:
@@ -136,3 +153,30 @@ jobs:
           $evidenceExit = $LASTEXITCODE
           if ($vitestExit -ne 0) { exit $vitestExit }
           if ($evidenceExit -ne 0) { exit $evidenceExit }
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [changes, quality, windows-integration-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate routed jobs
+        env:
+          EVENT: ${{ github.event_name }}
+          CODE_REQUIRED: ${{ needs.changes.outputs.code_required }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SMOKE_RESULT: ${{ needs.windows-integration-smoke.result }}
+        shell: bash
+        run: |
+          test "$CHANGES_RESULT" = success
+          if test "$EVENT" = push || test "$CODE_REQUIRED" = true; then
+            test "$QUALITY_RESULT" = success
+          else
+            echo "docs-only: code quality jobs intentionally skipped"
+            test "$QUALITY_RESULT" = skipped
+          fi
+          if test "$EVENT" = pull_request && test "$CODE_REQUIRED" = true; then
+            test "$SMOKE_RESULT" = success
+          else
+            test "$SMOKE_RESULT" = skipped
+          fi

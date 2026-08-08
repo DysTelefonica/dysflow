@@ -182,7 +182,10 @@ describe("release CI receipt", () => {
     ]);
 
     expect(ci).toMatch(
-      /windows-integration-smoke:[\s\S]*?if: github\.event_name == 'pull_request'[\s\S]*?runs-on: windows-latest/,
+      /quality:[\s\S]*?if: github\.event_name == 'push' \|\| needs\.changes\.outputs\.code_required == 'true'/,
+    );
+    expect(ci).toMatch(
+      /windows-integration-smoke:[\s\S]*?needs\.changes\.outputs\.code_required == 'true'[\s\S]*?runs-on: windows-latest/,
     );
     expect(ci).toMatch(
       /name: Audit dependencies[\s\S]*?if: github\.event_name == 'push'[\s\S]*?AUDIT_UNAVAILABLE_POLICY: fail/,
