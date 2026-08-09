@@ -416,10 +416,14 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   - Never pass `--delete-branch` to `gh pr merge` — leave the flag off.
   - Never run `git push origin --delete <branch>` or `git push origin :<branch>`.
   - Never ask `gh` to clean up the remote ref on merge, close, or reopen.
-  Local worktrees (`git worktree remove <path>`) and local-only branches with no `origin/<name>`
-  counterpart (`git branch -d <local>`) may be cleaned when no longer in active use to free disk,
-  but the remote ref persists. This applies to every branch type — `feat/*`, `fix/*`, `chore/*`,
-  `docs/*`, `refactor/*` — including branches whose PR was already merged into `main`.
+  This applies to every branch type — `feat/*`, `fix/*`, `chore/*`, `docs/*`, `refactor/*` —
+  including branches whose PR was already merged into `main`.
+- **Do delete the local worktree once its PR has merged.** If the work happened in a git worktree,
+  run `git worktree remove <path>` and then `git worktree prune`. This is not optional tidiness:
+  a stale worktree keeps an obsolete branch checked out on disk, and a later session that lands in
+  it will happily commit to the wrong place. The local branch may go with it (`git branch -d
+  <local>`); the remote ref stays. "Clean up the branch" after a merge means the worktree, never
+  the remote ref.
 
 ## MCP workflow recipes
 
