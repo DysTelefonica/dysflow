@@ -41,6 +41,7 @@ const workspaceRoot = join(tmpdir(), `dysflow-inline-e2e-${process.pid}-${Date.n
 function setupWorkspace(): void {
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
   mkdirSync(join(workspaceRoot, "src", "modules"), { recursive: true });
+  execFileSync("git", ["init", "--quiet"], { cwd: workspaceRoot, windowsHide: true });
   cpSync(fixtureFront, join(workspaceRoot, "NoConformidades.accdb"));
   cpSync(fixtureBackend, join(workspaceRoot, "NoConformidades_Datos.accdb"));
   writeFileSync(
@@ -200,14 +201,14 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
   it("runs a trivial snippet and returns its `result` value (#786)", async () => {
     const result = await callMcp(
       "vba_inline_execution",
-      { projectId: "dysflow-inline-e2e", code: 'result = "ok"' },
+      { projectId: "dysflow-inline-e2e", code: 'result = "ok"', apply: true },
       { timeoutMs: 120_000 },
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.text).toBe(true);
     const inner = parseInner(result.text);
     expect(inner.error).toBeNull();
-    expect(inner.ok).toBe(true);
+    expect(inner.ok, result.text).toBe(true);
     expect(inner.returnValue).toBe("ok");
 
     // Temp module is cleaned up from disk.
@@ -236,14 +237,14 @@ describe.skipIf(!canRunE2e)("vba_inline_execution E2E Integration", () => {
 
     const result = await callMcp(
       "vba_inline_execution",
-      { projectId: "dysflow-inline-e2e", code },
+      { projectId: "dysflow-inline-e2e", code, apply: true },
       { timeoutMs: 120_000 },
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.text).toBe(true);
     const inner = parseInner(result.text);
     expect(inner.error).toBeNull();
-    expect(inner.ok).toBe(true);
+    expect(inner.ok, result.text).toBe(true);
     expect(String(inner.returnValue)).toMatch(/^Attrs=\d+$/);
   }, 150_000);
 });

@@ -399,7 +399,7 @@ describe.skipIf(!canRunE2e)(
           projectId,
           moduleNames: [FORM_NAME],
           importMode: "Auto",
-          dryRun: false,
+          apply: true,
         },
         90_000,
       );

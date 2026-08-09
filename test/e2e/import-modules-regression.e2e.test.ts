@@ -583,7 +583,7 @@ describe.skipIf(!canRunE2e)(
           projectId: nonAsciiProjectId,
           moduleNames: [nonAsciiModuleName],
           importMode: "Code",
-          dryRun: false,
+          apply: true,
         },
         { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
       );
@@ -615,7 +615,7 @@ describe.skipIf(!canRunE2e)(
           projectId: nonAsciiProjectId,
           moduleNames: [nonAsciiModuleName],
           importMode: "Code",
-          dryRun: false,
+          apply: true,
         },
         { timeoutMs: 60_000, cwd: nonAsciiWorkspace },
       );

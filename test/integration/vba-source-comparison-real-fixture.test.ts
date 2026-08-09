@@ -1,5 +1,5 @@
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VbaOperationsAdapter } from "../../src/adapters/vba-sync/vba-operations-adapter";
@@ -26,10 +26,9 @@ describe.skipIf(skipReason !== undefined)(
       await expect(access(FIXTURE_FRONT)).resolves.toBeUndefined();
       await expect(access(FIXTURE_BACK)).resolves.toBeUndefined();
 
-      // Create isolated temporary workspace inside the project's test-runtime
-      const tempWorkspace = await mkdtemp(
-        join(REPO_ROOT, "test-runtime", "dysflow-verify-integration-"),
-      );
+      // Keep the fixture outside DYSFLOW_HOME: write-class tools reject
+      // destination roots inside the installed runtime.
+      const tempWorkspace = await mkdtemp(join(tmpdir(), "dysflow-verify-integration-"));
       const dbPath = join(tempWorkspace, "NoConformidades.accdb");
       const dbBackPath = join(tempWorkspace, "NoConformidades_Datos.accdb");
       const destinationRoot = join(tempWorkspace, "src");
@@ -116,8 +115,10 @@ describe.skipIf(skipReason !== undefined)(
 
         const exportResult = await service.execute("export_modules", {
           moduleNames: moduleNamesToExport,
+          destinationRoot,
+          apply: true,
         });
-        expect(exportResult.ok).toBe(true);
+        expect(exportResult.ok, JSON.stringify(exportResult)).toBe(true);
 
         // Assert files exist locally
         const basPath = join(destinationRoot, "modules", `${moduleName}.bas`);
