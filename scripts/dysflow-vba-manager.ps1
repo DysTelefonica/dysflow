@@ -3208,10 +3208,33 @@ function New-VbComponentFromCodeFile {
             $newCodeModule.DeleteLines(1, $lineCount)
         }
         $newCodeModule.AddFromFile($SanitizedAnsiPath)
+
+        $importResultVerbose = $null
+        if ($script:ImportVerbose) {
+            $normalizedSourceText = [System.IO.File]::ReadAllText($SanitizedAnsiPath, [System.Text.Encoding]::GetEncoding(1252))
+            $visibleSourceText = Convert-VbaTextForCodeModuleString -Text $normalizedSourceText
+            $verboseSource = Get-VbaTextSizeSnapshot -Text $visibleSourceText
+            $verboseDestination = Get-CodeModuleSizeSnapshot -CodeModule $newCodeModule
+            $verboseTruncated = ([int]$verboseDestination.lines -lt [int]$verboseSource.lines)
+            $verboseMismatch = $null
+            if ($verboseTruncated) {
+                $verboseMismatch = "line_count"
+            } elseif ([string]$verboseDestination.sha256 -ne [string]$verboseSource.sha256) {
+                $verboseMismatch = "content_hash"
+            }
+            $importResultVerbose = [pscustomobject]@{
+                source         = $verboseSource
+                destination    = $verboseDestination
+                truncated      = [bool]$verboseTruncated
+                mismatchReason = $verboseMismatch
+            }
+        }
+
         return [pscustomobject]@{
             CreatedNewComponent  = $true
             RequiresExplicitSave = (-not [bool]$seedComponentName)
             SeedComponentName    = $seedComponentName
+            Verbose              = $importResultVerbose
         }
     } finally {
         foreach ($obj in @($newCodeModule, $newComponent)) {
@@ -3774,6 +3797,7 @@ function Import-VbaModule {
                 RollbackApplied      = $false
                 FallbackUsed         = $false
                 FallbackReason       = $null
+                Verbose              = $newResult.Verbose
             }
         }
 
