@@ -3,9 +3,10 @@
  *
  * Exercises the FULL MCP protocol path for catalog_add_control through the
  * official SDK client/server pair over InMemoryTransport. Asserts the
- * default-dry-run semantics at the wire level: omitting both flags returns
- * a plan result (no write), `apply:true` flips to write mode, and the
- * write-gate fires when `apply:true` is sent with writes disabled.
+ * default-plan semantics at the wire level: omitting `apply` returns a plan
+ * result (no write), `apply:true` flips to write mode, and the write-gate fires
+ * when `apply:true` is sent with writes disabled. The retired `dryRun` field is
+ * rejected by the live input schema.
  *
  * No Access COM / PowerShell required — the rejection/plan branches happen
  * at the adapter layer.
@@ -25,14 +26,14 @@ function makeServices() {
     vbaService: { execute: vi.fn(async () => successResult({ returnValue: "ok" })) },
     queryService: { execute: vi.fn(async () => successResult({ rows: [] })) },
     diagnosticsService: { run: vi.fn(async () => successResult({ checks: [] })) },
-    // vbaSyncToolService MUST receive dryRun:true when caller omits both
-    // dryRun and apply. Pin the args the mock sees — that's the actual
-    // contract for DELTA-007 default-dry-run.
     vbaSyncToolService: {
       execute: vi.fn(async (toolName: string, input: unknown) => {
+        const apply = (input as { apply?: boolean })?.apply === true;
         return successResult({
           toolName,
-          dryRun: (input as { dryRun?: boolean })?.dryRun,
+          mode: apply ? "apply" : "plan",
+          ok: true,
+          dryRun: !apply,
         });
       }),
     },
@@ -57,7 +58,7 @@ async function createHarness(tools: ToolsInput): Promise<{
 }
 
 describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
-  it("catalog_add_control with no dryRun/apply defaults to dry-run plan (writes disabled)", async () => {
+  it("catalog_add_control with no apply defaults to a plan (writes disabled)", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services: services,
@@ -75,27 +76,19 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
       });
       expect(result.isError).toBe(false);
       const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
-      // Default-dry-run does NOT trip the write-gate — the dispatch resolves
-      // resolveIsDryRun=true so the service runs in plan mode. The mock
-      // returns a generic success, so we assert the write-gate did NOT fire
-      // and the service WAS reached (the service itself then decides
-      // dry-run from `params.dryRun !== false`).
       expect(text).not.toContain("MCP_WRITES_DISABLED");
+      expect(JSON.parse(text)).toMatchObject({ mode: "plan", ok: true, dryRun: true });
       expect(services.vbaSyncToolService?.execute).toHaveBeenCalledTimes(1);
-      // The dispatch passes the RAW input through to the service — the
-      // dryRun decision is made inside the service based on input.dryRun
-      // and input.apply. With both absent, input.dryRun is undefined.
       const lastCall = (
         services.vbaSyncToolService?.execute.mock.calls.at(-1) as unknown[] | undefined
-      )?.[1] as { dryRun?: boolean; apply?: boolean } | undefined;
-      expect(lastCall?.dryRun).toBeUndefined();
+      )?.[1] as { apply?: boolean } | undefined;
       expect(lastCall?.apply).toBeUndefined();
     } finally {
       await close();
     }
   });
 
-  it("catalog_add_control with dryRun:true runs plan path and skips write-gate", async () => {
+  it("catalog_add_control rejects the retired dryRun field", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services: services,
@@ -112,13 +105,10 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
           dryRun: true,
         },
       });
-      expect(result.isError).toBe(false);
+      expect(result.isError).toBe(true);
       const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
-      expect(text).not.toContain("MCP_WRITES_DISABLED");
-      const lastCall = (
-        services.vbaSyncToolService?.execute.mock.calls.at(-1) as unknown[] | undefined
-      )?.[1] as { dryRun?: boolean } | undefined;
-      expect(lastCall?.dryRun).toBe(true);
+      expect(text).toContain("MCP_INPUT_INVALID");
+      expect(services.vbaSyncToolService?.execute).not.toHaveBeenCalled();
     } finally {
       await close();
     }
@@ -145,6 +135,7 @@ describe("DELTA-007 — catalog_add_control dryRun/apply parity (E2E)", () => {
       expect(result.isError).toBe(false);
       const text = (result.content as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
       expect(text).not.toContain("MCP_WRITES_DISABLED");
+      expect(JSON.parse(text)).toMatchObject({ mode: "apply", ok: true, dryRun: false });
       const lastCall = (
         services.vbaSyncToolService?.execute.mock.calls.at(-1) as unknown[] | undefined
       )?.[1] as { apply?: boolean } | undefined;

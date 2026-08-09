@@ -306,7 +306,7 @@ describe.skipIf(!canRunE2e)(
           projectId,
           moduleNames: [FORM_NAME],
           importMode: "Auto",
-          dryRun: false,
+          apply: true,
         },
         { timeoutMs: 90_000 },
       );
@@ -321,6 +321,7 @@ describe.skipIf(!canRunE2e)(
         {
           projectId,
           moduleNames: [FORM_NAME],
+          destinationRoot: join(workspaceRoot, "src"),
         },
         { timeoutMs: 60_000 },
       );
@@ -387,7 +388,7 @@ describe.skipIf(!canRunE2e)(
           projectId,
           moduleNames: [FORM_NAME],
           importMode: "Code",
-          dryRun: false,
+          apply: true,
           // feat-759-no-compile (v1.19.0) — `compile` parameter removed.
         },
         { timeoutMs: 90_000 },
@@ -401,6 +402,7 @@ describe.skipIf(!canRunE2e)(
         {
           projectId,
           moduleNames: [FORM_NAME],
+          destinationRoot: join(workspaceRoot, "src"),
         },
         { timeoutMs: 60_000 },
       );
