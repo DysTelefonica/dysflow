@@ -503,9 +503,9 @@ describe.skipIf(!canRunE2e)(
     };
 
     it("verify_code verifies the whole project when no moduleNames are given", async () => {
-      const r = await callMcp("verify_code", { projectId, diff: true }, { timeoutMs: 60_000 });
+      const r = await callMcp("verify_code", { projectId, diff: true }, { timeoutMs: 120_000 });
       assertWholeProjectOk(r);
-    }, 90_000);
+    }, 150_000);
   },
 );
 

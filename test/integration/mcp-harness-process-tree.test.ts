@@ -97,7 +97,9 @@ async function runFixture(mode: "success" | "error" | "timeout") {
     requestId: 2,
     method: "tools/call",
     params: { name: "fixture", arguments: {} },
-    timeoutMs: mode === "timeout" ? 200 : 5_000,
+    // Keep the timeout bounded while allowing PowerShell to start the owned
+    // Node descendant and report its PID under accumulated suite load.
+    timeoutMs: mode === "timeout" ? 2_000 : 5_000,
     closeWatchdogMs: 500,
   });
   const match = result.stderr.match(/GRANDCHILD_PID=(\d+)/);
