@@ -1,5 +1,18 @@
 # Changelog
 
+## [v2.37.0] - 2026-08-09
+
+### Changes
+
+- fix(tests): stabilize integration timeout budgets (#1433)
+- docs(agents): make local worktree cleanup after a merge prescriptive (#1430)
+- fix(vba-sync): return verbose snapshots for new modules (#1431)
+- fix(tests): align integration corpus with current contracts
+- docs: add repository documentation entrypoints
+- fix(deps): patch nanoid transitive advisories
+- feat(ci): route docs-only prs to documentation checks
+
+
 ## [v2.36.0] - 2026-08-05
 
 ### Changes
