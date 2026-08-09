@@ -19,7 +19,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -147,12 +147,15 @@ describe.skipIf(skipReason !== undefined)(
   { timeout: 240_000 },
   () => {
     let sandboxRoot: string;
+    let sandboxAccessPath: string;
     let moduleSourcePath: string;
 
     beforeEach(() => {
       const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       sandboxRoot = join(tmpdir(), `dysflow-752-verbose-${id}`);
       mkdirSync(sandboxRoot, { recursive: true });
+      sandboxAccessPath = join(sandboxRoot, "NoConformidades.accdb");
+      copyFileSync(FIXTURE_SOURCE, sandboxAccessPath);
       // Seed a minimal source file. The file's content is irrelevant — the
       // goal of this test is the shape of the verbose envelope, not the
       // import itself succeeding. We give VB_Name = "Test_Foo" and a tiny
@@ -165,22 +168,23 @@ describe.skipIf(skipReason !== undefined)(
       rmSync(sandboxRoot, { recursive: true, force: true });
     });
 
-    it("verbose:true adds a per-module `verbose` field with source/destination snapshots", async () => {
+    it("verbose:true adds source/destination snapshots when creating a new module", async () => {
+      const newModuleName = "Test_Issue1427VerboseNew";
+      moduleSourcePath = join(sandboxRoot, `${newModuleName}.bas`);
+      writeFileSync(moduleSourcePath, makeMinimalModuleFile(newModuleName));
+
       const result = await runPwsh([
         "-Action",
         "Import",
         "-AccessPath",
-        FIXTURE_SOURCE,
+        sandboxAccessPath,
         "-DestinationRoot",
         sandboxRoot,
         "-ModuleNamesJson",
-        JSON.stringify(["Test_Foo"]),
+        JSON.stringify([newModuleName]),
         "-Json",
         "-VerboseContract",
       ]);
-      // The actual import may succeed (status:ok) or fail (status:error).
-      // Either way the verbose envelope must be present on the result
-      // record when -VerboseContract was passed.
       const payload = parseDysflowResult(result.stdout);
       expect(payload).toBeDefined();
       // The payload can be a per-module array OR a top-level { ok:false, modules:[...] } wrapper.
@@ -190,7 +194,8 @@ describe.skipIf(skipReason !== undefined)(
 
       const entry = (modules as Array<Record<string, unknown>>)[0];
       expect(entry).toBeDefined();
-      expect(entry?.module).toBe("Test_Foo");
+      expect(entry?.module).toBe(newModuleName);
+      expect(entry?.status).toBe("ok");
       // Verbose was requested; the per-module entry MUST carry the
       // verbose field with source + destination snapshots.
       const verbose = (entry?.verbose ?? entry?.Verbose) as
@@ -218,7 +223,7 @@ describe.skipIf(skipReason !== undefined)(
         "-Action",
         "Import",
         "-AccessPath",
-        FIXTURE_SOURCE,
+        sandboxAccessPath,
         "-DestinationRoot",
         sandboxRoot,
         "-ModuleNamesJson",
@@ -240,6 +245,20 @@ describe.skipIf(skipReason !== undefined)(
     });
 
     it("a source file whose Attribute VB_Name disagrees with the resolved component surfaces VB_NAME_MISMATCH", async () => {
+      const seedResult = await runPwsh([
+        "-Action",
+        "Import",
+        "-AccessPath",
+        sandboxAccessPath,
+        "-DestinationRoot",
+        sandboxRoot,
+        "-ModuleNamesJson",
+        JSON.stringify(["Test_Foo"]),
+        "-Json",
+      ]);
+      const seedEntry = getModuleEntries(parseDysflowResult(seedResult.stdout))[0];
+      expect(seedEntry?.status).toBe("ok");
+
       // Write a source file whose declared VB_Name ("MismatchedName")
       // disagrees with the moduleName parameter ("Test_Foo"). Import-VbaModule
       // resolves Test_Foo to (potentially) the existing component and
@@ -251,7 +270,7 @@ describe.skipIf(skipReason !== undefined)(
         "-Action",
         "Import",
         "-AccessPath",
-        FIXTURE_SOURCE,
+        sandboxAccessPath,
         "-DestinationRoot",
         sandboxRoot,
         "-ModuleNamesJson",
