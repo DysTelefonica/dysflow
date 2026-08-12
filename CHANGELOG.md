@@ -589,7 +589,7 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Docs
 
-- docs(review): voluntary post-merge review for PR #1003 (#1001) — focused `review-reliability` lens over the chunk-recursion fix, runnable post-merge by anyone who wants to close the audit gap left by the explicit review-gate bypass (see `docs/post-merge-review-1001.md`)
+- docs(review): voluntary post-merge review for PR #1003 (#1001) — focused `review-reliability` lens over the chunk-recursion fix, runnable post-merge by anyone who wants to close the audit gap left by the explicit review-gate bypass (see `docs/archive/post-merge-review-1001.md`)
 
 ### Notes
 
