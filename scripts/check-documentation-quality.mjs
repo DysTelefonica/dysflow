@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { access, appendFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const languages = new Set(["bash", "json", "text", "http", "yaml", "ts", "py"]);
@@ -30,7 +30,20 @@ export function classifyChanges(changes) {
   const applicableDocs = [...new Set(paths.filter(docPath))];
   return { codeRequired, docsChanged: applicableDocs.length > 0, applicableDocs };
 }
-export async function validateMarkdown({ path, content, root = process.cwd() }) {
+const repositoryPath = (documentPath, link) =>
+  posix
+    .normalize(posix.join(posix.dirname(documentPath), link.replaceAll("\\", "/")))
+    .replace(/\/+$/, "");
+const workingTreeExists = (root) => async (target) => {
+  try {
+    await access(resolve(root, target));
+    return true;
+  } catch {
+    return false;
+  }
+};
+export async function validateMarkdown({ path, content, root = process.cwd(), exists }) {
+  const resolves = exists ?? workingTreeExists(root);
   const violations = [];
   const add = (rule, line, message) => violations.push({ rule, line, message });
   const lines = content.replace(/\r\n/g, "\n").split("\n");
@@ -84,15 +97,12 @@ export async function validateMarkdown({ path, content, root = process.cwd() }) 
     if (/^(?:https?:|mailto:|#)/.test(target)) continue;
     const clean = decodeURIComponent(target.split("#")[0] ?? "");
     if (!clean) continue;
-    try {
-      await access(resolve(root, dirname(path), clean));
-    } catch {
-      add(
-        "relative-link",
-        content.slice(0, match.index).split("\n").length,
-        `relative link does not resolve: ${target}`,
-      );
-    }
+    if (await resolves(repositoryPath(path, clean))) continue;
+    add(
+      "relative-link",
+      content.slice(0, match.index).split("\n").length,
+      `relative link does not resolve: ${target}`,
+    );
   }
   const name = path.includes("/")
     ? /^[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(path.split("/").at(-1))
@@ -121,6 +131,18 @@ function diffChanges(base, head) {
   }
   return changes;
 }
+function treeExists(ref) {
+  const raw = execFileSync("git", ["ls-tree", "-r", "--name-only", "-z", ref], {
+    encoding: "utf8",
+  });
+  const entries = new Set();
+  for (const file of raw.split("\0").filter(Boolean)) {
+    entries.add(file);
+    const segments = file.split("/");
+    for (let i = 1; i < segments.length; i++) entries.add(segments.slice(0, i).join("/"));
+  }
+  return (target) => target === "" || target === "." || entries.has(target);
+}
 const countRules = (items) => {
   const counts = {};
   for (const item of items) counts[item.rule] = (counts[item.rule] ?? 0) + 1;
@@ -128,17 +150,30 @@ const countRules = (items) => {
 };
 async function check(base, head) {
   const changes = diffChanges(base, head);
+  const trees = new Map();
+  const treeFor = (ref) => {
+    if (!trees.has(ref)) trees.set(ref, treeExists(ref));
+    return trees.get(ref);
+  };
   const failures = [];
   for (const change of changes) {
     const path = change.paths.at(-1);
     if (!path || !docPath(path) || change.status === "D") continue;
     const headContent = execFileSync("git", ["show", `${head}:${path}`], { encoding: "utf8" });
-    const headIssues = await validateMarkdown({ path, content: headContent });
+    const headIssues = await validateMarkdown({
+      path,
+      content: headContent,
+      exists: treeFor(head),
+    });
     if (change.status === "A" || /^R/.test(change.status))
       failures.push(...headIssues.map((issue) => ({ path, ...issue })));
     else {
       const baseContent = execFileSync("git", ["show", `${base}:${path}`], { encoding: "utf8" });
-      const baseIssues = await validateMarkdown({ path, content: baseContent });
+      const baseIssues = await validateMarkdown({
+        path,
+        content: baseContent,
+        exists: treeFor(base),
+      });
       const baseline = countRules(baseIssues);
       const seen = {};
       for (const issue of headIssues) {

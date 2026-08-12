@@ -17,6 +17,8 @@ Validation covers root Markdown and `docs/**/*.md`, excluding `docs/archive/**`,
 
 Excluded paths still require code CI. New or renamed docs receive full validation; existing docs may reduce violations but may not increase them.
 
+Relative links resolve against the compared Git tree, not the working directory, so local and CI runs agree.
+
 ## Skill Mapping
 
 | Documentation Alan Style v1.0 rules | Enforcement |

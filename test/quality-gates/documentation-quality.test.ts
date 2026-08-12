@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -86,5 +86,36 @@ describe("documentation quality", () => {
     git("add", ".");
     git("commit", "-m", "mixed");
     expect(cli("--base", deletedHead, "--head", "HEAD")).toMatchObject({ codeRequired: true });
+  });
+  it("resolves relative links against the compared tree, not the working directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-doc-tree-"));
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    git("init");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    await mkdir(join(root, "docs", "tools"), { recursive: true });
+    await writeFile(join(root, "docs", "guide.md"), good);
+    await writeFile(join(root, "docs", "target.md"), good);
+    await writeFile(join(root, "docs", "tools", "one.md"), good);
+    git("add", ".");
+    git("commit", "-m", "base");
+    const base = git("rev-parse", "HEAD");
+    await writeFile(
+      join(root, "docs", "guide.md"),
+      `${good}\n[target](./target.md) and [tools](./tools/)\n`,
+    );
+    git("add", ".");
+    git("commit", "-m", "link tracked doc");
+    const head = git("rev-parse", "HEAD");
+    // Committed but absent from the working directory: the tree is the authority.
+    await rm(join(root, "docs", "target.md"));
+    expect(() => check(root, base, head)).not.toThrow();
+    // Present in the working directory but never committed: still unresolvable.
+    await writeFile(join(root, "docs", "untracked.md"), good);
+    await writeFile(join(root, "docs", "guide.md"), `${good}\n[untracked](./untracked.md)\n`);
+    git("add", "docs/guide.md");
+    git("commit", "-m", "link untracked doc");
+    expect(() => check(root, head, "HEAD")).toThrow();
   });
 });
