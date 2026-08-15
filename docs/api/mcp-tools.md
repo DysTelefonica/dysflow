@@ -1,6 +1,8 @@
 # Dysflow MCP Tool Reference
 
-Every visible MCP tool dysflow advertises over stdio, with its parameters and result contract. The transport strategy lives in [MCP protocol](../mcp-protocol.md); copy-pasteable payloads live in [MCP examples](../mcp-examples.md).
+Every visible MCP tool dysflow advertises over stdio, with its parameters and result contract.
+
+The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteable payloads live in [MCP examples](../mcp-examples.md).
 
 [Back to README](../../README.md)
 
@@ -67,31 +69,32 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
 ### `get_capabilities`
-Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call `get_capabilities({})` first: it reports the running version, live write gates, project resolution, effective defaults, canonical commit flags, and six machine-readable `preferredAgentWorkflows`. Then use `schema({ "view": "compact" })` for catalog-wide discovery or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
-Every MCP response, including this one, carries top-level
-`schemaVersion: "dysflow.result/v1"`; consumers must defensively parse a
-stringified host-wrapper result before requiring that discriminator.
+Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+
+Call `get_capabilities({})` first. It reports:
+
+- The running version, live write gates, and project resolution.
+- Effective defaults and canonical commit flags.
+- Six machine-readable `preferredAgentWorkflows`.
+
+Then use `schema({ "view": "compact" })` for catalog-wide discovery, or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract.
+
+Every MCP response, including this one, carries top-level `schemaVersion: "dysflow.result/v1"`.
+
+Consumers must defensively parse a stringified host-wrapper result before requiring that discriminator.
 * **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
 * **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
 
 ### `setup_project`
 Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
-Omitting `apply` returns the resolved config without writing. `apply:true`
-requires process writes to be enabled and the candidate
-`capabilities.allowWrites` to be true; unlike ordinary write tools, bootstrap
-does not require a pre-existing write-ready project config. The tool also
-accepts the complete `projectId` + `projectChoiceReason` + `recoveryToken` trio
-after an ambiguous `resolve_project` result. Recovery mode only caches the
-selected existing project and returns `mode: "resolution"`; it never creates or
-overwrites project config, regardless of `apply`.
-* **Parameters**: bootstrap mode requires `frontendFile` (basename), plus an
-  explicit `projectId` unless the selected WorktreeContext already has an id
-  that can be reused. It accepts optional `cwd`, `backendPath`,
-  `destinationRoot`, `capabilities`, `timeoutMs`, and `apply`. With no explicit
-  or reusable id it returns `MCP_INPUT_INVALID` (`projectId is required`) and
-  never derives one from the cwd basename. Recovery mode requires the complete
-  recovery trio, which is consumed before collision detection.
+
+- Omitting `apply` returns the resolved config without writing.
+- `apply:true` requires process writes to be enabled and the candidate `capabilities.allowWrites` to be true.
+- Unlike ordinary write tools, bootstrap does not require a pre-existing write-ready project config.
+- The tool also accepts the complete `projectId` + `projectChoiceReason` + `recoveryToken` trio after an ambiguous `resolve_project` result.
+- Recovery mode only caches the selected existing project and returns `mode: "resolution"`. It never creates or overwrites project config, regardless of `apply`.
+* **Parameters**: bootstrap mode requires `frontendFile` (basename), plus an explicit `projectId` unless the selected WorktreeContext already has an id that can be reused. It accepts optional `cwd`, `backendPath`, `destinationRoot`, `capabilities`, `timeoutMs`, and `apply`. With no explicit or reusable id it returns `MCP_INPUT_INVALID` (`projectId is required`) and never derives one from the cwd basename. Recovery mode requires the complete recovery trio, which is consumed before collision detection.
 
 ### `register_worktree`
 Eagerly scan and cache one canonical worktree context without changing files or
@@ -106,7 +109,9 @@ modified.
 * **Parameters**: optional `cwd`; omit it to clear all entries.
 
 ### `list_procedures`
-List VBA procedures in a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). Read-only.
+List VBA procedures in a source module without opening Access. Read-only.
+
+The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`).
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `filter` (string, optional): Substring filter for procedure names.
@@ -123,7 +128,9 @@ Retrieve one VBA procedure body from a source module without opening Access. The
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `find_references`
-Find all references to a given symbol across a set of modules. The tool parses inline `modules` when supplied, otherwise it resolves modules from the configured source root and/or exports them from the binary. Read-only.
+Find all references to a given symbol across a set of modules. Read-only.
+
+The tool parses inline `modules` when supplied, otherwise it resolves modules from the configured source root and/or exports them from the binary.
 * **Parameters**:
   - `symbol` (string, **required**): Symbol name to find references for.
   - `scope` (string, optional): `module`, `binary`, `source`, or `all` (default).
@@ -132,7 +139,9 @@ Find all references to a given symbol across a set of modules. The tool parses i
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `detect_dead_code`
-Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem. Read-only.
+Find VBA procedures and module-level declarations defined but never referenced. Read-only.
+
+Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem.
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code. When omitted, the tool resolves modules from the configured source root.
@@ -140,7 +149,11 @@ Find VBA procedures and module-level declarations defined but never referenced. 
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `validate_manifest`
-Validate a VBA test manifest before running `test_vba`. The tool parses an inline `manifest` or reads `testsPath`/`path`, resolves VBA source modules from the configured source root unless inline `modules` are supplied, and returns `valid`, separate `errors`/`warnings`, and a `summary`. Read-only.
+Validate a VBA test manifest before running `test_vba`. Read-only.
+
+The tool parses an inline `manifest` or reads `testsPath`/`path`, and resolves VBA source modules from the configured source root unless inline `modules` are supplied.
+
+It returns `valid`, separate `errors`/`warnings`, and a `summary`.
 * **Parameters**:
   - `testsPath` / `path` (string, optional): VBA test manifest path. Relative paths resolve against the project root.
   - `manifest` (object or array, optional): Inline test manifest object with a `tests` array, or an array of test entries.
@@ -148,7 +161,11 @@ Validate a VBA test manifest before running `test_vba`. The tool parses an inlin
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `lint_module`
-Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). It never opens Access, never spawns PowerShell, and never mutates files. Read-only.
+Lint one `.bas`/`.cls` VBA module before importing it into Access. Read-only.
+
+The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`).
+
+It never opens Access, never spawns PowerShell, and never mutates files.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `source` (string, optional): Inline VBA source text.
@@ -157,17 +174,26 @@ Lint one `.bas`/`.cls` VBA module before importing it into Access. The tool pars
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.
 
 ### `resolve_project`
-Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis. Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction; this tool re-checks the project config on disk. It never writes files, opens Access, or spawns PowerShell. On ambiguity it creates a short-lived, process-local recovery token so an exact human choice can be cached without editing project config.
+Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis. It never writes files, opens Access, or spawns PowerShell.
+
+Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction, while this tool re-checks the project config on disk.
+
+On ambiguity it creates a short-lived, process-local recovery token, so an exact human choice can be cached without editing project config.
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
   - `projectChoiceReason` (`"user_selected_after_ambiguous_project"`, optional): Exact acknowledgement that a human selected the supplied project from the recovery envelope.
   - `recoveryToken` (string, optional): Opaque one-shot token returned by the ambiguous call. Supply it only with `projectId` and `projectChoiceReason`.
   - `clearResolution` (boolean, optional): Drop cached choice and outstanding tokens before resolving again.
-* **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`. `outcome` is `resolved`, `unresolved`, or `ambiguous`. The ambiguous branch additionally returns `{ availableProjects, recoveryToken, recoveryInstruction }`. A valid trio passed to `resolve_project` commits the in-memory choice even though the tool remains filesystem-read-only; every write-class dispatcher accepts the same trio. See [`assets/examples/resolve-project-recovery.md`](assets/examples/resolve-project-recovery.md).
+* **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`. `outcome` is `resolved`, `unresolved`, or `ambiguous`. The ambiguous branch additionally returns `{ availableProjects, recoveryToken, recoveryInstruction }`. A valid trio passed to `resolve_project` commits the in-memory choice even though the tool remains filesystem-read-only; every write-class dispatcher accepts the same trio. See [`assets/examples/resolve-project-recovery.md`](../../assets/examples/resolve-project-recovery.md).
 
 ### `clean_stale_markers`
-Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transitions of stale `status: "running"` markers (and, when `keepFailed` is false, stale `status: "failed"` markers) to `status: "abandoned"`. User-callable companion to the #967 auto-cleanup. Safe-by-default: dry-run is the default; any apply call requires `options.confirm: true` AND writes enabled (returns `MCP_WRITES_DISABLED` when writes are off).
+Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply marker transitions to `status: "abandoned"`.
+
+- Stale `status: "running"` markers are always reap candidates.
+- Stale `status: "failed"` markers are included only when `keepFailed` is false.
+- User-callable companion to the #967 auto-cleanup.
+- Safe-by-default: dry-run is the default. Any apply call requires `options.confirm: true` AND writes enabled (returns `MCP_WRITES_DISABLED` when writes are off).
 * **Parameters**:
   - `projectId` (optional): Trace identity; `accessPath` resolves from `.dysflow/project.json` when omitted.
   - `options.olderThanMinutes` (number, optional, default `30`): Stale cutoff in minutes. Markers with `updatedAt` older than this are reap candidates.
@@ -177,7 +203,12 @@ Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply transit
 * **Returns**: `{ ok, scanned, removed, kept, removedMarkerIds, keptMarkerIds, errors }`. `scanned` counts every `*.json` file inspected; `removed` + `kept` partition successful decisions; `errors[]` carries per-file failures that did not abort the sweep.
 
 ### `migrate_project_config`
-Read `.dysflow/project.json` and (optionally with `apply:true`) rewrite it in place. Drives legacy config migrations deterministically — no more hand-editing absolute `accessPath` vs basename `frontendFile`, or top-level `allowWrites` vs `capabilities.allowWrites`. The read-only default returns `{ current, proposed, diff, remediation[] }` for review; the apply path atomically rewrites the file and refuses with `MCP_WRITES_DISABLED` when writes are off. Idempotent: an already-migrated config returns an empty diff and `applied:false`.
+Read `.dysflow/project.json` and, optionally with `apply:true`, rewrite it in place.
+
+- Drives legacy config migrations deterministically — no more hand-editing absolute `accessPath` vs basename `frontendFile`, or top-level `allowWrites` vs `capabilities.allowWrites`.
+- The read-only default returns `{ current, proposed, diff, remediation[] }` for review.
+- The apply path atomically rewrites the file and refuses with `MCP_WRITES_DISABLED` when writes are off.
+- Idempotent: an already-migrated config returns an empty diff and `applied:false`.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for cross-worktree parity — currently informational.
   - `cwd` (string, optional): Per-call cwd override (#1057 F10). Must be an existing directory containing `.dysflow/project.json`. Omit to use the MCP factory cwd.
@@ -185,7 +216,12 @@ Read `.dysflow/project.json` and (optionally with `apply:true`) rewrite it in pl
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
 
 ### `schema`
-Return static tool contracts in one of two views. Use `compact` for low-context discovery across all 94 advertised tools. Use `full` only when complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts are required. Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return static tool contracts in one of two views. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+
+- `compact` — low-context discovery across all 94 advertised tools.
+- `full` — complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts.
+
+Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
@@ -204,7 +240,11 @@ Return static tool contracts in one of two views. Use `compact` for low-context 
   4. `schema({ "view": "full" })` only for bulk analysis that genuinely needs every complete contract.
 
 ### `describe_tool`
-Preferred one-tool deep introspection view. It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`. Use it after compact discovery instead of fetching the complete tool catalog. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Preferred one-tool deep introspection view. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+
+It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`.
+
+Use it after compact discovery instead of fetching the complete tool catalog.
 * **Parameters**:
   - `name` (string): Tool name to describe (canonical param).
   - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
@@ -214,7 +254,11 @@ Preferred one-tool deep introspection view. It returns the same complete entry g
 * **Consumer pattern**: obtain `describe_tool({ "name": "<tool>" })`, call the tool, then validate success against `resultContract.dataSchema` or failure against `resultContract.errorEnvelope.shape`. Do not maintain a second result-schema registry in the consumer.
 
 ### `diagnose`
-Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Replaces the 4-5 round-trip pattern (`get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat). Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Pairs with `get_capabilities` (live adapter state) and `schema` (static contract): `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.
+Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in a single call. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
+
+It replaces the 4-5 round-trip pattern: `get_capabilities` + `resolve_project` + `list_access_operations` + `access_force_cleanup_orphaned` listing + filesystem stat.
+
+Pairs with `get_capabilities` (live adapter state) and `schema` (static contract). `diagnose` surfaces the unified "is this project healthy?" verdict every consumer wants.
 * **Parameters**:
   - `projectId` (string, optional): ProjectId to verify against `.dysflow/project.json`. Mirrors `resolve_project` semantics.
   - `accessPath` (string, optional): Explicit Access target override. Reserved for v2.16.x.
@@ -223,13 +267,24 @@ Return aggregated project health (`projectConfig` + `filesystem` + `runtime`) in
 * **Returns**: `{ projectConfig: { status, projectId, writeReady, diagnostics[], owningWorktree }, filesystem: { accessPath, backendPath, destinationRoot, projectRoot }, runtime: { staleMarkers, activeOps, orphans, dysflowVersion, writeExecutionPolicy } }`. Each `filesystem.X` block carries `{ path, exists, hint? }` so the consumer can detect missing-directory footguns (the `destinationRoot.hint` includes the `git rm -r` remediation).
 
 ### `state`
-Return the runtime operational state of a dysflow project as `{ operations, markers, locks, counters }`. `operations` lists every persisted record from the access operation registry (cross-ref `list_access_operations`) normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`. `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock. `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices over the registry's persisted records. `locks` is reserved for a future lock-registry split (#967 follow-up); today it is an empty array. Read-only — never opens Access, never spawns PowerShell, never mutates state. Pairs with `resolve_project` (config), `diagnose` (current health), and `logs` (event timeline): `state` is the structured complement that answers "what is happening right now?".
+Return the runtime operational state of a dysflow project as `{ operations, markers, locks, counters }`. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+
+- `operations` lists every persisted record from the access operation registry (cross-ref `list_access_operations`), normalized to `{ operationId, tool, status, startedAt, updatedAt, metadata }`.
+- `markers` enumerates `<cwd>/.dysflow/runtime/markers/*.json` with `ageMinutes` computed against the wall clock.
+- `counters` reports `totalOperations` plus `succeededLast24h` / `failedLast24h` / `abandonedLast24h` slices over the registry's persisted records.
+- `locks` is reserved for a future lock-registry split (#967 follow-up); today it is an empty array.
+
+Pairs with `resolve_project` (config), `diagnose` (current health), and `logs` (event timeline). `state` answers "what is happening right now?".
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current snapshot is global.
 * **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
 
 ### `logs`
-Return runtime log entries from `.dysflow/runtime/` (`invocations.jsonl`, `operations.json`, and per-operation markers) as a structured envelope. Invocation entries identify the exact MCP tool while the legacy operation ledger remains unchanged and joinable by `operationId`. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+
+Sources are `invocations.jsonl`, `operations.json`, and per-operation markers.
+
+Invocation entries identify the exact MCP tool, while the legacy operation ledger remains unchanged and joinable by `operationId`.
 * **Parameters**:
   - `projectId` (string, optional): Canonical project identity for traceability. The runtime dir is always `<cwd>/.dysflow/runtime/`; `projectId` is echoed back in the response for future per-project scoping.
   - `options` (object, optional): Filters and pagination.
@@ -280,17 +335,25 @@ Return runtime log entries from `.dysflow/runtime/` (`invocations.jsonl`, `opera
   - **Whole project** — omit `moduleNames`.
   - **A subset or a single module** — pass `moduleNames`. The filter is sent to the export phase, so the Access export targets only the requested modules (plus their normal form/report/code-behind artifacts), then the disk comparison is filtered to the same module names. It is not a broad whole-project export followed only by a filtered compare. If `moduleNames` is explicitly provided as an empty list, the request is rejected with `INVALID_INPUT`; omit `moduleNames` for a whole-project verify. If a non-empty `moduleNames` filter matches nothing in either side, it returns `MODULE_NOT_FOUND`.
 
-  By default it classifies each differing module semantically (see [Semantic diff classification](#semantic-diff-classification)) — separating non-functional noise (line endings/whitespace, `Attribute VB_*` headers, `.form.txt` serialization metadata, encoding/mojibake) from actionable functional differences. It reports a per-category `summary`, structured counts in `summaryStructured`, `actionableDifferent`/`nonActionableDifferent` lists, `bulkImportable[]`/`bulkExportable[]` module lists for direct sync planning, a `hasFunctionalDifferences` / `actionableOk` signal, per-diff `classification`/`reason`/`recommendation`, and an aggregated, whole-comparison `recommendation` plus a machine `recommendedAction` (`no_action`, `import_to_binary`, `export_to_src`, or `manual_merge`) so a consumer reads the sync direction in one shot. Backward-compatible: still reports `matched`, `different`, and missing modules with optional diffs.
+  By default it classifies each differing module semantically (see [Semantic diff classification](#semantic-diff-classification)), separating non-functional noise from actionable functional differences.
+
+  - Noise covers line endings/whitespace, `Attribute VB_*` headers, `.form.txt` serialization metadata, and encoding/mojibake.
+  - It reports a per-category `summary`, structured counts in `summaryStructured`, and `actionableDifferent`/`nonActionableDifferent` lists.
+  - `bulkImportable[]`/`bulkExportable[]` module lists drive direct sync planning, alongside a `hasFunctionalDifferences` / `actionableOk` signal.
+  - Every diff carries `classification`, `reason`, and `recommendation`.
+  - An aggregated, whole-comparison `recommendation` plus a machine `recommendedAction` (`no_action`, `import_to_binary`, `export_to_src`, or `manual_merge`) reads the sync direction in one shot.
+  - Backward-compatible: still reports `matched`, `different`, and missing modules with optional diffs.
   - Parameters: `moduleNames` (array, optional), `diff` (boolean, optional), `strict` (boolean, optional — restore byte/text-exact comparison), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
   - Timeout contract: `timeoutMs` is the overall operation budget. `verify_code` keeps a small reserve before that deadline so preflight/export/compare stalls fail with a typed Dysflow error instead of falling through to the outer MCP request timeout. Export stalls return `VBA_MANAGER_TIMEOUT`; preflight and compare stalls return `VERIFY_CODE_PHASE_TIMEOUT`. All typed errors include `error.details` with `tool: "verify_code"`, `phase`, `moduleName`/`moduleNames`, `operationTimeoutMs`, and `phaseTimeoutMs`. Export-phase errors additionally carry `error.details.durationMs` (how long PowerShell had been running before the stall). Post-timeout Access orphan cleanup and temporary-directory cleanup are each bounded; if either exceeds its bound, the result returns promptly with a warning diagnostic instead of waiting indefinitely, and an export-phase stall where post-timeout cleanup also stalled additionally sets `error.details.cleanupTimedOut: true` and `error.details.cleanupTimeoutMs` so consumers can distinguish "the export stalled" from "the export stalled AND we could not reap the orphan within the bound".
 
   > **Migration note:** `verify_binary`, `reconcile_binary`, and `compare_module` were four names over this one engine and have been **removed**. Use `verify_code` for all of them: omit `moduleNames` for the whole project (old `verify_binary`), pass a single module for the old `compare_module`, and read `recommendation`/`recommendedAction` for the old `reconcile_binary` plan.
 * **`delete_module`**: Delete one or more modules from the VBA project. Pass `moduleNames` (array) to delete a batch in a single Access session — this avoids the COM collisions that arise from issuing many parallel single-module calls; `moduleName` (singular) is still accepted for one module. The result reports per-module outcomes. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](../diagnostics/hresult-guide.md)). Write-gated.
 
-Typed error envelopes expose a top-level `error.remediation` when the runtime has a canonical next
-action. This field is independent of `get_capabilities.projectConfig.remediation`, whose existing
-diagnostic contract is unchanged. See the shipped [`references/error-codes.md`](../../references/error-codes.md)
-for the canonical catalog.
+Typed error envelopes expose a top-level `error.remediation` when the runtime has a canonical next action.
+
+This field is independent of `get_capabilities.projectConfig.remediation`, whose existing diagnostic contract is unchanged.
+
+See the shipped [`references/error-codes.md`](../../references/error-codes.md) for the canonical catalog.
   - Parameters: `moduleNames` (array, optional), `moduleName` (string, optional — single-module shorthand), `force` (boolean, optional — applies to the whole batch), `timeoutMs` (number, optional)
 * **`list_objects`**: List all forms, reports, modules, and macros.
   - Parameters: `filter` (string, optional), `timeoutMs` (number, optional)
@@ -311,7 +374,11 @@ for the canonical catalog.
 
 ### Semantic diff classification
 
-`verify_code` compares exported VBA/Form source against the disk tree. By default it runs in **semantic mode**: each differing module is classified so that non-functional noise does not drown out the changes that actually need action. This avoids the common false-positive flood where dozens of modules report as "different" but only a handful require any work.
+`verify_code` compares exported VBA/Form source against the disk tree.
+
+By default it runs in **semantic mode**: each differing module is classified so that non-functional noise does not drown out the changes that actually need action.
+
+This avoids the common false-positive flood where dozens of modules report as "different" but only a handful require any work.
 
 Each differing module is assigned one `classification`:
 
@@ -327,9 +394,35 @@ Each differing module is assigned one `classification`:
 | `binaryNewer` | Functional lines unique to the Access binary | Yes → `export_to_src` |
 | `bothChanged` | Both sides have unique functional lines | Yes → `manual_merge` |
 
-A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt`.** The code lives canonically in the `.cls` (dysflow's export writes it from `CodeModule.Lines`, and import syncs it back into the document module); the same code is also serialized — via `SaveAsText` — into the `.form.txt` `CodeBehindForm` section. The classifier strips everything from the `CodeBehindForm` marker onward and compares a `.form.txt` for its **UI/layout only**, so a real form change (control/property/layout) stays actionable while code-behind churn in the `.form.txt` is non-actionable (the `.cls` owns it). Casing and encoding normalization never collapse a genuine content change: identifier casing is folded only outside string literals/comments, so any runtime-visible difference still surfaces as functional.
+A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt`.**
 
-The result adds a flat `summary` (count per category), `summaryStructured` (nested actionable/non-actionable counts), `actionableDifferent` / `nonActionableDifferent` lists, `bulkImportable[]` and `bulkExportable[]` module-name lists, and a `hasFunctionalDifferences` / `actionableOk` signal so an automated consumer can decide what to act on without re-exporting and diffing the binary by hand. Agents should build sync calls from the bulk lists (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`) instead of parsing raw `different[]`; reserve `manual_merge` / `bothChanged` entries for human conflict resolution. It also carries `dysflowVersion` (the runtime package version that produced the result) and `classifierRules` (a fingerprint of the active rule set) so a consumer can tell *which* version classified a diff — distinguishing "fix not loaded into the running MCP" from "fix loaded but does not cover this case". When `diff: true`, each per-module entry in both `actionableDifferent[]` and `nonActionableDifferent[]` carries `classification`, `reason`, `isActionable`, `recommendedAction` (mirrors `recommendation`), and the unique-line counts. Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
+- The code lives canonically in the `.cls`: dysflow's export writes it from `CodeModule.Lines`, and import syncs it back into the document module.
+- The same code is also serialized — via `SaveAsText` — into the `.form.txt` `CodeBehindForm` section.
+- The classifier strips everything from the `CodeBehindForm` marker onward and compares a `.form.txt` for its **UI/layout only**.
+- A real form change (control/property/layout) stays actionable, while code-behind churn in the `.form.txt` is non-actionable — the `.cls` owns it.
+- Casing and encoding normalization never collapse a genuine content change: identifier casing is folded only outside string literals/comments, so any runtime-visible difference still surfaces as functional.
+
+The result adds:
+
+- A flat `summary` (count per category) and `summaryStructured` (nested actionable/non-actionable counts).
+- `actionableDifferent` / `nonActionableDifferent` lists.
+- `bulkImportable[]` and `bulkExportable[]` module-name lists.
+- A `hasFunctionalDifferences` / `actionableOk` signal, so an automated consumer decides what to act on without re-exporting and diffing the binary by hand.
+- `dysflowVersion` (the runtime package version that produced the result) and `classifierRules` (a fingerprint of the active rule set).
+
+Agents build sync calls from the bulk lists (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`) instead of parsing raw `different[]`.
+
+Reserve `manual_merge` / `bothChanged` entries for human conflict resolution.
+
+`dysflowVersion` and `classifierRules` tell a consumer *which* version classified a diff, separating "fix not loaded into the running MCP" from "fix loaded but does not cover this case".
+
+When `diff: true`, each per-module entry in both `actionableDifferent[]` and `nonActionableDifferent[]` carries:
+
+- `classification`, `reason`, and `isActionable`.
+- `recommendedAction` (mirrors `recommendation`).
+- The unique-line counts.
+
+Pass `strict: true` to disable classification and fall back to byte/text-exact comparison.
 
 ### 2. SQL Maintenance
 * **`query_sql`**: Legacy read-only SQL compatibility wrapper. New consumers use `query_execute({ mode: "read" })`; it remains callable throughout the v2.x line and cannot be removed without a documented deprecation window and migration release note.
@@ -456,7 +549,9 @@ The result adds a flat `summary` (count per category), `summaryStructured` (nest
 
 ## MCP protocol and maintenance
 
-The MCP stdio adapter uses `@modelcontextprotocol/sdk` v1.29.0. Protocol version negotiation, framing, and spec compliance are handled by the SDK. The server currently derives its default negotiated protocol version from the SDK (`2025-03-26` with this pinned SDK), and the SDK supports up to `2025-11-25`.
+The MCP stdio adapter uses `@modelcontextprotocol/sdk` v1.29.0. Protocol version negotiation, framing, and spec compliance are handled by the SDK.
+
+The server currently derives its default negotiated protocol version from the SDK (`2025-03-26` with this pinned SDK), and the SDK supports up to `2025-11-25`.
 
 Custom behaviors layered on top of the SDK (preserved from the previous hand-rolled adapter):
 
