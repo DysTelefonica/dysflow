@@ -62,6 +62,9 @@ describe("Form UI Factory documentation honesty (#596)", () => {
 function inventoryLine(reference: string, toolName: string): string {
   const lines = reference.split(/\r?\n/);
   const line = lines.find((l) => l.includes(`**\`${toolName}\`**`));
-  expect(line, `${TOOL_REFERENCE} must include an inventory entry for \`${toolName}\``).toBeDefined();
+  expect(
+    line,
+    `${TOOL_REFERENCE} must include an inventory entry for \`${toolName}\``,
+  ).toBeDefined();
   return line ?? "";
 }

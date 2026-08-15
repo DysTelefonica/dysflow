@@ -87,7 +87,11 @@ function visibleToolNames() {
 }
 
 function referenceInventoryToolNames(reference: string): Set<string> {
-  const inventory = sectionBetween(reference, "## Core MCP Tools", "## MCP protocol and maintenance");
+  const inventory = sectionBetween(
+    reference,
+    "## Core MCP Tools",
+    "## MCP protocol and maintenance",
+  );
   return new Set(
     [...inventory.matchAll(/^\s*(?:###|\*)\s+(?:\*\*)?`([^`]+)`(?:\*\*)?\s*(?::)?/gm)].flatMap(
       (match) => (match[1] === undefined ? [] : [match[1]]),
