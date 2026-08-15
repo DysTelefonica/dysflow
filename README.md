@@ -66,25 +66,21 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
 ### It is
 
-- A local automation runtime for Microsoft Access (`.accdb/.mdb`) focused on **safety and ownership**.
-- A **core-first platform** (`src/core`) with thin adapters (`src/adapters`) for MCP stdio and HTTP.
-- A platform with 94 visible MCP tools covering VBA, SQL, schema, form
-  operations, AI-assisted form UI workflows, source-level VBA procedure
-  introspection, dead-code detection, VBA test manifest validation, pre-import
-  module linting, geometric form layout rendering (`render_form_preview`),
-  before/after form layout diff (`diff_form_preview`),
-  form-binding validation against a database schema (`verify_form_bindings`),
-  batch geometry ergonomics (`form_align_controls`, `form_distribute_controls`),
-  atomic batch property updates (`form_set_properties`),
-  control cloning (`form_duplicate_control`),
-  read-only geometry + control inventory (`form_get_geometry`, `form_list_controls`),
-  and project-config resolution.
+| It is | Evidence in this repo |
+|---|---|
+| A local automation runtime for Microsoft Access (`.accdb`/`.mdb`) focused on safety and ownership | `src/adapters/vba-sync/`, `src/core/runtime/` |
+| A core-first platform with thin protocol adapters | `src/core/`, with `src/adapters/mcp/` and `src/adapters/http/` |
+| A platform with 94 visible MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
+| An AI-assisted form UI surface, from layout rendering to binding validation | `src/adapters/vba-sync/vba-forms-ai-tools.ts` |
 
 ### It is not
 
-- A full Access UI replacement.
-- A tool to run arbitrary system-level process management.
-- A web-hosted service (defaults to local-only execution).
+| It is not | Use this boundary |
+|---|---|
+| A full Access UI replacement | Access stays the editor and the compiler. |
+| A compiler | `compile_vba` was removed in v1.19.0; the human compiles. See [Absent by design](./docs/architecture/absent-by-design.md). |
+| A tool for arbitrary system-level process management | Only PID-verified Access orphans are reaped, and only after an explicit `confirmPid`. |
+| A web-hosted service | The HTTP adapter binds to `127.0.0.1` and starts writes-disabled. |
 
 ---
 
