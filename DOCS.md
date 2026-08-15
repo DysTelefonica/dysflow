@@ -11,6 +11,7 @@ Dysflow documentation is organized by the task you need to complete. Start here,
 | Install Dysflow or configure a project | [Install and verify Dysflow](./docs/SETUP.md) | Operators, contributors |
 | Call the local HTTP API | [HTTP API reference](./docs/api/http-api.md) | Integration authors |
 | Integrate through MCP | [MCP protocol](./docs/mcp-protocol.md) and [real-world examples](./docs/mcp-examples.md) | Agent and plugin authors |
+| Look up an MCP tool's parameters or result contract | [MCP tool reference](./docs/api/mcp-tools.md) | Agent and plugin authors |
 | Understand the repository before changing code | [Codebase guide](./CODEBASE-GUIDE.md) | Contributors, maintainers |
 | Understand dependency direction and boundaries | [Core and adapters architecture](./docs/architecture/dysflow-core-and-adapters.md) | Contributors, maintainers |
 | Write or review tests | [Testing philosophy](./docs/testing/testing-philosophy.md) and [quality gates](./docs/testing/repo-quality-gates.md) | Contributors, reviewers |

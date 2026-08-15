@@ -21,6 +21,8 @@ class FakeDiagnosticsService {
   }
 }
 
+const TOOL_REFERENCE = "docs/api/mcp-tools.md";
+
 describe("README MCP tool surface", () => {
   it("keeps the visible tool count aligned with the tools/list surface (#590)", async () => {
     const readme = await readFile("README.md", "utf8");
@@ -36,20 +38,26 @@ describe("README MCP tool surface", () => {
     expect(new Set(statedCounts)).toEqual(new Set([visibleCount]));
   });
 
-  it("documents every visible tools/list name in the README inventory (#590)", async () => {
-    const readme = await readFile("README.md", "utf8");
-    const inventoryToolNames = readmeInventoryToolNames(readme);
+  it("documents every visible tools/list name in the tool reference inventory (#590)", async () => {
+    const reference = await readFile(TOOL_REFERENCE, "utf8");
+    const inventoryToolNames = referenceInventoryToolNames(reference);
     const missing = visibleToolNames().filter((toolName) => !inventoryToolNames.has(toolName));
 
     expect(missing).toEqual([]);
   });
 
   it("documents visible tools/list names only as shaped entries in the MCP inventory (#590)", async () => {
-    const readme = await readFile("README.md", "utf8");
+    const reference = await readFile(TOOL_REFERENCE, "utf8");
     const expected = new Set(visibleToolNames());
-    const inventoryToolNames = readmeInventoryToolNames(readme);
+    const inventoryToolNames = referenceInventoryToolNames(reference);
 
     expect(inventoryToolNames).toEqual(expected);
+  });
+
+  it("keeps the README pointing at the extracted tool reference", async () => {
+    const readme = await readFile("README.md", "utf8");
+
+    expect(readme).toContain(`(./${TOOL_REFERENCE})`);
   });
 
   it("describes MCP writes as enabled by default with a --disable-writes opt-out, not only SQL writes", async () => {
@@ -78,14 +86,14 @@ function visibleToolNames() {
     .map((tool) => tool.name);
 }
 
-function readmeInventoryToolNames(readme: string): Set<string> {
+function referenceInventoryToolNames(reference: string): Set<string> {
   const inventory = sectionBetween(
-    readme,
-    "### Core MCP Tools",
-    "### MCP protocol and maintenance",
+    reference,
+    "## Core MCP Tools",
+    "## MCP protocol and maintenance",
   );
   return new Set(
-    [...inventory.matchAll(/^\s*(?:####|\*)\s+(?:\*\*)?`([^`]+)`(?:\*\*)?\s*(?::)?/gm)].flatMap(
+    [...inventory.matchAll(/^\s*(?:###|\*)\s+(?:\*\*)?`([^`]+)`(?:\*\*)?\s*(?::)?/gm)].flatMap(
       (match) => (match[1] === undefined ? [] : [match[1]]),
     ),
   );

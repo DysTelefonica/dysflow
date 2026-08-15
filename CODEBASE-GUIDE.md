@@ -4,6 +4,15 @@ Dysflow is organized from the inside out: core defines behavior, adapters transl
 
 [Back to Documentation](./DOCS.md)
 
+## Who This Is For
+
+| Reader | Use this guide to |
+|---|---|
+| New contributor | Build the mental model before opening a source file. |
+| Maintainer | Find the layer that owns a behavior. |
+| Reviewer | Check whether a change landed in the right layer. |
+| Agent | Resolve where to edit without exploring the whole tree. |
+
 ## 90-Second Mental Model
 
 ```text
@@ -61,14 +70,14 @@ For the complete boundary contract, read [Dysflow Core and Adapters](./docs/arch
 | Tests or quality gates | `test/` and the relevant source port | [Testing philosophy](./docs/testing/testing-philosophy.md) and [quality gates](./docs/testing/repo-quality-gates.md) |
 | Release or update behavior | `scripts/` and release workflows | [Release checklist](./docs/release-checklist.md) and [update trust model](./docs/security/update-trust-model.md) |
 
-## Guardrails
+## Core Invariants
 
-- Keep business logic in `src/core`; adapters translate protocols and perform I/O.
-- Do not create adapter-to-adapter dependencies. Put protocol-neutral shared validation in `src/shared/` or move domain behavior into core.
-- Test observable behavior at ports. Mock I/O boundaries, not internal collaborators.
-- Preserve operation ownership, write gates, explicit cleanup, and the signed release update path.
-- Use the repository's focused tests and quality gates before broad verification.
-- Treat `AGENTS.md` as the authoritative operating contract for agents in this repository.
+- **Core owns behavior**: business logic stays in `src/core`. Adapters translate protocols and perform I/O, nothing more.
+- **No adapter-to-adapter edges**: put protocol-neutral shared validation in `src/shared/`, or move the domain behavior into core.
+- **Test at the ports**: assert observable behavior. Mock I/O boundaries, never internal collaborators.
+- **Safety surfaces survive refactors**: operation ownership, write gates, explicit cleanup, and the signed release update path are preserved by every change.
+- **Focused before broad**: run the repository's focused tests and quality gates before broad verification.
+- **`AGENTS.md` is the operating contract**: it is authoritative for agents working in this repository.
 
 ## Existing References
 
@@ -79,4 +88,17 @@ For the complete boundary contract, read [Dysflow Core and Adapters](./docs/arch
 | [Testing philosophy](./docs/testing/testing-philosophy.md) | Refactor-safe testing at ports |
 | [Repository quality gates](./docs/testing/repo-quality-gates.md) | Current automated verification thresholds |
 | [Update trust model](./docs/security/update-trust-model.md) | Release archive integrity and process-spawn safety |
+| [Absent by design](./docs/architecture/absent-by-design.md) | Capabilities this repository deliberately does not have |
 | [Documentation index](./DOCS.md) | Task-oriented navigation across all documentation |
+
+## Contributor Checklist
+
+- [ ] Name the observable behavior before naming the file you will edit.
+- [ ] Decide whether the change belongs to core, an adapter, or the CLI.
+- [ ] Confirm the capability exists before documenting it — see [Absent by design](./docs/architecture/absent-by-design.md).
+- [ ] Read the tests next to the port you are changing before adding a new pattern.
+- [ ] Link an existing doc instead of restating it.
+
+## Next Step
+
+Read [Core and adapters architecture](./docs/architecture/dysflow-core-and-adapters.md) next.
