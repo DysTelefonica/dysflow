@@ -2,10 +2,10 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 /**
- * Doc-anchor test for the Form UI Factory README honesty claim.
+ * Doc-anchor test for the Form UI Factory honesty claim.
  *
  * Issue #596 (slice 1) closed the read half of #563. The slice 1 deliverable includes
- * a README fix that explicitly states `generate_form` writes a `.form.json` stub and
+ * a documentation fix that explicitly states `generate_form` writes a `.form.json` stub and
  * does NOT create a live Access form. This test pins that claim and the matching
  * source-only claim for `inspect_form` so a future revert is caught before it lands.
  *
@@ -15,10 +15,12 @@ import { describe, expect, it } from "vitest";
  * (`compile a live Access form` / `create a live Access form` / `build a live
  * Access form`) used as positive claims.
  */
-describe("Form UI Factory README honesty (#596)", () => {
-  it("README documents `generate_form` as a `.form.json` stub writer, not a form compiler", async () => {
-    const readme = await readFile("README.md", "utf8");
-    const line = readmeInventoryLine(readme, "generate_form");
+const TOOL_REFERENCE = "docs/api/mcp-tools.md";
+
+describe("Form UI Factory documentation honesty (#596)", () => {
+  it("the tool reference documents `generate_form` as a `.form.json` stub writer, not a form compiler", async () => {
+    const reference = await readFile(TOOL_REFERENCE, "utf8");
+    const line = inventoryLine(reference, "generate_form");
 
     // Positive: the entry mentions the `.form.json` stub.
     expect(line, "generate_form inventory entry").toContain(".form.json");
@@ -37,9 +39,9 @@ describe("Form UI Factory README honesty (#596)", () => {
     ).not.toMatch(lie);
   });
 
-  it("README documents `inspect_form` as source-only, read-only, and offline", async () => {
-    const readme = await readFile("README.md", "utf8");
-    const line = readmeInventoryLine(readme, "inspect_form");
+  it("the tool reference documents `inspect_form` as source-only, read-only, and offline", async () => {
+    const reference = await readFile(TOOL_REFERENCE, "utf8");
+    const line = inventoryLine(reference, "inspect_form");
 
     // Positive: the entry mentions the source `.form.txt` file format.
     expect(line, "inspect_form inventory entry").toContain(".form.txt");
@@ -57,9 +59,9 @@ describe("Form UI Factory README honesty (#596)", () => {
   });
 });
 
-function readmeInventoryLine(readme: string, toolName: string): string {
-  const lines = readme.split(/\r?\n/);
+function inventoryLine(reference: string, toolName: string): string {
+  const lines = reference.split(/\r?\n/);
   const line = lines.find((l) => l.includes(`**\`${toolName}\`**`));
-  expect(line, `README must include an inventory entry for \`${toolName}\``).toBeDefined();
+  expect(line, `${TOOL_REFERENCE} must include an inventory entry for \`${toolName}\``).toBeDefined();
   return line ?? "";
 }
