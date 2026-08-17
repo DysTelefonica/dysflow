@@ -184,9 +184,15 @@ jobs:
           run_install: false
 
       - uses: actions/setup-node@v5
+        # `cache: pnpm` is intentionally OMITTED. We pin pnpm's virtual store
+        # to the workspace (see "Install dependencies") which is incompatible
+        # with setup-node's default cache lookup path; the post-run cache
+        # save then fails with "Path Validation Error" and the job fails
+        # despite the harness running green. For a self-hosted runner
+        # the per-run pnpm cache buys nothing anyway — the persistent
+        # setup-pnpm install keeps its own store across runs.
         with:
           node-version: 20
-          cache: pnpm
 
       - name: Install dependencies
         # pnpm/action-setup@v6 pins PNPM_HOME to its bundled pnpm install
