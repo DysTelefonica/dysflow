@@ -141,11 +141,12 @@ jobs:
     # The full MCP end-to-end battery from `E2E_testing/` requires real
     # Microsoft Access (`NoConformidades.accdb`) and ACCESS_VBA_PASSWORD.
     # GitHub-hosted runners do not have Office; this job runs on a
-    # self-hosted `dysflow-e2e` runner with Access pre-installed. The 20-minute
-    # budget matches the README's "5-15 minutes" expected runtime with
-    # headroom for sandbox provisioning.
+    # self-hosted `dysflow-e2e` runner with Access pre-installed. 30-minute
+    # budget matches the README's "5-15 minutes" expected runtime plus
+    # sandbox provisioning, install, and the strictTDD/multi-area
+    # assertions that have been observed to take the upper end.
     runs-on: dysflow-e2e
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5
