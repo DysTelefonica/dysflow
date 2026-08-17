@@ -319,6 +319,46 @@ Commands:
 - Integration/E2E: `vitest.integration.config.ts` (`test/e2e/**`, `test/integration/**`) — requires Windows + Access COM.
 - Real MCP E2E: `node E2E_testing/mcp-e2e.mjs` (requires `ACCESS_VBA_PASSWORD`).
 
+## Documentation ownership — keep docs with the change
+
+A doc that describes behavior which no longer exists is worse than no doc, because an agent will act on it.
+
+The CI gate validates **shape**: headings, paragraph length, links, naming. It leaves **semantic accuracy to human review**.
+
+Nothing else catches a stale claim — see [documentation quality gates](./docs/testing/documentation-quality-gates.md). That is what this section is for.
+
+- **Docs ship with the change that makes them true.** A user-visible behavior change and its documentation belong in the same PR, never a follow-up. A new flag, environment variable, or error code is documented in the commit that introduces it.
+- **Removing a capability is a documentation change.** Record it in [absent by design](./docs/architecture/absent-by-design.md) naming the release that removed it, so nobody reintroduces it or files its absence as a defect.
+- **Claims name their evidence.** A statement about this repository carries the path that proves it, or the boundary that bounds it. A claim with neither is an opinion: delete it or prove it.
+
+### What changed maps to what you update
+
+| When you change... | Update | Anchored by |
+|---|---|---|
+| An MCP tool name, parameter, or result contract | [MCP tool reference](./docs/api/mcp-tools.md) | `test/docs/mcp-readme-tool-surface.test.ts` |
+| An HTTP route or its status mapping | [HTTP API](./docs/api/http-api.md) | `test/docs/http-api-doc.test.ts` |
+| A core/adapter boundary or dependency rule | [Core and adapters](./docs/architecture/dysflow-core-and-adapters.md) | `test/docs/architecture-doc.test.ts` |
+| A write gate, cleanup path, or the update mechanism | [Update trust model](./docs/security/update-trust-model.md) | `test/docs/security-doc-anchors.test.ts` |
+| A write-tool pre-flight schema | Skill examples under `skills/dysflow-usage/` | `test/docs/write-tool-preflight.test.ts` |
+| Install, project config, or an environment variable | [Setup](./docs/SETUP.md) | not anchored — review by hand |
+| A capability that stops existing | [Absent by design](./docs/architecture/absent-by-design.md) | not anchored — review by hand |
+
+### Doc-anchor tests
+
+`test/docs/` turns a documentation claim into an executable assertion. Add one when a doc states something the runtime can contradict.
+
+**Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
+
+Only three anchors do the second kind today:
+
+- `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
+- `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
+- `write-tool-preflight.test.ts` reads the MCP schema source.
+
+Every other anchor pins a literal string. Asserting that a doc merely *contains* a source path is a string anchor, not a runtime anchor.
+
+Prefer that shape whenever the code can enumerate what the doc claims.
+
 ## VBA semantic diff — behavioral contract
 
 `verify_code` (the single source/binary compare tool) runs in **semantic mode** by default. The job
