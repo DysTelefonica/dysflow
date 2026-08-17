@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.37.2] - 2026-08-17
+
+### Changes
+
+- fix(adapter): honor explicit destinationRoot override in pre-flight gate (#1438)
+
+
 ## [v2.37.1] - 2026-08-17
 
 ### Changes
