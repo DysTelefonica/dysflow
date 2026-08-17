@@ -8,6 +8,7 @@
 - docs: extract the MCP tool reference and apply the page-anatomy patterns (#1436)
 - chore(docs): archive superseded documents and drop the closed epic handoff (#1435)
 - fix(docs-quality): resolve relative links against the compared Git tree (#1434)
+- fix(deps): patch nanoid, hono, postcss and @hono/node-server advisories surfaced after v2.37.0 (audit gate)
 
 
 ## [v2.37.0] - 2026-08-09
