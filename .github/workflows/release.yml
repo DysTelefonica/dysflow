@@ -169,26 +169,31 @@ jobs:
           path: .release-build
 
       - name: Extract build over the workspace
-        shell: bash
-        # GitHub Actions on a self-hosted Windows runner still defaults the
-        # `run` shell to PowerShell. Pin `bash` here so `tar` and the
-        # subsequent `if [ ... ]` guard parse correctly. Working-directory
-        # is `.release-build`; `..` resolves to the workspace root where
-        # the checked-out source already lives.
+        # Default `run` shell on a self-hosted Windows runner is PowerShell 7.
+        # Pin explicitly so future runner upgrades don't change semantics.
+        # Windows ships `tar.exe` since 1809; `..` resolves to the workspace
+        # root where the source checkout already lives.
+        shell: pwsh
         working-directory: .release-build
         run: tar -xf dist-build.tar -C ..
 
       - name: Verify dist integrity
-        shell: bash
+        shell: pwsh
         working-directory: .release-build
         env:
           EXPECTED_DIST_SHA256: ${{ needs.build.outputs.dist_sha256 }}
         run: |
-          if [ -z "$EXPECTED_DIST_SHA256" ]; then
-            echo "::error::EXPECTED_DIST_SHA256 not propagated from build job"
+          if (-not $env:EXPECTED_DIST_SHA256) {
+            Write-Error "::error::EXPECTED_DIST_SHA256 not propagated from build job"
             exit 1
-          fi
-          echo "$EXPECTED_DIST_SHA256  dist-build.tar" | sha256sum --check -
+          }
+          $actual = (Get-FileHash dist-build.tar -Algorithm SHA256).Hash.ToLower()
+          $expected = $env:EXPECTED_DIST_SHA256.ToLower()
+          if ($actual -ne $expected) {
+            Write-Error "::error::SHA256 mismatch: expected=$expected actual=$actual"
+            exit 1
+          }
+          Write-Host "dist-build.tar SHA256 verified: $actual"
 
       - name: Install throwaway test runtime (Windows)
         shell: pwsh
