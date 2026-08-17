@@ -134,9 +134,76 @@ jobs:
         if: steps.receipt.outputs.decision == 'skip'
         run: echo "Skipping lint+test for exact tag SHA ${{ github.sha }}; authoritative CI run ${{ steps.receipt.outputs.run_id }}, quality job ${{ steps.receipt.outputs.job_id }}."
 
+  e2e-validation:
+    name: E2E validation (Windows self-hosted)
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    # The full MCP end-to-end battery from `E2E_testing/` requires real
+    # Microsoft Access (`NoConformidades.accdb`) and ACCESS_VBA_PASSWORD.
+    # GitHub-hosted runners do not have Office; this job runs on a
+    # self-hosted `dysflow-e2e` runner with Access pre-installed. The 20-minute
+    # budget matches the README's "5-15 minutes" expected runtime with
+    # headroom for sandbox provisioning.
+    runs-on: dysflow-e2e
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download exact-SHA build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.build.outputs.commit_sha }}
+          path: .release-build
+
+      - name: Extract build over the workspace
+        working-directory: .release-build
+        run: tar -xf dist-build.tar -C $GITHUB_WORKSPACE/..
+
+      - name: Verify dist integrity
+        working-directory: .release-build
+        env:
+          EXPECTED_DIST_SHA256: ${{ needs.build.outputs.dist_sha256 }}
+        run: |
+          if [ -z "$EXPECTED_DIST_SHA256" ]; then
+            echo "::error::EXPECTED_DIST_SHA256 not propagated from build job"
+            exit 1
+          fi
+          echo "$EXPECTED_DIST_SHA256  dist-build.tar" | sha256sum --check -
+
+      - name: Install throwaway test runtime (Windows)
+        shell: pwsh
+        # Per E2E_testing/README.md pre-release procedure:
+        # `node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui`.
+        # `dist/cli/index.js` is the canonical CLI; `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`
+        # keeps the harness off %LOCALAPPDATA%\dysflow.
+        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui
+
+      - name: Run full E2E battery
+        shell: pwsh
+        env:
+          ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+        # `pnpm test:e2e:mcp:release` refuses `--resume`; the release gate
+        # cannot be satisfied with a replayed partial run. Sandbox is
+        # auto-removed on success and preserved on failure under
+        # %TEMP%\dysflow-mcp-e2e-* (the harness prints the path).
+        run: pnpm test:e2e:mcp:release
+
   release:
     name: Build & Release Artifacts
-    needs: [build, release-validation]
+    needs: [build, release-validation, e2e-validation]
     if: startsWith(github.ref, 'refs/tags/v')
     # Linux packaging job. Windows jobs stay on windows-latest for MS Access.
     runs-on: ubuntu-latest
