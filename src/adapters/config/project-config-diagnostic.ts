@@ -447,6 +447,27 @@ export function diagnoseProjectConfig(
   );
   const backendPath = pathValue("backendPath");
   const destinationRoot = pathValue("destinationRoot") ?? normalize(join(projectRootNative, "src"));
+  // Issue #1438 — honor the caller-supplied `request.destinationRoot`
+  // override. The configured value is what `base.destinationRoot` reports
+  // (callers that audit the project config still see the configured value),
+  // but every gate from here on MUST use `effectiveDestinationRoot` so a
+  // post-`git rm -r src/ && mkdir -p src/{...}` export pass succeeds when
+  // the consumer supplied an explicit override that exists. The override
+  // is resolved relative to the worktree root (matching how the round-14
+  // (#1228) post-resolve containment check treats it) and forward/backslash
+  // paths are both normalized.
+  const requestDestinationRootRaw =
+    typeof request.destinationRoot === "string" && request.destinationRoot.length > 0
+      ? request.destinationRoot
+      : undefined;
+  const effectiveDestinationRoot =
+    requestDestinationRootRaw !== undefined
+      ? normalize(
+          isAbsolute(requestDestinationRootRaw)
+            ? requestDestinationRootRaw
+            : resolve(projectRootNative, requestDestinationRootRaw),
+        )
+      : destinationRoot;
   Object.assign(base, {
     configPath: normalize(selectedConfig),
     projectId,
@@ -530,15 +551,46 @@ export function diagnoseProjectConfig(
       "Configured accessPath or destinationRoot is outside the owning worktree.",
       `Move the target under ${projectRoot} or update ${base.configPath}.`,
     );
-  if (!existsSync(destinationRoot))
+  // Issue #1438 + Round-14 (#1228) — when a caller supplies a
+  // `request.destinationRoot` override, validate it BEFORE the existence
+  // gate at line 554. The override must (a) resolve inside this worktree
+  // OR (b) equal the configured value, otherwise it escapes the project
+  // root and the `path-mismatch` verdict alone would be misleading. This
+  // validation also runs BEFORE the existsSync check so that an override
+  // pointing outside the worktree (which cannot exist on disk) fails with
+  // `outside-project-root`, not the generic `destination-root-not-found`.
+  if (request.destinationRoot !== undefined) {
+    const requestedDestinationRoot = identity(resolve(projectRootNative, request.destinationRoot));
+    const isLegacyAbsoluteAccessPath =
+      parsed.accessPath !== undefined &&
+      typeof parsed.accessPath === "string" &&
+      (isAbsolute(parsed.accessPath) || basename(parsed.accessPath) !== parsed.accessPath);
+    const withinProjectRoot = (() => {
+      try {
+        return within(resolve(projectRootNative, request.destinationRoot ?? ""), projectRootNative);
+      } catch {
+        return false;
+      }
+    })();
+    const isEqualToConfigured = requestedDestinationRoot === identity(destinationRoot);
+    const accepted = isEqualToConfigured || (withinProjectRoot && !isLegacyAbsoluteAccessPath);
+    if (!accepted)
+      return failWith(
+        base,
+        "outside-project-root",
+        "Requested destinationRoot is not owned by this worktree config.",
+        `Use destinationRoot '${destinationRoot}' or a subdirectory of '${projectRoot}'.`,
+      );
+  }
+  if (!existsSync(effectiveDestinationRoot))
     return failWith(
       base,
       "destination-root-not-found",
-      `Configured destinationRoot directory does not exist: ${destinationRoot}.`,
-      remediationForDestinationRootNotFound(destinationRoot),
+      `destinationRoot directory does not exist: ${effectiveDestinationRoot}.`,
+      remediationForDestinationRootNotFound(effectiveDestinationRoot),
     );
   try {
-    const canonicalDestinationRoot = canonical(destinationRoot);
+    const canonicalDestinationRoot = canonical(effectiveDestinationRoot);
     const destinationWorktree = identity(worktreeRoot(canonicalDestinationRoot) ?? "");
     const destinationOwningRoot =
       destinationWorktree === identity(effectiveOwning)
@@ -552,7 +604,7 @@ export function diagnoseProjectConfig(
     return failWith(
       base,
       "outside-project-root",
-      "Configured destinationRoot cannot be canonically owned by this worktree.",
+      `destinationRoot '${effectiveDestinationRoot}' cannot be canonically owned by this worktree.`,
       `Create or move destinationRoot under ${projectRoot}.`,
     );
   }
@@ -741,38 +793,6 @@ export function diagnoseProjectConfig(
           `Run \`dysflow doctor --cwd ${normalize(dirname(target))}\` and call that worktree's MCP process.`,
         );
     }
-  }
-  if (request.destinationRoot !== undefined) {
-    const requestedDestinationRoot = identity(resolve(projectRootNative, request.destinationRoot));
-    // Round-14 (#1228) — accept any destinationRoot inside the project
-    // root when the config is modern (`frontendFile` rather than legacy
-    // `accessPath` absolute). The legacy equality check rejected every
-    // interior subdir, forcing consumers to point `destinationRoot`
-    // exactly at the configured `src/` (defeating the purpose of an
-    // override) or to use the `exportPath` legacy alias (which has its
-    // own dispatch contract). The fix: containment under `projectRoot`
-    // is the contract; equality with the configured `destinationRoot`
-    // is a single valid case but not the only one.
-    const isLegacyAbsoluteAccessPath =
-      parsed.accessPath !== undefined &&
-      typeof parsed.accessPath === "string" &&
-      (isAbsolute(parsed.accessPath) || basename(parsed.accessPath) !== parsed.accessPath);
-    const withinProjectRoot = (() => {
-      try {
-        return within(resolve(projectRootNative, request.destinationRoot ?? ""), projectRootNative);
-      } catch {
-        return false;
-      }
-    })();
-    const isEqualToConfigured = requestedDestinationRoot === identity(destinationRoot);
-    const accepted = isEqualToConfigured || (withinProjectRoot && !isLegacyAbsoluteAccessPath);
-    if (!accepted)
-      return failWith(
-        base,
-        "outside-project-root",
-        "Requested destinationRoot is not owned by this worktree config.",
-        `Use destinationRoot '${destinationRoot}' or a subdirectory of '${projectRoot}'.`,
-      );
   }
   const thresholdMs = resolveStaleMarkerThresholdMs(capabilities);
   reapStaleMarkerFiles(join(projectRootNative, ".dysflow", "runtime", "markers"), thresholdMs);
