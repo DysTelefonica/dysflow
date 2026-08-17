@@ -169,10 +169,17 @@ jobs:
           path: .release-build
 
       - name: Extract build over the workspace
+        shell: bash
+        # GitHub Actions on a self-hosted Windows runner still defaults the
+        # `run` shell to PowerShell. Pin `bash` here so `tar` and the
+        # subsequent `if [ ... ]` guard parse correctly. Working-directory
+        # is `.release-build`; `..` resolves to the workspace root where
+        # the checked-out source already lives.
         working-directory: .release-build
-        run: tar -xf dist-build.tar -C $GITHUB_WORKSPACE/..
+        run: tar -xf dist-build.tar -C ..
 
       - name: Verify dist integrity
+        shell: bash
         working-directory: .release-build
         env:
           EXPECTED_DIST_SHA256: ${{ needs.build.outputs.dist_sha256 }}
