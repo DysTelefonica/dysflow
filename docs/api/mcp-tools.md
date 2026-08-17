@@ -17,12 +17,28 @@ Many MCP tools share common context and override parameters:
   - `backendPath` / `comparePath` (string, optional): Paths to the backend database.
   - `target` selects a semantic database role for project-aware DAO tools. Database-wide reads (`query_sql`, `list_tables`, `get_relationships`) accept `frontend | backend`; table-aware reads (`get_schema`, `count_rows`, `distinct_values`) also accept `auto`, which probes both configured databases by `tableName` and rejects missing or ambiguous matches. Frontend-only linked-table and QueryDef tools accept only `frontend` and default to the configured `accessPath`. Explicit `databasePath` / `sourcePath` overrides the role for general reads. Unresolvable roles surface as `CONFIG_MISSING_TARGET_PATH` before execution.
 * **Workspace Overrides**:
-  - `destinationRoot` (string, optional): Directory for VBA module source exports (usually `src`).
+  - `destinationRoot` (string, optional): Directory for VBA module source exports (usually `src`). Override precedence and the gate contract are described in [`destinationRoot override`](#destinationroot-override-contract) below.
   - `projectRoot` (string, optional): Root directory of the repository/worktree.
 * **Operation Safeguards**:
   - `timeoutMs` (number, optional): Operation timeout override in milliseconds.
   - `dryRun` (boolean, optional): Evaluate operations (like writes or imports) without applying changes.
   - `apply` (boolean, optional): Explicitly apply write actions (mutually exclusive with `dryRun` mode).
+
+### `destinationRoot` override contract
+
+Override precedence, path normalization, and the pre-flight gate contract for `destinationRoot` are uniform across every write-class tool that reads or writes managed source files (`export_modules`, `export_all`, `import_modules`, `import_all`, `delete_module`, `sync_binary`, `form_serialize`, `form_deserialize`).
+
+| Aspect | Contract | Evidence |
+|---|---|---|
+| Precedence | Caller-supplied `destinationRoot` wins over the configured value from `.dysflow/project.json` for the duration of the call. The configured value stays in `projectConfig.destinationRoot` for audit. | `src/adapters/vba-sync/destination-root-override.ts:98-119` |
+| Path normalization | Forward slashes, backslashes, and mixed separators are accepted on Windows; relative paths resolve against the worktree root; case-insensitive comparison. | `src/core/config/execution-target.ts:107-128`, `src/adapters/config/project-config-diagnostic.ts:460-470` |
+| Pre-flight gate (v2.37.2+) | `existsSync` checks the EFFECTIVE path (override OR configured), so the `git rm -r src/ && mkdir -p src/{classes,forms,modules,reports}` flow plus an `export_all` call with `destinationRoot: "<absolute>/src"` succeeds when the override exists. | `test/adapters/config/issue-1438-destination-root-gate.test.ts`, `src/adapters/config/project-config-diagnostic.ts:587-593` |
+| Containment | An override that escapes the worktree fails with `OUTSIDE_PROJECT_ROOT` (typed), not the generic `DESTINATION_ROOT_NOT_FOUND`. The round-14 containment check (#1228) runs **before** the existence check so escape paths get the typed verdict. | `src/adapters/config/project-config-diagnostic.ts:555-587` |
+| Error envelope | `DESTINATION_ROOT_NOT_FOUND` references the exact path the gate tried to read, post-normalization. The legacy wording "Configured destinationRoot" is gone. | `src/adapters/config/project-config-diagnostic.ts:587-593`, `src/core/contracts/remediation.ts:144-156` |
+
+The success envelope adds two stable fields for every write-class tool that resolved the override path: `resolvedDestinationRoot` (the path the pure runner actually wrote to) and `destinationRootSource` (`override | config | projectRoot | cwd | default`). Consumers can audit override-vs-configured precedence without re-running the resolver.
+
+Reference: issue #1438, section "What changes" in the v2.37.2 CHANGELOG entry.
 
 ---
 
