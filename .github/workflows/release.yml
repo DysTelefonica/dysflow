@@ -150,6 +150,35 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Pre-stage E2E fixtures
+        # The Access fixtures (NoConformidades.accdb, NoConformidades_Datos.accdb)
+        # are .gitignored at .gitignore line 26, so a clean checkout never
+        # includes them. They live on the self-hosted runner machine
+        # (typically the same dev box the maintainer built them on) and
+        # must be copied into the workspace before the harness runs. Set
+        # the `DYSFLOW_FIXTURES_SOURCE` variable on the runner (or via
+        # `vars.DYSFLOW_FIXTURES_SOURCE` in the GitHub UI) to override
+        # the default `C:\00repos\codigo\dysflow\E2E_testing` lookup.
+        shell: pwsh
+        env:
+          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE || 'C:\00repos\codigo\dysflow\E2E_testing' }}
+        run: |
+          $source = $env:FIXTURES_SOURCE
+          $db1 = Join-Path $source 'NoConformidades.accdb'
+          $db2 = Join-Path $source 'NoConformidades_Datos.accdb'
+          if (-not (Test-Path -LiteralPath $db1)) {
+            Write-Error "::error::E2E fixture not found: $db1. Pre-stage NoConformidades.accdb at the source path or set DYSFLOW_FIXTURES_SOURCE."
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $db2)) {
+            Write-Error "::error::E2E fixture not found: $db2. Pre-stage NoConformidades_Datos.accdb at the source path or set DYSFLOW_FIXTURES_SOURCE."
+            exit 1
+          }
+          New-Item -ItemType Directory -Path 'E2E_testing' -Force | Out-Null
+          Copy-Item -LiteralPath $db1 -Destination 'E2E_testing\NoConformidades.accdb' -Force
+          Copy-Item -LiteralPath $db2 -Destination 'E2E_testing\NoConformidades_Datos.accdb' -Force
+          Write-Host "Pre-staged E2E fixtures from $source"
+
       - uses: pnpm/action-setup@v6
         with:
           run_install: false
