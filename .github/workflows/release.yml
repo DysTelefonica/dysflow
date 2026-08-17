@@ -189,7 +189,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # pnpm/action-setup@v6 pins PNPM_HOME to its bundled pnpm install
+        # (`~/setup-pnpm/` on Windows) and the virtual store lives next to it.
+        # On a self-hosted Windows runner that store has been observed to
+        # return ENOENT during copyfile from `files/<hash>` paths
+        # (store content-addressed files missing), even though the
+        # download phase reported success. Pinning `store-dir` to the
+        # workspace gives pnpm a fresh, fast, local store that survives
+        # the runner's setup-pnpm cache quirks.
+        shell: pwsh
+        run: |
+          pnpm config set store-dir "$GITHUB_WORKSPACE/.pnpm-store"
+          pnpm install --frozen-lockfile
 
       - name: Download exact-SHA build artifact
         uses: actions/download-artifact@v4
