@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.37.1] - 2026-08-17
+
+### Changes
+
+- docs(agents): add the documentation ownership contract and anchor it (#1437)
+- docs: extract the MCP tool reference and apply the page-anatomy patterns (#1436)
+- chore(docs): archive superseded documents and drop the closed epic handoff (#1435)
+- fix(docs-quality): resolve relative links against the compared Git tree (#1434)
+
+
 ## [v2.37.0] - 2026-08-09
 
 ### Changes
