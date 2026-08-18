@@ -286,16 +286,21 @@ describe("repository quality gates", () => {
 
   it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
     // release-validation stays on `windows-latest` (MS Access receipt verification);
-    // the packaging jobs (build, release) run on `ubuntu-latest`. This preserves
-    // the platform-neutral invariant: Linux for packaging, Windows for the
-    // MS-Access-dependent release-validation receipt check.
+    // the e2e-validation gate (#1438) runs on a self-hosted Windows runner with
+    // real Access pre-installed (`runs-on: dysflow-e2e`); the packaging jobs
+    // (build, release) run on `ubuntu-latest`. This preserves the platform-neutral
+    // invariant: Linux for packaging, Windows for the MS-Access-dependent
+    // release-validation receipt check and the full E2E battery.
     const workflow = await readText(".github/workflows/release.yml");
 
     expect(workflow).toMatch(
       /release-validation:[\s\S]*?name: Windows release validation[\s\S]*?runs-on: windows-latest/,
     );
     expect(workflow).toMatch(
-      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation\][\s\S]*?runs-on: ubuntu-latest/,
+      /e2e-validation:[\s\S]*?name: E2E validation[\s\S]*?runs-on: dysflow-e2e/,
+    );
+    expect(workflow).toMatch(
+      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
     );
   });
 
