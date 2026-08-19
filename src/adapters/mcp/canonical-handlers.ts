@@ -31,6 +31,10 @@ import {
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
 import { validateInput } from "./validator.js";
+import {
+  type AllowedProcedures,
+  resolveAllowedProceduresFor,
+} from "./allowed-procedures-resolver.js";
 
 type RequestBuildResult<TRequest> = TRequest | McpToolResult;
 
@@ -82,7 +86,7 @@ export async function handleMcpVbaExecute(
   input: unknown,
   schema: JsonObjectSchema,
   services: DysflowMcpServices,
-  allowedProcedures: readonly string[] | undefined,
+  allowedProcedures: AllowedProcedures | undefined,
   buildRequest: (input: unknown) => RequestBuildResult<AccessVbaRequest>,
   context?: McpToolContext,
 ): Promise<McpToolResult> {
@@ -103,9 +107,14 @@ export async function handleMcpVbaExecute(
   const request = buildRequest(input);
   if (isMcpToolResult(request)) return request;
 
+  // #1440 — resolve the allowlist per-input so the gate reflects the project
+  // the caller's target, not a frozen array captured at MCP startup. A
+  // static array is still honored (legacy fast path); a function is the
+  // per-input resolver wired by startMcpStdioAdapter.
+  const resolvedAllowlist = await resolveAllowedProceduresFor(allowedProcedures, input);
   const allowlistError = ensureProcedureAllowed(
     request.procedureName,
-    allowedProcedures,
+    resolvedAllowlist,
     request.dryRun,
   );
   if (allowlistError !== undefined) return allowlistError;

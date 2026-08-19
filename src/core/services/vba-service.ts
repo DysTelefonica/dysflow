@@ -85,6 +85,16 @@ export type VbaSourceResolver = {
   resolveAllModuleSources(): Promise<Record<string, string>>;
 };
 
+/**
+ * #1440 — per-call source-resolver factory. The preflight resolver is
+ * frozen at service construction, but the caller can override
+ * `destinationRoot` per call. The factory builds a fresh resolver around
+ * the caller's destinationRoot so the preflight reads the source the
+ * caller actually targeted, not the startup root the cached service
+ * captured.
+ */
+export type CreateSourceResolver = (destinationRoot: string) => VbaSourceResolver;
+
 export type AccessVbaServiceOptions = {
   runner: AccessRunner;
   config: DysflowConfig;
@@ -95,17 +105,46 @@ export type AccessVbaServiceOptions = {
    * callers that have not yet wired a resolver.
    */
   sourceResolver?: VbaSourceResolver;
+  /**
+   * #1440 — optional factory that produces a fresh resolver around a
+   * per-call `destinationRoot`. The preflight uses the result when the
+   * request carries an explicit destinationRoot, falling back to the
+   * static `sourceResolver` otherwise. When neither is provided, the
+   * preflight is a no-op (defensive — preserves the legacy behavior).
+   */
+  createSourceResolver?: CreateSourceResolver;
 };
 
 export class AccessVbaService {
   private readonly runner: AccessRunner;
   private readonly config: DysflowConfig;
   private readonly sourceResolver: VbaSourceResolver | undefined;
+  private readonly createSourceResolver: CreateSourceResolver | undefined;
 
   constructor(options: AccessVbaServiceOptions) {
     this.runner = options.runner;
     this.config = options.config;
     this.sourceResolver = options.sourceResolver;
+    this.createSourceResolver = options.createSourceResolver;
+  }
+
+  /**
+   * #1440 — pick the resolver to feed the preflight. The static
+   * `sourceResolver` is the default; a per-call override via
+   * `createSourceResolver` wins whenever the request carries an explicit
+   * non-empty `destinationRoot`. Returning `undefined` signals "no resolver
+   * wired; the preflight is a no-op", which preserves the legacy
+   * behavior for callers that have not wired a resolver.
+   */
+  private resolveSourceResolver(request: AccessVbaRequest): VbaSourceResolver | undefined {
+    if (
+      this.createSourceResolver !== undefined &&
+      typeof request.destinationRoot === "string" &&
+      request.destinationRoot.length > 0
+    ) {
+      return this.createSourceResolver(request.destinationRoot);
+    }
+    return this.sourceResolver;
   }
 
   async execute(
@@ -183,13 +222,25 @@ export class AccessVbaService {
     // open Access, hit a Spanish-localized COM exception, and flatten the
     // cause into a generic `RUNNER_FAILED`.
     //
+    // #1440 — the preflight resolver is per-call when the caller supplies
+    // an explicit `destinationRoot` on the request. The static
+    // `sourceResolver` captured at construction was bound to the startup
+    // `config.destinationRoot`; if the caller targets a different root
+    // (per-call override), the static resolver would read the wrong path.
+    // When `createSourceResolver` is wired, the per-call root wins.
+    const preflightResolver = this.resolveSourceResolver(normalizedRequest);
+    //
     // "Verifiably absent" requires at least one resolved source file.
     // When the resolver returns `undefined` / `{}` (e.g. no `destinationRoot`
     // configured, or a non-source-tracked `procedureName`), the service
     // falls through to the runner so the existing diagnostics still fire —
     // this is non-regressive behavior.
-    if (this.sourceResolver !== undefined) {
-      const preflight = await this.checkProcedureExists(normalizedRequest, parsedName.procName);
+    if (preflightResolver !== undefined) {
+      const preflight = await this.checkProcedureExists(
+        normalizedRequest,
+        parsedName.procName,
+        preflightResolver,
+      );
       if (preflight !== undefined) return preflight;
     }
 
@@ -222,12 +273,17 @@ export class AccessVbaService {
    * service compared the FULL `<module>.<procedure>` string against the
    * bare procedure name, always missing — the silent lookup bug at the
    * heart of issue #1174.
+   *
+   * #1440 — the resolver is passed in (per-call) rather than read from
+   * `this.sourceResolver` so the caller can target a different
+   * `destinationRoot` than the one captured at service construction.
+   * When `undefined`, the preflight is skipped.
    */
   private async checkProcedureExists(
     request: AccessVbaRequest,
     procName: string,
+    resolver: VbaSourceResolver | undefined,
   ): Promise<OperationResult<AccessVbaResult> | undefined> {
-    const resolver = this.sourceResolver;
     if (resolver === undefined) return undefined;
     if (typeof procName !== "string" || procName.length === 0) {
       return undefined;
