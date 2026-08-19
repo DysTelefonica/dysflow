@@ -1,5 +1,13 @@
 # Spec Delta: mcp-tool-test-vba
 
+> **Apply-phase note:** During apply, two design details were corrected without
+> changing the spec's behavioral contract. The `filter` parameter on `test_vba`
+> is exposed as a dedicated `SCHEMA_PROPS.testFilter` property (not the shared
+> `SCHEMA_PROPS.filter`), and the dedicated property intentionally omits
+> `type` so the validator does not reject object inputs before the adapter's
+> `parseTestFilter` runs. See `tasks.md § "Apply-phase deviations from design"`
+> for full context.
+
 ## ADDED Requirements
 
 ### Requirement: test_vba filter accepts object form
@@ -38,6 +46,11 @@ Existing `filter: string` substring+`|` OR-match and `proceduresJson` SHALL be p
 - WHEN `test_vba({ proceduresJson: "[\"A\",\"C\"]" })`
 - THEN only A and C run
 
+#### Scenario: proceduresJson-direct path ignores filter (atomicity preserved)
+- GIVEN atom candidates from direct `proceduresJson` and any `filter` value
+- WHEN caller passes BOTH `proceduresJson` AND `filter` directly
+- THEN `proceduresJson` is the final authoritative list (filter is not applied on this path)
+
 #### Scenario: omitted filter still runs every atom
 - WHEN `test_vba({})` with no `filter`
 - THEN every atom runs (backward-compat)
@@ -60,7 +73,6 @@ When `filter` is an invalid object, the tool SHALL reject with `MCP_INPUT_INVALI
 #### Scenario: unknown field is rejected
 - WHEN `test_vba({ filter: { tag: "x", foo: "y" } })`
 - THEN rejected with `MCP_INPUT_INVALID`; message names `foo` as unknown
-- AND `additionalProperties: false` blocks it at schema layer
 
 #### Scenario: legacy tags[] shape is rejected with a redirect
 - WHEN `test_vba({ filter: { tags: ["smoke"] } })`
@@ -75,16 +87,13 @@ If a future manifest shape introduces per-manifest `filter`, top-level SHALL win
 - THEN only `tag:"smoke"` atoms run; manifest-level is ignored
 
 ### Requirement: schema and doc surface declare both shapes
-`describe_tool({ name: "test_vba" })` SHALL declare `filter` as `oneOf: [string, object]` with `properties.tag: { type: "string" }` and `additionalProperties: false`. `docs/api/mcp-tools.md` SHALL describe both shapes under one `filter` heading.
+The `test_vba` parameter surface SHALL accept both shapes; the doc surface SHALL describe both shapes under one `filter` heading. (`SCHEMA_PROPS.testFilter` declares both shapes in the description; the JSON Schema intentionally omits `type` so the validator does not reject object inputs before the adapter validates them. See apply-phase note.)
 
-#### Scenario: live schema reports union shape
+#### Scenario: live schema describes both shapes
 - WHEN `describe_tool({ name: "test_vba" })`
-- THEN `parameters[filter]` is `oneOf: [string, object]` with `properties.tag: { type: "string" }` and `additionalProperties: false`
+- THEN the `filter` parameter description mentions both the string form and the `{ tag: "..." }` form
+- AND the runtime-anchored test asserts both phrases are present in the same parameter block
 
 #### Scenario: docs surface covers both shapes
 - WHEN reader consults `docs/api/mcp-tools.md` `test_vba` section
 - THEN section shows one example of `filter: string` and one of `filter: { tag: "smoke" }`
-
-## OPEN QUESTIONS
-
-- **Combined `proceduresJson` + object `filter`** — intersection (`proceduresJson` candidates, `filter` narrows) OR `proceduresJson` wins (filter ignored)? Proposal locks override only for top-level vs. manifest-level. Current `filter: string` + `proceduresJson` undocumented. Blocking for design.

@@ -12,15 +12,24 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | 200–300 |
-| 400-line budget risk | Low |
-| Chained PRs recommended | No |
-| Suggested split | Single PR |
+| Estimated changed lines (code, tests, docs, CHANGELOG) | ~650 |
+| 400-line budget risk | **High** |
+| Chained PRs recommended | **Yes** (user-approved 2026-08-19) |
+| Chain strategy | **stacked-to-main** (each PR merges to main in order) |
+| Suggested split | **3 PRs** |
 
-Decision needed before apply: No
-Chained PRs recommended: No
-Chain strategy: pending
-400-line budget risk: Low
+### Chain layout (3 PRs, stacked-to-main)
+
+| PR | Branch (from `main`) | Cherry-pick | Net code lines | Notes |
+|---|---|---|---|---|
+| **PR1** | `feat/test-vba-tag-filter-object-pr1` | `e0b409a2` + planning artifacts | ~950 (130 code + 822 planning) | Schema surface + dedicated `testFilter` + doc-anchor test + the proposal/spec/design/tasks OpenSpec files. Planning artifacts ship in PR1 so the spec is visible to reviewers of the code PRs. |
+| **PR2** | `feat/test-vba-tag-filter-object-pr2` | `7eaefc96` | 375 | `parseTestFilter` refactor + `matchesTestFilter` `tag_only` branch + port-driven unit tests. |
+| **PR3** | `feat/test-vba-tag-filter-object-pr3` | `f7b0b248` + E2E test + CHANGELOG | ~250 | Doc updates (`docs/api/mcp-tools.md`, `assets/examples/test-vba.md`, `skills/dysflow-usage/SKILL.md`) + `E2E_testing/mcp-e2e-issue-1442-test-vba-tag-filter.mjs` + `CHANGELOG.md` entry. |
+
+Each PR is independently reviewable and under the 400-line code budget. The
+planning-artifact commit at PR1 is accepted because OpenSpec files are
+documentation, not production code, and reviewers can skip that diff without
+losing context.
 
 ---
 
@@ -105,6 +114,25 @@ Chain strategy: pending
 - [x] **6.1** Add entry in `CHANGELOG.md` under `[Unreleased]` (or `[v2.37.4]` if section exists) noting `feat(mcp): test_vba filter accepts {tag:"..."} object form for tag-only matching (#1442)`. If the unreleased section does not exist, create it above `[v2.37.3]`.
   **Files:** `CHANGELOG.md`
   **Verify:** `grep -n "1442" CHANGELOG.md`
+
+---
+
+## Phase 7: E2E Test (real Access binary)
+
+> User direction 2026-08-19: "los tests nuevos han de formar parte del ci que ya hay en gh" — E2E tests live under `E2E_testing/` and are picked up by `release.yml:e2e-validation` via `pnpm test:e2e:mcp:release` (self-hosted `dysflow-e2e` runner with Access pre-installed).
+
+- [ ] **7.1** Create `E2E_testing/mcp-e2e-issue-1442-test-vba-tag-filter.mjs` modeled on `mcp-e2e-issue-1013-test-vba-sandbox-sync.mjs`. Covers:
+  - Happy path: `dysflow.test_vba({ filter: { tag: "smoke" }, apply: true })` against a manifest where exactly one atom has `tags: ["smoke"]`. Assert the `successResult` lists only that atom's procedure.
+  - Backward-compat path: `dysflow.test_vba({ filter: "smoke", apply: true })` (string form) against the same manifest. Assert the same atom is selected (substring over name/procedure/tags still works).
+  - Rejection path: `dysflow.test_vba({ filter: { tag: "" }, apply: true })`. Assert `MCP_INPUT_INVALID` with message naming `filter.tag`.
+  - Skip-safe when `NoConformidades.accdb` is missing (gated by `DYSFLOW_REQUIRE_ACCESS_E2E`).
+  - Imports the existing helpers (`_helpers/mcp-harness.mjs`, `_helpers/mcp-e2e-sandbox.mjs`, `_helpers/resolve-mcp-e2e-command.mjs`).
+  **Files:** `E2E_testing/mcp-e2e-issue-1442-test-vba-tag-filter.mjs`
+  **Verify:** `node E2E_testing/mcp-e2e-issue-1442-test-vba-tag-filter.mjs` with `DYSFLOW_REQUIRE_ACCESS_E2E=1` on a Windows host with Access; without those, exits 0 with a "skipped" log line.
+
+- [ ] **7.2** Confirm `pnpm test:e2e:mcp:release` (the script invoked by `release.yml:e2e-validation` step `Run full E2E battery`) discovers the new file automatically — no `package.json` or harness-config edit required. Spot-check by reading the harness glob in `E2E_testing/_helpers/` and confirming the new `mcp-e2e-issue-1442-*.mjs` matches the pattern.
+  **Files:** `package.json`, `E2E_testing/_helpers/*.mjs` (read-only)
+  **Verify:** `node -e 'console.log(require("./package.json").scripts["test:e2e:mcp:release"])'` and grep the glob against `E2E_testing/mcp-e2e-issue-1442-test-vba-tag-filter.mjs`.
 
 ---
 
