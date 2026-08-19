@@ -692,6 +692,271 @@ describe("VbaExecutionAdapter", () => {
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
+  // --- test_vba manifest filter: object form { tag } (#1442) ------------------
+  //
+  // Exercised through `adapter.execute("test_vba", ...)` rather than by
+  // importing `parseTestFilter` / `matchesTestFilter` directly. Both are
+  // file-local helpers with no export, and the spec states every scenario as a
+  // `test_vba({ filter: ... })` invocation, so the port is where the contract
+  // actually lives. Asserting the selected `proceduresJson` also survives any
+  // refactor that moves the matching logic between the two helpers.
+
+  /**
+   * Write `tests` as a manifest in a fresh temp dir and wire an adapter whose
+   * orchestrator records the resolved plan.
+   */
+  async function makeManifestAdapter(tests: readonly unknown[], slug: string) {
+    const root = await mkdtemp(join(tmpdir(), `dysflow-vba-${slug}-`));
+    await writeFile(join(root, "tests.vba.json"), JSON.stringify(tests), "utf8");
+    const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
+    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    return { adapter, executeMappedTool };
+  }
+
+  /** Procedure names the adapter actually forwarded to the runner. */
+  function selectedProcedures(executeMappedTool: ReturnType<typeof vi.fn>): string[] {
+    const call = executeMappedTool.mock.calls[0];
+    if (call === undefined) return [];
+    const params = call[1] as { proceduresJson: string };
+    return (JSON.parse(params.proceduresJson) as { procedure: string }[]).map(
+      (entry) => entry.procedure,
+    );
+  }
+
+  const TAGGED_MANIFEST = [
+    { name: "alpha", procedure: "Test_A", args: ["a"], tags: ["smoke", "regression"] },
+    { name: "beta", procedure: "Test_B", args: ["b"], tags: ["load"] },
+    { name: "Test_Smoke", procedure: "Test_C", args: ["c"], tags: [] },
+  ];
+
+  describe("parseTestFilter object branch", () => {
+    it("selects only atoms whose tags contain the requested substring", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(TAGGED_MANIFEST, "tag-hit");
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "smoke" },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A"]);
+    });
+
+    it("trims and lowercases the tag before matching", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(TAGGED_MANIFEST, "tag-trim");
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "  SMOKE  " },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A"]);
+    });
+
+    it("rejects an empty object with MCP_INPUT_INVALID naming the missing tag", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "tag-empty",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: {},
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain("tag");
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("rejects an empty tag string with MCP_INPUT_INVALID", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "tag-blank",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "   " },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain("non-empty");
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-string tag naming both expected and received type", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(TAGGED_MANIFEST, "tag-type");
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: 123 },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain("string");
+      expect(result.error.message).toContain("number");
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unknown field by name", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "tag-unknown",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "smoke", foo: "y" },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain("foo");
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("rejects the plural tags[] shape and redirects to the singular form", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "tag-plural",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tags: ["smoke"] },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.code).toBe("MCP_INPUT_INVALID");
+      expect(result.error.message).toContain('{ tag: "smoke" }');
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("matchesTestFilter tag_only branch", () => {
+    it("does not consult name or procedure", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        [
+          { name: "Test_Smoke", procedure: "Test_A", args: [], tags: [] },
+          { name: "y", procedure: "Test_RunSmokeCheck", args: [], tags: [] },
+        ],
+        "tag-name-ignored",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "smoke" },
+      });
+
+      expect(result).toMatchObject({ ok: false, error: { code: "VBA_NO_TESTS_SELECTED" } });
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("matches tags case-insensitively", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        [{ name: "alpha", procedure: "Test_A", args: [], tags: ["Smoke"] }],
+        "tag-case",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "SMOKE" },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A"]);
+    });
+
+    it("never selects an atom with an empty tags list", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        [{ name: "smoke", procedure: "Test_A", args: [], tags: [] }],
+        "tag-none",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "smoke" },
+      });
+
+      expect(result).toMatchObject({ ok: false, error: { code: "VBA_NO_TESTS_SELECTED" } });
+      expect(executeMappedTool).not.toHaveBeenCalled();
+    });
+
+    it("reports the tag in the VBA_NO_TESTS_SELECTED message", async () => {
+      const { adapter } = await makeManifestAdapter(
+        [{ name: "alpha", procedure: "Test_A", args: [], tags: ["load"] }],
+        "tag-message",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: { tag: "xyz" },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("expected rejection");
+      expect(result.error.message).toContain("xyz");
+    });
+  });
+
+  describe("test_vba manifest filter backward compatibility", () => {
+    it("keeps the string filter OR-matching across name, procedure, and tags", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        [
+          { name: "Test_Smoke", procedure: "Test_A", args: [], tags: [] },
+          { name: "beta", procedure: "Test_B", args: [], tags: ["regression"] },
+          { name: "gamma", procedure: "Test_C", args: [], tags: ["load"] },
+        ],
+        "string-or",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        testsPath: "tests.vba.json",
+        filter: "smoke|regression",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A", "Test_B"]);
+    });
+
+    it("runs every atom when the filter is omitted", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "no-filter",
+      );
+
+      const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A", "Test_B", "Test_C"]);
+    });
+
+    it("leaves the proceduresJson path free of filter narrowing", async () => {
+      const { adapter, executeMappedTool } = await makeManifestAdapter(
+        TAGGED_MANIFEST,
+        "procedures-json",
+      );
+
+      const result = await adapter.execute("test_vba", {
+        proceduresJson: JSON.stringify(["Test_A", "Test_C"]),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(selectedProcedures(executeMappedTool)).toEqual(["Test_A", "Test_C"]);
+    });
+  });
+
   // feat-759-no-compile (v1.19.0) — the "runs compile before test_vba
   // when compile is requested" test was deleted because compile is gone.
   // The runner no longer makes a compile_vba call before test_vba; the
