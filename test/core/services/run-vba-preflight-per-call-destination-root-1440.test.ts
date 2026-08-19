@@ -127,7 +127,7 @@ describe("#1440 — preflight per-call destinationRoot override (Bug A)", () => 
     // calling the factory.
     const staticResolver = {
       resolveModuleSource: async (moduleName: string) =>
-        moduleName === freshModuleName ? freshModuleSource : undefined as string | undefined,
+        moduleName === freshModuleName ? freshModuleSource : (undefined as string | undefined),
       resolveAllModuleSources: async () => ({}),
     };
     let factoryCalls = 0;
@@ -167,14 +167,14 @@ describe("#1440 — preflight per-call destinationRoot override (Bug A)", () => 
     // preflight accepts because the factory-built resolver reads path B.
     const staticResolver = {
       resolveModuleSource: async (moduleName: string) =>
-        moduleName === freshModuleName ? "" : undefined as string | undefined,
+        moduleName === freshModuleName ? "" : (undefined as string | undefined),
       resolveAllModuleSources: async () => ({}),
     };
     const createSourceResolver = (destinationRoot: string) => ({
       resolveModuleSource: async (moduleName: string) =>
         moduleName === freshModuleName && destinationRoot === correctDestinationRoot
           ? freshModuleSource
-          : undefined as string | undefined,
+          : (undefined as string | undefined),
       resolveAllModuleSources: async () => ({}),
     });
 

@@ -9,6 +9,10 @@ import {
 } from "../../core/operations/access-operation-registry.js";
 import { isRecord } from "../../core/utils/index.js";
 import {
+  type AllowedProcedures,
+  resolveAllowedProceduresFor,
+} from "./allowed-procedures-resolver.js";
+import {
   allowlistNotConfigured,
   enforceRequiresConfirmation,
   enrichmentForValidationMessage,
@@ -31,10 +35,6 @@ import {
 import type { JsonObjectSchema } from "./schemas.js";
 import type { McpToolContext } from "./types.js";
 import { validateInput } from "./validator.js";
-import {
-  type AllowedProcedures,
-  resolveAllowedProceduresFor,
-} from "./allowed-procedures-resolver.js";
 
 type RequestBuildResult<TRequest> = TRequest | McpToolResult;
 
