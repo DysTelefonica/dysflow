@@ -576,6 +576,14 @@ export function createConfiguredServices(
       runner,
       config,
       sourceResolver: createNodeVbaSourceResolver(config.destinationRoot),
+      // #1440 — per-call destinationRoot override. The static resolver above
+      // is bound to the configured `config.destinationRoot` at service
+      // construction; a per-call `request.destinationRoot` override would
+      // otherwise be ignored by the preflight. The factory closes over
+      // `createNodeVbaSourceResolver` so callers can target a different root
+      // than the one captured at startup without restarting the MCP server.
+      createSourceResolver: (destinationRoot: string) =>
+        createNodeVbaSourceResolver(destinationRoot),
     }),
     queryService: new AccessQueryService({ runner, config }),
     diagnosticsService: new AccessDiagnosticsService({ runner, config }),
