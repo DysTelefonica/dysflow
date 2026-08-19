@@ -1,5 +1,24 @@
 # Changelog
 
+## [v2.37.3] - 2026-08-19
+
+### Changes
+
+- fix(run-vba): honor per-call destinationRoot override in preflight (#1440) (#1441)
+- ci(release): disable setup-node cache on e2e-validation
+- test(quality-gates): assert e2e-validation gate in release.yml (#1438)
+- ci(release): bump e2e-validation timeout to 60 min
+- ci(release): bump e2e-validation timeout to 45 min
+- ci(release): bump e2e-validation timeout to 30 min
+- ci(release): drop setup-node cache for e2e-validation (self-hosted)
+- ci(release): pin pnpm store-dir to workspace for e2e-validation
+- ci(release): pre-stage E2E fixtures from runner-local source
+- ci(release): switch E2E extract/verify to PowerShell on Windows runner
+- ci(release): pin bash shell and fix -C path for E2E extract
+- ci(release): gate publish on E2E battery via self-hosted Windows runner
+- docs(api): document the destinationRoot override contract for v2.37.2
+
+
 ## [v2.37.2] - 2026-08-17
 
 ### Changes
