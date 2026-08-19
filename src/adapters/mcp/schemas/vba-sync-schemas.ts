@@ -538,7 +538,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       proceduresJson: SCHEMA_PROPS.proceduresJson,
-      filter: SCHEMA_PROPS.filter,
+      // Issue #1442 — `test_vba` is the only tool whose filter accepts an
+      // object (`{ tag: "smoke" }`) alongside the legacy string, so it uses
+      // the dedicated `testFilter` property instead of the shared, string-only
+      // `SCHEMA_PROPS.filter` the export/list tools rely on.
+      filter: SCHEMA_PROPS.testFilter,
       testsPath: SCHEMA_PROPS.testsPath,
       // Round-3 Item 5 (P2) — `dryRun: true` short-circuits to a plan-shaped
       // result in `VbaExecutionAdapter.executeTestVba` (no PowerShell spawn,

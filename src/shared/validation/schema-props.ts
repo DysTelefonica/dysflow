@@ -167,6 +167,25 @@ export const SCHEMA_PROPS = {
       "When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content.",
   } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
+  // Issue #1442 — `test_vba` accepts two filter shapes, so this property
+  // declares no `type`. The boundary validator matches a single primitive per
+  // property (`matchesJsonSchemaType` in `src/shared/validation/validator.ts`)
+  // and has no `oneOf`/`anyOf` at property level, so declaring `type:"string"`
+  // rejected the object form with "filter must be a string." before the
+  // adapter could read it. Omitting `type` is the validator's own escape
+  // hatch: `validateJsonSchemaProperty` skips type enforcement when neither
+  // `type` nor `enum` is set, which hands the real shape check to
+  // `parseTestFilter` in `src/adapters/vba-sync/vba-execution-adapter.ts` —
+  // the single site that rejects every invalid object with MCP_INPUT_INVALID.
+  //
+  // This is deliberately a separate property from `filter` above: that one is
+  // shared by `export_modules`, `export_all`, `list_objects`, and
+  // `harvest_form_catalog`, which accept a string filter only and must keep
+  // their boundary type guard.
+  testFilter: {
+    description:
+      'Test filter, accepted in two shapes. String form (e.g. "smoke" or "smoke|regression") splits on \'|\' for an OR match and matches any of {name, procedure, tags[]} by case-insensitive substring. Object form { tag: "smoke" } narrows to tags[] only and never consults name or procedure. An empty object, an empty or non-string tag, an unknown field, and the plural { tags: [...] } are each rejected with MCP_INPUT_INVALID.',
+  } as JsonSchemaProperty,
   importMode: {
     type: "string",
     default: "Auto",
