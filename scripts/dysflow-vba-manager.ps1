@@ -2389,6 +2389,8 @@ function Export-VbaModule {
     $component = $null
     $tmp = $null
     $finalPath = $null
+    $binaryText = $null
+    $verboseCodeModule = $null
 
     try {
         # Buscar en VBProject: primero con el nombre tal cual, luego con prefijos documentales
@@ -2414,6 +2416,27 @@ function Export-VbaModule {
         }
 
         $finalPath = Join-Path -Path $targetFolder -ChildPath ($ModuleName + $ext)
+
+        if ($script:ExportVerbose -and $component) {
+            try {
+                $verboseCodeModule = $component.CodeModule
+                if ($verboseCodeModule) {
+                    $binarySnapshot = Get-CodeModuleTextSnapshot -CodeModule $verboseCodeModule
+                    if ($binarySnapshot.success) {
+                        # CodeModule.Lines omits hidden module attributes while
+                        # VBComponent.Export writes them. Compare equivalent
+                        # representations so VB_Name presence alone is not a
+                        # false actionable export mismatch.
+                        $binaryText = Ensure-VbNameAttributeAtTop -Text ([string]$binarySnapshot.text) -ModuleName $actualName
+                    }
+                }
+            } finally {
+                if ($verboseCodeModule) {
+                    try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($verboseCodeModule) | Out-Null } catch { Write-Debug "Diagnostics: $_" }
+                    $verboseCodeModule = $null
+                }
+            }
+        }
 
         # FIX: formularios/reportes usan SaveAsText para obtener UI + codigo completo
         # SaveAsText requiere el nombre del objeto Access SIN prefijo "Form_"/"Report_"
@@ -2446,6 +2469,7 @@ function Export-VbaModule {
                 throw ("SaveAsText produjo un archivo incompleto para '{0}' (falta '{1}'). " +
                        "Asegurate de que el documento no este abierto en modo diseno en ninguna instancia de Access." -f $objectName, $beginMarker)
             }
+            if ($script:ExportVerbose) { $binaryText = [string]$savedContent }
 
             Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
             # issue #743: inject/replace `Attribute VB_Name` so Access never invents a
@@ -2487,8 +2511,21 @@ function Export-VbaModule {
                 Write-Utf8NoBom -Path $clsPath -Text $codeLines
             }
         }
+
+        if ($script:ExportVerbose) {
+            $fileText = [System.IO.File]::ReadAllText($finalPath, [System.Text.Encoding]::UTF8)
+            return [pscustomobject]@{
+                module      = $ModuleName
+                binary      = (Get-VbaTextSizeSnapshot -Text ([string]$binaryText))
+                file        = (Get-VbaTextSizeSnapshot -Text $fileText)
+                _binaryText = [string]$binaryText
+                _fileText   = $fileText
+                fileType    = $ext.TrimStart('.').ToLowerInvariant()
+            }
+        }
     } finally {
         if ($tmp -and (Test-Path -Path $tmp)) { Remove-Item -Path $tmp -Force -ErrorAction SilentlyContinue }
+        if ($verboseCodeModule) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($verboseCodeModule) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
         if ($component) { try { [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($component) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
     }
 }
@@ -3211,8 +3248,11 @@ function New-VbComponentFromCodeFile {
 
         $importResultVerbose = $null
         if ($script:ImportVerbose) {
-            $normalizedSourceText = [System.IO.File]::ReadAllText($SanitizedAnsiPath, [System.Text.Encoding]::GetEncoding(1252))
-            $visibleSourceText = Convert-VbaTextForCodeModuleString -Text $normalizedSourceText
+            # Diagnostics describe source-vs-binary semantics, not merely the
+            # already-lossy ANSI serialization handed to Access. Retain the
+            # original UTF-8 text so glyph loss inside strings stays visible.
+            $originalSourceText = [System.IO.File]::ReadAllText($SourcePath, [System.Text.Encoding]::UTF8)
+            $visibleSourceText = Convert-VbaTextForCodeModuleString -Text $originalSourceText
             $verboseSource = Get-VbaTextSizeSnapshot -Text $visibleSourceText
             $verboseDestination = Get-CodeModuleSizeSnapshot -CodeModule $newCodeModule
             $verboseTruncated = ([int]$verboseDestination.lines -lt [int]$verboseSource.lines)
@@ -3227,6 +3267,9 @@ function New-VbComponentFromCodeFile {
                 destination    = $verboseDestination
                 truncated      = [bool]$verboseTruncated
                 mismatchReason = $verboseMismatch
+                _sourceText    = $visibleSourceText
+                _destinationText = [string](Get-CodeModuleTextSnapshot -CodeModule $newCodeModule).text
+                fileType       = if ($componentType -eq 1) { 'bas' } else { 'cls' }
             }
         }
 
@@ -3648,8 +3691,14 @@ function Import-VbaModule {
             $codeTextForStringImport = Convert-VbaTextForCodeModuleString -Text $normalizedSourceText
             $visibleSourceLines = Get-VbaTextLineCount -Text $codeTextForStringImport
             $importVerboseSource = $null
+            $comparisonSourceText = $null
             if ($script:ImportVerbose) {
-                $importVerboseSource = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
+                # Preserve original UTF-8 evidence before CP-1252 serialization.
+                # Actual import and truncation guards continue to use the ANSI
+                # representation above; only semantic diagnostics use this text.
+                $originalSourceText = [System.IO.File]::ReadAllText($src, [System.Text.Encoding]::UTF8)
+                $comparisonSourceText = Convert-VbaTextForCodeModuleString -Text $originalSourceText
+                $importVerboseSource = Get-VbaTextSizeSnapshot -Text $comparisonSourceText
             }
 
             $count = $codeModule.CountOfLines
@@ -3687,9 +3736,6 @@ function Import-VbaModule {
                 $fallbackReason = "add_from_file_truncated"
                 if ($afterAddFromFileLines -gt 0) { $codeModule.DeleteLines(1, $afterAddFromFileLines) }
                 $expectedImportedLines = Get-VbaTextLineCount -Text $codeTextForStringImport
-                if ($script:ImportVerbose) {
-                    $effectiveVerboseSource = Get-VbaTextSizeSnapshot -Text $codeTextForStringImport
-                }
                 if (-not [string]::IsNullOrWhiteSpace($codeTextForStringImport)) {
                     $codeModule.AddFromString($codeTextForStringImport)
                 }
@@ -3742,6 +3788,9 @@ function Import-VbaModule {
                     destination    = $importVerboseDest
                     truncated      = [bool]$importVerboseTruncated
                     mismatchReason = $importVerboseMismatch
+                    _sourceText    = $comparisonSourceText
+                    _destinationText = [string](Get-CodeModuleTextSnapshot -CodeModule $codeModule).text
+                    fileType       = ([System.IO.Path]::GetExtension($src)).TrimStart('.').ToLowerInvariant()
                 }
             }
 
@@ -4658,6 +4707,7 @@ function Invoke-ExportAction {
     }
 
     $exported = @()
+    $verboseResults = @()
     $planned = @()
     $total = $targets.Count
     $idx = 0
@@ -4674,8 +4724,9 @@ function Invoke-ExportAction {
         }
         Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
         try {
-            Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -AccessObjectName $accessObjectName -VbComponentName $vbComponentName
+            $moduleVerbose = Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -AccessObjectName $accessObjectName -VbComponentName $vbComponentName
             $exported += $name
+            if ($script:ExportVerbose -and $moduleVerbose) { $verboseResults += $moduleVerbose }
         } catch {
             if ($Json) {
                 $errMsg = $_.Exception.Message
@@ -4747,6 +4798,9 @@ function Invoke-ExportAction {
     $exportResult = @{
         ok = $true
         exported = $exported
+    }
+    if ($script:ExportVerbose) {
+        $exportResult["verbose"] = $verboseResults
     }
     if ($ReadOnly) {
         # Issue #1063 — plan-mode envelope: exported stays empty; planned[]

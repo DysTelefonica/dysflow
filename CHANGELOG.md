@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changes
+
+- fix(vba-sync): classify import/export verbose mismatches with the canonical semantic rules, preserve original UTF-8 evidence across ANSI import serialization, normalize hidden `VB_Name` export metadata, and keep private comparison bodies out of success and failure envelopes (#1443)
+
 ## [v2.37.3] - 2026-08-19
 
 ### Changes

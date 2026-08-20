@@ -1,5 +1,7 @@
 # export_modules — destinationRoot override (temp-dir reconciliation)
 
+> Add `verbose:true` when the caller needs per-module binary-before/file-after snapshots and the canonical VBA semantic `classification`, `actionable`, and `recommendation` fields. The `verbose` payload is absent by default.
+
 ## When to use
 
 The `destinationRoot` override on `export_modules` (and every other

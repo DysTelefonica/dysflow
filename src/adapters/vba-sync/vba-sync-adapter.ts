@@ -41,6 +41,7 @@ import {
   withResolvedDestinationRoot,
 } from "./destination-root-override.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
+import { enrichVbaSyncVerboseDiagnostics } from "./post-write-content-verify.js";
 import {
   runSyncBinary,
   type SyncBinaryAdapterLike,
@@ -969,6 +970,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     let parsedOutput: unknown;
     try {
       parsedOutput = parseOutput(result.stdout, secrets);
+      parsedOutput = enrichVbaSyncVerboseDiagnostics(parsedOutput);
     } catch (error) {
       if (result.exitCode !== 0 || isImportTool(toolName)) {
         return failureResult(failureFromUnexpectedRunnerExit(toolName, result, error, secrets), {
@@ -1578,7 +1580,7 @@ function buildRunnerFailureOutputDetails(
   result: VbaManagerExecutionResult,
   secrets: readonly string[],
 ): { displayOutput: string; details: Record<string, unknown> } {
-  const stdout = sanitizeSecrets(result.stdout, secrets);
+  const stdout = sanitizeRunnerFailureStdout(result.stdout, secrets);
   const stderr = sanitizeSecrets(result.stderr, secrets);
   const displayOutput =
     stderr.trim().length > 0 ? stderr : stdout.trim().length > 0 ? stdout : "No output.";
@@ -1591,6 +1593,32 @@ function buildRunnerFailureOutputDetails(
       stderr,
     },
   };
+}
+
+/**
+ * Failure details preserve runner logs for diagnosis, but a structured result
+ * can contain private comparison bodies used only at the classifier seam.
+ * Sanitize every sentinel payload before it can reach an error message or
+ * `error.details.stdout`; malformed private payloads fail closed to redaction.
+ */
+function sanitizeRunnerFailureStdout(stdout: string, secrets: readonly string[]): string {
+  const sanitized = sanitizeSecrets(stdout, secrets);
+  return sanitized
+    .split("\n")
+    .map((line) => {
+      if (!line.startsWith(RESULT_MARKER)) return line;
+      const rawPayload = line.slice(RESULT_MARKER.length).trim();
+      try {
+        const publicPayload = enrichVbaSyncVerboseDiagnostics(JSON.parse(rawPayload));
+        return `${RESULT_MARKER}${JSON.stringify(publicPayload)}`;
+      } catch {
+        if (/"_(?:source|destination|binary|file)Text"\s*:/.test(rawPayload)) {
+          return `${RESULT_MARKER}{"privateVerbosePayload":"redacted"}`;
+        }
+        return line;
+      }
+    })
+    .join("\n");
 }
 
 async function readVbaManagerOperationMarker(

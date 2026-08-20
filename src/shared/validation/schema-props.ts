@@ -164,7 +164,7 @@ export const SCHEMA_PROPS = {
   verboseContract: {
     type: "boolean",
     description:
-      "When true, the response includes per-module source/destination line counts, byte counts, sha256 hashes, and a `truncated` boolean. Recommended after any import_modules of a module that already exists in the binary, since AddFromFile truncates silently when the pre-existing module's CountOfLines caps the new content.",
+      "When true, import/export responses include per-module before/after snapshots plus the canonical VBA semantic `classification`, `actionable`, `recommendation`, `reason`, and `classifierRules` fields. Import snapshots are `source`/`destination`; export snapshots are `binary`/`file`. The payload is absent when false or omitted. IMPORT_TRUNCATED remains a fatal typed error with rollback.",
   } as JsonSchemaProperty,
   filter: { type: "string", description: "Test or object filter." } as JsonSchemaProperty,
   importMode: {
