@@ -28,6 +28,7 @@ Describe "dysflow-vba-manager.ps1 — F16 source-larger import fallback helpers"
             'Get-VbaTextLineCount',
             'Get-VbaTextSizeSnapshot',
             'Get-CodeModuleTextSnapshot',
+            'Get-CodeModuleSizeSnapshot',
             'Restore-CodeModuleTextSnapshot',
             'Test-IsVbaImportDroppableMetadataLine',
             'Test-IsVbaOptionDirectiveLine',
@@ -376,6 +377,28 @@ Describe "dysflow-vba-manager.ps1 — F16 source-larger import fallback helpers"
             $codeModule.State.AddFromStringCalls | Should -Be 1
             $codeModule.State.Text | Should -Be "Option Explicit`r`nPublic Sub Newer()`r`nEnd Sub"
         } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "compares the original UTF-8 source when ANSI import loses a glyph inside a string" {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) ("dysflow-1443-utf8-evidence-{0}" -f [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $root | Out-Null
+        try {
+            $source = Join-Path $root "Test_Foo.bas"
+            $sourceText = "Attribute VB_Name = `"Test_Foo`"`r`nOption Explicit`r`nPublic Function Marker() As String`r`n    Marker = `"►`"`r`nEnd Function`r`n"
+            [System.IO.File]::WriteAllText($source, $sourceText, [System.Text.UTF8Encoding]::new($false))
+            $codeModule = New-FakeCodeModule -InitialText "Option Explicit`r`n"
+            $project = New-FakeVbProject -CodeModule $codeModule -Name "Test_Foo"
+            $script:ImportVerbose = $true
+
+            $result = Import-VbaModule -VbProject $project -ModuleName "Test_Foo" -ModulesPath $root -ImportMode "Auto"
+
+            $result.Verbose._sourceText | Should -Match '►'
+            $result.Verbose._destinationText | Should -Match '\?'
+            $result.Verbose.mismatchReason | Should -Be 'content_hash'
+        } finally {
+            $script:ImportVerbose = $false
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
     }

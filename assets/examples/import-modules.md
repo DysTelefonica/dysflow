@@ -37,6 +37,10 @@ A dropped property is reported in `actionableDifferent` with `category: "control
 
 Do not add `compile:true`. The human must compile the Access project manually in the VBE after a successful import and before running VBA tests.
 
+## Actionable verbose diagnostics
+
+Pass `verbose:true` to receive source/destination `{ lines, bytes, sha256 }` snapshots and the canonical VBA semantic verdict on each successful module. Source evidence comes from the original UTF-8 file before ANSI import serialization, so lossy changes inside strings remain actionable. Consumers branch on `actionable` and `recommendation`; `mismatchReason:"content_hash"` alone does not distinguish harmless VBE normalization from a functional change. `IMPORT_TRUNCATED` remains fatal and rolls back.
+
 ## Curated default-value allow-list
 
 For ComboBox and ListBox exports, Dysflow preserves these functional properties even when Access serializes their default value:

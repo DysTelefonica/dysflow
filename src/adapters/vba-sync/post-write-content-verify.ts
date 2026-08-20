@@ -1,86 +1,85 @@
+import {
+  classifyVbaPair,
+  SEMANTIC_CLASSIFIER_RULES,
+} from "../../core/services/vba-semantic-classifier.js";
+import { isRecord } from "../../core/utils/index.js";
+
 /**
- * Round-14 regression fix — issue #1228 bug 1.
- *
- * `import_modules` with `importMode:"Code"` (or any mode) MUST verify
- * post-write that the binary's stored module content actually reflects
- * the source on disk. Without this check, the runner can report
- * `status:ok` + `mismatchReason:null` + `SHA source == destination` while
- * the binary is stale (round-5 #1040 documented the same shape for
- * `Auto` mode; the fix never covered `Code` mode).
- *
- * This helper is the single chokepoint the runner consults after every
- * write. It compares the stored module's hash to the source's hash. If
- * they differ, it returns `mismatchReason: "content_hash"` so the
- * envelope surfaces an honest verdict. If they match, the helper
- * confirms the write landed and returns `mismatchReason: null`.
- *
- * The helper is pure: it never reaches the file system, the runner, or
- * the Access COM port. The adapter reads both texts (source from disk,
- * stored module from the binary) and passes them in. This keeps the
- * reconciliation testable at the port and refactor-safe.
- *
- * The shape is additive: existing call sites that only need a yes/no
- * answer can read `reconciled`; new call sites that need to surface
- * the reason can branch on `mismatchReason`. The expected/observed
- * hash fields are stable for the contract so a consumer can introspect
- * what the runner saw.
+ * Enriches runner-owned verbose snapshots with the canonical VBA semantic
+ * verdict, then removes the private comparison text used at the adapter seam.
+ * The PowerShell runner owns Access COM capture; TypeScript owns semantic
+ * policy. Keeping that split prevents the runner from growing a second,
+ * inevitably drifting classification taxonomy.
  */
+export function enrichVbaSyncVerboseDiagnostics(payload: unknown): unknown {
+  return visit(payload);
+}
 
-export type PostWriteMismatchReason =
-  | "content_hash"
-  | "missing_stored_module"
-  | "missing_source_text";
+function visit(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(visit);
+  if (!isRecord(value)) return value;
 
-export type PostWriteReconcileInput = {
-  moduleName: string;
-  sourceText: string;
-  sourceSha256: string;
-  storedModuleText: string | null;
-  storedModuleSha256: string | null;
-};
+  const enriched = enrichVerboseObject(value);
+  return Object.fromEntries(Object.entries(enriched).map(([key, child]) => [key, visit(child)]));
+}
 
-export type PostWriteReconcileResult = {
-  reconciled: boolean;
-  mismatchReason: PostWriteMismatchReason | null;
-  expectedSha256: string;
-  observedSha256: string | null;
-};
-
-export function reconcilePostWriteModuleContent(
-  input: PostWriteReconcileInput,
-): PostWriteReconcileResult {
-  if (input.sourceText.length === 0) {
-    return {
-      reconciled: false,
-      mismatchReason: "missing_source_text",
-      expectedSha256: input.sourceSha256,
-      observedSha256: input.storedModuleSha256,
-    };
+function enrichVerboseObject(value: Record<string, unknown>): Record<string, unknown> {
+  const importSource = text(value._sourceText);
+  const importDestination = text(value._destinationText);
+  if (importSource !== undefined && importDestination !== undefined) {
+    return withClassification(value, importSource, importDestination);
   }
-  if (
-    input.storedModuleText === null ||
-    input.storedModuleSha256 === null ||
-    input.storedModuleText.length === 0
-  ) {
-    return {
-      reconciled: false,
-      mismatchReason: "missing_stored_module",
-      expectedSha256: input.sourceSha256,
-      observedSha256: null,
-    };
+
+  const exportBinary = text(value._binaryText);
+  const exportFile = text(value._fileText);
+  if (exportBinary !== undefined && exportFile !== undefined) {
+    // The canonical classifier names the disk side `source` and the Access
+    // side `binary`, independent of whether the operation is import or export.
+    return withClassification(value, exportFile, exportBinary);
   }
-  if (input.sourceSha256 !== input.storedModuleSha256) {
-    return {
-      reconciled: false,
-      mismatchReason: "content_hash",
-      expectedSha256: input.sourceSha256,
-      observedSha256: input.storedModuleSha256,
-    };
-  }
+
+  return removePrivateText(value);
+}
+
+function withClassification(
+  value: Record<string, unknown>,
+  sourceText: string,
+  binaryText: string,
+): Record<string, unknown> {
+  const { _sourceText, _destinationText, _binaryText, _fileText, ...publicFields } = value;
+  void _sourceText;
+  void _destinationText;
+  void _binaryText;
+  void _fileText;
+  const fileType = normalizeFileType(value.fileType);
+  const classification = classifyVbaPair({
+    sourceText,
+    binaryText,
+    fileType,
+    mode: "semantic",
+  });
+
   return {
-    reconciled: true,
-    mismatchReason: null,
-    expectedSha256: input.sourceSha256,
-    observedSha256: input.storedModuleSha256,
+    ...publicFields,
+    ...classification,
+    classifierRules: SEMANTIC_CLASSIFIER_RULES,
   };
+}
+
+function normalizeFileType(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) return "bas";
+  return value.replace(/^\./, "").toLowerCase();
+}
+
+function removePrivateText(value: Record<string, unknown>): Record<string, unknown> {
+  const { _sourceText, _destinationText, _binaryText, _fileText, ...publicFields } = value;
+  void _sourceText;
+  void _destinationText;
+  void _binaryText;
+  void _fileText;
+  return publicFields;
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }

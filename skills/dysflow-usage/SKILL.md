@@ -4,10 +4,10 @@ description: "MUST-LOAD before any dysflow diagnosis or call when the cwd contai
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "1.16.0"
+  version: "1.17.0"
   status: active
-  last_verified: "2026-08-05"
-  last_dysflow_version: "2.36.0"
+  last_verified: "2026-08-20"
+  last_dysflow_version: "2.37.3"
   requires: "dysflow MCP >= 2.34"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
