@@ -1,6 +1,6 @@
 ﻿# `test_vba`
 
-> **Phase**: tests  Â·  **Access**: conditional-write  Â·  **Status**: preferred (_meta["dysflow/workflow"].status)
+> **Phase**: tests  ·  **Access**: conditional-write  ·  **Status**: preferred (_meta["dysflow/workflow"].status)
 
 ## What it does
 
@@ -28,6 +28,7 @@ Execute the validated VBA test manifest after the human-compile gate is clear.
     - `expectedDestinationRoot`
     - `proceduresJson`
     - `filter`
+    - `testFilter`
     - `testsPath`
     - `apply`
     - `diff`
@@ -44,7 +45,8 @@ Execute the validated VBA test manifest after the human-compile gate is clear.
 - `apply`
 - `testsPath`
 - `proceduresJson`
-- `filter`
+- `filter` (substring match against procedure names — typed `string`)
+- `testFilter` (object-shape filter, e.g. `{tag: "issue-82"}` — introduced by #1442; untyped so JSON shapes pass the boundary validator)
 - `timeoutMs`
 
 ## Call shape (HR-2: `apply:false` then review then `apply:true`)
@@ -60,6 +62,21 @@ Execute the validated VBA test manifest after the human-compile gate is clear.
   }
 }
 `
+
+> **Filter shape (post #1442):** the legacy shape `dysflow.test_vba({filter: "issue-82", apply: true})` works unchanged (substring match against procedure names). For object-shape filters like `{tag: "..."}`, use the dedicated `testFilter` parameter — untyped at the boundary validator:
+>
+> `json
+> {
+>   "name": "test_vba",
+>   "arguments": {
+>     "testsPath": "tests/tests.vba.json",
+>     "testFilter": { "tag": "issue-82" },
+>     "apply": true
+>   }
+> }
+> `
+>
+> `filter` (string) and `testFilter` (object) are independent — pass at most one. Passing both is undefined; the runtime prefers `testFilter` when present.
 
 ## Result shape (always schemaVersion: "dysflow.result/v1")
 
@@ -103,6 +120,7 @@ Replace these placeholders with values from your worktree (HR-10, HR-11):
 - `cwd`: TODO -- worktree root, or omit for the startup worktree.
 - `accessPath` / `backendPath`: TODO -- only if resolving a non-default frontend/backend.
 - `apply`: TODO -- `false` to plan, `true` to commit (default plans in `safe-by-default`).
+- `filter` (string OR object): TODO -- for substring use `filter`; for object shapes (e.g. `{tag: "..."}`) use the dedicated `testFilter` parameter introduced by #1442.
 - For `query_execute`: `mode` is REQUIRED (`read` or `write`, never omitted).
 - For confirmation flags: `implements_check` + `confirmedRequiresConfirmation:true` paired (NEVER legacy `dryRun:true` / `options.confirm:true` / `confirmPid:N` -- HR-9, migration map in `dysflow-usage` section 6).
 - Other tool-specific runtime values per `describe_tool({name:"test_vba"})`.

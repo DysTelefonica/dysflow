@@ -43,6 +43,8 @@
 |---|---|---|---|---|
 | `test_vba` | `plan` | `[]` | `critical-write` | Executes the validated test manifest. **Block on `humanCompilePending === true`** before invoking (HR-1 of `dysflow-arnes`). `apply:true` commits and runs; `apply:false` is the documented opt-out when `allowedProcedures` is empty. |
 
+> **`test_vba` filter shape (post #1442):** the legacy `filter` (typed `string`) is preserved as substring match. For object-shape filtering (e.g. `{tag: "issue-82"}`) use the dedicated `testFilter` parameter (untyped at the boundary; shape handed to `parseTestFilter`). Both are optional.
+
 ### forms (12 tools)
 
 | Tool | Default behavior | Legacy aliases | Risk class | Notes |
