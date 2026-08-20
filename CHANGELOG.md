@@ -4,6 +4,10 @@
 
 ### Changes
 
+- test(schema-props): add testFilter to the shared schema property atoms (#1447)
+- docs(dysflow-usage): scaffold 22 canonical examples for status:preferred tools (#1444)
+- docs(dysflow-usage): add error-codes reference, write-flags matrix, anti-patterns, examples verifier (#1446)
+- docs(dysflow-usage): document testFilter parameter on test_vba (#1448)
 - fix(vba-sync): classify import/export verbose mismatches with the canonical semantic rules, preserve original UTF-8 evidence across ANSI import serialization, normalize hidden `VB_Name` export metadata, and keep private comparison bodies out of success and failure envelopes (#1443)
 
 ## [v2.37.3] - 2026-08-19
