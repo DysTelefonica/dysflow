@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalJson,
   compareBudget,
+  extractPayload,
   measureLogicalBytes,
   summarizeContributors,
 } from "../../scripts/mcp-context-budget.mjs";
@@ -35,6 +36,20 @@ describe("MCP context budget helpers", () => {
     expect(compareBudget({ toolsList: { logicalBytes: 11, wireBytes: 12 } }, baseline)).toEqual([
       { metric: "toolsList.logicalBytes", baseline: 10, current: 11 },
     ]);
+  });
+
+  it("measures canonical structured payloads once when text is summary-only", () => {
+    expect(
+      extractPayload({
+        content: [{ type: "text", text: '{"summary":"structuredContent"}' }],
+        structuredContent: {
+          schemaVersion: "dysflow.result/v1",
+          isError: false,
+          ok: true,
+          tools: [{ name: "large_tool" }],
+        },
+      }),
+    ).toEqual({ tools: [{ name: "large_tool" }] });
   });
 
   it("wires the built-runtime shrink-only command into the Node 20 CI leg", async () => {

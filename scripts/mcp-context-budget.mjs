@@ -289,7 +289,12 @@ function summarizeSchemaTools(payload) {
   );
 }
 
-function extractPayload(result) {
+export function extractPayload(result) {
+  const structured = result?.structuredContent;
+  if (structured !== null && typeof structured === "object" && !Array.isArray(structured)) {
+    const payload = stripEnvelopeMetadata(structured);
+    if (Object.keys(payload).length > 0) return payload;
+  }
   const content = result?.content;
   if (Array.isArray(content) && content.length === 1 && typeof content[0]?.text === "string") {
     try {
@@ -299,6 +304,18 @@ function extractPayload(result) {
     }
   }
   return result;
+}
+
+function stripEnvelopeMetadata(structured) {
+  const {
+    schemaVersion: _schemaVersion,
+    content: _content,
+    isError: _isError,
+    ok: _ok,
+    error: _error,
+    ...payload
+  } = structured;
+  return payload;
 }
 
 function buildParity(tools, fullPayload, describeFrames) {
