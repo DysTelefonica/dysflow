@@ -75,9 +75,11 @@ is in the duplicated JSON-RPC wire projection:
 | **Total** | **2,251,625** | **2,251,609** | **6,680,397** | **4,185,766** | **37.34%** |
 
 The after-side does not grow any measured payload and keeps the full schema and
-describe-tool parity sets unchanged. Issue #1462 additionally compacts the
-`tools/list` descriptions, parameter prose, and workflow metadata while keeping
-all callable property keys and safety-critical flags.
+describe-tool parity sets unchanged.
+
+Issue #1462 additionally compacts the `tools/list` descriptions, parameter
+prose, and workflow metadata while keeping all callable property keys and
+safety-critical flags.
 
 The committed baseline records the exact runtime version and parent commit
 used to generate the after-side, so the shrink-only CI gate cannot hide later
@@ -122,8 +124,10 @@ contract during the compatibility window.
 ## Issue #1462 compact tools/list evidence
 
 The compact advertisement is measured against the #1461 baseline. It preserves
-all 94 tool names and every callable input property, while moving deep parameter
-prose and migration/history guidance to `schema` and `describe_tool`.
+all 94 tool names and every callable input property.
+
+Deep parameter prose and migration/history guidance move to `schema` and
+`describe_tool`.
 
 | View | #1461 logical | #1462 logical | #1461 wire | #1462 wire | Wire reduction |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -131,6 +135,8 @@ prose and migration/history guidance to `schema` and `describe_tool`.
 
 The compact `_meta["dysflow/workflow"]` retains only routing `phases[]` and
 `status`; deep `preferredFor[]` guidance remains available in the canonical
-schema catalog. Safety-critical properties retain concise explicit semantics.
-The baseline records the built runtime commit and the shrink-only gate rejects
-any later growth.
+schema catalog.
+
+Safety-critical properties retain concise explicit semantics. The baseline
+records the built runtime commit and the shrink-only gate rejects any later
+growth.

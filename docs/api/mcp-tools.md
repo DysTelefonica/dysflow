@@ -113,9 +113,11 @@ Consumers must defensively parse a stringified host-wrapper result before requir
 
 The compact advertisement is derived from the same canonical contracts as the deep
 catalog. It removes issue-history and migration prose from the hot path without
-removing a callable property. With `additionalProperties:false`, clients MUST NOT
-infer that an omitted description means an omitted parameter: use the property keys
-from `tools/list`, then call `describe_tool` for the complete parameter contract.
+removing a callable property.
+
+With `additionalProperties:false`, clients MUST NOT infer that an omitted
+description means an omitted parameter. Use the property keys from `tools/list`,
+then call `describe_tool` for the complete parameter contract.
 
 ### `setup_project`
 Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
