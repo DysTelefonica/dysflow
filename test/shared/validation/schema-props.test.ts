@@ -188,7 +188,6 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "location",
       "top",
       "testsPath",
-      "testFilter",
       "exists_name",
       "code",
       // slice 5 (issue #618) — `create_form_from_template` atoms.
