@@ -156,8 +156,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
           column: {
             type: "string",
             minLength: 1,
-            pattern: "^[A-Za-z_][A-Za-z0-9_]*$",
-            description: "Numeric fixture/test-id column used to bound teardown rows.",
+            description: "Bounded numeric fixture/test-id column; shared identifier rules.",
           },
           min: {
             type: "number",

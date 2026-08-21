@@ -307,11 +307,11 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   list_linked_tables:
     "List tables linked into the frontend, with their connection sources. Frontend-only: target may only be 'frontend' and omission resolves to the configured accessPath. Read-only.",
   get_schema:
-    'Return a table column schema. With projectId/contextId, target accepts "frontend", "backend", or "auto"; auto probes both configured databases by tableName and rejects missing or ambiguous tables. Explicit databasePath/sourcePath wins. Read-only.',
+    "Return a table schema. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
   count_rows:
-    "Count table rows. Table-aware target accepts frontend, backend, or auto; auto resolves by tableName and rejects missing or ambiguous tables. Read-only.",
+    "Count rows. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
   distinct_values:
-    "Return distinct column values. Table-aware target accepts frontend, backend, or auto; auto resolves by tableName and rejects missing or ambiguous tables. Read-only.",
+    "Return distinct values. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
   compare_backends:
     "Compare two backend databases (the configured backend vs comparePath) and report schema/data differences. Read-only.",
   list_access_files:
@@ -329,9 +329,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Create a table from a definition/fields list. Write-gated; dryRun/apply control plan vs commit.",
   drop_table: "Drop a table (DESTRUCTIVE). Write-gated; dryRun/apply control plan vs commit.",
   seed_fixture:
-    "Insert fixture rows into a table for testing. Write-gated; dryRun/apply and allow/deny table guards apply.",
+    "Insert fixture rows. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. Write-gated; dryRun/apply.",
   teardown_fixture:
-    "Remove fixture rows only within a required structured numeric test-id range predicate. Unbounded DELETE is rejected before Access mutation. Write-gated; dryRun returns the exact bounded SQL plan, and allow/deny table guards apply independently.",
+    "Delete fixture rows within a required test-id range. Same name rules; no brackets. Unbounded DELETE is rejected. Write-gated; dryRun returns SQL.",
   link_tables:
     "Link tables from backendPath into the frontend. Write-gated; dryRun:true plans without writing. NOTE: when backendPassword is set, Access stores the credential inside the linked-table Connect string in the .accdb.",
   relink_tables:

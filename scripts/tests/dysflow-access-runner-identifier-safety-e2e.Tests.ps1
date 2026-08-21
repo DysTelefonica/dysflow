@@ -10,7 +10,7 @@
 .DESCRIPTION
     The unit-test file `dysflow-access-runner-identifier-quoting.Tests.ps1`
     proves the Format-AccessIdentifier helper's own contract (validity,
-    bracket-escape, SQL separator, digit-prefix, unicode rejection, error
+    bracket-escape, compatibility names, error
     message shape). It also AST-proves that every interpolation site delegates
     to the helper.
 
@@ -129,10 +129,9 @@ Describe "Issue #573 — integrated SQL interpolation sites reject malicious ide
             $script:FakeDatabase.SqlCalls.Count | Should -Be 0
         }
 
-        It "rejects a digit-prefixed identifier: '1Bad' never reaches OpenRecordset" {
-            { Invoke-CountRowsAction -Database $script:FakeDatabase -TableName "1Bad" } |
-                Should -Throw -ExpectedMessage "*Invalid table*"
-            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        It "accepts a digit-prefixed identifier and brackets it" {
+            Invoke-CountRowsAction -Database $script:FakeDatabase -TableName "1Good" | Out-Null
+            $script:FakeDatabase.SqlCalls[0] | Should -Be "SELECT COUNT(*) AS RowCount FROM [1Good]"
         }
 
         It "accepts a valid identifier and produces SELECT COUNT(*) FROM [Name]" {
@@ -150,10 +149,9 @@ Describe "Issue #573 — integrated SQL interpolation sites reject malicious ide
             $script:FakeDatabase.SqlCalls.Count | Should -Be 0
         }
 
-        It "rejects a malicious table name even when the column is valid: never reaches OpenRecordset" {
-            { Invoke-DistinctValuesAction -Database $script:FakeDatabase -TableName "bad-name" -ColumnName "col_ok" } |
-                Should -Throw -ExpectedMessage "*Invalid table*"
-            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        It "accepts a hyphenated table name and brackets it" {
+            Invoke-DistinctValuesAction -Database $script:FakeDatabase -TableName "good-name" -ColumnName "col_ok" | Out-Null
+            $script:FakeDatabase.SqlCalls[0] | Should -Be "SELECT DISTINCT [col_ok] AS [Value] FROM [good-name]"
         }
 
         It "accepts valid identifiers and brackets both column AND table" {
@@ -193,9 +191,9 @@ Describe "Issue #573 — integrated SQL interpolation sites reject malicious ide
             $script:FakeDatabase.SqlCalls.Count | Should -Be 0
         }
 
-        It "teardown_fixture rejects a malicious table name and never reaches Execute" {
+        It "teardown_fixture rejects a closing-bracket table name and never reaches Execute" {
             { Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
-                    tableName = "1Bad"
+                    tableName = "Bad]Name"
                 })
             } | Should -Throw -ExpectedMessage "*Invalid table*"
             $script:FakeDatabase.SqlCalls.Count | Should -Be 0

@@ -82,11 +82,18 @@ $splitSqlDefinition = $splitSqlAst.Extent.Text -replace
     'function script:Split-SqlStatements'
 Invoke-Expression $splitSqlDefinition
 
+$formatIdentifierAst = $runnerAst.Find(
+    { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Format-AccessIdentifier' },
+    $true
+)
+$formatIdentifierDefinition = $formatIdentifierAst.Extent.Text -replace
+    '^function\s+Format-AccessIdentifier',
+    'function script:Format-AccessIdentifier'
+Invoke-Expression $formatIdentifierDefinition
+
 function script:Assert-ColumnNameSafe {
     param([string] $Name, [string] $Label = "column")
-    if ($Name -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') {
-        throw "Invalid $Label name: $Name"
-    }
+    [void](Format-AccessIdentifier -Name $Name -Label $Label)
 }
 
 function script:Invoke-SeedFixtureDryRun {
@@ -437,16 +444,14 @@ Describe "seed_fixture SQL injection prevention" {
                 Should -Throw -ExpectedMessage "*Invalid table name*"
         }
 
-        It "rejects table name starting with a digit" {
+        It "accepts table name starting with a digit" {
             $rows = @([PSCustomObject]@{ id = 1 })
-            { Invoke-SeedFixtureDryRun -TableName "1BadTable" -Rows $rows } |
-                Should -Throw -ExpectedMessage "*Invalid table name*"
+            { Invoke-SeedFixtureDryRun -TableName "1GoodTable" -Rows $rows } | Should -Not -Throw
         }
 
-        It "rejects table name with spaces" {
+        It "accepts table name with spaces" {
             $rows = @([PSCustomObject]@{ id = 1 })
-            { Invoke-SeedFixtureDryRun -TableName "Bad Table" -Rows $rows } |
-                Should -Throw -ExpectedMessage "*Invalid table name*"
+            { Invoke-SeedFixtureDryRun -TableName "Good Table" -Rows $rows } | Should -Not -Throw
         }
     }
 
@@ -471,30 +476,27 @@ Describe "seed_fixture SQL injection prevention" {
                 Should -Throw -ExpectedMessage "*Invalid column name*"
         }
 
-        It "rejects column name with spaces: 'name WITH SPACES'" {
+        It "accepts column name with spaces: 'name WITH SPACES'" {
             $row = New-Object PSObject
             $row | Add-Member -MemberType NoteProperty -Name "name WITH SPACES" -Value "test"
-            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } |
-                Should -Throw -ExpectedMessage "*Invalid column name*"
+            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } | Should -Not -Throw
         }
 
-        It "rejects column name with double-dash SQL comment: 'col--comment'" {
+        It "accepts a hyphenated column name: 'col--comment'" {
             $row = New-Object PSObject
             $row | Add-Member -MemberType NoteProperty -Name "col--comment" -Value 1
-            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } |
-                Should -Throw -ExpectedMessage "*Invalid column name*"
+            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } | Should -Not -Throw
         }
 
-        It "rejects column name starting with a digit" {
+        It "accepts column name starting with a digit" {
             $row = New-Object PSObject
             $row | Add-Member -MemberType NoteProperty -Name "1col" -Value 1
-            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } |
-                Should -Throw -ExpectedMessage "*Invalid column name*"
+            { Invoke-SeedFixtureDryRun -TableName "Users" -Rows @($row) } | Should -Not -Throw
         }
 
         It "rejects column name that is empty string" {
             { Assert-ColumnNameSafe -Name "" -Label "column" } |
-                Should -Throw -ExpectedMessage "*Invalid column name*"
+                Should -Throw -ExpectedMessage "*required*"
         }
     }
 

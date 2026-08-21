@@ -12,16 +12,15 @@
     malicious or malformed name can escape the bracket quoting.
 
     Fix: introduce `Format-AccessIdentifier` that BOTH validates the name
-    against the Access identifier grammar AND returns the bracket-wrapped
+    against the compatibility-safe Access identifier grammar AND returns the bracket-wrapped
     form, and route every SQL interpolation through it.
 
     These tests pin the contract:
-      - Accepts valid identifiers (letters, digits, underscores; leading letter/underscore).
+      - Accepts Unicode letters, digits, underscores, spaces, and hyphens.
       - Rejects empty / whitespace names with a clear "required" message.
-      - Rejects names containing `]`, `[`, single-quote, semicolon, hyphen, space,
-        period, slash, or any other non-[A-Za-z0-9_] character (defense against
+      - Rejects names containing `]`, `[`, single-quote, semicolon, period,
+        slash, or other characters outside the shared grammar (defense against
         bracket-escape attacks and SQL separator injection).
-      - Rejects names that start with a digit (Access grammar).
       - Returns the bracket-wrapped identifier for valid input.
 #>
 
@@ -107,16 +106,16 @@ Describe "Format-AccessIdentifier — central SQL identifier quoting (issue #573
                 Should -Throw -ExpectedMessage "*Invalid*"
         }
 
-        It "rejects names containing a space" {
-            { Format-AccessIdentifier -Name "Bad Table" } | Should -Throw -ExpectedMessage "*Invalid*"
+        It "accepts names containing a space" {
+            Format-AccessIdentifier -Name "Good Table" | Should -Be "[Good Table]"
         }
 
         It "rejects names containing a period" {
             { Format-AccessIdentifier -Name "schema.table" } | Should -Throw -ExpectedMessage "*Invalid*"
         }
 
-        It "rejects names containing a hyphen" {
-            { Format-AccessIdentifier -Name "bad-name" } | Should -Throw -ExpectedMessage "*Invalid*"
+        It "accepts names containing a hyphen" {
+            Format-AccessIdentifier -Name "good-name" | Should -Be "[good-name]"
         }
 
         It "rejects names containing a slash" {
@@ -132,17 +131,17 @@ Describe "Format-AccessIdentifier — central SQL identifier quoting (issue #573
         }
     }
 
-    Context "rejects names that violate Access identifier grammar" {
-        It "rejects names starting with a digit" {
-            { Format-AccessIdentifier -Name "1BadTable" } | Should -Throw -ExpectedMessage "*Invalid*"
+    Context "accepts Access-compatible leading digits and Unicode" {
+        It "accepts names starting with a digit" {
+            Format-AccessIdentifier -Name "1GoodTable" | Should -Be "[1GoodTable]"
         }
 
-        It "rejects names that are only digits" {
-            { Format-AccessIdentifier -Name "123" } | Should -Throw -ExpectedMessage "*Invalid*"
+        It "accepts names that are only digits" {
+            Format-AccessIdentifier -Name "123" | Should -Be "[123]"
         }
 
-        It "rejects names containing a unicode letter (out of scope for the ASCII grammar)" {
-            { Format-AccessIdentifier -Name "Año" } | Should -Throw -ExpectedMessage "*Invalid*"
+        It "accepts names containing a Unicode letter" {
+            Format-AccessIdentifier -Name "Año" | Should -Be "[Año]"
         }
     }
 
