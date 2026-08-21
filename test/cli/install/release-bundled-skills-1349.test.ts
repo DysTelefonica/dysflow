@@ -50,6 +50,10 @@ describe("release bundled skills (#1349)", () => {
   it("includes every canonical SKILL.md in the real produced tar archive", async () => {
     const listing = await tar(["-tzf", archivePath]);
     expect(() => assertReleaseArchiveManifest(listing)).not.toThrow();
+    expect(listing.replaceAll("\\", "/")).toContain(
+      "scripts/lib/dysflow-vba-import-transport.psm1",
+    );
+    expect(listing.replaceAll("\\", "/")).toContain("dist/cli/vba-import-orchestration.js");
     for (const name of DYSSKILL_NAMES) {
       expect(listing.replaceAll("\\", "/")).toContain(`skills/${name}/SKILL.md`);
     }
@@ -114,6 +118,10 @@ describe("release bundled skills (#1349)", () => {
     }
 
     const installedCli = path.join(runtimeDir, "app", "dist", "cli", "index.js");
+    await access(
+      path.join(runtimeDir, "app", "scripts", "lib", "dysflow-vba-import-transport.psm1"),
+    );
+    await access(path.join(runtimeDir, "app", "dist", "cli", "vba-import-orchestration.js"));
     const doctor = await execFileAsync(process.execPath, [installedCli, "doctor", "--skills"], {
       cwd: path.join(runtimeDir, "app"),
       env,

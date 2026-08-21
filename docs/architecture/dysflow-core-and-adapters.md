@@ -66,6 +66,33 @@ A per-call override (rarely needed):
 { "projectId": "my-project", "testsPath": "tests/tests.vba.json", "timeoutMs": 300000 }
 ```
 
+## VBA import orchestration
+
+VBA import policy follows the same inward dependency direction as the protocol adapters:
+
+```text
+scripts/dysflow-vba-manager.ps1
+  -> scripts/lib/dysflow-vba-import-transport.psm1
+  -> src/cli/vba-import-orchestration.ts
+  -> src/core/services/vba-import-orchestration.ts
+  -> ordered PowerShell/Access COM primitive pass
+```
+
+The pure core service owns ordered pass selection, progress-based retry, rollback policy,
+save-only decisions, typed per-module error mapping, and the terminal result projection. The
+PowerShell boundary retains the one live Access session and implements only the raw mutation and
+save primitives. This keeps COM out of `src/core/**` without opening a new Access process for each
+module.
+
+The observable contract is preserved: retries target failed modules only after another module made
+progress, mutation failures request rollback to the pre-import snapshot, new components and
+re-imported forms/reports request `RunCommand(280)`, and a post-import save failure is a warning
+that does not replace successful module results. Import never compiles VBA; the human still compiles
+in Access before running tests. The executable behavior matrix lives in
+[`test/fixtures/vba-import-orchestration-contract.json`](../../test/fixtures/vba-import-orchestration-contract.json),
+with the full boundary contract in
+[`vba-import-orchestration.md`](./vba-import-orchestration.md).
+
 ## Compatibility reference
 
 The existing implementation at `<workflow-repo>/skills/dysflow` is a compatibility reference. The productized adapter in this repository (`src/adapters/mcp`) is the active implementation.

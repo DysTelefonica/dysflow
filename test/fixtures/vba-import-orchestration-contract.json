@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "dysflow.vba-import-orchestration-contract/v1",
+  "capturedFrom": "scripts/dysflow-vba-manager.ps1 on origin/main 7ba072a2",
+  "invariants": [
+    "Caller order is preserved in the final modules array.",
+    "A multi-module import retries only failed modules after a pass that made progress.",
+    "A single-module failure is terminal after one pass.",
+    "New components and re-imported forms or reports trigger save-only persistence with RunCommand(280).",
+    "Post-import save failure is a warning and does not replace a fully successful module result.",
+    "No compile command runs; the human compiles in Access after source import.",
+    "Terminal module failures keep the VBA_IMPORT_FAILED top-level code and typed per-module errors."
+  ],
+  "cases": [
+    {
+      "id": "explicit-empty-plan",
+      "targets": [],
+      "passes": [],
+      "expectedPassRequests": [],
+      "expectedSaveRequests": [],
+      "expectedExitCode": 0,
+      "expectedResult": []
+    },
+    {
+      "id": "existing-module-success",
+      "targets": ["ModA"],
+      "passes": [
+        [
+          {
+            "module": "ModA",
+            "ok": true,
+            "durationMs": 7,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["ModA"]],
+      "expectedSaveRequests": [],
+      "expectedExitCode": 0,
+      "expectedResult": [
+        {
+          "module": "ModA",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 7,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        }
+      ]
+    },
+    {
+      "id": "created-component-save-only",
+      "targets": ["BrandNew"],
+      "passes": [
+        [
+          {
+            "module": "BrandNew",
+            "ok": true,
+            "durationMs": 9,
+            "createdComponentName": "BrandNew",
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["BrandNew"]],
+      "expectedSaveRequests": [["BrandNew"]],
+      "expectedExitCode": 0,
+      "expectedResult": [
+        {
+          "module": "BrandNew",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 9,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        }
+      ]
+    },
+    {
+      "id": "reimported-document-save-only",
+      "targets": ["Form_frmBusy"],
+      "passes": [
+        [
+          {
+            "module": "Form_frmBusy",
+            "ok": true,
+            "durationMs": 12,
+            "modifiedDocumentName": "Form_frmBusy",
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["Form_frmBusy"]],
+      "expectedSaveRequests": [["Form_frmBusy"]],
+      "expectedExitCode": 0,
+      "expectedResult": [
+        {
+          "module": "Form_frmBusy",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 12,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        }
+      ]
+    },
+    {
+      "id": "progress-enables-targeted-retry",
+      "targets": ["DependsOnLater", "Dependency"],
+      "passes": [
+        [
+          {
+            "module": "DependsOnLater",
+            "ok": false,
+            "durationMs": 5,
+            "phase": "import",
+            "message": "temporary unresolved dependency",
+            "rollbackAttempted": false,
+            "rollbackApplied": false,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          },
+          {
+            "module": "Dependency",
+            "ok": true,
+            "durationMs": 6,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ],
+        [
+          {
+            "module": "DependsOnLater",
+            "ok": true,
+            "durationMs": 4,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["DependsOnLater", "Dependency"], ["DependsOnLater"]],
+      "expectedSaveRequests": [],
+      "expectedExitCode": 0,
+      "expectedResult": [
+        {
+          "module": "DependsOnLater",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 4,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        },
+        {
+          "module": "Dependency",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 6,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        }
+      ]
+    },
+    {
+      "id": "typed-terminal-failure-with-rollback",
+      "targets": ["Módulo_Acción"],
+      "passes": [
+        [
+          {
+            "module": "Módulo_Acción",
+            "ok": false,
+            "durationMs": 11,
+            "phase": "import",
+            "message": "VB_NAME_MISMATCH: source declares OtroNombre",
+            "rollbackAttempted": true,
+            "rollbackApplied": true,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["Módulo_Acción"]],
+      "expectedSaveRequests": [],
+      "expectedExitCode": 1,
+      "expectedResult": {
+        "ok": false,
+        "error": {
+          "code": "VBA_IMPORT_FAILED",
+          "message": "Import no pudo completar algunos modulos tras 1 pasada(s): Módulo_Acción: VB_NAME_MISMATCH: source declares OtroNombre"
+        },
+        "modules": [
+          {
+            "module": "Módulo_Acción",
+            "status": "error",
+            "phase": "import",
+            "error": {
+              "code": "VB_NAME_MISMATCH",
+              "message": "VB_NAME_MISMATCH: source declares OtroNombre",
+              "data": null,
+              "remediation": "Make Attribute VB_Name match the target module name before retrying.",
+              "machine": null,
+              "user": null,
+              "rollbackAttempted": true,
+              "rollbackApplied": true,
+              "rollbackError": null,
+              "fallbackUsed": false,
+              "fallbackReason": null
+            },
+            "durationMs": 11,
+            "rollbackApplied": true,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "multi-module-no-progress-is-terminal",
+      "targets": ["First", "Second"],
+      "passes": [
+        [
+          {
+            "module": "First",
+            "ok": false,
+            "durationMs": 3,
+            "phase": "import",
+            "message": "first failure",
+            "rollbackAttempted": false,
+            "rollbackApplied": false,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          },
+          {
+            "module": "Second",
+            "ok": false,
+            "durationMs": 4,
+            "phase": "import",
+            "message": "second failure",
+            "rollbackAttempted": false,
+            "rollbackApplied": false,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["First", "Second"]],
+      "expectedSaveRequests": [],
+      "expectedExitCode": 1,
+      "expectedResult": {
+        "ok": false,
+        "error": {
+          "code": "VBA_IMPORT_FAILED",
+          "message": "Import no pudo completar algunos modulos tras 1 pasada(s): First: first failure; Second: second failure"
+        },
+        "modules": [
+          {
+            "module": "First",
+            "status": "error",
+            "phase": "import",
+            "error": {
+              "code": "VBA_IMPORT_PHASE_FAILED",
+              "message": "first failure",
+              "data": null,
+              "remediation": "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
+              "machine": null,
+              "user": null,
+              "rollbackAttempted": false,
+              "rollbackApplied": false,
+              "rollbackError": null,
+              "fallbackUsed": false,
+              "fallbackReason": null
+            },
+            "durationMs": 3,
+            "rollbackApplied": false,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          },
+          {
+            "module": "Second",
+            "status": "error",
+            "phase": "import",
+            "error": {
+              "code": "VBA_IMPORT_PHASE_FAILED",
+              "message": "second failure",
+              "data": null,
+              "remediation": "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
+              "machine": null,
+              "user": null,
+              "rollbackAttempted": false,
+              "rollbackApplied": false,
+              "rollbackError": null,
+              "fallbackUsed": false,
+              "fallbackReason": null
+            },
+            "durationMs": 4,
+            "rollbackApplied": false,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "save-warning-keeps-success",
+      "targets": ["Form_frmSaved"],
+      "passes": [
+        [
+          {
+            "module": "Form_frmSaved",
+            "ok": true,
+            "durationMs": 8,
+            "modifiedDocumentName": "Form_frmSaved",
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "saveWarning": "RunCommand(280) failed after import",
+      "expectedPassRequests": [["Form_frmSaved"]],
+      "expectedSaveRequests": [["Form_frmSaved"]],
+      "expectedExitCode": 0,
+      "expectedResult": [
+        {
+          "module": "Form_frmSaved",
+          "status": "ok",
+          "phase": null,
+          "error": null,
+          "durationMs": 8,
+          "rollbackApplied": false,
+          "fallbackUsed": false,
+          "fallbackReason": null
+        }
+      ]
+    }
+  ]
+}

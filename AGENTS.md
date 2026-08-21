@@ -349,8 +349,9 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Only three anchors do the second kind today:
+Four anchors do the second kind today:
 
+- `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
 - `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
 - `write-tool-preflight.test.ts` reads the MCP schema source.

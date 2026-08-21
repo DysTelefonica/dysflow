@@ -7,6 +7,8 @@
     Pure-PowerShell helper function tests run in any environment.
 #>
 
+Import-Module (Join-Path $PSScriptRoot ".." "lib" "dysflow-vba-import-transport.psm1") -Force
+
 # Helper to stub/mock Write-DysflowResult for functions extracted via AST
 function global:Write-DysflowResult {
     param(
