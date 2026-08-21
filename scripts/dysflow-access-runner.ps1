@@ -45,6 +45,7 @@ Set-ScriptOutputEncodingUtf8
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
 . (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+Import-Module (Join-Path $PSScriptRoot 'lib/dysflow-relink-directory-transport.psm1') -Force
 
 # Pin a deterministic culture before any Access/DAO/COM work so SQL date
 # literals, decimal and list separators do not depend on the host's Windows
@@ -1431,106 +1432,8 @@ function Invoke-WriteAction {
 }
 
 # ---------------------------------------------------------------------------
-# relink_directory helpers — file enumeration, classification, dry-run JSON
+# relink_directory DAO primitives + thin core transport (#1464)
 # ---------------------------------------------------------------------------
-
-function ConvertTo-CanonicalFullPath {
-  param([Parameter(Mandatory = $true)] [string]$Path)
-  $full = [System.IO.Path]::GetFullPath($Path).Replace([System.IO.Path]::AltDirectorySeparatorChar, [System.IO.Path]::DirectorySeparatorChar)
-  $root = [System.IO.Path]::GetPathRoot($full).Replace([System.IO.Path]::AltDirectorySeparatorChar, [System.IO.Path]::DirectorySeparatorChar)
-  while ($full.Length -gt $root.Length -and $full.EndsWith([string][System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::Ordinal)) {
-    $full = $full.Substring(0, $full.Length - 1)
-  }
-  return $full
-}
-
-function Test-CanonicalPathContained {
-  param(
-    [Parameter(Mandatory = $true)] [string]$CandidatePath,
-    [Parameter(Mandatory = $true)] [string]$RootPath
-  )
-  $candidate = ConvertTo-CanonicalFullPath -Path $CandidatePath
-  $root = ConvertTo-CanonicalFullPath -Path $RootPath
-  if ($candidate.Equals($root, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
-  $separator = [string][System.IO.Path]::DirectorySeparatorChar
-  $prefix = if ($root.EndsWith($separator, [System.StringComparison]::Ordinal)) { $root } else { $root + $separator }
-  return $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
-}
-
-function Get-AccessFilesRecursive {
-  param(
-    [string]$RootPath,
-    [bool]$Recursive = $true
-  )
-  $filter = @("*.accdb", "*.mdb")
-  if ($Recursive) {
-    return @(Get-ChildItem -Path $RootPath -Include $filter -Recurse -File -ErrorAction SilentlyContinue)
-  }
-  $searchPath = Join-Path $RootPath "*"
-  return @(Get-ChildItem -Path $searchPath -Include $filter -File -ErrorAction SilentlyContinue)
-}
-
-function Build-AccessFileIndex {
-  param([System.IO.FileInfo[]]$Files)
-  $index = @{}
-  foreach ($f in $Files) {
-    $key = $f.Name.ToLower()
-    if (-not $index.ContainsKey($key)) {
-      $index[$key] = [System.Collections.Generic.List[string]]::new()
-    }
-    $index[$key].Add($f.FullName)
-  }
-  return $index
-}
-
-function Resolve-LocalPath {
-  param(
-    [string]$BackendPath,
-    [hashtable]$AliasMap,
-    [hashtable]$FileIndex
-  )
-  $basename = [System.IO.Path]::GetFileName($BackendPath).ToLower()
-  $matchExt = [System.IO.Path]::GetExtension($basename).ToLower()
-
-  # Apply alias map first
-  if ($AliasMap.ContainsKey($basename)) {
-    $basename = $AliasMap[$basename].ToLower()
-    $matchExt = [System.IO.Path]::GetExtension($basename).ToLower()
-  }
-
-  if (-not $FileIndex.ContainsKey($basename)) { return $null }
-
-  $matches = @($FileIndex[$basename])
-  # Extension-exact match (no .mdb <-> .accdb cross-match per ADR-5)
-  $exactMatches = @($matches | Where-Object { [System.IO.Path]::GetExtension($_).ToLower() -eq $matchExt })
-
-  if ($exactMatches.Count -eq 0) { return $null }
-  if ($exactMatches.Count -gt 1) { return @{ path = $null; ambiguous = $true } }
-  return @{ path = $exactMatches[0]; ambiguous = $false }
-}
-
-function Get-LinkClassification {
-  param(
-    [string]$BackendPath,
-    [string]$RootPath,
-    [hashtable]$AliasMap,
-    [hashtable]$FileIndex
-  )
-
-  # Already local if the canonical backend path is inside the canonical root.
-  if (Test-CanonicalPathContained -CandidatePath $BackendPath -RootPath $RootPath) {
-    return @{ classification = "alreadyLocal"; resolvedLocalPath = $BackendPath }
-  }
-
-  $resolved = Resolve-LocalPath -BackendPath $BackendPath -AliasMap $AliasMap -FileIndex $FileIndex
-  if ($null -eq $resolved) {
-    return @{ classification = "unresolved"; resolvedLocalPath = $null }
-  }
-  if ($resolved.ambiguous) {
-    return @{ classification = "ambiguous"; resolvedLocalPath = $null }
-  }
-  return @{ classification = "plannedRelink"; resolvedLocalPath = $resolved.path }
-}
 
 function Backup-AccessFile {
   param([string]$Path)
@@ -1544,394 +1447,177 @@ function Backup-AccessFile {
   return $dest
 }
 
-function Resolve-LinkChain {
-  param(
-    $DbEngine,
-    $StartDb,
-    [string]$TableName,
-    [string]$RootPath,
-    [hashtable]$AliasMap,
-    [hashtable]$FileIndex,
-    [ref]$Visited,
-    [int]$Depth = 0,
-    [int]$MaxDepth = 5
+function Get-RelinkDirectoryCandidatesPrimitive {
+  param([Parameter(Mandatory = $true)] [string]$RootPath)
+
+  return @(
+    Get-ChildItem -Path $RootPath -Include @('*.accdb', '*.mdb') -Recurse -File -ErrorAction SilentlyContinue |
+      ForEach-Object { [ordered]@{ filePath = $_.FullName } }
   )
-  $dbPath = [string]$StartDb.Name
-  $key = "$($dbPath.ToLower())|$($TableName.ToLower())"
-  if ($Visited.Value.ContainsKey($key)) {
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $true; hops = $Depth }
-  }
-  if ($Depth -ge $MaxDepth) {
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $MaxDepth }
-  }
-  $Visited.Value[$key] = $true
+}
 
-  $td = $null
-  foreach ($t in $StartDb.TableDefs) {
-    if ([string]$t.Name -eq $TableName) { $td = $t; break }
-  }
-  if ($null -eq $td) {
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
-  }
+function Open-RelinkDatabasePrimitive {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] [string]$DatabasePath,
+    [Parameter(Mandatory = $true)] [bool]$ReadOnly,
+    [AllowEmptyString()] [string]$PrimaryPassword,
+    [AllowEmptyString()] [string]$FallbackPassword
+  )
 
-  $connectStr = [string]$td.Connect
-  if ([string]::IsNullOrWhiteSpace($connectStr)) {
-    return [ordered]@{ resolvedPath = $dbPath; resolvedTable = $TableName; isLocal = $true; cycleDetected = $false; hops = $Depth }
-  }
-
-  $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=([^;]+)')
-  if (-not $dbMatch.Success) {
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
-  }
-
-  $nextBackend = $dbMatch.Groups[1].Value.Trim()
-  $sourceTable = [string]$td.SourceTableName
-
-  $classResult = Get-LinkClassification -BackendPath $nextBackend -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex
-  $localPath = $null
-  if ($classResult.classification -eq 'alreadyLocal' -or $classResult.classification -eq 'plannedRelink') {
-    $localPath = $classResult.resolvedLocalPath
-  }
-  if ($null -eq $localPath) {
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
-  }
-
-  $nextDb = $null
   try {
-    try {
-      $nextDb = Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $BackendPassword
-    } catch {
-      if (-not [string]::IsNullOrWhiteSpace($AccessPassword)) {
-        $nextDb = Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $localPath -ReadOnly $true -Password $AccessPassword
-      } else {
-        throw $_
-      }
-    }
-    try {
-      return Resolve-LinkChain -DbEngine $DbEngine -StartDb $nextDb -TableName $sourceTable -RootPath $RootPath -AliasMap $AliasMap -FileIndex $FileIndex -Visited $Visited -Depth ($Depth + 1) -MaxDepth $MaxDepth
-    } finally {
-      try { $nextDb.Close() } catch { Write-Debug "Diagnostics: $_" }
-      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($nextDb) } catch { Write-Debug "Diagnostics: $_" }
-    }
+    return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $ReadOnly -Password $PrimaryPassword
   } catch {
-    Write-Warning "Resolve-LinkChain: could not open or traverse '$localPath' for table '$TableName' - $_"
-    return [ordered]@{ resolvedPath = $null; resolvedTable = $null; isLocal = $false; cycleDetected = $false; hops = $Depth }
+    if ([string]::IsNullOrWhiteSpace($FallbackPassword)) { throw }
+    return Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $DatabasePath -ReadOnly $ReadOnly -Password $FallbackPassword
   }
 }
 
-function Test-LinkExternal {
+function Read-RelinkDirectoryFilePrimitive {
   param(
-    [string]$BackendPath,
-    [string]$RootPath,
-    [string[]]$DenyPrefixes = @()
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] [string]$FilePath,
+    [AllowEmptyString()] [string]$PrimaryPassword,
+    [AllowEmptyString()] [string]$FallbackPassword
   )
-  $external = -not (Test-CanonicalPathContained -CandidatePath $BackendPath -RootPath $RootPath)
-  $broken   = $external -and -not (Test-Path -LiteralPath $BackendPath -PathType Leaf)
-  $denied   = $false
-  foreach ($prefix in $DenyPrefixes) {
-    if ($BackendPath.StartsWith([string]$prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-      $denied = $true; break
+
+  $result = [ordered]@{ filePath = $FilePath; tables = @() }
+  $database = $null
+  try {
+    $database = Open-RelinkDatabasePrimitive -DbEngine $DbEngine -DatabasePath $FilePath -ReadOnly $true -PrimaryPassword $PrimaryPassword -FallbackPassword $FallbackPassword
+    $tables = [System.Collections.ArrayList]::new()
+    foreach ($tableDef in $database.TableDefs) {
+      $name = [string]$tableDef.Name
+      if ($name.StartsWith('MSys', [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+      $connect = [string]$tableDef.Connect
+      $backendPath = $null
+      if (-not [string]::IsNullOrWhiteSpace($connect)) {
+        $databaseMatch = [regex]::Match($connect, '(?i)(?:^|;)DATABASE=([^;]+)')
+        if ($databaseMatch.Success) { $backendPath = $databaseMatch.Groups[1].Value.Trim() }
+      }
+      $sourceTableName = [string]$tableDef.SourceTableName
+      if ([string]::IsNullOrWhiteSpace($sourceTableName)) { $sourceTableName = $name }
+      [void]$tables.Add([ordered]@{
+        name = $name
+        sourceTableName = $sourceTableName
+        backendPath = $backendPath
+        backendExists = if ($null -eq $backendPath) { $true } else { Test-Path -LiteralPath $backendPath -PathType Leaf }
+      })
+    }
+    $result.tables = @($tables)
+  } catch {
+    $result.error = $_.Exception.Message
+  } finally {
+    if ($null -ne $database) {
+      try { $database.Close() } catch { Write-Debug "Diagnostics: $_" }
+      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) } catch { Write-Debug "Diagnostics: $_" }
     }
   }
-  return [ordered]@{ external = $external; denied = $denied; broken = $broken }
+  return $result
+}
+
+function Invoke-RelinkDirectoryFilePlanPrimitive {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] $Plan,
+    [AllowEmptyString()] [string]$PrimaryPassword,
+    [AllowEmptyString()] [string]$FallbackPassword,
+    [AllowEmptyString()] [string]$BackendPassword
+  )
+
+  $result = [ordered]@{ filePath = [string]$Plan.filePath; actionResults = @() }
+  if ([bool]$Plan.createBackup) {
+    try {
+      $result.backupPath = Backup-AccessFile -Path ([string]$Plan.filePath)
+    } catch {
+      $result.backupError = $_.Exception.Message
+      return $result
+    }
+  }
+
+  $database = $null
+  try {
+    $database = Open-RelinkDatabasePrimitive -DbEngine $DbEngine -DatabasePath ([string]$Plan.filePath) -ReadOnly $false -PrimaryPassword $PrimaryPassword -FallbackPassword $FallbackPassword
+  } catch {
+    $result.openError = $_.Exception.Message
+    return $result
+  }
+
+  $actionResults = [System.Collections.ArrayList]::new()
+  try {
+    foreach ($action in @($Plan.actions)) {
+      $actionResult = [ordered]@{
+        kind = [string]$action.kind
+        linkName = [string]$action.linkName
+        ok = $false
+      }
+      try {
+        if ([string]$action.kind -eq 'remove') {
+          $database.TableDefs.Delete([string]$action.linkName)
+        } else {
+          $tableDef = $database.TableDefs.Item([string]$action.linkName)
+          $currentConnect = [string]$tableDef.Connect
+          $currentSource = [string]$tableDef.SourceTableName
+          $newConnect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
+            $passwordMatch = [regex]::Match($currentConnect, '(?i)(?:^|;)PWD=([^;]+)')
+            if ($passwordMatch.Success) {
+              ";DATABASE=$([string]$action.targetPath);PWD=$($passwordMatch.Groups[1].Value)"
+            } else {
+              ";DATABASE=$([string]$action.targetPath)"
+            }
+          } else {
+            ";DATABASE=$([string]$action.targetPath);PWD=$BackendPassword"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace([string]$action.targetTable) -and $currentSource -ne [string]$action.targetTable) {
+            $linkName = [string]$tableDef.Name
+            $attributes = $tableDef.Attributes
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tableDef) } catch { Write-Debug "Diagnostics: $_" }
+            $database.TableDefs.Delete($linkName)
+            $newTableDef = $database.CreateTableDef($linkName, $attributes, [string]$action.targetTable, $newConnect)
+            $database.TableDefs.Append($newTableDef)
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTableDef) } catch { Write-Debug "Diagnostics: $_" }
+          } else {
+            if ($currentConnect -ne $newConnect) {
+              $tableDef.Connect = $newConnect
+              $tableDef.RefreshLink()
+            }
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tableDef) } catch { Write-Debug "Diagnostics: $_" }
+          }
+        }
+        $actionResult.ok = $true
+      } catch {
+        $actionResult.error = $_.Exception.Message
+      }
+      [void]$actionResults.Add($actionResult)
+    }
+    $result.actionResults = @($actionResults)
+  } finally {
+    try { $database.Close() } catch { Write-Debug "Diagnostics: $_" }
+    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) } catch { Write-Debug "Diagnostics: $_" }
+  }
+  return $result
 }
 
 function Invoke-RelinkDirectory {
   param($Payload)
 
-  $rootPath      = [string]$Payload.rootPath
-  $dryRun        = $true;  if ($null -ne $Payload.dryRun)          { $dryRun        = [bool]$Payload.dryRun }
-  $recursive     = $true;  if ($null -ne $Payload.recursive)       { $recursive     = [bool]$Payload.recursive }
-  $noBackup      = $false; if ($null -ne $Payload.noBackup)        { $noBackup      = [bool]$Payload.noBackup }
-  $removeUnresolved = $false; if ($null -ne $Payload.removeUnresolved) { $removeUnresolved = [bool]$Payload.removeUnresolved }
-
-  $aliasMap = @{}
-  if ($null -ne $Payload.maps) {
-    foreach ($entry in @($Payload.maps)) {
-      $fromVal = [string]$entry.from; $toVal = [string]$entry.to
-      if (-not [string]::IsNullOrWhiteSpace($fromVal) -and -not [string]::IsNullOrWhiteSpace($toVal)) {
-        $aliasMap[$fromVal.ToLower()] = $toVal
-      }
-    }
-  }
-
-  $files      = @(Get-AccessFilesRecursive -RootPath $rootPath -Recursive $recursive)
-  $fileIndex  = Build-AccessFileIndex -Files $files
-
-  $fileResults   = [System.Collections.ArrayList]::new()
-  $allErrors     = [System.Collections.ArrayList]::new()
-  $allBackupPaths = [System.Collections.ArrayList]::new()
-  $totalLinked = 0; $totalAlreadyLocal = 0; $totalPlanned = 0; $totalApplied = 0; $totalRemoved = 0
-
-  Write-DysflowProgress -Percent 20 -Message "Scanning files" -Total $files.Count
-
   $dbEngine = New-DaoDbEngine
   try {
-    $fileIdx = 0
-    foreach ($file in $files) {
-      $fileIdx++
-      Write-DysflowProgress -Percent ([int](20 + 60 * $fileIdx / [Math]::Max(1, $files.Count))) -Message "Processing $($file.Name)" -Total $files.Count
-
-      $fileResult = [ordered]@{
-        filePath          = $file.FullName
-        linkedTablesFound = 0; alreadyLocal = 0; plannedRelinks = 0; appliedRelinks = 0
-        links  = [System.Collections.ArrayList]::new()
-        errors = [System.Collections.ArrayList]::new()
-      }
-
-      try {
-        # Phase 1: classify all links (read-only)
-        $remapPlan          = [System.Collections.ArrayList]::new()
-        $unresolvedLinkNames = [System.Collections.ArrayList]::new()
-
-        $db = $null
-        try {
-          $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $AccessPassword
-        } catch {
-          if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
-            $db = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $true -Password $BackendPassword
-          } else {
-            throw $_
-          }
-        }
-        try {
-          foreach ($td in $db.TableDefs) {
-            $tdName = [string]$td.Name
-            if ($tdName.StartsWith("MSys")) { continue }
-            $connectStr = [string]$td.Connect
-            if ([string]::IsNullOrWhiteSpace($connectStr)) { continue }
-
-            $dbMatch = [regex]::Match($connectStr, '(?i)(?:^|;)DATABASE=([^;]+)')
-            if (-not $dbMatch.Success) { continue }
-
-            $backendPath = $dbMatch.Groups[1].Value.Trim()
-            $classResult = Get-LinkClassification -BackendPath $backendPath -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex
-
-            $linkEntry = [ordered]@{
-              database            = $file.FullName
-              linkName            = $tdName
-              originalBackendPath = $backendPath
-              classification      = $classResult.classification
-              resolvedLocalPath   = $classResult.resolvedLocalPath
-              chainHops           = 0
-              cycleDetected       = $false
-            }
-
-            $fileResult.linkedTablesFound++; $totalLinked++
-
-            switch ($classResult.classification) {
-              "alreadyLocal"  { $fileResult.alreadyLocal++; $totalAlreadyLocal++ }
-              "plannedRelink" {
-                $fileResult.plannedRelinks++; $totalPlanned++
-                [void]$remapPlan.Add([ordered]@{ tdName = $tdName; resolvedLocalPath = $classResult.resolvedLocalPath; linkEntry = $linkEntry })
-              }
-              "unresolved" { [void]$unresolvedLinkNames.Add($tdName) }
-              "ambiguous"  { $linkEntry.classification = "unresolved"; [void]$unresolvedLinkNames.Add($tdName) }
-            }
-            [void]$fileResult.links.Add($linkEntry)
-          }
-        } finally {
-          try { $db.Close() } catch { Write-Debug "Diagnostics: $_" }
-          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) } catch { Write-Debug "Diagnostics: $_" }
-        }
-
-        # Phase 2: apply (when not dry-run and there is work)
-        $hasWork = $remapPlan.Count -gt 0 -or ($removeUnresolved -and $unresolvedLinkNames.Count -gt 0)
-        if (-not $dryRun -and $hasWork) {
-          $applyOk = $true
-          if (-not $noBackup) {
-            try {
-              $bak = Backup-AccessFile -Path $file.FullName
-              [void]$allBackupPaths.Add($bak)
-            } catch {
-              [void]$fileResult.errors.Add("Backup failed: $($_.Exception.Message)")
-              [void]$allErrors.Add("$($file.FullName): Backup failed: $($_.Exception.Message)")
-              $applyOk = $false
-            }
-          }
-
-          if ($applyOk) {
-            $dbWrite = $null
-            try {
-              $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $AccessPassword
-            } catch {
-              if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
-                $dbWrite = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $file.FullName -ReadOnly $false -Password $BackendPassword
-              } else {
-                throw $_
-              }
-            }
-            try {
-              foreach ($plan in $remapPlan) {
-                $visited = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
-                $chain = Resolve-LinkChain -DbEngine $dbEngine -StartDb $dbWrite -TableName $plan.tdName -RootPath $rootPath -AliasMap $aliasMap -FileIndex $fileIndex -Visited ([ref]$visited) -Depth 0 -MaxDepth 5
-
-                if ($chain.cycleDetected) {
-                  $plan.linkEntry.classification = "cycle"
-                  $plan.linkEntry.cycleDetected  = $true
-                  continue
-                }
-
-                $targetPath = if ($null -ne $chain.resolvedPath) { $chain.resolvedPath } else { $plan.resolvedLocalPath }
-                $plan.linkEntry.chainHops = $chain.hops
-
-                try {
-                  $tdW = $dbWrite.TableDefs.Item($plan.tdName)
-                  $currentConnect = [string]$tdW.Connect
-                  $currentSource = [string]$tdW.SourceTableName
-                  
-                  $newConnect = if ([string]::IsNullOrWhiteSpace($BackendPassword)) {
-                    $pwdMatch = [regex]::Match($currentConnect, '(?i)(?:^|;)PWD=([^;]+)')
-                    if ($pwdMatch.Success) {
-                      ";DATABASE=$targetPath;PWD=$($pwdMatch.Groups[1].Value)"
-                    } else {
-                      ";DATABASE=$targetPath"
-                    }
-                  } else {
-                    ";DATABASE=$targetPath;PWD=$BackendPassword"
-                  }
-
-                  if ($chain.resolvedTable -and $currentSource -ne [string]$chain.resolvedTable) {
-                    $linkName = $tdW.Name
-                    $attributes = $tdW.Attributes
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
-                    $dbWrite.TableDefs.Delete($linkName)
-                    $newTd = $dbWrite.CreateTableDef($linkName, $attributes, $chain.resolvedTable, $newConnect)
-                    $dbWrite.TableDefs.Append($newTd)
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($newTd) } catch { Write-Debug "Diagnostics: $_" }
-                  } else {
-                    if ($currentConnect -ne $newConnect) {
-                      # #T17 inspector fix: pre-check that the target table
-                      # actually exists in the resolved backend file. Without
-                      # this, RefreshLink fails at runtime for the case where
-                      # the backend FILE exists in the resolved root but the
-                      # target table is missing from it (Variante 2). The
-                      # link is left in a broken state pointing at the
-                      # resolved backend. Classify as "unresolved" with
-                      # reason "target-table-missing" so --remove-unresolved
-                      # can pick it up, and so the error is distinguishable
-                      # from a generic RefreshLink failure.
-                      $targetDb = $null
-                      $targetTableMissing = $true
-                      try {
-                        try {
-                          $targetDb = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $targetPath -ReadOnly $true -Password $AccessPassword
-                        } catch {
-                          if (-not [string]::IsNullOrWhiteSpace($BackendPassword)) {
-                            $targetDb = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $targetPath -ReadOnly $true -Password $BackendPassword
-                          } else {
-                            throw $_
-                          }
-                        }
-                        foreach ($existingTd in $targetDb.TableDefs) {
-                          if ($existingTd.Name -eq $plan.tdName) {
-                            $targetTableMissing = $false
-                            break
-                          }
-                        }
-                      } catch {
-                        Write-Debug "Pre-check failed for $targetPath : $($_.Exception.Message)"
-                      } finally {
-                        if ($null -ne $targetDb) {
-                          try { $targetDb.Close() } catch { Write-Debug "Diagnostics: $_" }
-                          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($targetDb) } catch { Write-Debug "Diagnostics: $_" }
-                        }
-                      }
-
-                      if ($targetTableMissing) {
-                        [void]$fileResult.errors.Add("RefreshLink $($plan.tdName): target table missing in $targetPath")
-                        [void]$allErrors.Add("$($file.FullName)!$($plan.tdName): target table missing in $targetPath")
-                        $plan.linkEntry.classification = "unresolved"
-                        $plan.linkEntry.reason = "target-table-missing"
-                        [void]$unresolvedLinkNames.Add($plan.tdName)
-                        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
-                        continue
-                      }
-
-                      $tdW.Connect = $newConnect
-                      $tdW.RefreshLink()
-                    }
-                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($tdW) } catch { Write-Debug "Diagnostics: $_" }
-                  }
-
-                  $plan.linkEntry.classification = "applied"
-                  $plan.linkEntry.resolvedLocalPath = $targetPath
-                  $fileResult.appliedRelinks++; $totalApplied++
-                } catch {
-                  [void]$fileResult.errors.Add("RefreshLink $($plan.tdName): $($_.Exception.Message)")
-                  [void]$allErrors.Add("$($file.FullName)!$($plan.tdName): $($_.Exception.Message)")
-                }
-              }
-
-              if ($removeUnresolved) {
-                foreach ($linkName in $unresolvedLinkNames) {
-                  try {
-                    $dbWrite.TableDefs.Delete($linkName)
-                    $totalRemoved++
-                    foreach ($le in $fileResult.links) {
-                      if ([string]$le.linkName -eq $linkName) { $le.classification = "removed"; break }
-                    }
-                  } catch {
-                    [void]$fileResult.errors.Add("Delete ${linkName}: $($_.Exception.Message)")
-                    [void]$allErrors.Add("$($file.FullName)!$($linkName): $($_.Exception.Message)")
-                  }
-                }
-              }
-            } finally {
-              try { $dbWrite.Close() } catch { Write-Debug "Diagnostics: $_" }
-              try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbWrite) } catch { Write-Debug "Diagnostics: $_" }
-            }
-          }
-        }
-      } catch {
-        [void]$fileResult.errors.Add($_.Exception.Message)
-        [void]$allErrors.Add("$($file.FullName): $($_.Exception.Message)")
-      }
-
-      [void]$fileResults.Add($fileResult)
+    $coreDecision = { param($eventName, $body) Invoke-RelinkDirectoryCoreDecision -Event $eventName -Payload $body }
+    $enumerateFiles = { param($rootPath) Get-RelinkDirectoryCandidatesPrimitive -RootPath $rootPath }
+    $inspectFile = {
+      param($filePath)
+      Read-RelinkDirectoryFilePrimitive -DbEngine $dbEngine -FilePath $filePath -PrimaryPassword $AccessPassword -FallbackPassword $BackendPassword
     }
+    $applyFile = {
+      param($plan)
+      Invoke-RelinkDirectoryFilePlanPrimitive -DbEngine $dbEngine -Plan $plan -PrimaryPassword $AccessPassword -FallbackPassword $BackendPassword -BackendPassword $BackendPassword
+    }
+    $writeProgress = { param($percent, $message, $total) Write-DysflowProgress -Percent $percent -Message $message -Total $total }
+    return Invoke-RelinkDirectoryTransport -Payload $Payload -CoreDecision $coreDecision -EnumerateFiles $enumerateFiles -InspectFile $inspectFile -ApplyFile $applyFile -WriteProgress $writeProgress
   } finally {
     try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" }
-  }
-
-  Write-DysflowProgress -Percent 90 -Message "Finalizing"
-
-  $allLinks = @($fileResults | ForEach-Object { @($_.links) } | Where-Object { $_ -ne $null })
-
-  $denyPrefixList = [string[]]@()
-  if ($null -ne $Payload.denyPrefixes) { $denyPrefixList = @($Payload.denyPrefixes | ForEach-Object { [string]$_ }) }
-
-  $externalLinkCount = 0
-  $datosteLinkCount  = 0
-  $brokenLinkCount   = 0
-  foreach ($link in $allLinks) {
-    $cls = [string]$link.classification
-    if ($cls -notin @("alreadyLocal", "applied", "removed")) {
-      $check = Test-LinkExternal -BackendPath ([string]$link.originalBackendPath) -RootPath $rootPath -DenyPrefixes $denyPrefixList
-      if ($check.external) { $externalLinkCount++ }
-      if ($check.denied)   { $datosteLinkCount++ }
-      if ($check.broken)   { $brokenLinkCount++ }
-    }
-  }
-
-  return [ordered]@{
-    relinkDirectory = [ordered]@{
-      mode              = if ($dryRun) { "dry-run" } else { "apply" }
-      root              = $rootPath
-      filesScanned      = $files.Count
-      linkedTablesFound = $totalLinked
-      alreadyLocal      = $totalAlreadyLocal
-      plannedRelinks    = $totalPlanned
-      appliedRelinks    = $totalApplied
-      unresolved        = @($allLinks | Where-Object { $_.classification -eq "unresolved" })
-      removed           = @($allLinks | Where-Object { $_.classification -eq "removed" })
-      externalLinkCount = $externalLinkCount
-      datosteLinkCount  = $datosteLinkCount
-      brokenLinkCount   = $brokenLinkCount
-      backupPaths       = @($allBackupPaths)
-      errors            = @($allErrors)
-      fileResults       = @($fileResults)
-    }
   }
 }
 

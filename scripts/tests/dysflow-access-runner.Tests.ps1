@@ -1120,14 +1120,14 @@ Describe "Access query write dry-run contract — behavioral" {
     }
 }
 
-Describe "relink_directory local path containment — behavioral" {
+Describe "relink_directory DAO primitives — behavioral" {
     BeforeAll {
         $script:RunnerPath = Join-Path $PSScriptRoot ".." "dysflow-access-runner.ps1"
         $ast = [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path $script:RunnerPath).Path,
             [ref]$null, [ref]$null
         )
-        foreach ($name in @('ConvertTo-CanonicalFullPath', 'Test-CanonicalPathContained', 'Resolve-LocalPath', 'Get-LinkClassification', 'Test-LinkExternal')) {
+        foreach ($name in @('Open-RelinkDatabasePrimitive', 'Invoke-RelinkDirectoryFilePlanPrimitive')) {
             $fnAst = $ast.FindAll(
                 { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                   $args[0].Name -eq $name },
@@ -1138,38 +1138,80 @@ Describe "relink_directory local path containment — behavioral" {
         }
     }
 
-    It "does not classify a sibling path prefix as already local" {
-        $result = Get-LinkClassification `
-            -BackendPath "C:\data\project2\backend.accdb" `
-            -RootPath "C:\data\project" `
-            -AliasMap @{} `
-            -FileIndex @{}
-
-        $result.classification | Should -Be "unresolved"
+    BeforeEach {
+        $script:passwords = [System.Collections.Generic.List[string]]::new()
+        $script:openCalls = 0
+        function script:Open-DatabaseWithPassword {
+            param($DbEngine, $DatabasePath, $ReadOnly, $Password)
+            $script:openCalls++
+            $script:passwords.Add([string]$Password)
+            if ($Password -eq 'frontend-secret') { throw 'first password rejected' }
+            return [pscustomobject]@{ marker = 'opened' }
+        }
     }
 
-    It "classifies contained paths and the root itself as local across trailing separator variants" {
-        $child = Get-LinkClassification `
-            -BackendPath "C:\data\project\backend.accdb" `
-            -RootPath "C:\data\project\" `
-            -AliasMap @{} `
-            -FileIndex @{}
-        $root = Get-LinkClassification `
-            -BackendPath "C:\data\project" `
-            -RootPath "C:\data\project\" `
-            -AliasMap @{} `
-            -FileIndex @{}
+    It "preserves frontend-password then backend-password fallback" {
+        $result = Open-RelinkDatabasePrimitive `
+            -DbEngine ([pscustomobject]@{}) `
+            -DatabasePath 'C:\data\frontend.accdb' `
+            -ReadOnly $true `
+            -PrimaryPassword 'frontend-secret' `
+            -FallbackPassword 'backend-secret'
 
-        $child.classification | Should -Be "alreadyLocal"
-        $root.classification | Should -Be "alreadyLocal"
+        $result.marker | Should -Be 'opened'
+        $script:passwords | Should -Be @('frontend-secret', 'backend-secret')
     }
 
-    It "reports sibling prefix links as external while accepting trailing separator containment" {
-        $sibling = Test-LinkExternal -BackendPath "C:\data\project2\backend.accdb" -RootPath "C:\data\project"
-        $root = Test-LinkExternal -BackendPath "C:\data\project" -RootPath "C:\data\project\"
+    It "stops before opening DAO when the core-required backup fails" {
+        function script:Backup-AccessFile { throw 'disk full' }
+        $plan = [pscustomobject]@{
+            filePath = 'C:\data\frontend.accdb'
+            createBackup = $true
+            actions = @([pscustomobject]@{ kind = 'remove'; linkName = 'BrokenLink' })
+        }
 
-        $sibling.external | Should -Be $true
-        $root.external | Should -Be $false
+        $result = Invoke-RelinkDirectoryFilePlanPrimitive `
+            -DbEngine ([pscustomobject]@{}) `
+            -Plan $plan `
+            -PrimaryPassword '' `
+            -FallbackPassword '' `
+            -BackendPassword ''
+
+        $result.backupError | Should -Be 'disk full'
+        $result.actionResults.Count | Should -Be 0
+        $script:openCalls | Should -Be 0
+    }
+
+    It "continues core-ordered removal actions after a DAO failure" {
+        function script:Backup-AccessFile { 'C:\data\frontend.accdb.bak' }
+        $tableDefs = [pscustomobject]@{}
+        $tableDefs | Add-Member -MemberType ScriptMethod -Name Delete -Value {
+            param($Name)
+            if ($Name -eq 'First') { throw 'delete failed' }
+        }
+        $script:relinkDatabase = [pscustomobject]@{ TableDefs = $tableDefs }
+        $script:relinkDatabase | Add-Member -MemberType ScriptMethod -Name Close -Value {}
+        function script:Open-DatabaseWithPassword { return $script:relinkDatabase }
+        $plan = [pscustomobject]@{
+            filePath = 'C:\data\frontend.accdb'
+            createBackup = $false
+            actions = @(
+                [pscustomobject]@{ kind = 'remove'; linkName = 'First' },
+                [pscustomobject]@{ kind = 'remove'; linkName = 'Second' }
+            )
+        }
+
+        $result = Invoke-RelinkDirectoryFilePlanPrimitive `
+            -DbEngine ([pscustomobject]@{}) `
+            -Plan $plan `
+            -PrimaryPassword '' `
+            -FallbackPassword '' `
+            -BackendPassword ''
+
+        $result.actionResults.Count | Should -Be 2
+        $result.actionResults[0].ok | Should -Be $false
+        $result.actionResults[0].error | Should -Match 'delete failed'
+        $result.actionResults[1].ok | Should -Be $true
     }
 }
 

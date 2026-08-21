@@ -540,6 +540,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
 * **`relink_directory`**: Bulk relink table references recursively under a directory root.
   - Parameters: `rootPath` (string, required), `dryRun`, `apply`, `backup` (boolean, optional), `recursive` (boolean, optional), `maps` (array, optional), `denyPrefixes` (array, optional), `strictLocal` (boolean, optional), `removeUnresolved` (boolean, optional), `timeoutMs` (number, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional overrides)
+  - Traversal, relink planning, action order, cycle handling, and partial-failure reporting are core-owned; PowerShell supplies filesystem and DAO primitives. See [relink-directory orchestration](../architecture/relink-directory-orchestration.md).
 
 ### 4. GUI & Forms
 * **`validate_form_spec`**: Parse and lint a JSON specification for form generation.
