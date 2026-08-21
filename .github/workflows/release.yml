@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       force_full_validation:
-        description: Ignore a fresh CI receipt and run lint/tests again
+        description: Ignore a fresh CI receipt and run all quality gates again
         required: false
         type: boolean
         default: false
 
 jobs:
-  # This job is deliberately independent from release validation: it creates
-  # the immutable, run-scoped build once while Windows validates the tag.
+  # This job is deliberately independent from quality authority and release
+  # E2E: it creates the immutable, run-scoped build once for both consumers.
   build:
     name: Build release artifact
     if: startsWith(github.ref, 'refs/tags/v')
@@ -74,6 +74,92 @@ jobs:
 
       - name: Record artifact identity
         run: echo "Uploaded dist-${{ steps.commit.outputs.sha }} with digest ${{ steps.upload.outputs.artifact-digest }}"
+
+  quality-authority:
+    name: Exact-SHA quality authority
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      authority_type: ${{ steps.authority.outputs.authority_type }}
+      commit_sha: ${{ steps.authority.outputs.commit_sha }}
+      reason: ${{ steps.authority.outputs.reason }}
+      run_id: ${{ steps.authority.outputs.run_id }}
+      job_id: ${{ steps.authority.outputs.job_id }}
+      authority_url: ${{ steps.authority.outputs.authority_url }}
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Verify checkout matches build input
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit_sha }}
+        run: test -n "$EXPECTED_COMMIT_SHA" && test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA"
+
+      - name: Verify exact-SHA CI receipt
+        id: receipt
+        env:
+          EXPECTED_RELEASE_SHA: ${{ needs.build.outputs.commit_sha }}
+          FORCE_FULL_VALIDATION: ${{ inputs.force_full_validation }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/verify-ci-receipt.mjs
+
+      - name: Enable pnpm for direct gates
+        if: steps.receipt.outputs.decision != 'skip'
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js for direct gates
+        if: steps.receipt.outputs.decision != 'skip'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies for direct gates
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm lint
+
+      - name: Test
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm test
+
+      - name: Test with coverage
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm coverage
+
+      - name: Record exact-SHA quality authority
+        id: authority
+        env:
+          AUTHORITY_TYPE: ${{ steps.receipt.outputs.decision == 'skip' && 'ci-receipt' || 'direct-gates' }}
+          COMMIT_SHA: ${{ needs.build.outputs.commit_sha }}
+          REASON: ${{ steps.receipt.outputs.reason }}
+          RUN_ID: ${{ steps.receipt.outputs.decision == 'skip' && steps.receipt.outputs.run_id || github.run_id }}
+          JOB_ID: ${{ steps.receipt.outputs.decision == 'skip' && steps.receipt.outputs.job_id || github.job }}
+          AUTHORITY_URL: ${{ steps.receipt.outputs.decision == 'skip' && format('{0}/{1}/actions/runs/{2}/job/{3}', github.server_url, github.repository, steps.receipt.outputs.run_id, steps.receipt.outputs.job_id) || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+        run: |
+          set -euo pipefail
+          test -n "$AUTHORITY_TYPE"
+          test -n "$COMMIT_SHA"
+          test -n "$REASON"
+          test -n "$RUN_ID"
+          test -n "$JOB_ID"
+          test -n "$AUTHORITY_URL"
+          echo "authority_type=$AUTHORITY_TYPE" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          echo "authority_url=$AUTHORITY_URL" >> "$GITHUB_OUTPUT"
 
   e2e-validation:
     name: E2E validation (Windows self-hosted)
@@ -207,7 +293,7 @@ jobs:
 
   release:
     name: Build & Release Artifacts
-    needs: [build, e2e-validation]
+    needs: [build, quality-authority, e2e-validation]
     if: startsWith(github.ref, 'refs/tags/v')
     # Linux packaging job. Windows jobs stay on windows-latest for MS Access.
     runs-on: ubuntu-latest
@@ -230,6 +316,32 @@ jobs:
         env:
           EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit_sha }}
         run: test -n "$EXPECTED_COMMIT_SHA" && test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA"
+
+      - name: Record exact-SHA quality authority
+        env:
+          AUTHORITY_TYPE: ${{ needs.quality-authority.outputs.authority_type }}
+          AUTHORITY_SHA: ${{ needs.quality-authority.outputs.commit_sha }}
+          AUTHORITY_REASON: ${{ needs.quality-authority.outputs.reason }}
+          AUTHORITY_RUN_ID: ${{ needs.quality-authority.outputs.run_id }}
+          AUTHORITY_JOB_ID: ${{ needs.quality-authority.outputs.job_id }}
+          AUTHORITY_URL: ${{ needs.quality-authority.outputs.authority_url }}
+        run: |
+          set -euo pipefail
+          test -n "$AUTHORITY_TYPE"
+          test -n "$AUTHORITY_SHA"
+          test "$AUTHORITY_SHA" = "$(git rev-parse HEAD)"
+          test -n "$AUTHORITY_REASON"
+          test -n "$AUTHORITY_RUN_ID"
+          test -n "$AUTHORITY_JOB_ID"
+          test -n "$AUTHORITY_URL"
+          {
+            echo "### Exact-SHA quality authority"
+            echo "- Type: $AUTHORITY_TYPE"
+            echo "- Commit: \`$AUTHORITY_SHA\`"
+            echo "- Reason: \`$AUTHORITY_REASON\`"
+            echo "- Run: [$AUTHORITY_RUN_ID]($AUTHORITY_URL)"
+            echo "- Job: \`$AUTHORITY_JOB_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stamp release version
         run: node .github/scripts/set-release-package-version.mjs "${{ github.ref_name }}"
