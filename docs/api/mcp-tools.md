@@ -109,7 +109,13 @@ Consumers must defensively parse a stringified host-wrapper result before requir
 * **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
 * **Progressive parameters**: `compact:true` (or `view:"compact"`) returns a bounded bootstrap projection. `include` selects large blocks (`tools`, `sharedBlockSupport`, `effectiveDryRunDefault`, `migrationNotes`, `preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`, `documentationBundle`, `projectConfig`, `worktreeCache`); `toolNames` filters per-tool maps without changing the full default.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
-* **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
+* **Per-tool advertisement**: every `tools/list` entry carries a compact, routing-safe description, the complete callable `inputSchema.properties` set, standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`), and namespaced workflow routing metadata at `_meta["dysflow/workflow"]`. The hot-path namespaced value contains only `phases[]` and `status`; deep `preferredFor[]` guidance remains in `schema` and `describe_tool`. Safety-critical parameter semantics such as `apply`, `dryRun`, `confirm`, `force`, and compile/allowlist gates stay explicit in the compact schema. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically.
+
+The compact advertisement is derived from the same canonical contracts as the deep
+catalog. It removes issue-history and migration prose from the hot path without
+removing a callable property. With `additionalProperties:false`, clients MUST NOT
+infer that an omitted description means an omitted parameter: use the property keys
+from `tools/list`, then call `describe_tool` for the complete parameter contract.
 
 ### `setup_project`
 Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.

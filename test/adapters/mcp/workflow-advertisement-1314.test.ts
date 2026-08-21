@@ -24,7 +24,7 @@ type WorkflowAdvertisement = {
   _meta: {
     [WORKFLOW_META_KEY]: {
       phases: string[];
-      preferredFor: string[];
+      status: string;
     };
   };
 };
@@ -74,7 +74,7 @@ describe("MCP workflow advertisement (#1314)", () => {
     expect(tool.annotations).not.toHaveProperty("preferredFor");
     expect(tool._meta[WORKFLOW_META_KEY]).toMatchObject({
       phases: ["bootstrap", "recovery"],
-      preferredFor: expect.arrayContaining([expect.any(String)]),
+      status: "preferred",
     });
   });
 
