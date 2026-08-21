@@ -1,5 +1,6 @@
+import { resolve } from "node:path";
 import { type OperationResult, successResult } from "../contracts/index.js";
-import { stringValue } from "../utils/index.js";
+import { isAbsolutePath, stringValue } from "../utils/index.js";
 import {
   type ConfigFileSystemPort,
   type DysflowConfig,
@@ -33,6 +34,28 @@ export type ExecutionTarget = Pick<
   | "timeoutMs"
 > & { accessPath?: string; destinationRoot: string; targetProvenance: TargetProvenance };
 
+/**
+ * Issue #1478 — absolutize a caller-supplied path override against the
+ * project base BEFORE it leaves the resolver.
+ *
+ * A relative override (`destinationRoot: "src"`) used to be returned
+ * verbatim, and each downstream consumer then anchored it to a different
+ * base. The concrete failure: `executeMappedTool` spawns the VBA worker with
+ * `cwd: target.projectRoot` — which #1169 made follow the same raw override —
+ * and the worker resolved the relative `destinationRoot` against that cwd,
+ * writing `<root>/src/src/forms/` instead of `<root>/src/forms/`.
+ *
+ * Absolute values (POSIX, Windows drive-letter, UNC) are kept byte-identical:
+ * `node:path` is host-platform-specific and would prefix cwd to a Windows path
+ * on POSIX, and the `OUTSIDE_PROJECT_ROOT` guard compares the value it is
+ * given, so an external absolute root must reach it unchanged.
+ */
+function absolutizeOverride(value: unknown, base: string): string | undefined {
+  const normalized = stringValue(value);
+  if (normalized === undefined) return undefined;
+  return isAbsolutePath(normalized) ? normalized : resolve(base, normalized);
+}
+
 export async function resolveExecutionTarget(
   params: Record<string, unknown>,
   context: ExecutionTargetContext,
@@ -63,11 +86,12 @@ export async function resolveExecutionTarget(
       context.fileSystem,
     );
     if (!config.ok) return config;
+    const explicitBase = config.data.projectRoot ?? context.cwd;
     return successResult({
       ...config.data,
       accessPath: config.data.accessDbPath,
       destinationRoot:
-        stringValue(params.destinationRoot) ??
+        absolutizeOverride(params.destinationRoot, explicitBase) ??
         config.data.destinationRoot ??
         config.data.projectRoot ??
         context.cwd,
@@ -78,8 +102,8 @@ export async function resolveExecutionTarget(
       // configured `projectRoot` is preserved only when no override is
       // supplied, so the legacy contract stays unchanged.
       projectRoot:
-        stringValue(params.projectRoot) ??
-        stringValue(params.destinationRoot) ??
+        absolutizeOverride(params.projectRoot, explicitBase) ??
+        absolutizeOverride(params.destinationRoot, explicitBase) ??
         config.data.projectRoot ??
         context.cwd,
       targetProvenance:
@@ -101,19 +125,20 @@ export async function resolveExecutionTarget(
       context.fileSystem,
     );
     if (repoConfig.ok) {
+      const repoBase = repoConfig.data.projectRoot ?? context.cwd;
       return successResult({
         ...repoConfig.data,
         accessPath: repoConfig.data.accessDbPath,
         destinationRoot:
-          stringValue(params.destinationRoot) ??
+          absolutizeOverride(params.destinationRoot, repoBase) ??
           repoConfig.data.destinationRoot ??
           repoConfig.data.projectRoot ??
           context.cwd,
         // Issue #1169 — see the matching comment in the explicit-override
         // branch above. The override flows through the same precedence.
         projectRoot:
-          stringValue(params.projectRoot) ??
-          stringValue(params.destinationRoot) ??
+          absolutizeOverride(params.projectRoot, repoBase) ??
+          absolutizeOverride(params.destinationRoot, repoBase) ??
           repoConfig.data.projectRoot ??
           context.cwd,
         targetProvenance: "implicit-cwd",
@@ -123,8 +148,8 @@ export async function resolveExecutionTarget(
   }
 
   const destinationRoot =
-    stringValue(params.destinationRoot) ??
-    stringValue(params.projectRoot) ??
+    absolutizeOverride(params.destinationRoot, context.cwd) ??
+    absolutizeOverride(params.projectRoot, context.cwd) ??
     context.destinationRoot ??
     context.cwd;
   return successResult({
@@ -138,8 +163,8 @@ export async function resolveExecutionTarget(
     // follows so the path-containment guards in the form / serialization
     // tools accept the override root as the authoritative project root.
     projectRoot:
-      stringValue(params.projectRoot) ??
-      stringValue(params.destinationRoot) ??
+      absolutizeOverride(params.projectRoot, context.cwd) ??
+      absolutizeOverride(params.destinationRoot, context.cwd) ??
       context.destinationRoot ??
       context.cwd,
     projectId: undefined,
