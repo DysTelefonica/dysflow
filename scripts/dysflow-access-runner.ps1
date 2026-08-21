@@ -1123,6 +1123,7 @@ function Split-SqlStatements {
   $statements = New-Object System.Collections.ArrayList
   $builder = New-Object System.Text.StringBuilder
   $inSingleQuote = $false
+  $inDoubleQuote = $false
 
   for ($i = 0; $i -lt $Sql.Length; $i++) {
     $char = $Sql[$i]
@@ -1135,20 +1136,38 @@ function Split-SqlStatements {
       continue
     }
 
-    if ($char -eq "'") {
+    if ($char -eq '"' -and $inDoubleQuote -and $nextChar -eq '"') {
+      [void]$builder.Append($char)
+      [void]$builder.Append($nextChar)
+      $i++
+      continue
+    }
+
+    if ($char -eq "'" -and -not $inDoubleQuote) {
       $inSingleQuote = -not $inSingleQuote
       [void]$builder.Append($char)
       continue
     }
 
-    if ($char -eq '-' -and $nextChar -eq '-' -and -not $inSingleQuote) {
-      while ($i -lt $Sql.Length -and $Sql[$i] -ne "`n") { $i++ }
+    if ($char -eq '"' -and -not $inSingleQuote) {
+      $inDoubleQuote = -not $inDoubleQuote
+      [void]$builder.Append($char)
       continue
     }
 
-    if ($char -eq ";" -and -not $inSingleQuote) {
-      $sql = $builder.ToString().Trim()
-      if (-not [string]::IsNullOrWhiteSpace($sql)) { [void]$statements.Add($sql) }
+    if ($char -eq '/' -and $nextChar -eq '*' -and -not $inSingleQuote -and -not $inDoubleQuote) {
+      throw "Block comments are not supported in Access SQL scripts. Use -- line comments instead."
+    }
+
+    if ($char -eq '-' -and $nextChar -eq '-' -and -not $inSingleQuote -and -not $inDoubleQuote) {
+      while ($i -lt $Sql.Length -and $Sql[$i] -ne "`n") { $i++ }
+      if ($i -lt $Sql.Length) { [void]$builder.Append("`n") }
+      continue
+    }
+
+    if ($char -eq ";" -and -not $inSingleQuote -and -not $inDoubleQuote) {
+      $statement = $builder.ToString().Trim()
+      if (-not [string]::IsNullOrWhiteSpace($statement)) { [void]$statements.Add($statement) }
       [void]$builder.Clear()
       continue
     }

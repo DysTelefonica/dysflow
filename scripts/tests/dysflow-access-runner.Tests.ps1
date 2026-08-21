@@ -18,8 +18,8 @@
 # ---------------------------------------------------------------------------
 # Bootstrap: define only the pure helper functions under test.
 # We cannot dot-source the full script because it has a mandatory param block
-# and an Access COM dependency at the top level.  Instead we redefine the
-# small, self-contained functions here and keep them in sync with the source.
+# and an Access COM dependency at the top level. Split-SqlStatements is loaded
+# from its production definition so parser tests cannot drift from the runner.
 # ---------------------------------------------------------------------------
 
 function script:Resolve-SandboxedPath {
@@ -55,44 +55,32 @@ function script:Format-SqlLiteral {
     return "'" + ($Value.ToString().Replace("'", "''")) + "'"
 }
 
-function script:Split-SqlStatements {
-    param([string] $Sql)
-    $statements = New-Object System.Collections.ArrayList
-    $builder    = New-Object System.Text.StringBuilder
-    $inSingleQuote = $false
-
-    for ($i = 0; $i -lt $Sql.Length; $i++) {
-        $char     = $Sql[$i]
-        $nextChar = if ($i + 1 -lt $Sql.Length) { $Sql[$i + 1] } else { [char]0 }
-
-        if ($char -eq "'" -and $inSingleQuote -and $nextChar -eq "'") {
-            [void]$builder.Append($char)
-            [void]$builder.Append($nextChar)
-            $i++
-            continue
-        }
-        if ($char -eq "'") {
-            $inSingleQuote = -not $inSingleQuote
-            [void]$builder.Append($char)
-            continue
-        }
-        if ($char -eq '-' -and $nextChar -eq '-' -and -not $inSingleQuote) {
-            while ($i -lt $Sql.Length -and $Sql[$i] -ne "`n") { $i++ }
-            continue
-        }
-        if ($char -eq ";" -and -not $inSingleQuote) {
-            $s = $builder.ToString().Trim()
-            if (-not [string]::IsNullOrWhiteSpace($s)) { [void]$statements.Add($s) }
-            [void]$builder.Clear()
-            continue
-        }
-        [void]$builder.Append($char)
-    }
-
-    $tail = $builder.ToString().Trim()
-    if (-not [string]::IsNullOrWhiteSpace($tail)) { [void]$statements.Add($tail) }
-    return $statements
+$runnerScriptPath = Join-Path $PSScriptRoot '..\dysflow-access-runner.ps1'
+$tokens = $null
+$parseErrors = $null
+$runnerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    $runnerScriptPath,
+    [ref] $tokens,
+    [ref] $parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+    throw "Unable to parse production runner: $($parseErrors[0].Message)"
 }
+$splitSqlAst = $runnerAst.Find(
+    {
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -eq 'Split-SqlStatements'
+    },
+    $true
+)
+if ($null -eq $splitSqlAst) {
+    throw 'Production Split-SqlStatements function was not found.'
+}
+$splitSqlDefinition = $splitSqlAst.Extent.Text -replace
+    '^function\s+Split-SqlStatements',
+    'function script:Split-SqlStatements'
+Invoke-Expression $splitSqlDefinition
 
 function script:Assert-ColumnNameSafe {
     param([string] $Name, [string] $Label = "column")
@@ -348,6 +336,21 @@ Describe "Split-SqlStatements" {
         $result.Count | Should -Be 2
     }
 
+    It "does not split double-quoted literals containing apostrophes and semicolons" {
+        $sql = 'INSERT INTO t (col) VALUES ("O''Brien;still here"); SELECT 2'
+        $result = @(Split-SqlStatements $sql)
+        $result.Count | Should -Be 2
+        $result[0] | Should -Be 'INSERT INTO t (col) VALUES ("O''Brien;still here")'
+        $result[1] | Should -Be 'SELECT 2'
+    }
+
+    It "handles doubled double quotes inside double-quoted literals" {
+        $sql = 'INSERT INTO t (col) VALUES ("say ""go;now"""); SELECT 2'
+        $result = @(Split-SqlStatements $sql)
+        $result.Count | Should -Be 2
+        $result[0] | Should -Be 'INSERT INTO t (col) VALUES ("say ""go;now""")'
+    }
+
     It "returns empty list for whitespace-only input" {
         $result = @(Split-SqlStatements "   ")
         $result.Count | Should -Be 0
@@ -374,10 +377,27 @@ Describe "Split-SqlStatements" {
         $result[1] | Should -Be "SELECT 2"
     }
 
+    It "preserves a newline when removing a line comment between tokens" {
+        $result = @(Split-SqlStatements "SELECT 1-- comment`nFROM Foo")
+        $result.Count | Should -Be 1
+        $result[0] | Should -Be "SELECT 1`nFROM Foo"
+    }
+
     It "does not strip -- inside a string literal" {
         $result = @(Split-SqlStatements "SELECT '--not a comment' AS x")
         $result.Count | Should -Be 1
         $result[0] | Should -Be "SELECT '--not a comment' AS x"
+    }
+
+    It "does not strip -- inside a double-quoted string literal" {
+        $result = @(Split-SqlStatements 'SELECT "--not a comment;still literal" AS x')
+        $result.Count | Should -Be 1
+        $result[0] | Should -Be 'SELECT "--not a comment;still literal" AS x'
+    }
+
+    It "rejects block comments outside literals" {
+        { Split-SqlStatements "SELECT 1 /* unsupported */; SELECT 2" } |
+            Should -Throw '*Block comments are not supported*'
     }
 
     It "returns empty list for comment-only input" {
