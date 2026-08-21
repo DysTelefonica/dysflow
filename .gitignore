@@ -19,6 +19,10 @@ Thumbs.db
 dysflow-release.key
 *.release-signing.key
 
+# Local release outputs are generated at the repository root; keep nested fixtures trackable.
+/SHA256SUMS
+/dysflow-v*.tar.gz
+
 # compact_repair backups: dysflow-access-runner.ps1 writes <path>.bak-<timestamp>[-<rand>].
 *.bak-*
 

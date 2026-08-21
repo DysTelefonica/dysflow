@@ -112,6 +112,11 @@ regression, then re-run.
 
 ## Release hygiene
 
+Local release packaging writes `SHA256SUMS` and `dysflow-v*.tar.gz` to the
+repository root. Those generated root files are ignored by Git; files with the
+same names under fixture or documentation directories remain visible and
+trackable.
+
 - [ ] GitHub release **title equals the tag name exactly** (e.g. tag `v1.2.23`
   → title `v1.2.23`).
 - [ ] Release notes mention the MCP adapter cleanup work and any
