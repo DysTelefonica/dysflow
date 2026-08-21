@@ -150,6 +150,10 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // `compile` flag. See openspec/specs/vba-manager-actions/spec.md
       // "Save-only persistence (no compile)".
       "filter",
+      // Issue #1442 — `test_vba` accepts `filter: { tag: "smoke" }` alongside
+      // the legacy string, so it carries its own property. `filter` above stays
+      // string-typed for the export/list tools that share it.
+      "testFilter",
       "importMode",
       "mode",
       "strict",
@@ -184,7 +188,6 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "location",
       "top",
       "testsPath",
-      "testFilter",
       "exists_name",
       "code",
       // slice 5 (issue #618) — `create_form_from_template` atoms.

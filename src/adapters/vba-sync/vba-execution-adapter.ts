@@ -741,7 +741,9 @@ End Function
 
       const parsed = await readJsonFileAsync<unknown>(resolvedPath);
       const tests = normalizeTestPlan(parsed);
-      const filterParts = parseTestFilter(params.filter);
+      const parsedFilter = parseTestFilter(params.filter);
+      if (!parsedFilter.ok) return parsedFilter;
+      const filterParts = parsedFilter.data;
       const selected =
         filterParts === undefined
           ? tests
@@ -750,7 +752,7 @@ End Function
         return failureResult(
           createDysflowError(
             "VBA_NO_TESTS_SELECTED",
-            `No VBA tests selected from ${resolvedPath}${stringValue(params.filter) !== undefined ? ` with filter "${stringValue(params.filter)}"` : ""}.`,
+            `No VBA tests selected from ${resolvedPath}${describeTestFilter(filterParts)}.`,
           ),
         );
       }
@@ -1020,18 +1022,115 @@ function validateTestProceduresJson(proceduresJson: string): OperationResult<str
   }
 }
 
-function parseTestFilter(value: unknown): string[] | undefined {
+/**
+ * Shape of a parsed `test_vba` filter.
+ *
+ * Issue #1442 — the tool accepts two filter forms and they select differently,
+ * so the parsed value carries which form was used instead of collapsing both
+ * into a bare string array. Normalization (trim + lowercase) happens here, at
+ * parse time, so the per-atom matcher stays allocation-free.
+ */
+type TestFilterParts =
+  | { kind: "name_or_tag"; parts: readonly string[] }
+  | { kind: "tag_only"; tag: string };
+
+/**
+ * Parse the `filter` parameter into its matching form.
+ *
+ * Returns a successful `undefined` when no usable filter was supplied (the
+ * historical behavior for an absent, blank, or non-string filter), and a
+ * `MCP_INPUT_INVALID` failure for an object that cannot be honored. Rejecting
+ * rather than ignoring matters: a caller who mistypes the object would
+ * otherwise silently run the ENTIRE manifest instead of the slice they asked
+ * for, which is the failure this returns a typed error to prevent.
+ */
+function parseTestFilter(value: unknown): OperationResult<TestFilterParts | undefined> {
+  if (isRecord(value)) return parseTestFilterObject(value);
+
   const filterText = stringValue(value);
-  if (filterText === undefined) return undefined;
+  if (filterText === undefined) return successResult(undefined);
   const parts = filterText
     .split("|")
     .map((part) => part.trim().toLowerCase())
     .filter((part) => part.length > 0);
-  return parts.length > 0 ? parts : undefined;
+  return successResult(parts.length > 0 ? { kind: "name_or_tag", parts } : undefined);
 }
 
-function matchesTestFilter(test: VbaTestPlanEntry, filterParts: readonly string[]): boolean {
-  return filterParts.some(
+/**
+ * Validate the object filter form `{ tag: "smoke" }`.
+ *
+ * This is the single site that enforces the object's shape. The MCP boundary
+ * validator cannot do it: it matches one primitive type per property and has
+ * no `oneOf`, so `filter` is advertised without a `type` and every object
+ * reaches this function unchecked (see `SCHEMA_PROPS.testFilter`).
+ */
+function parseTestFilterObject(
+  value: Record<string, unknown>,
+): OperationResult<TestFilterParts | undefined> {
+  if ("tags" in value) {
+    return failureResult(
+      createDysflowError(
+        "MCP_INPUT_INVALID",
+        'filter does not accept a plural "tags" array. Use the singular object form filter: { tag: "smoke" }, or the string form filter: "smoke|regression".',
+      ),
+    );
+  }
+
+  const unknownKeys = Object.keys(value).filter((key) => key !== "tag");
+  if (unknownKeys.length > 0) {
+    return failureResult(
+      createDysflowError(
+        "MCP_INPUT_INVALID",
+        `filter object does not allow ${unknownKeys.map((key) => `"${key}"`).join(", ")}. Its only accepted key is "tag", e.g. filter: { tag: "smoke" }.`,
+      ),
+    );
+  }
+
+  if (!("tag" in value)) {
+    return failureResult(
+      createDysflowError(
+        "MCP_INPUT_INVALID",
+        'filter object must include a "tag" string, e.g. filter: { tag: "smoke" }.',
+      ),
+    );
+  }
+
+  const tag = value.tag;
+  if (typeof tag !== "string") {
+    return failureResult(
+      createDysflowError(
+        "MCP_INPUT_INVALID",
+        `filter.tag must be a string (received ${tag === null ? "null" : typeof tag}).`,
+      ),
+    );
+  }
+
+  const normalized = tag.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return failureResult(
+      createDysflowError("MCP_INPUT_INVALID", "filter.tag must be a non-empty string."),
+    );
+  }
+
+  return successResult({ kind: "tag_only", tag: normalized });
+}
+
+/** Render the active filter for the `VBA_NO_TESTS_SELECTED` message. */
+function describeTestFilter(filter: TestFilterParts | undefined): string {
+  if (filter === undefined) return "";
+  return filter.kind === "tag_only"
+    ? ` with filter { tag: "${filter.tag}" }`
+    : ` with filter "${filter.parts.join("|")}"`;
+}
+
+function matchesTestFilter(test: VbaTestPlanEntry, filter: TestFilterParts): boolean {
+  // The object form narrows to tags only. Consulting name/procedure here would
+  // make `{ tag: "smoke" }` select a `Test_Smoke` atom carrying no tags at all,
+  // which is exactly the distinction the object form exists to draw.
+  if (filter.kind === "tag_only") {
+    return test.tags.some((tag) => tag.toLowerCase().includes(filter.tag));
+  }
+  return filter.parts.some(
     (filterText) =>
       test.name.toLowerCase().includes(filterText) ||
       test.procedure.toLowerCase().includes(filterText) ||
