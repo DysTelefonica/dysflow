@@ -67,6 +67,9 @@ const ALIAS_GROUPS: readonly AliasGroup[] = [
     toolName,
     alternatives: ["tableName", "table"] as const,
     canonical: "tableName",
+    ...(toolName === "teardown_fixture"
+      ? { baseInput: { predicate: { column: "TestId", min: 900_000, max: 900_010 } } }
+      : {}),
   })),
   {
     toolName: "form_set_property",

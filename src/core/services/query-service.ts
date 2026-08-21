@@ -13,6 +13,7 @@ import {
   ensureResultShape,
 } from "../runner/access-runner.js";
 import { detectWriteSqlKeyword, isRecord, looksLikeReadOnlySql } from "../utils/index.js";
+import { buildFixtureTeardownPlan } from "./fixture-teardown-plan.js";
 
 export type AccessQueryResult = {
   dryRun?: true;
@@ -75,14 +76,22 @@ export class AccessQueryService {
       }
     }
 
+    const teardownPlan =
+      request.action === "teardown_fixture" ? buildFixtureTeardownPlan(request) : undefined;
+    if (teardownPlan !== undefined && !teardownPlan.ok) {
+      return failureResult(createDysflowError(teardownPlan.code, teardownPlan.message));
+    }
+
     if (request.mode === "write" && request.dryRun === true && usesInlineWritePlan(request)) {
+      const exactTeardownPlan = teardownPlan?.ok === true ? teardownPlan.plan : undefined;
       return successResult({
         dryRun: true,
         willExecute: false,
         willModifyAccess: false,
         action: request.action,
         mode: request.mode,
-        sql: request.sql,
+        sql: exactTeardownPlan?.sql ?? request.sql,
+        ...(exactTeardownPlan === undefined ? {} : { plan: exactTeardownPlan }),
       });
     }
 

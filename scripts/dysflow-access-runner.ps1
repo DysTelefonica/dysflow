@@ -1259,7 +1259,28 @@ function Invoke-WriteAction {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for teardown_fixture." }
       Assert-TableAllowed ([string]$Payload.tableName)
       $quotedTable = Format-AccessIdentifier -Name ([string]$Payload.tableName) -Label "table"
-      $sql = "DELETE FROM $quotedTable"
+      if ($null -eq $Payload.predicate) {
+        throw "predicate is required for teardown_fixture; unbounded DELETE is forbidden."
+      }
+      $predicateColumn = [string]$Payload.predicate.column
+      $quotedPredicateColumn = Format-AccessIdentifier -Name $predicateColumn -Label "predicate column"
+      $predicateMin = $Payload.predicate.min
+      $predicateMax = $Payload.predicate.max
+      $integerTypes = @([byte], [int16], [int32], [int64])
+      $fixtureTestIdMin = [int64]900000
+      $maxSafeInteger = [int64]9007199254740991
+      if ($null -eq $predicateMin -or -not ($integerTypes -contains $predicateMin.GetType()) -or [int64]$predicateMin -lt $fixtureTestIdMin -or [int64]$predicateMin -gt $maxSafeInteger) {
+        throw "teardown_fixture predicate min must be an integer at or above TEST_ID_BASE (900000)."
+      }
+      if ($null -eq $predicateMax -or -not ($integerTypes -contains $predicateMax.GetType()) -or [int64]$predicateMax -lt $fixtureTestIdMin -or [int64]$predicateMax -gt $maxSafeInteger) {
+        throw "teardown_fixture predicate max must be an integer at or above TEST_ID_BASE (900000)."
+      }
+      $rangeMin = [int64]$predicateMin
+      $rangeMax = [int64]$predicateMax
+      if ($rangeMin -gt $rangeMax) {
+        throw "teardown_fixture predicate range requires min to be less than or equal to max."
+      }
+      $sql = "DELETE FROM $quotedTable WHERE $quotedPredicateColumn BETWEEN $rangeMin AND $rangeMax"
       if ($dryRun) { return [ordered]@{ dryRun = $true; sql = $sql } }
       $Database.Execute($sql, 128)
       return [ordered]@{ dryRun = $false; sql = $sql; affectedRows = $Database.RecordsAffected }

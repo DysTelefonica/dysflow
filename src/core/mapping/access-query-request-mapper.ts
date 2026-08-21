@@ -1,4 +1,4 @@
-import type { AccessQueryRequest } from "../contracts/index.js";
+import type { AccessQueryRequest, FixtureTeardownPredicate } from "../contracts/index.js";
 import { isRecord, stringValue } from "../utils/index.js";
 
 /**
@@ -56,6 +56,18 @@ export function isValidAccessQueryAction(action: unknown): action is AccessQuery
 
 function paramsOf(input: unknown): Record<string, unknown> {
   return isRecord(input) ? input : {};
+}
+
+function fixtureTeardownPredicateValue(value: unknown): FixtureTeardownPredicate | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    typeof value.column !== "string" ||
+    typeof value.min !== "number" ||
+    typeof value.max !== "number"
+  ) {
+    return undefined;
+  }
+  return { column: value.column, min: value.min, max: value.max };
 }
 
 /**
@@ -334,6 +346,7 @@ export function buildWriteFixtureRequest(
     scriptPath: getStr(params, "scriptPath", ["path"]),
     definition: getStr(params, "definition", ["fields"]),
     rows: rowsValue(params.rows),
+    predicate: fixtureTeardownPredicateValue(params.predicate),
     dryRun: resolveIsDryRun(input),
     allowTables: stringArrayValue(params.allowTables) ?? singleStringArrayValue(params.allowTable),
     denyTables: stringArrayValue(params.denyTables) ?? singleStringArrayValue(params.denyTable),

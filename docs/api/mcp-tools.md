@@ -458,8 +458,9 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
   - Parameters: `tableName` (string, optional), `dryRun`, `apply`
 * **`seed_fixture`**: Populates mock rows in a table.
   - Parameters: `tableName` (string, optional), `rows` (array of objects, optional), `dryRun`, `apply`
-* **`teardown_fixture`**: Clears fixture rows from a table.
-  - Parameters: `tableName` (string, optional), `dryRun`, `apply`
+* **`teardown_fixture`**: Clears only fixture rows inside a validated numeric test-id range. Unbounded teardown is rejected before Access is opened for mutation, and every generated `DELETE` includes a `WHERE ... BETWEEN ... AND ...` clause.
+  - Parameters: `tableName` (string, required; `table` alias), `predicate` (required object: `column`, inclusive integer `min`, inclusive integer `max`; both bounds must be at or above `TEST_ID_BASE` 900000), `allowTables`/`denyTables` (optional), `dryRun`, `apply`
+  - Preview returns the exact bounded SQL under `sql` and the structured values under `plan`; apply repeats the same validation at the PowerShell runner boundary.
 
 ### 3. Database Schema & Links
 * **`list_tables`**: List tables in one selected database. Use `projectId` plus `target="frontend"` or `target="backend"`; `auto` is intentionally invalid because the operation has no `tableName` to drive lookup.
