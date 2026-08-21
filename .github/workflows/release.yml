@@ -188,16 +188,16 @@ jobs:
           run_install: false
 
       - uses: actions/setup-node@v5
-        # `cache: ''` explicitly DISABLES the post-run cache upload. The
-        # action saves a 52 MB tar of the workspace pnpm store on any
-        # detected lockfile (default behaviour), and on this home network
-        # the upload runs at <0.1 MB/s for ~17 min — enough to push the
-        # job into the timeout territory just for an upload that buys
-        # nothing on a self-hosted runner (the runner persists across
-        # jobs and keeps its own setup-pnpm store).
+        # The `cache:` key is omitted entirely to disable the post-run cache
+        # upload. `cache: ''` (empty string) does NOT disable caching; the
+        # action still packages the workspace pnpm store into a 52 MB tar
+        # and tries to upload it, which on this home network runs at
+        # <0.1 MB/s for ~17 min — enough to push the job into the timeout
+        # territory just for an upload that buys nothing on a self-hosted
+        # runner (the runner persists across jobs and keeps its own
+        # setup-pnpm store).
         with:
           node-version: 20
-          cache: ''
 
       - name: Install dependencies
         # pnpm/action-setup@v6 pins PNPM_HOME to its bundled pnpm install
