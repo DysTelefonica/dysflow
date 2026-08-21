@@ -97,12 +97,17 @@ Call `get_capabilities({})` first. It reports:
 - Effective defaults and canonical commit flags.
 - Six machine-readable `preferredAgentWorkflows`.
 
-Then use `schema({ "view": "compact" })` for catalog-wide discovery, or `describe_tool({ "name": "<tool>" })` for one tool's complete static contract.
+For a bounded bootstrap, use `get_capabilities({ "compact": true })`, then
+`schema({ "view": "index" })` to choose a tool.
+
+Use `describe_tool({ "name": "<tool>", "sections": ["parameters"] })` for
+one-tool details. Full defaults remain available for compatibility.
 
 Every MCP response, including this one, carries top-level `schemaVersion: "dysflow.result/v1"`.
 
 Consumers must defensively parse a stringified host-wrapper result before requiring that discriminator.
 * **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
+* **Progressive parameters**: `compact:true` (or `view:"compact"`) returns a bounded bootstrap projection. `include` selects large blocks (`tools`, `sharedBlockSupport`, `effectiveDryRunDefault`, `migrationNotes`, `preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`, `documentationBundle`, `projectConfig`, `worktreeCache`); `toolNames` filters per-tool maps without changing the full default.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
 * **Per-tool advertisement**: every `tools/list` entry carries standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) plus Dysflow-specific workflow metadata at `_meta["dysflow/workflow"]`. The namespaced value contains `phases[]`, `preferredFor[]`, and `status`; every advertised tool has at least one phase. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically. Clients may opt in to grouping by the namespaced metadata.
 
@@ -236,16 +241,20 @@ Read `.dysflow/project.json` and, optionally with `apply:true`, rewrite it in pl
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
 
 ### `schema`
-Return static tool contracts in one of two views. Read-only — never opens Access, never spawns PowerShell, never mutates state.
+Return static tool contracts in progressive views. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 
+- `index` — routing-only entries with optional `phase`, `status`, and `toolName` filters.
 - `compact` — low-context discovery across all 94 advertised tools.
 - `full` — complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts.
 
-Omitting `view` preserves the legacy full response. Both views are deterministic and support the same `toolName` filter.
+Omitting `view` preserves the legacy full response. All views are deterministic and support the same `toolName` filter; `index` additionally supports workflow `phase` and `status` filters.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
-  - `view` (`"compact" | "full"`, optional, default `"full"`): Select low-context discovery or the complete backward-compatible contract.
+  - `view` (`"index" | "compact" | "full"`, optional, default `"full"`): Select routing-only, low-context, or complete discovery.
+  - `phase` (`"bootstrap" | "sync" | "tests" | "sql" | "forms" | "recovery"`, optional): Filter routing views by canonical workflow phase.
+  - `status` (`"preferred" | "specialized" | "legacy"`, optional): Filter routing views by canonical workflow status.
+* **Index returns**: `{ projectId, tools: [{ name, purpose, access, phases, status, preferredFor, annotations }] }`.
 * **Compact returns**: `{ projectId, tools: [{ name, purpose, access, annotations, _meta, agentWorkflow, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
 * **Full returns**: `{ projectId, tools: [{ name, description, access, annotations, _meta, agentWorkflow, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
 * **Workflow classification**:
@@ -262,13 +271,19 @@ Omitting `view` preserves the legacy full response. Both views are deterministic
 ### `describe_tool`
 Preferred one-tool deep introspection view. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 
-It returns the same complete entry generated for `schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an alias of `parameters`.
+It returns the same complete entry generated for
+`schema({ "view": "full", "toolName": "<tool>" })`, plus `params` as an
+alias of `parameters`.
+
+Pass `sections` for a bounded response. Selected `parameters` are exposed once
+under `parameters` without the legacy `params` duplicate.
 
 Use it after compact discovery instead of fetching the complete tool catalog.
 * **Parameters**:
   - `name` (string): Tool name to describe (canonical param).
   - `toolName` (string, optional): Alias of `name` for symmetry with the `schema` filter.
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
+  - `sections` (array, optional): Any of `summary`, `parameters`, `returns`, `errors`, `references`, `workflow`, or `resultContract`. Omit for the full backward-compatible response.
 * **Returns**: the full single-tool contract — `{ name, description, access, annotations, _meta, agentWorkflow, inputSchema, parameters, params, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }`. Unknown tool → `TOOL_NOT_FOUND`; missing `name` → `MCP_INPUT_INVALID`.
 * **Result validation policy**: the stdio runtime validates every successful JSON payload against this executable `resultContract` before serialization. The active policy is reported by `get_capabilities.resultValidationPolicy` and defaults to `"enforce"`. A handler/contract mismatch fails closed with `RESULT_CONTRACT_VIOLATION`; the invalid payload is not returned or included in diagnostics. Typed tool errors continue to use the published `errorEnvelope`, and callable compatibility aliases project the canonical tool's payload contract.
 * **Consumer pattern**: obtain `describe_tool({ "name": "<tool>" })`, call the tool, then validate success against `resultContract.dataSchema` or failure against `resultContract.errorEnvelope.shape`. Do not maintain a second result-schema registry in the consumer.

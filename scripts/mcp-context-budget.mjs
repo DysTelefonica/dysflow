@@ -91,6 +91,14 @@ export async function measureContextBudget({
       name: "get_capabilities",
       arguments: { projectId: "context-budget" },
     });
+    const getCapabilitiesCompact = await client.request("tools/call", {
+      name: "get_capabilities",
+      arguments: {
+        projectId: "context-budget",
+        compact: true,
+        include: ["tools", "sharedBlockSupport", "effectiveDryRunDefault", "migrationNotes"],
+      },
+    });
     const schemaFull = await client.request("tools/call", {
       name: "schema",
       arguments: { projectId: "context-budget", view: "full" },
@@ -98,6 +106,10 @@ export async function measureContextBudget({
     const schemaCompact = await client.request("tools/call", {
       name: "schema",
       arguments: { projectId: "context-budget", view: "compact" },
+    });
+    const schemaIndex = await client.request("tools/call", {
+      name: "schema",
+      arguments: { projectId: "context-budget", view: "index", phase: "bootstrap" },
     });
 
     const descriptions = tools.map((tool) => ({
@@ -115,6 +127,7 @@ export async function measureContextBudget({
 
     const descriptionsByTool = [];
     const describeFrames = [];
+    const describeSummaryFrames = [];
     for (const tool of tools) {
       const frame = await client.request("tools/call", {
         name: "describe_tool",
@@ -125,18 +138,32 @@ export async function measureContextBudget({
         name: tool.name,
         logicalBytes: measureLogicalBytes(extractPayload(frame.parsed?.result)),
       });
+      describeSummaryFrames.push(
+        await client.request("tools/call", {
+          name: "describe_tool",
+          arguments: {
+            projectId: "context-budget",
+            toolName: tool.name,
+            sections: ["summary", "parameters"],
+          },
+        }),
+      );
     }
 
     const fullPayload = extractPayload(schemaFull.parsed?.result);
     const compactPayload = extractPayload(schemaCompact.parsed?.result);
+    const indexPayload = extractPayload(schemaIndex.parsed?.result);
     const measures = {
       toolsList: measureFrame(toolsList),
       getCapabilities: measureFrame(getCapabilities),
+      getCapabilitiesCompact: measureFrame(getCapabilitiesCompact),
       schemaFull: measureFrame(schemaFull),
       schemaCompact: measureFrame(schemaCompact),
+      schemaIndex: measureFrame(schemaIndex),
       describeTool: aggregateFrames(describeFrames),
+      describeToolSelected: aggregateFrames(describeSummaryFrames),
     };
-    const parity = buildParity(tools, fullPayload, describeFrames);
+    const parity = buildParity(tools, fullPayload, indexPayload, describeFrames);
 
     return {
       schemaVersion: 1,
@@ -154,6 +181,7 @@ export async function measureContextBudget({
         describeTool: summarizeContributors(descriptionsByTool),
         schemaFull: summarizeSchemaTools(fullPayload),
         schemaCompact: summarizeSchemaTools(compactPayload),
+        schemaIndex: summarizeSchemaTools(indexPayload),
       },
       parity,
       tokenizerEstimates: null,
@@ -318,7 +346,7 @@ function stripEnvelopeMetadata(structured) {
   return payload;
 }
 
-function buildParity(tools, fullPayload, describeFrames) {
+function buildParity(tools, fullPayload, indexPayload, describeFrames) {
   const listNames = tools.map((tool) => tool.name).sort();
   const schemaNames = (Array.isArray(fullPayload?.tools) ? fullPayload.tools : [])
     .map((tool) => tool.name)
@@ -333,6 +361,7 @@ function buildParity(tools, fullPayload, describeFrames) {
     toolsListCount: listNames.length,
     schemaFullCount: schemaNames.length,
     describeToolCount: describedNames.length,
+    schemaIndexCount: Array.isArray(indexPayload?.tools) ? indexPayload.tools.length : 0,
   };
 }
 

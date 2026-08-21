@@ -42,12 +42,16 @@ import {
   supportsSharedOutputMode,
 } from "../../shared/validation/schema-blocks.js";
 import {
+  AGENT_WORKFLOW_PHASES,
   type AgentWorkflowMetadata,
+  type AgentWorkflowPhase,
+  type AgentWorkflowStatus,
   buildAgentWorkflowMetadata,
   buildToolAdvertisementMetadata,
   type ToolAdvertisementMetadata,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
+import { CAPABILITIES_INPUT_SCHEMA } from "./capabilities-discovery.js";
 import { executableResultContractForTool } from "./contracts/executable-result-contract-registry.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
 import {
@@ -95,13 +99,26 @@ import { withWorktreeCwdSchema } from "./worktree-cwd.js";
  * implementation returns the global catalog regardless of the supplied
  * `projectId`.
  */
-export type SchemaView = "compact" | "full";
+export type SchemaView = "compact" | "full" | "index";
 
 export type SchemaInput = {
   projectId?: string;
   toolName?: string;
   view?: SchemaView;
+  phase?: AgentWorkflowPhase;
+  status?: AgentWorkflowStatus;
 };
+
+export const DESCRIBE_TOOL_SECTIONS = [
+  "summary",
+  "parameters",
+  "returns",
+  "errors",
+  "references",
+  "workflow",
+  "resultContract",
+] as const;
+export type DescribeToolSection = (typeof DESCRIBE_TOOL_SECTIONS)[number];
 
 /**
  * Single parameter descriptor exposed under `ToolSchema.parameters`.
@@ -251,7 +268,26 @@ export type CompactToolSchemaCatalog = {
   tools: CompactToolSchema[];
 };
 
-export type ToolSchemaCatalogView = ToolSchemaCatalog | CompactToolSchemaCatalog;
+/** Routing-only catalog entry for progressive bootstrap discovery. */
+export type SchemaIndexTool = {
+  name: string;
+  purpose: string;
+  access: McpToolAccess;
+  phases: AgentWorkflowPhase[];
+  status: AgentWorkflowStatus;
+  preferredFor: string[];
+  annotations: ToolAdvertisementMetadata["annotations"];
+};
+
+export type SchemaIndexCatalog = {
+  projectId: string | null;
+  tools: SchemaIndexTool[];
+};
+
+export type ToolSchemaCatalogView =
+  | ToolSchemaCatalog
+  | CompactToolSchemaCatalog
+  | SchemaIndexCatalog;
 
 /**
  * Top-level catalog shape. The `projectId` field echoes the input so a
@@ -410,12 +446,22 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
       description:
         "Optional tool name to filter the catalog to a single entry. Omit for every advertised tool.",
     },
+    phase: {
+      type: "string",
+      enum: [...AGENT_WORKFLOW_PHASES],
+      description: "Optional routing filter for compact or index discovery views.",
+    },
+    status: {
+      type: "string",
+      enum: ["preferred", "specialized", "legacy"],
+      description: "Optional workflow-status filter for compact or index discovery views.",
+    },
     view: {
       type: "string",
-      enum: ["compact", "full"],
+      enum: ["index", "compact", "full"],
       default: "full",
       description:
-        "Catalog detail level. Use compact for low-context discovery and full for complete JSON Schema, aliases, errors, use cases, and references. Defaults to full for backward compatibility.",
+        "Catalog detail level. Use index for routing-only discovery, compact for low-context discovery, and full for complete JSON Schema. Defaults to full for backward compatibility.",
     },
   },
 } as const;
@@ -440,6 +486,12 @@ export const DESCRIBE_TOOL_INPUT_SCHEMA = {
     // consumer-facing description matches every other tool that uses
     // this atom.
     ...PROJECT_IDENTITY_BLOCK,
+    sections: {
+      type: "array",
+      items: { type: "string", enum: [...DESCRIBE_TOOL_SECTIONS] },
+      description:
+        "Optional sections for a bounded deep view. Omit for the legacy full response; selected sections expose parameters once under `parameters` (without the compatibility `params` alias).",
+    },
   },
   // Issue #1074 — declarative alias-group requirement. The handler
   // historically rejected missing name/toolName with MCP_INPUT_INVALID;
@@ -464,7 +516,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   query_execute: QUERY_EXECUTE_SCHEMA,
   doctor: DOCTOR_SCHEMA,
   access_force_cleanup_orphaned: ORPHAN_CLEANUP_SCHEMA,
-  get_capabilities: NO_INPUT_SCHEMA,
+  get_capabilities: CAPABILITIES_INPUT_SCHEMA,
   list_procedures: LIST_PROCEDURES_SCHEMA,
   get_procedure: GET_PROCEDURE_SCHEMA,
   find_references: FIND_REFERENCES_SCHEMA,
@@ -1216,19 +1268,46 @@ function buildFullToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
       ? advertised
       : advertised.filter((name) => name === filter);
   const sorted = [...selected].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const tools = sorted.map(buildSchemaForTool);
+  const filtered = tools.filter((tool) => {
+    const workflow = tool.agentWorkflow;
+    return (
+      (input.phase === undefined || workflow.workflowPhases.includes(input.phase)) &&
+      (input.status === undefined || workflow.status === input.status)
+    );
+  });
   return {
     projectId: input.projectId ?? null,
-    tools: sorted.map(buildSchemaForTool),
+    tools: filtered,
+  };
+}
+
+function indexSchemaForTool(tool: ToolSchema): SchemaIndexTool {
+  return {
+    name: tool.name,
+    purpose: tool.description,
+    access: tool.access,
+    phases: [...tool.agentWorkflow.workflowPhases],
+    status: tool.agentWorkflow.status,
+    preferredFor: [...tool.agentWorkflow.preferFor],
+    annotations: tool.annotations,
   };
 }
 
 export function buildToolSchemaCatalog(
   input: SchemaInput & { view: "compact" },
 ): CompactToolSchemaCatalog;
+export function buildToolSchemaCatalog(input: SchemaInput & { view: "index" }): SchemaIndexCatalog;
 export function buildToolSchemaCatalog(input: SchemaInput & { view?: "full" }): ToolSchemaCatalog;
 export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView;
 export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView {
   const full = buildFullToolSchemaCatalog(input);
+  if (input.view === "index") {
+    return {
+      projectId: full.projectId,
+      tools: full.tools.map(indexSchemaForTool),
+    };
+  }
   if (input.view !== "compact") return full;
   return {
     projectId: full.projectId,
@@ -1259,7 +1338,7 @@ export function createSchemaTool(): DysflowMcpTool {
     name: "schema",
     resultContract: schemaResultContract,
     description:
-      "Return static contracts for the consumer's dysflow installation. Call get_capabilities first for live adapter and write-gate state. Use { view: 'compact' } for low-context discovery across all tools, { view: 'full' } for complete JSON Schema, aliases, errors, use cases, and references, and { toolName: '<name>' } to filter either view. Omitted view defaults to full for backward compatibility. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
+      "Return static contracts for the consumer's dysflow installation. Call get_capabilities first for live adapter and write-gate state. Use { view: 'index' } for routing-only discovery with optional phase/status/name filters, { view: 'compact' } for low-context discovery, and { view: 'full' } for complete JSON Schema. Omitted view defaults to full for backward compatibility. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.schema.summary,
     inputSchema: SCHEMA_TOOL_INPUT_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
@@ -1273,8 +1352,20 @@ export function createSchemaTool(): DysflowMcpTool {
         typeof params.toolName === "string" && params.toolName.length > 0
           ? params.toolName
           : undefined;
-      const view: SchemaView = params.view === "compact" ? "compact" : "full";
-      const catalog = buildToolSchemaCatalog({ projectId, toolName, view });
+      const view: SchemaView =
+        params.view === "index" ? "index" : params.view === "compact" ? "compact" : "full";
+      const phase =
+        typeof params.phase === "string" &&
+        AGENT_WORKFLOW_PHASES.includes(params.phase as AgentWorkflowPhase)
+          ? (params.phase as AgentWorkflowPhase)
+          : undefined;
+      const status =
+        params.status === "preferred" ||
+        params.status === "specialized" ||
+        params.status === "legacy"
+          ? params.status
+          : undefined;
+      const catalog = buildToolSchemaCatalog({ projectId, toolName, view, phase, status });
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(catalog) }];
       return { content, isError: false, ok: true };
     },
@@ -1327,14 +1418,34 @@ export function createDescribeToolTool(): DysflowMcpTool {
           error: { code: "TOOL_NOT_FOUND", message },
         };
       }
-      // `params` mirrors `parameters` for consumers following the issue's
-      // sketch (`describe_tool(...).params`); `parameters` stays the
-      // catalog-consistent field name.
-      const payload = {
-        ...entry,
+      const rawSections = Array.isArray(params.sections)
+        ? params.sections.filter((value): value is DescribeToolSection =>
+            DESCRIBE_TOOL_SECTIONS.includes(value as DescribeToolSection),
+          )
+        : undefined;
+      const sections = rawSections === undefined ? undefined : new Set(rawSections);
+      const payload: Record<string, unknown> = {
+        name: entry.name,
         description: `${entry.name}: ${entry.description}`,
-        params: entry.parameters,
       };
+      if (sections === undefined) {
+        Object.assign(payload, entry, { params: entry.parameters });
+        payload.description = `${entry.name}: ${entry.description}`;
+      } else {
+        if (sections.has("parameters")) payload.parameters = entry.parameters;
+        if (sections.has("returns")) payload.returns = entry.returns;
+        if (sections.has("errors")) payload.errorCodes = entry.errorCodes;
+        if (sections.has("references")) payload.crossReferences = entry.crossReferences;
+        if (sections.has("workflow")) {
+          payload.agentWorkflow = entry.agentWorkflow;
+          payload.useCases = entry.useCases;
+        }
+        if (sections.has("resultContract")) payload.resultContract = entry.resultContract;
+        if (sections.has("summary")) {
+          payload.access = entry.access;
+          payload.safeByDefault = entry.safeByDefault;
+        }
+      }
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(payload) }];
       return { content, isError: false, ok: true };
     },

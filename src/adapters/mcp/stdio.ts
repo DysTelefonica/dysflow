@@ -72,6 +72,10 @@ import { unknownToolResult } from "./unknown-tool-result.js";
 const SERVER_VERSION = readPackageVersionNear(import.meta.url);
 const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 
+/** Short bootstrap guidance returned in the MCP initialize result. */
+export const INITIALIZE_INSTRUCTIONS =
+  "Bootstrap: call get_capabilities({ compact: true }), then schema({ view: 'index' }) to choose a tool and describe_tool({ name: '<tool>', sections: ['parameters'] }) for one-tool details.";
+
 // MCP protocol version this server targets.
 //
 // Protocol negotiation is owned by the official SDK (McpServer +
@@ -277,7 +281,10 @@ export async function startWithSdkServer(
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const hiddenRegistry = buildHiddenToolRegistry(tools);
 
-  const server = new McpServer({ name: "dysflow", version: SERVER_VERSION });
+  const server = new McpServer(
+    { name: "dysflow", version: SERVER_VERSION },
+    { instructions: INITIALIZE_INSTRUCTIONS },
+  );
 
   // Register capabilities and handlers directly on the underlying Server to avoid
   // overload ambiguity from passing raw JSON Schema objects to server.tool().

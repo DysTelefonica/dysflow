@@ -20,6 +20,12 @@ import {
   type PreferredAgentWorkflow,
   type ToolAdvertisementMetadata,
 } from "./agent-workflow-registry.js";
+import {
+  CAPABILITIES_INPUT_SCHEMA,
+  CAPABILITY_BLOCK_NAMES,
+  type CapabilityBlockName,
+  type GetCapabilitiesInput,
+} from "./capabilities-discovery.js";
 import { getCapabilitiesResultContract } from "./contracts/bootstrap-result-contracts.js";
 import {
   type ResultValidationPolicy,
@@ -35,8 +41,6 @@ import {
 import type { DysflowMcpTool, McpWriteAccessResolver } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
 import { inputSchemaForTool } from "./schema-tool.js";
-import { NO_INPUT_SCHEMA } from "./schemas/dysflow-schemas.js";
-import { WORKTREE_CWD_SCHEMA_PROP } from "./worktree-cwd.js";
 
 export const ESCAPE_HATCH_MIGRATION_NOTES = {
   dryRun: {
@@ -237,6 +241,8 @@ export type McpCapabilitySnapshot = {
   >;
 };
 
+export type CompactMcpCapabilitySnapshot = Record<string, unknown>;
+
 export type GetCapabilitiesAllInput = {
   writesEnabled: boolean;
   writeAccessResolver: McpWriteAccessResolver | undefined;
@@ -270,6 +276,86 @@ export type GetCapabilitiesAllInput = {
    */
   documentationBundleResolver?: () => DocumentationBundleStatus;
 };
+
+export function projectCapabilitiesSnapshot(
+  snapshot: McpCapabilitySnapshot,
+  input: GetCapabilitiesInput = {},
+): McpCapabilitySnapshot | CompactMcpCapabilitySnapshot {
+  const compact = input.compact === true || input.view === "compact";
+  const selectedNames = input.toolNames === undefined ? undefined : new Set(input.toolNames);
+  const filterMap = <T>(map: Readonly<Record<string, T>>): Record<string, T> => {
+    if (selectedNames === undefined) return { ...map };
+    return Object.fromEntries(
+      Object.entries(map).filter(([name]) => selectedNames.has(name)),
+    ) as Record<string, T>;
+  };
+  const toolEntries =
+    selectedNames === undefined
+      ? Object.entries(snapshot.tools)
+      : Object.entries(snapshot.tools).filter(([name]) => selectedNames.has(name));
+  const compactTools = Object.fromEntries(
+    toolEntries.map(([name, tool]) => [
+      name,
+      {
+        name,
+        access: MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS]?.access ?? "read-only",
+        title: tool.annotations.title,
+        commitFlag: tool.commitFlag,
+        canonicalCommitFlag: tool.canonicalCommitFlag,
+        noWriteAlias: tool.noWriteAlias,
+        defaultBehavior: tool.defaultBehavior,
+        phases: tool._meta["dysflow/workflow"].phases,
+        status: tool._meta["dysflow/workflow"].status,
+        preferredFor: tool._meta["dysflow/workflow"].preferredFor,
+      },
+    ]),
+  );
+  if (!compact && input.include === undefined && selectedNames === undefined) return snapshot;
+
+  const include = new Set<CapabilityBlockName>(
+    input.include ??
+      (compact
+        ? ["tools", "sharedBlockSupport", "effectiveDryRunDefault", "migrationNotes"]
+        : [...CAPABILITY_BLOCK_NAMES]),
+  );
+  const base: Record<string, unknown> = compact
+    ? {
+        adapterVersion: snapshot.adapterVersion,
+        surface: snapshot.surface,
+        writesProcess: snapshot.writesProcess,
+        writesProject: snapshot.writesProject,
+        projectIdResolution: snapshot.projectIdResolution,
+        dryRunDefault: snapshot.dryRunDefault,
+        writeExecutionPolicy: snapshot.writeExecutionPolicy,
+        resultValidationPolicy: snapshot.resultValidationPolicy,
+        toolsVisible: snapshot.toolsVisible,
+      }
+    : { ...snapshot };
+
+  if (!compact) {
+    for (const block of CAPABILITY_BLOCK_NAMES) {
+      if (!include.has(block)) delete base[block];
+    }
+  }
+
+  if (include.has("tools")) base.tools = compact ? compactTools : Object.fromEntries(toolEntries);
+  if (include.has("sharedBlockSupport"))
+    base.sharedBlockSupport = filterMap(snapshot.sharedBlockSupport);
+  if (include.has("effectiveDryRunDefault"))
+    base.effectiveDryRunDefault = filterMap(snapshot.effectiveDryRunDefault);
+  if (include.has("migrationNotes")) base.migrationNotes = snapshot.migrationNotes;
+  if (include.has("preferredAgentWorkflows"))
+    base.preferredAgentWorkflows = snapshot.preferredAgentWorkflows;
+  if (include.has("writeClassToolsPermitted"))
+    base.writeClassToolsPermitted = snapshot.writeClassToolsPermitted;
+  if (include.has("allowedProcedures")) base.allowedProcedures = snapshot.allowedProcedures;
+  if (include.has("documentationBundle")) base.documentationBundle = snapshot.documentationBundle;
+  if (include.has("projectConfig") && snapshot.projectConfig !== undefined)
+    base.projectConfig = snapshot.projectConfig;
+  if (include.has("worktreeCache") && snapshot.worktreeCache !== undefined)
+    base.worktreeCache = snapshot.worktreeCache;
+  return base;
+}
 
 // ─── Pure aggregate function ──────────────────────────────────────────────────
 
@@ -519,17 +605,30 @@ export function createGetCapabilitiesTool(opts: {
   return {
     name: "get_capabilities",
     resultContract: getCapabilitiesResultContract,
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first, then follow preferredAgentWorkflows or use schema({ view: 'compact' }) for low-context catalog discovery and describe_tool({ name: '<tool>' }) for the preferred one-tool deep view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
-    inputSchema: {
-      ...NO_INPUT_SCHEMA,
-      properties: { cwd: WORKTREE_CWD_SCHEMA_PROP },
-    },
+    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first; use { compact: true } or { view: 'compact' } for a bounded bootstrap view, then schema({ view: 'index' }) or schema({ view: 'compact' }) to choose a route and describe_tool({ name: '<tool>', sections: ['parameters'] }) for selective discovery. Omitted view is full for backward compatibility. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    inputSchema: CAPABILITIES_INPUT_SCHEMA,
     handler: async (input): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const params =
         typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
       const cwd = typeof params.cwd === "string" ? params.cwd : undefined;
       const projectConfig = await opts.projectConfigResolver?.(input, cwd);
-      const result: OperationResult<McpCapabilitySnapshot> = successResult(
+      const requestParams =
+        typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+      const include = Array.isArray(requestParams.include)
+        ? requestParams.include.filter((value): value is CapabilityBlockName =>
+            CAPABILITY_BLOCK_NAMES.includes(value as CapabilityBlockName),
+          )
+        : undefined;
+      const toolNames = Array.isArray(requestParams.toolNames)
+        ? requestParams.toolNames.filter((value): value is string => typeof value === "string")
+        : undefined;
+      const view =
+        requestParams.view === "compact"
+          ? "compact"
+          : requestParams.view === "full"
+            ? "full"
+            : undefined;
+      const projected = projectCapabilitiesSnapshot(
         projectConfig === undefined
           ? snapshot
           : {
@@ -538,7 +637,14 @@ export function createGetCapabilitiesTool(opts: {
               worktreeCache: opts.worktreeCacheTelemetry?.(),
               projectIdResolution: projectIdResolutionFromConfig(projectConfig),
             },
+        {
+          compact: requestParams.compact === true,
+          view,
+          include,
+          toolNames,
+        },
       );
+      const result: OperationResult<typeof projected> = successResult(projected);
       return translateCoreResultToMcpContent(result);
     },
   };

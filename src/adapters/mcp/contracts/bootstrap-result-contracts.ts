@@ -6,36 +6,61 @@ import { defineResultContract } from "./result-contract.js";
 const unknownRecord = z.record(z.string(), z.unknown());
 const registryHealth = unknownRecord;
 
+const fullCapabilitiesSchema = z
+  .object({
+    adapterVersion: z.string(),
+    surface: z.enum(["stdio", "http"]),
+    writesProcess: z
+      .object({ enabled: z.boolean(), resolverConfigured: z.boolean() })
+      .passthrough(),
+    writesProject: z.object({ allowWrites: z.boolean() }).passthrough(),
+    projectIdResolution: z.object({
+      projectId: z.string().nullable(),
+      outcome: z.enum(["resolved", "unresolved", "ambiguous"]),
+    }),
+    projectConfig: unknownRecord.optional(),
+    worktreeCache: unknownRecord.optional(),
+    allowedProcedures: z.array(z.string()).optional(),
+    dryRunDefault: z.boolean(),
+    writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
+    resultValidationPolicy: z.enum(["off", "report", "enforce"]),
+    effectiveDryRunDefault: z.record(z.string(), z.boolean()),
+    migrationNotes: unknownRecord,
+    toolsVisible: z.number().int().nonnegative(),
+    preferredAgentWorkflows: z.array(unknownRecord),
+    writeClassToolsPermitted: z.array(z.string()),
+    humanCompilePending: z.boolean(),
+    documentationBundle: unknownRecord,
+    tools: z.record(z.string(), unknownRecord),
+  })
+  .passthrough();
+
+const compactCapabilitiesSchema = z
+  .object({
+    adapterVersion: z.string(),
+    surface: z.enum(["stdio", "http"]),
+    writesProcess: z
+      .object({ enabled: z.boolean(), resolverConfigured: z.boolean() })
+      .passthrough(),
+    writesProject: z.object({ allowWrites: z.boolean() }).passthrough(),
+    projectIdResolution: z.object({
+      projectId: z.string().nullable(),
+      outcome: z.enum(["resolved", "unresolved", "ambiguous"]),
+    }),
+    dryRunDefault: z.boolean(),
+    writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
+    resultValidationPolicy: z.enum(["off", "report", "enforce"]),
+    toolsVisible: z.number().int().nonnegative(),
+    tools: z.record(z.string(), unknownRecord).optional(),
+    sharedBlockSupport: z.record(z.string(), unknownRecord).optional(),
+    effectiveDryRunDefault: z.record(z.string(), z.boolean()).optional(),
+    migrationNotes: unknownRecord.optional(),
+  })
+  .passthrough();
+
 export const getCapabilitiesResultContract = defineResultContract({
   description: "Live adapter identity, project resolution, write gates, tools and workflows.",
-  schema: z
-    .object({
-      adapterVersion: z.string(),
-      surface: z.enum(["stdio", "http"]),
-      writesProcess: z
-        .object({ enabled: z.boolean(), resolverConfigured: z.boolean() })
-        .passthrough(),
-      writesProject: z.object({ allowWrites: z.boolean() }).passthrough(),
-      projectIdResolution: z.object({
-        projectId: z.string().nullable(),
-        outcome: z.enum(["resolved", "unresolved", "ambiguous"]),
-      }),
-      projectConfig: unknownRecord.optional(),
-      worktreeCache: unknownRecord.optional(),
-      allowedProcedures: z.array(z.string()).optional(),
-      dryRunDefault: z.boolean(),
-      writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
-      resultValidationPolicy: z.enum(["off", "report", "enforce"]),
-      effectiveDryRunDefault: z.record(z.string(), z.boolean()),
-      migrationNotes: unknownRecord,
-      toolsVisible: z.number().int().nonnegative(),
-      preferredAgentWorkflows: z.array(unknownRecord),
-      writeClassToolsPermitted: z.array(z.string()),
-      humanCompilePending: z.boolean(),
-      documentationBundle: unknownRecord,
-      tools: z.record(z.string(), unknownRecord),
-    })
-    .passthrough(),
+  schema: z.union([fullCapabilitiesSchema, compactCapabilitiesSchema]),
 });
 
 export const schemaResultContract = defineResultContract({
@@ -45,22 +70,28 @@ export const schemaResultContract = defineResultContract({
     .passthrough(),
 });
 
+const fullDescribeToolSchema = z
+  .object({
+    name: z.string(),
+    description: z.string(),
+    inputSchema: unknownRecord,
+    parameters: z.record(z.string(), unknownRecord),
+    params: z.record(z.string(), unknownRecord),
+    returns: unknownRecord,
+    resultContract: unknownRecord,
+    errorCodes: z.array(unknownRecord),
+    useCases: z.array(z.string()),
+    crossReferences: z.array(z.string()),
+  })
+  .passthrough();
+
+const selectedDescribeToolSchema = z
+  .object({ name: z.string(), description: z.string() })
+  .passthrough();
+
 export const describeToolResultContract = defineResultContract({
-  description: "One canonical tool's complete introspection projection.",
-  schema: z
-    .object({
-      name: z.string(),
-      description: z.string(),
-      inputSchema: unknownRecord,
-      parameters: z.record(z.string(), unknownRecord),
-      params: z.record(z.string(), unknownRecord),
-      returns: unknownRecord,
-      resultContract: unknownRecord,
-      errorCodes: z.array(unknownRecord),
-      useCases: z.array(z.string()),
-      crossReferences: z.array(z.string()),
-    })
-    .passthrough(),
+  description: "One canonical tool's complete or selected introspection projection.",
+  schema: z.union([fullDescribeToolSchema, selectedDescribeToolSchema]),
 });
 
 export const resolveProjectResultContract = defineResultContract({
