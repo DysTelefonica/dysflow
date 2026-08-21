@@ -14,11 +14,16 @@ CLI / MCP stdio / HTTP
 
 `src/core/**` MUST NOT import MCP or HTTP adapters. Core returns protocol-neutral `OperationResult` values with typed errors, diagnostics, data, and duration. Adapters translate that result at the boundary: MCP returns text content blocks, the HTTP adapter returns JSON/status codes, and the CLI prints human-readable summaries.
 
+Long-running Access workflows follow the same inward dependency rule. For example,
+[`relink_directory`](./relink-directory-orchestration.md) keeps traversal, planning, sequencing,
+and partial-failure policy in core while PowerShell implements filesystem and DAO primitives.
+
 ## Adapter-to-adapter boundary
 
 Adapters MUST NOT import from sibling adapters for shared request validation, schema atoms, or protocol-neutral helpers. Use `src/shared/**` for protocol-neutral shared kernels, or move domain behavior into `src/core/**` when it is part of the product model.
 
-The shared validation kernel lives in `src/shared/validation/**` so the HTTP and MCP adapters can reuse the same request schemas and `validateInput()` behavior without a lateral HTTP -> MCP or MCP -> HTTP dependency.
+The shared validation kernel lives in `src/shared/validation/**`. HTTP and MCP adapters reuse its
+request schemas and `validateInput()` behavior without a lateral dependency.
 
 ## MCP stdio adapter
 

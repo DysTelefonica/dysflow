@@ -227,6 +227,7 @@ export type RelinkDirectoryLinkResult = {
   cycleDetected?: boolean;
   chainHops?: number;
   ambiguous?: boolean;
+  reason?: string;
 };
 
 export type RelinkDirectoryFileResult = {

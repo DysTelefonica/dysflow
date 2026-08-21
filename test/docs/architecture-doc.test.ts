@@ -9,5 +9,6 @@ describe("core and adapters architecture doc", () => {
     expect(content).toContain("`src/core/**` MUST NOT import MCP or HTTP adapters");
     expect(content).toContain("`<workflow-repo>/skills/dysflow`");
     expect(content).toContain("Compatibility reference");
+    expect(content).toContain("./relink-directory-orchestration.md");
   });
 });
