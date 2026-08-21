@@ -174,7 +174,13 @@ describe("release CI receipt", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("wires the four optimizations and weekly drift check without weakening release guards", async () => {
+  it("wires the post-v2.37.5 release guards without the dropped Windows release-validation job", async () => {
+    // Post v2.37.5 (commit 15ba5380) the release-validation job was dropped.
+    // The verify-ci-receipt.mjs / EXPECTED_RELEASE_SHA / receipt.outputs.decision
+    // skip-path it implemented is no longer present in release.yml. The remaining
+    // release-time guards this test pins are the artifact build/extract chain,
+    // the Ed25519 signature over SHA256SUMS, the tag-vs-release-name check, and
+    // the weekly CI drift cron that re-exercises this very suite.
     const [ci, release, weekly] = await Promise.all([
       readFile(".github/workflows/ci.yml", "utf8"),
       readFile(".github/workflows/release.yml", "utf8"),
@@ -190,10 +196,10 @@ describe("release CI receipt", () => {
     expect(ci).toMatch(
       /name: Audit dependencies[\s\S]*?if: github\.event_name == 'push'[\s\S]*?AUDIT_UNAVAILABLE_POLICY: fail/,
     );
-    expect(release).toContain("verify-ci-receipt.mjs");
-    expect(release).toContain("EXPECTED_RELEASE_SHA");
+    expect(release).not.toContain("verify-ci-receipt.mjs");
+    expect(release).not.toContain("EXPECTED_RELEASE_SHA");
+    expect(release).not.toContain("steps.receipt.outputs");
     expect(release).toContain("git rev-parse HEAD");
-    expect(release).toContain("steps.receipt.outputs.decision != 'skip'");
     expect(release).toContain("actions/upload-artifact@v4");
     expect(release).toContain("actions/download-artifact@v4");
     expect(release).toContain("EXPECTED_DIST_SHA256");

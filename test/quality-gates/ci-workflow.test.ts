@@ -284,23 +284,23 @@ describe("repository quality gates", () => {
     );
   });
 
-  it("uses Windows for release validation and Linux only for platform-neutral packaging", async () => {
-    // release-validation stays on `windows-latest` (MS Access receipt verification);
-    // the e2e-validation gate (#1438) runs on a self-hosted Windows runner with
-    // real Access pre-installed (`runs-on: dysflow-e2e`); the packaging jobs
-    // (build, release) run on `ubuntu-latest`. This preserves the platform-neutral
-    // invariant: Linux for packaging, Windows for the MS-Access-dependent
-    // release-validation receipt check and the full E2E battery.
+  it("uses Linux for packaging and the self-hosted Windows runner for the full E2E battery", async () => {
+    // Post v2.37.5 (commit 15ba5380) the release pipeline dropped the Windows
+    // `release-validation` job (CI-receipt check + duplicate lint/test) — it was
+    // redundant with the E2E battery and the source of multi-hour CI wall time
+    // on past releases. The remaining windows-bound gate is `e2e-validation`,
+    // which runs on a self-hosted `dysflow-e2e` runner with Microsoft Access
+    // pre-installed. The packaging jobs (`build`, `release`) run on
+    // `ubuntu-latest`. This preserves the platform-neutral invariant: Linux for
+    // packaging, Windows for the MS-Access-dependent E2E battery.
     const workflow = await readText(".github/workflows/release.yml");
 
-    expect(workflow).toMatch(
-      /release-validation:[\s\S]*?name: Windows release validation[\s\S]*?runs-on: windows-latest/,
-    );
+    expect(workflow).not.toMatch(/^  release-validation:$/m);
     expect(workflow).toMatch(
       /e2e-validation:[\s\S]*?name: E2E validation[\s\S]*?runs-on: dysflow-e2e/,
     );
     expect(workflow).toMatch(
-      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, release-validation, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
+      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
     );
   });
 
