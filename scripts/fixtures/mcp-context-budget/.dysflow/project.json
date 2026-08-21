@@ -1,0 +1,6 @@
+{
+  "projectId": "context-budget",
+  "capabilities": {
+    "allowWrites": false
+  }
+}
