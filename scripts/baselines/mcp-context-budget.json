@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "runtime": {
     "version": "2.37.5",
-    "commit": "bce19cc9d98f36c75d3865bd344b9c86498aa1a5",
+    "commit": "87c1621af8fba91705991a35ccd597b829fd71ab",
     "runtimePath": "dist/cli/index.js"
   },
   "toolCount": 94,
@@ -12,20 +12,20 @@
       "wireBytes": 309249
     },
     "getCapabilities": {
-      "logicalBytes": 62754,
-      "wireBytes": 201703
+      "logicalBytes": 62738,
+      "wireBytes": 63565
     },
     "schemaFull": {
       "logicalBytes": 780365,
-      "wireBytes": 2497004
+      "wireBytes": 780817
     },
     "schemaCompact": {
       "logicalBytes": 119108,
-      "wireBytes": 382209
+      "wireBytes": 119560
     },
     "describeTool": {
       "logicalBytes": 1022684,
-      "wireBytes": 3290232
+      "wireBytes": 2912575
     }
   },
   "contributors": {
@@ -356,7 +356,7 @@
   "baseline": {
     "generatedFrom": {
       "version": "2.37.5",
-      "commit": "bce19cc9d98f36c75d3865bd344b9c86498aa1a5",
+      "commit": "87c1621af8fba91705991a35ccd597b829fd71ab",
       "runtimePath": "dist/cli/index.js"
     }
   }
