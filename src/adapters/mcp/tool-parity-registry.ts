@@ -331,7 +331,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   seed_fixture:
     "Insert fixture rows into a table for testing. Write-gated; dryRun/apply and allow/deny table guards apply.",
   teardown_fixture:
-    "Remove fixture rows/data from a table. Write-gated; dryRun/apply and allow/deny table guards apply.",
+    "Remove fixture rows only within a required structured numeric test-id range predicate. Unbounded DELETE is rejected before Access mutation. Write-gated; dryRun returns the exact bounded SQL plan, and allow/deny table guards apply independently.",
   link_tables:
     "Link tables from backendPath into the frontend. Write-gated; dryRun:true plans without writing. NOTE: when backendPassword is set, Access stores the credential inside the linked-table Connect string in the .accdb.",
   relink_tables:

@@ -294,7 +294,11 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "teardown_fixture")
-        ?.handler({ tableName: "People", apply: true }),
+        ?.handler({
+          tableName: "People",
+          predicate: { column: "TestId", min: 900_000, max: 900_010 },
+          apply: true,
+        }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -362,7 +366,12 @@ describe("Dysflow MCP tool parity inventory", () => {
         denyTables: undefined,
       },
       expect.objectContaining({ action: "run_script", scriptPath: "fixtures.sql", dryRun: false }),
-      expect.objectContaining({ action: "teardown_fixture", tableName: "People", dryRun: false }),
+      expect.objectContaining({
+        action: "teardown_fixture",
+        tableName: "People",
+        predicate: { column: "TestId", min: 900_000, max: 900_010 },
+        dryRun: false,
+      }),
     ]);
   });
 
@@ -430,6 +439,7 @@ describe("Dysflow MCP tool parity inventory", () => {
         accessPath: "C:/frontend.accdb",
         sourcePath: "C:/teardown-target.accdb",
         tableName: "ZZZ_Target",
+        predicate: { column: "TestId", min: 900_000, max: 900_010 },
         apply: true,
       });
 

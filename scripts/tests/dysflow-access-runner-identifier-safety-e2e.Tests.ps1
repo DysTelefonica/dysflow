@@ -220,13 +220,64 @@ Describe "Issue #573 — integrated SQL interpolation sites reject malicious ide
             $script:FakeDatabase.SqlCalls[0] | Should -Be "DROP TABLE [TbDrop]"
         }
 
-        It "teardown_fixture accepts a valid table name and emits DELETE FROM [Name]" {
+        It "teardown_fixture rejects a missing predicate before Execute" {
+            { Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
+                    tableName = "TbTear"
+                    dryRun    = $false
+                })
+            } | Should -Throw -ExpectedMessage "*predicate*required*"
+            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        }
+
+        It "teardown_fixture rejects an invalid or reversed range before Execute" {
+            { Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
+                    tableName = "TbTear"
+                    predicate = [PSCustomObject]@{ column = "TestId"; min = 900010; max = 900000 }
+                    dryRun    = $false
+                })
+            } | Should -Throw -ExpectedMessage "*range*"
+            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        }
+
+        It "teardown_fixture rejects IDs below TEST_ID_BASE before Execute" {
+            { Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
+                    tableName = "TbTear"
+                    predicate = [PSCustomObject]@{ column = "TestId"; min = 0; max = 900010 }
+                    dryRun    = $false
+                })
+            } | Should -Throw -ExpectedMessage "*TEST_ID_BASE*900000*"
+            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        }
+
+        It "teardown_fixture keeps denyTables independent from the row predicate" {
+            { Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
+                    tableName = "TbTear"
+                    predicate = [PSCustomObject]@{ column = "TestId"; min = 900000; max = 900010 }
+                    denyTables = @("TbTear")
+                    dryRun    = $false
+                })
+            } | Should -Throw -ExpectedMessage "*denied*"
+            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
+        }
+
+        It "teardown_fixture accepts a bounded test-id range and always emits WHERE" {
             Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
                     tableName = "TbTear"
+                    predicate = [PSCustomObject]@{ column = "TestId"; min = 900000; max = 900010 }
                     dryRun    = $false
                 }) | Out-Null
             $script:FakeDatabase.SqlCalls.Count | Should -Be 1
-            $script:FakeDatabase.SqlCalls[0] | Should -Be "DELETE FROM [TbTear]"
+            $script:FakeDatabase.SqlCalls[0] | Should -Be "DELETE FROM [TbTear] WHERE [TestId] BETWEEN 900000 AND 900010"
+        }
+
+        It "teardown_fixture preview returns the exact bounded SQL and never calls Execute" {
+            $result = Invoke-WriteAction -Database $script:FakeDatabase -Action "teardown_fixture" -Payload ([PSCustomObject]@{
+                    tableName = "TbTear"
+                    predicate = [PSCustomObject]@{ column = "TestId"; min = 900000; max = 900010 }
+                })
+            $result.dryRun | Should -Be $true
+            $result.sql | Should -Be "DELETE FROM [TbTear] WHERE [TestId] BETWEEN 900000 AND 900010"
+            $script:FakeDatabase.SqlCalls.Count | Should -Be 0
         }
 
         It "create_table dryRun=true short-circuits and returns the SQL string without invoking Execute (regression: write-action default must be safe)" {

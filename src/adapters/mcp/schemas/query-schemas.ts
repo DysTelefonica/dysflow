@@ -148,6 +148,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   },
   teardown_fixture: {
     type: "object",
+    required: ["predicate"],
     additionalProperties: false,
     ...TABLE_NAME_ALIAS_REQUIREMENT,
     properties: {
@@ -155,6 +156,35 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
+      predicate: {
+        type: "object",
+        required: ["column", "min", "max"],
+        additionalProperties: false,
+        properties: {
+          column: {
+            type: "string",
+            minLength: 1,
+            pattern: "^[A-Za-z_][A-Za-z0-9_]*$",
+            description: "Numeric fixture/test-id column used to bound teardown rows.",
+          },
+          min: {
+            type: "number",
+            minimum: 900_000,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Inclusive lower fixture/test-id boundary. Must be a safe integer at or above TEST_ID_BASE (900000).",
+          },
+          max: {
+            type: "number",
+            minimum: 900_000,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Inclusive upper fixture/test-id boundary. Must be a safe integer and >= min.",
+          },
+        },
+        description:
+          "Required bounded teardown predicate. Deletes only rows whose numeric fixture/test id is within the inclusive range.",
+      },
       ...WRITE_INTENT_BLOCK,
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,

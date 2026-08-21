@@ -397,7 +397,12 @@ function buildToolCases(): ToolCase[] {
     }),
     t("drop_table", "happy", { ...ctx, tableName: "ZZZ_E2E_NonExistent", dryRun: true }),
     t("seed_fixture", "happy", { ...ctx, tableName: "TbNoConformidades", rows: [], dryRun: true }),
-    t("teardown_fixture", "happy", { ...ctx, tableName: "TbNoConformidades", dryRun: true }),
+    t("teardown_fixture", "happy", {
+      ...ctx,
+      tableName: "TbNoConformidades",
+      predicate: { column: "IDNoConformidad", min: 900_000, max: 999_999 },
+      dryRun: true,
+    }),
     t("link_tables", "happy", { ...ctx, dryRun: true }),
     t("relink_tables", "happy", { ...ctx, dryRun: true }),
     t("localize_backend_links", "happy", { ...ctx, dryRun: true }),

@@ -914,6 +914,22 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
       recoverable: true,
     });
   }
+  if (name === "teardown_fixture") {
+    codes.push(
+      {
+        code: "FIXTURE_TEARDOWN_UNBOUNDED",
+        description:
+          "The required bounded predicate was missing, so teardown stopped before Access mutation.",
+        recoverable: true,
+      },
+      {
+        code: "FIXTURE_TEARDOWN_PREDICATE_INVALID",
+        description:
+          "The teardown predicate column or inclusive integer range was invalid, so teardown stopped before Access mutation.",
+        recoverable: true,
+      },
+    );
+  }
   if (writeClass && (name === "run_script" || name === "vba_inline_execution")) {
     codes.push({
       code: "SANDBOX_ONLY",

@@ -311,6 +311,14 @@ export type AccessQueryRequest = {
   scriptPath?: string;
   definition?: string;
   rows?: readonly Record<string, unknown>[];
+  /**
+   * Bounded row selector for `teardown_fixture` (#1453).
+   *
+   * The runner deletes only rows whose numeric fixture/test id is inside the
+   * inclusive range. All three fields are required and validated before
+   * Access is opened for mutation.
+   */
+  predicate?: FixtureTeardownPredicate;
   dryRun?: boolean;
   /** compact_repair: back up the database (Backup-AccessFile) before compacting. */
   backupFirst?: boolean;
@@ -344,6 +352,12 @@ export type AccessQueryRequest = {
   expectedAccessPath?: string;
   expectedProjectRoot?: string;
   expectedDestinationRoot?: string;
+};
+
+export type FixtureTeardownPredicate = {
+  column: string;
+  min: number;
+  max: number;
 };
 
 export function createDiagnostic(
