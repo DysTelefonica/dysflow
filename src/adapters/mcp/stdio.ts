@@ -23,6 +23,12 @@ import { AccessPowerShellRunner } from "../../core/runner/access-runner.js";
 import { AccessDiagnosticsService } from "../../core/services/diagnostics-service.js";
 import { AccessQueryService } from "../../core/services/query-service.js";
 import { AccessVbaService } from "../../core/services/vba-service.js";
+import {
+  createSchemaAdvertisementAccountant,
+  type SchemaAdvertisementAccountant,
+  type SchemaAdvertisementObservation,
+  type SchemaAdvertisementRecorder,
+} from "../../core/telemetry/schema-advertisement.js";
 import { isRecord, truthy } from "../../core/utils/index.js";
 import { readPackageVersionNear } from "../../core/utils/package-info.js";
 import { resolveDocumentationBundleStatusNearModule } from "../../shared/install-docs.js";
@@ -51,6 +57,7 @@ import {
 import {
   buildInvocationTelemetryEntry,
   createInvocationTelemetryContextResolver,
+  createSchemaAdvertisementRecorder,
   type InvocationTelemetryContextResolver,
   type InvocationTelemetryRecorder,
   resolveInvocationWriteIntent,
@@ -192,6 +199,14 @@ export async function startMcpStdioAdapter(
   const fallbackTelemetryCwd = startupConfig?.projectRoot ?? process.cwd();
   await startWithSdkServer(tools, undefined, {
     resultValidationPolicy: "enforce",
+    // Issue #1459 — the advertisement stream follows the same enable flag as
+    // the invocation stream, so a project that opted out of telemetry opts out
+    // of both. It is project-local and resolved once at startup: `tools/list`
+    // carries no arguments, so there is no per-call project to resolve.
+    schemaAdvertisementRecorder: createSchemaAdvertisementRecorder({
+      cwd: fallbackTelemetryCwd,
+      enabled: startupConfig?.invocationTelemetryEnabled !== false,
+    }),
     invocationContextResolver: createInvocationTelemetryContextResolver({
       fallback: {
         cwd: fallbackTelemetryCwd,
@@ -279,6 +294,11 @@ export async function startWithSdkServer(
     reportResultContractViolation?: (diagnostic: ResultContractViolationDiagnostic) => void;
     invocationRecorder?: InvocationTelemetryRecorder;
     invocationContextResolver?: InvocationTelemetryContextResolver;
+    /**
+     * Issue #1459 — schema-advertisement accounting. Optional: when absent,
+     * `tools/list` behaves exactly as before and records nothing.
+     */
+    schemaAdvertisementRecorder?: SchemaAdvertisementRecorder;
     writeExecutionPolicy?: "safe-by-default" | "developer";
   } = {},
 ): Promise<void> {
@@ -294,8 +314,10 @@ export async function startWithSdkServer(
   // overload ambiguity from passing raw JSON Schema objects to server.tool().
   server.server.registerCapabilities({ tools: {} });
 
-  server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: tools
+  const advertisementAccountant = createSchemaAdvertisementAccountant();
+
+  server.server.setRequestHandler(ListToolsRequestSchema, () => {
+    const advertised = tools
       .filter((t) => !hiddenRegistry.has(t.name))
       .map((t) => {
         const access =
@@ -312,8 +334,25 @@ export async function startWithSdkServer(
           ),
           ...buildCompactToolAdvertisementMetadata(t.name, access),
         };
-      }),
-  }));
+      });
+
+    // Issue #1459 — record what this advertisement costs the client, never
+    // blocking or altering the response. A telemetry failure must not turn a
+    // successful tools/list into an error, so the write is fire-and-forget and
+    // its rejection is swallowed the same way invocation telemetry does it.
+    recordSchemaAdvertisementBestEffort(
+      options.schemaAdvertisementRecorder,
+      advertisementAccountant,
+      {
+        surface: "tools/list",
+        view: "compact",
+        toolCount: advertised.length,
+        payloadBytes: Buffer.byteLength(JSON.stringify(advertised), "utf8"),
+      },
+    );
+
+    return { tools: advertised };
+  });
 
   server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args, _meta } = request.params;
@@ -426,6 +465,26 @@ async function resolveInvocationContext(
     recorder: options.invocationRecorder,
     writeExecutionPolicy: options.writeExecutionPolicy ?? "safe-by-default",
   };
+}
+
+/**
+ * Issue #1459 — sibling of `recordInvocationBestEffort` for the advertisement
+ * stream. Synchronous by design: `tools/list` is a synchronous handler and its
+ * response must not wait on a disk write, so the promise is deliberately not
+ * awaited and its rejection is absorbed here.
+ */
+function recordSchemaAdvertisementBestEffort(
+  recorder: SchemaAdvertisementRecorder | undefined,
+  accountant: SchemaAdvertisementAccountant,
+  observation: SchemaAdvertisementObservation,
+): void {
+  if (recorder === undefined) return;
+  void recorder.record(accountant.next(observation)).catch((error: unknown) => {
+    if (process.env.DYSFLOW_DEBUG_TELEMETRY === "true") {
+      process.stderr.write(`[dysflow] schema advertisement telemetry error: ${String(error)}
+`);
+    }
+  });
 }
 
 async function recordInvocationBestEffort(

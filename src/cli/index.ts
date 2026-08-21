@@ -11,6 +11,7 @@ import { handleMcpCommand } from "./commands/mcp.js";
 import { handleMigrateDryRunCommand } from "./commands/migrate-dryrun.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
+import { handleTelemetryEvidenceCommand } from "./commands/telemetry-evidence.js";
 import { handleTuiCommand } from "./commands/tui.js";
 import {
   type CliCommandContext,
@@ -36,6 +37,7 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["lint", handleLintCommand],
   ["codegraph-drift", handleCodegraphDriftCommand],
   ["migrate-dryrun", handleMigrateDryRunCommand],
+  ["telemetry-evidence", handleTelemetryEvidenceCommand],
 ]);
 
 /**
