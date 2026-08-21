@@ -95,7 +95,7 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
     access: "conditional-write",
     writeGate: "conditional",
     dryRunDefault: true,
-    summary: "Write-capable MCP contract; write execution is write-gated.",
+    summary: "Atomic apply; preview is non-mutating with statementCount.",
   },
   create_table: {
     access: "conditional-write",

@@ -457,6 +457,8 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
   - `allowTables`/`denyTables` (and their singular aliases) are rejected with `MCP_INPUT_INVALID`; arbitrary SQL is not parsed to infer every referenced table.
 * **`run_script`**: Execute SQL statements from a disk script file.
   - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`
+  - Preview never opens a transaction or executes SQL and returns `statementCount`. Apply executes every statement in one transaction owned by an isolated DAO workspace; success commits once, while any statement failure rolls back the whole script.
+  - Failure messages identify the one-based statement position and total count without echoing SQL text. If rollback itself fails, the error says atomicity could not be confirmed rather than claiming a successful rollback.
   - `allowTables`/`denyTables` (and their singular aliases) are rejected with `MCP_INPUT_INVALID`; use a structured table action when table scoping is required.
   - Script grammar: semicolons split statements only outside single- or double-quoted literals. Doubled quotes (`''` or `""`) escape the matching quote inside a literal.
   - `--` line comments are removed while preserving their terminating newline, and empty or comment-only fragments are ignored. Block comments (`/* ... */`) are rejected; use `--` comments instead.
