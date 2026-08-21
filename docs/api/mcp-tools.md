@@ -60,7 +60,9 @@ Run arbitrary SQL statements. Writes are guarded by the write-safety model.
   - `mode` (string, **required**): Execution mode (`read` or `write`).
   - `projectId`, `contextId` (optional)
 
-`allowTables` and `denyTables` are intentionally unsupported for arbitrary SQL. Supplying either returns `MCP_INPUT_INVALID` with remediation to omit the field or use a structured table action such as `seed_fixture` or `teardown_fixture`. Dysflow does not claim complete table discovery without a full Jet/ACE SQL parser.
+`allowTables` and `denyTables` are intentionally unsupported for arbitrary SQL. Supplying either returns `MCP_INPUT_INVALID`.
+
+To restrict writes, omit these fields and use a structured table action such as `seed_fixture` or `teardown_fixture`. Dysflow does not claim complete table discovery without a full Jet/ACE SQL parser.
 
 ### `doctor`
 Run diagnostics on the MCP connection, Access installation, and configuration.
