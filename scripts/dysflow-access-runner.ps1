@@ -1164,6 +1164,22 @@ function Split-SqlStatements {
 function Invoke-WriteAction {
   param($Database, [string] $Action, $Payload)
 
+  # Issue #1452 — arbitrary SQL cannot truthfully enforce allow/deny table
+  # policies without a complete Jet/ACE parser. Check property PRESENCE (not
+  # truthiness) so even an explicitly supplied empty array fails closed.
+  if ($Action -in @("exec_sql", "run_script")) {
+    $suppliedTablePolicies = @()
+    foreach ($policyName in @("allowTables", "allowTable", "denyTables", "denyTable")) {
+      if ($null -ne $Payload.PSObject.Properties[$policyName]) {
+        $suppliedTablePolicies += $policyName
+      }
+    }
+    if ($suppliedTablePolicies.Count -gt 0) {
+      $policyList = $suppliedTablePolicies -join ", "
+      throw "MCP_INPUT_INVALID: $policyList cannot be enforced for arbitrary SQL. Omit these parameters or use a structured table action such as seed_fixture or teardown_fixture."
+    }
+  }
+
   $dryRun = $true
   if ($null -ne $Payload.dryRun) {
     $dryRun = [bool]$Payload.dryRun

@@ -106,30 +106,9 @@ describe("HTTP validation schemas", () => {
     expect(MCP_TOOL_SCHEMAS.run_vba?.required).not.toContain("apply");
   });
 
-  // PR2 (#621 F1 / #6a) — query_execute write mode must surface
-  // allowTables/denyTables in its schema so the modern handler (which spreads
-  // the validated input) can pass them through to AccessQueryService. The
-  // legacy `exec_sql` already accepts these; this closes the alias drift.
-  it("MCP QUERY_EXECUTE_SCHEMA advertises allowTables as an optional string array (PR2 #621 F1 / #6a)", () => {
-    const allowTables = QUERY_EXECUTE_SCHEMA.properties?.allowTables as {
-      type: string;
-      items: { type: string };
-    };
-    expect(allowTables).toBeDefined();
-    expect(allowTables.type).toBe("array");
-    expect(allowTables.items.type).toBe("string");
-    expect(QUERY_EXECUTE_SCHEMA.required).not.toContain("allowTables");
-  });
-
-  it("MCP QUERY_EXECUTE_SCHEMA advertises denyTables as an optional string array (PR2 #621 F1 / #6a)", () => {
-    const denyTables = QUERY_EXECUTE_SCHEMA.properties?.denyTables as {
-      type: string;
-      items: { type: string };
-    };
-    expect(denyTables).toBeDefined();
-    expect(denyTables.type).toBe("array");
-    expect(denyTables.items.type).toBe("string");
-    expect(QUERY_EXECUTE_SCHEMA.required).not.toContain("denyTables");
+  it("MCP QUERY_EXECUTE_SCHEMA does not advertise unenforceable arbitrary-SQL table policies (#1452)", () => {
+    expect(QUERY_EXECUTE_SCHEMA.properties).not.toHaveProperty("allowTables");
+    expect(QUERY_EXECUTE_SCHEMA.properties).not.toHaveProperty("denyTables");
   });
 
   // PR2 (#621 F2 / #6b) — modern cleanup_access_operation must accept the

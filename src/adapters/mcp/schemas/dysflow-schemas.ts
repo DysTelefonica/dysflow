@@ -88,17 +88,6 @@ export const QUERY_EXECUTE_SCHEMA: JsonObjectSchema = {
     ...WRITE_INTENT_BLOCK,
     ...STRICT_CTX,
     ...PROCESS_TIMEOUT_BLOCK,
-    // PR2 (#621 F1 / #6a) — modern/legacy alias parity for query execute.
-    // The legacy `exec_sql` schema already declares allowTables/denyTables
-    // and `scripts/dysflow-access-runner.ps1:1062-1072` enforces them.
-    // `AccessQueryRequest.allowTables` / `denyTables` exist on the core
-    // contract (`src/core/contracts/index.ts:207-208`); this surfaces them in
-    // the modern tool's inputSchema so the handler's spread (`...request`)
-    // carries them through to `AccessQueryService.execute`. Write-mode only —
-    // read-mode ignores the guards, which is the same behavior the legacy
-    // alias has always had.
-    allowTables: SCHEMA_PROPS.allowTables,
-    denyTables: SCHEMA_PROPS.denyTables,
   },
 };
 

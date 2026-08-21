@@ -4,6 +4,7 @@
 
 ### Changes
 
+- fix(sql): reject unenforceable allowTables/denyTables policies on arbitrary SQL entry points (#1452)
 - test(e2e): bump mcp-e2e harness default timeoutMs from 30s to 60s (DYSFLOW_E2E_TIMEOUT_MS env still overrides). Flaky `unlink_table` hung at ~30s on a self-hosted runner while passing cleanly in 5s on a different run; the bump gives ~2x headroom without hiding a real hang. No runtime production change.
 
 ## [v2.37.4] - 2026-08-21 [YANKED]

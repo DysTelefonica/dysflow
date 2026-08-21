@@ -911,6 +911,41 @@ export function enrichmentForValidationMessage(
   return undefined;
 }
 
+const ARBITRARY_SQL_TABLE_POLICY_KEYS = [
+  "allowTables",
+  "allowTable",
+  "denyTables",
+  "denyTable",
+] as const;
+
+/**
+ * Issue #1452 — arbitrary Access SQL cannot truthfully enforce a table policy
+ * without a complete Jet/ACE parser. Reject the unsupported policy surface at
+ * the MCP boundary instead of forwarding a false guarantee to the runner.
+ */
+export function rejectArbitrarySqlTablePolicy(
+  input: unknown,
+  toolName: "exec_sql" | "run_script" | "query_execute",
+): McpToolResult | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+
+  const params = input as Record<string, unknown>;
+  const supplied = ARBITRARY_SQL_TABLE_POLICY_KEYS.filter((key) => params[key] !== undefined);
+  const rejectedFlag = supplied[0];
+  if (rejectedFlag === undefined) return undefined;
+
+  return invalidInput(
+    `${supplied.join(", ")} cannot be enforced for arbitrary SQL.`,
+    `Omit ${supplied.join(", ")} from ${toolName}; Dysflow cannot prove every table referenced by arbitrary Access SQL. Use a structured table action such as seed_fixture or teardown_fixture when table scoping is required.`,
+    {
+      kind: "unknown-param",
+      rejectedFlag,
+      rejectedFlags: supplied,
+      toolName,
+    },
+  );
+}
+
 /**
  * Surface a `MCP_INPUT_INVALID` envelope. The plain text body mirrors
  * the legacy prefix (`MCP_INPUT_INVALID: <message>`). When the
