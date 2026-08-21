@@ -54,6 +54,12 @@ argument values are never persisted. Set `capabilities.telemetry.invocations` to
 `false` in `.dysflow/project.json` to opt out, and use the read-only `logs` tool
 for exact `tool` or coarse `action` filters and `groupBy: "tool"` aggregation.
 
+The same opt-out covers `.dysflow/runtime/schema-advertisements.jsonl`, which counts
+what each `tools/list` costs the client.
+
+Analyze a collected window with `dysflow telemetry-evidence`. See
+[surface-profile evidence](./docs/architecture/surface-profile-evidence.md).
+
 Operator commands:
 
 ```powershell
