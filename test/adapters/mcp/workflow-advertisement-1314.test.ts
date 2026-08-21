@@ -24,7 +24,8 @@ type WorkflowAdvertisement = {
   _meta: {
     [WORKFLOW_META_KEY]: {
       phases: string[];
-      preferredFor: string[];
+      status?: string;
+      preferredFor?: string[];
     };
   };
 };
@@ -74,7 +75,7 @@ describe("MCP workflow advertisement (#1314)", () => {
     expect(tool.annotations).not.toHaveProperty("preferredFor");
     expect(tool._meta[WORKFLOW_META_KEY]).toMatchObject({
       phases: ["bootstrap", "recovery"],
-      preferredFor: expect.arrayContaining([expect.any(String)]),
+      status: "preferred",
     });
   });
 
@@ -92,7 +93,7 @@ describe("MCP workflow advertisement (#1314)", () => {
         workflow.phases.every((phase) => PHASES.includes(phase)),
         tool.name,
       ).toBe(true);
-      expect(workflow.preferredFor.length, `${tool.name} needs usage guidance`).toBeGreaterThan(0);
+      expect(workflow.preferredFor?.length, `${tool.name} needs usage guidance`).toBeGreaterThan(0);
       expect(snapshot.tools[tool.name]?._meta[WORKFLOW_META_KEY]).toEqual(workflow);
     }
   });

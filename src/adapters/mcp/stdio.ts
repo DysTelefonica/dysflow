@@ -41,7 +41,6 @@ import {
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
-import { buildToolAdvertisementMetadata } from "./agent-workflow-registry.js";
 import {
   RESULT_CONTRACT_VIOLATION,
   type ResultContractViolationDiagnostic,
@@ -65,6 +64,11 @@ import {
   wrapWithErrorAbsorber,
   wrapWithSanitizer,
 } from "./stdio-wrappers.js";
+import {
+  buildCompactToolAdvertisementDescription,
+  buildCompactToolAdvertisementMetadata,
+  compactToolInputSchema,
+} from "./tool-advertisement.js";
 import { createDysflowMcpTools, type DysflowMcpServices, type DysflowMcpTool } from "./tools.js";
 import type { McpToolContext } from "./types.js";
 import { unknownToolResult } from "./unknown-tool-result.js";
@@ -298,13 +302,15 @@ export async function startWithSdkServer(
           MCP_TOOL_CONTRACTS[t.name as keyof typeof MCP_TOOL_CONTRACTS]?.access ?? "read-only";
         return {
           name: t.name,
-          description: t.description,
-          inputSchema: t.inputSchema ?? {
-            type: "object" as const,
-            additionalProperties: false,
-            properties: {},
-          },
-          ...buildToolAdvertisementMetadata(t.name, access),
+          description: buildCompactToolAdvertisementDescription(t.name, access),
+          inputSchema: compactToolInputSchema(
+            t.inputSchema ?? {
+              type: "object" as const,
+              additionalProperties: false,
+              properties: {},
+            },
+          ),
+          ...buildCompactToolAdvertisementMetadata(t.name, access),
         };
       }),
   }));

@@ -139,12 +139,14 @@ verbatim: outside the per-tool gate it now reports the worktree root.
 ### Workflow metadata and introspection
 
 Every advertised tool exposes standard MCP `annotations` (`title`, `readOnlyHint`,
-`destructiveHint`, `idempotentHint`, `openWorldHint`) and namespaced
-`_meta["dysflow/workflow"]` (`phases`, `preferredFor`, `status`). These fields
-are projected consistently through `tools/list`, compact/full `schema`,
-`describe_tool`, and `get_capabilities.tools`. Use them to select a tool; use
-full schema or `describe_tool` for its exact parameters, constraints, result
-contract, and errors.
+`destructiveHint`, `idempotentHint`, `openWorldHint`) and a compact namespaced
+`_meta["dysflow/workflow"]` routing block (`phases`, `status`). The compact
+`tools/list` schema keeps every callable property and concise safety semantics,
+but omits deep parameter prose and migration/history text. Deep
+`preferredFor` guidance and complete constraints remain in `schema` and
+`describe_tool`. With `additionalProperties:false`, never treat an omitted
+description as an omitted property; use the advertised property keys and then
+fetch the deep contract when needed.
 
 For low-context routing, `schema({view:"index"})` returns only `name`, `purpose`,
 `access`, canonical workflow `phases`, `status`, `preferredFor`, and annotations.
