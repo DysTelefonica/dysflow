@@ -100,10 +100,19 @@ export async function resolveDestinationRoot(
   orchestrator: DestinationRootOrchestratorLike,
 ): Promise<DestinationRootResolution> {
   const override = stringValue(params.destinationRoot);
-  if (override !== undefined) {
-    return { resolved: override, source: "override" };
-  }
   const target = await orchestrator.resolveExecutionTarget(params);
+  if (override !== undefined) {
+    // Issue #1478 — report the EFFECTIVE root, not the raw input. A relative
+    // override (`"src"`) used to be echoed back verbatim while the write landed
+    // somewhere else entirely, so the envelope hid the defect from the
+    // consumer's logs. The resolver absolutizes the override, so read the
+    // resolved value back and only fall through to the raw input when the
+    // orchestrator could not resolve at all (stubbed / failed resolution).
+    const resolvedOverride = stringValue(
+      ((target?.ok ? (target.data ?? {}) : {}) as ResolvedTargetShape).destinationRoot,
+    );
+    return { resolved: resolvedOverride ?? override, source: "override" };
+  }
   if (!target?.ok) {
     // Resolution failed or the orchestrator returned an undefined /
     // non-OperationResult value (e.g. a vi.fn() stub in unit tests).
