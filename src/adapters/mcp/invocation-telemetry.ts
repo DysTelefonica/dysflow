@@ -8,6 +8,10 @@ import type {
   InvocationTelemetryRecorder,
   InvocationWriteIntent,
 } from "../../core/telemetry/invocation-telemetry.js";
+import type {
+  SchemaAdvertisementEntry,
+  SchemaAdvertisementRecorder,
+} from "../../core/telemetry/schema-advertisement.js";
 import { isTransientLockContentionError, lockErrorCode } from "../../core/utils/lock-errors.js";
 import { effectiveDryRunDefaultForTool, isWriteIntentTool } from "./mcp-tool-risks.js";
 import type { McpToolResult } from "./result-translation.js";
@@ -223,7 +227,7 @@ export function buildInvocationTelemetryEntry(input: {
   };
 }
 
-export function createInvocationTelemetryRecorder(options: {
+export type JsonlTelemetrySinkOptions = {
   cwd: string;
   enabled?: boolean;
   maxBytes?: number;
@@ -232,7 +236,22 @@ export function createInvocationTelemetryRecorder(options: {
   staleLockMs?: number;
   /** Test seam; production probes a PID without signalling it. */
   isProcessAlive?: (pid: number) => boolean;
-}): InvocationTelemetryRecorder {
+};
+
+/**
+ * Append-and-rotate JSONL sink under `<cwd>/.dysflow/runtime/<fileName>`.
+ *
+ * The record type is a parameter because #1459 needs a second, separate
+ * stream for schema-advertisement accounting: one advertisement is not one
+ * invocation, so the two must never share a file. Everything else — the
+ * cross-process lock, stale-lock reclamation, and size rotation — is
+ * identical, and duplicating it would mean maintaining two copies of the
+ * concurrency-sensitive half.
+ */
+export function createJsonlTelemetrySink<TEntry>(
+  fileName: string,
+  options: JsonlTelemetrySinkOptions,
+): { record(entry: TEntry): Promise<void> } {
   const enabled = options.enabled !== false;
   const maxBytes = Math.max(512, Math.floor(options.maxBytes ?? DEFAULT_MAX_BYTES));
   const maxFiles = Math.max(1, Math.floor(options.maxFiles ?? DEFAULT_MAX_FILES));
@@ -242,7 +261,7 @@ export function createInvocationTelemetryRecorder(options: {
   );
   const staleLockMs = Math.max(1, Math.floor(options.staleLockMs ?? DEFAULT_STALE_LOCK_MS));
   const runtimePath = join(options.cwd, ".dysflow", "runtime");
-  const sinkPath = join(runtimePath, "invocations.jsonl");
+  const sinkPath = join(runtimePath, fileName);
   const lockPath = `${sinkPath}.lock`;
   const isProcessAlive = options.isProcessAlive ?? processIsAlive;
   let pending = Promise.resolve();
@@ -288,6 +307,27 @@ export function createInvocationTelemetryRecorder(options: {
       await pending;
     },
   };
+}
+
+/**
+ * The invocation stream (#1197). Public signature is unchanged; the body now
+ * delegates to the shared JSONL sink.
+ */
+export function createInvocationTelemetryRecorder(
+  options: JsonlTelemetrySinkOptions,
+): InvocationTelemetryRecorder {
+  return createJsonlTelemetrySink<InvocationTelemetryEntry>("invocations.jsonl", options);
+}
+
+/**
+ * The schema-advertisement stream (#1459). Deliberately a sibling file rather
+ * than a discriminated field inside the invocation stream: a consumer counting
+ * invocations must never have to filter advertisements out first.
+ */
+export function createSchemaAdvertisementRecorder(
+  options: JsonlTelemetrySinkOptions,
+): SchemaAdvertisementRecorder {
+  return createJsonlTelemetrySink<SchemaAdvertisementEntry>("schema-advertisements.jsonl", options);
 }
 
 export function createInvocationTelemetryContextResolver(options: {
