@@ -6,7 +6,8 @@ weaker release gate: uncertainty always selects the full validation path.
 
 ## Fast path
 
-The `release-validation` job skips lint and tests only when GitHub reports one
+The `quality-authority` job skips duplicate lint, unit-test, and coverage runs
+only when GitHub reports one
 unambiguous `Quality gates (20)` job that:
 
 - belongs to the `CI` workflow at `.github/workflows/ci.yml` in this repository;
@@ -14,7 +15,9 @@ unambiguous `Quality gates (20)` job that:
 - completed successfully less than 24 hours ago; and
 - reports the same run ID and commit SHA through the workflow-run and job APIs.
 
-The job logs a `Receipt-skip summary` containing the accepted run and job IDs.
+The job exports the accepted run and job IDs, exact commit, decision reason, and
+authority URL. The final publication job validates the authority SHA against
+its checkout and renders those references in the workflow summary.
 The expected SHA is resolved from the checked-out commit, so annotated tag
 objects cannot be mistaken for the commit that CI tested.
 The release build, archive checksum, Ed25519 signature, signature self-check,
@@ -22,16 +25,18 @@ publication, and release-title guard still run on every release.
 
 ## Full-validation fallback
 
-Windows installs dependencies and runs `pnpm lint` plus `pnpm test` whenever a
-receipt is missing, stale, failed, incomplete, for a different SHA, workflow,
-branch, event, or repository, or when the GitHub API is unavailable or returns
-malformed/ambiguous data. Verification errors deliberately exit successfully
-from the receipt probe so the guarded validation steps run; they never grant a
-skip.
+Linux installs dependencies and runs `pnpm lint`, `pnpm test`, and
+`pnpm coverage` whenever a receipt is missing, stale, failed, incomplete, for a
+different SHA, workflow, branch, event, or repository, or when the GitHub API
+is unavailable or returns malformed/ambiguous data. Verification errors
+deliberately exit successfully from the receipt probe so the guarded validation
+steps run; they never grant a skip. The direct-gate run becomes the auditable
+authority only after every command succeeds.
 
 To force the slow path for one release, dispatch the `Release` workflow on the
-existing version tag and enable **Ignore a fresh CI receipt and run lint/tests
-again**. Manual dispatches from non-version refs are rejected by every job.
+existing version tag and enable **Ignore a fresh CI receipt and run all quality
+gates again**. Manual dispatches from non-version refs are rejected by every
+job.
 
 ## Other CI optimizations
 

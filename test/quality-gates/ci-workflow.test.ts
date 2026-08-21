@@ -285,22 +285,19 @@ describe("repository quality gates", () => {
   });
 
   it("uses Linux for packaging and the self-hosted Windows runner for the full E2E battery", async () => {
-    // Post v2.37.5 (commit 15ba5380) the release pipeline dropped the Windows
-    // `release-validation` job (CI-receipt check + duplicate lint/test) — it was
-    // redundant with the E2E battery and the source of multi-hour CI wall time
-    // on past releases. The remaining windows-bound gate is `e2e-validation`,
-    // which runs on a self-hosted `dysflow-e2e` runner with Microsoft Access
-    // pre-installed. The packaging jobs (`build`, `release`) run on
-    // `ubuntu-latest`. This preserves the platform-neutral invariant: Linux for
-    // packaging, Windows for the MS-Access-dependent E2E battery.
+    // Release quality authority is platform-neutral and runs on Linux. The
+    // Access-dependent E2E battery remains on the self-hosted Windows runner.
     const workflow = await readText(".github/workflows/release.yml");
 
-    expect(workflow).not.toMatch(/^  release-validation:$/m);
+    expect(workflow).not.toMatch(/^ {2}release-validation:$/m);
+    expect(workflow).toMatch(
+      /quality-authority:[\s\S]*?name: Exact-SHA quality authority[\s\S]*?runs-on: ubuntu-latest/,
+    );
     expect(workflow).toMatch(
       /e2e-validation:[\s\S]*?name: E2E validation[\s\S]*?runs-on: dysflow-e2e/,
     );
     expect(workflow).toMatch(
-      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
+      /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, quality-authority, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
     );
   });
 

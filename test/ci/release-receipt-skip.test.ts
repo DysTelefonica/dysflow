@@ -8,6 +8,15 @@ import {
 const SHA = "a".repeat(40);
 const NOW = "2026-08-02T12:00:00.000Z";
 
+function workflowJobBlock(workflow: string, job: string): string {
+  const lines = workflow.split(/\r?\n/);
+  const start = lines.indexOf(`  ${job}:`);
+  if (start < 0) throw new Error(`release.yml declares no "${job}" job`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+}
+
 function run(overrides: Record<string, unknown> = {}) {
   return {
     id: 42,
@@ -174,18 +183,14 @@ describe("release CI receipt", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("wires the post-v2.37.5 release guards without the dropped Windows release-validation job", async () => {
-    // Post v2.37.5 (commit 15ba5380) the release-validation job was dropped.
-    // The verify-ci-receipt.mjs / EXPECTED_RELEASE_SHA / receipt.outputs.decision
-    // skip-path it implemented is no longer present in release.yml. The remaining
-    // release-time guards this test pins are the artifact build/extract chain,
-    // the Ed25519 signature over SHA256SUMS, the tag-vs-release-name check, and
-    // the weekly CI drift cron that re-exercises this very suite.
+  it("requires exact-SHA quality authority while preserving build and release E2E", async () => {
     const [ci, release, weekly] = await Promise.all([
       readFile(".github/workflows/ci.yml", "utf8"),
       readFile(".github/workflows/release.yml", "utf8"),
       readFile(".github/workflows/verify-receipt-skip.yml", "utf8"),
     ]);
+    const authority = workflowJobBlock(release, "quality-authority");
+    const publication = workflowJobBlock(release, "release");
 
     expect(ci).toMatch(
       /quality:[\s\S]*?if: github\.event_name == 'push' \|\| needs\.changes\.outputs\.code_required == 'true'/,
@@ -196,9 +201,23 @@ describe("release CI receipt", () => {
     expect(ci).toMatch(
       /name: Audit dependencies[\s\S]*?if: github\.event_name == 'push'[\s\S]*?AUDIT_UNAVAILABLE_POLICY: fail/,
     );
-    expect(release).not.toContain("verify-ci-receipt.mjs");
-    expect(release).not.toContain("EXPECTED_RELEASE_SHA");
-    expect(release).not.toContain("steps.receipt.outputs");
+    expect(authority).toContain("needs: build");
+    expect(authority).toContain("actions: read");
+    expect(authority).toContain("EXPECTED_RELEASE_SHA: $" + "{{ needs.build.outputs.commit_sha }}");
+    expect(authority).toContain("node .github/scripts/verify-ci-receipt.mjs");
+    expect(authority).toContain("steps.receipt.outputs.decision != 'skip'");
+    expect(authority).toContain("run: pnpm lint");
+    expect(authority).toContain("run: pnpm test");
+    expect(authority).toContain("run: pnpm coverage");
+    expect(authority).toContain(
+      "AUTHORITY_TYPE: $" +
+        "{{ steps.receipt.outputs.decision == 'skip' && 'ci-receipt' || 'direct-gates' }}",
+    );
+    expect(authority).toContain('echo "authority_type=$AUTHORITY_TYPE" >> "$GITHUB_OUTPUT"');
+    expect(publication).toContain("needs: [build, quality-authority, e2e-validation]");
+    expect(publication).toContain("needs.quality-authority.outputs.authority_type");
+    expect(publication).toContain("needs.quality-authority.outputs.run_id");
+    expect(publication).toContain("needs.quality-authority.outputs.job_id");
     expect(release).toContain("git rev-parse HEAD");
     expect(release).toContain("actions/upload-artifact@v4");
     expect(release).toContain("actions/download-artifact@v4");
