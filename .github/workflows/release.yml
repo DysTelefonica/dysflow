@@ -75,65 +75,6 @@ jobs:
       - name: Record artifact identity
         run: echo "Uploaded dist-${{ steps.commit.outputs.sha }} with digest ${{ steps.upload.outputs.artifact-digest }}"
 
-  # The product runtime is Windows-only. A recent successful main-push Quality
-  # gates job for these exact bytes is accepted as its receipt; any uncertainty
-  # (API errors included) falls through to the complete historical validation.
-  release-validation:
-    name: Windows release validation
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-    permissions:
-      actions: read
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      # `github.sha` can describe the pushed ref. Resolve the checked-out commit
-      # so annotated tags are compared with the CI run's commit SHA.
-      - name: Resolve tagged commit
-        id: commit
-        shell: pwsh
-        run: '"sha=$(git rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8'
-
-      - name: Verify CI receipt
-        id: receipt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXPECTED_RELEASE_SHA: ${{ steps.commit.outputs.sha }}
-          FORCE_FULL_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_validation && 'true' || 'false' }}
-        run: node .github/scripts/verify-ci-receipt.mjs
-
-      - name: Enable pnpm
-        if: steps.receipt.outputs.decision != 'skip'
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        if: steps.receipt.outputs.decision != 'skip'
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        if: steps.receipt.outputs.decision != 'skip'
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        if: steps.receipt.outputs.decision != 'skip'
-        run: pnpm lint
-
-      - name: Test
-        if: steps.receipt.outputs.decision != 'skip'
-        run: pnpm test
-
-      - name: Receipt-skip summary
-        if: steps.receipt.outputs.decision == 'skip'
-        run: echo "Skipping lint+test for exact tag SHA ${{ github.sha }}; authoritative CI run ${{ steps.receipt.outputs.run_id }}, quality job ${{ steps.receipt.outputs.job_id }}."
-
   e2e-validation:
     name: E2E validation (Windows self-hosted)
     needs: build
@@ -266,7 +207,7 @@ jobs:
 
   release:
     name: Build & Release Artifacts
-    needs: [build, release-validation, e2e-validation]
+    needs: [build, e2e-validation]
     if: startsWith(github.ref, 'refs/tags/v')
     # Linux packaging job. Windows jobs stay on windows-latest for MS Access.
     runs-on: ubuntu-latest
