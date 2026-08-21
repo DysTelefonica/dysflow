@@ -458,6 +458,8 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
 * **`run_script`**: Execute SQL statements from a disk script file.
   - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`
   - `allowTables`/`denyTables` (and their singular aliases) are rejected with `MCP_INPUT_INVALID`; use a structured table action when table scoping is required.
+  - Script grammar: semicolons split statements only outside single- or double-quoted literals. Doubled quotes (`''` or `""`) escape the matching quote inside a literal.
+  - `--` line comments are removed while preserving their terminating newline, and empty or comment-only fragments are ignored. Block comments (`/* ... */`) are rejected; use `--` comments instead.
 * **`create_table`**: Programmatically create a table in the database.
   - Parameters: `tableName` (string, optional), `definition` (string, optional), `dryRun`, `apply`
 * **`drop_table`**: Drop a table.
