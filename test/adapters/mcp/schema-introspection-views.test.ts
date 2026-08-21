@@ -235,7 +235,7 @@ describe("schema compact and full introspection views (#1079)", () => {
     const viewSchema = SCHEMA_TOOL_INPUT_SCHEMA.properties.view as
       | { enum?: readonly string[]; default?: string }
       | undefined;
-    expect(viewSchema?.enum).toEqual(["compact", "full"]);
+    expect(viewSchema?.enum).toEqual(["index", "compact", "full"]);
     expect(viewSchema?.default).toBe("full");
 
     const schemaTool = ADVERTISED_TOOLS.find((tool) => tool.name === "schema");

@@ -19,7 +19,10 @@ The command starts `dist/cli/index.js mcp --disable-writes` in the committed
 fixture directory `scripts/fixtures/mcp-context-budget`.
 
 It performs the MCP initialize handshake over stdio and measures `tools/list`,
-`get_capabilities`, full and compact `schema`, and every `describe_tool` call.
+full and compact `get_capabilities`, and index/compact/full `schema`.
+
+It also measures every full `describe_tool` call and the selected sections used
+by the compact bootstrap path.
 
 The fixture has no Access paths, credentials, network dependency, or mutable
 project state.
@@ -93,3 +96,23 @@ That update must be accompanied by the change that explains the reduced
 surface. Do not update the baseline to hide growth.
 
 Do not add a tokenizer estimate as if it were a provider-independent fact.
+
+## Issue #1461 progressive-discovery evidence
+
+The built runtime at origin/main plus the progressive views measures the new
+bootstrap path deterministically as follows.
+
+The index view is phase-filtered to `bootstrap`; selected descriptions request
+`summary` and `parameters`.
+
+| View | Logical bytes | Wire bytes |
+| --- | ---: | ---: |
+| `get_capabilities({compact:true, include:[tools, sharedBlockSupport, effectiveDryRunDefault, migrationNotes]})` | 49,573 | 50,259 |
+| `schema({view:"index", phase:"bootstrap"})` | 3,446 | 11,219 |
+| `describe_tool({sections:[summary, parameters]})`, aggregate | 256,810 | 839,869 |
+
+Full defaults remain measured separately and parity stays true for all 94
+advertised tools.
+
+The index and selected views are additive; they do not change the full response
+contract during the compatibility window.

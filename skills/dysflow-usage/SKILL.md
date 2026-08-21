@@ -85,6 +85,8 @@ Do NOT use when:
 > **First call:** `get_capabilities({})` — that snapshot is the truth for every other example in this skill.
 > If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
 
+> **Compact bootstrap:** when context is constrained, call `get_capabilities({compact:true})`, then `schema({view:"index",phase:"<phase>"})` to select a route, and `describe_tool({name:"<tool>",sections:["parameters"]})` for one-tool details. Full responses remain the compatibility default.
+
 > **`setup_project` identity is fail-closed:** a fresh bootstrap requires an
 > explicit `projectId`. If it is omitted, the runtime may reuse only the
 > selected WorktreeContext's existing configured id and emits a warning that
@@ -143,6 +145,11 @@ are projected consistently through `tools/list`, compact/full `schema`,
 `describe_tool`, and `get_capabilities.tools`. Use them to select a tool; use
 full schema or `describe_tool` for its exact parameters, constraints, result
 contract, and errors.
+
+For low-context routing, `schema({view:"index"})` returns only `name`, `purpose`,
+`access`, canonical workflow `phases`, `status`, `preferredFor`, and annotations.
+Use `phase`, `status`, and `toolName` filters before requesting one deep view.
+`get_capabilities({compact:true,include:["tools","sharedBlockSupport","effectiveDryRunDefault","migrationNotes"],toolNames:["<tool>"]})` keeps the routing blocks aligned while avoiding unrelated per-tool entries.
 
 ### When a tool rejects your flag (#757 C4)
 

@@ -278,12 +278,12 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
     expect(tool, "tool must be registered").toBeDefined();
   });
 
-  it("accepts only the optional cwd worktree selector", () => {
+  it("accepts progressive discovery selectors plus the optional cwd worktree selector", () => {
     const tools = createDysflowMcpTools({
       services: makeServices(),
     });
     const tool = tools.find((t) => t.name === "get_capabilities");
-    expect(tool?.inputSchema).toEqual({
+    expect(tool?.inputSchema).toMatchObject({
       type: "object",
       additionalProperties: false,
       properties: {
@@ -293,6 +293,10 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
           description:
             "Optional per-call worktree cwd. Paths are canonicalized and resolved through the bounded worktree-context cache. Omit to use the MCP startup cwd.",
         },
+        compact: { type: "boolean", default: false },
+        view: { type: "string", enum: ["compact", "full"], default: "full" },
+        include: { type: "array" },
+        toolNames: { type: "array" },
       },
     });
   });
