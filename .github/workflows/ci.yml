@@ -101,6 +101,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: MCP context budget (shrink-only)
+        if: matrix.node-version == 20
+        run: pnpm mcp:context-budget
+
   windows-integration-smoke:
     name: Windows PowerShell/Access smoke
     needs: changes

@@ -17,6 +17,7 @@
     "test:e2e:mcp:release": "node E2E_testing/mcp-e2e.mjs --release",
     "test:ps1": "pwsh -Command \"Invoke-Pester scripts/tests/\"",
     "build": "tsc -p tsconfig.json",
+    "mcp:context-budget": "node scripts/mcp-context-budget.mjs --baseline scripts/baselines/mcp-context-budget.json",
     "lint": "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && node scripts/report-ts-import-cycles.mjs --check scripts/baselines/ts-import-cycles.json && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ tests/ scripts/ E2E_testing/_helpers/",
     "lint:fix": "biome check src/ test/ tests/ scripts/ E2E_testing/_helpers/ --write",
     "format": "biome format src/ test/ tests/ scripts/ E2E_testing/_helpers/ --write",
