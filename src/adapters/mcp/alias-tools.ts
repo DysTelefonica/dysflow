@@ -18,6 +18,7 @@ import {
   invalidInput,
   mcpSchemaFor,
   parseMcpArgsJson,
+  rejectArbitrarySqlTablePolicy,
 } from "./dispatch-common.js";
 
 import { MCP_TOOL_QUERY_ACTIONS } from "./dispatch-routes.js";
@@ -349,8 +350,10 @@ export function buildAliasTools(
       name: "exec_sql",
       description: TOOL_DESCRIPTIONS.exec_sql,
       inputSchema: execSqlSchema,
-      handler: async (input) =>
-        handleValidatedMcpWrite(
+      handler: async (input) => {
+        const tablePolicyRejection = rejectArbitrarySqlTablePolicy(input, "exec_sql");
+        if (tablePolicyRejection !== undefined) return tablePolicyRejection;
+        return handleValidatedMcpWrite(
           input,
           execSqlSchema,
           writesEnabled,
@@ -363,13 +366,16 @@ export function buildAliasTools(
           // `MCP_INPUT_INVALID` envelope can surface the canonical
           // commit flag and remediation.
           "exec_sql",
-        ),
+        );
+      },
     },
     {
       name: "run_script",
       description: TOOL_DESCRIPTIONS.run_script,
       inputSchema: runScriptSchema,
       handler: async (input) => {
+        const tablePolicyRejection = rejectArbitrarySqlTablePolicy(input, "run_script");
+        if (tablePolicyRejection !== undefined) return tablePolicyRejection;
         const context = await accessContextResolver?.(input);
         const sandboxRoot = context?.ok ? context.data.projectRoot : undefined;
         const sandboxViolation = enforceSandboxOnlyAccess(input, "run_script", sandboxRoot);

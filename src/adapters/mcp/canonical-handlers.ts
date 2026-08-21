@@ -19,6 +19,7 @@ import {
   invalidInput,
   isWriteAllowed,
   procedureNotAllowed,
+  rejectArbitrarySqlTablePolicy,
   writesDisabled,
 } from "./dispatch-common.js";
 import type {
@@ -170,6 +171,8 @@ export async function handleMcpQueryExecute(
       },
     );
   }
+  const tablePolicyRejection = rejectArbitrarySqlTablePolicy(input, "query_execute");
+  if (tablePolicyRejection !== undefined) return tablePolicyRejection;
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
     // Issue #1078 — uniform `MCP_INPUT_INVALID` envelope across every

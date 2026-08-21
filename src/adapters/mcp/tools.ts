@@ -242,7 +242,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     {
       name: "query_execute",
       resultContract: queryExecuteResultContract,
-      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. ${MCP_TOOL_CONTRACTS.query_execute.summary}`,
+      description: `Execute Access SQL with explicit mode: "read" or mode: "write". Write mode honors dryRun/apply, is blocked by the MCP write gate when writes are disabled, and returns MCP_WRITES_DISABLED instead of mutating data. Table allow/deny policies are rejected because arbitrary Jet/ACE SQL is not completely parsed. ${MCP_TOOL_CONTRACTS.query_execute.summary}`,
       inputSchema: QUERY_EXECUTE_SCHEMA,
       handler: async (input, context) =>
         handleMcpQueryExecute(

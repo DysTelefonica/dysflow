@@ -60,6 +60,10 @@ Run arbitrary SQL statements. Writes are guarded by the write-safety model.
   - `mode` (string, **required**): Execution mode (`read` or `write`).
   - `projectId`, `contextId` (optional)
 
+`allowTables` and `denyTables` are intentionally unsupported for arbitrary SQL. Supplying either returns `MCP_INPUT_INVALID`.
+
+To restrict writes, omit these fields and use a structured table action such as `seed_fixture` or `teardown_fixture`. Dysflow does not claim complete table discovery without a full Jet/ACE SQL parser.
+
 ### `doctor`
 Run diagnostics on the MCP connection, Access installation, and configuration.
 * **Parameters**:
@@ -449,9 +453,11 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
   - Resolution priority: an explicit `accessPath` is executed as the query database; otherwise an explicit `databasePath`/`sourcePath` wins, then `target` resolves through project config, and calls without an override keep the configured default. Raw SQL is not parsed to infer a table or database. Successful responses include `resolvedAccessPath` so callers can audit the selected database.
   - For a conservative simple `SELECT` against one table, Dysflow verifies the resolved database schema and returns `TABLE_NOT_IN_DATABASE` or `COLUMN_NOT_IN_TABLE` with `resolvedAccessPath` in `error.details`. Joins, subqueries, expressions, wildcards, and other complex SQL retain the database engine's existing generic error classification rather than guessing.
 * **`exec_sql`**: Legacy write SQL compatibility wrapper. New consumers use `query_execute({ mode: "write", apply: false | true })`; it remains callable throughout the v2.x line under the same documented deprecation policy.
-  - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (array, optional), `accessPath`/`backendPath` (optional)
+  - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `accessPath`/`backendPath` (optional)
+  - `allowTables`/`denyTables` (and their singular aliases) are rejected with `MCP_INPUT_INVALID`; arbitrary SQL is not parsed to infer every referenced table.
 * **`run_script`**: Execute SQL statements from a disk script file.
-  - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`, `allowTables`/`denyTables` (optional)
+  - Parameters: `scriptPath` (string, optional), `path` (string, optional), `dryRun`, `apply`
+  - `allowTables`/`denyTables` (and their singular aliases) are rejected with `MCP_INPUT_INVALID`; use a structured table action when table scoping is required.
 * **`create_table`**: Programmatically create a table in the database.
   - Parameters: `tableName` (string, optional), `definition` (string, optional), `dryRun`, `apply`
 * **`drop_table`**: Drop a table.

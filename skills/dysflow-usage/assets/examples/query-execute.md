@@ -37,8 +37,6 @@ Execute the preferred unified read or write SQL contract.
     - `expectedAccessPath`
     - `expectedProjectRoot`
     - `expectedDestinationRoot`
-    - `allowTables`
-    - `denyTables`
     - `cwd`
     - `projectChoiceReason`
     - `recoveryToken`
@@ -112,3 +110,5 @@ Replace these placeholders with values from your worktree (HR-10, HR-11):
 - Other tool-specific runtime values per `describe_tool({name:"query_execute"})`.
 
 The live `inputSchema.properties` (read once per session via `describe_tool`) is authoritative. This file is a scaffold, not a frozen contract.
+
+`allowTables` and `denyTables` are not accepted by `query_execute`. Dysflow cannot prove every table referenced by arbitrary Jet/ACE SQL without a complete parser, so supplying either field fails closed with `MCP_INPUT_INVALID`. Use a structured table action such as `seed_fixture` or `teardown_fixture` when table scoping is required.

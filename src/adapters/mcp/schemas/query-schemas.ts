@@ -82,10 +82,6 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       sql: SCHEMA_PROPS.sql,
       query: SCHEMA_PROPS.query,
       ...WRITE_INTENT_BLOCK,
-      allowTables: SCHEMA_PROPS.allowTables,
-      allowTable: SCHEMA_PROPS.allowTable,
-      denyTables: SCHEMA_PROPS.denyTables,
-      denyTable: SCHEMA_PROPS.denyTable,
     },
   },
   run_script: {
@@ -97,10 +93,6 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       scriptPath: SCHEMA_PROPS.scriptPath,
       path: SCHEMA_PROPS.path,
       ...WRITE_INTENT_BLOCK,
-      allowTables: SCHEMA_PROPS.allowTables,
-      allowTable: SCHEMA_PROPS.allowTable,
-      denyTables: SCHEMA_PROPS.denyTables,
-      denyTable: SCHEMA_PROPS.denyTable,
     },
   },
   create_table: {
