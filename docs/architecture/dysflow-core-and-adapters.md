@@ -79,18 +79,26 @@ scripts/dysflow-vba-manager.ps1
 ```
 
 The pure core service owns ordered pass selection, progress-based retry, rollback policy,
-save-only decisions, typed per-module error mapping, and the terminal result projection. The
-PowerShell boundary retains the one live Access session and implements only the raw mutation and
-save primitives. This keeps COM out of `src/core/**` without opening a new Access process for each
-module.
+save-only decisions, typed per-module error mapping, and the terminal result projection.
 
-The observable contract is preserved: retries target failed modules only after another module made
-progress, mutation failures request rollback to the pre-import snapshot, new components and
-re-imported forms/reports request `RunCommand(280)`, and a post-import save failure is a warning
-that does not replace successful module results. Import never compiles VBA; the human still compiles
-in Access before running tests. The executable behavior matrix lives in
-[`test/fixtures/vba-import-orchestration-contract.json`](../../test/fixtures/vba-import-orchestration-contract.json),
-with the full boundary contract in
+The PowerShell boundary retains the one live Access session and implements only the raw mutation
+and save primitives.
+
+This keeps COM out of `src/core/**` without opening a new Access process for each module.
+
+The observable contract is preserved:
+
+- Retries target failed modules only after another module made progress.
+- Mutation failures request rollback to the pre-import snapshot.
+- New components and re-imported forms/reports request `RunCommand(280)`.
+- A post-import save failure is a warning and does not replace successful module results.
+
+Import never compiles VBA. The human still compiles in Access before running tests.
+
+Review the executable behavior matrix first:
+[`test/fixtures/vba-import-orchestration-contract.json`](../../test/fixtures/vba-import-orchestration-contract.json).
+
+For the full boundary contract, continue with
 [`vba-import-orchestration.md`](./vba-import-orchestration.md).
 
 ## Compatibility reference

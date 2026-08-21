@@ -1,8 +1,11 @@
 # VBA Import Orchestration Contract
 
-This document captures the observable import behavior from `origin/main` at `7ba072a2` that
-issue #1463 preserves while moving policy out of `scripts/dysflow-vba-manager.ps1`. The executable matrix is
-`test/fixtures/vba-import-orchestration-contract.json`.
+This document captures the observable import behavior from `origin/main` at `7ba072a2`.
+
+Issue #1463 preserves that behavior while moving policy out of
+`scripts/dysflow-vba-manager.ps1`.
+
+The executable matrix is `test/fixtures/vba-import-orchestration-contract.json`.
 
 ## Behavior and failure matrix
 
@@ -31,6 +34,9 @@ issue #1463 preserves while moving policy out of `scripts/dysflow-vba-manager.ps
 ## Migration seam
 
 The TypeScript core owns pass selection, retry policy, rollback policy, save decisions, and
-legacy result projection. PowerShell executes ordered primitive commands against the live COM
-session and serializes raw outcomes. Removing the core orchestrator reverts the slice without
-changing the COM import atoms.
+legacy result projection.
+
+PowerShell executes ordered primitive commands against the live COM session and serializes raw
+outcomes.
+
+Removing the core orchestrator reverts the slice without changing the COM import atoms.
