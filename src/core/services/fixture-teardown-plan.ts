@@ -1,6 +1,6 @@
 import type { AccessQueryRequest, FixtureTeardownPredicate } from "../contracts/index.js";
 
-const ACCESS_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ACCESS_IDENTIFIER = /^[\p{L}\p{N}_ -]+$/u;
 export const FIXTURE_TEST_ID_MIN = 900_000;
 
 export type FixtureTeardownPlan = {
@@ -38,10 +38,15 @@ export function buildFixtureTeardownPlan(
   }
 
   const tableName = request.tableName;
-  if (tableName === undefined || !ACCESS_IDENTIFIER.test(tableName)) {
+  if (tableName === undefined) {
     return invalid("teardown_fixture tableName must be a valid Access identifier.");
   }
-  if (!ACCESS_IDENTIFIER.test(predicate.column)) {
+  const quotedTable = formatAccessIdentifier(tableName);
+  if (quotedTable === undefined) {
+    return invalid("teardown_fixture tableName must be a valid Access identifier.");
+  }
+  const quotedColumn = formatAccessIdentifier(predicate.column);
+  if (quotedColumn === undefined) {
     return invalid("teardown_fixture predicate column must be a valid Access identifier.");
   }
   if (!Number.isSafeInteger(predicate.min) || !Number.isSafeInteger(predicate.max)) {
@@ -59,9 +64,15 @@ export function buildFixtureTeardownPlan(
   }
 
   const sql =
-    `DELETE FROM [${tableName}] WHERE [${predicate.column}] ` +
+    `DELETE FROM ${quotedTable} WHERE ${quotedColumn} ` +
     `BETWEEN ${predicate.min} AND ${predicate.max}`;
   return { ok: true, plan: { tableName, predicate: { ...predicate }, sql } };
+}
+
+function formatAccessIdentifier(name: string | undefined): string | undefined {
+  return name !== undefined && name.trim().length > 0 && ACCESS_IDENTIFIER.test(name)
+    ? `[${name}]`
+    : undefined;
 }
 
 function invalid(message: string): FixtureTeardownPlanResult {

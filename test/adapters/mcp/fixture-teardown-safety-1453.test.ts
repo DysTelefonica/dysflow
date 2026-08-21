@@ -37,19 +37,22 @@ describe("#1453 teardown_fixture MCP contract", () => {
     expect(requests).toEqual([]);
   });
 
-  it("rejects malformed predicate fields before dispatch", async () => {
+  it("dispatches Access-compatible identifier fields", async () => {
     const { requests, tool } = fixture();
 
     const result = await tool.handler({
-      tableName: "FixtureRows",
-      predicate: { column: "bad-column", min: 900_000, max: 900_010 },
+      tableName: "2026 Fixture-Rows",
+      predicate: { column: "Test Id", min: 900_000, max: 900_010 },
       apply: true,
     });
 
-    expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe("MCP_INPUT_INVALID");
-    expect(result.error?.message).toMatch(/predicate\.column/i);
-    expect(requests).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(requests).toEqual([
+      expect.objectContaining({
+        tableName: "2026 Fixture-Rows",
+        predicate: { column: "Test Id", min: 900_000, max: 900_010 },
+      }),
+    ]);
   });
 
   it("rejects a range below TEST_ID_BASE before dispatch", async () => {
@@ -120,8 +123,8 @@ describe("#1453 teardown_fixture MCP contract", () => {
     if (tool === undefined) throw new Error("teardown_fixture is not registered");
 
     const result = await tool.handler({
-      tableName: "FixtureRows",
-      predicate: { column: "TestId", min: 900_000, max: 900_010 },
+      tableName: "2026 Fixture-Rows",
+      predicate: { column: "Test Id", min: 900_000, max: 900_010 },
       apply: false,
     });
 
@@ -131,11 +134,11 @@ describe("#1453 teardown_fixture MCP contract", () => {
       dryRun: true,
       willExecute: false,
       willModifyAccess: false,
-      sql: "DELETE FROM [FixtureRows] WHERE [TestId] BETWEEN 900000 AND 900010",
+      sql: "DELETE FROM [2026 Fixture-Rows] WHERE [Test Id] BETWEEN 900000 AND 900010",
       plan: {
-        tableName: "FixtureRows",
-        predicate: { column: "TestId", min: 900_000, max: 900_010 },
-        sql: "DELETE FROM [FixtureRows] WHERE [TestId] BETWEEN 900000 AND 900010",
+        tableName: "2026 Fixture-Rows",
+        predicate: { column: "Test Id", min: 900_000, max: 900_010 },
+        sql: "DELETE FROM [2026 Fixture-Rows] WHERE [Test Id] BETWEEN 900000 AND 900010",
       },
     });
   });

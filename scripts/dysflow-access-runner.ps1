@@ -475,6 +475,7 @@ function Get-TableNames {
 
 function Get-TableSchema {
   param($Database, [string] $TableName)
+  [void](Format-AccessIdentifier -Name $TableName -Label "table")
   $table = $Database.TableDefs.Item($TableName)
   $schema = New-Object System.Collections.ArrayList
   foreach ($field in $table.Fields) {
@@ -1136,21 +1137,21 @@ function Format-SqlLiteral {
   return "'" + ($Value.ToString().Replace("'", "''")) + "'"
 }
 
-# Centralized Access identifier quoting (issue #573). Validates the name against
-# the ASCII identifier grammar and returns the bracket-wrapped form. Every SQL
+# Centralized Access identifier quoting (issues #573, #1456). Validates the
+# compatibility-safe name grammar and returns the bracket-wrapped form. Every SQL
 # interpolation site (count_rows, distinct_values, create_table, drop_table,
 # seed_fixture, teardown_fixture) must go through this helper so an unsafe
-# name can never reach the SQL string — bracket-escape attacks via `]` and SQL
-# separator injection via `;`, quotes, or whitespace are rejected with a
-# descriptive error that names the offending value.
+# name can never reach the SQL string. Brackets delimit identifiers in Access
+# SQL, so names containing either bracket are rejected instead of applying an
+# unverified escaping rule.
 function Format-AccessIdentifier {
   param(
     [Parameter(Mandatory = $true)] [AllowEmptyString()] [string] $Name,
     [Parameter(Mandatory = $false)] [string] $Label = "identifier"
   )
   if ([string]::IsNullOrWhiteSpace($Name)) { throw "$Label name is required." }
-  if ($Name -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') {
-    throw "Invalid $Label name: $Name. Names must start with a letter or underscore and contain only letters, digits, or underscores."
+  if ($Name -notmatch '^[\p{L}\p{N}_ -]+$') {
+    throw "Invalid $Label name: $Name. Names may contain Unicode letters, digits, spaces, hyphens, or underscores; brackets are not allowed."
   }
   return "[$Name]"
 }
