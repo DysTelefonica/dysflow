@@ -324,7 +324,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   exec_sql:
     "Execute an arbitrary SQL write (INSERT/UPDATE/DELETE/DDL). Write-gated; dryRun/apply control plan vs commit. Table allow/deny policies are rejected because Dysflow does not parse every Jet/ACE SQL form.",
   run_script:
-    "Execute an arbitrary multi-statement Access SQL script from scriptPath/path. Write-gated; dryRun/apply control plan vs commit. Table allow/deny policies are rejected because Dysflow does not parse every statement form.",
+    "Run multi-statement Access SQL. Preview is non-mutating with statementCount. Apply uses an isolated DAO transaction; failures roll back and identify statement position without SQL text. Table policies are rejected.",
   create_table:
     "Create a table from a definition/fields list. Write-gated; dryRun/apply control plan vs commit.",
   drop_table: "Drop a table (DESTRUCTIVE). Write-gated; dryRun/apply control plan vs commit.",

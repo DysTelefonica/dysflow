@@ -236,6 +236,43 @@ function Resolve-WriteActionDatabase {
   return [ordered]@{ Database = $targetDb; Owned = $true; TargetPath = $targetPath }
 }
 
+function Open-RunScriptTransactionContext {
+  param(
+    [Parameter(Mandatory = $true)] $DbEngine,
+    [Parameter(Mandatory = $true)] [string] $DatabasePath,
+    [Parameter(Mandatory = $false)] [string] $Password = ""
+  )
+  $workspace = $null
+  $database = $null
+  try {
+    # DAO transactions are global to a Workspace. A dedicated workspace keeps
+    # this script's commit/rollback from affecting any database work owned by
+    # the canonical Access session or another caller.
+    $workspaceName = "dysflow-run-script-" + [guid]::NewGuid().ToString("N")
+    $workspace = $DbEngine.CreateWorkspace($workspaceName, "admin", "", 2)
+    $database = Open-DatabaseWithPassword `
+      -DbEngine $workspace `
+      -DatabasePath $DatabasePath `
+      -Password $Password
+    return [ordered]@{ Workspace = $workspace; Database = $database; DatabasePath = $DatabasePath }
+  } catch {
+    if ($null -ne $database) { try { $database.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $workspace) { try { $workspace.Close() } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $database) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) } catch { Write-Debug "Diagnostics: $_" } }
+    if ($null -ne $workspace) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($workspace) } catch { Write-Debug "Diagnostics: $_" } }
+    throw
+  }
+}
+
+function Close-RunScriptTransactionContext {
+  param($Context)
+  if ($null -eq $Context) { return }
+  if ($null -ne $Context.Database) { try { $Context.Database.Close() } catch { Write-Debug "Diagnostics: $_" } }
+  if ($null -ne $Context.Workspace) { try { $Context.Workspace.Close() } catch { Write-Debug "Diagnostics: $_" } }
+  if ($null -ne $Context.Database) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($Context.Database) } catch { Write-Debug "Diagnostics: $_" } }
+  if ($null -ne $Context.Workspace) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($Context.Workspace) } catch { Write-Debug "Diagnostics: $_" } }
+}
+
 function Resolve-ReadActionDatabase {
   param(
     [Parameter(Mandatory = $true)] $DbEngine,
@@ -1180,8 +1217,88 @@ function Split-SqlStatements {
   return $statements
 }
 
+function Invoke-RunScriptAction {
+  param($Database, $TransactionWorkspace, $Payload)
+
+  if ([string]::IsNullOrWhiteSpace([string]$Payload.scriptPath)) { throw "scriptPath is required for run_script." }
+  $rootPath = [string]$Payload.rootPath
+  if ([string]::IsNullOrWhiteSpace($rootPath)) { $rootPath = Split-Path -Path $AccessDbPath -Parent }
+  $scriptPath = Resolve-SandboxedPath -RawPath ([string]$Payload.scriptPath) -RootPath $rootPath -Label "scriptPath"
+  if (-not (Test-Path -LiteralPath $scriptPath)) { throw "Script file not found: $scriptPath" }
+
+  $statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))
+  $statementCount = $statements.Count
+  $dryRun = $true
+  if ($null -ne $Payload.dryRun) { $dryRun = [bool]$Payload.dryRun }
+
+  if ($dryRun) {
+    return [ordered]@{
+      dryRun = $true
+      transactional = $false
+      statementCount = $statementCount
+      statements = $statements
+    }
+  }
+
+  if ($statementCount -eq 0) {
+    return [ordered]@{
+      dryRun = $false
+      transactional = $false
+      statementCount = 0
+      statements = @()
+    }
+  }
+  if ($null -eq $TransactionWorkspace) {
+    throw "run_script requires an isolated transaction workspace; no statements were executed."
+  }
+  if ($null -eq $Database.PSObject.Properties['Transactions'] -or -not [bool]$Database.Transactions) {
+    throw "run_script target does not support transactions; no statements were executed."
+  }
+
+  try {
+    $TransactionWorkspace.BeginTrans()
+  } catch {
+    throw "run_script could not start its isolated transaction; no statements were executed."
+  }
+
+  $executed = New-Object System.Collections.ArrayList
+  for ($index = 0; $index -lt $statementCount; $index++) {
+    $statementNumber = $index + 1
+    $sql = $statements[$index].Trim()
+    try {
+      $Database.Execute($sql, 128)
+      [void]$executed.Add($sql)
+    } catch {
+      try {
+        $TransactionWorkspace.Rollback()
+      } catch {
+        throw "run_script rollback failed after statement $statementNumber of $statementCount failed; atomicity could not be confirmed."
+      }
+      throw "run_script failed at statement $statementNumber of $statementCount; transaction rolled back."
+    }
+  }
+
+  try {
+    $TransactionWorkspace.CommitTrans()
+  } catch {
+    try {
+      $TransactionWorkspace.Rollback()
+    } catch {
+      throw "run_script rollback failed after commit failed for $statementCount statements; atomicity could not be confirmed."
+    }
+    throw "run_script commit failed after $statementCount statements; transaction rolled back."
+  }
+
+  return [ordered]@{
+    dryRun = $false
+    transactional = $true
+    statementCount = $statementCount
+    statements = $executed
+  }
+}
+
 function Invoke-WriteAction {
-  param($Database, [string] $Action, $Payload)
+  param($Database, [string] $Action, $Payload, $TransactionWorkspace = $null)
 
   # Issue #1452 — arbitrary SQL cannot truthfully enforce allow/deny table
   # policies without a complete Jet/ACE parser. Check property PRESENCE (not
@@ -1228,24 +1345,10 @@ function Invoke-WriteAction {
       return [ordered]@{ dryRun = $false; affectedRows = $Database.RecordsAffected; sql = [string]$Payload.sql }
     }
     "run_script" {
-      if ([string]::IsNullOrWhiteSpace([string]$Payload.scriptPath)) { throw "scriptPath is required for run_script." }
-      $rootPath = [string]$Payload.rootPath
-      if ([string]::IsNullOrWhiteSpace($rootPath)) { $rootPath = Split-Path -Path $AccessDbPath -Parent }
-      $scriptPath = Resolve-SandboxedPath -RawPath ([string]$Payload.scriptPath) -RootPath $rootPath -Label "scriptPath"
-      if (-not (Test-Path -LiteralPath $scriptPath)) { throw "Script file not found: $scriptPath" }
-      $statements = @(Split-SqlStatements (Get-Content -LiteralPath $scriptPath -Raw))
-      $executed = New-Object System.Collections.ArrayList
-      foreach ($statement in $statements) {
-        $sql = $statement.Trim()
-        if ([string]::IsNullOrWhiteSpace($sql)) { continue }
-        if ($dryRun) {
-          [void]$executed.Add($sql)
-          continue
-        }
-        $Database.Execute($sql, 128)
-        [void]$executed.Add($sql)
-      }
-      return [ordered]@{ dryRun = $dryRun; statements = $executed }
+      return Invoke-RunScriptAction `
+        -Database $Database `
+        -TransactionWorkspace $TransactionWorkspace `
+        -Payload $Payload
     }
     "create_table" {
       if ([string]::IsNullOrWhiteSpace([string]$Payload.tableName)) { throw "tableName is required for create_table." }
@@ -2100,16 +2203,33 @@ try {
 
   if ($Operation -eq 'query') {
     if ($isDirectTargetQuery) {
-      $directDb = Open-DatabaseWithBackendPassword -DbEngine $access.DBEngine -DatabasePath $targetPath
+      $directDb = $null
+      $runScriptContext = $null
       try {
         $directAction = $action
         if ([string]::IsNullOrWhiteSpace($directAction) -and $payload.mode -eq 'write') { $directAction = 'exec_sql' }
-        $result = Invoke-WriteAction -Database $directDb -Action $directAction -Payload $payload
+        if ($directAction -eq 'run_script') {
+          $runScriptContext = Open-RunScriptTransactionContext `
+            -DbEngine $access.DBEngine `
+            -DatabasePath $targetPath `
+            -Password $BackendPassword
+          $result = Invoke-WriteAction `
+            -Database $runScriptContext.Database `
+            -Action $directAction `
+            -Payload $payload `
+            -TransactionWorkspace $runScriptContext.Workspace
+        } else {
+          $directDb = Open-DatabaseWithBackendPassword -DbEngine $access.DBEngine -DatabasePath $targetPath
+          $result = Invoke-WriteAction -Database $directDb -Action $directAction -Payload $payload
+        }
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         Write-DysflowResult -Result $result -Depth 20
       } finally {
-        try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
-        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
+        Close-RunScriptTransactionContext -Context $runScriptContext
+        if ($null -ne $directDb) {
+          try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+          try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
+        }
       }
       $script:exitCode = 0; return
     }
@@ -2304,11 +2424,25 @@ try {
 
     if ($action -in @('exec_sql', 'run_script', 'create_table', 'drop_table', 'seed_fixture', 'teardown_fixture')) {
       $writeDb = Resolve-WriteActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
+      $runScriptContext = $null
       try {
-        $result = Invoke-WriteAction -Database $writeDb.Database -Action $action -Payload $payload
+        if ($action -eq 'run_script' -and -not $dryRun) {
+          $runScriptContext = Open-RunScriptTransactionContext `
+            -DbEngine $access.DBEngine `
+            -DatabasePath $AccessDbPath `
+            -Password $AccessPassword
+          $result = Invoke-WriteAction `
+            -Database $runScriptContext.Database `
+            -Action $action `
+            -Payload $payload `
+            -TransactionWorkspace $runScriptContext.Workspace
+        } else {
+          $result = Invoke-WriteAction -Database $writeDb.Database -Action $action -Payload $payload
+        }
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         Write-DysflowResult -Result $result -Depth 20
       } finally {
+        Close-RunScriptTransactionContext -Context $runScriptContext
         if ($writeDb.Owned) {
           try { $writeDb.Database.Close() } catch { Write-Debug "Diagnostics: $_" }
           try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($writeDb.Database) } catch { Write-Debug "Diagnostics: $_" }
