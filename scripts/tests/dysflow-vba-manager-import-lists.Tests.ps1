@@ -22,6 +22,8 @@
 #        Unicode module names
 # ===========================================================================
 
+Import-Module (Join-Path $PSScriptRoot ".." "lib" "dysflow-vba-import-transport.psm1") -Force
+
 Describe "Invoke-ImportAction — per-module structured reporting (consumer request)" {
     BeforeAll {
         $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
@@ -552,31 +554,27 @@ Describe "Invoke-ImportAction — ModifiedDocumentNames surface for re-imported 
         }
     }
 
-    Context "R-849 — dispatcher gate structural contract" {
+    Context "R-849 — core save decision contract" {
 
-        It "the top-level dispatcher (script Param block) gates Save-VbaProjectModules on ModifiedDocumentNames.Count too (#849 AST structural check)" {
-            # Walk the script body (the script is a top-level entry point with
-            # Param(), not a named function). Confirm the save-all gate condition
-            # references BOTH CreatedComponentNames and ModifiedDocumentNames. This
-            # is a structural contract: a future refactor that drops the
-            # ModifiedDocumentNames half must be flagged, because the runtime would
-            # silently regress to skipping save-all for form re-imports.
-            $src = $script:SourceAst.Extent.Text
-            $src | Should -Match 'ModifiedDocumentNames' `
-                -Because "issue #849: the dispatcher must read ModifiedDocumentNames from Invoke-ImportAction's result"
-            $src | Should -Match 'CreatedComponentNames' `
-                -Because "the dispatcher must continue to read CreatedComponentNames so newly created components are still saved"
-            $src | Should -Match 'Save-VbaProjectModules' `
-                -Because "the dispatcher must invoke Save-VbaProjectModules after a successful import"
-            # The gate must include the modified-documents term. A naive refactor
-            # that ONLY checks CreatedComponentNames would silently skip the save
-            # for form re-imports. Assert the gate expression references BOTH lists.
-            # Match the `Count -gt 0` shape on each list (whether or not the
-            # producer wraps the property with `@(...)` or a `.PSObject` guard).
-            $hasGateOnBoth = ($src -match 'ModifiedDocumentNames[\)\.]*\.Count\s*-gt\s*0') -and
-                             ($src -match 'CreatedComponentNames[\)\.]*\.Count\s*-gt\s*0')
-            $hasGateOnBoth | Should -Be $true `
-                -Because "the dispatcher save-all gate must be '(CreatedComponentNames.Count -gt 0) -or (ModifiedDocumentNames.Count -gt 0)'; dropping either side is a #849 regression"
+        It "the TypeScript core requests save-only persistence for a re-imported document (#849 runtime anchor)" {
+            $start = Invoke-VbaImportCoreDecision -Event start -Payload ([ordered]@{
+                targets = @('Form_X')
+                scope = 'explicit'
+            })
+            $decision = Invoke-VbaImportCoreDecision -Event pass-completed -Payload ([ordered]@{
+                state = $start.state
+                attempts = @([ordered]@{
+                    module = 'Form_X'
+                    ok = $true
+                    durationMs = 1
+                    modifiedDocumentName = 'Form_X'
+                    fallbackUsed = $false
+                    fallbackReason = $null
+                })
+            })
+
+            $decision.kind | Should -Be 'save'
+            @($decision.moduleNames) | Should -Contain 'Form_X'
         }
 
         It "Invoke-ImportAction returns ModifiedDocumentNames on the success envelope and the error envelope (#849 contract surface)" {

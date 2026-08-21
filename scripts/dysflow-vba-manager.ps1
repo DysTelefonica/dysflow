@@ -3417,7 +3417,8 @@ function Import-VbaModule {
         [Parameter(Mandatory = $true)][string]$ModuleName,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         $AccessApplication = $null,  # FIX: necesario para LoadFromText de formularios
-        [string]$ImportMode = "Auto"
+        [string]$ImportMode = "Auto",
+        [bool]$RollbackOnMutationFailure = $true
     )
 
     # Per-module phase tracking (R2 of the consumer request). The script-
@@ -3436,6 +3437,7 @@ function Import-VbaModule {
     $tmpAnsiSanitized = $null
     $component = $null
     $codeModule = $null
+    $canonicalDocumentText = $null
 
     try {
         # FIX: formularios/reportes usan LoadFromText — nunca VBComponents.Import
@@ -3563,6 +3565,9 @@ function Import-VbaModule {
                     $script:ImportCurrentPhase = "import-phase-failed"
                     throw ("No se pudo reconstruir el header canónico desde Access para '{0}': {1}. Se aborta el import para evitar usar un header local potencialmente desactualizado." -f $objectName, $_.Exception.Message)
                 }
+                if ([string]::IsNullOrWhiteSpace($canonicalDocumentText)) {
+                    throw "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED: SaveAsText did not produce a reusable document snapshot."
+                }
             } else {
                 Write-Status -Message ("WARN: '{0}' no existe en Access; se importará como documento nuevo usando el .form.txt/.report.txt local." -f $objectName) -Color DarkYellow
             }
@@ -3612,6 +3617,31 @@ function Import-VbaModule {
                 Import-DocumentCodeBehind -VbProject $VbProject -ModuleName $documentModuleName -SourcePath $codeBehindSrc
             }
 
+            if ($documentExistsInAccess) {
+                $rollbackApp = $AccessApplication
+                $rollbackObjectType = $objectType
+                $rollbackObjectName = $objectName
+                $rollbackDocumentText = $canonicalDocumentText
+                $rollbackAction = {
+                    $rollbackPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("VBAManager_rollback_{0}.txt" -f [guid]::NewGuid().ToString('N'))
+                    try {
+                        [IO.File]::WriteAllText($rollbackPath, $rollbackDocumentText, [Text.Encoding]::GetEncoding(1252))
+                        try { $rollbackApp.DoCmd.Close($rollbackObjectType, $rollbackObjectName, 1) } catch { Write-Debug "Diagnostics: $_" }
+                        $rollbackApp.LoadFromText($rollbackObjectType, $rollbackObjectName, $rollbackPath)
+                    } finally {
+                        Remove-Item -LiteralPath $rollbackPath -Force -ErrorAction SilentlyContinue
+                    }
+                }.GetNewClosure()
+            } else {
+                $rollbackApp = $AccessApplication
+                $rollbackObjectType = $objectType
+                $rollbackObjectName = $objectName
+                $rollbackAction = {
+                    try { $rollbackApp.DoCmd.Close($rollbackObjectType, $rollbackObjectName, 1) } catch { Write-Debug "Diagnostics: $_" }
+                    $rollbackApp.DoCmd.DeleteObject($rollbackObjectType, $rollbackObjectName)
+                }.GetNewClosure()
+            }
+
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
@@ -3631,6 +3661,7 @@ function Import-VbaModule {
                 Error                = $null
                 DurationMs           = 0
                 RollbackApplied      = $false
+                RollbackAction       = $rollbackAction
             }
         }
 
@@ -3794,6 +3825,24 @@ function Import-VbaModule {
                 }
             }
 
+            $rollbackProject = $VbProject
+            $rollbackComponentName = $actualComponentName
+            $rollbackSnapshot = $originalCodeModuleSnapshot
+            $rollbackAction = {
+                $rollbackComponent = $null
+                $rollbackCodeModule = $null
+                try {
+                    $rollbackComponent = $rollbackProject.VBComponents.Item($rollbackComponentName)
+                    $rollbackCodeModule = $rollbackComponent.CodeModule
+                    $restore = Restore-CodeModuleTextSnapshot -CodeModule $rollbackCodeModule -Snapshot $rollbackSnapshot
+                    if (-not $restore.applied) { throw ("Code module rollback failed: {0}" -f $restore.error) }
+                } finally {
+                    foreach ($rollbackObject in @($rollbackCodeModule, $rollbackComponent)) {
+                        if ($rollbackObject) { try { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($rollbackObject) | Out-Null } catch { Write-Debug "Diagnostics: $_" } }
+                    }
+                }
+            }.GetNewClosure()
+
             return [pscustomobject]@{
                 CreatedNewComponent  = $false
                 RequiresExplicitSave = $false
@@ -3803,6 +3852,7 @@ function Import-VbaModule {
                 RollbackApplied      = $false
                 FallbackUsed         = [bool]$fallbackUsed
                 FallbackReason       = $fallbackReason
+                RollbackAction       = $rollbackAction
                 # issue #752 — opt-in verbose contract. The pscustomobject
                 # shape stays backward-compatible: when -VerboseContract is
                 # not requested, Verbose is $null and existing consumers ignore
@@ -3813,7 +3863,7 @@ function Import-VbaModule {
             }
         } catch {
             if ($_.Exception.Message -ne 'COMPONENTE_NO_ENCONTRADO') {
-                if ($mutationStarted) {
+                if ($mutationStarted -and $RollbackOnMutationFailure) {
                     $script:ImportLastRollbackAttempted = $true
                     $rollbackResult = Restore-CodeModuleTextSnapshot -CodeModule $codeModule -Snapshot $originalCodeModuleSnapshot
                     $script:ImportLastRollbackApplied = [bool]$rollbackResult.applied
@@ -3834,6 +3884,14 @@ function Import-VbaModule {
             # Evita prompts/modales de VBE asociados a VBComponents.Import() y mantiene control del nombre final.
             $script:ImportCurrentPhase = "import"
             $newResult = New-VbComponentFromCodeFile -AccessApplication $AccessApplication -VbProject $VbProject -ModuleName $ModuleName -SourcePath $src -SanitizedAnsiPath $tmpAnsiSanitized
+            $createdComponentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $ModuleName
+            if (-not $createdComponentName) { throw "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED: created component could not be resolved for rollback." }
+            $rollbackApp = $AccessApplication
+            $rollbackAction = {
+                # acModule = 5. Keep rollback on the prompt-safe Access primitive;
+                # VBComponents.Remove can surface VBE UI in visible instances.
+                $rollbackApp.DoCmd.DeleteObject(5, $createdComponentName)
+            }.GetNewClosure()
             # Augment the existing return with the consumer-request fields so the
             # upstream caller (Invoke-ImportAction) sees the same shape it sees for
             # the update path. CreatedNewComponent / RequiresExplicitSave stay as-is.
@@ -3847,6 +3905,7 @@ function Import-VbaModule {
                 FallbackUsed         = $false
                 FallbackReason       = $null
                 Verbose              = $newResult.Verbose
+                RollbackAction       = $rollbackAction
             }
         }
 
@@ -5216,26 +5275,23 @@ function Invoke-ImportAction {
         [string[]]$NormalizedModules,
         [Parameter(Mandatory = $true)][string]$ModulesPath,
         [Parameter(Mandatory = $true)][string]$ImportMode,
-        # R4: when bound, an empty NormalizedModules list is treated as an
-        # explicit no-op plan (no Get-ChildItem discovery fallback, no
-        # import-all expansion). When NOT bound (legacy call paths), the
-        # absence of moduleNames keeps the historical "import everything
-        # under ModulesPath" behavior.
         [switch]$ModuleNamesExplicit,
         [switch]$Json
     )
 
-    $vbProject = $Session.VbProject
+    # Issue #1463 — load the thin transport only for import actions. Keeping
+    # this inside the import boundary lets non-import script harnesses source
+    # the manager without requiring a script-root context.
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        Import-Module (Join-Path -Path $PSScriptRoot -ChildPath "lib/dysflow-vba-import-transport.psm1") -Force
+    } elseif (-not (Get-Command -Name Invoke-VbaImportTransport -ErrorAction SilentlyContinue)) {
+        throw 'VBA import transport is unavailable because the manager script root could not be resolved.'
+    }
 
     $targets = @()
     if ($NormalizedModules.Count -gt 0) {
-        $targets = $NormalizedModules
-    } elseif ($ModuleNamesExplicit) {
-        # R4: explicit-empty. Do NOT fall back to Get-ChildItem. The caller
-        # is asking for a plan with zero modules; respect that.
-        $targets = @()
-    } else {
-        # FIX: incluir *.form.txt y *.report.txt y extraer nombre correctamente
+        $targets = @($NormalizedModules)
+    } elseif (-not $ModuleNamesExplicit) {
         $targets = @(Get-ChildItem -Path $ModulesPath -File -Recurse `
             -Include "*.bas", "*.cls", "*.frm", "*.form.txt", "*.report.txt" -ErrorAction SilentlyContinue |
             ForEach-Object {
@@ -5245,272 +5301,90 @@ function Invoke-ImportAction {
             } | Sort-Object -Unique)
     }
 
-    $total = $targets.Count
-    $useRetryImport = ($targets.Count -gt 1)
-    $createdComponentNames = New-Object System.Collections.Generic.List[string]
-    # issue #849 — track form/report re-imports separately so the dispatcher can
-    # trigger Save-VbaProjectModules for them too (the previous gate was
-    # CreatedComponentNames.Count -gt 0, which is empty for re-imports and
-    # skipped RunCommand(280), leaving LoadFromText + Import-DocumentCodeBehind
-    # mutations in dirty COM state).
-    $modifiedDocumentNames = New-Object System.Collections.Generic.List[string]
-    $pendingTargets = @($targets)
-    $pass = 0
-    # R2: per-module structured result. Keys are module names, values are
-    # pscustomobject entries with {module, status, phase, error, durationMs,
-    # rollbackApplied, fallbackUsed, fallbackReason}. On error, error carries
-    # {code, message, machine, user, rollbackAttempted, rollbackApplied,
-    # rollbackError, fallbackUsed, fallbackReason}. Keeping these keyed by
-    # module name lets the retry loop preserve the last known good/bad state
-    # for each module.
-    $lastResults = @{}
-    $maxPasses = if ($useRetryImport) { [Math]::Max(2, $targets.Count) } else { 1 }
-
-    do {
-        $pass++
-        $progressThisPass = $false
-        $failedThisPass = New-Object System.Collections.Generic.List[string]
-        $idx = 0
-
-        foreach ($name in $pendingTargets) {
-            $idx++
-            if ($useRetryImport -and $pass -gt 1) {
-                Write-Status -Message ("[{0}/{1}] Importando (pasada {2}): {3}" -f $idx, $pendingTargets.Count, $pass, $name) -Color Cyan
-            } else {
-                Write-Status -Message ("[{0}/{1}] Importando: {2}" -f $idx, $total, $name) -Color Cyan
-            }
-
-            $moduleStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-            $script:ImportCurrentPhase = "locate-source"
-            $script:ImportLastRollbackAttempted = $false
-            $script:ImportLastRollbackApplied = $false
-            $script:ImportLastRollbackError = $null
-            $script:ImportLastFallbackUsed = $false
-            $script:ImportLastFallbackReason = $null
-            try {
-                $beforeExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
-                $importResult = Import-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -ImportMode $ImportMode
-                if (-not $beforeExists) {
-                    $afterExists = Resolve-ExistingComponentName -VbProject $vbProject -ModuleName $name
-                    if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
-                        $createdComponentNames.Add([string]$afterExists) | Out-Null
-                    }
-                } elseif ($importResult -and $importResult.PSObject.Properties['ReimportedDocument'] -and [bool]$importResult.ReimportedDocument) {
-                    # issue #849 — form/report re-import path. The form already
-                    # existed in the binary, so CreatedComponentNames stays
-                    # empty; the dispatcher needs a separate signal to know
-                    # Save-VbaProjectModules must run.
-                    $modifiedDocumentNames.Add([string]$name) | Out-Null
+    $scope = if ($ModuleNamesExplicit) { 'explicit' } else { 'all' }
+    $coreDecision = {
+        param($eventName, $payload)
+        Invoke-VbaImportCoreDecision -Event $eventName -Payload $payload
+    }
+    $runPass = {
+        param($moduleNames, $rollbackOnMutationFailure, $pass, $total)
+        Invoke-VbaImportPrimitivePass `
+            -Session $Session `
+            -ModuleNames @($moduleNames) `
+            -ModulesPath $ModulesPath `
+            -ImportMode $ImportMode `
+            -RollbackOnMutationFailure ([bool]$rollbackOnMutationFailure) `
+            -Pass ([int]$pass) `
+            -Total ([int]$total) `
+            -ResolveExisting { param($project, $name) Resolve-ExistingComponentName -VbProject $project -ModuleName $name } `
+            -ImportModule {
+                param($importSession, $name, $sourceRoot, $mode, $rollback)
+                $importArgs = @{
+                    VbProject = $importSession.VbProject
+                    ModuleName = $name
+                    ModulesPath = $sourceRoot
+                    AccessApplication = $importSession.AccessApplication
+                    ImportMode = $mode
                 }
-                $moduleStopwatch.Stop()
-                $progressThisPass = $true
-                # R2 success record. Phase is null on the happy path because
-                # nothing failed. DurationMs is captured per-module (not just
-                # total). rollbackApplied is false on success because no
-                # rollback is needed; fallbackUsed/fallbackReason report whether
-                # the F16 AddFromString fallback was needed after AddFromFile.
-                $resultFallbackUsed = [bool]($importResult -and $importResult.PSObject.Properties['FallbackUsed'] -and $importResult.FallbackUsed)
-                $resultFallbackReason = $null
-                if ($importResult -and $importResult.PSObject.Properties['FallbackReason']) {
-                    $resultFallbackReason = $importResult.FallbackReason
+                if ((Get-Command -Name Import-VbaModule).Parameters.ContainsKey('RollbackOnMutationFailure')) {
+                    $importArgs.RollbackOnMutationFailure = [bool]$rollback
                 }
-                $lastResults[$name] = [pscustomobject]@{
-                    module          = [string]$name
-                    status          = "ok"
-                    phase           = $null
-                    error           = $null
-                    durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
-                    rollbackApplied = $false
-                    fallbackUsed    = $resultFallbackUsed
-                    fallbackReason  = $resultFallbackReason
-                }
-                if ($lastResults[$name].error) {
-                    # Defensive: never let a non-null error slip into an ok entry.
-                    $lastResults[$name].error = $null
-                }
-                # issue #752 — forward the optional Verbose snapshot from
-                # Import-VbaModule. Backward-compatible: when the caller did not
-                # pass -VerboseContract, $importResult.Verbose is $null and we
-                # do not set the property on $lastResults[$name]. When set, the
-                # field carries {source, destination, truncated, mismatchReason}.
-                if ($importResult -and $importResult.PSObject.Properties['Verbose'] -and $importResult.Verbose) {
-                    $lastResults[$name] | Add-Member -NotePropertyName Verbose -NotePropertyValue ($importResult.Verbose) -Force
-                }
-            } catch {
-                $moduleStopwatch.Stop()
-                $failedThisPass.Add($name) | Out-Null
-                # Coerce $_.Exception.Message defensively to a string (issue #496). When
-                # the VBE raises a COM error (e.g. 0x800A09D5), .Exception.Message can be
-                # a COM property reference rather than a plain string, which later breaks
-                # ConvertTo-Json inside Write-DysflowResult.
-                $rawMessage = $_.Exception.Message
-                $messageString = if ($null -eq $rawMessage) { "<empty VBE error>" }
-                                 elseif ($rawMessage -is [string]) { $rawMessage }
-                                 else { [string]$rawMessage }
-                # R2 structured error. machine/user are populated only when the
-                # message text matches a recognizable Access lock pattern;
-                # otherwise null. We deliberately do NOT try to be cleverer
-                # than the message text — guessing would mislead consumers.
-                # issue #752 — VB_NAME_MISMATCH / DUPLICATE_OPTION_DIRECTIVE /
-                # IMPORT_TRUNCATED detection is done by simple prefix matching
-                # on the throw messages emitted by Import-VbaModule so the
-                # per-module error.code carries the typed signal consumers need
-                # to act on the failure without re-parsing free-form text.
-                $machine = $null
-                $user = $null
-                $errorCode = "VBA_IMPORT_PHASE_FAILED"
-                if ($messageString.StartsWith("VB_NAME_MISMATCH:")) {
-                    $errorCode = "VB_NAME_MISMATCH"
-                } elseif ($messageString.StartsWith("FORM_SOURCE_MALFORMED:")) {
-                    # issue #958 — structural pre-import guard rejected the
-                    # .form.txt/.report.txt before LoadFromText touched the
-                    # binary.
-                    $errorCode = "FORM_SOURCE_MALFORMED"
-                } elseif ($messageString.StartsWith("DUPLICATE_OPTION_DIRECTIVE:")) {
-                    $errorCode = "DUPLICATE_OPTION_DIRECTIVE"
-                } elseif ($messageString.StartsWith("IMPORT_TRUNCATED:")) {
-                    $errorCode = "IMPORT_TRUNCATED"
-                } elseif ($messageString.StartsWith("VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED:")) {
-                    $errorCode = "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED"
-                } elseif ($messageString.StartsWith("FORM_NAME_RESOLUTION_FAILED:")) {
-                    $errorCode = "FORM_NAME_RESOLUTION_FAILED"
-                } elseif ($messageString.StartsWith("FORM_VBNAME_PREFIX_MISMATCH:")) {
-                    # issue #1040 — pre-import guard rejected the Auto-mode
-                    # full-form source because the binary already has
-                    # `Form_<base>` and the .cls declares VB_Name without
-                    # the prefix. The import was not started so no rollback
-                    # is required (binary is untouched).
-                    $errorCode = "FORM_VBNAME_PREFIX_MISMATCH"
-                } elseif (Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) {
-                    if (Test-IsAccessDatabaseLockedError -Message $messageString) {
-                        $errorCode = "ACCESS_DATABASE_LOCKED"
-                        if (Get-Command -Name Get-AccessDatabaseLockedOwner -ErrorAction SilentlyContinue) {
-                            $locked = Get-AccessDatabaseLockedOwner -Message $messageString
-                            $machine = $locked.machine
-                            $user = $locked.user
-                        }
-                    }
-                }
-                $lastResults[$name] = [pscustomobject]@{
-                    module          = [string]$name
-                    status          = "error"
-                    phase           = [string]$script:ImportCurrentPhase
-                    error           = [ordered]@{
-                        code    = $errorCode
-                        message = $messageString
-                        # Issue #957 P1 — surface rebuild-path diagnostic data so
-                        # consumers can tell stale-handle (ACE 3265) from
-                        # property-collection (Properties.Count missing) from
-                        # identity (objectName mismatch) issues. The diagnostic
-                        # is set inside the canonical-header rebuild catch
-                        # block; the lift into the structured envelope happens
-                        # here so the human-readable message stays free of
-                        # path-bearing data that would break JSON encoding.
-                        data    = if ($script:LastRebuildDiagnostic) { $script:LastRebuildDiagnostic } else { $null }
-                        remediation = switch ($errorCode) {
-                            "VB_NAME_MISMATCH" { "Make Attribute VB_Name match the target module name before retrying." }
-                            "DUPLICATE_OPTION_DIRECTIVE" { "Keep only one copy of each Option directive before retrying." }
-                            "IMPORT_TRUNCATED" { "Restore the complete module source and retry the import." }
-                            "VBA_IMPORT_ROLLBACK_SNAPSHOT_FAILED" { "Resolve the snapshot failure before retrying; the import was not started safely." }
-                            "FORM_NAME_RESOLUTION_FAILED" { "Rename the form/report source so its module name resolves to a non-empty Access object name before retrying." }
-                            "FORM_VBNAME_PREFIX_MISMATCH" { "Rename the source files to use the prefixed form name (Form_<base> or Report_<base>) or delete the legacy prefixed form from the binary before retrying." }
-                            "ACCESS_DATABASE_LOCKED" { "Close the verified lock owner or reconcile the tracked Access operation before retrying." }
-                            default { "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding." }
-                        }
-                        machine = $machine
-                        user    = $user
-                        rollbackAttempted = [bool]$script:ImportLastRollbackAttempted
-                        rollbackApplied   = [bool]$script:ImportLastRollbackApplied
-                        rollbackError     = $script:ImportLastRollbackError
-                        fallbackUsed      = [bool]$script:ImportLastFallbackUsed
-                        fallbackReason    = $script:ImportLastFallbackReason
-                    }
-                    durationMs      = [int64]$moduleStopwatch.ElapsedMilliseconds
+                Import-VbaModule @importArgs
+            } `
+            -ResetDiagnostics {
+                $script:ImportCurrentPhase = 'locate-source'
+                $script:ImportLastRollbackAttempted = $false
+                $script:ImportLastRollbackApplied = $false
+                $script:ImportLastRollbackError = $null
+                $script:ImportLastFallbackUsed = $false
+                $script:ImportLastFallbackReason = $null
+                $script:LastRebuildDiagnostic = $null
+            } `
+            -ReadDiagnostics {
+                [pscustomobject]@{
+                    phase = [string]$script:ImportCurrentPhase
+                    data = $script:LastRebuildDiagnostic
+                    rollbackAttempted = [bool]$script:ImportLastRollbackAttempted
                     rollbackApplied = [bool]$script:ImportLastRollbackApplied
-                    fallbackUsed    = [bool]$script:ImportLastFallbackUsed
-                    fallbackReason  = $script:ImportLastFallbackReason
+                    rollbackError = $script:ImportLastRollbackError
+                    fallbackUsed = [bool]$script:ImportLastFallbackUsed
+                    fallbackReason = $script:ImportLastFallbackReason
                 }
-            }
-        }
-
-        $pendingTargets = @($failedThisPass)
-    } while ($useRetryImport -and $pendingTargets.Count -gt 0 -and $progressThisPass -and $pass -lt $maxPasses)
-
-    # R2: emit per-module entries in the order the caller requested, with the
-    # rich shape {module, status, phase, error:{...}, durationMs,
-    # rollbackApplied, fallbackUsed, fallbackReason}. Error entries include
-    # nested rollback/fallback diagnostics under error as well.
-    # Preserve the existing happy-path emit shape (top-level array) so existing
-    # consumers parsing the DYSFLOW_RESULT sentinel still see a JSON array of
-    # module entries.
-    $moduleResults = New-Object System.Collections.Generic.List[object]
-    foreach ($t in $targets) {
-        if ($lastResults.ContainsKey([string]$t)) {
-            $moduleResults.Add($lastResults[[string]$t]) | Out-Null
-        } else {
-            # Should not happen, but defend against an entry that was never
-            # processed (e.g. empty NormalizedModules explicit case).
-            $moduleResults.Add([pscustomobject]@{
-                module          = [string]$t
-                status          = "ok"
-                phase           = $null
-                error           = $null
-                durationMs      = 0
-                rollbackApplied = $false
-                fallbackUsed    = $false
-                fallbackReason  = $null
-            }) | Out-Null
+            } `
+            -InspectLockOwner {
+                param($message)
+                $result = [ordered]@{ databaseLocked = $false; machine = $null; user = $null }
+                if ((Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) -and (Test-IsAccessDatabaseLockedError -Message $message)) {
+                    $result.databaseLocked = $true
+                    if (Get-Command -Name Get-AccessDatabaseLockedOwner -ErrorAction SilentlyContinue) {
+                        $owner = Get-AccessDatabaseLockedOwner -Message $message
+                        $result.machine = $owner.machine
+                        $result.user = $owner.user
+                    }
+                }
+                [pscustomobject]$result
+            } `
+            -WriteStatus { param($message) Write-Status -Message $message -Color Cyan }
+    }
+    $save = {
+        param($moduleNames)
+        try {
+            Save-VbaProjectModules -AccessApplication $Session.AccessApplication -ModuleNames @($moduleNames | Select-Object -Unique)
+            return $null
+        } catch {
+            return [string]$_.Exception.Message
         }
     }
-
-    if ($pendingTargets.Count -gt 0) {
-        $details = @($pendingTargets | ForEach-Object {
-            $n = [string]$_
-            if ($lastResults.ContainsKey($n) -and $lastResults[$n].error) {
-                $msg = [string]$lastResults[$n].error.message
-                "{0}: {1}" -f $n, $msg
-            } else {
-                $n
-            }
-        }) -join "; "
-        $scopeLabel = if ($ModuleNamesExplicit -and $NormalizedModules.Count -eq 0) { "Import-plan" }
-                      elseif ($NormalizedModules.Count -eq 0) { "Import-all" }
-                      else { "Import" }
-        $errorMessage = "{0} no pudo completar algunos modulos tras {1} pasada(s): {2}" -f $scopeLabel, $pass, $details
-        $modulesArray = @($moduleResults.ToArray())
-        # The top-level error code stays VBA_IMPORT_FAILED for backward
-        # compatibility with existing consumers; per-module error.code carries
-        # the fine-grained signal (ACCESS_DATABASE_LOCKED, VBA_IMPORT_PHASE_FAILED).
-        Write-DysflowResult -Result ([ordered]@{
-            ok = $false
-            error = [ordered]@{
-                code = "VBA_IMPORT_FAILED"
-                message = $errorMessage
-            }
-            modules = $modulesArray
-        }) -Depth 6
-        return [pscustomobject]@{
-            CreatedComponentNames = @()
-            # issue #849 — surface the modified-document list even on the
-            # error envelope so the dispatcher's save-all gate stays accurate
-            # when a partial error path produced re-imports before the failure.
-            ModifiedDocumentNames = @($modifiedDocumentNames)
-            Total = [int]$total
-            HasErrors = $true
-            ErrorMessage = $errorMessage
-        }
+    $writeResult = {
+        param($result)
+        Write-DysflowResult -Result $result -Depth 6
+    }
+    $writeStatus = {
+        param($message)
+        Write-Status -Message $message -Color Yellow
     }
 
-    Write-DysflowResult -Result (@($moduleResults.ToArray())) -Depth 4
-
-    return [pscustomobject]@{
-        CreatedComponentNames = @($createdComponentNames)
-        # issue #849 — ModifiedDocumentNames surfaces form/report re-imports so
-        # the dispatcher can trigger Save-VbaProjectModules for them.
-        ModifiedDocumentNames = @($modifiedDocumentNames)
-        Total = [int]$total
-        HasErrors = $false
-    }
+    return Invoke-VbaImportTransport -Targets @($targets) -Scope $scope -CoreDecision $coreDecision -RunPass $runPass -Save $save -WriteResult $writeResult -WriteStatus $writeStatus
 }
 
 $session = $null
@@ -5576,30 +5450,6 @@ try {
         $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
         $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -ModuleNamesExplicit:$moduleNamesExplicit -Json:$Json
         if ($importResult.HasErrors) { exit 1 }
-        # issue #849 — gate Save-VbaProjectModules on EITHER newly created
-        # components OR re-imported form/report documents. The previous
-        # CreatedComponentNames-only gate skipped save-all for form re-imports
-        # and left LoadFromText + Import-DocumentCodeBehind in dirty COM state.
-        $hasCreated = (@($importResult.CreatedComponentNames).Count -gt 0)
-        $hasReimportedDocuments = ($importResult.PSObject.Properties['ModifiedDocumentNames'] -and @($importResult.ModifiedDocumentNames).Count -gt 0)
-        if ($hasCreated -or $hasReimportedDocuments) {
-            $saveNames = @($importResult.CreatedComponentNames)
-            if ($hasReimportedDocuments) { $saveNames += @($importResult.ModifiedDocumentNames) }
-            # issue #861 — the per-module import already succeeded and emitted its
-            # DYSFLOW_RESULT (status:"ok"). Save-VbaProjectModules is best-effort
-            # persistence (RunCommand 280 = acCmdSaveAllModules); its per-module
-            # fallback wrongly targets form/report document modules with
-            # acModule=5 and can throw. A throw here used to make the script
-            # exit 1 AFTER a successful import, so the TS adapter wrapped a
-            # status:"ok" result in a misleading VBA_MANAGER_FAILED envelope.
-            # The human compiles in Access before trusting the binary, so a save
-            # hiccup must degrade to a warning, never corrupt the success envelope.
-            try {
-                Save-VbaProjectModules -AccessApplication $session.AccessApplication -ModuleNames @($saveNames | Select-Object -Unique)
-            } catch {
-                Write-Status -Message ("ADVERTENCIA: guardado explícito post-import no completó ({0}). El import se aplicó; compilá en Access (Debug > Compile) para persistir/verificar." -f $_.Exception.Message) -Color Yellow
-            }
-        }
         Write-Status -Message ("OK Import completado ({0})" -f $importResult.Total) -Color Green
 
     } elseif ($Action -eq "Delete") {

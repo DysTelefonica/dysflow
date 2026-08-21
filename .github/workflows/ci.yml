@@ -137,6 +137,9 @@ jobs:
           Get-Command powershell.exe
           powershell.exe -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
 
+      - name: Build TypeScript core bridge
+        run: pnpm build
+
       - name: Run PowerShell Pester tests
         shell: pwsh
         run: |
