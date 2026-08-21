@@ -35,6 +35,7 @@ describe("dysflow CLI help", () => {
         "  lint    Run static VBA source checks (e.g. lint callees)",
         "  codegraph-drift Scan or fix stale codegraph-vba runtime refs in user-supplement blocks",
         "  migrate-dryrun Migrate legacy consumer dryRun payloads to apply with undo support",
+        "  telemetry-evidence Analyze a collected telemetry window for the surface-profile gate",
       ].join("\n"),
       stderr: "",
     });
