@@ -4,6 +4,16 @@
 
 ### Changes
 
+- test(e2e): bump mcp-e2e harness default timeoutMs from 30s to 60s (DYSFLOW_E2E_TIMEOUT_MS env still overrides). Flaky `unlink_table` hung at ~30s on a self-hosted runner while passing cleanly in 5s on a different run; the bump gives ~2x headroom without hiding a real hang. No runtime production change.
+
+## [v2.37.4] - 2026-08-21 [YANKED]
+
+This release was yank-ed before consumers could update. The `gh release create` bypass of `release-prepare.ps1` did not attach the workflow artifacts (`dysflow-v2.37.4.tar.gz`, `SHA256SUMS`, `SHA256SUMS.sig`), so `dysflow update` returned HTTP 404 for the missing archive; in addition the local E2E battery aborted in `unlink_table` after a 30s wait for the MCP response with an UNSAFE-STOP, indicating the binary itself had a flake. Do not upgrade to v2.37.4; v2.37.3 remains the last reliable release.
+
+## [Unreleased before v2.37.4]
+
+### Changes
+
 - test(schema-props): add testFilter to the shared schema property atoms (#1447)
 - docs(dysflow-usage): scaffold 22 canonical examples for status:preferred tools (#1444)
 - docs(dysflow-usage): add error-codes reference, write-flags matrix, anti-patterns, examples verifier (#1446)

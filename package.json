@@ -1,6 +1,6 @@
 {
   "name": "dysflow",
-  "version": "2.37.4",
+  "version": "2.37.5",
   "description": "Dysflow Access automation product foundation.",
   "type": "module",
   "private": true,

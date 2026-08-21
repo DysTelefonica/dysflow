@@ -58,7 +58,11 @@ const accessPath = sandboxPlan.sandbox.accessPath;
 const backendPath = sandboxPlan.sandbox.backendPath;
 const destinationRoot = sandboxPlan.sandbox.destinationRoot;
 const reportPath = sandboxPlan.sandbox.reportPath;
-const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 30000);
+// Bumped 30000 -> 60000 in v2.37.5: a flaky `unlink_table` hung at ~30s on a
+// self-hosted runner while passing cleanly on a different run in 5s. The
+// operation itself never exceeded 12s in any recorded run; the bump gives
+// ~2x headroom without hiding a real hang.
+const timeoutMs = Number(process.env.DYSFLOW_E2E_TIMEOUT_MS ?? 60000);
 // #583: when a response is captured but the child never emits 'close' (some
 // hosts do not when the process is killed by signal), the harness forces a
 // settle after this many milliseconds so the suite cannot hang indefinitely.
