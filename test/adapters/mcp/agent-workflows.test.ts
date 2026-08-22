@@ -153,6 +153,7 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
     }
 
     expect(workflows.find((workflow) => workflow.phase === "bootstrap")?.tools).toEqual([
+      "bootstrap",
       "get_capabilities",
       "schema",
       "describe_tool",

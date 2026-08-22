@@ -87,6 +87,10 @@ export async function measureContextBudget({
       throw new Error("stdio tools/list returned no tools; refusing to score an empty surface.");
     }
 
+    const bootstrap = await client.request("tools/call", {
+      name: "bootstrap",
+      arguments: {},
+    });
     const getCapabilities = await client.request("tools/call", {
       name: "get_capabilities",
       arguments: { projectId: "context-budget" },
@@ -155,6 +159,7 @@ export async function measureContextBudget({
     const indexPayload = extractPayload(schemaIndex.parsed?.result);
     const measures = {
       toolsList: measureFrame(toolsList),
+      bootstrap: measureFrame(bootstrap),
       getCapabilities: measureFrame(getCapabilities),
       getCapabilitiesCompact: measureFrame(getCapabilitiesCompact),
       schemaFull: measureFrame(schemaFull),

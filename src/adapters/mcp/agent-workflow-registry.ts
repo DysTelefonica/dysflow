@@ -55,6 +55,7 @@ export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
   {
     phase: "bootstrap",
     tools: [
+      "bootstrap",
       "get_capabilities",
       "schema",
       "describe_tool",
@@ -107,6 +108,7 @@ for (const workflow of PREFERRED_AGENT_WORKFLOWS) {
 }
 
 const BOOTSTRAP_TOOLS = new Set([
+  "bootstrap",
   "get_capabilities",
   "schema",
   "describe_tool",
@@ -181,8 +183,11 @@ const LEGACY_METADATA: Readonly<
 };
 
 const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
+  bootstrap: [
+    "Make the first Dysflow MCP call when an agent needs runtime identity, write gates, and recommended next tools.",
+  ],
   get_capabilities: [
-    "Bootstrap every agent session with live adapter, project, and write-gate state.",
+    "Inspect the full live adapter, project, and write-gate state after bootstrap routing selects it.",
   ],
   schema: [
     "Discover all tools with view:'compact'; request view:'full' only for catalog-wide contract analysis.",
