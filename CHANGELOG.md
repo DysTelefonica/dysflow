@@ -3081,10 +3081,11 @@ consolidation (#493) remain deferred and tracked.
 ### Changed
 
 - **MCP SDK migration**: Replaced the hand-rolled JSON-RPC 2.0 stdio adapter (`stdio.ts`, ~320 lines)
-  with `@modelcontextprotocol/sdk` v1.29.0. All protocol mechanics (framing, routing, spec
-  compliance) are now handled by the SDK. Custom behaviors (exception absorption into
-  `isError: true`, path sanitization in error text, hidden tools, 1 MiB size guard, progress
-  notifications) are preserved via focused wrapper modules.
+  with `@modelcontextprotocol/sdk` v1.29.0.
+- All protocol mechanics (framing, routing, spec compliance) are now handled by the SDK.
+- Custom behaviors (exception absorption into `isError: true`, path sanitization in error text,
+  hidden tools, 1 MiB size guard, progress notifications) are preserved via focused wrapper
+  modules.
 - **New modules**: `stdio-wrappers.ts` (errorAbsorber, sanitizer, hiddenToolRegistry),
   `stdio-size-guard.ts` (SizeLimitTransform).
 - **Test harness**: migrated from `PassThrough` stream injection to `InMemoryTransport` client/server
