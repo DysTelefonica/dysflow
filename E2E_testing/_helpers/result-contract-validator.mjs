@@ -1,4 +1,11 @@
 function parseToolPayload(result, label, allowPlainError = false) {
+  // #1471 — past 16 KB the text channel carries only a summary stub and the
+  // real payload lives in `structuredContent`. describe_tool for a form tool
+  // clears that threshold easily, so reading text first loses `resultContract`
+  // and the battery reports the contract as missing rather than as unmatched.
+  const structured = result?.response?.result?.structuredContent;
+  if (structured !== undefined && structured !== null) return structured;
+
   const text =
     result?.response?.result?.content?.map((item) => item?.text ?? "").join("\n") ??
     result?.text ??

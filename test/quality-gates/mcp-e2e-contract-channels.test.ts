@@ -13,13 +13,21 @@
 //    The floor is read out of the PowerShell runner rather than restated, so a
 //    change there is enforced against the battery without editing this file.
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LARGE_RESULT_TEXT_THRESHOLD_BYTES } from "../../src/adapters/mcp/response-envelope.js";
 
 const MCP_E2E_PATH = resolve(process.cwd(), "E2E_testing/mcp-e2e.mjs");
 const RUNNER_PATH = resolve(process.cwd(), "scripts/dysflow-access-runner.ps1");
+const HELPERS_DIR = resolve(process.cwd(), "E2E_testing/_helpers");
+
+/**
+ * The transport's job IS to surface the raw channels: it returns the whole
+ * `response`, so every consumer can reach `structuredContent` itself. Requiring
+ * it to choose a channel would defeat the purpose of exposing both.
+ */
+const TRANSPORT_HELPERS = new Set(["mcp-harness.mjs"]);
 
 const source = readFileSync(MCP_E2E_PATH, "utf8");
 
@@ -34,6 +42,34 @@ function runnerTestIdFloor(): number {
 describe("mcp-e2e payload channel (#1471)", () => {
   it("keeps a threshold worth defending", () => {
     expect(LARGE_RESULT_TEXT_THRESHOLD_BYTES).toBeGreaterThan(0);
+  });
+
+  it("prefers structuredContent in every helper that unwraps a tool result", () => {
+    // The battery is not the only reader. Its helpers unwrap results too, and
+    // the contract validator read `content[].text` — which is exactly how a
+    // 16 KB-plus describe_tool payload came back without its resultContract.
+    const offenders = readdirSync(HELPERS_DIR)
+      .filter((entry) => entry.endsWith(".mjs") && !TRANSPORT_HELPERS.has(entry))
+      .flatMap((entry) => {
+        const helper = readFileSync(join(HELPERS_DIR, entry), "utf8");
+        const unwrapsContent = /result\??\.\s*content|\.result\??\.content/.test(helper);
+        if (!unwrapsContent) return [];
+        return helper.includes("structuredContent") ? [] : [entry];
+      });
+
+    expect(
+      offenders,
+      "a helper unwraps result.content without checking structuredContent first",
+    ).toEqual([]);
+  });
+
+  it("keeps the transport handing back the raw response", () => {
+    // The exemption above is only safe while the transport returns `response`
+    // untouched; without it no consumer could reach structuredContent at all.
+    for (const entry of TRANSPORT_HELPERS) {
+      const helper = readFileSync(join(HELPERS_DIR, entry), "utf8");
+      expect(helper, `${entry} must return the raw response`).toMatch(/^\s*response,$/m);
+    }
   });
 
   it("reads tool payloads through payloadOf, never by parsing text", () => {
