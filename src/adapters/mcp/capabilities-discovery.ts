@@ -31,15 +31,12 @@ export const CAPABILITIES_INPUT_SCHEMA = {
     view: {
       type: "string",
       enum: ["compact", "full"],
-      default: "full",
-      description:
-        "Use compact for progressive discovery; full is the backward-compatible default.",
+      default: "compact",
+      description: "Default compact; pass full for the complete snapshot.",
     },
     compact: {
       type: "boolean",
-      default: false,
-      description:
-        "Opt into the compact discovery projection without changing the default response.",
+      description: "Alias for the compact projection.",
     },
     include: {
       type: "array",

@@ -277,7 +277,9 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
     const migrate = registered.find((tool) => tool.name === "migrate_project_config");
     if (getCapabilities === undefined || migrate === undefined) throw new Error("missing tool");
 
-    const before = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+    const before = JSON.parse(
+      (await getCapabilities.handler({ view: "full" })).content[0]?.text ?? "{}",
+    ) as {
       projectConfig?: { status?: string };
       worktreeCache?: { misses?: number };
     };
@@ -285,11 +287,15 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
 
     const migrated = await migrate.handler({ apply: true });
     expect(migrated.isError).toBe(false);
-    const first = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+    const first = JSON.parse(
+      (await getCapabilities.handler({ view: "full" })).content[0]?.text ?? "{}",
+    ) as {
       projectConfig?: { status?: string; projectId?: string };
       worktreeCache?: { hits?: number; misses?: number };
     };
-    const repeated = JSON.parse((await getCapabilities.handler({})).content[0]?.text ?? "{}") as {
+    const repeated = JSON.parse(
+      (await getCapabilities.handler({ view: "full" })).content[0]?.text ?? "{}",
+    ) as {
       projectConfig?: { status?: string; projectId?: string };
       worktreeCache?: { hits?: number; misses?: number };
     };

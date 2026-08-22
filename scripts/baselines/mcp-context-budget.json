@@ -8,20 +8,20 @@
   "toolCount": 94,
   "metrics": {
     "toolsList": {
-      "logicalBytes": 120443,
-      "wireBytes": 120478
+      "logicalBytes": 120447,
+      "wireBytes": 120482
     },
     "getCapabilities": {
-      "logicalBytes": 62692,
-      "wireBytes": 63519
+      "logicalBytes": 49573,
+      "wireBytes": 50259
     },
     "getCapabilitiesCompact": {
       "logicalBytes": 49573,
       "wireBytes": 50259
     },
     "schemaFull": {
-      "logicalBytes": 198,
-      "wireBytes": 2484
+      "logicalBytes": 784285,
+      "wireBytes": 784737
     },
     "schemaCompact": {
       "logicalBytes": 118222,
@@ -32,12 +32,12 @@
       "wireBytes": 11219
     },
     "describeTool": {
-      "logicalBytes": 1027612,
-      "wireBytes": 2928694
+      "logicalBytes": 1027510,
+      "wireBytes": 2928400
     },
     "describeToolSelected": {
-      "logicalBytes": 256758,
-      "wireBytes": 839705
+      "logicalBytes": 256724,
+      "wireBytes": 839607
     }
   },
   "contributors": {
@@ -45,37 +45,37 @@
       {
         "name": "verify_form_ui",
         "logicalBytes": 3378,
-        "share": 0.039445
+        "share": 0.039443
       },
       {
         "name": "generate_form_design_plan",
         "logicalBytes": 2952,
-        "share": 0.03447
+        "share": 0.034469
       },
       {
         "name": "copy_form_ui_pattern",
         "logicalBytes": 2192,
-        "share": 0.025596
+        "share": 0.025595
       },
       {
         "name": "sync_binary",
         "logicalBytes": 1911,
-        "share": 0.022315
+        "share": 0.022314
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 1903,
-        "share": 0.022221
+        "share": 0.02222
       },
       {
         "name": "teardown_fixture",
         "logicalBytes": 1694,
-        "share": 0.019781
+        "share": 0.01978
       },
       {
         "name": "import_modules",
         "logicalBytes": 1659,
-        "share": 0.019372
+        "share": 0.019371
       },
       {
         "name": "seed_fixture",
@@ -85,7 +85,7 @@
       {
         "name": "form_set_property",
         "logicalBytes": 1474,
-        "share": 0.017212
+        "share": 0.017211
       },
       {
         "name": "relink_directory",
@@ -201,55 +201,106 @@
       {
         "name": "sync_binary",
         "logicalBytes": 26894,
-        "share": 0.026171
+        "share": 0.026174
       },
       {
         "name": "import_modules",
         "logicalBytes": 24747,
-        "share": 0.024082
+        "share": 0.024084
       },
       {
         "name": "export_modules",
         "logicalBytes": 21854,
-        "share": 0.021267
+        "share": 0.021269
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 17893,
-        "share": 0.017412
+        "share": 0.017414
       },
       {
         "name": "form_set_property",
         "logicalBytes": 17752,
-        "share": 0.017275
+        "share": 0.017277
       },
       {
         "name": "form_duplicate_control",
         "logicalBytes": 17193,
-        "share": 0.016731
+        "share": 0.016733
       },
       {
         "name": "export_all",
         "logicalBytes": 17080,
-        "share": 0.016621
+        "share": 0.016623
       },
       {
         "name": "relink_directory",
         "logicalBytes": 16906,
-        "share": 0.016452
+        "share": 0.016453
       },
       {
         "name": "create_form_from_template",
         "logicalBytes": 16477,
-        "share": 0.016034
+        "share": 0.016036
       },
       {
         "name": "teardown_fixture",
         "logicalBytes": 15812,
-        "share": 0.015387
+        "share": 0.015389
       }
     ],
-    "schemaFull": [],
+    "schemaFull": [
+      {
+        "name": "sync_binary",
+        "logicalBytes": 19546,
+        "share": 0.024926
+      },
+      {
+        "name": "import_modules",
+        "logicalBytes": 17732,
+        "share": 0.022613
+      },
+      {
+        "name": "export_modules",
+        "logicalBytes": 15947,
+        "share": 0.020337
+      },
+      {
+        "name": "apply_form_design_plan",
+        "logicalBytes": 14006,
+        "share": 0.017861
+      },
+      {
+        "name": "form_set_property",
+        "logicalBytes": 12803,
+        "share": 0.016327
+      },
+      {
+        "name": "export_all",
+        "logicalBytes": 12545,
+        "share": 0.015998
+      },
+      {
+        "name": "form_duplicate_control",
+        "logicalBytes": 12469,
+        "share": 0.015901
+      },
+      {
+        "name": "relink_directory",
+        "logicalBytes": 12271,
+        "share": 0.015649
+      },
+      {
+        "name": "create_form_from_template",
+        "logicalBytes": 12050,
+        "share": 0.015367
+      },
+      {
+        "name": "verify_form_ui",
+        "logicalBytes": 11924,
+        "share": 0.015206
+      }
+    ],
     "schemaCompact": [
       {
         "name": "verify_code",
@@ -346,10 +397,10 @@
     ]
   },
   "parity": {
-    "stdioToolsListVsSchemaFull": false,
+    "stdioToolsListVsSchemaFull": true,
     "stdioToolsListVsDescribeTool": true,
     "toolsListCount": 94,
-    "schemaFullCount": 0,
+    "schemaFullCount": 94,
     "describeToolCount": 94,
     "schemaIndexCount": 8
   },
