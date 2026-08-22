@@ -265,6 +265,8 @@ describe("MCP tool registration over core services", () => {
       "query_execute",
       "doctor",
       "access_force_cleanup_orphaned",
+      // Issue #1484 — `bootstrap` is a minimal first-call read-only surface.
+      "bootstrap",
       "get_capabilities",
       "list_procedures",
       "get_procedure",

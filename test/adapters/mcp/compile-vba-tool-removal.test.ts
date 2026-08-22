@@ -130,6 +130,6 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(94);
+    expect(advertisedToolCount()).toBe(95);
   });
 });
