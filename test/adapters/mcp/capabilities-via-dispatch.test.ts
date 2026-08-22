@@ -47,7 +47,7 @@ describe("get_capabilities via dispatch harness (#656)", () => {
     const tool = tools.find((t) => t.name === "get_capabilities");
     expect(tool, "tool must be reachable through the dispatch chain").toBeDefined();
 
-    const result = await tool?.handler({});
+    const result = await tool?.handler({ view: "full" });
     expect(result?.isError).toBe(false);
     expect(result?.ok).toBe(true);
 
