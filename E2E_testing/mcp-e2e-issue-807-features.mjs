@@ -21,13 +21,13 @@
 //     fixture is missing. Use this in CI to make the E2E blocking.
 
 import { spawn } from "node:child_process";
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
-import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { runMcpHarness } from "./_helpers/mcp-harness.mjs";
+import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");

@@ -2,31 +2,32 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
-import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
-import { runMcpHarness, runMcpSession } from "./_helpers/mcp-harness.mjs";
-import {
-  assertSafeResumeRoot,
-  computeE2eExitCode,
-  createResultRows,
-  createPhaseSnapshots,
-  createResumeController,
-  hashRunIdentity,
-  runtimeIdentityPaths,
-  parseResumeArgs,
-  prepareReleaseRuntime,
-  readCheckpoint,
-  validateCheckpoint,
-} from "./_helpers/mcp-e2e-resume.mjs";
-import {
-  isPidOrDescendantAlive,
-  record as recordImpl,
-} from "./_helpers/mcp-e2e-record.mjs";
 import {
   EXPECTED_ADVERTISED_TOOL_COUNT,
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
   ISSUE_713_REQUIRED_TOOLS,
 } from "./_helpers/advertised-tool-count.mjs";
+import {
+  isPidOrDescendantAlive,
+  record as recordImpl,
+} from "./_helpers/mcp-e2e-record.mjs";
+import {
+  assertSafeResumeRoot,
+  computeE2eExitCode,
+  createPhaseSnapshots,
+  createResultRows,
+  createResumeController,
+  hashRunIdentity,
+  parseResumeArgs,
+  prepareReleaseRuntime,
+  readCheckpoint,
+  runtimeIdentityPaths,
+  validateCheckpoint,
+} from "./_helpers/mcp-e2e-resume.mjs";
+import { assertSafeExistingSandboxRoot, buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
+import { resolveMcpE2eToolName } from "./_helpers/mcp-e2e-tool-aliases.mjs";
+import { runMcpHarness, runMcpSession } from "./_helpers/mcp-harness.mjs";
+import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { validateMcpResultAgainstDescription } from "./_helpers/result-contract-validator.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));

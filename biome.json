@@ -11,6 +11,7 @@
       "test/**",
       "scripts/**/*.mjs",
       "E2E_testing/_helpers/**/*.mjs",
+      "E2E_testing/*.mjs",
       "!!**/dist",
       "!!**/coverage",
       "!!**/node_modules",
@@ -64,6 +65,21 @@
           "style": {
             "useTemplate": "off"
           }
+        }
+      }
+    },
+    {
+      "includes": ["E2E_testing/*.mjs"],
+      "formatter": { "enabled": false },
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "error",
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          },
+          "style": { "useTemplate": "off" },
+          "complexity": { "useOptionalChain": "off", "noUselessLoneBlockStatements": "off" }
         }
       }
     },

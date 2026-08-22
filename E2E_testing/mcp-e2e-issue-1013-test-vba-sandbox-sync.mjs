@@ -16,8 +16,8 @@
 // E2E_testing/ (set DYSFLOW_REQUIRE_ACCESS_E2E=1 for release-gate mode).
 
 import { spawn } from "node:child_process";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMcpE2eSandboxPlan, initializeMcpE2eSandbox } from "./_helpers/mcp-e2e-sandbox.mjs";
