@@ -11,6 +11,7 @@ The registration surface for a canonical MCP tool is deliberately distributed. T
 That decision stands. What was missing was the map, so contributors discovered the touchpoints by grep and by CI failure. This is that map.
 
 `test/docs/add-a-tool-checklist-1493.test.ts` anchors it. Every registry named here is compared against the live advertised surface.
+
 A tool registered in one place and forgotten in another fails the suite rather than shipping half-wired.
 
 ## Hand-maintained registration points
@@ -25,7 +26,9 @@ Four registries need an entry for every new canonical tool. Each owns one concer
 | 4 | `src/adapters/mcp/mcp-tool-risks.ts` | **The risk classification** — write class, strict-context and timeout requirements. Most entries derive from defaults; a tool that departs from them needs an explicit exception. |
 
 Pick the registry in step 1 by slice, not by preference.
+
 `mcp-tool-registry.ts` carries the VBA-sync and query tools that map to a PowerShell action.
+
 `modern-tool-registry.ts` carries tools composed in TypeScript.
 
 ## Derived — do not hand-edit
