@@ -16,6 +16,7 @@ const NEXT_HEADING = "## VBA semantic diff — behavioral contract";
 
 /** Anchors that derive their expectation from the runtime or its source, not a fixed string. */
 const RUNTIME_ANCHORS = [
+  "add-a-tool-checklist-1493.test.ts",
   "architecture-doc.test.ts",
   "mcp-readme-tool-surface.test.ts",
   "resolve-project-recovery-example.test.ts",
