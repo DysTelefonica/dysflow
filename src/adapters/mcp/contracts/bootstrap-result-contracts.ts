@@ -58,6 +58,30 @@ const compactCapabilitiesSchema = z
   })
   .passthrough();
 
+const bootstrapWorkflowMapSchema = z
+  .object({ tools: z.object({ count: z.number().int().nonnegative() }).strict() })
+  .catchall(z.array(z.string()));
+
+const bootstrapSchema = z
+  .object({
+    adapterVersion: z.string(),
+    surface: z.enum(["stdio", "http"]),
+    writesProcess: z
+      .object({ enabled: z.boolean(), resolverConfigured: z.boolean() })
+      .passthrough(),
+    writesProject: z.object({ allowWrites: z.boolean() }).passthrough(),
+    writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
+    toolsVisible: z.number().int().nonnegative(),
+    preferredAgentWorkflows: bootstrapWorkflowMapSchema,
+    humanCompilePending: z.boolean(),
+  })
+  .strict();
+
+export const bootstrapResultContract = defineResultContract({
+  description: "Minimal first-call adapter identity, write gates, surface, and workflow routing.",
+  schema: bootstrapSchema,
+});
+
 export const getCapabilitiesResultContract = defineResultContract({
   description: "Live adapter identity, project resolution, write gates, tools and workflows.",
   schema: z.union([fullCapabilitiesSchema, compactCapabilitiesSchema]),
@@ -377,6 +401,7 @@ export const migrateProjectConfigResultContract = defineResultContract({
 });
 
 export const bootstrapRecoveryResultContracts = {
+  bootstrap: bootstrapResultContract,
   get_capabilities: getCapabilitiesResultContract,
   schema: schemaResultContract,
   describe_tool: describeToolResultContract,

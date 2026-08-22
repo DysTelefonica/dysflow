@@ -51,6 +51,7 @@ import {
   type ToolAdvertisementMetadata,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
+import { BOOTSTRAP_INPUT_SCHEMA } from "./bootstrap-schema.js";
 import { CAPABILITIES_INPUT_SCHEMA } from "./capabilities-discovery.js";
 import { executableResultContractForTool } from "./contracts/executable-result-contract-registry.js";
 import { DIAGNOSE_INPUT_SCHEMA } from "./diagnose-tool.js";
@@ -516,6 +517,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   query_execute: QUERY_EXECUTE_SCHEMA,
   doctor: DOCTOR_SCHEMA,
   access_force_cleanup_orphaned: ORPHAN_CLEANUP_SCHEMA,
+  bootstrap: BOOTSTRAP_INPUT_SCHEMA,
   get_capabilities: CAPABILITIES_INPUT_SCHEMA,
   list_procedures: LIST_PROCEDURES_SCHEMA,
   get_procedure: GET_PROCEDURE_SCHEMA,

@@ -153,6 +153,15 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Issue #1484 — `bootstrap` is the minimal first-call surface for
+  // adapter identity, write gates, and workflow routing. It deliberately
+  // omits project resolution and heavy per-tool metadata. It never opens
+  // Access, never spawns PowerShell, and is never write-gated.
+  bootstrap: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
   // PR-1 (issue #656) — `get_capabilities` is the read-only gate
   // introspection surface (#655 umbrella). It aggregates the static contract
   // metadata with the live process- and project-level state. It never opens

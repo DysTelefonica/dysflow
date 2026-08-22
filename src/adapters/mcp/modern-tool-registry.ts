@@ -13,6 +13,7 @@ export const MODERN_TOOL_NAMES = [
   "query_execute",
   "doctor",
   "access_force_cleanup_orphaned",
+  "bootstrap",
   "get_capabilities",
   ...MODERN_ANALYSIS_TOOL_NAMES,
   "resolve_project",
