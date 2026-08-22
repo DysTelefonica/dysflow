@@ -7,6 +7,7 @@ import { resolveAccessOperationRegistry } from "../../core/operations/access-ope
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { VbaModuleLintRule } from "../../core/services/vba-module-lint-service.js";
+import { createBootstrapTool } from "./bootstrap-tool.js";
 import {
   handleMcpAccessOrphanCleanup,
   handleMcpCleanStaleMarkers,
@@ -319,6 +320,19 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
           accessContextResolver,
         ),
     },
+    // Issue #1484 — minimal first-call read-only bootstrap. It reuses the
+    // capabilities snapshot pipeline but deliberately omits project
+    // resolution and heavy per-tool metadata.
+    createBootstrapTool({
+      writesEnabled,
+      writeAccessResolver,
+      allowedProcedures: Array.isArray(allowedProcedures) ? allowedProcedures : undefined,
+      projectId,
+      allowWrites: writesAllowedForCapabilities,
+      accessDbPath,
+      writeExecutionPolicy,
+      resultValidationPolicy,
+    }),
     // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
     // aggregated `McpCapabilitySnapshot` for the live MCP adapter. The tool
     // is registered in `MODERN_TOOL_NAMES` above and surfaces its contract

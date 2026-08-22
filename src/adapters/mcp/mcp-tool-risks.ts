@@ -38,6 +38,7 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   doctor: "read-only",
   access_force_cleanup_orphaned: "process-control",
   resolve_project: "read-only",
+  bootstrap: "read-only",
   get_capabilities: "read-only",
   // #701 read-only VBA procedure introspection
   list_procedures: "read-only",
