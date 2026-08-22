@@ -1,5 +1,17 @@
 # Changelog
 
+## [v2.38.2] - 2026-08-22
+
+### Changes
+
+- fix(quality-gates): move the lint-scope pin with the scope change
+- fix(e2e): recover payload fields the wire envelope shadows
+- docs(e2e): correct stale comment about the inspect_form text channel
+- fix(e2e): read describe_tool contracts from structuredContent
+- fix(e2e): import resolveMcpE2eToolName and lint the battery
+- fix(e2e): read payloads from structuredContent and bound fixture teardown
+
+
 ## [v2.38.1] - 2026-08-22
 
 ### Changes
