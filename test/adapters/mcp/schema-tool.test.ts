@@ -191,11 +191,28 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     expect(names).toContain("schema");
   });
 
-  it("schema tool handler returns the full catalog when no toolName is supplied", async () => {
+  it("schema tool handler returns SCHEMA_VIEW_REQUIRED when view is omitted", async () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
     const result = await schemaTool?.handler({}, undefined as never);
+    if (result === undefined) throw new Error("schema handler returned undefined");
+
+    expect(result.isError).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("SCHEMA_VIEW_REQUIRED");
+    expect(result.error?.message).toContain("schema({}) is not allowed without an explicit view");
+    expect(result.error?.message).toContain("view: 'index'");
+    expect(result.error?.message).toContain("'compact'");
+    expect(result.error?.message).toContain("'full'");
+    expect(result.content[0]?.text).toContain("SCHEMA_VIEW_REQUIRED");
+  });
+
+  it("schema tool handler returns the full catalog when full view is explicit and no toolName is supplied", async () => {
+    const tools = createDysflowMcpTools({ services: makeServices() });
+    const schemaTool = tools.find((t) => t.name === "schema");
+    expect(schemaTool).toBeDefined();
+    const result = await schemaTool?.handler({ view: "full" }, undefined as never);
     if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     expect(result.ok).toBe(true);
@@ -208,11 +225,14 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     expect(names).toContain("schema");
   });
 
-  it("schema tool handler returns a single tool when toolName is supplied", async () => {
+  it("schema tool handler returns a single tool when toolName and view are supplied", async () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool?.handler({ toolName: "export_modules" }, undefined as never);
+    const result = await schemaTool?.handler(
+      { view: "full", toolName: "export_modules" },
+      undefined as never,
+    );
     if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
@@ -228,7 +248,7 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool?.handler({ toolName: "schema" }, undefined as never);
+    const result = await schemaTool?.handler({ view: "full", toolName: "schema" }, undefined as never);
     if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
@@ -248,8 +268,8 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
 });
 
 describe("SchemaInput — type contract smoke test (#971)", () => {
-  it("accepts empty input as the canonical 'all tools' selector", () => {
-    const input: SchemaInput = {};
+  it("accepts explicit full view as the canonical 'all tools' selector", () => {
+    const input: SchemaInput = { view: "full" };
     const catalog = buildToolSchemaCatalog(input);
     expect(catalog.tools.length).toBeGreaterThan(0);
   });

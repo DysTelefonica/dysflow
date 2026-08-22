@@ -49,6 +49,10 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **`schema` requires an explicit `view`** — omitting `view` now returns `SCHEMA_VIEW_REQUIRED` instead of silently resolving to `"full"`. Callers must pass `view: "index"` (routing-only), `"compact"` (low-context), or `"full"` (complete catalog, ~196K tokens — opt in deliberately). Fixes the single largest token-cost trap in the MCP. See #1485.
+
 ### Changes
 
 - fix(export): a relative `destinationRoot` override is absolutized by the resolver, so `destinationRoot: "src"` against a configured `src` root no longer writes to `<root>/src/src/` (#1478). `resolvedDestinationRoot` now reports the effective absolute path instead of echoing the raw input.
