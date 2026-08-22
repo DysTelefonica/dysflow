@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.38.1] - 2026-08-22
+
+### Changes
+
+- fix(e2e): stop passing rejected table policies to arbitrary SQL (#1452)
+
+
 ## [v2.38.0] - 2026-08-22
 
 ### Changes
