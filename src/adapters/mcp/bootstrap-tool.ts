@@ -1,16 +1,10 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
-import {
-  PREFERRED_AGENT_WORKFLOWS,
-  type AgentWorkflowPhase,
-} from "./agent-workflow-registry.js";
+import { type AgentWorkflowPhase, PREFERRED_AGENT_WORKFLOWS } from "./agent-workflow-registry.js";
 import { BOOTSTRAP_INPUT_SCHEMA } from "./bootstrap-schema.js";
 import { bootstrapResultContract } from "./contracts/bootstrap-result-contracts.js";
 import { invalidInput } from "./dispatch-common.js";
-import {
-  getCapabilitiesAll,
-  type GetCapabilitiesAllInput,
-} from "./get-capabilities-tool.js";
+import { type GetCapabilitiesAllInput, getCapabilitiesAll } from "./get-capabilities-tool.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -61,8 +55,10 @@ export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool 
     handler: async (input) => {
       const validation = validateInput(input, BOOTSTRAP_INPUT_SCHEMA);
       if (validation !== undefined) return invalidInput(validation);
-      const params = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
-      const phase = typeof params.phase === "string" ? (params.phase as AgentWorkflowPhase) : undefined;
+      const params =
+        typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+      const phase =
+        typeof params.phase === "string" ? (params.phase as AgentWorkflowPhase) : undefined;
       const projected = projectBootstrapSnapshot(snapshot, phase);
       const result: OperationResult<typeof projected> = successResult(projected);
       return translateCoreResultToMcpContent(result);
@@ -86,7 +82,10 @@ export function projectBootstrapSnapshot(
   };
 }
 
-function buildBootstrapWorkflowMap(toolsVisible: number, phase?: AgentWorkflowPhase): BootstrapWorkflowMap {
+function buildBootstrapWorkflowMap(
+  toolsVisible: number,
+  phase?: AgentWorkflowPhase,
+): BootstrapWorkflowMap {
   const workflows = PREFERRED_AGENT_WORKFLOWS.filter(
     (workflow) => phase === undefined || workflow.phase === phase,
   );
