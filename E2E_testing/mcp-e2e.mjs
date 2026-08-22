@@ -2313,9 +2313,8 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
 // `name` (the bare formName) in its payload.
 {
   // Test 1: Successful resolution via projectId against the existing fixture.
-  // The MCP harness's `toolText` already unwraps the JSON-RPC envelope and
-  // returns the inner content text, so `inspectResult.text` IS the inspect_form
-  // payload (not a JSON-RPC wrapper). Parse it once.
+  // Read through `payloadOf`: the text channel only carries the whole payload
+  // below the #1471 threshold, so a larger form would arrive as a stub there.
   const inspectResult = await record("project-resolution", "inspect_form", {
     projectId: "noconformidades-e2e",
     formName: "FormCPV",
