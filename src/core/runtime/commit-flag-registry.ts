@@ -279,6 +279,9 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   resolve_project: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   get_capabilities: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   doctor: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #1484 — `bootstrap` is a read-only surface; same registry
+  // shape as `get_capabilities` / `doctor` / `lint_module`.
+  bootstrap: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   lint_module: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   // Alias tools.
   "dysflow.diagnose_query": {

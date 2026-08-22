@@ -20,6 +20,11 @@ const OUTPUT_CONTRACT_GROUPS = {
     // are pre-existing aliases (lives in `modernServiceAliases` below)
     // registered in `alias-tools.ts`.
     "access_force_cleanup_orphaned",
+    // Issue #1484 — `bootstrap` is a minimal first-call read-only surface.
+    // It reuses the capabilities snapshot pipeline but deliberately omits
+    // project resolution and heavy per-tool metadata. Same group as
+    // `get_capabilities` / `schema` / `diagnose`.
+    "bootstrap",
     // #777 (Opción A cont.) — `dysflow_vba_execute` was REMOVED
     // completely. The canonical `run_vba` is a pre-existing alias in
     // `alias-tools.ts` (lives in `modernServiceAliases` below); it is no
