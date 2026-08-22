@@ -16,7 +16,11 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { LARGE_RESULT_TEXT_THRESHOLD_BYTES } from "../../src/adapters/mcp/response-envelope.js";
+import {
+  LARGE_RESULT_TEXT_THRESHOLD_BYTES,
+  type ResponseEnvelopeShape,
+  withWireResponseEnvelope,
+} from "../../src/adapters/mcp/response-envelope.js";
 
 const MCP_E2E_PATH = resolve(process.cwd(), "E2E_testing/mcp-e2e.mjs");
 const RUNNER_PATH = resolve(process.cwd(), "scripts/dysflow-access-runner.ps1");
@@ -95,6 +99,26 @@ describe("mcp-e2e payload channel (#1471)", () => {
       offenders,
       "parsing a result's text channel is size-dependent since #1471; use payloadOf(result)",
     ).toEqual([]);
+  });
+
+  it("proves the envelope shadows a payload field, and that content recovers it", () => {
+    // Not hypothetical: verify_form_ui reports drift as `ok: false` on a call
+    // that succeeded, so the envelope's own `ok` lands on top of it. Below the
+    // threshold the verbatim payload survives under `content`, which is the
+    // only reason the battery can still read the field it asked for.
+    const payload = { ok: false, formName: "Probe", findings: [{ code: "DRIFT" }] };
+    const envelope = withWireResponseEnvelope<ResponseEnvelopeShape>({
+      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      isError: false,
+      ok: true,
+    });
+
+    expect(envelope.structuredContent?.ok, "envelope ok shadows the payload's").toBe(true);
+
+    const verbatim = (envelope.structuredContent as { content?: { text: string }[] }).content?.[0]
+      ?.text;
+    expect(verbatim, "small results must keep the verbatim payload").toBeDefined();
+    expect(JSON.parse(verbatim as string)).toEqual(payload);
   });
 
   it("defines payloadOf and prefers structuredContent inside it", () => {

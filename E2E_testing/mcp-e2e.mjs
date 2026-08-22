@@ -321,11 +321,23 @@ function safeJsonParse(text) {
  * exceeds 16 KB; past that threshold `text` carries only a summary stub and
  * the real payload lives in `structuredContent`. Reading `text` alone is
  * therefore SIZE-DEPENDENT: the same assertion passes on a small sandbox and
- * fails on a large one. Always prefer the structured channel and keep the
- * text parse as the fallback for small results and error envelopes.
+ * fails on a large one.
+ *
+ * `structuredContent` is not the payload verbatim either. It is built as
+ * `{ ...payload, schemaVersion, isError, ok, error }`, so an envelope field
+ * SHADOWS a payload field of the same name — and `ok` collides for real:
+ * `verify_form_ui` returns `ok: false` to report drift on a call that
+ * succeeded, so the envelope's `ok: true` lands on top of it.
+ *
+ * Below the threshold the envelope still carries the original text under
+ * `structuredContent.content`, so read the payload back from there and keep
+ * the shadowed fields intact. Above it that copy is dropped and the merged
+ * object is all there is.
  */
 function payloadOf(result) {
   const structured = result?.response?.result?.structuredContent;
+  const verbatim = structured?.content?.[0]?.text;
+  if (verbatim !== undefined) return safeJsonParse(verbatim) ?? structured;
   return structured ?? safeJsonParse(result?.text);
 }
 
