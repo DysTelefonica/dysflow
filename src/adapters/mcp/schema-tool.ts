@@ -70,7 +70,12 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { MIGRATE_PROJECT_CONFIG_SCHEMA } from "./migrate-project-config-tool.js";
 import { PROJECT_RECOVERY_SCHEMA_BLOCK } from "./project-resolution-recovery.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
-import type { DysflowMcpTool, McpTextContent, McpToolResult } from "./result-translation.js";
+import {
+  type DysflowMcpTool,
+  type McpTextContent,
+  type McpToolResult,
+  withSchemaVersion,
+} from "./result-translation.js";
 import {
   CLEAN_STALE_MARKERS_SCHEMA,
   DETECT_DEAD_CODE_SCHEMA,
@@ -459,9 +464,8 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
     view: {
       type: "string",
       enum: ["index", "compact", "full"],
-      default: "full",
       description:
-        "Catalog detail level. Use index for routing-only discovery, compact for low-context discovery, and full for complete JSON Schema. Defaults to full for backward compatibility.",
+        "Required. Choose index for routing-only discovery, compact for low-context discovery, or full for complete JSON Schema (deliberate opt-in).",
     },
   },
 } as const;
@@ -1323,6 +1327,26 @@ assertToolResultContractsAreTotal();
 
 // ─── MCP tool factory ─────────────────────────────────────────────────────────
 
+function resolveSchemaView(value: unknown): SchemaView | undefined {
+  return value === "index" || value === "compact" || value === "full" ? value : undefined;
+}
+
+function schemaViewRequiredError(): McpToolResult {
+  const message =
+    "schema({}) is not allowed without an explicit view. Pass view: 'index' (routing-only), 'compact' (~30K tokens), or 'full' (full schema, ~196K tokens — opt in deliberately).";
+  return withSchemaVersion({
+    content: [{ type: "text", text: `SCHEMA_VIEW_REQUIRED: ${message}` }],
+    isError: true,
+    ok: false,
+    error: {
+      code: "SCHEMA_VIEW_REQUIRED",
+      message,
+      remediation:
+        "Call schema({ view: 'index' }) for routing-only discovery, schema({ view: 'compact' }) for low-context discovery, or schema({ view: 'full' }) only when deliberately opting into the complete catalog.",
+    },
+  });
+}
+
 /**
  * Factory for the `schema` MCP tool. Pure: `cwd` is unused today but
  * reserved for the per-project scoping extension. The handler never
@@ -1338,7 +1362,7 @@ export function createSchemaTool(): DysflowMcpTool {
     name: "schema",
     resultContract: schemaResultContract,
     description:
-      "Return static contracts for the consumer's dysflow installation. Call get_capabilities first for live adapter and write-gate state. Use { view: 'index' } for routing-only discovery with optional phase/status/name filters, { view: 'compact' } for low-context discovery, and { view: 'full' } for complete JSON Schema. Omitted view defaults to full for backward compatibility. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
+      "Return static contracts for this dysflow installation. Call get_capabilities first. Explicit view is required: use { view: 'index' } for routing-only discovery, { view: 'compact' } for low-context discovery, or { view: 'full' } for the complete catalog only by deliberate opt-in. Use describe_tool for the preferred one-tool deep view. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.schema.summary,
     inputSchema: SCHEMA_TOOL_INPUT_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {
@@ -1352,8 +1376,8 @@ export function createSchemaTool(): DysflowMcpTool {
         typeof params.toolName === "string" && params.toolName.length > 0
           ? params.toolName
           : undefined;
-      const view: SchemaView =
-        params.view === "index" ? "index" : params.view === "compact" ? "compact" : "full";
+      const view = resolveSchemaView(params.view);
+      if (view === undefined) return schemaViewRequiredError();
       const phase =
         typeof params.phase === "string" &&
         AGENT_WORKFLOW_PHASES.includes(params.phase as AgentWorkflowPhase)

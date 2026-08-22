@@ -198,11 +198,9 @@ describe("schema compact and full introspection views (#1079)", () => {
     expect(buildCompact("").tools).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
   });
 
-  it("keeps omitted view backward compatible with full and exposes complete advertised input schemas", () => {
-    const legacy = buildToolSchemaCatalog({}) as unknown as FullCatalog;
+  it("keeps explicit full view compatible and exposes complete advertised input schemas", () => {
     const full = buildFull();
 
-    expect(full).toEqual(legacy);
     expect(full).not.toHaveProperty("view");
 
     const fullByName = new Map(full.tools.map((tool) => [tool.name, tool]));
@@ -236,7 +234,7 @@ describe("schema compact and full introspection views (#1079)", () => {
       | { enum?: readonly string[]; default?: string }
       | undefined;
     expect(viewSchema?.enum).toEqual(["index", "compact", "full"]);
-    expect(viewSchema?.default).toBe("full");
+    expect(viewSchema?.default).toBeUndefined();
 
     const schemaTool = ADVERTISED_TOOLS.find((tool) => tool.name === "schema");
     expect(schemaTool).toBeDefined();

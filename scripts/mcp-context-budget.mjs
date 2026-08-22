@@ -101,7 +101,7 @@ export async function measureContextBudget({
     });
     const schemaFull = await client.request("tools/call", {
       name: "schema",
-      arguments: { projectId: "context-budget", view: "full" },
+      arguments: { projectId: "context-budget" },
     });
     const schemaCompact = await client.request("tools/call", {
       name: "schema",
