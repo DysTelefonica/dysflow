@@ -1474,8 +1474,11 @@ await record("links", "unlink_table", { projectId, accessPath, tableName: "TbNoC
 await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
 
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", apply: true });
-await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, apply: true, allowTable: probeTable });
-await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, apply: true, allowTable: probeTable });
+// #1452 — arbitrary Access SQL cannot prove which tables it touches, so exec_sql
+// and run_script reject every table-policy key. Scoping stays with the structured
+// table actions below (seed_fixture / teardown_fixture), which can enforce it.
+await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, apply: true });
+await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, apply: true });
 await record("vba", "run_script:sandbox-only", {
   accessPath: "C:/Production/real.accdb", scriptPath: "/path/to/anything.sql", apply: false,
 }, { expected: "error" });
