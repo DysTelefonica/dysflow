@@ -21,8 +21,15 @@ attempts, and policy. `unavailable` is NEVER evidence that dependencies are clea
 - `pnpm lint` — three-stage check:
   1. `node scripts/check-core-adapter-boundary.mjs` — `src/core` must not import `src/adapters`.
   2. `node scripts/check-optional-presence-guards.mjs` — no unchecked `in` / `hasOwnProperty` on optional config/params fields.
-  3. `tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ scripts/ E2E_testing/_helpers/`.
-     Biome lint covers `src/`, `test/`, `scripts/*.mjs`, and `E2E_testing/_helpers/*.mjs`.
+  3. `tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ scripts/ E2E_testing/`.
+     Biome lint covers `src/`, `test/`, `scripts/*.mjs`, and all of `E2E_testing/*.mjs`.
+
+     The battery is in scope with `noUndeclaredVariables` as an error.
+
+     A name used without an import is a ReferenceError that would otherwise
+     surface only in the 30-minute release run.
+
+     Its formatter and unused-symbol rules stay off.
   - `pnpm format` / `pnpm format:check` — auto-format / verify formatting.
 - `pnpm coverage` — Vitest coverage for `src/**/*.ts`.
 
