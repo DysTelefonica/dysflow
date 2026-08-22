@@ -89,12 +89,12 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
 ### `bootstrap`
-Minimal first-call read-only surface. Returns `adapterVersion`, `toolsVisible`, `writesProcess`, `writesProject`, `writeExecutionPolicy`, and the `preferredAgentWorkflows` map in a single ~700-byte call.
+Minimal first-call read-only surface. Returns adapter version, tool count, write-gate state, write execution policy, and the `preferredAgentWorkflows` map in a single ~700-byte call.
 
-Recommended first call for any session that needs to discover the live runtime. Replaces the heavier two-call path (`get_capabilities({ compact: true })` + `schema({ view: "index" })`) when only routing metadata is required.
+Recommended first call when only routing metadata is required. Replaces the heavier two-call path (`get_capabilities({ compact: true })` + `schema({ view: "index" })`).
 
-Pure read-only; never opens Access, never spawns PowerShell, never mutates state. The handler reuses the capabilities snapshot pipeline but deliberately omits project resolution and per-tool metadata.
-* **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. Optional `phase` filter for `preferredAgentWorkflows`.
+Pure read-only; never opens Access, never spawns PowerShell, never mutates state. Reuses the capabilities snapshot pipeline but omits per-tool metadata.
+* **Parameters**: optional `cwd`; omit to use the MCP startup worktree. Optional `phase` filter for `preferredAgentWorkflows`.
 
 ### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
