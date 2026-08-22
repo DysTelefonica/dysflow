@@ -1,6 +1,6 @@
 ---
 name: dysflow-usage
-description: "MUST-LOAD before any dysflow diagnosis or call when the cwd contains .dysflow/project.json, .dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, or tests/*.json. Load first and call get_capabilities({}) before inspecting static files or changing config. Canonical tool names, write flags, error codes, safe-by-default policy, and human-compile contract."
+description: "MUST-LOAD before any dysflow diagnosis or call when the cwd contains .dysflow/project.json, .dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, or tests/*.json. Load first and call get_capabilities({ compact: true }) plus schema({ view: \"index\" }) before inspecting static files or changing config. Canonical tool names, write flags, error codes, safe-by-default policy, and human-compile contract."
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
@@ -22,8 +22,9 @@ metadata:
 **MUST-LOAD:** when a cwd contains `.dysflow/project.json`, any `.dysflow/*`
 artifact, `*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, or `tests/*.json`, load
 this skill BEFORE inspecting static project files, inventing a diagnosis, or
-modifying configuration. Call `get_capabilities({})` first; the live runtime
-owns tool names, flags, defaults, and recovery semantics.
+modifying configuration. Call `get_capabilities({ compact: true })` first,
+then `schema({ view: "index" })` for route selection; the live runtime owns tool
+names, flags, defaults, and recovery semantics.
 
 Use this skill when ANY of:
 
@@ -66,7 +67,7 @@ If you call the dysflow MCP from a host that DOES parse JSON correctly (Claude/C
 **Detecting the bug at runtime** (use in tools that expect object results):
 
 ```js
-const snap = await tools.dysflow.get_capabilities({});
+const snap = await tools.dysflow.get_capabilities({ compact: true });
 if (typeof snap === 'string') {
   // OpenCode Code Mode wrapper is delivering a JSON string instead of the parsed object.
   // File an issue against OpenCode (or hard-restart the MCP client). Skill contract says
@@ -82,10 +83,15 @@ Do NOT use when:
 
 ## Quick start
 
-> **First call:** `get_capabilities({})` — that snapshot is the truth for every other example in this skill.
-> If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
+> **First call:** `get_capabilities({ compact: true })` — this compact snapshot is the default bootstrap for every other example in this skill.
+> Prefer the progressive path introduced by #1461 and refined by #1462: start compact, use the schema index for routing, and fetch deep tool detail only when needed. If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
 
-> **Compact bootstrap:** when context is constrained, call `get_capabilities({compact:true})`, then `schema({view:"index",phase:"<phase>"})` to select a route, and `describe_tool({name:"<tool>",sections:["parameters"]})` for one-tool details. Full responses remain the compatibility default.
+### Progressive bootstrap
+
+When context is constrained, call `get_capabilities({ compact: true })`, then
+`schema({ view: "index", phase: "<phase>" })` to select a route, and
+`describe_tool({ name: "<tool>", sections: ["parameters"] })` for one-tool
+details. Full responses remain the compatibility default.
 
 > **`setup_project` identity is fail-closed:** a fresh bootstrap requires an
 > explicit `projectId`. If it is omitted, the runtime may reuse only the
