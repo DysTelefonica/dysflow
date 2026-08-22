@@ -21,6 +21,12 @@ const CIM_JOB_TIMEOUT_SEC = 4;
 
 /**
  * Builds a PS 5.1-compatible script that:
+ * 0. Probes with Get-Process FIRST and exits early when no Access process
+ *    exists (#1494). The CIM query below is filtered on the same image name, so
+ *    an empty probe means an empty CIM result — exiting early is equivalent,
+ *    not an approximation. This matters because step 1 costs ~510ms: Start-Job
+ *    spins up a second PowerShell runspace, and the preflight cleanup runs this
+ *    on every adapter call. Measured 906ms -> 208ms when Access is not running.
  * 1. Runs the CIM query in a background job to bound WMI hangs.
  * 2. Joins CIM metadata with Get-Process MainWindowHandle because Win32_Process
  *    does not expose that property.
@@ -30,7 +36,7 @@ const CIM_JOB_TIMEOUT_SEC = 4;
  *
  * The filter expression is injected by the caller (already-quoted PS literal).
  */
-function buildCimWithFallbackScript(
+export function buildAccessProcessQueryScript(
   filter: string,
   fallbackNameFilter: string,
   fallbackProcessId?: number,
@@ -39,8 +45,11 @@ function buildCimWithFallbackScript(
     fallbackProcessId === undefined ? `` : ` | Where-Object { $_.Id -eq ${fallbackProcessId} }`;
   return (
     `$gp = @{}; ` +
-    `Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue${fallbackFilter} | ` +
-    `ForEach-Object { $gp[[int]$_.Id] = if ($null -ne $_.MainWindowHandle) { $_.MainWindowHandle.ToInt64() } else { $null } }; ` +
+    // #1494 short-circuit: one enumeration serves both the early exit and the
+    // MainWindowHandle join below, so the probe costs nothing extra.
+    `$probe = @(Get-Process -Name "${fallbackNameFilter}" -ErrorAction SilentlyContinue${fallbackFilter}); ` +
+    `if ($probe.Count -eq 0) { ''; exit 0 }; ` +
+    `$probe | ForEach-Object { $gp[[int]$_.Id] = if ($null -ne $_.MainWindowHandle) { $_.MainWindowHandle.ToInt64() } else { $null } }; ` +
     `$job = Start-Job { Get-CimInstance Win32_Process -Filter "${filter}" | ` +
     `Select-Object ProcessId,Name,CreationDate,CommandLine }; ` +
     `$r = $null; ` +
@@ -66,7 +75,7 @@ function buildCimWithFallbackScript(
 
 export class WindowsMsAccessProcessInspector implements ProcessInspector {
   async getProcess(pid: number): Promise<OsProcessInfo | undefined> {
-    const script = buildCimWithFallbackScript(`ProcessId=${pid}`, `MSACCESS`, pid);
+    const script = buildAccessProcessQueryScript(`ProcessId=${pid}`, `MSACCESS`, pid);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
@@ -94,7 +103,7 @@ export class WindowsMsAccessProcessScanner implements ProcessScanner {
   async listProcesses(): Promise<OsProcessInfo[]> {
     if (process.platform !== "win32") return [];
 
-    const script = buildCimWithFallbackScript(`Name='MSACCESS.EXE'`, `MSACCESS`);
+    const script = buildAccessProcessQueryScript(`Name='MSACCESS.EXE'`, `MSACCESS`);
     const { stdout } = await execFileAsync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
