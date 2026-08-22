@@ -248,7 +248,10 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     const tools = createDysflowMcpTools({ services: makeServices() });
     const schemaTool = tools.find((t) => t.name === "schema");
     expect(schemaTool).toBeDefined();
-    const result = await schemaTool?.handler({ view: "full", toolName: "schema" }, undefined as never);
+    const result = await schemaTool?.handler(
+      { view: "full", toolName: "schema" },
+      undefined as never,
+    );
     if (result === undefined) throw new Error("schema handler returned undefined");
     expect(result.isError).toBe(false);
     const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
