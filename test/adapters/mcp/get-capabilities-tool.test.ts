@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createGetCapabilitiesTool,
   getCapabilitiesAll,
+  projectCapabilitiesSnapshot,
 } from "../../../src/adapters/mcp/get-capabilities-tool";
 import { MCP_TOOL_CONTRACTS } from "../../../src/adapters/mcp/mcp-tool-contracts";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
@@ -207,7 +208,7 @@ describe("getCapabilitiesAll() — pure aggregate function (#656)", () => {
       }),
     });
 
-    const result = await tool.handler({});
+    const result = await tool.handler({ view: "full" });
     const payload = JSON.parse(result.content[0]?.text ?? "{}");
     const snapshot = payload.result ?? payload;
 
@@ -293,12 +294,58 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
           description:
             "Optional per-call worktree cwd. Paths are canonicalized and resolved through the bounded worktree-context cache. Omit to use the MCP startup cwd.",
         },
-        compact: { type: "boolean", default: false },
-        view: { type: "string", enum: ["compact", "full"], default: "full" },
+        compact: { type: "boolean" },
+        view: { type: "string", enum: ["compact", "full"], default: "compact" },
         include: { type: "array" },
         toolNames: { type: "array" },
       },
     });
+  });
+
+  it("defaults to the compact projection when no view is supplied", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+    });
+
+    const projected = projectCapabilitiesSnapshot(snapshot, {});
+
+    expect(projected).toMatchObject({
+      adapterVersion: snapshot.adapterVersion,
+      tools: expect.any(Object),
+      effectiveDryRunDefault: expect.any(Object),
+    });
+    expect(projected).not.toHaveProperty("allowedProcedures");
+    expect(projected).not.toHaveProperty("documentationBundle");
+  });
+
+  it("preserves the full projection for explicit view: 'full' callers", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+    });
+
+    expect(projectCapabilitiesSnapshot(snapshot, { view: "full" })).toBe(snapshot);
+  });
+
+  it("keeps compact: true and view: 'compact' as identical compact aliases", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+    });
+
+    expect(projectCapabilitiesSnapshot(snapshot, { compact: true })).toEqual(
+      projectCapabilitiesSnapshot(snapshot, { view: "compact" }),
+    );
   });
 
   it("is NOT write-gated: handler returns ok when writes are disabled", async () => {
@@ -338,8 +385,10 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
       writesProject: expect.any(Object),
       projectIdResolution: expect.any(Object),
       toolsVisible: expect.any(Number),
-      writeClassToolsPermitted: expect.any(Array),
+      tools: expect.any(Object),
+      effectiveDryRunDefault: expect.any(Object),
     });
+    expect(parsed).not.toHaveProperty("writeClassToolsPermitted");
   });
 });
 

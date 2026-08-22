@@ -281,7 +281,7 @@ export function projectCapabilitiesSnapshot(
   snapshot: McpCapabilitySnapshot,
   input: GetCapabilitiesInput = {},
 ): McpCapabilitySnapshot | CompactMcpCapabilitySnapshot {
-  const compact = input.compact === true || input.view === "compact";
+  const compact = input.compact === true || input.view !== "full";
   const selectedNames = input.toolNames === undefined ? undefined : new Set(input.toolNames);
   const filterMap = <T>(map: Readonly<Record<string, T>>): Record<string, T> => {
     if (selectedNames === undefined) return { ...map };
@@ -605,7 +605,7 @@ export function createGetCapabilitiesTool(opts: {
   return {
     name: "get_capabilities",
     resultContract: getCapabilitiesResultContract,
-    description: `Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Call this tool first; use { compact: true } or { view: 'compact' } for a bounded bootstrap view, then schema({ view: 'index' }) or schema({ view: 'compact' }) to choose a route and describe_tool({ name: '<tool>', sections: ['parameters'] }) for selective discovery. Omitted view is full for backward compatibility. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
+    description: `Return the compact capabilities snapshot for the live Dysflow MCP adapter by default. Call this tool first for a bounded bootstrap view; pass { view: 'full' } to opt into the complete snapshot, then schema({ view: 'index' }) or schema({ view: 'compact' }) to choose a route and describe_tool({ name: '<tool>', sections: ['parameters'] }) for selective discovery. { compact: true } remains a compatibility alias for the compact view. Read-only — does not open Access, does not spawn PowerShell, does not mutate state. Snapshot surface: ${snapshot.surface}. Adapter version: ${snapshot.adapterVersion}. Writes process: ${snapshot.writesProcess.enabled ? "enabled" : "disabled"}. Writes project (allowWrites): ${snapshot.writesProject.allowWrites}. Tools visible: ${snapshot.toolsVisible}. Write-class tools permitted: ${snapshot.writeClassToolsPermitted.length}. Human-compile pending: ${snapshot.humanCompilePending}. Documentation bundle (errorCodesMd=${snapshot.documentationBundle.errorCodesMd}, hresultGuideMd=${snapshot.documentationBundle.hresultGuideMd}, version=${snapshot.documentationBundle.version}) is exposed under snapshot.documentationBundle (#940). Write execution policy: ${snapshot.writeExecutionPolicy}. Result validation policy: ${snapshot.resultValidationPolicy}. Per-tool commit-flag metadata (commitFlag, noWriteAlias, defaultBehavior) is exposed under snapshot.tools for ${Object.keys(snapshot.tools).length} tools (#757). ${MCP_TOOL_CONTRACTS.get_capabilities.summary}`,
     inputSchema: CAPABILITIES_INPUT_SCHEMA,
     handler: async (input): Promise<ReturnType<typeof translateCoreResultToMcpContent>> => {
       const params =
@@ -622,12 +622,7 @@ export function createGetCapabilitiesTool(opts: {
       const toolNames = Array.isArray(requestParams.toolNames)
         ? requestParams.toolNames.filter((value): value is string => typeof value === "string")
         : undefined;
-      const view =
-        requestParams.view === "compact"
-          ? "compact"
-          : requestParams.view === "full"
-            ? "full"
-            : undefined;
+      const view = requestParams.view === "full" ? "full" : "compact";
       const projected = projectCapabilitiesSnapshot(
         projectConfig === undefined
           ? snapshot

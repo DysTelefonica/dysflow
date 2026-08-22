@@ -18,7 +18,7 @@ describe("get_capabilities projectConfig", () => {
         allowWrites: true,
         projectConfigResolver: () => diagnoseProjectConfig(root),
       });
-      const first = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
+      const first = JSON.parse((await tool.handler({ view: "full" })).content[0]?.text ?? "{}");
       expect(first.projectConfig.status).toBe("missing");
       mkdirSync(join(root, ".dysflow"));
       mkdirSync(join(root, "src"));
@@ -27,7 +27,7 @@ describe("get_capabilities projectConfig", () => {
         join(root, ".dysflow", "project.json"),
         JSON.stringify({ id: "app", accessPath: "app.accdb", destinationRoot: "src" }),
       );
-      const second = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
+      const second = JSON.parse((await tool.handler({ view: "full" })).content[0]?.text ?? "{}");
       expect(second.projectConfig).toMatchObject({
         status: "valid",
         writeReady: true,
@@ -65,7 +65,7 @@ describe("get_capabilities projectConfig", () => {
         allowWrites: true,
         projectConfigResolver: () => diagnoseProjectConfig(cwd),
       });
-      const result = JSON.parse((await tool.handler({})).content[0]?.text ?? "{}");
+      const result = JSON.parse((await tool.handler({ view: "full" })).content[0]?.text ?? "{}");
       expect(result.projectConfig).toMatchObject({ status: "path-mismatch", writeReady: false });
       expect(result.projectConfig.diagnostics[0]?.code).toBe("FRONTEND_PATH_NOT_BASENAME");
       expect(result.projectConfig.diagnostics[0]?.remediation).toEqual({
