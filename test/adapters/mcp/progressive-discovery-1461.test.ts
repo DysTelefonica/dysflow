@@ -49,9 +49,9 @@ describe("progressive discovery views (#1461)", () => {
     expect(parameters.toolNames).toMatchObject({ type: "array" });
   });
 
-  it("keeps the full capabilities default and provides compact filtered blocks", async () => {
+  it("returns full when view is explicit and provides compact filtered blocks by default", async () => {
     const tool = createGetCapabilitiesTool(capabilityOptions());
-    const full = parseText(await tool.handler({}));
+    const full = parseText(await tool.handler({ view: "full" }));
     const compact = parseText(
       await tool.handler({
         compact: true,

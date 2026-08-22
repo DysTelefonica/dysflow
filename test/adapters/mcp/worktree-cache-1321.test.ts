@@ -109,10 +109,10 @@ describe("cwd-aware worktree cache (#1321)", () => {
   it("routes get_capabilities to the explicit cwd and preserves startup cwd when omitted", async () => {
     const getCapabilities = requiredTool(tools(), "get_capabilities");
 
-    const explicit = payload(await getCapabilities.handler({ cwd: sibling }));
+    const explicit = payload(await getCapabilities.handler({ cwd: sibling, view: "full" }));
     expect(explicit.projectConfig?.projectId).toBe("sibling");
 
-    const implicit = payload(await getCapabilities.handler({}));
+    const implicit = payload(await getCapabilities.handler({ view: "full" }));
     expect(implicit.projectConfig?.projectId).toBe("startup");
   });
 
@@ -209,7 +209,7 @@ describe("cwd-aware worktree cache (#1321)", () => {
     });
     expect(result.isError).toBe(false);
 
-    const capabilities = payload(await getCapabilities.handler({ cwd: sibling }));
+    const capabilities = payload(await getCapabilities.handler({ cwd: sibling, view: "full" }));
     expect(capabilities.projectConfig?.projectId).toBe("sibling");
     expect(capabilities.worktreeCache?.hits).toEqual(expect.any(Number));
     expect(capabilities.worktreeCache?.misses).toBe(1);
@@ -343,7 +343,7 @@ describe("cwd-aware worktree cache (#1321)", () => {
       }),
     );
     expect(applied.mode).toBe("apply");
-    const capabilities = payload(await getCapabilities.handler({ cwd: sibling }));
+    const capabilities = payload(await getCapabilities.handler({ cwd: sibling, view: "full" }));
     expect(capabilities.projectConfig).toMatchObject({ status: "valid", writeReady: true });
     expect(capabilities.worktreeCache).toMatchObject({
       entries: 1,
@@ -368,7 +368,7 @@ describe("cwd-aware worktree cache (#1321)", () => {
     );
     expect(applied.mode).toBe("apply");
 
-    const implicit = payload(await getCapabilities.handler({}));
+    const implicit = payload(await getCapabilities.handler({ view: "full" }));
     expect(implicit.projectConfig).toMatchObject({ projectId: "startup", status: "valid" });
   });
 });
