@@ -1,5 +1,33 @@
 # Changelog
 
+## [v2.38.0] - 2026-08-22
+
+### Changes
+
+- research(mcp): sampling protocol and evidence tooling for surface profiles (#1481)
+- refactor(vba): move import orchestration behind core ports (#1480)
+- fix(export): absolutize relative destinationRoot overrides (#1478) (#1479)
+- chore(repo): ignore root release artifacts (#1477)
+- refactor(access): move relink orchestration into core (#1476)
+- refactor(mcp): separate compact tools/list advertisements from deep contracts (#1475)
+- feat(mcp): add progressive discovery views (#1474)
+- fix(sql): accept Access-compatible identifiers (#1473)
+- fix(sql): make run_script execution atomic (#1472)
+- fix(mcp): reduce redundant response payload copies (#1471)
+- test(mcp): add deterministic context budget gate (#1470)
+- fix(sql): parse Access script literals and comments (#1469)
+- fix(sql): reject unenforceable table policies (#1468)
+- fix(release): require exact-sha quality authority (#1466)
+- test(schema-props): drop duplicate testFilter entry in expectedKeys (#1442)
+- fix(fixtures): require bounded teardown predicates
+- feat(vba-sync): accept object filter {tag} on test_vba (#1442)
+- docs(openspec): reconcile apply-phase deviations (#1442)
+- docs(openspec): initial planning artifacts (#1442)
+- test(ci): align with post-v2.37.5 release.yml (release-validation dropped)
+- ci(release): drop Windows release-validation job; only E2E + build + release remain
+- ci(release): disable pnpm cache upload on self-hosted E2E runner
+
+
 ## [Unreleased]
 
 ### Changes
