@@ -336,6 +336,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 | When you change... | Update | Anchored by |
 |---|---|---|
 | An MCP tool name, parameter, or result contract | [MCP tool reference](./docs/api/mcp-tools.md) | `test/docs/mcp-readme-tool-surface.test.ts` |
+| Where a new MCP tool must be registered | [Adding an MCP tool](./docs/api/adding-an-mcp-tool.md) | `test/docs/add-a-tool-checklist-1493.test.ts` |
 | An HTTP route or its status mapping | [HTTP API](./docs/api/http-api.md) | `test/docs/http-api-doc.test.ts` |
 | A core/adapter boundary or dependency rule | [Core and adapters](./docs/architecture/dysflow-core-and-adapters.md) | `test/docs/architecture-doc.test.ts` |
 | A write gate, cleanup path, or the update mechanism | [Update trust model](./docs/security/update-trust-model.md) | `test/docs/security-doc-anchors.test.ts` |
@@ -349,8 +350,9 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Four anchors do the second kind today:
+Five anchors do the second kind today:
 
+- `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
 - `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
