@@ -136,6 +136,9 @@ const formSpec = sandboxPlan.sandbox.formSpec;
 const queriesExportPath = sandboxPlan.sandbox.queriesExportPath;
 const pruneExportPath = sandboxPlan.sandbox.pruneExportPath;
 const probeTable = "ZZZ_DysflowMcpE2E";
+// Fixture rows live at or above TEST_ID_BASE so a bounded teardown predicate can
+// legally reach them; the runner rejects any range starting below it.
+const TEST_ID_BASE = 900000;
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
 const uiFormSrcRoot = sandboxPlan.sandbox.destinationRoot;
 const uiFormCatalogPath = sandboxPlan.sandbox.catalogPath;
@@ -203,7 +206,7 @@ const uiFormFixture = (await readFile(join(destinationRoot, "forms", "Form_FormC
   .replace('Name ="Etiqueta240"', 'Name ="txtSet"')
   .replace('Name ="lblTitulo"', 'Name ="txtDelete"');
 if (!resumeRoot) {
-  await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (2, 'script')\n`, "utf8");
+  await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (${TEST_ID_BASE + 2}, 'script')\n`, "utf8");
   await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
   await mkdir(dirname(uiFormPath), { recursive: true });
   await writeFile(uiFormPath, uiFormFixture, "utf8");
@@ -308,6 +311,21 @@ function safeJsonParse(text) {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The canonical payload of a tool result.
+ *
+ * #1471 stopped serializing the full payload into the text channel once it
+ * exceeds 16 KB; past that threshold `text` carries only a summary stub and
+ * the real payload lives in `structuredContent`. Reading `text` alone is
+ * therefore SIZE-DEPENDENT: the same assertion passes on a small sandbox and
+ * fails on a large one. Always prefer the structured channel and keep the
+ * text parse as the fallback for small results and error envelopes.
+ */
+function payloadOf(result) {
+  const structured = result?.response?.result?.structuredContent;
+  return structured ?? safeJsonParse(result?.text);
 }
 
 function extractMcpErrorCode(text) {
@@ -429,7 +447,7 @@ async function recordRecoveryTokenTrioJourney() {
       timeoutMs,
       run: async ({ callTool }) => {
         const ambiguous = await callTool("resolve_project", { cwd: chosenRoot });
-        const ambiguousPayload = safeJsonParse(ambiguous.text);
+        const ambiguousPayload = payloadOf(ambiguous);
         const recoveryToken = ambiguousPayload?.recoveryToken;
         if (
           ambiguous.isError ||
@@ -447,7 +465,7 @@ async function recordRecoveryTokenTrioJourney() {
           apply: false,
         };
         const consumed = await callTool("setup_project", trio);
-        const consumedPayload = safeJsonParse(consumed.text);
+        const consumedPayload = payloadOf(consumed);
         if (
           consumed.isError ||
           consumedPayload?.mode !== "resolution" ||
@@ -571,7 +589,7 @@ async function record(area, tool, args = {}, options = {}) {
 }
 
 function mcpErrorFromResult(result) {
-  const parsed = safeJsonParse(result?.text);
+  const parsed = payloadOf(result);
   return (
     parsed?.error ??
     result?.response?.result?.error ??
@@ -580,8 +598,8 @@ function mcpErrorFromResult(result) {
 }
 
 function assertPlanApplyResolverPair(tool, planResult, applyResult, assertPayloads) {
-  const plan = safeJsonParse(planResult?.text);
-  const apply = safeJsonParse(applyResult?.text);
+  const plan = payloadOf(planResult);
+  const apply = payloadOf(applyResult);
   const errorParity = Boolean(planResult?.isError) === Boolean(applyResult?.isError);
   const resolvedProjectParity =
     plan?.resolvedProjectId === undefined && apply?.resolvedProjectId === undefined
@@ -617,7 +635,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const required = ["list_objects", "list_vba_modules", "exists"];
         const entries = new Map((parsed?.tools ?? []).map((entry) => [entry.name, entry]));
         const pass = required.every((name) => {
@@ -637,7 +655,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args: { ...args, symbol: "MouseCursor" },
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass =
           Array.isArray(parsed?.binaryReferences) &&
           typeof parsed?.hasDifferences === "boolean" &&
@@ -657,7 +675,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = Array.isArray(parsed?.filesInspected) && Array.isArray(parsed?.detectedDrift);
         return {
           pass,
@@ -707,7 +725,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args: { ...args, backendPath },
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = typeof parsed?.markdownFile === "string" && parsed.markdownFile.endsWith(".md");
         return {
           pass,
@@ -722,7 +740,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options: { ...options, expected: "error" },
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const entry = Array.isArray(parsed?.invalid)
           ? parsed.invalid.find((candidate) => candidate?.procedure === "GetMaxOrdinalE2E")
           : undefined;
@@ -755,7 +773,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const failures = Object.entries(parsed?.effectiveDryRunDefault ?? {}).filter(
           ([name, effective]) => effective !== (parsed?.tools?.[name]?.defaultBehavior !== "writes"),
         );
@@ -772,7 +790,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = result?.response?.result?.structuredContent ?? safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = parsed?.schemaVersion === "dysflow.result/v1";
         return {
           pass,
@@ -803,7 +821,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = parsed?.dryRun === true || parsed?.willModifyAccess === false;
         return {
           pass,
@@ -818,7 +836,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = parsed?.dryRun === true || parsed?.willModifyAccess === false;
         return {
           pass,
@@ -848,7 +866,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass = parsed?.module === "mdlCursor" && parsed?.procedure === "MouseCursor";
         return {
           pass,
@@ -902,7 +920,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass =
           parsed?.error?.code === "PROJECT_CONFIG_NOT_FOUND" &&
           typeof parsed.error.message === "string" &&
@@ -920,7 +938,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass =
           parsed?.ok === true &&
           parsed?.mode === "plan" &&
@@ -980,7 +998,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args,
       options,
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const pass =
           parsed?.ok === true &&
           parsed?.mode === "plan" &&
@@ -1015,7 +1033,7 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       args: { name: "list_access_files" },
       options: {},
       assert: (result) => {
-        const parsed = safeJsonParse(result?.text);
+        const parsed = payloadOf(result);
         const parameters = parsed?.parameters ?? parsed?.tool?.parameters;
         const pass =
           parameters !== null &&
@@ -1311,9 +1329,9 @@ const telemetryAggregateLogs = await record("release-telemetry", "logs", {
   projectId,
   options: { tool: "delete_module", groupBy: "tool", limit: 1000, orderBy: "asc" },
 });
-const deleteModuleLogData = safeJsonParse(deleteModuleLogs.text);
-const vbaActionLogData = safeJsonParse(vbaActionLogs.text);
-const telemetryAggregateData = safeJsonParse(telemetryAggregateLogs.text);
+const deleteModuleLogData = payloadOf(deleteModuleLogs);
+const vbaActionLogData = payloadOf(vbaActionLogs);
+const telemetryAggregateData = payloadOf(telemetryAggregateLogs);
 const deleteModuleAggregate = telemetryAggregateData?.aggregate?.tools?.find(
   (tool) => tool.tool === "delete_module",
 );
@@ -1409,8 +1427,8 @@ console.log(`${projectConfigRestored ? "PASS" : "FAIL"}\tinvocation-sink:opt-out
   const crossRow = (() => {
     if (cross.timedOut) return { pass: false, summary: "timeout" };
     if (cross.isError) return { pass: false, summary: normalize(cross.text || cross.stderr || "") };
-    let parsed;
-    try { parsed = JSON.parse(cross.text); } catch { return { pass: false, summary: "non-JSON response" }; }
+    const parsed = payloadOf(cross);
+    if (parsed === undefined) return { pass: false, summary: "non-JSON response" };
     const snapshot = parsed?.snapshot ?? parsed;
     if (!snapshot || typeof snapshot.toolsVisible !== "number") return { pass: false, summary: "missing snapshot.toolsVisible" };
     const matches =
@@ -1477,7 +1495,7 @@ await record("write", "create_table", { ...ctx, databasePath: backendPath, table
 // #1452 — arbitrary Access SQL cannot prove which tables it touches, so exec_sql
 // and run_script reject every table-policy key. Scoping stays with the structured
 // table actions below (seed_fixture / teardown_fixture), which can enforce it.
-await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (1, 'exec')`, apply: true });
+await record("write", "exec_sql", { ...ctx, databasePath: backendPath, sql: `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (${TEST_ID_BASE + 1}, 'exec')`, apply: true });
 await record("write", "run_script", { ...ctx, databasePath: backendPath, scriptPath: sqlScript, apply: true });
 await record("vba", "run_script:sandbox-only", {
   accessPath: "C:/Production/real.accdb", scriptPath: "/path/to/anything.sql", apply: false,
@@ -1487,8 +1505,10 @@ await record("vba", "vba_inline_execution:runtime-mutating-code-needs-confirmati
   code: "Application.Quit", apply: true,
 }, { expected: "error" });
 // assertion: error.code in {HR1_VIOLATION, COMPILE_REQUIRED, CONFIRMATION_REQUIRED}
-await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: 3, Name: "seed" }], apply: true, allowTable: probeTable });
-await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, allowTable: probeTable });
+await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: TEST_ID_BASE + 3, Name: "seed" }], apply: true, allowTable: probeTable });
+// teardown_fixture refuses an unbounded DELETE. The predicate range must sit at or
+// above TEST_ID_BASE, which is why every probe row above is seeded inside it.
+await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, allowTable: probeTable, predicate: { column: "ID", min: TEST_ID_BASE, max: TEST_ID_BASE + 999 } });
 await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true });
 
 await record("vba-sync", "list_objects", ctx);
@@ -1510,7 +1530,7 @@ await record("vba-sync", "export_all:default-safety", {
 // export_all — give the operation (and the harness) ample time on large fixtures.
 const pruneResult = await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, prune: true, timeoutMs: 120000 }, { timeoutMs: 120000 });
 try {
-  const pruneData = JSON.parse(pruneResult.text ?? "{}");
+  const pruneData = (payloadOf(pruneResult) ?? {});
   const ok = pruneData.prune !== undefined && typeof pruneData.prune.applied === "boolean";
   addResult({ area: "vba-sync", tool: "export_all:prune-report", pass: ok, expected: "prune.applied present", ms: 0, summary: ok ? `applied=${pruneData.prune.applied} deleted=${(pruneData.prune.deleted || []).length}` : `missing prune in: ${Object.keys(pruneData).join(",")}` });
   console.log(`${ok ? "PASS" : "FAIL"}\texport_all:prune-report\t0ms\t${rows.at(-1).summary}`);
@@ -1551,7 +1571,7 @@ const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNam
 // Semantic path assertion: verify_code now runs in semantic mode by default.
 // The result JSON must include the additive semantic fields introduced in vba-semantic-diff.
 try {
-  const verifyData = JSON.parse(verifyResult.text ?? "{}");
+  const verifyData = (payloadOf(verifyResult) ?? {});
   const hasSemanticFields = "summary" in verifyData && "hasFunctionalDifferences" in verifyData && "actionableOk" in verifyData;
   addResult({ area: "vba-sync", tool: "verify_code:semantic-fields", pass: hasSemanticFields, expected: "summary+hasFunctionalDifferences+actionableOk present", ms: 0, summary: hasSemanticFields ? "semantic fields present" : `missing fields in: ${Object.keys(verifyData).join(",")}` });
   console.log(`${hasSemanticFields ? "PASS" : "FAIL"}\tverify_code:semantic-fields\t0ms\t${rows.at(-1).summary}`);
@@ -1566,7 +1586,7 @@ try {
 const singleModuleResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: true, timeoutMs: 180000 }, { timeoutMs: 180000 });
 // Validate the unified single-module response shape, including the aggregated recommendation.
 try {
-  const smData = JSON.parse(singleModuleResult.text ?? "{}");
+  const smData = (payloadOf(singleModuleResult) ?? {});
   const hasModuleFields = smData.operation === "verify_code" && "ok" in smData && "recommendedAction" in smData;
   addResult({ area: "vba-sync", tool: "verify_code:single-module-shape", pass: hasModuleFields, expected: "operation=verify_code+ok+recommendedAction present", ms: 0, summary: hasModuleFields ? "verify_code single-module shape valid" : `missing fields in: ${Object.keys(smData).join(",")}` });
   console.log(`${hasModuleFields ? "PASS" : "FAIL"}\tverify_code:single-module-shape\t0ms\t${rows.at(-1).summary}`);
@@ -1597,7 +1617,7 @@ let bulkImportableFlowSummary = "DEFERRED: frontend .accdb fixture not present i
   if (frontendFixturePresent) {
     try {
       const wholeProjectVerify = await record("vba-sync", "verify_code", { ...ctx, diff: false, timeoutMs: 180000 }, { timeoutMs: 180000 });
-      const verifyData = JSON.parse(wholeProjectVerify.text ?? "{}");
+      const verifyData = (payloadOf(wholeProjectVerify) ?? {});
       const structuredPresent =
         verifyData.summaryStructured &&
         Array.isArray(verifyData.bulkImportable) &&
@@ -1637,7 +1657,7 @@ const deleteModuleMissingResult = await record("vba-sync", "delete_module", {
   ...ctx,
   moduleName: "DysflowMcpE2EMissing",
 });
-const deleteModuleMissingPlan = safeJsonParse(deleteModuleMissingResult.text);
+const deleteModuleMissingPlan = payloadOf(deleteModuleMissingResult);
 const hasDeletePlanForMissing = Boolean(
   deleteModuleMissingPlan &&
     deleteModuleMissingPlan.operation === "delete_module" &&
@@ -1669,7 +1689,7 @@ const formEventDeadCodeResult = await record("vba", "detect_dead_code:form-event
   modules: { FormEntryModule: formEventEntrySource },
 });
 // assertion: CmdSave_Click either not flagged OR flagged with calledByFormEvent:true, risk:Low
-const formEventDeadCode = safeJsonParse(formEventDeadCodeResult.text);
+const formEventDeadCode = payloadOf(formEventDeadCodeResult);
 const formEventFinding = formEventDeadCode?.findings?.find(
   (finding) => finding.symbol === "CmdSave_Click",
 );
@@ -1689,7 +1709,7 @@ const realSourceTreeCatalogResult = await record("forms", "harvest_form_catalog:
   projectId, destinationRoot: uiFormSrcRoot, catalogPath: uiFormCatalogPath,
 });
 // assertion: result.total > 0 against 100+ .form.txt files
-const realSourceTreeCatalog = safeJsonParse(realSourceTreeCatalogResult.text);
+const realSourceTreeCatalog = payloadOf(realSourceTreeCatalogResult);
 const realSourceTreePass = Number(realSourceTreeCatalog?.total) > 0;
 addResult({
   area: "forms",
@@ -1741,7 +1761,7 @@ for (const tool of formReadTools) {
   await record("form-ui", `${tool}:access-path-exposed`, { projectId, sourcePath: uiFormPath });
 }
 
-const analyzeFormUi = safeJsonParse(analyzeFormUiResult.text);
+const analyzeFormUi = payloadOf(analyzeFormUiResult);
 const analyzePass = Boolean(
   analyzeFormUi &&
     analyzeFormUi.formName === "DysflowMcpE2E" &&
@@ -1761,7 +1781,7 @@ addResult({
 console.log(`${analyzePass ? "PASS" : "FAIL"}\tanalyze_form_ui:shape\t0ms\t${rows.at(-1).summary}`);
 
 const analyzeFormUiAliasResult = await record("form-ui", "analyze_form_ui", { projectId, path: uiFormPath });
-const analyzeFormUiAlias = safeJsonParse(analyzeFormUiAliasResult.text);
+const analyzeFormUiAlias = payloadOf(analyzeFormUiAliasResult);
 const analyzeAliasPass = Boolean(
   analyzeFormUiAlias &&
     analyzeFormUiAlias.formName === "DysflowMcpE2E" &&
@@ -1804,7 +1824,7 @@ const mapFormBehaviorResult = await record("form-ui", "map_form_behavior", {
   sourcePath: uiFormPath,
   codegraphEvidence,
 });
-const behaviorMap = safeJsonParse(mapFormBehaviorResult.text);
+const behaviorMap = payloadOf(mapFormBehaviorResult);
 behaviorMap?.controls?.push(
   {
     name: "txtSet",
@@ -1876,7 +1896,7 @@ const designPlanResult = await record("form-ui", "generate_form_design_plan", {
     ],
   },
 });
-const designPlan = safeJsonParse(designPlanResult.text);
+const designPlan = payloadOf(designPlanResult);
 const generatePass = Boolean(
   designPlan &&
     designPlan.formName === "DysflowMcpE2E" &&
@@ -1914,7 +1934,7 @@ const applyPlanResult = await recordContract("form-ui", "apply_form_design_plan"
     .replaceAll('"txtDelete"', '"lblTitulo"')),
   apply: true,
 }, {}, ["apply"]);
-const applyPlan = safeJsonParse(applyPlanResult.text);
+const applyPlan = payloadOf(applyPlanResult);
 const appliedFormText = await readFile(join(destinationRoot, "forms", "Form_FormCPV.form.txt"), "utf8");
 const applyPass = Boolean(
   applyPlan &&
@@ -1954,7 +1974,7 @@ const copyPlanResult = await record("form-ui", "copy_form_ui_pattern", {
     },
   },
 });
-const copyPlan = safeJsonParse(copyPlanResult.text);
+const copyPlan = payloadOf(copyPlanResult);
 const copyPass = Boolean(
   copyPlan &&
     copyPlan.formName === "DysflowMcpE2E" &&
@@ -1990,7 +2010,7 @@ const verifyCleanResult = await record("form-ui", "verify_form_ui", {
     controls: behaviorMap.controls.filter(({ name }) => name !== "txtDelete" && name !== "txtRename").map((control) => control.name === "cmdApply" ? { ...control, properties: { ...control.properties, Left: "100" } } : control.name === "txtSet" ? { ...control, properties: { ...control.properties, Caption: "Probe input" } } : control).concat({ ...behaviorMap.controls.find(({ name }) => name === "txtRename"), name: "txtInput" }, { name: "txtAdded", type: "TextBox", role: "input", properties: { Caption: "Added" }, events: [], bindings: [], codegraphEvidence: [] }),
   },
 });
-const verifyClean = safeJsonParse(verifyCleanResult.text);
+const verifyClean = payloadOf(verifyCleanResult);
 const verifyCleanPass = Boolean(
   verifyClean &&
     verifyClean.formName === "DysflowMcpE2E" &&
@@ -2041,7 +2061,7 @@ const emptyEvidenceMapResult = await record("form-ui", "map_form_behavior", {
   sourcePath: uiFormPath,
   codegraphEvidence: [],
 });
-const emptyEvidenceMap = safeJsonParse(emptyEvidenceMapResult.text);
+const emptyEvidenceMap = payloadOf(emptyEvidenceMapResult);
 const emptyEvidencePass = Boolean(
   emptyEvidenceMap &&
     emptyEvidenceMap.formName === "DysflowMcpE2E" &&
@@ -2089,7 +2109,7 @@ const applyDryRunResult = await record("form-ui", "apply_form_design_plan", {
   sourcePath: uiFormPath,
   plan: designPlan,
 });
-const applyDryRun = safeJsonParse(applyDryRunResult.text);
+const applyDryRun = payloadOf(applyDryRunResult);
 const applyDryRunPass = Boolean(
   applyDryRun &&
     applyDryRun.mode === "dry-run" &&
@@ -2114,7 +2134,7 @@ const verifyFormUiResult = await record("form-ui", "verify_form_ui", {
   sourceContract: behaviorMap,
   appliedContract: driftedContract,
 });
-const formUiVerifyResult = safeJsonParse(verifyFormUiResult.text);
+const formUiVerifyResult = payloadOf(verifyFormUiResult);
 const verifyPass = Boolean(
   formUiVerifyResult &&
     formUiVerifyResult.formName === "DysflowMcpE2E" &&
@@ -2299,7 +2319,7 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
     projectId: "noconformidades-e2e",
     formName: "FormCPV",
   });
-  const innerData = safeJsonParse(inspectResult.text);
+  const innerData = payloadOf(inspectResult);
   const inspectPass = Boolean(innerData && innerData.name === "FormCPV");
   addResult({
     area: "project-resolution",
@@ -2318,7 +2338,7 @@ await record("protocol", "effective-dry-run-default-coherence", { projectId });
     projectId: "noconformidades-e2e",
     formName: "NonexistentForm",
   }, { expected: "error" });
-  const badData = safeJsonParse(badResult.text);
+  const badData = payloadOf(badResult);
   // inspect_form surfaces FORM_NOT_FOUND as a plain-text error string (not a
   // JSON envelope), so safeJsonParse returns undefined; fall back to the raw
   // error text so the "no [PATH] leak" check runs against the real message.
