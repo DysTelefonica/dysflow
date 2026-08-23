@@ -7,6 +7,7 @@ import {
   DYSSKILL_NAMES,
   diagnoseBundledSkills,
   discoverSkillTargets,
+  HARNESS_METADATA_SCHEMA_VERSION,
   installBundledSkills,
   MCP_HARNESS_VERSION,
 } from "../../../../src/cli/commands/install/skills-installer";
@@ -24,6 +25,28 @@ async function seedBundle(root: string): Promise<void> {
     await mkdir(join(root, "skills", name), { recursive: true });
     await writeFile(join(root, "skills", name, "SKILL.md"), `# ${name}\n`, "utf8");
   }
+  await mkdir(join(root, "skills", "dysflow-codegraph-update", "assets", "scripts"), {
+    recursive: true,
+  });
+  await writeFile(
+    join(
+      root,
+      "skills",
+      "dysflow-codegraph-update",
+      "assets",
+      "scripts",
+      "Invoke-DysflowSemanticAudit.ps1",
+    ),
+    Buffer.from([0xef, 0xbb, 0xbf, 0x23, 0x20, 0x61, 0x75, 0x64, 0x69, 0x74, 0x0a]),
+  );
+  await mkdir(join(root, "skills", "dysflow-usage", "assets", "examples"), {
+    recursive: true,
+  });
+  await writeFile(
+    join(root, "skills", "dysflow-usage", "assets", "examples", "bootstrap.md"),
+    "# bootstrap\n",
+    "utf8",
+  );
 }
 
 afterEach(async () => {
@@ -48,9 +71,30 @@ describe("bundled Dysflow skill installation (#1323)", () => {
       const installed = await readFile(join(skillsDir, name, "SKILL.md"));
       expect(installed.equals(source)).toBe(true);
     }
+    const nestedSource = await readFile(
+      join(
+        bundleRoot,
+        "skills",
+        "dysflow-codegraph-update",
+        "assets",
+        "scripts",
+        "Invoke-DysflowSemanticAudit.ps1",
+      ),
+    );
+    const nestedInstalled = await readFile(
+      join(
+        skillsDir,
+        "dysflow-codegraph-update",
+        "assets",
+        "scripts",
+        "Invoke-DysflowSemanticAudit.ps1",
+      ),
+    );
+    expect(nestedInstalled.equals(nestedSource)).toBe(true);
     const metadata = JSON.parse(
       await readFile(join(skillsDir, ".dysflow-harness.json"), "utf8"),
-    ) as { mcpHarnessVersion: string; skills: Record<string, string> };
+    ) as { schemaVersion: number; mcpHarnessVersion: string; skills: Record<string, string> };
+    expect(metadata.schemaVersion).toBe(HARNESS_METADATA_SCHEMA_VERSION);
     expect(metadata.mcpHarnessVersion).toBe(MCP_HARNESS_VERSION);
     expect(Object.keys(metadata.skills).sort()).toEqual([...DYSSKILL_NAMES].sort());
   });
@@ -86,6 +130,17 @@ describe("bundled Dysflow skill installation (#1323)", () => {
     await seedBundle(bundleRoot);
     await mkdir(join(firstSkillsDir, "dysflow-arnes"), { recursive: true });
     await writeFile(join(firstSkillsDir, "dysflow-arnes", "SKILL.md"), "original bytes", "utf8");
+    await mkdir(join(firstSkillsDir, "dysflow-codegraph-update", "assets", "scripts"), {
+      recursive: true,
+    });
+    const nestedFile = join(
+      firstSkillsDir,
+      "dysflow-codegraph-update",
+      "assets",
+      "scripts",
+      "Invoke-DysflowSemanticAudit.ps1",
+    );
+    await writeFile(nestedFile, "original nested bytes", "utf8");
     await writeFile(failingSkillsDir, "blocks mkdir", "utf8");
 
     await expect(
@@ -101,6 +156,7 @@ describe("bundled Dysflow skill installation (#1323)", () => {
     expect(await readFile(join(firstSkillsDir, "dysflow-arnes", "SKILL.md"), "utf8")).toBe(
       "original bytes",
     );
+    expect(await readFile(nestedFile, "utf8")).toBe("original nested bytes");
     await expect(stat(join(firstSkillsDir, "dysflow-usage"))).rejects.toThrow();
     await expect(stat(join(firstSkillsDir, ".dysflow-harness.json"))).rejects.toThrow();
   });
@@ -197,7 +253,11 @@ describe("bundled Dysflow skill installation (#1323)", () => {
       bundleRoot,
       targets: [{ agentId: "codex", skillsDir }],
     });
-    await writeFile(join(skillsDir, "dysflow-usage", "SKILL.md"), "stale", "utf8");
+    await writeFile(
+      join(skillsDir, "dysflow-usage", "assets", "examples", "bootstrap.md"),
+      "stale nested example",
+      "utf8",
+    );
 
     const statuses = await diagnoseBundledSkills({
       bundleRoot,
@@ -213,7 +273,39 @@ describe("bundled Dysflow skill installation (#1323)", () => {
         staleSkills: ["dysflow-usage"],
       }),
     ]);
-    const expected = createHash("sha256").update("# dysflow-arnes\n").digest("hex");
+    const fileHash = createHash("sha256").update("# dysflow-arnes\n").digest("hex");
+    const expected = createHash("sha256").update(`SKILL.md\0${fileHash}`).digest("hex");
     expect(statuses[0]?.expectedHashes["dysflow-arnes"]).toBe(expected);
+  });
+
+  it("detects and removes stale nested files that are no longer in the canonical bundle", async () => {
+    const root = await tempRoot("dysflow-skills-stale-nested-");
+    const bundleRoot = join(root, "bundle");
+    const skillsDir = join(root, "consumer", "skills");
+    const staleFile = join(skillsDir, "dysflow-usage", "assets", "examples", "removed-tool.md");
+    await seedBundle(bundleRoot);
+    await installBundledSkills({
+      bundleRoot,
+      targets: [{ agentId: "codex", skillsDir }],
+    });
+    await writeFile(staleFile, "stale nested bytes", "utf8");
+
+    const [before] = await diagnoseBundledSkills({
+      bundleRoot,
+      targets: [{ agentId: "codex", skillsDir }],
+    });
+    expect(before?.staleSkills).toContain("dysflow-usage");
+
+    await installBundledSkills({
+      bundleRoot,
+      targets: [{ agentId: "codex", skillsDir }],
+    });
+
+    await expect(readFile(staleFile)).rejects.toThrow();
+    const [after] = await diagnoseBundledSkills({
+      bundleRoot,
+      targets: [{ agentId: "codex", skillsDir }],
+    });
+    expect(after?.hashesMatch).toBe(true);
   });
 });

@@ -1,5 +1,14 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -17,6 +26,18 @@ const roots: string[] = [];
 const repoRoot = process.cwd();
 let root: string;
 let archivePath: string;
+
+async function listFiles(root: string, relativeRoot = ""): Promise<string[]> {
+  const directory = path.join(root, ...relativeRoot.split("/").filter(Boolean));
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relativePath = relativeRoot ? `${relativeRoot}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) files.push(...(await listFiles(root, relativePath)));
+    else if (entry.isFile()) files.push(relativePath);
+  }
+  return files.sort();
+}
 
 // Every path this suite hands to tar is absolute, so on Windows it must carry
 // the same GNU tar guard the release helper uses (#1377).
@@ -56,6 +77,15 @@ describe("release bundled skills (#1349)", () => {
     expect(listing.replaceAll("\\", "/")).toContain("dist/cli/vba-import-orchestration.js");
     for (const name of DYSSKILL_NAMES) {
       expect(listing.replaceAll("\\", "/")).toContain(`skills/${name}/SKILL.md`);
+    }
+    for (const nestedPath of [
+      "skills/dysflow-codegraph-update/assets/scripts/Invoke-DysflowJsonRpc.ps1",
+      "skills/dysflow-codegraph-update/assets/scripts/Invoke-DysflowSemanticAudit.ps1",
+      "skills/dysflow-codegraph-update/references/procedure.md",
+      "skills/dysflow-usage/assets/examples/bootstrap.md",
+      "skills/dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1",
+    ]) {
+      expect(listing.replaceAll("\\", "/")).toContain(nestedPath);
     }
   });
 
@@ -110,11 +140,17 @@ describe("release bundled skills (#1349)", () => {
     expect(install.stderr).toBe("");
 
     for (const name of DYSSKILL_NAMES) {
-      const source = path.join(extractedRoot, "skills", name, "SKILL.md");
-      const runtimeCopy = path.join(runtimeDir, "app", "skills", name, "SKILL.md");
-      const adapterCopy = path.join(home, ".codex", "skills", name, "SKILL.md");
-      expect(await readFile(runtimeCopy)).toEqual(await readFile(source));
-      expect(await readFile(adapterCopy)).toEqual(await readFile(source));
+      const sourceRoot = path.join(extractedRoot, "skills", name);
+      const files = await listFiles(sourceRoot);
+      expect(files).toContain("SKILL.md");
+      for (const relativePath of files) {
+        const segments = relativePath.split("/");
+        const source = path.join(sourceRoot, ...segments);
+        const runtimeCopy = path.join(runtimeDir, "app", "skills", name, ...segments);
+        const adapterCopy = path.join(home, ".codex", "skills", name, ...segments);
+        expect(await readFile(runtimeCopy)).toEqual(await readFile(source));
+        expect(await readFile(adapterCopy)).toEqual(await readFile(source));
+      }
     }
 
     const installedCli = path.join(runtimeDir, "app", "dist", "cli", "index.js");
