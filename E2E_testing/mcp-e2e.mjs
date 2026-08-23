@@ -1466,7 +1466,10 @@ try {
     telemetry: { ...(projectConfig.capabilities?.telemetry ?? {}), invocations: false },
   };
   await writeFile(projectConfigPath, `${JSON.stringify(projectConfig, null, 2)}\n`, "utf8");
-  const telemetryOptOutCall = await record("release-telemetry", "schema", { projectId });
+  const telemetryOptOutCall = await record("release-telemetry", "schema", {
+    projectId,
+    view: "index",
+  });
   const invocationSinkAfterOptOut = await readFile(invocationSinkPath);
   const telemetryOptOutPass = Buffer.compare(invocationSinkBeforeOptOut, invocationSinkAfterOptOut) === 0;
   addResult({
