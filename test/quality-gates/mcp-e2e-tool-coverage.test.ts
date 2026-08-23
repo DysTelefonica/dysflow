@@ -47,15 +47,6 @@ const UNCOVERED_BY_DESIGN: Readonly<Record<string, string>> = Object.freeze({
   form_serialize: "form round-trip scenario pending #1504",
   form_deserialize: "form round-trip scenario pending #1504",
   create_form_from_template: "form creation scenario pending #1504",
-  // Read-only form surfaces — lower risk than the mutators, same gap.
-  form_get_geometry: "read-only form scenario pending #1504",
-  form_list_controls: "read-only form scenario pending #1504",
-  render_form_preview: "read-only form scenario pending #1504",
-  diff_form_preview: "read-only form scenario pending #1504",
-  analyze_form_layout: "read-only form scenario pending #1504",
-  verify_form_bindings: "read-only form scenario pending #1504",
-  compare_form: "read-only form scenario pending #1504",
-  lint_form_code: "read-only form scenario pending #1504",
   // Non-form gaps.
   lint_module: "source-only linter; no Access round trip to exercise",
   register_worktree: "worktree pre-warm covered by adapters/config unit tests",

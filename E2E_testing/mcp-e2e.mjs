@@ -141,6 +141,11 @@ const probeTable = "ZZZ_DysflowMcpE2E";
 // legally reach them; the runner rejects any range starting below it.
 const TEST_ID_BASE = 900000;
 const uiFormPath = join(sandboxPlan.sandbox.destinationRoot, "forms", "Form_DysflowMcpE2E.form.txt");
+const uiFormBaselinePath = join(
+  sandboxPlan.sandbox.destinationRoot,
+  "forms",
+  "Form_FormCPV.form.txt",
+);
 const uiFormSrcRoot = sandboxPlan.sandbox.destinationRoot;
 const uiFormCatalogPath = sandboxPlan.sandbox.catalogPath;
 const formEventEntrySource = [
@@ -200,7 +205,7 @@ function baselineArgsFor(tool) {
 // rename/set targets), and `lblTitulo` -> `txtDelete` (the delete
 // target). Renaming at copy time keeps the source fixture untouched
 // while giving the rest of the harness a self-contained sandbox form.
-const uiFormFixture = (await readFile(join(destinationRoot, "forms", "Form_FormCPV.form.txt"), "utf8"))
+const uiFormFixture = (await readFile(uiFormBaselinePath, "utf8"))
   .replace('Name ="CPV"', 'Name ="txtProbe"')
   .replace('Name ="ComandoRegistrar"', 'Name ="cmdApply"')
   .replace('Name ="Etiqueta232"', 'Name ="txtRename"')
@@ -1732,6 +1737,188 @@ addResult({
   ms: 0,
   summary: realSourceTreePass ? `harvested=${realSourceTreeCatalog.total}` : "catalog was empty",
 });
+
+const formGeometryResult = await record("forms", "form_get_geometry", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlName: "txtProbe",
+});
+const formGeometry = payloadOf(formGeometryResult);
+const formGeometryPass = Boolean(
+  formGeometry?.controlName === "txtProbe" &&
+    formGeometry.type === "TextBox" &&
+    ["left", "top", "width", "height"].every((key) => Number.isFinite(formGeometry[key])),
+);
+addResult({
+  area: "forms",
+  tool: "form_get_geometry:shape",
+  pass: formGeometryPass,
+  expected: "txtProbe TextBox with finite left/top/width/height geometry",
+  ms: 0,
+  summary: formGeometryPass ? "control geometry parsed" : "missing or invalid geometry fields",
+});
+
+const formControlsResult = await record("forms", "form_list_controls", {
+  projectId,
+  sourcePath: uiFormPath,
+  limit: 1000,
+});
+const formControls = payloadOf(formControlsResult);
+const formControlNames = Array.isArray(formControls?.controls)
+  ? formControls.controls.map((control) => control.name)
+  : [];
+const formControlsPass = Boolean(
+  formControls?.formName === "DysflowMcpE2E" &&
+    formControls?.totalCount === 11 &&
+    formControls?.truncated === false &&
+    ["txtProbe", "txtRename", "txtSet", "txtDelete", "cmdApply"].every((name) =>
+      formControlNames.includes(name),
+    ),
+);
+addResult({
+  area: "forms",
+  tool: "form_list_controls:shape",
+  pass: formControlsPass,
+  expected: "11 controls including all five renamed sandbox controls",
+  ms: 0,
+  summary: formControlsPass ? "sandbox control inventory is complete" : "unexpected control inventory",
+});
+
+const formPreviewResult = await record("forms", "render_form_preview", {
+  projectId,
+  sourcePath: uiFormPath,
+  output: "both",
+});
+const formPreview = payloadOf(formPreviewResult);
+const formPreviewPass = Boolean(
+  formPreview?.formName === "DysflowMcpE2E" &&
+    Number(formPreview?.viewport?.width) > 0 &&
+    Number(formPreview?.viewport?.height) > 0 &&
+    typeof formPreview?.svg === "string" &&
+    formPreview.svg.includes("<svg") &&
+    typeof formPreview?.ascii === "string",
+);
+addResult({
+  area: "forms",
+  tool: "render_form_preview:shape",
+  pass: formPreviewPass,
+  expected: "positive viewport plus SVG and ASCII previews",
+  ms: 0,
+  summary: formPreviewPass ? "both preview formats rendered" : "preview payload is incomplete",
+});
+
+const formLayoutResult = await record("forms", "analyze_form_layout", {
+  projectId,
+  sourcePath: uiFormPath,
+});
+const formLayout = payloadOf(formLayoutResult);
+const formLayoutPass = Boolean(
+  formLayout?.formName === "DysflowMcpE2E" &&
+    formLayout?.controls === 11 &&
+    Number(formLayout?.sections) > 0 &&
+    Array.isArray(formLayout?.findings),
+);
+addResult({
+  area: "forms",
+  tool: "analyze_form_layout:shape",
+  pass: formLayoutPass,
+  expected: "11 controls, at least one section, and a findings collection",
+  ms: 0,
+  summary: formLayoutPass ? "layout analysis matches sandbox form" : "unexpected layout analysis",
+});
+
+const formPreviewDiffResult = await record("forms", "diff_form_preview", {
+  projectId,
+  beforePath: uiFormBaselinePath,
+  afterPath: uiFormPath,
+  output: "both",
+});
+const formPreviewDiff = payloadOf(formPreviewDiffResult);
+const formPreviewChanges = formPreviewDiff?.changes;
+const formPreviewChangeCount = ["added", "removed", "moved", "resized"].reduce(
+  (total, key) => total + (Array.isArray(formPreviewChanges?.[key]) ? formPreviewChanges[key].length : 0),
+  0,
+);
+const formPreviewDiffPass = Boolean(
+  formPreviewDiff?.beforeForm === "FormCPV" &&
+    formPreviewDiff?.afterForm === "DysflowMcpE2E" &&
+    formPreviewChangeCount > 0 &&
+    typeof formPreviewDiff?.svg === "string" &&
+    Array.isArray(formPreviewDiff?.ascii),
+);
+addResult({
+  area: "forms",
+  tool: "diff_form_preview:shape",
+  pass: formPreviewDiffPass,
+  expected: "renamed fixture produces form drift plus SVG and ASCII diff previews",
+  ms: 0,
+  summary: formPreviewDiffPass ? `previewChanges=${formPreviewChangeCount}` : "preview diff did not expose expected drift",
+});
+
+const formBindingsResult = await record("forms", "verify_form_bindings", {
+  projectId,
+  sourcePath: uiFormPath,
+  schema: {},
+});
+const formBindings = payloadOf(formBindingsResult);
+// Empty bindings/findings are valid for unattended forms whose sources are assigned at runtime.
+const formBindingsPass = Boolean(
+  formBindings?.formName === "DysflowMcpE2E" &&
+    formBindings?.controls === 11 &&
+    Array.isArray(formBindings?.findings),
+);
+addResult({
+  area: "forms",
+  tool: "verify_form_bindings:shape",
+  pass: formBindingsPass,
+  expected: "11 controls and a findings collection; empty is valid for unattended forms",
+  ms: 0,
+  summary: formBindingsPass ? `bindingFindings=${formBindings.findings.length}` : "unexpected binding verification payload",
+});
+
+const formComparisonResult = await record("forms", "compare_form", {
+  projectId,
+  sourcePath: uiFormBaselinePath,
+  targetPath: uiFormPath,
+});
+const formComparison = payloadOf(formComparisonResult);
+const formComparisonPass = Boolean(
+  formComparison?.sourceName === "FormCPV" &&
+    formComparison?.targetName === "DysflowMcpE2E" &&
+    formComparison?.matched === false &&
+    formComparison?.driftDetected === true &&
+    Array.isArray(formComparison?.drifts) &&
+    formComparison.drifts.length > 0,
+);
+addResult({
+  area: "forms",
+  tool: "compare_form:shape",
+  pass: formComparisonPass,
+  expected: "baseline and renamed fixture are reported as meaningfully different",
+  ms: 0,
+  summary: formComparisonPass ? `drifts=${formComparison.drifts.length}` : "expected form drift was not reported",
+});
+
+const formLintResult = await record("forms", "lint_form_code", {
+  projectId,
+  destinationRoot: uiFormSrcRoot,
+  formName: "Form_DysflowMcpE2E",
+});
+const formLint = payloadOf(formLintResult);
+const formLintPass = Boolean(
+  formLint?.summary?.formsScanned === 1 &&
+    Array.isArray(formLint?.diagnostics) &&
+    formLint.summary.diagnosticsCount === formLint.diagnostics.length,
+);
+addResult({
+  area: "forms",
+  tool: "lint_form_code:shape",
+  pass: formLintPass,
+  expected: "one form scanned and diagnosticsCount matches diagnostics length",
+  ms: 0,
+  summary: formLintPass ? `diagnostics=${formLint.diagnostics.length}` : "unexpected form lint payload",
+});
+
 const missingFormUiTools = [
   "analyze_form_ui",
   "map_form_behavior",
