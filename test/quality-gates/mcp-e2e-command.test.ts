@@ -53,6 +53,15 @@ describe("MCP E2E command resolution wiring (#582)", () => {
     expect(text).toMatch(/spawn\(\s*cliCommand/);
   });
 
+  it("starts every MCP child with the full surface required by the 95-tool battery", () => {
+    const text = readE2E();
+    expect(text).toMatch(
+      /const mcpCliArgs = Object\.freeze\(\["mcp", "--tool-surface", "full"\]\);/,
+    );
+    expect([...text.matchAll(/spawn\(\s*cliCommand,\s*mcpCliArgs,/g)]).toHaveLength(2);
+    expect(text).not.toMatch(/spawn\(\s*cliCommand,\s*\["mcp"\]/);
+  });
+
   it("mcp-e2e.mjs sets DYSFLOW_HOME to the repo test-runtime after the helper resolves", () => {
     const text = readE2E();
     // The DYSFLOW_HOME assignment must come AFTER the helper check, so a

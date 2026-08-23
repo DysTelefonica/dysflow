@@ -89,6 +89,7 @@ if (!resolvedCommand.ok) {
   process.exit(1);
 }
 const cliCommand = resolvedCommand.command;
+const mcpCliArgs = Object.freeze(["mcp", "--tool-surface", "full"]);
 console.log(`[mcp-e2e] Using dysflow runtime: ${cliCommand} (source: ${resolvedCommand.source})`);
 
 // Force the runner to use the test-runtime copy of `dysflow-access-runner.ps1`
@@ -361,7 +362,7 @@ function extractMcpErrorCode(text) {
 }
 
 async function callMcp(method, params = {}, options = {}) {
-  const child = spawn(cliCommand, ["mcp"], {
+  const child = spawn(cliCommand, mcpCliArgs, {
     cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
@@ -443,7 +444,7 @@ async function recordRecoveryTokenTrioJourney() {
     runCheckedGit(chosenRoot, ["commit", "-m", "test: recovery trio fixture"]);
     runCheckedGit(chosenRoot, ["worktree", "add", "-b", "competing", competingRoot]);
 
-    const child = spawn(cliCommand, ["mcp"], {
+    const child = spawn(cliCommand, mcpCliArgs, {
       cwd: chosenRoot,
       shell: true,
       stdio: ["pipe", "pipe", "pipe"],
