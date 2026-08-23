@@ -10,6 +10,30 @@ export const AGENT_WORKFLOW_PHASES = [
 export type AgentWorkflowPhase = (typeof AGENT_WORKFLOW_PHASES)[number];
 export type AgentWorkflowStatus = "preferred" | "specialized" | "legacy";
 
+/** Issue #1492 — advertised surface mode for `tools/list`. */
+export const TOOL_SURFACE_MODES = ["core", "full"] as const;
+export type ToolSurface = (typeof TOOL_SURFACE_MODES)[number];
+
+/** Phases that belong to the default `core` advertised surface. */
+export const CORE_SURFACE_PHASES: readonly AgentWorkflowPhase[] = [
+  "bootstrap",
+  "recovery",
+  "tests",
+  "sync",
+] as const;
+
+/** True when the tool's workflow membership intersects the core phases. */
+export function isCoreSurfaceTool(name: string): boolean {
+  const phases = classifyWorkflowPhases(name);
+  return phases.some((phase) => CORE_SURFACE_PHASES.includes(phase));
+}
+
+/** True when the tool should be advertised under the given surface. */
+export function isAdvertisedUnderSurface(name: string, surface: ToolSurface): boolean {
+  if (surface === "full") return true;
+  return isCoreSurfaceTool(name);
+}
+
 export type AgentWorkflowMetadata = {
   status: AgentWorkflowStatus;
   supersededBy?: string;

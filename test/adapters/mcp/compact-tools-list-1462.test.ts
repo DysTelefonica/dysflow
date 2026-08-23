@@ -32,12 +32,12 @@ const tools = createDysflowMcpTools({
   },
 });
 
-async function listTools(): Promise<{
+async function listTools(toolSurface: "core" | "full" = "full"): Promise<{
   tools: Array<Record<string, unknown>>;
   close: () => Promise<void>;
 }> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const serverDone = startWithSdkServer(tools, serverTransport);
+  const serverDone = startWithSdkServer(tools, serverTransport, { toolSurface });
   const client = new Client(
     { name: "compact-tools-list-test", version: "0.0.1" },
     { capabilities: {} },

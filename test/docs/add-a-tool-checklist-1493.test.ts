@@ -18,6 +18,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { CORE_SURFACE_PHASES } from "../../src/adapters/mcp/agent-workflow-registry";
 import { MCP_TOOL_CONTRACTS } from "../../src/adapters/mcp/mcp-tool-contracts";
 import { DYSFLOW_MCP_TOOL_NAMES } from "../../src/adapters/mcp/mcp-tool-registry";
 import { MCP_TOOL_RISKS } from "../../src/adapters/mcp/mcp-tool-risks";
@@ -97,5 +98,13 @@ describe("#1493 add-a-tool registration points", () => {
       const sourcePath = path.split(" ")[0] as string;
       expect(doc, `checklist must name ${sourcePath}`).toContain(sourcePath);
     }
+  });
+
+  it("names the runtime-derived default surface instead of a tool allow-list", () => {
+    const doc = readFileSync("docs/api/adding-an-mcp-tool.md", "utf8");
+
+    expect(CORE_SURFACE_PHASES).toEqual(["bootstrap", "recovery", "tests", "sync"]);
+    expect(doc).toContain("CORE_SURFACE_PHASES");
+    expect(doc).toContain("test/adapters/mcp/tool-surface-1492.test.ts");
   });
 });

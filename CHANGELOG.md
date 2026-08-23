@@ -51,6 +51,7 @@
 
 ### Breaking Changes
 
+- **`tools/list` now advertises the 39-tool core surface by default.** The core set is derived from the `bootstrap`, `recovery`, `tests`, and `sync` workflow phases; SQL and form tools remain callable by name and discoverable through `schema({ view: "index" })`, but require `mcp.toolSurface: "full"` or `dysflow mcp --tool-surface full` to appear in `tools/list`. See #1492.
 - **`schema` requires an explicit `view`** — omitting `view` now returns `SCHEMA_VIEW_REQUIRED` instead of silently resolving to `"full"`.
   Callers must pass `view: "index"` (routing-only), `"compact"` (low-context), or `"full"` (complete catalog, ~196K tokens — opt in deliberately).
   Fixes the single largest token-cost trap in the MCP. See #1485.

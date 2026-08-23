@@ -119,6 +119,24 @@ dysflow doctor
 
 Keep secrets in environment variables, not in the committed project file.
 
+### Select the advertised MCP tool surface
+
+The stdio server advertises the 39-tool core surface by default. It includes the bootstrap,
+recovery, test, and source-sync workflows. SQL and form tools remain callable by name and
+discoverable with `schema({ view: "index" })`; they are hidden only from `tools/list`.
+
+Opt in to the complete surface per project:
+
+```json
+{
+  "mcp": { "toolSurface": "full" }
+}
+```
+
+Or override it for one process with `dysflow mcp --tool-surface full`. The CLI flag takes
+precedence over project configuration. The only accepted values are `"core"` and `"full"`;
+an invalid project value fails with `CONFIG_UNKNOWN_TOOL_SURFACE` instead of silently falling back.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -127,4 +145,3 @@ Keep secrets in environment variables, not in the committed project file.
 | Reported version is stale | Compare `dysflow --version` with `get_capabilities({}).adapterVersion`, then run `dysflow update`. |
 | OpenCode points at a checkout or `test-runtime` | Re-run `dysflow install --agents opencode --no-tui`. |
 | Project diagnostics fail | Run `dysflow doctor` from the project root and repair `.dysflow/project.json`; do not bypass its path or write guards. |
-

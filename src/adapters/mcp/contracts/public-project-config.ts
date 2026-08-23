@@ -7,6 +7,12 @@ const publicCapabilitiesSchema = z
   })
   .strict();
 
+const publicMcpSchema = z
+  .object({
+    toolSurface: z.enum(["core", "full"]).optional(),
+  })
+  .strict();
+
 export const publicResolvedProjectConfigSchema = z
   .object({
     id: z.string().optional(),
@@ -15,6 +21,7 @@ export const publicResolvedProjectConfigSchema = z
     destinationRoot: z.string().optional(),
     timeoutMs: z.number().optional(),
     capabilities: publicCapabilitiesSchema.optional(),
+    mcp: publicMcpSchema.optional(),
   })
   .strict();
 
@@ -44,6 +51,16 @@ export function projectPublicResolvedConfig(
       : {}),
   };
 
+  const mcpConfig =
+    typeof config.mcp === "object" && config.mcp !== null && !Array.isArray(config.mcp)
+      ? (config.mcp as Record<string, unknown>)
+      : undefined;
+  const publicMcp = {
+    ...(mcpConfig?.toolSurface === "core" || mcpConfig?.toolSurface === "full"
+      ? { toolSurface: mcpConfig.toolSurface }
+      : {}),
+  };
+
   return publicResolvedProjectConfigSchema.parse({
     ...(typeof config.id === "string" ? { id: config.id } : {}),
     ...(typeof config.frontendFile === "string" ? { frontendFile: config.frontendFile } : {}),
@@ -53,5 +70,6 @@ export function projectPublicResolvedConfig(
       : {}),
     ...(typeof config.timeoutMs === "number" ? { timeoutMs: config.timeoutMs } : {}),
     ...(Object.keys(publicCapabilities).length > 0 ? { capabilities: publicCapabilities } : {}),
+    ...(Object.keys(publicMcp).length > 0 ? { mcp: publicMcp } : {}),
   });
 }

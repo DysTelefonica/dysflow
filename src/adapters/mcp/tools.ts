@@ -7,6 +7,7 @@ import { resolveAccessOperationRegistry } from "../../core/operations/access-ope
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { VbaModuleLintRule } from "../../core/services/vba-module-lint-service.js";
+import type { ToolSurface } from "./agent-workflow-registry.js";
 import { createBootstrapTool } from "./bootstrap-tool.js";
 import {
   handleMcpAccessOrphanCleanup,
@@ -162,6 +163,9 @@ export type CreateDysflowMcpToolsOptions = {
   documentationBundleResolver?: () => import("../../shared/install-docs.js").DocumentationBundleStatus;
   cwd?: string;
   worktreeCache?: WorktreeContextCache;
+  // Issue #1492 — advertised tool surface (default "core"). The bootstrap
+  // tool reports it; the stdio tools/list handler applies the matching filter.
+  toolSurface?: ToolSurface;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -183,6 +187,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     documentationBundleResolver,
     cwd = process.cwd(),
     worktreeCache: worktreeCacheInput,
+    toolSurface = "core" as ToolSurface,
   } = options;
   const rawProjectConfigResolver =
     projectConfigResolver ??
@@ -332,6 +337,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       accessDbPath,
       writeExecutionPolicy,
       resultValidationPolicy,
+      toolSurface,
     }),
     // PR-1 (issue #656) — gate-introspection read-only tool. Returns the
     // aggregated `McpCapabilitySnapshot` for the live MCP adapter. The tool
@@ -372,7 +378,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // catalog: never opens Access, never spawns PowerShell, never mutates
     // state. Pairs with get_capabilities (live state) and resolve_project
     // (project resolution).
-    createSchemaTool(),
+    createSchemaTool({ toolSurface }),
     // Issue #1057 (F5) — single-tool introspection sibling of `schema`.
     createDescribeToolTool(),
     // Issue #965 — `dysflow.diagnose` aggregates projectConfig + filesystem

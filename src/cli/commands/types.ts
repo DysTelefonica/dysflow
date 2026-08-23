@@ -22,7 +22,7 @@ export type CliCommandContext = {
   cwd?: string;
   startMcpAdapter?: (
     config?: DysflowConfig,
-    options?: { writesEnabled?: boolean },
+    options?: { writesEnabled?: boolean; toolSurfaceOverride?: "core" | "full" },
   ) => Promise<void>;
   diagnosticsService?: {
     run(request?: {
