@@ -47,6 +47,7 @@ import {
 import { nodeLockFileSystem } from "../runner/node-lock-file-system.js";
 import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import { VbaSyncAdapter } from "../vba-sync/vba-sync-adapter.js";
+import { isAdvertisedUnderSurface, type ToolSurface } from "./agent-workflow-registry.js";
 import {
   RESULT_CONTRACT_VIOLATION,
   type ResultContractViolationDiagnostic,
@@ -131,9 +132,17 @@ export function resolveStartupWriteExecutionPolicy(
   return config?.writeExecutionPolicy ?? "safe-by-default";
 }
 
+/** Resolve `tools/list` surface precedence: CLI > project config > core. */
+export function resolveToolSurface(
+  config: DysflowConfig | undefined,
+  override: ToolSurface | undefined,
+): ToolSurface {
+  return override ?? config?.mcp?.toolSurface ?? "core";
+}
+
 export async function startMcpStdioAdapter(
   config?: DysflowConfig,
-  options?: { writesEnabled?: boolean },
+  options?: { writesEnabled?: boolean; toolSurfaceOverride?: ToolSurface },
 ): Promise<void> {
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
@@ -143,10 +152,14 @@ export async function startMcpStdioAdapter(
   );
   const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
+  // Issue #1492 — resolve the effective tool surface.
+  // Precedence: CLI override > project config > default "core".
+  const toolSurface = resolveToolSurface(startupConfig, options?.toolSurfaceOverride);
 
   const tools = createDysflowMcpTools({
     services,
     writes: writesEnabled,
+    toolSurface, // Issue #1492 — propagate to bootstrap + tools/list filter
     writeAccessResolver: async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
     env: process.env,
     // #674 — per-input allowedProcedures resolution. The MCP gate (see
@@ -199,6 +212,7 @@ export async function startMcpStdioAdapter(
   const fallbackTelemetryCwd = startupConfig?.projectRoot ?? process.cwd();
   await startWithSdkServer(tools, undefined, {
     resultValidationPolicy: "enforce",
+    toolSurface,
     // Issue #1459 — the advertisement stream follows the same enable flag as
     // the invocation stream, so a project that opted out of telemetry opts out
     // of both. It is project-local and resolved once at startup: `tools/list`
@@ -300,6 +314,8 @@ export async function startWithSdkServer(
      */
     schemaAdvertisementRecorder?: SchemaAdvertisementRecorder;
     writeExecutionPolicy?: "safe-by-default" | "developer";
+    /** Issue #1492 — advertised tool surface (default "core"). */
+    toolSurface?: ToolSurface;
   } = {},
 ): Promise<void> {
   const toolMap = new Map(tools.map((t) => [t.name, t]));
@@ -316,9 +332,11 @@ export async function startWithSdkServer(
 
   const advertisementAccountant = createSchemaAdvertisementAccountant();
 
+  const activeSurface: ToolSurface = options.toolSurface ?? "core";
   server.server.setRequestHandler(ListToolsRequestSchema, () => {
     const advertised = tools
       .filter((t) => !hiddenRegistry.has(t.name))
+      .filter((t) => isAdvertisedUnderSurface(t.name, activeSurface))
       .map((t) => {
         const access =
           MCP_TOOL_CONTRACTS[t.name as keyof typeof MCP_TOOL_CONTRACTS]?.access ?? "read-only";

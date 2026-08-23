@@ -1,6 +1,11 @@
 import type { OperationResult } from "../../core/contracts/index.js";
 import { successResult } from "../../core/contracts/index.js";
-import { type AgentWorkflowPhase, PREFERRED_AGENT_WORKFLOWS } from "./agent-workflow-registry.js";
+import {
+  type AgentWorkflowPhase,
+  isAdvertisedUnderSurface,
+  PREFERRED_AGENT_WORKFLOWS,
+  type ToolSurface,
+} from "./agent-workflow-registry.js";
 import { BOOTSTRAP_INPUT_SCHEMA } from "./bootstrap-schema.js";
 import { bootstrapResultContract } from "./contracts/bootstrap-result-contracts.js";
 import { invalidInput } from "./dispatch-common.js";
@@ -25,7 +30,19 @@ export type BootstrapSnapshot = {
     allowWrites: boolean;
   };
   writeExecutionPolicy: "safe-by-default" | "developer";
+  /**
+   * Issue #1492 — number of tools the runtime will advertise under the
+   * active surface (`core` ≈ 39, `full` ≈ 95). Non-advertised tools remain
+   * callable by name.
+   */
   toolsVisible: number;
+  toolSurface: ToolSurface;
+  /**
+   * Issue #1492 — how to widen the surface. Only emitted when the active
+   * surface is `core`; consumers can read `schema({ view: "index" })` to
+   * discover non-advertised tools without flipping the surface.
+   */
+  toolSurfaceGuidance?: string;
   preferredAgentWorkflows: BootstrapWorkflowMap;
   humanCompilePending: boolean;
 };
@@ -42,7 +59,10 @@ export type BootstrapToolOptions = Pick<
   | "accessDbPath"
   | "writeExecutionPolicy"
   | "resultValidationPolicy"
->;
+> & {
+  /** Issue #1492 — active advertised surface (default "core"). */
+  toolSurface?: ToolSurface;
+};
 
 export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool {
   const snapshot = getCapabilitiesAll(opts);
@@ -59,7 +79,7 @@ export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool 
         typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
       const phase =
         typeof params.phase === "string" ? (params.phase as AgentWorkflowPhase) : undefined;
-      const projected = projectBootstrapSnapshot(snapshot, phase);
+      const projected = projectBootstrapSnapshot(snapshot, opts.toolSurface ?? "core", phase);
       const result: OperationResult<typeof projected> = successResult(projected);
       return translateCoreResultToMcpContent(result);
     },
@@ -68,16 +88,27 @@ export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool 
 
 export function projectBootstrapSnapshot(
   snapshot: ReturnType<typeof getCapabilitiesAll>,
+  toolSurface: ToolSurface,
   phase?: AgentWorkflowPhase,
 ): BootstrapSnapshot {
+  const advertisedCount = Object.keys(MCP_TOOL_CONTRACTS).filter((name) =>
+    isAdvertisedUnderSurface(name, toolSurface),
+  ).length;
   return {
     adapterVersion: snapshot.adapterVersion,
     surface: snapshot.surface,
     writesProcess: snapshot.writesProcess,
     writesProject: snapshot.writesProject,
     writeExecutionPolicy: snapshot.writeExecutionPolicy,
-    toolsVisible: snapshot.toolsVisible,
-    preferredAgentWorkflows: buildBootstrapWorkflowMap(snapshot.toolsVisible, phase),
+    toolsVisible: advertisedCount,
+    toolSurface,
+    ...(toolSurface === "core"
+      ? {
+          toolSurfaceGuidance:
+            'Active surface is "core" (39 tools). Pass `toolSurface: "full"` to the dysflow mcp CLI (`--tool-surface full`) or set `mcp.toolSurface: "full"` in `.dysflow/project.json` to advertise every tool. Non-advertised tools remain callable by name; discover them with `schema({ view: "index" })`.',
+        }
+      : {}),
+    preferredAgentWorkflows: buildBootstrapWorkflowMap(advertisedCount, phase),
     humanCompilePending: snapshot.humanCompilePending,
   };
 }

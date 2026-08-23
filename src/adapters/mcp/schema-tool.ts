@@ -48,7 +48,9 @@ import {
   type AgentWorkflowStatus,
   buildAgentWorkflowMetadata,
   buildToolAdvertisementMetadata,
+  isAdvertisedUnderSurface,
   type ToolAdvertisementMetadata,
+  type ToolSurface,
 } from "./agent-workflow-registry.js";
 import { ALIAS_TOOL_NAMES } from "./alias-tools.js";
 import { BOOTSTRAP_INPUT_SCHEMA } from "./bootstrap-schema.js";
@@ -113,6 +115,8 @@ export type SchemaInput = {
   view?: SchemaView;
   phase?: AgentWorkflowPhase;
   status?: AgentWorkflowStatus;
+  /** Issue #1492 — surfaces advertised state in the index view. */
+  toolSurface?: ToolSurface;
 };
 
 export const DESCRIBE_TOOL_SECTIONS = [
@@ -283,6 +287,8 @@ export type SchemaIndexTool = {
   status: AgentWorkflowStatus;
   preferredFor: string[];
   annotations: ToolAdvertisementMetadata["annotations"];
+  /** Issue #1492 — true if the tool is currently advertised via `tools/list`. */
+  advertised: boolean;
 };
 
 export type SchemaIndexCatalog = {
@@ -1288,7 +1294,7 @@ function buildFullToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalog {
   };
 }
 
-function indexSchemaForTool(tool: ToolSchema): SchemaIndexTool {
+function indexSchemaForTool(tool: ToolSchema, toolSurface: ToolSurface): SchemaIndexTool {
   return {
     name: tool.name,
     purpose: tool.description,
@@ -1297,6 +1303,7 @@ function indexSchemaForTool(tool: ToolSchema): SchemaIndexTool {
     status: tool.agentWorkflow.status,
     preferredFor: [...tool.agentWorkflow.preferFor],
     annotations: tool.annotations,
+    advertised: isAdvertisedUnderSurface(tool.name, toolSurface),
   };
 }
 
@@ -1309,9 +1316,10 @@ export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogVie
 export function buildToolSchemaCatalog(input: SchemaInput): ToolSchemaCatalogView {
   const full = buildFullToolSchemaCatalog(input);
   if (input.view === "index") {
+    const surface = input.toolSurface ?? "full";
     return {
       projectId: full.projectId,
-      tools: full.tools.map(indexSchemaForTool),
+      tools: full.tools.map((tool) => indexSchemaForTool(tool, surface)),
     };
   }
   if (input.view !== "compact") return full;
@@ -1359,7 +1367,7 @@ function schemaViewRequiredError(): McpToolResult {
  * verdicts): `schema` reports the static contract every other tool
  * advertises.
  */
-export function createSchemaTool(): DysflowMcpTool {
+export function createSchemaTool(opts: { toolSurface?: ToolSurface } = {}): DysflowMcpTool {
   return {
     name: "schema",
     resultContract: schemaResultContract,
@@ -1391,7 +1399,14 @@ export function createSchemaTool(): DysflowMcpTool {
         params.status === "legacy"
           ? params.status
           : undefined;
-      const catalog = buildToolSchemaCatalog({ projectId, toolName, view, phase, status });
+      const catalog = buildToolSchemaCatalog({
+        projectId,
+        toolName,
+        view,
+        phase,
+        status,
+        toolSurface: opts.toolSurface,
+      });
       const content: McpTextContent[] = [{ type: "text", text: JSON.stringify(catalog) }];
       return { content, isError: false, ok: true };
     },

@@ -45,7 +45,7 @@ These read from the registries above. Adding a tool name here by hand means the 
 
 - **The input schema** — under `src/adapters/mcp/schemas/`. Keep it small: every property is paid on every `tools/list`, by every client, on every connection. See [#1492](https://github.com/DysTelefonica/dysflow/issues/1492) for the measured cost.
 - **The handler** — a tool module in `src/adapters/mcp/`, or an adapter branch for a mapped tool.
-- **Workflow metadata** — `src/adapters/mcp/agent-workflow-registry.ts`, when the tool belongs to a phase an agent routes through. Tools inherit sensible defaults, so this is curation rather than a required entry.
+- **Workflow metadata** — `src/adapters/mcp/agent-workflow-registry.ts`, when the tool belongs to a phase an agent routes through. `CORE_SURFACE_PHASES` is the source of truth for default `tools/list` membership: a tool joins the core surface when its metadata includes `bootstrap`, `recovery`, `tests`, or `sync`; tools classified only as `sql` or `forms` require the full surface. Do not add a second tool-name allow-list. The runtime contract is anchored by `test/adapters/mcp/tool-surface-1492.test.ts`.
 - **Focused tests** — behavior at the port, per [the testing philosophy](../testing/testing-philosophy.md). Unit tests must not spawn PowerShell; inject the fake executor and the preflight cleanup.
 
 ## Before opening the PR

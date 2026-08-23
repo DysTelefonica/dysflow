@@ -136,6 +136,14 @@ export type DysflowProjectConfig = {
   allowedProcedures?: string[];
   capabilities?: DysflowProjectCapabilities;
   accessPath?: string;
+  /**
+   * Issue #1492 — MCP runtime settings namespace.
+   * Carries `toolSurface` which controls the default `tools/list` surface.
+   * Precedence: CLI flag (`--tool-surface full`) > this project setting > `"core"`.
+   */
+  mcp?: {
+    toolSurface?: "core" | "full";
+  };
   frontendFile?: string;
   backendPath?: string;
   destinationRoot?: string;
@@ -217,6 +225,13 @@ export type DysflowConfig = {
    *    overlaps the active source root.
    */
   writeExecutionPolicy?: WriteExecutionPolicy;
+  /**
+   * Issue #1492 — MCP runtime settings.
+   * `mcp.toolSurface` selects the advertised tool surface (default `"core"`).
+   */
+  mcp?: {
+    toolSurface?: "core" | "full";
+  };
   discoveredProjects?: readonly DiscoveredProjectConfig[];
 };
 
@@ -1005,6 +1020,17 @@ function buildProjectConfig(
     ),
   );
 
+  const toolSurface = raw.mcp?.toolSurface;
+  if (toolSurface !== undefined && toolSurface !== "core" && toolSurface !== "full") {
+    return failureResult(
+      createDysflowError(
+        "CONFIG_UNKNOWN_TOOL_SURFACE",
+        `Unknown mcp.toolSurface '${String(toolSurface)}'. Expected "core" or "full".`,
+        { retryable: false },
+      ),
+    );
+  }
+
   // Resolve the consolidated `capabilities` block (#657, #655). T18: the
   // top-level `allowWrites` and `allowedProcedures` aliases were removed in
   // v1.15.0; the rejection happens earlier in this function (see top-level
@@ -1052,6 +1078,7 @@ function buildProjectConfig(
     // #779 — risk-based write-execution policy. Defaults to
     // `safe-by-default` when the field is absent.
     writeExecutionPolicy,
+    ...(toolSurface === undefined ? {} : { mcp: { toolSurface } }),
     // #789 — opt-in to the historical strict (error) severity for
     // non-ASCII identifiers inside `identifier-safety`. Default `false`
     // (warning) for cross-fleet back-compat.

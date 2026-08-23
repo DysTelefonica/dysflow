@@ -27,6 +27,8 @@ const fullCapabilitiesSchema = z
     effectiveDryRunDefault: z.record(z.string(), z.boolean()),
     migrationNotes: unknownRecord,
     toolsVisible: z.number().int().nonnegative(),
+    toolSurface: z.enum(["core", "full"]).optional(),
+    toolSurfaceGuidance: z.string().optional(),
     preferredAgentWorkflows: z.array(unknownRecord),
     writeClassToolsPermitted: z.array(z.string()),
     humanCompilePending: z.boolean(),
@@ -72,6 +74,8 @@ const bootstrapSchema = z
     writesProject: z.object({ allowWrites: z.boolean() }).passthrough(),
     writeExecutionPolicy: z.enum(["safe-by-default", "developer"]),
     toolsVisible: z.number().int().nonnegative(),
+    toolSurface: z.enum(["core", "full"]),
+    toolSurfaceGuidance: z.string().optional(),
     preferredAgentWorkflows: bootstrapWorkflowMapSchema,
     humanCompilePending: z.boolean(),
   })

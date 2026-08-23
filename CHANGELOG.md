@@ -51,6 +51,8 @@
 
 ### Breaking Changes
 
+- **`tools/list` now advertises the 39-tool core surface by default.** The core set is derived from the `bootstrap`, `recovery`, `tests`, and `sync` workflow phases; SQL and form tools remain callable by name and discoverable through `schema({ view: "index" })`, but require `mcp.toolSurface: "full"` or `dysflow mcp --tool-surface full` to appear in `tools/list`. See #1492.
+
 - **Node.js 26 is now required** — Node 20, 22, and 24 are no longer supported. The CI matrix and Windows integration smoke now run on the single supported major, eliminating duplicate lint, build, public-suite, and coverage work per pull request. See #1506.
 
 - **`schema` requires an explicit `view`** — omitting `view` now returns `SCHEMA_VIEW_REQUIRED` instead of silently resolving to `"full"`.
