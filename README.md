@@ -331,6 +331,10 @@ against the running product release.
 | `beta` | Validating a release candidate. | SHA-256 against the published `SHA256SUMS`. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
 | `main` | Testing changes that have not shipped. | None. Unverified by design. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
 
+On `stable`, `dysflow install` does not download. It installs the package the invoked CLI was started from, which is unchanged behaviour; `dysflow update` is the command that fetches.
+
+Only `beta` and `main` reach the network on `install`.
+
 Stable needs no flag, but naming it is worth doing in scripts:
 
 ```text

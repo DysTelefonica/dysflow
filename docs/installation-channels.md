@@ -1,6 +1,6 @@
 # Installation channels
 
-`dysflow install` and `dysflow update` fetch the runtime from one of three channels. The default is `stable`, and every command shape that omits `--channel` keeps its current behaviour.
+`dysflow install` and `dysflow update` accept `--channel {stable|beta|main}`. The default is `stable`, and every command shape that omits `--channel` keeps its current behaviour.
 
 [Back to documentation index](../DOCS.md)
 
@@ -14,6 +14,19 @@
 
 Pick `stable` unless you have a reason not to. The other channels trade verification for reach, and [the trust model](./security/update-trust-model.md) explains what each gives up.
 
+## What install and update each do
+
+The flag does not mean the same thing on both commands. Read this before assuming that `install` fetches anything.
+
+| Command | `stable` | `beta` and `main` |
+|---|---|---|
+| `dysflow install` | Installs the package the invoked CLI was started from. No download. | Downloads from the network, then installs. |
+| `dysflow update` | Downloads the latest published release. | Downloads from the network, then installs. |
+
+`dysflow install` and `dysflow install --channel stable` do not reach the network. They install the package the running CLI was started from, which is the existing behaviour and is unchanged.
+
+An operator who wants the latest published build wants `dysflow update`. That command fetches on every channel.
+
 ## Channel resolution order
 
 Dysflow resolves the active channel from the first source that supplies one:
@@ -23,11 +36,15 @@ Dysflow resolves the active channel from the first source that supplies one:
 3. The channel persisted in `<runtimeDir>/.dysflow-install-state.json`.
 4. The `stable` default.
 
+Both `--channel <name>` and `--channel=<name>` are accepted. Values are trimmed and lowercased, so a padded or capitalised value still resolves.
+
+An empty or whitespace-only `DYSFLOW_CHANNEL` is ignored rather than rejected. Resolution falls through to the next source.
+
 The persisted value is what makes `dysflow update` sticky: once you install from a channel, later updates stay on it until you switch deliberately.
 
 ## Stable channel
 
-This is the default and the only channel with a cryptographic trust anchor. Install or update it with no extra arguments:
+This is the default and the only channel with a cryptographic trust anchor:
 
 ```text
 dysflow install
@@ -74,6 +91,8 @@ dysflow install --channel main
 
 This channel has no cryptographic verification at all. GitHub publishes no `SHA256SUMS` for branch archives, and their bytes are not reproducible, so there is nothing to verify against.
 
+The build runs `pnpm install --ignore-scripts --frozen-lockfile` and then `pnpm run build`. A working pnpm toolchain is a hard prerequisite for this channel, and for no other.
+
 Treat it as running unreviewed code on your machine. Use it to reproduce a fix before it ships, then return to `stable`.
 
 ## Switching channels
@@ -96,25 +115,59 @@ Each install records what it produced in `<runtimeDir>/.dysflow-install-state.js
   "channel": "stable",
   "version": "2.38.2",
   "commitSha": "abc123",
-  "installedAt": "2026-08-23T17:00:00Z"
+  "installedAt": "2026-08-23T17:00:00.000Z"
 }
 ```
 
-Read this file when you need to know which channel a machine is actually on. `dysflow doctor` reports the same value and warns whenever the active channel is not `stable`.
+The file is two-space JSON with a trailing newline. `installedAt` is an ISO-8601 timestamp carrying milliseconds.
+
+`commitSha` is omitted entirely when the commit is unknown. It is never written as `null` or as an empty string, so read it as an optional key.
+
+## Checking the active channel
+
+`dysflow doctor` prepends the active channel to its report, naming the source that decided it:
+
+```text
+Dysflow install channel: stable (source: default)
+```
+
+The source is one of `flag`, `env`, `state`, or `default`, matching the resolution order above. On `beta` and `main` a second line follows:
+
+```text
+WARN: insecure channel, expect breakage
+```
+
+`doctor --help` lists `[--channel stable|beta|main]` alongside its other options.
+
+## What update prints
+
+On `main`, the usual upgrade line is replaced so the build is never mistaken for a release:
+
+```text
+Dysflow runtime update: installed main channel build v<version> (unverified development build)
+```
+
+Non-stable commands also print a leading `Dysflow install channel: <channel> (source: <source>)` line.
+
+Stable output is byte-identical to previous releases. Nothing about the default path changed, which is the backward-compatibility promise of this feature.
 
 ## Error codes
 
-These are the failures specific to channel selection. Canonical remediation for every Dysflow error code lives in the [error-code reference](../references/error-codes.md).
+These are the failures specific to channel selection. Every one ends its message with a pointer to `docs/security/update-trust-model.md`, so an operator is always sent to the reasoning.
 
 | Code | Trigger | Next action |
 |---|---|---|
 | `DYSFLOW_UNKNOWN_CHANNEL` | The requested channel is not `stable`, `beta`, or `main`. | Retry with one of the three supported names. |
-| `DYSFLOW_INSECURE_GATE_MISSING` | `beta` or `main` was requested without the gate. | Set `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, after reading what the channel gives up. |
 | `DYSFLOW_SKIP_CHECKSUM_REQUIRES_STABLE_CHANNEL` | `--skip-checksum` was combined with `beta` or `main`. | Drop the flag. Those channels enforce their gate differently. |
+| `DYSFLOW_INSECURE_GATE_MISSING` | `beta` or `main` was requested without the gate. | Set `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, after reading what the channel gives up. |
 | `DYSFLOW_CHANNEL_PIN_REQUIRES_FORCE` | `update` requested a channel other than the persisted one. | Re-run with `--force` if the switch is intended. |
 | `DYSFLOW_PRERELEASE_TAG_NOT_FOUND` | `beta` was requested and no tag matched the prerelease shapes. | Wait for a prerelease to be published, or use `stable`. |
 
 The gate is satisfied by `1` or `true`, matched case-insensitively.
+
+The table is ordered by the order the checks run: unknown channel, then `--skip-checksum`, then the insecure gate, then the channel pin.
+
+That order matters when reproducing a failure. On `beta` or `main`, `DYSFLOW_CHANNEL_PIN_REQUIRES_FORCE` is unreachable unless `DYSFLOW_ALLOW_INSECURE_UPDATE=1` is already set: the gate fails first.
 
 ## Rolling back
 
@@ -128,6 +181,8 @@ dysflow install --channel stable
 `dysflow uninstall` reverts the adapter integrations and removes the runtime directory recursively, in `src/cli/commands/uninstall.ts`.
 
 The install state lives inside that directory, so it is discarded with it. The following `install` writes a fresh state pinned to `stable`.
+
+Because `install` does not download, this restores the runtime the invoked CLI carries. Run `dysflow update` afterwards to move to the latest published release.
 
 Verify the result before trusting it:
 
