@@ -7,7 +7,7 @@ import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import type { VbaManagerExecutor } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { OperationResult } from "../../../src/core/contracts/index";
-import type { AccessOperationPreflightCleanupResult } from "../../../src/core/operations/access-operation-preflight.js";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 /**
  * Issue #975 — transactional mode integration through VbaModulesAdapter.
@@ -67,13 +67,7 @@ function makeAdapter(executor: VbaManagerExecutor): {
       diagnostics: [],
       durationMs: 0,
     }),
-    runPreflightCleanup: async () =>
-      ({
-        cleaned: [],
-        killed: [],
-        orphanedKilled: [],
-        errors: [],
-      }) satisfies AccessOperationPreflightCleanupResult,
+    runPreflightCleanup: runNoopPreflightCleanup,
     executeMappedTool: async (toolName, params) => {
       const accessPath = typeof params.accessPath === "string" ? params.accessPath : binaryPath;
       const executorResult = await executor({
@@ -302,13 +296,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
         diagnostics: [],
         durationMs: 0,
       }),
-      runPreflightCleanup: async () =>
-        ({
-          cleaned: [],
-          killed: [],
-          orphanedKilled: [],
-          errors: [],
-        }) satisfies AccessOperationPreflightCleanupResult,
+      runPreflightCleanup: runNoopPreflightCleanup,
       executeMappedTool: async () => ({
         ok: true,
         data: {},

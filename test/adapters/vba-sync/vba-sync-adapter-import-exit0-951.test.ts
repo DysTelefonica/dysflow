@@ -3,6 +3,7 @@ import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 /**
  * issue #951 — an import whose process exits 0 but whose structured
@@ -17,6 +18,7 @@ import {
  */
 function buildAdapter(executor: VbaManagerExecutor) {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor,
     scriptPath: "scripts/dysflow-vba-manager.ps1",
     accessPath: "C:/db/front.accdb",

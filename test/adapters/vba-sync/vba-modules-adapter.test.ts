@@ -8,6 +8,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { buildImportPlanResult } from "../../../src/core/services/vba-import-plan";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 describe("VbaModulesAdapter", () => {
   it("handles module tools", () => {
@@ -144,7 +145,12 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor,
+    });
 
     const result = await service.execute("delete_module", {
       moduleNames: ["Module_Foo", "Module_Bar"],
@@ -191,7 +197,12 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor,
+    });
 
     const result = await service.execute("delete_module", {
       moduleName: "Module_Foo",
@@ -236,7 +247,12 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor,
+    });
 
     const result = await service.execute("delete_module", {
       moduleNames: ["Module_Foo"],
@@ -286,7 +302,12 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor,
+    });
 
     await service.execute("delete_module", { moduleNames: ["Module_Foo"] });
 
@@ -322,7 +343,12 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {}, executor });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor,
+    });
 
     await service.execute("delete_module", {
       moduleNames: ["Module_Foo"],
@@ -347,6 +373,7 @@ describe("VbaModulesAdapter", () => {
       };
     };
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "C:/Users/alice/AppData/Local/dysflow/app/scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -384,6 +411,7 @@ describe("VbaModulesAdapter", () => {
   ])("normalizes import_modules importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         capturedImportMode = request.extra.importMode;
         return {
@@ -418,6 +446,7 @@ describe("VbaModulesAdapter", () => {
   ])("normalizes import_all importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
     let capturedImportMode: unknown;
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         capturedImportMode = request.extra.importMode;
         return {
@@ -482,6 +511,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: staging,
       env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath },
       executor: async () => ({
@@ -519,6 +549,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: staging,
       env: {
         DYSFLOW_PROJECT_REGISTRY_PATH: join(root, "missing-projects.json"),
@@ -542,7 +573,11 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(develop, "src", "modules"), { recursive: true });
     await writeFile(join(develop, "front.accdb"), "", "utf8");
     await writeFile(join(develop, "src", "modules", "Variables Globales.bas"), "", "utf8");
-    const service = new VbaSyncAdapter({ cwd: staging, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: staging,
+      env: {},
+    });
 
     const result = await service.execute("import_all", {
       projectId: "staging",
@@ -565,6 +600,7 @@ describe("VbaModulesAdapter", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-fallback-source-adapter-"));
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
       destinationRoot: root,
@@ -588,6 +624,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
       destinationRoot: root,
@@ -628,6 +665,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
       destinationRoot: root,
@@ -670,7 +708,11 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+    });
 
     const result = await service.execute("import_all", { dryRun: true });
 
@@ -686,7 +728,11 @@ describe("VbaModulesAdapter", () => {
 
   it("fails fast when no accessPath or project config can be resolved", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-strict-missing-adapter-"));
-    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+    });
 
     const result = await service.execute("import_all", {
       dryRun: true,
@@ -727,6 +773,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: { DYSFLOW_PROJECT_REGISTRY_PATH: registryPath },
     });
@@ -760,7 +807,11 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+    });
 
     const result = await service.execute("import_all", {
       dryRun: true,
@@ -789,6 +840,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
       executor: async () => ({
@@ -863,6 +915,7 @@ describe("VbaModulesAdapter", () => {
     const actions: string[] = [];
     const deletedBatches: string[][] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
       executor: async (request) => {
@@ -921,6 +974,7 @@ describe("VbaModulesAdapter", () => {
 
     const actions: string[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
       executor: async (request) => {
@@ -958,6 +1012,7 @@ describe("VbaModulesAdapter", () => {
 
     const actions: string[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
       executor: async (request) => {
@@ -1188,6 +1243,7 @@ describe("VbaModulesAdapter", () => {
     const actions: string[] = [];
     const deletedBatches: string[][] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
       executor: async (request) => {
@@ -1234,6 +1290,7 @@ describe("VbaModulesAdapter", () => {
   it("import_all without prune keeps historical merge behavior — #555", async () => {
     const actions: string[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         actions.push(request.action);
         return {
@@ -1258,6 +1315,7 @@ describe("VbaModulesAdapter", () => {
   it("maps list/exists tools with JSON output enabled", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -1304,6 +1362,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "modules", "Module2.bas"), "disk", "utf8");
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         expect(request.destinationRoot).not.toBe(sourceRoot);
@@ -1361,6 +1420,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "modules", "Other.bas"), "disk only", "utf8");
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
@@ -1404,6 +1464,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "same", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
         await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "same", "utf8");
@@ -1427,6 +1488,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "Line A\nLine B\nLine C", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
         await writeFile(
@@ -1460,6 +1522,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
     await writeFile(join(sourceRoot, "modules", "Module1.bas"), "disk", "utf8");
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
         await writeFile(join(request.destinationRoot, "modules", "Module1.bas"), "binary", "utf8");
@@ -1509,7 +1572,11 @@ describe("VbaModulesAdapter", () => {
       }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+    });
 
     const result = await service.execute("import_all", { dryRun: true });
 
@@ -1535,7 +1602,11 @@ describe("VbaModulesAdapter", () => {
       JSON.stringify({ id: "dedup-project", accessPath: "front.accdb", destinationRoot: "src" }),
       "utf8",
     );
-    const service = new VbaSyncAdapter({ cwd: root, env: {} });
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+    });
 
     const result = await service.execute("import_all", { dryRun: true });
 
@@ -1559,6 +1630,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "queries", "qryActive.sql"), "SELECT 1", "utf8");
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
@@ -1598,6 +1670,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "modules", "Obsolete.bas"), "old", "utf8");
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout:
@@ -1629,6 +1702,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "modules", "Obsolete.bas"), "old", "utf8");
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
@@ -1653,6 +1727,7 @@ describe("VbaModulesAdapter", () => {
   it("export_all --prune rejects a filtered export (would delete everything else)", async () => {
     let executorCalled = false;
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => {
         executorCalled = true;
         return {
@@ -1687,6 +1762,7 @@ describe("VbaModulesAdapter", () => {
 
     // Malformed success payload: no `exported` field at all.
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true}',
@@ -1721,6 +1797,7 @@ describe("VbaModulesAdapter", () => {
 
     // Malformed success payload: `exported` is a string instead of an array.
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true,"exported":"Live"}',
@@ -1755,6 +1832,7 @@ describe("VbaModulesAdapter", () => {
 
     // Null is not an array.
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true,"exported":null}',
@@ -1791,6 +1869,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => ({
         exitCode: 0,
         stdout: `DYSFLOW_RESULT {"ok":true,"exported":${exportedJson}}`,
@@ -1826,6 +1905,7 @@ describe("VbaModulesAdapter", () => {
       await writeFile(join(sourceRoot, "modules", "LegacyForm.frm"), "binary", "utf8");
 
       const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => ({
           exitCode: 0,
           stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
@@ -1862,6 +1942,7 @@ describe("VbaModulesAdapter", () => {
       await writeFile(join(sourceRoot, "classes", "OrphanClass.cls"), "old", "utf8");
 
       const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => ({
           exitCode: 0,
           stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
@@ -1902,6 +1983,7 @@ describe("VbaModulesAdapter", () => {
       await writeFile(join(sourceRoot, "modules", "notes.txt"), "scratch", "utf8");
 
       const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => ({
           exitCode: 0,
           stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',
@@ -1938,6 +2020,7 @@ describe("VbaModulesAdapter", () => {
       await writeFile(join(sourceRoot, "modules", "ImportantModule.frm"), "binary", "utf8");
 
       const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => ({
           exitCode: 0,
           stdout: 'DYSFLOW_RESULT {"ok":true,"exported":["Live"]}',

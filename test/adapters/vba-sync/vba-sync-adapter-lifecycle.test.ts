@@ -8,6 +8,7 @@ import type {
   AccessOperationRegistry,
 } from "../../../src/core/operations/access-operation-registry";
 import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 /**
  * Wrapper that records every `update` call and ALSO pre-fills the
@@ -89,6 +90,7 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
     });
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       operationRegistry: registry,
       accessPath: "C:/db/front.accdb",
       destinationRoot,
@@ -128,6 +130,7 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
     });
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       operationRegistry: registry,
       accessPath: "C:/db/front.accdb",
       destinationRoot,
@@ -163,6 +166,7 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
     });
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       operationRegistry: registry,
       accessPath: "C:/db/front.accdb",
       destinationRoot,
@@ -215,6 +219,7 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
     });
 
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       operationRegistry: registry,
       accessPath: "C:/db/front.accdb",
       destinationRoot,
@@ -250,6 +255,7 @@ describe("VbaSyncAdapter lifecycle transitions", () => {
       aborted: true,
     });
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       operationRegistry: registry,
       accessPath: "C:/db/front.accdb",
       destinationRoot,

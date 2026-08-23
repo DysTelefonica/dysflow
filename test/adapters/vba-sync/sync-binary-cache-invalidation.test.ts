@@ -58,6 +58,7 @@ const mockedCompare = vi.mocked(compareSourceAgainstBinary);
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 import type { VbaVerifyResult } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const ACCESS_PATH = "C:/db/front.accdb";
 const DESTINATION_ROOT = "C:/repo/src";
@@ -151,6 +152,7 @@ function makeExecutor() {
 
 function newService(executor: ReturnType<typeof makeExecutor>) {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor: executor as unknown as ConstructorParameters<typeof VbaSyncAdapter>[0] extends {
       executor?: infer E;
     }

@@ -40,6 +40,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadDysflowConfig } from "../../src/adapters/config/dysflow-config-node";
 import { VbaSyncAdapter } from "../../src/adapters/vba-sync/vba-sync-adapter";
 import { createInMemoryAccessOperationRegistry } from "../../src/core/operations/access-operation-registry";
+import { noopPreflightCleanup } from "../_helpers/noop-preflight-cleanup.js";
 
 const repoRoot = resolve(__dirname, "..", "..");
 const fixtureFront = join(repoRoot, "E2E_testing", "NoConformidades.accdb");
@@ -154,6 +155,7 @@ function createBrokenProjectAdapter(cwd: string): BrokenProjectAdapter {
     DYSFLOW_BACKEND_PASSWORD: password,
   };
   const adapter = new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     operationRegistry: createInMemoryAccessOperationRegistry(),
     cleanupService: undefined,
     scriptPath,

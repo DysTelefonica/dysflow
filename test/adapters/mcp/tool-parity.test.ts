@@ -18,6 +18,7 @@ import { type OperationResult, successResult } from "../../../src/core/contracts
 import type { AccessDiagnosticsResult } from "../../../src/core/services/diagnostics-service";
 import type { AccessQueryResult } from "../../../src/core/services/query-service";
 import type { AccessVbaResult } from "../../../src/core/services/vba-service";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 class FakeVbaService {
   public requests: unknown[] = [];
@@ -607,6 +608,7 @@ describe("Dysflow MCP tool parity inventory", () => {
   it("supports the basic form tooling workflow through the VBA sync service", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "dysflow-form-slice-"));
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: tempRoot,
       executor: async () => {
         throw new Error("executor should not be called for local form tooling");

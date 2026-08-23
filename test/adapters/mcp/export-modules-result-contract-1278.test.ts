@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { resultContractForDispatchTool } from "../../../src/adapters/mcp/contracts/dispatch-result-contracts.js";
 import { validateToolResult } from "../../../src/adapters/mcp/contracts/result-validation.js";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 describe("export_modules dry-run result contract (#1278)", () => {
   it("returns an explicit non-mutating export plan accepted by the executable contract", async () => {
     let runnerCalls = 0;
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async () => {
         runnerCalls += 1;
         throw new Error("dry-run export must not invoke the runner");

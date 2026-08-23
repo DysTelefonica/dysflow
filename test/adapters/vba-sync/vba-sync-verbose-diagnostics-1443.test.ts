@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const SOURCE = ["Option Explicit", "Public Sub Run()", '  MsgBox "Hello"', "End Sub", ""].join(
   "\n",
@@ -22,6 +23,7 @@ function runner(stdoutPayload: unknown) {
 
 function service(stdoutPayload: unknown) {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor: runner(stdoutPayload),
     accessPath: "C:/project/frontend.accdb",
     destinationRoot: "C:/project/src",
@@ -45,6 +47,7 @@ function powershellService(stdoutPayload: unknown, exitCode = 0) {
   );
 
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor: async () => ({
       exitCode,
       stdout,

@@ -7,6 +7,7 @@ import {
   type VbaManagerExecutionRequest,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 describe("sync_binary adapter forwarding (#1284)", () => {
   let root: string;
@@ -27,6 +28,7 @@ describe("sync_binary adapter forwarding (#1284)", () => {
 
   function buildAdapter() {
     return new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         requests.push(request);
         await mkdir(join(request.destinationRoot, "modules"), { recursive: true });
