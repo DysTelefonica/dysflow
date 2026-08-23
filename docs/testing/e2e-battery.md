@@ -82,7 +82,7 @@ Necesitas lo siguiente antes de poder ejecutar la batería:
 | Dependencia | Por qué |
 |---|---|
 | **Windows + Microsoft Access** | El runner PowerShell abre `Access.Application` por COM; no hay ruta headless sin Access. |
-| **Node 20+** | El harness usa `node:child_process`, `node:fs/promises` y JSON-RPC sobre stdio. |
+| **Node 26** | El harness usa `node:child_process`, `node:fs/promises` y JSON-RPC sobre stdio. |
 | **pnpm 10+** | El binario `dysflow.cmd` que arranca el harness sale de `pnpm build`. |
 | **`ACCESS_VBA_PASSWORD`** en entorno de usuario | Password del fixture `NoConformidades.accdb`. El harness **rechaza arrancar sin él**. Acepta también `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_BACKEND_PASSWORD`. |
 | **Runtime de prueba en `test-runtime/bin/`** | El harness **no puede** usar el runtime de producción en `%LOCALAPPDATA%\dysflow` salvo override explícito (`DYSFLOW_E2E_COMMAND`). Ver [§ Runtime resuelto](#runtime-resuelto). |

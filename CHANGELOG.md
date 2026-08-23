@@ -51,6 +51,8 @@
 
 ### Breaking Changes
 
+- **Node.js 26 is now required** — Node 20, 22, and 24 are no longer supported. The CI matrix and Windows integration smoke now run on the single supported major, eliminating duplicate lint, build, public-suite, and coverage work per pull request. See #1506.
+
 - **`schema` requires an explicit `view`** — omitting `view` now returns `SCHEMA_VIEW_REQUIRED` instead of silently resolving to `"full"`.
   Callers must pass `view: "index"` (routing-only), `"compact"` (low-context), or `"full"` (complete catalog, ~196K tokens — opt in deliberately).
   Fixes the single largest token-cost trap in the MCP. See #1485.

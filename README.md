@@ -7,7 +7,7 @@
     <img src="https://img.shields.io/github/v/release/DysTelefonica/dysflow" alt="Release" />
   </a>
   <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform: Windows" />
-  <img src="https://img.shields.io/badge/Node-20--26-339933?logo=node.js&logoColor=white" alt="Node 20-26" />
+  <img src="https://img.shields.io/badge/Node-26-339933?logo=node.js&logoColor=white" alt="Node 26" />
 </p>
 
 Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
@@ -30,7 +30,7 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**95 visible MCP tools · Windows / Node 20-26**
+**95 visible MCP tools · Windows / Node 26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -267,7 +267,7 @@ A call to a procedure not in the list is rejected before any COM automation is s
 | Requirement  | Notes                                |
 | ------------ | ------------------------------------ |
 | OS           | Windows                              |
-| Runtime      | Node.js 20+                          |
+| Runtime      | Node.js 26                          |
 | Access stack | Microsoft Access / ACE               |
 | Shell        | Windows PowerShell 5.1               |
 | MCP client   | OpenCode (current production target) |
