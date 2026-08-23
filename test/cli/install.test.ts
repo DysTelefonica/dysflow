@@ -151,7 +151,7 @@ describe("install arg parsing", () => {
 
   it("parses install arguments", () => {
     expect(
-      parseInstallArgs(["--runtime-dir", "C:/tmp/runtime", "--agent-all", "--no-tui"]),
+      parseInstallArgs(["--runtime-dir", "C:/tmp/runtime", "--agent-all", "--no-tui"], {}),
     ).toEqual({
       ok: true,
       options: {
@@ -161,12 +161,13 @@ describe("install arg parsing", () => {
         verbose: false,
         onlySkills: [],
         excludeSkills: [],
+        requestedChannel: { source: "unset" },
       },
     });
   });
 
   it("accepts verbose install reporting without changing agent selection", () => {
-    expect(parseInstallArgs(["--agents", "opencode", "--no-tui", "--verbose"])).toEqual({
+    expect(parseInstallArgs(["--agents", "opencode", "--no-tui", "--verbose"], {})).toEqual({
       ok: true,
       options: {
         runtimeDir: undefined,
@@ -175,12 +176,13 @@ describe("install arg parsing", () => {
         verbose: true,
         onlySkills: [],
         excludeSkills: [],
+        requestedChannel: { source: "unset" },
       },
     });
   });
 
   it("parses update arguments", () => {
-    expect(parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--force"])).toEqual({
+    expect(parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--force"], {})).toEqual({
       ok: true,
       options: {
         runtimeDir: "C:/tmp/runtime",
@@ -188,6 +190,7 @@ describe("install arg parsing", () => {
         skipChecksum: false,
         onlySkills: [],
         excludeSkills: [],
+        requestedChannel: { source: "unset" },
       },
     });
   });
@@ -1659,7 +1662,7 @@ describe("handleInstallCommand interactive agent selection", () => {
 
 describe("update arg parsing with skip-checksum", () => {
   it("parses --skip-checksum flag correctly", () => {
-    expect(parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--skip-checksum"])).toEqual({
+    expect(parseUpdateArgs(["--runtime-dir", "C:/tmp/runtime", "--skip-checksum"], {})).toEqual({
       ok: true,
       options: {
         runtimeDir: "C:/tmp/runtime",
@@ -1667,6 +1670,7 @@ describe("update arg parsing with skip-checksum", () => {
         skipChecksum: true,
         onlySkills: [],
         excludeSkills: [],
+        requestedChannel: { source: "unset" },
       },
     });
   });
