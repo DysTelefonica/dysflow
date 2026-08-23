@@ -17,11 +17,22 @@ the signed SHA-256 checksum entry.
 | No gh CLI fallback | The latest-release lookup uses only the GitHub REST API. There is no `gh` CLI fallback when the API returns non-OK. |
 | Checksum bypass | `--skip-checksum` is available for development/testing. It MUST NOT be used in production installs. |
 
-If the release archive is missing, the signature asset is missing/invalid, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum/signature is fixed or report the broken release; there is no source-build or git-clone fallback.
+If the release archive is missing, the signature asset is missing/invalid, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum/signature is fixed or report the broken release; on `stable` and `beta` there is no source-build or git-clone fallback.
 
-**No git-clone / source-build fallback exists.** The git-clone update path was removed in
-commit `499d5e4`. Any attempt to introduce a source-build fallback reintroduces the
-supply-chain risk that audit finding #436 identified.
+**No git-clone / source-build fallback exists on `stable` or `beta`.** The git-clone update
+path was removed in commit `499d5e4`.
+
+Neither channel may degrade into building from source when a download or checksum fails. That
+removal was not cosmetic.
+
+A source build reintroduces the supply-chain risk that audit finding #436 identified, and that
+risk is unchanged today.
+
+The `main` channel reintroduces a source build deliberately. It is gated behind
+`DYSFLOW_ALLOW_INSECURE_UPDATE=1`, is never reachable by default, and verifies nothing.
+
+An operator who sets that variable accepts exactly the risk #436 named: code from the branch
+archive is built and executed locally, with no signature and no checksum to detect tampering.
 
 ## Archive extraction (tar-slip defense)
 

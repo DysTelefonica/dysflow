@@ -907,7 +907,13 @@ Use `--force` to reinstall the latest release even when versions match:
 dysflow update --force
 ```
 
-The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it. There is no source-build or git-clone fallback, protecting the update path from supply-chain risks.
+The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it.
+
+On `stable` and `beta` there is no source-build or git-clone fallback: a failed download never degrades into a source build, which is what protects the update path from supply-chain risks.
+
+The `main` channel is the one deliberate exception. It builds from a downloaded branch archive, is unreachable unless `DYSFLOW_ALLOW_INSECURE_UPDATE=1` is set, and verifies nothing it downloads.
+
+See [installation channels](./docs/installation-channels.md) for what that costs the operator.
 
 If the release asset is missing, the signature is missing/invalid, or the SHA-256 checksum does not match, the update aborts. Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
 
