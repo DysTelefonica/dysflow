@@ -1,14 +1,14 @@
 ---
 name: dysflow-usage
-description: "MUST-LOAD before any dysflow diagnosis or call when the cwd contains .dysflow/project.json, .dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, or tests/*.json. Load first and call get_capabilities({ compact: true }) plus schema({ view: \"index\" }) before inspecting static files or changing config. Canonical tool names, write flags, error codes, safe-by-default policy, and human-compile contract."
+description: "Trigger: MUST-LOAD before any dysflow diagnosis or call when the cwd contains .dysflow/project.json, .dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, or tests/*.json. Load first and call bootstrap({}), then use explicit bounded discovery views before inspecting static files or changing config. Canonical tool names, write flags, error codes, safe-by-default policy, and human-compile contract."
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "1.17.0"
+  version: "2.0.0"
   status: active
-  last_verified: "2026-08-20"
-  last_dysflow_version: "2.37.3"
-  requires: "dysflow MCP >= 2.34"
+  last_verified: "2026-08-23"
+  last_dysflow_version: "3.0.0"
+  requires: "dysflow MCP >= 3.0"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
     in_scope: "canonical dysflow tool names, write-flags matrix, error codes, write-execution-policy, human-compile contract, defensive parsing for transport wrappers that still double-encode envelopes"
@@ -22,9 +22,11 @@ metadata:
 **MUST-LOAD:** when a cwd contains `.dysflow/project.json`, any `.dysflow/*`
 artifact, `*.accdb`, `*.bas`, `*.cls`, `*.form.txt`, or `tests/*.json`, load
 this skill BEFORE inspecting static project files, inventing a diagnosis, or
-modifying configuration. Call `get_capabilities({ compact: true })` first,
-then `schema({ view: "index" })` for route selection; the live runtime owns tool
-names, flags, defaults, and recovery semantics.
+modifying configuration. Call `bootstrap({})` first, then
+`schema({ view: "index" })` for route selection. Expand with
+`get_capabilities({ view: "compact" })` or a selective `describe_tool` only when
+the next step needs those fields; the live runtime owns tool names, flags,
+defaults, and recovery semantics.
 
 Use this skill when ANY of:
 
@@ -67,7 +69,7 @@ If you call the dysflow MCP from a host that DOES parse JSON correctly (Claude/C
 **Detecting the bug at runtime** (use in tools that expect object results):
 
 ```js
-const snap = await tools.dysflow.get_capabilities({ compact: true });
+const snap = await tools.dysflow.bootstrap({});
 if (typeof snap === 'string') {
   // OpenCode Code Mode wrapper is delivering a JSON string instead of the parsed object.
   // File an issue against OpenCode (or hard-restart the MCP client). Skill contract says
@@ -83,15 +85,21 @@ Do NOT use when:
 
 ## Quick start
 
-> **First call:** `get_capabilities({ compact: true })` — this compact snapshot is the default bootstrap for every other example in this skill.
-> Prefer the progressive path introduced by #1461 and refined by #1462: start compact, use the schema index for routing, and fetch deep tool detail only when needed. If a runtime value disagrees with what this skill says, **trust the runtime** and update the skill.
+> **First call:** `bootstrap({})` — the minimal, project-resolution-free identity,
+> write-gate, advertised-surface, workflow-routing, and human-compile snapshot.
+> Then use the schema index for routing and fetch only the deeper block needed by
+> the selected step. If runtime disagrees with this skill, **trust runtime** and
+> update the bundle.
 
 ### Progressive bootstrap
 
-When context is constrained, call `get_capabilities({ compact: true })`, then
-`schema({ view: "index", phase: "<phase>" })` to select a route, and
+Call `bootstrap({})`, then `schema({ view: "index", phase: "<phase>" })` to
+select a callable tool. Index includes every registered/callable contract and
+marks whether each one is currently `advertised` by `tools/list`. Fetch
 `describe_tool({ name: "<tool>", sections: ["parameters"] })` for one-tool
-details. Full responses remain the compatibility default.
+details. Use `get_capabilities({ view: "compact" })` for compact tool/write
+metadata; use `{ view: "full" }` only as deliberate complete-snapshot opt-in.
+The compatibility alias `{ compact: true }` is accepted but is not canonical.
 
 > **`setup_project` identity is fail-closed:** a fresh bootstrap requires an
 > explicit `projectId`. If it is omitted, the runtime may reuse only the
@@ -102,7 +110,24 @@ details. Full responses remain the compatibility default.
 
 > **Stale `.laccdb` files do not block imports.** The runtime probes live-handle ownership. It removes an unowned stale lock and emits `LACCDB_STALE_DETECTED`; a real holder emits `LIVE_PROCESS_HOLDS_LACCDB` with its PID. Consumers must use only dysflow-owned cleanup paths (`cleanup_access_operation`, or `access_force_cleanup_orphaned` with a listed `pid` plus `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true`) — never a generic process killer or consumer-side lock-file deletion. See `references/error-codes.md` and `assets/examples/import-modules.md#stale-laccdb-recovery-v291`.
 
-The response carries:
+`bootstrap` carries:
+
+| Field | Meaning |
+|---|---|
+| `adapterVersion` | Live runtime version. |
+| `writesProcess`, `writesProject`, `writeExecutionPolicy` | Minimal write-gate preflight. |
+| `toolsVisible` | Legacy advertised count for the active `toolSurface`. |
+| `toolInventory` | Unambiguous `{ callable, advertised, surface }` counts. |
+| `preferredAgentWorkflows` | Phase routing, optionally filtered by `phase`. |
+| `humanCompilePending` | Manual compile gate. |
+
+`get_capabilities({ view: "compact" })` always carries the base identity/gates,
+`toolInventory`, and by default compact `tools`, `sharedBlockSupport`,
+`effectiveDryRunDefault`, and `migrationNotes`. It deliberately omits
+`preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`,
+`documentationBundle`, `projectConfig`, `worktreeCache`, and
+`humanCompilePending` unless requested through `include` or `{ view: "full" }`.
+The full/selective capability response carries:
 
 | Field | Meaning |
 |---|---|
@@ -110,7 +135,8 @@ The response carries:
 | `writesProcess.enabled` | Whether writes are enabled at process level. `false` ⇒ every write tool returns `MCP_WRITES_DISABLED`. |
 | `writesProject.allowWrites` | Whether the active `.dysflow/project.json` allows writes. Same envelope. |
 | `dryRunDefault` | Compatibility-named global plan default. Input intent is canonical `apply`; the per-tool `effectiveDryRunDefault` map is what the dispatch seam consults. |
-| `toolsVisible` | Total MCP tool count exposed by the live adapter. |
+| `toolsVisible` | Legacy callable registry count in `get_capabilities`; do not compare it directly with bootstrap's advertised count. |
+| `toolInventory` | Stable distinction: callable registry count, advertised `tools/list` count, and active surface. |
 | `documentationBundle` | Installed diagnostic-doc availability (`errorCodesMd`, `hresultGuideMd`) and the bundle version. Treat missing or version-skewed diagnostics as an installation defect before following local remediation docs. |
 | `writeClassToolsPermitted` | The allowlist of tools capable of mutating state. Cross-reference before documenting any tool name. |
 | `humanCompilePending` | Whether the human has compiled the project since last persistence. Test runs block on it. |
@@ -118,7 +144,7 @@ The response carries:
 | `effectiveDryRunDefault` | Per-tool effective plan default under the active policy. Keys are contract tool names; values are booleans. Check it with `canonicalCommitFlag` and pass explicit `apply` intent. |
 | `projectIdResolution` | Resolved project identity for the current `cwd`: `{ projectId, outcome }`. `outcome` is `"resolved"` when a unique project config was found, otherwise `"unresolved"`. Use this together with `projectConfig` to confirm the active target before any write-class call. |
 | `surface` | Transport type the MCP server bound (e.g. `"stdio"`). Diagnostic-only — consumers do not branch on this; the live contract surface is the same regardless of transport. |
-| `preferredAgentWorkflows` | Phase-indexed tool guidance for the canonical agent loop: `bootstrap:[get_capabilities,schema,describe_tool,setup_project,resolve_project]`, `sync:[sync_binary]`, `tests:[validate_manifest,test_vba]`, `sql:[query_execute]`, `forms:[analyze_form_ui,generate_form_design_plan,apply_form_design_plan,verify_form_ui]`, `recovery:[resolve_project,diagnose,state,logs,cleanup_access_operation]`. Derived from the same source of truth as introspection views; no hand-maintained registry — read this rather than guessing the next tool. |
+| `preferredAgentWorkflows` | Full-view phase guidance. Bootstrap includes `bootstrap,get_capabilities,schema,describe_tool,register_worktree,setup_project,resolve_project,clear_worktree_cache`; other phase lists are runtime-derived. |
 | `projectConfig` | Normalized project-config diagnosis: `cwd`, `configPath`, config-owning `projectRoot`, `projectId`, effective `accessPath`, optional shared `backendPath`, local `destinationRoot`, `discoveredProjects[]`, typed `status`, boolean `writeReady`, `diagnostics[]`, and exact `remediation`. Persistent config stores only `frontendFile` (or a basename-only legacy `accessPath`); the effective frontend is always resolved under the worktree that physically owns `.dysflow/project.json`. Another worktree is selected only by an explicit per-call `projectId`, absolute `accessPath`, `backendPath`, or `cwd`. Explicit target provenance is call-local and never persisted. `cwd` is the **active git worktree toplevel**, not the process spawn cwd — see the two typed warnings below. |
 
 #### `projectConfig.cwd` is the worktree, not the spawn cwd (#1179)
@@ -144,7 +170,7 @@ verbatim: outside the per-tool gate it now reports the worktree root.
 
 ### Workflow metadata and introspection
 
-Every advertised tool exposes standard MCP `annotations` (`title`, `readOnlyHint`,
+Every advertised `tools/list` entry exposes standard MCP `annotations` (`title`, `readOnlyHint`,
 `destructiveHint`, `idempotentHint`, `openWorldHint`) and a compact namespaced
 `_meta["dysflow/workflow"]` routing block (`phases`, `status`). The compact
 `tools/list` schema keeps every callable property and concise safety semantics,
@@ -154,8 +180,9 @@ but omits deep parameter prose and migration/history text. Deep
 description as an omitted property; use the advertised property keys and then
 fetch the deep contract when needed.
 
-For low-context routing, `schema({view:"index"})` returns only `name`, `purpose`,
-`access`, canonical workflow `phases`, `status`, `preferredFor`, and annotations.
+For low-context routing, `schema({view:"index"})` returns every callable tool
+with only `name`, `purpose`, `access`, canonical workflow `phases`, `status`,
+`preferredFor`, annotations, and boolean `advertised`.
 Use `phase`, `status`, and `toolName` filters before requesting one deep view.
 `get_capabilities({compact:true,include:["tools","sharedBlockSupport","effectiveDryRunDefault","migrationNotes"],toolNames:["<tool>"]})` keeps the routing blocks aligned while avoiding unrelated per-tool entries.
 
@@ -205,7 +232,8 @@ silently picking one intent — always read
 
 | File | Action |
 |---|---|
-| `assets/examples/get-capabilities.md` | `get_capabilities` — the bootstrap call |
+| `assets/examples/bootstrap.md` | `bootstrap` — mandatory minimal first call |
+| `assets/examples/get-capabilities.md` | `get_capabilities` — compact/full capability expansion |
 | `assets/examples/describe-tool.md` | `describe_tool` — one-tool on-demand introspection |
 | `assets/examples/setup-project.md` | `setup_project` — plan/apply bootstrap for a missing worktree config |
 | `assets/examples/resolve-project.md` | `resolve_project` — select and verify a worktree without restarting MCP |
@@ -396,11 +424,11 @@ explicitly declared — see Issue #1226 for the pre-resolve
 
 Run these in your head before every call. One fail = stop and resolve.
 
-1. `adapterVersion` is current (from the latest `get_capabilities`).
+1. `adapterVersion` is current (from the latest `bootstrap`, expanded through `get_capabilities` only as needed).
 2. The per-tool effective dry-run default (`effectiveDryRunDefault[toolName]`) matches your intent. Default behavior depends on the active policy — see `assets/examples/get-capabilities.md` for the truth table. Read `canonicalCommitFlag` and pass explicit canonical intent when committing.
 3. Writes are enabled for write-class calls (`writesProcess.enabled` and `writesProject.allowWrites` both `true`).
 4. `humanCompilePending:false` before any `test_vba` / `run_vba` call.
-5. `toolsVisible` is consistent with anything you cite. Compare against the live registry (`tools` map) — both fields come from the same source of truth.
+5. `toolInventory` matches the claim you cite: `advertised` for `tools/list`, `callable` for schema/dispatch. `toolsVisible` is legacy and context-dependent (`bootstrap` = advertised; `get_capabilities` = callable).
 6. For `query_execute` — `mode: "read" | "write"` is REQUIRED (issue #1164). `apply: true` alone does NOT pick a write path; it only commits. Omitting `mode` returns `MCP_INPUT_INVALID` with `error.missingParam: "mode"` and exact remediation. `missingParam` is distinct from rejected write flags: it does not include `rejectedFlag` or `toolCommitFlag`. See `assets/examples/query-execute.md`.
 7. **Legacy `accessPath` in `.dysflow/project.json`** — the runtime joins `frontendFile` to the worktree that physically owns the config (contract introduced in #1092, shipped in v2.23.1). If your config still carries an absolute legacy `accessPath`, migrate it with a one-line replacement:
 
@@ -428,4 +456,6 @@ Run these in your head before every call. One fail = stop and resolve.
 Full rationale and per-item recovery: `assets/examples/preflight-checklist.md`.
 Composition recipes (TDD loop, drift + act, recovery, exploration): `assets/examples/composition-patterns.md`.
 
-> **Error codes in this skill are verified live against the runtime.** If `get_capabilities` doesn't list an error, it doesn't exist in `references/error-codes.md`. Period.
+> **Error codes in this skill are verified live against the runtime.** The full
+> `schema({ view: "full" })` / selective `describe_tool` error catalogs are
+> authoritative; `get_capabilities` does not enumerate per-tool errors.

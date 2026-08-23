@@ -24,10 +24,10 @@
 
 | Symptom | Fix |
 |---|---|
-| Trusting a remembered `adapterVersion` from a previous session | Re-run `get_capabilities({})` at session start. The runtime is the only authority. HR-12 of `dysflow-usage`. |
+| Trusting a remembered `adapterVersion` from a previous session | Re-run `bootstrap({})` at session start. The runtime is the only authority. |
 | Reusing a `projectId` from a previous session without resolving it again | Call `resolve_project({cwd, projectId})` to verify the active project before any write-class dispatch. |
 | Reusing an old worktree context after a config change | Call `register_worktree({cwd})` or `clear_worktree_cache({cwd})` to force a rescan. |
-| Caching `effectiveDryRunDefault[toolName]` across sessions | Re-fetch `get_capabilities({})` once per session. The map changes when flags or policy change. |
+| Caching `effectiveDryRunDefault[toolName]` across sessions | Re-fetch the bounded `get_capabilities({view:"compact"})` block after bootstrap. |
 
 ## Misusing `apply` and legacy flags
 
@@ -38,7 +38,7 @@
 | Passing `confirmOverwriteSource: true` alone | Set `destinationRoot` (or `allowConfiguredDestinationRoot: true`) AND pass `implements_check: "export_overwrites_source_precheck"` + `confirmedRequiresConfirmation: true`. See `migrationNotes.confirmOverwriteSource`. |
 | Passing `confirmPid: 12345` alone | Set `pid: 12345` AND `implements_check: "orphans_msaccess"` AND `confirmedRequiresConfirmation: true`. See `migrationNotes.confirmPid`. |
 | Calling `query_execute` with `apply: true` but no `mode` | Add `mode: "read"` or `mode: "write"`. `apply` alone never picks a write path. Runtime emits `MCP_INPUT_INVALID` with `error.missingParam:"mode"`. HR-3 of `dysflow-usage`. |
-| Treating `toolsVisible` (integer) as the tool-name array | Use `Object.keys(get_capabilities.tools)` to enumerate. `toolsVisible` is the count, not the array. |
+| Treating `toolsVisible` as one universal count | Use schema index for callable names and `toolInventory` for `{callable,advertised,surface}`. Bootstrap's legacy count is advertised; capabilities' legacy count is callable. |
 | Auto-picking `availableProjects[0]` when `resolve_project` returns `ambiguous` | STOP. Ask the human. Pass the trio `projectId` + `projectChoiceReason:"user_selected_after_ambiguous_project"` + opaque `recoveryToken`. HR-11 of `dysflow-usage`. |
 | Calling `setup_project` without `projectId` | Pass explicit `projectId`. Bootstrap is fail-closed; `cwd` basename is never used to invent an id. HR-10 of `dysflow-arnes`. |
 
@@ -101,7 +101,7 @@
 |---|---|
 | Hand-editing `.dysflow/project.json` to convert legacy `accessPath` | Use `migrate_project_config({cwd, apply:true})` (HR-13 of `dysflow-codegraph-update`). For one-line refactor: replace `"accessPath": "../../.../frontend.accdb"` with `"frontendFile": "frontend.accdb"`. `frontendFile` is a basename; the runtime resolves it against the active worktree root, so the same config works across every worktree. Per-call override (`accessPath`) still wins when a genuinely different frontend is needed. |
 | Treating a sibling id passed as `projectId` as a free choice | Duplicate sibling ids fail with `PROJECT_ID_COLLISION` rather than first-match behavior. `resolve_project({outcome:"ambiguous"})` is the only path forward. |
-| Editing `C:\Proyectos\skills` directly | Deprecated mirror (issue #9). The installer owns propagation to supported agent SkillsDirs. |
+| Editing `<legacy-skills-mirror>` directly | Deprecated mirror (issue #9). The installer owns propagation to supported agent SkillsDirs. |
 
 ## See also
 

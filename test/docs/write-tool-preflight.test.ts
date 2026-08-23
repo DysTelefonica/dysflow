@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 // Issue #966 — docs gap. The `destinationRoot` pre-condition for every
@@ -10,23 +10,13 @@ import { describe, expect, it } from "vitest";
 
 const SCHEMAS_PATH = "src/adapters/mcp/schemas/vba-sync-schemas.ts";
 
-// The skill assets live outside the repo (operator-local install). On
-// CI / non-operator machines the path won't exist; the assertions for
-// those assets gracefully `it.skip` instead of failing the suite.
-const SKILL_DIR = "C:/Users/adm1/.agents/skills/dysflow-usage/assets";
+// Release-bundled assets are canonical. Installed user mirrors may lag and
+// must never be a test dependency or development mutation target.
+const SKILL_DIR = "skills/dysflow-usage/assets";
 const VERIFY_SCRIPT_PATH = `${SKILL_DIR}/scripts/verify-examples-vs-runtime.ps1`;
 const EXPORT_MODULES_EXAMPLE_PATH = `${SKILL_DIR}/examples/export-modules.md`;
 const IMPORT_MODULES_EXAMPLE_PATH = `${SKILL_DIR}/examples/import-modules.md`;
 const SYNC_BINARY_EXAMPLE_PATH = `${SKILL_DIR}/examples/sync-binary.md`;
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const PRE_FLIGHT_BLOCK = [
   "Pre-flight checks (executed automatically at apply:true)",
@@ -66,22 +56,13 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
   });
 
   it("verify-examples-vs-runtime.ps1 refreshes live captures before the semantic audit", async () => {
-    if (!(await fileExists(VERIFY_SCRIPT_PATH))) {
-      // Skill asset lives outside the repo (operator-local install).
-      // CI runners don't have it; the schema assertions above still
-      // cover the canonical contract.
-      return;
-    }
     const script = await readFile(VERIFY_SCRIPT_PATH, "utf8");
     expect(script).toContain("Invoke-DysflowSemanticAudit.ps1");
     expect(script).toMatch(/& \$audit -Refresh/);
-    expect(script).toContain("-SkipLive requires an existing complete -CapturesDir");
+    expect(script).toContain("A complete candidate-runtime full.json capture is required");
   });
 
   it("export-modules.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
-    if (!(await fileExists(EXPORT_MODULES_EXAMPLE_PATH))) {
-      return;
-    }
     const example = await readFile(EXPORT_MODULES_EXAMPLE_PATH, "utf8");
     expect(example).toContain("destinationRoot must exist");
     expect(example).toContain("git rm -r");
@@ -91,9 +72,6 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
   });
 
   it("import-modules.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
-    if (!(await fileExists(IMPORT_MODULES_EXAMPLE_PATH))) {
-      return;
-    }
     const example = await readFile(IMPORT_MODULES_EXAMPLE_PATH, "utf8");
     expect(example).toContain("destinationRoot must exist");
     expect(example).toContain("git rm -r");
@@ -101,9 +79,6 @@ describe("write-tools Pre-flight checks docs (Round-12 #966)", () => {
   });
 
   it("sync-binary.md surfaces the destinationRoot pre-condition and the git rm -r footgun", async () => {
-    if (!(await fileExists(SYNC_BINARY_EXAMPLE_PATH))) {
-      return;
-    }
     const example = await readFile(SYNC_BINARY_EXAMPLE_PATH, "utf8");
     expect(example).toContain("destinationRoot must exist");
     expect(example).toContain("git rm -r");

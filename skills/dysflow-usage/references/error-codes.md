@@ -1,10 +1,10 @@
 ﻿# Dysflow MCP Error Codes Reference
 
-> **Source of truth**: live `describe_tool({name:"<X>"}).errorCodes` snapshots captured against adapterVersion 2.37.2 on 2026-08-20. The runtime is authoritative; this file is the human-readable mirror. If a code shows up in a tool response that is NOT in this file, surface it as a runtime gap.
+> **Source of truth**: candidate-runtime full schema and selective `describe_tool({name:"<X>"}).errorCodes` captures verified for the v3.0.0 release on 2026-08-23. The runtime is authoritative.
 >
 > **How to update**: re-run `describe_tool({name:"X"})` for one tool per preferredAgentWorkflows phase, aggregate the union into the table below, bump the version / commit / run the canonical verifier.
 >
-> **Companion to** `dysflow-usage/SKILL.md` Â§3 Decision Gates and Â§6 Anti-patterns. Referenced from each scaffold in `assets/examples/<tool>.md`.
+> **Companion to** `dysflow-usage/SKILL.md` §3 Decision Gates and §6 Anti-patterns. Referenced from each scaffold in `assets/examples/<tool>.md`.
 
 ## Envelope contract
 
@@ -28,19 +28,20 @@ Every MCP response carries a top-level `schemaVersion: "dysflow.result/v1"`. On 
 }
 ```
 
-Discriminate on `schemaVersion` BEFORE reading the payload; the parser pattern lives in `dysflow-usage` Â§1 (defensive Code-Mode parse).
+Discriminate on `schemaVersion` BEFORE reading the payload; the parser pattern lives in `dysflow-usage` §1 (defensive Code-Mode parse).
 
 ## Error code taxonomy
 
 | Code | Category | When it fires | Recovery |
 |---|---|---|---|
-| `MCP_INPUT_INVALID` | input schema | Input fails JSON-Schema validation (missing required field, wrong type, parameter outside the anyOf alternatives). Same code is also returned for rejected legacy flag combinations (`dryRun:true`, `options.confirm:true`, etc. â€” see `migrationNotes` in `get_capabilities`). | Re-run `describe_tool({name:"X"})` or `schema({view:"full"})` and align the call. Migration map for legacy flags is in `dysflow-usage/SKILL.md` Â§6. |
-| `MCP_WRITES_DISABLED` | process gate | Process-level `writesProcess.enabled === false`. Every write-class call returns this code until the MCP is restarted with `--enable-writes`. | Restart the MCP server, OR pass `dryRun:true` (legacy alias) to preview. Note: `dryRun:true` is itself a legacy alias â€” prefer `apply:false`. |
+| `SCHEMA_VIEW_REQUIRED` | discovery routing | `schema` was called without explicit `view`; the handler preserves a typed error instead of generic validation. | Retry with `view:"index"`, `"compact"`, or deliberate `"full"`. |
+| `MCP_INPUT_INVALID` | input schema | Input fails JSON-Schema validation (missing required field, wrong type, parameter outside the anyOf alternatives). Same code is also returned for rejected legacy flag combinations (`dryRun:true`, `options.confirm:true`, etc. — see `migrationNotes` in `get_capabilities`). | Re-run `describe_tool({name:"X"})` or `schema({view:"full"})` and align the call. Migration map for legacy flags is in `dysflow-usage/SKILL.md` §6. |
+| `MCP_WRITES_DISABLED` | process gate | Process-level `writesProcess.enabled === false`. Every write-class call returns this code until the MCP is restarted with `--enable-writes`. | Restart the MCP server, OR pass `dryRun:true` (legacy alias) to preview. Note: `dryRun:true` is itself a legacy alias — prefer `apply:false`. |
 | `CAPABILITIES_DISALLOW_WRITE` | project gate | Project-level `capabilities.allowWrites === false`. Set in `.dysflow/project.json`. Independent of process gate. | Update `.dysflow/project.json` `capabilities.allowWrites` to `true`, then retry the call. |
 | `PROJECT_ID_MISMATCH` | project resolve | The `projectId` you passed does not match the resolved project (from `.dysflow/project.json`, cwd-aware worktree detection, or recovery-token answer). | Drop the `projectId` and let the resolver pick, OR pass the correct `projectId` + the recovery-token trio (`resolve_project({outcome:"resolved"})` first). See HR-11. |
 | `WRITE_LOCKED_BY_RUNNING_OP` | concurrency | A concurrent dysflow operation holds the project's write lock. | Wait for the in-flight operation to finish, OR call `cleanup_access_operation({operationId:"<real id>"})` to retire it explicitly. Never `Stop-Process -Name MSACCESS` (HR-2 of `dysflow-arnes`). |
 | `OUTSIDE_PROJECT_ROOT` | path containment | The target path (read or write) sits outside the configured `projectRoot` / `destinationRoot`. Case-insensitive on Windows. | Pass a path that sits inside the project root, OR use a linked worktree (HR-9 of `dysflow-arnes`) and operate on it. |
-| `DESTINATION_ROOT_NOT_FOUND` | path resolution | `projectRoot` / `destinationRoot` is missing or unconfigured for the resolved project. | Configure it in `.dysflow/project.json` and retry, OR pass an explicit `destinationRoot` per call (preferred for one-shot destinations, HR-via-Â§3 of `dysflow-usage`). Note `export_modules` / `export_all` also fire `DESTINATION_ROOT_REQUIRED` BEFORE this guard if neither `destinationRoot`, `exportPath`, nor `allowConfiguredDestinationRoot` is set. |
+| `DESTINATION_ROOT_NOT_FOUND` | path resolution | `projectRoot` / `destinationRoot` is missing or unconfigured for the resolved project. | Configure it in `.dysflow/project.json` and retry, OR pass an explicit `destinationRoot` per call (preferred for one-shot destinations, HR-via-§3 of `dysflow-usage`). Note `export_modules` / `export_all` also fire `DESTINATION_ROOT_REQUIRED` BEFORE this guard if neither `destinationRoot`, `exportPath`, nor `allowConfiguredDestinationRoot` is set. |
 | `INVALID_READ_ONLY_QUERY` | mode contract | `query_execute({mode:"read"})` rejected a SQL that mutates the database (DDL or DML with side effects). | Restrict the SQL to read-only statements, OR explicitly set `mode:"write"` (which also requires `apply:true`). |
 | `PROCEDURE_NOT_FOUND` | VBA runtime | `run_vba` plan succeeded with `moduleName` / `procedureName` populated, but apply returns this because the binary's compiled p-code is stale after an uncompiled import. | Force a manual recompile in Access VBE (Debug -> Compile VBA Project), then retry. NEVER chase a phantom import issue (HR-7 of `dysflow-arnes`). |
 | `PROCEDURE_NOT_CALLABLE` | VBA runtime | `apply` failed because Access COM cannot invoke the procedure despite it being present in `VBComponents`. Stale p-code. | Same as above: force a manual recompile, retry. |
@@ -58,13 +59,13 @@ The `error.code` field is the discriminator. Severity is inferred from category:
 
 | Category | Default severity |
 |---|---|
-| `input schema` (MCP_INPUT_INVALID, etc.) | recoverable â€” caller fixes and retries |
-| `*gate*` (process, project, worktree) | recoverable â€” caller configures the gate |
-| `path containment` | recoverable â€” caller adjusts path |
-| `mode contract` (query_execute) | recoverable â€” caller flips mode |
-| `VBA runtime` (PROCEDURE_*, RUNNER_*) | recoverable â€” caller recompiles or files bug |
-| `lock discovery` (STALE_LACCDB_*, LIVE_*) | recoverable to critical â€” depends on lock holder |
-| `envelope / parser` (`schemaVersion` mismatch, transport wrapper flattened) | critical â€” call the transport layer, not the dispatcher |
+| `input schema` (MCP_INPUT_INVALID, etc.) | recoverable — caller fixes and retries |
+| `*gate*` (process, project, worktree) | recoverable — caller configures the gate |
+| `path containment` | recoverable — caller adjusts path |
+| `mode contract` (query_execute) | recoverable — caller flips mode |
+| `VBA runtime` (PROCEDURE_*, RUNNER_*) | recoverable — caller recompiles or files bug |
+| `lock discovery` (STALE_LACCDB_*, LIVE_*) | recoverable to critical — depends on lock holder |
+| `envelope / parser` (`schemaVersion` mismatch, transport wrapper flattened) | critical — call the transport layer, not the dispatcher |
 
 A code marked `recoverable: true` in the runtime envelope means: the same call, after fixing the issue, is expected to succeed. A `recoverable: false` (rare) means: the situation is unrecoverable from the caller side (file a bug).
 
@@ -94,9 +95,8 @@ if (env?.error?.code) {
 }
 ```
 
-Prefer the typed `error.code` over text matching â€” the runtime reserves the right to change the human-readable text without bumping the contract.
+Prefer the typed `error.code` over text matching — the runtime reserves the right to change the human-readable text without bumping the contract.
 
 ## When this file gets stale
 
 Run `dysflow doctor`. If it reports tools whose `errorCodes` array has changed (added / removed / renamed), bump `last_verified` in your local Skill mirror, regenerate from live `describe_tool` snapshots, and PR against DysTelefonica/dysflow (per `dysflow-codegraph-update` HR-10).
-

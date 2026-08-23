@@ -1,6 +1,6 @@
 # Dysflow MCP Write-Flag Matrix
 
-> **Source of truth**: live `get_capabilities({}).tools` and `tools_visible` snapshots captured against adapterVersion 2.37.2 on 2026-08-20. The runtime is authoritative; this file is the human-readable mirror.
+> **Source of truth**: candidate-runtime `bootstrap`, full capabilities, schema index/full, and selective `describe_tool` captures verified for the v3.0.0 release on 2026-08-23. The runtime is authoritative; this file is the human-readable mirror.
 >
 > **Companion to** `dysflow-usage/SKILL.md` §2 Hard Rules (HR-2), §3 Decision Gates (resolve `apply:true` vs `apply:false`), §6 Anti-patterns.
 >
@@ -10,7 +10,7 @@
 
 | Field | Value | Why |
 |---|---|---|
-| `canonicalCommitFlag` | `"apply"` (for EVERY advertised tool, including `test_vba`) | Unified in [issue #1167](https://github.com/DysTelefonica/dysflow/issues/1167). No more polarity per tool. |
+| `canonicalCommitFlag` | `"apply"` (for every callable tool, including `test_vba`) | Unified in [issue #1167](https://github.com/DysTelefonica/dysflow/issues/1167). Read-only tools report noop behavior. |
 | `legacyAliases` | mostly empty; **only** `["diff"]` on `export_modules` and `export_all` | Compatibility alias from the pre-#1167 days. Never treat as canonical. |
 | `noWriteAlias` | `"diff"` on `export_modules` and `export_all`; `null` elsewhere | Plan-shape alias for the two tools that historically had it. Prefer `apply:false`. |
 | `defaultBehavior` | `"plan"` for write-class tools; `"noop"` for read-only tools | Omitted intent on a write-class tool always plans. See `dysflow-usage` §3 Decision Gates. |
@@ -148,4 +148,7 @@ The per-call write-gate is AUTHORITATIVE and is never bypassed, independent of m
 
 ## When this file gets stale
 
-If `get_capabilities({}).writeClassToolsPermitted` adds a tool or renames flags, this matrix goes stale. Re-fetch and re-render. Run `dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1` for an automatic structural check.
+If schema index/full adds a write-capable tool or changes its canonical intent,
+this matrix goes stale. Re-capture the candidate runtime and run
+`assets/scripts/verify-examples-vs-runtime.ps1`; never enumerate only the core
+advertised `tools/list` surface.

@@ -1,248 +1,131 @@
-<#
-.SYNOPSIS
-    Verify the canonical example scaffolds match dysflow-usage's authoring discipline.
-
-.DESCRIPTION
-    Structural checker for the example corpus under assets/examples/. The script
-    does NOT call MCP tools at runtime; it validates the document shape only.
-
-    What it checks per scaffold:
-      1. Filename matches kebab-case of the H1 heading tool name.
-      2. H1 heading has a name token in triple-backtick fences.
-      3. Section headers (## What it does, ## When to use, ## Required flags,
-         ## All input properties, ## Call shape, ## Result shape, ## Common errors,
-         ## Cross-reference, ## TODO before production use) all present.
-      4. Call-shape section contains a JSON code block with an explicit
-         apply:true|false flag (HR-2 of dysflow-usage).
-      5. NO legacy flag strings appear (dryRun:true, options.confirm:true,
-         confirmOverwriteSource:true, confirmPid:<digits>) - HR-9 of dysflow-usage.
-      6. The Common errors table starts with `| Code | Description | Fix |` header.
-      7. For query_execute specifically, the call shape must declare mode
-         (HR-3 of dysflow-usage).
-
-    Exit codes:
-      0 = all scaffolds pass
-      1 = one or more scaffolds failed
-      2 = script-level failure (could not find assets/examples, etc.)
-
-.NOTES
-    Generated: 2026-08-20 (dysflow-usage ARN-3 close-out).
-
-.EXAMPLE
-    PS> powershell -File assets/scripts/verify-examples-vs-runtime.ps1
-    PS> powershell -File assets/scripts/verify-examples-vs-runtime.ps1 -ExamplesDir C:\path
-    PS> powershell -File assets/scripts/verify-examples-vs-runtime.ps1 -Json
-#>
-
 [CmdletBinding()]
-param (
-    [string]$ExamplesDir,
-    [switch]$Json
+param(
+    [string]$Path,
+    [string]$CapturesDir = (Join-Path $env:TEMP 'dysflow-usage-semantic-captures'),
+    [switch]$SkipLive,
+    [string]$OutputJson
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $Path) { $Path = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path }
+$audit = Resolve-Path (Join-Path $PSScriptRoot '..\..\..\dysflow-codegraph-update\assets\scripts\Invoke-DysflowSemanticAudit.ps1')
 
-if (-not $ExamplesDir) {
-    if ($PSScriptRoot) {
-        $ExamplesDir = Join-Path $PSScriptRoot '..\examples'
-    } else {
-        # Fallback when running via `powershell -File` from a different cwd.
-        $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-        $ExamplesDir = Join-Path $here '..\examples'
+if (-not $SkipLive) {
+    & $audit -Refresh -CapturesDir $CapturesDir -SkillRoot $Path | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+$fullPath = Join-Path $CapturesDir 'full.json'
+if (-not (Test-Path -LiteralPath $fullPath)) {
+    throw 'A complete candidate-runtime full.json capture is required. Use -SkipLive only with -CapturesDir from the semantic audit.'
+}
+
+$capture = Get-Content -Raw -LiteralPath $fullPath | ConvertFrom-Json -Depth 100
+if ($capture.PSObject.Properties.Name -contains 'payload') { $capture = $capture.payload }
+if ($capture.schemaVersion -ne 'dysflow.result/v1') { throw 'full.json is not a Dysflow result/v1 capture.' }
+$bootstrapPath = Join-Path $CapturesDir 'bootstrap.json'
+$adapterVersion = $null
+if (Test-Path -LiteralPath $bootstrapPath) {
+    $bootstrapCapture = Get-Content -Raw -LiteralPath $bootstrapPath | ConvertFrom-Json -Depth 100
+    if ($bootstrapCapture.PSObject.Properties.Name -contains 'payload') { $bootstrapCapture = $bootstrapCapture.payload }
+    $adapterVersion = $bootstrapCapture.adapterVersion
+}
+$tools = @{}
+foreach ($tool in @($capture.tools)) { $tools[[string]$tool.name] = $tool }
+$findings = [Collections.Generic.List[object]]::new()
+$checked = 0
+
+function Add-Finding([string]$File,[string]$Tool,[string]$Code,[string]$Detail) {
+    $findings.Add([pscustomobject]@{kind='DRIFT';file=$File;tool=$Tool;code=$Code;detail=$Detail})
+}
+
+function Test-Type($Value,$Schema) {
+    if ($null -eq $Schema -or $null -eq $Schema.type) { return $true }
+    if ($null -eq $Value) { return $Schema.nullable -eq $true -or $Schema.type -eq 'array' }
+    switch ([string]$Schema.type) {
+        'string' { return $Value -is [string] }
+        'boolean' { return $Value -is [bool] }
+        'number' { return $Value -is [ValueType] -and $Value -isnot [bool] }
+        'array' { return $null -eq $Value -or $Value -is [array] -or $Value -is [Collections.IList] }
+        'object' { return $Value -is [pscustomobject] -or $Value -is [Collections.IDictionary] }
+        default { return $true }
     }
 }
 
-function H1Name([string]$content) {
-    if ($content -match '(?m)^#\s+`{1,3}([A-Za-z_][A-Za-z0-9_]*)`{1,3}') { return $matches[1] }
-    if ($content -match '(?m)^#\s+([A-Za-z_][A-Za-z0-9_]*)') { return $matches[1] }
-    return $null
-}
-
-function CallShapeSection([string]$content) {
-    # Match `## Call shape` heading (with optional parenthetical suffix).
-    $m = [regex]::Match($content, '(?im)^##\s+Call\s+shape(?=\s|$)', 'Multiline')
-    if (-not $m.Success) { return $null }
-    $start = $m.Index
-    $rest = $content.Substring($start)
-    $next = [regex]::Match($rest, '(?m)^##\s+')
-    if ($next.Success -and $next.Index -gt 0) { return $rest.Substring(0, $next.Index) }
-    return $rest
-}
-
-function Section([string]$haystack, [string]$needle) {
-    if ($haystack.IndexOf($needle) -ge 0) { return $true }
-    return $false
-}
-
-function TestKebab([string]$name) {
-    if ($name -match '^[a-z][a-z0-9]*(-[a-z0-9]+)*$') {
-        return "ok"
+function Test-Invocation([string]$File,[string]$ToolName,$Arguments) {
+    $script:checked++
+    if (-not $tools.ContainsKey($ToolName)) {
+        Add-Finding $File $ToolName 'UNKNOWN_TOOL' 'Tool is absent from the callable schema index/full catalog.'
+        return
     }
-    return "filename '$name' is not kebab-case"
-}
-
-function TestH1NameMatchesFilename([string]$content, [string]$basename) {
-    $n = H1Name $content
-    if (-not $n) { return 'no name token in H1' }
-    $expected = $basename -replace '-', '_'
-    if ($n -ne $expected) {
-        return "H1 tool name '$n' does not match filename expectation '$expected'"
-    }
-    return 'ok'
-}
-
-function TestRequiredHeadings([string]$content) {
-    $required = @(
-        'What it does',
-        'When to use',
-        'Required flags',
-        'All input properties',
-        'Call shape',
-        'Result shape',
-        'Common errors',
-        'Cross-reference',
-        'TODO before production use'
-    )
-    $missing = @()
-    foreach ($h in $required) {
-        # Allow optional parenthetical suffix: `## Heading` or `## Heading (extra context)`.
-        $pattern = '(?m)^##\s+' + [regex]::Escape($h) + '(\s*$|\s+\()'
-        if (-not [regex]::IsMatch($content, $pattern)) {
-            $missing += $h
+    if ($null -eq $Arguments) { $Arguments = [pscustomobject]@{} }
+    $argumentNames = @($Arguments.PSObject.Properties.Name | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $tool = $tools[$ToolName]
+    $properties = $tool.inputSchema.properties
+    foreach ($name in $argumentNames) {
+        if (-not ($properties.PSObject.Properties.Name -contains $name)) {
+            Add-Finding $File $ToolName 'UNKNOWN_PARAMETER' "Parameter '$name' is absent from inputSchema.properties."
+            continue
+        }
+        $argumentValue = $Arguments.PSObject.Properties[$name].Value
+        if (-not (Test-Type $argumentValue $properties.$name)) {
+            Add-Finding $File $ToolName 'PARAMETER_TYPE' "Parameter '$name' does not match type '$($properties.$name.type)'."
         }
     }
-    if ($missing.Count -gt 0) { return "missing headings: " + ($missing -join ', ') }
-    return 'ok'
+    $required = @($tool.inputSchema.required | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $runtimeRequired = @($properties.PSObject.Properties | Where-Object { $_.Value.runtimeRequired -eq $true } | ForEach-Object Name)
+    foreach ($name in @($required + $runtimeRequired | Sort-Object -Unique)) {
+        if ($name -notin $argumentNames) { Add-Finding $File $ToolName 'MISSING_PARAMETER' "Required parameter '$name' is absent." }
+    }
+    $alternatives = @($tool.inputSchema.anyOf | Where-Object { $null -ne $_ })
+    if ($alternatives.Count -gt 0) {
+        $satisfied = @($alternatives | Where-Object {
+            @($_.required | Where-Object { $_ -notin $argumentNames }).Count -eq 0
+        }).Count -gt 0
+        if (-not $satisfied) { Add-Finding $File $ToolName 'COMPOSITION' 'No inputSchema.anyOf required alternative is satisfied.' }
+    }
+    $hasApply = $properties.PSObject.Properties.Name -contains 'apply'
+    if ($tool.access -eq 'read-only' -and 'apply' -in $argumentNames) {
+        Add-Finding $File $ToolName 'READ_ONLY_WRITE_INTENT' 'Read-only example declares a write-intent flag.'
+    }
+    if ($tool.access -ne 'read-only' -and $hasApply -and 'apply' -notin $argumentNames) {
+        Add-Finding $File $ToolName 'MISSING_WRITE_INTENT' 'Write-capable example must declare canonical apply:true|false explicitly.'
+    }
 }
 
-function TestCallShapeApply([string]$content) {
-    $cs = CallShapeSection $content
-    if (-not $cs) { return "no '## Call shape' section" }
-    # Accept 1-3 backtick fences (PowerShell here-strings sometimes strip backticks).
-    if (-not [regex]::IsMatch($cs, '(?m)`{1,3}json')) {
-        return 'no JSON code block under Call shape (expected 1-3 backticks + json)'
-    }
-    if (-not [regex]::IsMatch($cs, 'apply\s*:\s*(true|false)')) {
-        return 'call shape JSON does not declare apply:true/false (HR-2)'
-    }
-    return 'ok'
-}
-
-function TestLegacyFlags([string]$content) {
-    # Each legacy flag is documented as anti-pattern in anti-patterns.md and in
-    # the TODO section of each scaffold. The check ignores matches whose
-    # surrounding context (160-char window) contains documentation markers
-    # like "NEVER", "do not use", "Replace with", "migrate", "opt-out", or
-    # "forbidden". Anything else is real usage and HR-9 fails it.
-    $patterns = @(
-        @{ n = 'dryRun:true';                 re = 'dryRun\s*:\s*true' },
-        @{ n = 'options.confirm:true';        re = 'options\.confirm\s*:\s*true' },
-        @{ n = 'confirmOverwriteSource:true'; re = 'confirmOverwriteSource\s*:\s*true' },
-        @{ n = 'confirmPid:<digits>';        re = 'confirmPid\s*:\s*\d+' }
-    )
-    $docTokens = 'NEVER|do not use|Replace with|forbidden|opt-out|migrate|migration'
-    foreach ($p in $patterns) {
-        foreach ($m in [regex]::Matches($content, $p.re)) {
-            $start = [Math]::Max(0, $m.Index - 80)
-            $ctx = $content.Substring($start, [Math]::Min(160, $content.Length - $start))
-            if ($ctx -match $docTokens) { continue }
-            return ("legacy flag {0} used (HR-9) - this is real call-shape usage, not the documentation anti-pattern" -f $p.n)
+$examplesDir = Join-Path $Path 'assets\examples'
+foreach ($file in Get-ChildItem -LiteralPath $examplesDir -Filter '*.md' -File | Sort-Object Name) {
+    $text = Get-Content -Raw -LiteralPath $file.FullName
+    $fileCheckedBefore = $checked
+    foreach ($match in [regex]::Matches($text, '(?s)(?:<!--\s*dysflow-example\s+tool="([A-Za-z_][A-Za-z0-9_]*)"\s*-->\s*)?```json\s*(\{.*?\})\s*```')) {
+        $rawBlock = $match.Groups[2].Value
+        if (-not $match.Groups[1].Value -and $rawBlock -notmatch '"(?:tool|name)"\s*:') { continue }
+        try { $value = $rawBlock | ConvertFrom-Json -Depth 100 -ErrorAction Stop }
+        catch { Add-Finding $file.Name '' 'INVALID_JSON' $_.Exception.Message; continue }
+        $markerTool = $match.Groups[1].Value
+        $toolName = if ($markerTool) { $markerTool } elseif ($value.tool) { [string]$value.tool } elseif ($value.name -and $value.arguments) { [string]$value.name } else { '' }
+        if (-not $toolName) { continue }
+        $arguments = if ($value.PSObject.Properties.Name -contains 'arguments') { $value.arguments } else {
+            $copy = [ordered]@{}
+            foreach ($property in $value.PSObject.Properties) { if ($property.Name -notin @('tool','name')) { $copy[$property.Name] = $property.Value } }
+            [pscustomobject]$copy
         }
+        Test-Invocation $file.Name $toolName $arguments
     }
-    return 'ok'
-}
-
-function TestCommonErrorsTable([string]$content) {
-    if (-not (Section $content '## Common errors')) { return "no '## Common errors' section" }
-    if (-not [regex]::IsMatch($content, '(?m)^\|\s*Code\s*\|\s*Description\s*\|\s*Fix\s*\|')) {
-        return "common errors table not in '| Code | Description | Fix |' format"
-    }
-    return 'ok'
-}
-
-function TestQueryExecuteMode([string]$content) {
-    $tool = H1Name $content
-    if ($tool -ne 'query_execute') { return 'ok' }
-    $cs = CallShapeSection $content
-    if (-not $cs) { return 'skipped (no call shape)' }
-    if (-not [regex]::IsMatch($cs, 'mode\s*:')) { return 'query_execute call shape must declare mode (HR-3)' }
-    return 'ok'
-}
-
-if (-not (Test-Path -LiteralPath $ExamplesDir)) {
-    Write-Error ("examples dir not found: $ExamplesDir")
-    exit 2
-}
-
-$files = Get-ChildItem -LiteralPath $ExamplesDir -Filter '*.md' -ErrorAction SilentlyContinue | Sort-Object Name
-if (-not $files) {
-    Write-Error ("no .md scaffolds under $ExamplesDir")
-    exit 2
-}
-
-$results = New-Object System.Collections.Generic.List[object]
-
-foreach ($f in $files) {
-    $content = Get-Content -LiteralPath $f.FullName -Raw
-    $checks = [ordered]@{
-        '1. kebab-filename'           = (TestKebab $f.BaseName)
-        '2. H1 name matches filename' = (TestH1NameMatchesFilename $content $f.BaseName)
-        '3. required headings'        = (TestRequiredHeadings $content)
-        '4. call shape apply'         = (TestCallShapeApply $content)
-        '5. no legacy flags'          = (TestLegacyFlags $content)
-        '6. common errors table'      = (TestCommonErrorsTable $content)
-        '7. query_execute has mode'   = (TestQueryExecuteMode $content)
-    }
-    $failed = $false
-    $firstReason = $null
-    foreach ($k in $checks.Keys) {
-        if ($checks[$k] -ne 'ok') {
-            $failed = $true
-            if (-not $firstReason) { $firstReason = '[' + $k + '] ' + $checks[$k] }
-        }
-    }
-    $results.Add([pscustomobject]@{
-        file   = $f.Name
-        ok     = (-not $failed)
-        checks = $checks
-        reason = $firstReason
-    }) | Out-Null
-}
-
-$passed = ($results | Where-Object { $_.ok }).Count
-$failed = ($results | Where-Object { -not $_.ok }).Count
-
-if ($Json) {
-    [pscustomobject]@{
-        examplesDir = $ExamplesDir
-        total       = $results.Count
-        passed      = $passed
-        failed      = $failed
-        results     = $results
-    } | ConvertTo-Json -Depth 6
-    if ($failed -gt 0) { exit 1 }
-    exit 0
-}
-
-Write-Host '== verify-examples-vs-runtime =='
-Write-Host ("examplesDir: {0}" -f $ExamplesDir)
-Write-Host ("total: {0}  passed: {1}  failed: {2}" -f $results.Count, $passed, $failed)
-Write-Host ''
-
-foreach ($r in $results) {
-    if ($r.ok) {
-        Write-Host ("OK   {0}" -f $r.file)
-    } else {
-        Write-Host ("FAIL {0}  {1}" -f $r.file, $r.reason)
+    $inferredTool = $file.BaseName -replace '-','_'
+    $declaresToolScaffold = [regex]::IsMatch($text, '(?m)^#\s+`' + [regex]::Escape($inferredTool) + '`\s*$')
+    if ($declaresToolScaffold -and $tools.ContainsKey($inferredTool) -and $checked -eq $fileCheckedBefore) {
+        Add-Finding $file.Name $inferredTool 'MISSING_CALL' 'Tool example has no machine-readable JSON invocation block.'
     }
 }
 
-if ($failed -gt 0) {
-    Write-Host ''
-    Write-Host ("FAILED: {0} of {1} scaffolds need fixes" -f $failed, $results.Count)
-    exit 1
+$report = [pscustomobject]@{
+    adapterVersion = $adapterVersion
+    callableTools = $tools.Count
+    checkedInvocations = $checked
+    findings = @($findings)
 }
-
-Write-Host ''
-Write-Host 'All scaffolds pass.'
+$json = $report | ConvertTo-Json -Depth 100
+if ($OutputJson) { [IO.File]::WriteAllText($OutputJson,$json,[Text.UTF8Encoding]::new($false)) }
+[Console]::Out.WriteLine($json)
+if ($findings.Count) { exit 1 }
 exit 0
