@@ -33,6 +33,48 @@ attempts, and policy. `unavailable` is NEVER evidence that dependencies are clea
   - `pnpm format` / `pnpm format:check` — auto-format / verify formatting.
 - `pnpm coverage` — Vitest coverage for `src/**/*.ts`.
 
+## Access E2E cadence and runner split
+
+The full MCP battery runs from `main` every day at 02:17 UTC in
+`.github/workflows/nightly-access-e2e.yml`. A nightly cadence bounds regression
+detection to 24 hours without serializing every pull request behind the single
+`dysflow-e2e` runner. The workflow queues overlapping nightlies rather than
+cancelling an active Access operation.
+
+The tag-only release gate in `.github/workflows/release.yml` remains mandatory
+and unchanged. Both workflows use the self-hosted Access runner, pre-staged
+fixture copies, `ACCESS_VBA_PASSWORD`, and a repository-local `test-runtime`.
+Neither workflow may fall back to the production runtime.
+
+The issue #1503 audit classified the 30 previously unselected files as follows:
+
+| Classification | Count | Evidence boundary |
+|---|---:|---|
+| Real Access / self-hosted | 17 | Access COM or DAO, `E2E_testing/*.accdb`, and password gates in the test files |
+| Hosted Windows | 10 | In-memory MCP transports, pure filesystem/form transforms, or owned PowerShell child processes |
+| Already in unit CI | 2 | Explicit `vitest.config.ts` includes for result-writer and temp-sweep contracts |
+| No hosted signal | 1 | Every template-clone atom requires the gitignored `bench-cache` fixture |
+
+The hosted subset is pinned by
+`test/quality-gates/ci-workflow.test.ts` and runs in the existing
+`windows-integration-smoke` job:
+
+- `test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts`
+- `test/e2e/mcp-catalog-dryrun.e2e.test.ts`
+- `test/e2e/mcp-harness-watchdog.e2e.test.ts`
+- `test/e2e/mcp-input-validation.e2e.test.ts`
+- `test/e2e/mcp-orphan-cleanup.e2e.test.ts`
+- `test/e2e/mcp-query-validation.e2e.test.ts`
+- `test/e2e/runtime-guard-mcp-integration.e2e.test.ts`
+- `test/integration/form-ir-mutation-preservation.test.ts`
+- `test/integration/mcp-harness-process-tree.test.ts`
+- `test/integration/vba-manager-sentinel-trap.test.ts`
+
+`test/integration/dysflow-result-writer-contract.test.ts` and
+`test/integration/global-setup-temp-sweep.test.ts` stay in the unit suite. The
+benchmark-only `test/integration/form-template-clone-bench.test.ts` stays out of
+hosted CI until it has a deterministic committed or downloaded fixture.
+
 ## Coverage thresholds
 
 > Coverage is a **regression floor and a diagnostic, not a target.** See
@@ -57,13 +99,17 @@ Thresholds are set at measured baseline minus a safety margin (ADR-6). Current f
 ## PowerShell test quality rule
 
 Tests for PowerShell runner behavior (scripts in `scripts/dysflow-access-runner.ps1`,
-`scripts/dysflow-vba-manager.ps1`, and `scripts/lib/dysflow-access-com.ps1`) MUST assert
-observable behavior through a port-level Vitest contract or a Pester behavior contract.
+`scripts/dysflow-vba-manager.ps1`, and `scripts/lib/dysflow-access-com.ps1`) have a
+single evidence rule.
+
+They MUST assert observable behavior through a port-level Vitest contract or a Pester
+behavior contract.
 
 **Prohibited**: tests that read `.ps1` files and assert internal variable names, function-body
-text, dispatcher-arm source snippets, or any source layout. These assertions fail on
-behavior-preserving refactors (variable renames, code reorganization) and violate the
-[testing philosophy](./testing-philosophy.md) north star.
+text, dispatcher-arm source snippets, or any source layout.
+
+These assertions fail on behavior-preserving refactors (variable renames, code
+reorganization) and violate the [testing philosophy](./testing-philosophy.md) north star.
 
 **Required for PowerShell contracts**:
 
@@ -76,6 +122,7 @@ behavior-preserving refactors (variable renames, code reorganization) and violat
   diagnostics, cleanup), use `AccessPowerShellRunner` Vitest port tests with an injected
   `PowerShellExecutor` — no `.ps1` file reads.
 
-**Gate**: `pnpm test:ps1` should be run when Pester coverage for PowerShell contracts changes.
-Skipped Pester execution must be called out with an explicit reason (e.g., no pwsh available
-in CI environment for this run).
+**Gate**: run `pnpm test:ps1` when Pester coverage for PowerShell contracts changes.
+
+Call out skipped Pester execution with an explicit reason, such as no `pwsh` in the CI
+environment for that run.

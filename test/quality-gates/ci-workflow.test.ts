@@ -23,21 +23,33 @@ function vitestConfigPaths(config: string): string[] {
 /** Extract every concrete `*.test.ts` file (not a glob) from a `run:` step in a workflow. */
 function workflowRunTestPaths(workflow: string): string[] {
   const out: string[] = [];
-  for (const cmd of workflowRunCommands(workflow)) {
-    for (const match of cmd.matchAll(/(\S*\.test\.ts)\b/g)) {
-      const path = match[1] ?? "";
-      if (
-        path.length > 0 &&
-        !path.startsWith("-") &&
-        !path.includes("*") &&
-        !path.startsWith("--")
-      ) {
-        out.push(path);
-      }
+  for (const match of workflow.matchAll(/(\S*\.test\.ts)\b/g)) {
+    const path = match[1] ?? "";
+    if (path.length > 0 && !path.startsWith("-") && !path.includes("*") && !path.startsWith("--")) {
+      out.push(path);
     }
   }
   return out;
 }
+
+const EXISTING_HOSTED_ACCESS_SMOKE_TESTS = [
+  "test/e2e/access-fixture.e2e.test.ts",
+  "test/e2e/access-relink-directory.test.ts",
+  "test/e2e/access-relink-directory-apply.test.ts",
+] as const;
+
+const ACCESS_INDEPENDENT_HOSTED_TESTS = [
+  "test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts",
+  "test/e2e/mcp-catalog-dryrun.e2e.test.ts",
+  "test/e2e/mcp-harness-watchdog.e2e.test.ts",
+  "test/e2e/mcp-input-validation.e2e.test.ts",
+  "test/e2e/mcp-orphan-cleanup.e2e.test.ts",
+  "test/e2e/mcp-query-validation.e2e.test.ts",
+  "test/e2e/runtime-guard-mcp-integration.e2e.test.ts",
+  "test/integration/form-ir-mutation-preservation.test.ts",
+  "test/integration/mcp-harness-process-tree.test.ts",
+  "test/integration/vba-manager-sentinel-trap.test.ts",
+] as const;
 
 /** The body of one top-level job in a workflow, without the neighbouring jobs. */
 function workflowJobBlock(workflow: string, job: string): string {
@@ -385,6 +397,45 @@ describe("repository quality gates", () => {
     expect(workflow).toMatch(
       /release:[\s\S]*?name: Build & Release Artifacts[\s\S]*?needs: \[build, quality-authority, e2e-validation\][\s\S]*?runs-on: ubuntu-latest/,
     );
+  });
+
+  it("runs the full Access E2E battery nightly from main without overlapping itself (#1503)", async () => {
+    const workflow = await readText(".github/workflows/nightly-access-e2e.yml");
+
+    expect(workflow).toMatch(/^\s*schedule:$/m);
+    expect(workflow).toContain("- cron: '17 2 * * *'");
+    expect(workflow).toMatch(/^\s*group: nightly-access-e2e$/m);
+    expect(workflow).toMatch(/^\s*cancel-in-progress: false$/m);
+    expect(workflow).toMatch(/^\s*if: github\.ref == 'refs\/heads\/main'$/m);
+    expect(workflow).toMatch(/^\s*runs-on: dysflow-e2e$/m);
+    expect(workflow).toContain(
+      "node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui",
+    );
+    expect(workflow).toMatch(/ACCESS_VBA_PASSWORD:\s*\$\{\{\s*secrets\.ACCESS_VBA_PASSWORD\s*\}\}/);
+    expect(workflowRunCommands(workflow)).toContain("pnpm test:e2e:mcp:release");
+    expect(workflow).not.toContain("--resume");
+  });
+
+  it("keeps the tag release gated by the unchanged full Access E2E battery (#1503)", async () => {
+    const workflow = await readText(".github/workflows/release.yml");
+    const e2e = workflowJobBlock(workflow, "e2e-validation");
+
+    expect(e2e).toContain("if: startsWith(github.ref, 'refs/tags/v')");
+    expect(e2e).toContain("runs-on: dysflow-e2e");
+    expect(e2e).toMatch(/ACCESS_VBA_PASSWORD:\s*\$\{\{\s*secrets\.ACCESS_VBA_PASSWORD\s*\}\}/);
+    expect(workflowRunCommands(e2e)).toContain("pnpm test:e2e:mcp:release");
+    expect(workflowJobBlock(workflow, "release")).toContain(
+      "needs: [build, quality-authority, e2e-validation]",
+    );
+  });
+
+  it("runs exactly the audited Access-independent integration files on hosted Windows (#1503)", async () => {
+    const workflow = await readText(".github/workflows/ci.yml");
+    const hosted = workflowJobBlock(workflow, "windows-integration-smoke");
+    const expected = [...EXISTING_HOSTED_ACCESS_SMOKE_TESTS, ...ACCESS_INDEPENDENT_HOSTED_TESTS];
+
+    expect(hosted).toContain("runs-on: windows-latest");
+    expect([...new Set(workflowRunTestPaths(hosted))].sort()).toEqual(expected.sort());
   });
 
   it("pins LF checkouts so the Windows quality gate is not defeated by CRLF", async () => {
