@@ -83,9 +83,15 @@ interface MatrixNodeCoverage {
 }
 
 function matrixNodeCoverage(jobBlock: string): MatrixNodeCoverage {
-  const expression = /node-version:[ \t]*\$\{\{(.+)\}\}/.exec(jobBlock)?.[1];
+  // Scope to the `matrix:` declaration. Every step also carries
+  // `node-version: ${{ matrix.node-version }}`, and once the matrix itself
+  // became a literal list (#1506) an unscoped search matched that step instead
+  // and reported the matrix as conditional on `matrix.node-version`.
+  const matrixBlock = /^\s*matrix:\n([\s\S]*?)(?=^\s{4}\S|^\s{0,4}steps:)/m.exec(jobBlock)?.[1];
+  const declaration = matrixBlock ?? jobBlock;
+  const expression = /node-version:[ \t]*\$\{\{(.+)\}\}/.exec(declaration)?.[1];
   if (expression === undefined) {
-    const literal = matrixNodeMajors(jobBlock);
+    const literal = matrixNodeMajors(declaration);
     return { pullRequest: literal, everyEvent: literal };
   }
   if (!expression.includes("github.event_name == 'pull_request'")) {
@@ -148,19 +154,56 @@ describe("repository quality gates", () => {
     expect(docs).toContain("check-documentation-quality.mjs check");
     expect(docs).not.toMatch(/^\s+paths:/m);
   });
-  it("runs install, lint, test, build, and coverage in CI", async () => {
+  it("runs install, lint, build, and the coverage suite in CI", async () => {
+    // `pnpm test` is deliberately absent: `pnpm coverage` is a strict superset,
+    // so asserting both would pin back the duplication #1506 removed.
     const workflow = await readText(".github/workflows/ci.yml");
     const commands = workflowRunCommands(workflow);
 
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("push:");
     expect(commands).toContain("pnpm install --frozen-lockfile");
-    expect(commands).toContain("pnpm test");
-    expect(commands).toContain("pnpm build");
     expect(commands).toContain("pnpm lint");
+    expect(commands).toContain("pnpm build");
     expect(commands).toContain("pnpm coverage");
-    expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm test"));
     expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm build"));
+  });
+
+  it("builds exactly once per job, before anything reads dist (#1506)", async () => {
+    // The build ran twice per leg: the root `prepare` lifecycle during
+    // `pnpm install`, then an explicit step. Removing the explicit step and
+    // keeping `prepare` was measured and rejected — pnpm skips lifecycle
+    // scripts when an install is a no-op, so the build silently would not
+    // happen and release-bundled-skills-1349 fails with a bare ENOENT from its
+    // unguarded `access(dist/cli/index.js)`. It survives in CI today only
+    // because node_modules is uncached, which is a side effect, not a contract.
+    //
+    // So `prepare` is the half that goes: an explicit step ordered ahead of its
+    // consumers cannot skip, and a lifecycle hook can.
+    const packageJson = JSON.parse(await readText("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(
+      packageJson.scripts?.prepare,
+      "`prepare` reintroduces a second build on every install; CI builds explicitly instead",
+    ).toBeUndefined();
+
+    const workflow = await readText(".github/workflows/ci.yml");
+    for (const jobName of ["quality", "windows-integration-smoke"]) {
+      const builds = workflowRunCommands(workflowJobBlock(workflow, jobName)).filter(
+        (command) => command === "pnpm build",
+      );
+      expect(builds.length, `${jobName} must build exactly once`).toBe(1);
+    }
+
+    // Both of these read `dist/`, so the build has to precede them.
+    const qualityCommands = workflowRunCommands(workflowJobBlock(workflow, "quality"));
+    for (const consumer of ["pnpm coverage", "pnpm mcp:context-budget"]) {
+      expect(
+        qualityCommands.indexOf("pnpm build"),
+        `\`${consumer}\` reads dist/ and must run after the build`,
+      ).toBeLessThan(qualityCommands.indexOf(consumer));
+    }
   });
 
   it("runs the complete quality-gate suite on the supported Windows platform", async () => {
@@ -201,19 +244,17 @@ describe("repository quality gates", () => {
     }
   });
 
-  it("uses Node 24-capable GitHub Actions while preserving Node 20 product runtime (#190)", async () => {
+  it("pins the GitHub Actions the quality gate depends on (#190)", async () => {
+    // #190 originally paired the action versions with a literal Node 20 floor.
+    // The floor moved to 26 in #1506, and restating any literal here would make
+    // this test a second source of truth for the supported range. The matrix
+    // test below owns that, derived from engines.node; this one owns the
+    // actions.
     const workflow = await readText(".github/workflows/ci.yml");
-    const packageJson = JSON.parse(await readText("package.json")) as {
-      engines?: Record<string, string>;
-    };
 
     expect(workflow).toContain("uses: actions/checkout@v5");
     expect(workflow).toContain("uses: actions/setup-node@v5");
     expect(workflow).toContain("uses: pnpm/action-setup@v6");
-    expect(workflow).toContain("node-version: 20");
-    // Only the floor is pinned here; the ceiling belongs to the matrix-coverage
-    // test below, which derives it rather than restating a literal.
-    expect(packageJson.engines?.node).toMatch(/^>=20\.0\.0(\s|$)/);
   });
 
   it("runs the quality gates on every Node major the package claims to support (#1153)", async () => {
@@ -254,21 +295,66 @@ describe("repository quality gates", () => {
 
   it("runs the test suite exactly once per Node leg (#1188)", async () => {
     // `pnpm coverage` is `vitest run --coverage`: the same suite `pnpm test`
-    // runs, plus instrumentation and thresholds. Running both unconditionally
-    // in one job doubled the heaviest step for no extra signal. Each leg must
-    // therefore reach exactly one of them, selected by a matrix condition.
+    // runs, plus instrumentation and thresholds. Running both doubles the
+    // heaviest step for no extra signal.
+    //
+    // #1188 expressed that as "each leg reaches exactly one of them, selected by
+    // a matrix condition", which required both commands to be present. #1506
+    // collapsed the matrix to a single leg, so the guard is stated as the
+    // invariant it always meant: the job runs one suite command, unconditionally
+    // or matrix-selected, but never both at once.
     const workflow = await readText(".github/workflows/ci.yml");
     const quality = workflowJobBlock(workflow, "quality");
     const steps = quality.split(/^ {6}- name: /m).slice(1);
 
-    for (const command of ["pnpm test", "pnpm coverage"]) {
+    const suiteSteps = ["pnpm test", "pnpm coverage"].flatMap((command) => {
       const step = steps.find((body) => new RegExp(`run: ${command}\\s*$`, "m").test(body));
-      expect(step, `the Quality gates job never runs \`${command}\``).toBeDefined();
-      expect(
-        step,
-        `\`${command}\` runs on every Node leg; it must be selected by a matrix condition so the suite is not run twice per leg`,
-      ).toMatch(/^\s*if: matrix\.node-version [!=]= \d+$/m);
+      return step === undefined ? [] : [{ command, step }];
+    });
+
+    expect(
+      suiteSteps.length,
+      "the Quality gates job runs neither `pnpm test` nor `pnpm coverage`",
+    ).toBeGreaterThan(0);
+
+    const unguarded = suiteSteps.filter(
+      ({ step }) => !/^\s*if: matrix\.node-version [!=]= \d+$/m.test(step),
+    );
+    expect(
+      unguarded.length,
+      `${unguarded.map((entry) => entry.command).join(" and ")} run on every leg; at most one suite ` +
+        "command may be unguarded, or the suite runs twice per leg",
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it("runs no step twice across the quality-gate matrix (#1506)", async () => {
+    // The two-leg matrix ran lint, the public suite and the build on both legs
+    // with no `if:`, so each executed twice per pull request against pinned,
+    // deterministic tooling. A single leg makes that impossible by construction;
+    // this pins it, so re-widening the matrix without guarding the deterministic
+    // steps fails here rather than quietly doubling the bill again.
+    const workflow = await readText(".github/workflows/ci.yml");
+    const quality = workflowJobBlock(workflow, "quality");
+    const legs = matrixNodeCoverage(quality).everyEvent;
+
+    if (legs.length <= 1) {
+      expect(legs.length).toBe(1);
+      return;
     }
+
+    const steps = quality.split(/^ {6}- name: /m).slice(1);
+    const unguardedRepeatable = steps.filter((body) => {
+      const runsDeterministicWork = /run: pnpm (lint|build|test:public|coverage|test)\s*$/m.test(
+        body,
+      );
+      const guarded = /^\s*if: /m.test(body);
+      return runsDeterministicWork && !guarded;
+    });
+
+    expect(
+      unguardedRepeatable,
+      "a multi-leg matrix must guard every deterministic step, or it runs twice per pull request",
+    ).toEqual([]);
   });
 
   it("cancels superseded pull-request runs but never a push to main (#1188)", async () => {

@@ -14,7 +14,7 @@ For the complete command and tool reference, see the
 | Requirement | Supported value |
 | --- | --- |
 | Operating system | Windows |
-| Node.js | 20 through 26 |
+| Node.js | 26 |
 | Microsoft Access | Required for Access/VBA operations, but not for installation |
 | Git and pnpm | Required only when building from source |
 

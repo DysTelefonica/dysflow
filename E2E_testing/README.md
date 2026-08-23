@@ -131,7 +131,7 @@ keeps each assertion independent in the report and scannable for reviewers.
 
 ### Prerequisites (Windows)
 
-- **Node 20+**, **pnpm 10+** (matches `packageManager` in `package.json`).
+- **Node 26**, **pnpm 10+** (matches `engines.node` and `packageManager` in `package.json`).
 - **Microsoft Access** installed (the dev machine — not GitHub-hosted CI runners).
 - **`ACCESS_VBA_PASSWORD`** set in the user environment, matching the password of the
   `NoConformidades.accdb` fixture.
