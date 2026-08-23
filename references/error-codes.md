@@ -45,6 +45,21 @@ the message and nested details as diagnostic evidence; do not parse localized Ac
 | `TABLE_NOT_IN_DATABASE` | The requested table is absent from the selected database. | Enumerate the live schema and retry with an existing table. |
 | `COLUMN_NOT_IN_TABLE` | The requested column is absent from the selected table. | Enumerate the table columns and retry with an existing column. |
 
+## CLI install and update channels
+
+`dysflow install`, `dysflow update`, and `dysflow doctor` accept `--channel {stable|beta|main}`
+(issue #1521). The channel is resolved as: explicit `--channel` -> `DYSFLOW_CHANNEL` -> the channel
+persisted in `<runtimeDir>/.dysflow-install-state.json` -> `stable`. These codes are emitted on
+stderr by the CLI, not inside an MCP envelope, so the code is the first token of the message.
+
+| Code | Meaning | Remediation |
+| --- | --- | --- |
+| `DYSFLOW_UNKNOWN_CHANNEL` | The requested channel is not one of `stable`, `beta`, `main`. Raised for both `--channel <name>` and `DYSFLOW_CHANNEL`; the message names which one carried the bad value. No network request is made. | Re-run with one of the three channels, or unset `DYSFLOW_CHANNEL`. See [update trust model](../docs/security/update-trust-model.md). |
+| `DYSFLOW_INSECURE_GATE_MISSING` | `beta` or `main` was requested without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`. Neither channel is covered by the Ed25519 release trust anchor, so the gate is refused before any artifact is fetched — reachability of the artifact is irrelevant. | Set `DYSFLOW_ALLOW_INSECURE_UPDATE=1` to accept the risk explicitly, or stay on `--channel stable`. See [update trust model](../docs/security/update-trust-model.md). |
+| `DYSFLOW_SKIP_CHECKSUM_REQUIRES_STABLE_CHANNEL` | `--skip-checksum` was combined with `--channel beta` or `--channel main`. The flag is a stable-channel escape hatch; the unsigned channels enforce their own verification policy, so the combination is a contradiction rather than a stronger bypass. | Drop `--skip-checksum`, or switch to `--channel stable`. See [update trust model](../docs/security/update-trust-model.md). |
+| `DYSFLOW_CHANNEL_PIN_REQUIRES_FORCE` | `dysflow update --channel X` was run against a runtime whose install state records a different channel, without `--force`. A runtime does not change channel silently. Re-running `update` on the pinned channel is always allowed. | Re-run with `--force` to switch channels, or drop `--channel` to keep updating the pinned one. See [update trust model](../docs/security/update-trust-model.md). |
+| `DYSFLOW_PRERELEASE_TAG_NOT_FOUND` | The `beta` channel listed the published releases and found no tag matching the Dysflow prerelease grammar `vX.Y.Z-{rc,beta,alpha,prerelease}.N`. | Use `--channel stable`, or wait until a prerelease is published. See [update trust model](../docs/security/update-trust-model.md). |
+
 ## Runner and Access binary failures
 
 | Code | Meaning | Remediation |
