@@ -79,6 +79,19 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Build once, and before anything reads `dist/`.
+      #
+      # The build used to run twice per leg: the root `prepare` lifecycle during
+      # `pnpm install`, then this step (#1506 shows `tsc` at log lines 208 and
+      # 984 of run 32597834437). `prepare` is the half that was removed, not
+      # this step: pnpm skips lifecycle scripts when an install is a no-op, so
+      # relying on it means the build can silently not happen — and
+      # release-bundled-skills-1349 then fails with a bare ENOENT from its
+      # unguarded `access(dist/cli/index.js)`. An explicit step ordered ahead of
+      # its consumers cannot skip.
+      - name: Build
+        run: pnpm build
+
       # `pnpm coverage` is `vitest run --coverage`: the same suite `pnpm test`
       # runs, plus instrumentation and thresholds. Keep only the superset so
       # the suite runs exactly once per pull request (#1506).
@@ -88,9 +101,6 @@ jobs:
       - name: Public test suite (#979)
         run: pnpm test:public
 
-      # `pnpm install` runs the root `prepare` lifecycle, which builds `dist/`.
-      # The removed explicit build repeated the same pinned compiler over the
-      # same sources (#1506). A repository gate pins this lifecycle dependency.
       - name: MCP context budget (shrink-only)
         run: pnpm mcp:context-budget
 
@@ -125,6 +135,12 @@ jobs:
         run: |
           Get-Command powershell.exe
           powershell.exe -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
+
+      # One explicit build, same reasoning as the quality job: the Pester and
+      # Access steps below load the compiled core bridge, and `prepare` is no
+      # longer there to build it implicitly (#1506).
+      - name: Build TypeScript core bridge
+        run: pnpm build
 
       - name: Run PowerShell Pester tests
         shell: pwsh

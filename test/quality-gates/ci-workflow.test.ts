@@ -154,11 +154,9 @@ describe("repository quality gates", () => {
     expect(docs).toContain("check-documentation-quality.mjs check");
     expect(docs).not.toMatch(/^\s+paths:/m);
   });
-  it("runs install, lint, and the coverage suite in CI", async () => {
-    // `pnpm test` and an explicit `pnpm build` are deliberately absent (#1506).
-    // `pnpm coverage` is a strict superset of `pnpm test`, and `prepare` runs
-    // `pnpm build` during the install. Asserting the literal commands here
-    // would pin the duplication back in place.
+  it("runs install, lint, build, and the coverage suite in CI", async () => {
+    // `pnpm test` is deliberately absent: `pnpm coverage` is a strict superset,
+    // so asserting both would pin back the duplication #1506 removed.
     const workflow = await readText(".github/workflows/ci.yml");
     const commands = workflowRunCommands(workflow);
 
@@ -166,22 +164,46 @@ describe("repository quality gates", () => {
     expect(workflow).toContain("push:");
     expect(commands).toContain("pnpm install --frozen-lockfile");
     expect(commands).toContain("pnpm lint");
+    expect(commands).toContain("pnpm build");
     expect(commands).toContain("pnpm coverage");
-    expect(commands).not.toContain("pnpm build");
-    expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm coverage"));
+    expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm build"));
   });
 
-  it("builds dist through the install lifecycle, since CI has no build step (#1506)", async () => {
-    // The issue deliberately keeps `prepare` as the single build path and
-    // removes the duplicate explicit steps. Pin that dependency so a future
-    // lifecycle change cannot silently leave CI without a build.
+  it("builds exactly once per job, before anything reads dist (#1506)", async () => {
+    // The build ran twice per leg: the root `prepare` lifecycle during
+    // `pnpm install`, then an explicit step. Removing the explicit step and
+    // keeping `prepare` was measured and rejected — pnpm skips lifecycle
+    // scripts when an install is a no-op, so the build silently would not
+    // happen and release-bundled-skills-1349 fails with a bare ENOENT from its
+    // unguarded `access(dist/cli/index.js)`. It survives in CI today only
+    // because node_modules is uncached, which is a side effect, not a contract.
+    //
+    // So `prepare` is the half that goes: an explicit step ordered ahead of its
+    // consumers cannot skip, and a lifecycle hook can.
     const packageJson = JSON.parse(await readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     expect(
       packageJson.scripts?.prepare,
-      "CI has no build step; `prepare` is what produces dist/ during pnpm install",
-    ).toContain("build");
+      "`prepare` reintroduces a second build on every install; CI builds explicitly instead",
+    ).toBeUndefined();
+
+    const workflow = await readText(".github/workflows/ci.yml");
+    for (const jobName of ["quality", "windows-integration-smoke"]) {
+      const builds = workflowRunCommands(workflowJobBlock(workflow, jobName)).filter(
+        (command) => command === "pnpm build",
+      );
+      expect(builds.length, `${jobName} must build exactly once`).toBe(1);
+    }
+
+    // Both of these read `dist/`, so the build has to precede them.
+    const qualityCommands = workflowRunCommands(workflowJobBlock(workflow, "quality"));
+    for (const consumer of ["pnpm coverage", "pnpm mcp:context-budget"]) {
+      expect(
+        qualityCommands.indexOf("pnpm build"),
+        `\`${consumer}\` reads dist/ and must run after the build`,
+      ).toBeLessThan(qualityCommands.indexOf(consumer));
+    }
   });
 
   it("runs the complete quality-gate suite on the supported Windows platform", async () => {

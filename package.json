@@ -23,7 +23,6 @@
     "format": "biome format src/ test/ tests/ scripts/ E2E_testing/ --write",
     "format:check": "biome format src/ test/ tests/ scripts/ E2E_testing/ --check",
     "coverage": "vitest run --coverage",
-    "prepare": "pnpm build",
     "prepack": "pnpm build"
   },
   "engines": {
