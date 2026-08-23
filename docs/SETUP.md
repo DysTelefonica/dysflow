@@ -122,8 +122,10 @@ Keep secrets in environment variables, not in the committed project file.
 ### Select the advertised MCP tool surface
 
 The stdio server advertises the 39-tool core surface by default. It includes the bootstrap,
-recovery, test, and source-sync workflows. SQL and form tools remain callable by name and
-discoverable with `schema({ view: "index" })`; they are hidden only from `tools/list`.
+recovery, test, and source-sync workflows.
+
+SQL and form tools remain callable by name and discoverable with `schema({ view: "index" })`.
+They are hidden only from `tools/list`.
 
 Opt in to the complete surface per project:
 
@@ -134,8 +136,10 @@ Opt in to the complete surface per project:
 ```
 
 Or override it for one process with `dysflow mcp --tool-surface full`. The CLI flag takes
-precedence over project configuration. The only accepted values are `"core"` and `"full"`;
-an invalid project value fails with `CONFIG_UNKNOWN_TOOL_SURFACE` instead of silently falling back.
+precedence over project configuration.
+
+The only accepted values are `"core"` and `"full"`. An invalid project value fails with
+`CONFIG_UNKNOWN_TOOL_SURFACE` instead of silently falling back.
 
 ## Troubleshooting
 
