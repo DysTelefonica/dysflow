@@ -422,9 +422,28 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   immediately validates the live release. The split is intentional because `GITHUB_TOKEN`-created releases
   do not reliably trigger another workflow.
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
-- Update path security: the ONLY update mechanism is the GitHub Release tar.gz with SHA-256
-  verification. There is NO git-clone / source-build fallback. See
-  [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
+- **Update path security is per channel, and `stable` is the only signed one.** `dysflow install`
+  / `dysflow update` / `dysflow doctor` take `--channel {stable|beta|main}` (issue #1521),
+  resolved as `--channel` -> `DYSFLOW_CHANNEL` -> the channel recorded in
+  `<runtimeDir>/.dysflow-install-state.json` -> `stable`. Omitting the flag keeps every existing
+  call shape on `stable`, unchanged.
+  - `stable` (default, ungated): the GitHub Release tar.gz, verified by an Ed25519 signature over
+    `SHA256SUMS` and then SHA-256 over the archive. Never weaken this path — the signature gate
+    fails closed, and `--skip-checksum` remains a stable-only escape hatch that still requires
+    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+  - `beta` (gated): the newest published prerelease tag's release tar.gz, verified by SHA-256
+    against the published `SHA256SUMS`. Prereleases are NOT covered by the trust anchor, so this
+    channel is unreachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+  - `main` (gated): `archive/refs/heads/main.tar.gz` — repository **source**, built locally with
+    `pnpm install` + `pnpm build` to reproduce the release-tarball shape. **Unverified by design**:
+    GitHub publishes no `SHA256SUMS` for a branch archive and its bytes are not reproducible, so
+    there is nothing to verify against. This is the one source-build path in the product; it is an
+    explicitly gated development channel, never reachable without
+    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, and it is never a fallback for a failed `stable` update.
+  - There is still NO git-clone update path, and no channel may silently substitute for another:
+    the archive-traversal guard runs on every channel, and `update` refuses to move a runtime
+    between channels without `--force`. See
+    [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
 - **`export_all` prune is destructive — preserve its guards.** When `prune: true`, deletions are
   gated on a fully clean export (skip on ANY warning), scoped to managed source extensions
   (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
