@@ -116,7 +116,7 @@ async function readSkillTree(skillRoot: string): Promise<Map<string, Buffer>> {
 
   await visit(skillRoot, "");
   if (!files.has("SKILL.md")) {
-    throw new Error(`Bundled skill is missing SKILL.md: ${skillRoot}`);
+    throw new Error(`Bundled skill is missing SKILL.md: ${path.join(skillRoot, "SKILL.md")}`);
   }
   return files;
 }

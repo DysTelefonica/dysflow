@@ -50,7 +50,8 @@ describe("issue #1403 skill discoverability", () => {
     const agents = await readFile(`${repoRoot}/AGENTS.md`, "utf8");
 
     expect(agents).toMatch(/load.*dysflow-usage.*first/i);
-    expect(agents).toMatch(/get_capabilities\(\{\}\)[\s\S]*before[\s\S]*static/i);
+    expect(agents).toMatch(/bootstrap\(\{\}\)[\s\S]*before[\s\S]*static/i);
+    expect(agents).toMatch(/get_capabilities\(\{view:"compact"/i);
   });
 });
 
