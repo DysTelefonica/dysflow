@@ -626,8 +626,10 @@ code-behind through the `.form.txt` (it is serialization noise; see VBA semantic
 ### FormIR — intermediate representation (for implementors)
 
 `src/core/models/form-ir.ts` defines `FormIR`, the in-memory tree produced by `parseFormTxt`.
+
 Entries use **ordered arrays** (not maps) so duplicate keys (e.g. `NoSaveCTIWhenDisabled` appearing
 twice in frmBusy) are preserved verbatim. Blob entries (`Key = Begin…End`) are kept opaque.
+
 `codeBehind` is the raw VBA text after the `CodeBehindForm` marker, or `null` when absent.
 
 ### MCP real-world examples reference

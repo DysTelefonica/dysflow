@@ -90,8 +90,10 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 
 ### `bootstrap`
 Minimal first-call read-only surface. Returns adapter version, write-gate state,
-write policy, unambiguous callable/advertised `toolInventory`, active surface,
-human-compile state, and the `preferredAgentWorkflows` map.
+write policy, and unambiguous callable/advertised `toolInventory`.
+
+It also returns the active surface, human-compile state, and the
+`preferredAgentWorkflows` map.
 
 This is the recommended first call. Route next through
 `schema({ view: "index" })`; expand capabilities or one tool only when needed.
@@ -109,8 +111,9 @@ Call `bootstrap({})` first. Use `get_capabilities` when the selected step needs:
 - Six machine-readable `preferredAgentWorkflows`.
 
 The default `{}` response is compact. Use `{ "view": "compact" }` explicitly
-in agent-authored calls and `{ "view": "full" }` only for the complete
-snapshot. `compact:true` remains a compatibility alias.
+in agent-authored calls and `{ "view": "full" }` only for the complete snapshot.
+
+`compact:true` remains a compatibility alias.
 
 Use `describe_tool({ "name": "<tool>", "sections": ["parameters"] })` for
 one-tool details.
@@ -272,8 +275,9 @@ Return static tool contracts in progressive views. Read-only — never opens Acc
 
 Omitting `view` fails closed with typed `SCHEMA_VIEW_REQUIRED`. This runtime-required
 parameter is exposed through machine metadata without adding JSON Schema
-`required:["view"]`, so the handler preserves the typed error envelope. All views
-are deterministic and support `toolName`; index also supports workflow filters.
+`required:["view"]`, so the handler preserves the typed error envelope.
+
+All views are deterministic and support `toolName`; index also supports workflow filters.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
   - `toolName` (string, optional): Filter to one exact callable tool name.
