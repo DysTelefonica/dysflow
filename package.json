@@ -21,7 +21,7 @@
     "lint": "node scripts/check-core-adapter-boundary.mjs && node scripts/check-optional-presence-guards.mjs && node scripts/report-ts-import-cycles.mjs --check scripts/baselines/ts-import-cycles.json && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && biome check src/ test/ tests/ scripts/ E2E_testing/",
     "lint:fix": "biome check src/ test/ tests/ scripts/ E2E_testing/ --write",
     "format": "biome format src/ test/ tests/ scripts/ E2E_testing/ --write",
-    "format:check": "biome format src/ test/ tests/ scripts/ E2E_testing/ --check",
+    "format:check": "biome format src/ test/ tests/ scripts/ E2E_testing/",
     "coverage": "vitest run --coverage",
     "prepack": "pnpm build"
   },

@@ -467,6 +467,20 @@ describe("repository quality gates", () => {
     expect(packageJson.scripts).not.toHaveProperty("postinstall");
   });
 
+  it("keeps format:check on Biome's non-writing format invocation (#1512)", async () => {
+    const scripts = (
+      JSON.parse(await readText("package.json")) as {
+        scripts?: Record<string, string>;
+      }
+    ).scripts;
+    const writeCommand = scripts?.format ?? "";
+    const checkCommand = scripts?.["format:check"] ?? "";
+
+    expect(writeCommand).toMatch(/^biome format .+ --write$/);
+    expect(checkCommand).toBe(writeCommand.replace(/\s+--write$/, ""));
+    expect(checkCommand).not.toMatch(/\s--(?:write|fix|check)(?:\s|$)/);
+  });
+
   it("type-checks tests through a dedicated TypeScript config", async () => {
     const testConfig = JSON.parse(await readText("tsconfig.test.json")) as {
       extends?: string;
