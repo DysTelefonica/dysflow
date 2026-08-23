@@ -8,6 +8,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { successResult } from "../../../src/core/contracts/index";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const runnerSuccess = {
   exitCode: 0,
@@ -44,6 +45,7 @@ describe("write-intent dryRun parity (#1188)", () => {
   it("fix_encoding dryRun:true returns a plan without invoking the runner", async () => {
     const executor = vi.fn<VbaManagerExecutor>().mockResolvedValue(runnerSuccess);
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/repo/front.accdb",
       destinationRoot: "C:/repo/src",
@@ -100,6 +102,7 @@ describe("write-intent dryRun parity (#1188)", () => {
   ])("fix_encoding plans for legacy diff or omitted intent: %j", async (intent) => {
     const executor = vi.fn<VbaManagerExecutor>().mockResolvedValue(runnerSuccess);
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/repo/front.accdb",
       destinationRoot: "C:/repo/src",
@@ -141,6 +144,7 @@ describe("write-intent dryRun parity (#1188)", () => {
   it("fix_encoding apply:true overrides dryRun:true at the adapter boundary", async () => {
     const executor = vi.fn<VbaManagerExecutor>().mockResolvedValue(runnerSuccess);
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/repo/front.accdb",
       destinationRoot: "C:/repo/src",

@@ -6,6 +6,7 @@ import {
   type VbaManagerExecutionResult,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const oomExit: VbaManagerExecutionResult = {
   exitCode: 3_762_504_530,
@@ -34,6 +35,7 @@ async function makeAdapter(results: readonly VbaManagerExecutionResult[]) {
   const executor = vi.fn();
   for (const result of results) executor.mockResolvedValueOnce(result);
   const adapter = new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     cwd: root,
     accessPath,
     destinationRoot: root,

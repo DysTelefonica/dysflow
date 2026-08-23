@@ -30,6 +30,7 @@ import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 interface CapturedCall {
   action: string;
@@ -39,6 +40,7 @@ interface CapturedCall {
 
 function buildAdapter(executor: VbaManagerExecutor, accessPath = "C:/db/front.accdb") {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor,
     scriptPath: "scripts/dysflow-vba-manager.ps1",
     accessPath,
@@ -274,6 +276,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
     );
 
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       executor: async () => ({
         exitCode: 0,

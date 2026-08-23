@@ -28,6 +28,7 @@ import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const FAKE_FORM_TXT = [
   "Version =21",
@@ -74,6 +75,7 @@ describe("destinationRoot override (#1169) — every write-class tool honors the
 
   function buildAdapter() {
     return new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: okExecutor(),
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",

@@ -9,6 +9,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { successResult } from "../../../src/core/contracts/index";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 interface CapturedChunkCall {
   moduleNames: string[];
@@ -16,6 +17,7 @@ interface CapturedChunkCall {
 
 function buildAdapter(executor: VbaManagerExecutor, accessPath = "C:/db/front.accdb") {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor,
     scriptPath: "scripts/dysflow-vba-manager.ps1",
     accessPath,
@@ -76,6 +78,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -111,6 +114,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -147,6 +151,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -182,6 +187,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -219,6 +225,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -255,6 +262,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -302,6 +310,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -352,6 +361,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -390,6 +400,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
@@ -422,6 +433,7 @@ describe("VbaModulesAdapter — import_modules bulk by directory (#807 Feature 2
       };
     };
     const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       accessPath: "C:/db/front.accdb",
