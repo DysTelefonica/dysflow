@@ -31,6 +31,10 @@ export type JsonSchemaProperty = {
   deprecated?: boolean;
   /** Parameters that must accompany this property when it is supplied. */
   requiredWith?: readonly string[];
+  /** Required by the handler so omission can return a typed domain error. */
+  runtimeRequired?: boolean;
+  /** Typed error returned when a runtime-required parameter is omitted. */
+  omissionErrorCode?: string;
 };
 
 export type JsonObjectSchema = {

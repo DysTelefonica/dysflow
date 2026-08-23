@@ -473,6 +473,8 @@ export const SCHEMA_TOOL_INPUT_SCHEMA = {
       enum: ["index", "compact", "full"],
       description:
         "Required. Choose index for routing-only discovery, compact for low-context discovery, or full for complete JSON Schema (deliberate opt-in).",
+      runtimeRequired: true,
+      omissionErrorCode: "SCHEMA_VIEW_REQUIRED",
     },
   },
 } as const;
@@ -1451,7 +1453,7 @@ export function createDescribeToolTool(): DysflowMcpTool {
       const catalog = buildToolSchemaCatalog({ toolName: rawName });
       const entry = catalog.tools[0];
       if (entry === undefined) {
-        const message = `Tool '${rawName}' not found. Call schema({ view: 'index' }) to list every advertised tool name.`;
+        const message = `Tool '${rawName}' not found. Call schema({ view: 'index' }) to list every callable tool name and inspect its advertised state.`;
         return {
           content: [{ type: "text", text: `TOOL_NOT_FOUND: ${message}` }],
           isError: true,

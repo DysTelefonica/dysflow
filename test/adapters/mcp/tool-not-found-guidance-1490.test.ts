@@ -55,8 +55,11 @@ describe("#1490 TOOL_NOT_FOUND guidance", () => {
     expect(message).not.toMatch(/view:\s*'full'/);
   });
 
-  it("names a view that actually lists every advertised tool name", async () => {
-    const view = namedView(await unknownToolMessage());
+  it("names a view that actually lists every callable tool name", async () => {
+    const message = await unknownToolMessage();
+    expect(message).toMatch(/every callable tool name/i);
+    expect(message).not.toMatch(/every advertised tool name/i);
+    const view = namedView(message);
     expect(view, "guidance must name a concrete schema view").toBeDefined();
 
     const bounded = await schemaToolNames({ view });

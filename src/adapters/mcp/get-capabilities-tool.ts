@@ -16,10 +16,13 @@ import type { ProjectConfigDiagnostic } from "../config/project-config-diagnosti
 import type { WorktreeCacheTelemetry } from "../config/worktree-context-cache.js";
 import {
   buildToolAdvertisementMetadata,
+  isAdvertisedUnderSurface,
   PREFERRED_AGENT_WORKFLOWS,
   type PreferredAgentWorkflow,
   type ToolAdvertisementMetadata,
+  type ToolSurface,
 } from "./agent-workflow-registry.js";
+import type { ToolInventorySnapshot } from "./bootstrap-tool.js";
 import {
   CAPABILITIES_INPUT_SCHEMA,
   CAPABILITY_BLOCK_NAMES,
@@ -116,8 +119,8 @@ export const ESCAPE_HATCH_MIGRATION_NOTES = {
  *   defaults to true via the `contractFromGeneratedRoute` derivation
  *   (`src/adapters/mcp/mcp-tool-contracts.ts:32`), so the global default is
  *   `true`. Surfaced as a snapshot field so a consumer can detect drift.
- * - `toolsVisible`: count of tools in `MCP_TOOL_CONTRACTS`. Equal to the
- *   number of tools advertised in `tools/list` after the hidden-stub filter.
+ * - `toolsVisible`: legacy count of callable tools in `MCP_TOOL_CONTRACTS`.
+ *   Use `toolInventory` when distinguishing callable from advertised tools.
  * - `writeClassToolsPermitted`: names of write-class tools (i.e. `access`
  *   is `read-write` or `conditional-write`) that the process-level gate
  *   currently permits. When `writesProcess.enabled` is `false` and no
@@ -187,6 +190,7 @@ export type McpCapabilitySnapshot = {
   >;
   migrationNotes: typeof ESCAPE_HATCH_MIGRATION_NOTES;
   toolsVisible: number;
+  toolInventory: ToolInventorySnapshot;
   preferredAgentWorkflows: readonly PreferredAgentWorkflow[];
   writeClassToolsPermitted: readonly string[];
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
@@ -251,6 +255,7 @@ export type GetCapabilitiesAllInput = {
   allowWrites: boolean;
   surface?: "stdio" | "http";
   adapterVersion?: string;
+  toolSurface?: ToolSurface;
   /**
    * v1.20.0 (#762) — front-end `.accdb` path used to look up the
    * per-project `human-compile-state`. When omitted, the snapshot
@@ -329,6 +334,7 @@ export function projectCapabilitiesSnapshot(
         writeExecutionPolicy: snapshot.writeExecutionPolicy,
         resultValidationPolicy: snapshot.resultValidationPolicy,
         toolsVisible: snapshot.toolsVisible,
+        toolInventory: snapshot.toolInventory,
       }
     : { ...snapshot };
 
@@ -367,6 +373,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
   const surface: "stdio" | "http" = input.surface ?? "stdio";
   const adapterVersion = input.adapterVersion ?? readAdapterVersion();
   const toolNames = Object.keys(MCP_TOOL_CONTRACTS);
+  const toolSurface = input.toolSurface ?? "core";
 
   const writeClassToolsPermitted = computeWriteClassToolsPermitted(input.writesEnabled, toolNames);
 
@@ -460,6 +467,11 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     sharedBlockSupport: Object.freeze(sharedBlockSupport),
     migrationNotes: ESCAPE_HATCH_MIGRATION_NOTES,
     toolsVisible: toolNames.length,
+    toolInventory: {
+      callable: toolNames.length,
+      advertised: toolNames.filter((name) => isAdvertisedUnderSurface(name, toolSurface)).length,
+      surface: toolSurface,
+    },
     preferredAgentWorkflows: PREFERRED_AGENT_WORKFLOWS.map((workflow) => ({
       phase: workflow.phase,
       tools: [...workflow.tools],
@@ -558,6 +570,7 @@ export function createGetCapabilitiesTool(opts: {
   allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined;
   projectId: string | undefined;
   allowWrites: boolean;
+  toolSurface?: ToolSurface;
   /**
    * v1.20.0 (#762) — optional front-end `.accdb` path used to surface
    * the per-project `humanCompilePending` flag. When omitted, the
@@ -599,6 +612,7 @@ export function createGetCapabilitiesTool(opts: {
     accessDbPath: opts.accessDbPath,
     writeExecutionPolicy: opts.writeExecutionPolicy,
     resultValidationPolicy: opts.resultValidationPolicy,
+    toolSurface: opts.toolSurface,
     documentationBundleResolver: opts.documentationBundleResolver,
   });
 

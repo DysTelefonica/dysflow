@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { loadDysflowConfigAsync } from "../../../src/adapters/config/dysflow-config-node.js";
+import { formatCoreSurfaceGuidance } from "../../../src/adapters/mcp/bootstrap-tool.js";
 import { resolveToolSurface, startWithSdkServer } from "../../../src/adapters/mcp/stdio.js";
 import {
   createDysflowMcpTools,
@@ -159,11 +160,51 @@ describe("tool-surface (#1492)", () => {
       {},
     );
 
-    expect(corePayload).toMatchObject({ toolSurface: "core", toolsVisible: CORE_TOOL_COUNT });
+    expect(corePayload).toMatchObject({
+      toolSurface: "core",
+      toolsVisible: CORE_TOOL_COUNT,
+      toolInventory: {
+        callable: allTools.length,
+        advertised: CORE_TOOL_COUNT,
+        surface: "core",
+      },
+    });
+    expect(corePayload.toolSurfaceGuidance).toContain(`${CORE_TOOL_COUNT} tools`);
     expect(corePayload.toolSurfaceGuidance).toContain("--tool-surface full");
     expect(corePayload.toolSurfaceGuidance).toContain('mcp.toolSurface: "full"');
-    expect(fullPayload).toMatchObject({ toolSurface: "full", toolsVisible: allTools.length });
+    expect(fullPayload).toMatchObject({
+      toolSurface: "full",
+      toolsVisible: allTools.length,
+      toolInventory: {
+        callable: allTools.length,
+        advertised: allTools.length,
+        surface: "full",
+      },
+    });
     expect(fullPayload).not.toHaveProperty("toolSurfaceGuidance");
+  });
+
+  it("disambiguates callable and advertised counts in capabilities", async () => {
+    const corePayload = await callToolPayload(allTools, "get_capabilities", {});
+    const fullPayload = await callToolPayload(
+      createDysflowMcpTools({ services, toolSurface: "full" }),
+      "get_capabilities",
+      {},
+    );
+
+    expect(corePayload).toMatchObject({
+      toolsVisible: allTools.length,
+      toolInventory: { callable: allTools.length, advertised: CORE_TOOL_COUNT, surface: "core" },
+    });
+    expect(fullPayload).toMatchObject({
+      toolsVisible: allTools.length,
+      toolInventory: { callable: allTools.length, advertised: allTools.length, surface: "full" },
+    });
+  });
+
+  it("derives core-surface guidance from the runtime count instead of a pinned literal", () => {
+    expect(formatCoreSurfaceGuidance(41)).toContain('surface is "core" (41 tools)');
+    expect(formatCoreSurfaceGuidance(41)).not.toContain("39 tools");
   });
 
   it("loads full from project config and lets a CLI override win", async () => {

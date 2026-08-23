@@ -19,6 +19,14 @@ export type BootstrapWorkflowMap = {
   tools: { count: number };
 } & Partial<Record<AgentWorkflowPhase, readonly string[]>>;
 
+export type ToolInventorySnapshot = {
+  /** Every registered contract; callable by name even when not advertised. */
+  callable: number;
+  /** Contracts present in tools/list under the active surface. */
+  advertised: number;
+  surface: ToolSurface;
+};
+
 export type BootstrapSnapshot = {
   adapterVersion: string;
   surface: "stdio" | "http";
@@ -36,6 +44,8 @@ export type BootstrapSnapshot = {
    * callable by name.
    */
   toolsVisible: number;
+  /** Unambiguous replacement for the legacy context-dependent toolsVisible field. */
+  toolInventory: ToolInventorySnapshot;
   toolSurface: ToolSurface;
   /**
    * Issue #1492 — how to widen the surface. Only emitted when the active
@@ -63,6 +73,10 @@ export type BootstrapToolOptions = Pick<
   /** Issue #1492 — active advertised surface (default "core"). */
   toolSurface?: ToolSurface;
 };
+
+export function formatCoreSurfaceGuidance(advertisedCount: number): string {
+  return `Active surface is "core" (${advertisedCount} tools). Pass \`toolSurface: "full"\` to the dysflow mcp CLI (\`--tool-surface full\`) or set \`mcp.toolSurface: "full"\` in \`.dysflow/project.json\` to advertise every tool. Non-advertised tools remain callable by name; discover them with \`schema({ view: "index" })\`.`;
+}
 
 export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool {
   const snapshot = getCapabilitiesAll(opts);
@@ -101,11 +115,15 @@ export function projectBootstrapSnapshot(
     writesProject: snapshot.writesProject,
     writeExecutionPolicy: snapshot.writeExecutionPolicy,
     toolsVisible: advertisedCount,
+    toolInventory: {
+      callable: Object.keys(MCP_TOOL_CONTRACTS).length,
+      advertised: advertisedCount,
+      surface: toolSurface,
+    },
     toolSurface,
     ...(toolSurface === "core"
       ? {
-          toolSurfaceGuidance:
-            'Active surface is "core" (39 tools). Pass `toolSurface: "full"` to the dysflow mcp CLI (`--tool-surface full`) or set `mcp.toolSurface: "full"` in `.dysflow/project.json` to advertise every tool. Non-advertised tools remain callable by name; discover them with `schema({ view: "index" })`.',
+          toolSurfaceGuidance: formatCoreSurfaceGuidance(advertisedCount),
         }
       : {}),
     preferredAgentWorkflows: buildBootstrapWorkflowMap(advertisedCount, phase),

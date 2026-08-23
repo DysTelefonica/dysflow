@@ -354,6 +354,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       accessDbPath,
       writeExecutionPolicy,
       resultValidationPolicy,
+      toolSurface,
       projectConfigResolver: resolveProjectConfig,
       worktreeCacheTelemetry: () => worktreeCache.telemetry(),
       // Issue #940 — forward the documentation bundle resolver so the
