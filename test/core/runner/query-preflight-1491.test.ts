@@ -17,8 +17,10 @@ import { successResult } from "../../../src/core/contracts/index.js";
 import type { AccessRunnerOperation } from "../../../src/core/runner/access-runner-operation.js";
 import {
   type QueryPreflightDeps,
+  resolveCrossDbTableTarget,
   resolveQueryPreflight,
 } from "../../../src/core/runner/query-preflight.js";
+import type { CrossDbTableRunner } from "../../../src/core/runtime/cross-db-table-lookup.js";
 
 const noCompactTarget = () => undefined;
 
@@ -38,6 +40,63 @@ function deps(overrides: Partial<QueryPreflightDeps> = {}): QueryPreflightDeps {
 function queryOperation(request: Record<string, unknown>): AccessRunnerOperation {
   return { kind: "query", request } as AccessRunnerOperation;
 }
+
+function crossDbRunnerWith(
+  hits: Partial<Record<"frontend" | "backend", boolean>>,
+): CrossDbTableRunner {
+  return {
+    runProbe: async <TData>(request: { databasePath?: string }) => {
+      const role = request.databasePath?.includes("back") === true ? "backend" : "frontend";
+      const schema = hits[role] === true ? [{ name: "id" }] : [];
+      return successResult({ schema } as TData);
+    },
+  };
+}
+
+describe("#1491 resolveCrossDbTableTarget", () => {
+  it("resolves the single database that contains the table", async () => {
+    const result = await resolveCrossDbTableTarget(
+      config({ backendPath: "C:/db/back.accdb" }),
+      "TbPeople",
+      crossDbRunnerWith({ backend: true }),
+    );
+
+    expect(result).toEqual({ outcome: "resolved", databasePath: "C:/db/back.accdb" });
+  });
+
+  it("maps an ambiguous lookup to the typed pre-flight failure once", async () => {
+    const result = await resolveCrossDbTableTarget(
+      config({ backendPath: "C:/db/back.accdb" }),
+      "TbPeople",
+      crossDbRunnerWith({ backend: true, frontend: true }),
+    );
+
+    expect(result.outcome).toBe("failure");
+    if (result.outcome !== "failure" || result.failure.ok) return;
+    expect(result.failure.error).toMatchObject({
+      code: "ACCESS_TABLE_AMBIGUOUS",
+      details: {
+        roles: ["backend", "frontend"],
+        candidates: [
+          { role: "backend", path: "C:/db/back.accdb" },
+          { role: "frontend", path: "C:/db/front.accdb" },
+        ],
+      },
+    });
+  });
+
+  it("preserves the not-found message for the caller to contextualize", async () => {
+    const result = await resolveCrossDbTableTarget(
+      config({ backendPath: "C:/db/back.accdb" }),
+      "TbMissing",
+      crossDbRunnerWith({}),
+    );
+
+    expect(result.outcome).toBe("not_found");
+    if (result.outcome !== "not_found") return;
+    expect(result.message).toContain("Table 'TbMissing' not found in either configured database");
+  });
+});
 
 describe("#1491 resolveQueryPreflight", () => {
   it("passes a non-query operation through untouched", async () => {

@@ -35,8 +35,10 @@ export type QueryPreflightDeps = {
   crossDbRunner: CrossDbTableRunner;
 };
 
+type QueryPreflightFailure = { outcome: "failure"; failure: OperationResult<never> };
+
 export type QueryPreflightResolution =
-  | { outcome: "failure"; failure: OperationResult<never> }
+  | QueryPreflightFailure
   | {
       outcome: "resolved";
       operation: AccessRunnerOperation;
@@ -48,8 +50,42 @@ export type QueryPreflightResolution =
  * sites keep their exact argument expressions and stay diff-comparable against
  * the original method.
  */
-function failedPreflight(error: DysflowError): QueryPreflightResolution {
+function failedPreflight(error: DysflowError): QueryPreflightFailure {
   return { outcome: "failure", failure: failureResult(error) };
+}
+
+export type CrossDbTableTargetResolution =
+  | { outcome: "resolved"; databasePath: string }
+  | { outcome: "not_found"; message: string }
+  | QueryPreflightFailure;
+
+/**
+ * Resolve a table to one configured database and translate the shared
+ * ambiguity outcome into the public pre-flight failure contract.
+ *
+ * Callers retain their context-specific not-found messages, but ambiguity has
+ * exactly one translation so its machine-readable details cannot drift.
+ */
+export async function resolveCrossDbTableTarget(
+  config: DysflowConfig,
+  tableName: string,
+  runner: CrossDbTableRunner,
+): Promise<CrossDbTableTargetResolution> {
+  const lookup = await lookupTableAcrossDatabases(config, tableName, runner);
+  if (lookup.ok) {
+    return { outcome: "resolved", databasePath: lookup.databasePath };
+  }
+  if (lookup.error === "ACCESS_TABLE_AMBIGUOUS") {
+    return failedPreflight(
+      createDysflowError(lookup.error, lookup.message, {
+        details: {
+          roles: lookup.details.roles,
+          candidates: lookup.details.candidates,
+        },
+      }),
+    );
+  }
+  return { outcome: "not_found", message: lookup.message };
 }
 
 export async function resolveQueryPreflight(
@@ -132,19 +168,13 @@ export async function resolveQueryPreflight(
           ),
         );
       }
-      const runner = deps.crossDbRunner;
-      const lookup = await lookupTableAcrossDatabases(config, operation.request.tableName, runner);
-      if (!lookup.ok) {
-        if (lookup.error === "ACCESS_TABLE_AMBIGUOUS") {
-          return failedPreflight(
-            createDysflowError(lookup.error, lookup.message, {
-              details: {
-                roles: lookup.details.roles,
-                candidates: lookup.details.candidates,
-              },
-            }),
-          );
-        }
+      const lookup = await resolveCrossDbTableTarget(
+        config,
+        operation.request.tableName,
+        deps.crossDbRunner,
+      );
+      if (lookup.outcome === "failure") return lookup;
+      if (lookup.outcome === "not_found") {
         // ACCESS_TABLE_NOT_FOUND — fall through to the existing
         // CONFIG_MISSING_TARGET_PATH guard below.
         return failedPreflight(
@@ -233,23 +263,13 @@ export async function resolveQueryPreflight(
       finalOperation.request.tableName !== undefined &&
       finalOperation.request.tableName.length > 0
     ) {
-      const runner = deps.crossDbRunner;
-      const lookup = await lookupTableAcrossDatabases(
+      const lookup = await resolveCrossDbTableTarget(
         config,
         finalOperation.request.tableName,
-        runner,
+        deps.crossDbRunner,
       );
-      if (!lookup.ok) {
-        if (lookup.error === "ACCESS_TABLE_AMBIGUOUS") {
-          return failedPreflight(
-            createDysflowError(lookup.error, lookup.message, {
-              details: {
-                roles: lookup.details.roles,
-                candidates: lookup.details.candidates,
-              },
-            }),
-          );
-        }
+      if (lookup.outcome === "failure") return lookup;
+      if (lookup.outcome === "not_found") {
         // ACCESS_TABLE_NOT_FOUND — fall through to the existing
         // CONFIG_MISSING_TARGET_PATH guard below. The default-backend
         // fallback MUST NOT silently switch DBs when the lookup said
