@@ -78,12 +78,15 @@ describe("dysflow command modules", () => {
       // `codegraph-supplement-drift-check.test.ts`.
       checkSupplementDrift: false,
       checkSkillsInstallation: false,
+      // Pin the environment so the install-channel banner resolves to the
+      // stable default instead of whatever runtime this machine has installed.
+      env: {},
     });
 
     expect(frames.at(-1)).toContain("▸ Doctor");
     expect(result).toEqual({
       exitCode: 0,
-      stdout: "✓ access-db-path: configured",
+      stdout: "Dysflow install channel: stable (source: default)\n✓ access-db-path: configured",
       stderr: "",
     });
   });
@@ -387,7 +390,7 @@ describe("dysflow command modules", () => {
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: "✓ access-db-path: configured",
+      stdout: "Dysflow install channel: stable (source: default)\n✓ access-db-path: configured",
       stderr: "",
     });
   });
@@ -487,7 +490,7 @@ describe("dysflow command modules", () => {
       }),
     ).resolves.toEqual({
       exitCode: 0,
-      stdout: "✓ access-db-path: configured",
+      stdout: "Dysflow install channel: stable (source: default)\n✓ access-db-path: configured",
       stderr: "",
     });
 

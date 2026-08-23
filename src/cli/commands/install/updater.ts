@@ -4,7 +4,17 @@ import { parseNamedArgs } from "../arg-parser.js";
 import type { CliResult } from "../types.js";
 import { type AgentName, ALL_AGENTS, getHome } from "./agent-config.js";
 import {
-  createGitHubReleaseUpdateProvider,
+  checkChannelGates,
+  checkChannelPin,
+  INSTALL_CHANNELS,
+  type InstallChannel,
+  type RequestedChannel,
+  type ResolvedChannel,
+  readRequestedChannel,
+  resolveInstallChannel,
+} from "./channel.js";
+import {
+  createReleaseUpdateProviderForChannel,
   type PreparedReleasePackage,
   type ReleaseInfo,
   type ReleaseUpdateProvider,
@@ -15,6 +25,7 @@ import {
   resolveRuntimePaths,
   writeRuntimeMarker,
 } from "./extractor.js";
+import { readInstallState, writeInstallState } from "./install-state.js";
 import { resolvePackageRoot } from "./package-root.js";
 import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
 import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
@@ -26,10 +37,10 @@ import {
   type SkillAgentId,
 } from "./skills-installer.js";
 
-export const INSTALL_USAGE =
-  "Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] [--no-tui] [--verbose]";
-const UPDATE_USAGE =
-  "Usage: dysflow update [--runtime-dir <dir>] [--force] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>]";
+const CHANNEL_USAGE = `[--channel <${INSTALL_CHANNELS.join("|")}>]`;
+
+export const INSTALL_USAGE = `Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] ${CHANNEL_USAGE} [--no-tui] [--verbose]`;
+const UPDATE_USAGE = `Usage: dysflow update [--runtime-dir <dir>] [--force] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] ${CHANNEL_USAGE}`;
 
 export type InstallOptions = {
   runtimeDir?: string;
@@ -38,6 +49,8 @@ export type InstallOptions = {
   verbose: boolean;
   onlySkills: SkillAgentId[];
   excludeSkills: SkillAgentId[];
+  /** `--channel` / `DYSFLOW_CHANNEL`; install state is layered in by the command. */
+  requestedChannel: RequestedChannel;
 };
 
 type UpdateOptions = {
@@ -46,11 +59,13 @@ type UpdateOptions = {
   skipChecksum: boolean;
   onlySkills: SkillAgentId[];
   excludeSkills: SkillAgentId[];
+  /** `--channel` / `DYSFLOW_CHANNEL`; install state is layered in by the command. */
+  requestedChannel: RequestedChannel;
 };
 
 function expandEqualsOptions(args: readonly string[]): string[] {
   return args.flatMap((arg) => {
-    for (const name of ["--only", "--exclude"] as const) {
+    for (const name of ["--only", "--exclude", "--channel"] as const) {
       const prefix = `${name}=`;
       if (arg.startsWith(prefix)) return [name, arg.slice(prefix.length)];
     }
@@ -110,6 +125,7 @@ export function parseAgentList(
 
 export function parseInstallArgs(
   args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
 ): { ok: true; options: InstallOptions } | { ok: false; message: string } {
   if (args.includes("--help") || args.includes("-h")) {
     return { ok: false, message: INSTALL_USAGE };
@@ -124,6 +140,7 @@ export function parseInstallArgs(
       { name: "--verbose", type: "boolean" },
       { name: "--only", type: "string" },
       { name: "--exclude", type: "string" },
+      { name: "--channel", type: "string" },
     ],
     args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported install option: ${arg}`,
@@ -135,6 +152,8 @@ export function parseInstallArgs(
   }
   const skillFilters = parseSkillFilters(parsed.values);
   if (!skillFilters.ok) return skillFilters;
+  const channel = readRequestedChannel(parsed.values["--channel"] as string | undefined, env);
+  if (!channel.ok) return { ok: false, message: channel.message };
 
   const agentAll = parsed.values["--agent-all"] === true;
   const noTui = parsed.values["--no-tui"] === true;
@@ -170,12 +189,14 @@ export function parseInstallArgs(
       verbose: parsed.values["--verbose"] === true,
       onlySkills: skillFilters.onlySkills,
       excludeSkills: skillFilters.excludeSkills,
+      requestedChannel: channel.requested,
     },
   };
 }
 
 export function parseUpdateArgs(
   args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
 ): { ok: true; options: UpdateOptions } | { ok: false; message: string } {
   if (args.includes("--help") || args.includes("-h")) {
     return { ok: false, message: UPDATE_USAGE };
@@ -188,6 +209,7 @@ export function parseUpdateArgs(
       { name: "--skip-checksum", type: "boolean" },
       { name: "--only", type: "string" },
       { name: "--exclude", type: "string" },
+      { name: "--channel", type: "string" },
     ],
     args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported update option: ${arg}`,
@@ -199,6 +221,8 @@ export function parseUpdateArgs(
   }
   const skillFilters = parseSkillFilters(parsed.values);
   if (!skillFilters.ok) return skillFilters;
+  const channel = readRequestedChannel(parsed.values["--channel"] as string | undefined, env);
+  if (!channel.ok) return { ok: false, message: channel.message };
 
   return {
     ok: true,
@@ -208,6 +232,7 @@ export function parseUpdateArgs(
       skipChecksum: parsed.values["--skip-checksum"] === true,
       onlySkills: skillFilters.onlySkills,
       excludeSkills: skillFilters.excludeSkills,
+      requestedChannel: channel.requested,
     },
   };
 }
@@ -234,15 +259,43 @@ function createNoUpdateReport(runtimeDir: string, localVersion: string): string 
   return `Dysflow runtime is up to date and already at the latest version: v${localVersion} (at ${runtimeDir}).`;
 }
 
+/**
+ * A non-stable channel prefixes its report so the operator can never mistake an
+ * unsigned build for a signed release. The stable channel prints exactly what it
+ * printed before #1521.
+ */
+function channelReportPrefix(resolved: ResolvedChannel): string {
+  return resolved.channel === "stable"
+    ? ""
+    : `Dysflow install channel: ${resolved.channel} (source: ${resolved.source})\n`;
+}
+
+/** Records what is on disk now, so `update` can pin and `doctor` can report. */
+async function persistInstallState(input: {
+  runtimeDir: string;
+  channel: InstallChannel;
+  version: string;
+  commitSha?: string;
+}): Promise<void> {
+  await writeInstallState(input.runtimeDir, {
+    channel: input.channel,
+    version: input.version,
+    ...(input.commitSha === undefined ? {} : { commitSha: input.commitSha }),
+    installedAt: new Date().toISOString(),
+  });
+}
+
 export async function handleUpdateCommand(
   args: readonly string[],
   context: {
     env?: NodeJS.ProcessEnv;
     releaseUpdateProvider?: ReleaseUpdateProvider;
+    createReleaseUpdateProvider?: (channel: InstallChannel) => ReleaseUpdateProvider;
     packageRoot?: string;
   } = {},
 ): Promise<CliResult> {
-  const parsed = parseUpdateArgs(args);
+  const env = context.env ?? process.env;
+  const parsed = parseUpdateArgs(args, env);
   if (!parsed.ok) {
     const isUsage = parsed.message === UPDATE_USAGE;
     return {
@@ -252,7 +305,24 @@ export async function handleUpdateCommand(
     };
   }
 
-  const env = context.env ?? process.env;
+  const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
+  const installState = await readInstallState(runtimeDir);
+  const resolvedChannel = resolveInstallChannel(
+    parsed.options.requestedChannel,
+    installState?.channel,
+  );
+
+  // Channel gates run before the legacy --skip-checksum guard: combining that
+  // stable-only flag with an already-unsigned channel is a contradiction, and
+  // the operator deserves the specific code rather than the generic one.
+  const channelGate = checkChannelGates({
+    channel: resolvedChannel.channel,
+    skipChecksum: parsed.options.skipChecksum,
+    env,
+  });
+  if (!channelGate.ok) {
+    return { exitCode: 1, stdout: "", stderr: channelGate.message };
+  }
 
   // Guard: --skip-checksum requires explicit opt-in
   if (parsed.options.skipChecksum) {
@@ -276,12 +346,25 @@ export async function handleUpdateCommand(
     );
   }
 
-  const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
+  // A runtime stays on the channel it was installed from unless the operator
+  // says otherwise. Re-running update on the pinned channel is always allowed.
+  const channelPin = checkChannelPin({
+    requestedChannel: resolvedChannel.channel,
+    persistedChannel: installState?.channel,
+    force: parsed.options.force,
+  });
+  if (!channelPin.ok) {
+    return { exitCode: 1, stdout: "", stderr: channelPin.message };
+  }
+
   const localPackageRoot = context.packageRoot ?? resolvePackageRoot();
   const runtimePaths = resolveRuntimePaths(runtimeDir, localPackageRoot);
 
   const installedVersion = await readPackageJsonVersion(runtimePaths.packageJsonDest);
-  const provider = context.releaseUpdateProvider ?? createGitHubReleaseUpdateProvider();
+  const provider =
+    context.releaseUpdateProvider ??
+    context.createReleaseUpdateProvider?.(resolvedChannel.channel) ??
+    createReleaseUpdateProviderForChannel(resolvedChannel.channel);
 
   let latestRelease: ReleaseInfo;
   try {
@@ -295,7 +378,15 @@ export async function handleUpdateCommand(
     };
   }
 
+  // A rolling channel has no comparable version — `main` always overlays HEAD.
+  // A channel switch always overlays too, because the installed version number
+  // says nothing about which channel produced those bytes.
+  const isRollingChannel = provider.isRolling === true;
+  const isChannelSwitch =
+    installState !== undefined && installState.channel !== resolvedChannel.channel;
   const isUpdateNeeded =
+    isRollingChannel ||
+    isChannelSwitch ||
     parsed.options.force ||
     installedVersion === undefined ||
     compareVersions(latestRelease.version, installedVersion) > 0;
@@ -312,9 +403,17 @@ export async function handleUpdateCommand(
           exclude: parsed.options.excludeSkills,
         }),
       });
+      // Refresh the pin even when nothing was downloaded, so a runtime installed
+      // before install state existed still records the channel it is tracking.
+      await persistInstallState({
+        runtimeDir,
+        channel: resolvedChannel.channel,
+        version: installedVersion ?? latestRelease.version,
+        ...(installState?.commitSha === undefined ? {} : { commitSha: installState.commitSha }),
+      });
       return {
         exitCode: 0,
-        stdout: `${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}`,
+        stdout: `${channelReportPrefix(resolvedChannel)}${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}`,
         stderr: "",
       };
     } catch (error) {
@@ -351,10 +450,24 @@ export async function handleUpdateCommand(
     const previousVersionStr =
       installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
     const latestVersionStr = `v${latestRelease.version}`;
+    // A rolling channel installs whatever HEAD builds to; the authoritative
+    // version is what actually landed on disk, not the moniker we asked for.
+    const landedVersion =
+      (await readPackageJsonVersion(releaseRuntimePaths.packageJsonDest)) ?? latestRelease.version;
+    await persistInstallState({
+      runtimeDir,
+      channel: resolvedChannel.channel,
+      version: landedVersion,
+      ...(preparedPackage.commitSha === undefined ? {} : { commitSha: preparedPackage.commitSha }),
+    });
+    const upgradeLine = isRollingChannel
+      ? `Dysflow runtime update: installed ${resolvedChannel.channel} channel build v${landedVersion} (unverified development build)\n`
+      : `Dysflow runtime update: upgrading from ${previousVersionStr} to ${latestVersionStr} (${previousVersion} -> ${latestRelease.version})\n`;
     return {
       exitCode: 0,
       stdout:
-        `Dysflow runtime update: upgrading from ${previousVersionStr} to ${latestVersionStr} (${previousVersion} -> ${latestRelease.version})\n` +
+        channelReportPrefix(resolvedChannel) +
+        upgradeLine +
         (preparedPackage.commitSha === undefined
           ? ""
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
