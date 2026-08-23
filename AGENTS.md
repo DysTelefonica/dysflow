@@ -340,6 +340,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 | An HTTP route or its status mapping | [HTTP API](./docs/api/http-api.md) | `test/docs/http-api-doc.test.ts` |
 | A core/adapter boundary or dependency rule | [Core and adapters](./docs/architecture/dysflow-core-and-adapters.md) | `test/docs/architecture-doc.test.ts` |
 | A write gate, cleanup path, or the update mechanism | [Update trust model](./docs/security/update-trust-model.md) | `test/docs/security-doc-anchors.test.ts` |
+| An install channel, its gate, or its verification | [Installation channels](./docs/installation-channels.md) | `test/docs/readme-release-doc.test.ts` |
 | A write-tool pre-flight schema | Skill examples under `skills/dysflow-usage/` | `test/docs/write-tool-preflight.test.ts` |
 | Install, project config, or an environment variable | [Setup](./docs/SETUP.md) | not anchored — review by hand |
 | A capability that stops existing | [Absent by design](./docs/architecture/absent-by-design.md) | not anchored — review by hand |
@@ -350,11 +351,12 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Five anchors do the second kind today:
+Six anchors do the second kind today:
 
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
+- `readme-release-doc.test.ts` reads the installer source for the insecure-update gate variable and requires the README and the trust model to name the one the installer actually enforces, so renaming it in code fails until both documents follow.
 - `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
 - `write-tool-preflight.test.ts` reads the MCP schema source.
 

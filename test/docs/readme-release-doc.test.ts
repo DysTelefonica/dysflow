@@ -131,7 +131,7 @@ describe("README release and update guidance", () => {
  * corrected, instead of leaving docs that name a variable nothing reads.
  */
 async function installerGateNames(): Promise<string[]> {
-  const directory = join("src", "cli", "commands", "install");
+  const directory = "src/cli/commands/install";
   const names = new Set<string>();
 
   for (const entry of await readdir(directory)) {
