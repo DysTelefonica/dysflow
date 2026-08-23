@@ -36,12 +36,6 @@ const UNCOVERED_BY_DESIGN: Readonly<Record<string, string>> = Object.freeze({
   // #1504 — the form phase is a third of the advertised surface and has the
   // thinnest coverage. These mutate `.form.txt`, so they need a real Access
   // round trip rather than an IR-level unit test.
-  form_add_control: "form mutation scenario pending #1504",
-  form_move_control: "form mutation scenario pending #1504",
-  form_rename_control: "form mutation scenario pending #1504",
-  form_delete_control: "form mutation scenario pending #1504",
-  form_duplicate_control: "form mutation scenario pending #1504",
-  form_set_properties: "form mutation scenario pending #1504",
   form_align_controls: "form mutation scenario pending #1504",
   form_distribute_controls: "form mutation scenario pending #1504",
   form_serialize: "form round-trip scenario pending #1504",

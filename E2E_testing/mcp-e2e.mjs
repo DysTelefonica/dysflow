@@ -212,6 +212,59 @@ const uiFormFixture = (await readFile(uiFormBaselinePath, "utf8"))
   .replace('Name ="Etiqueta232"', 'Name ="txtRename"')
   .replace('Name ="Etiqueta240"', 'Name ="txtSet"')
   .replace('Name ="lblTitulo"', 'Name ="txtDelete"');
+
+function countExactFormEntry(source, key, value) {
+  return source
+    .split(/\r?\n/)
+    .filter((line) => line.trim() === `${key} =${value}`).length;
+}
+
+function opaqueFormEntry(source, key) {
+  const lines = source.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `${key} = Begin`);
+  if (start < 0) return undefined;
+  const indent = lines[start].match(/^\s*/)?.[0] ?? "";
+  const end = lines.findIndex((line, index) => index > start && line === `${indent}End`);
+  return end < 0 ? undefined : lines.slice(start, end + 1).join("\n");
+}
+
+function controlSource(source, controlName) {
+  const lines = source.split(/\r?\n/);
+  const nameLine = lines.findIndex((line) => line.trim() === `Name ="${controlName}"`);
+  if (nameLine < 0) return undefined;
+
+  let start = nameLine;
+  while (start >= 0 && !/^\s*Begin\s+\S+/.test(lines[start])) start -= 1;
+  if (start < 0) return undefined;
+
+  const indent = lines[start].match(/^\s*/)?.[0] ?? "";
+  const end = lines.findIndex((line, index) => index > nameLine && line === `${indent}End`);
+  return end < 0 ? undefined : lines.slice(start, end + 1).join("\n");
+}
+
+const unrelatedFormEntryBaseline = Object.freeze({
+  duplicateNoSaveCount: countExactFormEntry(uiFormFixture, "NoSaveCTIWhenDisabled", "1"),
+  guidBlob: opaqueFormEntry(uiFormFixture, "GUID"),
+  prtMipBlob: opaqueFormEntry(uiFormFixture, "PrtMip"),
+});
+
+function unrelatedFormEntriesSurvived(source) {
+  const duplicateNoSaveCount = countExactFormEntry(source, "NoSaveCTIWhenDisabled", "1");
+  const pass = Boolean(
+    unrelatedFormEntryBaseline.duplicateNoSaveCount >= 2 &&
+      duplicateNoSaveCount === unrelatedFormEntryBaseline.duplicateNoSaveCount &&
+      unrelatedFormEntryBaseline.guidBlob !== undefined &&
+      opaqueFormEntry(source, "GUID") === unrelatedFormEntryBaseline.guidBlob &&
+      unrelatedFormEntryBaseline.prtMipBlob !== undefined &&
+      opaqueFormEntry(source, "PrtMip") === unrelatedFormEntryBaseline.prtMipBlob,
+  );
+  return {
+    pass,
+    summary: pass
+      ? `duplicate NoSaveCTIWhenDisabled=${duplicateNoSaveCount}; GUID and PrtMip blobs preserved`
+      : "unrelated duplicate keys or opaque blobs changed",
+  };
+}
 if (!resumeRoot) {
   await writeFile(sqlScript, `INSERT INTO [${probeTable}] ([ID], [Name]) VALUES (${TEST_ID_BASE + 2}, 'script')\n`, "utf8");
   await writeFile(formSpec, JSON.stringify({ name: "Form_DysflowMcpE2E", kind: "Form", controls: [] }), "utf8");
@@ -236,6 +289,12 @@ const mutatingAssertionSteps = new Set([
   "vba-sync/export_all:prune-report",
   "vba-sync/verify_code:bulkImportable:import_modules",
   "form-ui/apply_form_design_plan:contract",
+  "forms/form_add_control:round-trip",
+  "forms/form_move_control:round-trip",
+  "forms/form_rename_control:round-trip",
+  "forms/form_delete_control:round-trip",
+  "forms/form_set_properties:round-trip",
+  "forms/form_duplicate_control:round-trip",
 ]);
 const resultRows = createResultRows();
 const { rows, appendUnchecked } = resultRows;
@@ -2352,6 +2411,150 @@ addResult({
   summary: verifyPass ? "drift detection found event regression" : "unexpected verify_form_ui payload",
 });
 console.log(`${verifyPass ? "PASS" : "FAIL"}\tverify_form_ui:drift-detection\t0ms\t${rows.at(-1).summary}`);
+
+await record("forms", "form_add_control", {
+  projectId,
+  sourcePath: uiFormPath,
+  targetSectionName: "Detail",
+  controlName: "txtMutationAdded",
+  controlType: "TextBox",
+  properties: { Left: 321, Top: 432, Width: 1440, Height: 300 },
+  apply: true,
+});
+const addedFormSource = await readFile(uiFormPath, "utf8");
+const addedControlSource = controlSource(addedFormSource, "txtMutationAdded") ?? "";
+const addPreservation = unrelatedFormEntriesSurvived(addedFormSource);
+const addControlPass = Boolean(
+  addedControlSource.includes("Begin TextBox") &&
+    addedControlSource.includes("Left =321") &&
+    addedControlSource.includes("Top =432") &&
+    addPreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_add_control:round-trip",
+  pass: addControlPass,
+  expected: "txtMutationAdded TextBox persisted with geometry and unrelated entries preserved",
+  ms: 0,
+  summary: addControlPass ? addPreservation.summary : "added control or preservation proof missing",
+});
+
+await record("forms", "form_move_control", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlName: "txtProbe",
+  left: 123,
+  top: 456,
+  apply: true,
+});
+const movedFormSource = await readFile(uiFormPath, "utf8");
+const movedControlSource = controlSource(movedFormSource, "txtProbe") ?? "";
+const movePreservation = unrelatedFormEntriesSurvived(movedFormSource);
+const moveControlPass = Boolean(
+  movedControlSource.includes("Left =123") &&
+    movedControlSource.includes("Top =456") &&
+    movePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_move_control:round-trip",
+  pass: moveControlPass,
+  expected: "txtProbe persisted at left=123 top=456 with unrelated entries preserved",
+  ms: 0,
+  summary: moveControlPass ? movePreservation.summary : "moved geometry or preservation proof missing",
+});
+
+await record("forms", "form_rename_control", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlName: "txtRename",
+  newName: "txtMutationRenamed",
+  apply: true,
+});
+const renamedFormSource = await readFile(uiFormPath, "utf8");
+const renamePreservation = unrelatedFormEntriesSurvived(renamedFormSource);
+const renameControlPass = Boolean(
+  controlSource(renamedFormSource, "txtMutationRenamed") !== undefined &&
+    controlSource(renamedFormSource, "txtRename") === undefined &&
+    renamePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_rename_control:round-trip",
+  pass: renameControlPass,
+  expected: "txtRename persisted as txtMutationRenamed with unrelated entries preserved",
+  ms: 0,
+  summary: renameControlPass ? renamePreservation.summary : "renamed control or preservation proof missing",
+});
+
+await record("forms", "form_delete_control", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlName: "txtDelete",
+  apply: true,
+});
+const deletedFormSource = await readFile(uiFormPath, "utf8");
+const deletePreservation = unrelatedFormEntriesSurvived(deletedFormSource);
+const deleteControlPass = Boolean(
+  controlSource(deletedFormSource, "txtDelete") === undefined && deletePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_delete_control:round-trip",
+  pass: deleteControlPass,
+  expected: "txtDelete absent after write with unrelated entries preserved",
+  ms: 0,
+  summary: deleteControlPass ? deletePreservation.summary : "deleted control or preservation proof missing",
+});
+
+await record("forms", "form_set_properties", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlName: "txtSet",
+  properties: { Caption: "Mutation Set" },
+  apply: true,
+});
+const propertiesFormSource = await readFile(uiFormPath, "utf8");
+const propertiesControlSource = controlSource(propertiesFormSource, "txtSet") ?? "";
+const propertiesPreservation = unrelatedFormEntriesSurvived(propertiesFormSource);
+const setPropertiesPass = Boolean(
+  propertiesControlSource.includes('Caption ="Mutation Set"') && propertiesPreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_set_properties:round-trip",
+  pass: setPropertiesPass,
+  expected: "txtSet Caption persisted as Mutation Set with unrelated entries preserved",
+  ms: 0,
+  summary: setPropertiesPass
+    ? propertiesPreservation.summary
+    : "updated property or preservation proof missing",
+});
+
+await record("forms", "form_duplicate_control", {
+  projectId,
+  sourcePath: uiFormPath,
+  sourceControlName: "txtProbe",
+  newName: "txtProbeMutationCopy",
+  apply: true,
+});
+const duplicatedFormSource = await readFile(uiFormPath, "utf8");
+const duplicatePreservation = unrelatedFormEntriesSurvived(duplicatedFormSource);
+const duplicateControlPass = Boolean(
+  controlSource(duplicatedFormSource, "txtProbe") !== undefined &&
+    controlSource(duplicatedFormSource, "txtProbeMutationCopy") !== undefined &&
+    duplicatePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_duplicate_control:round-trip",
+  pass: duplicateControlPass,
+  expected: "source and duplicated controls persisted with unrelated entries preserved",
+  ms: 0,
+  summary: duplicateControlPass
+    ? duplicatePreservation.summary
+    : "duplicated control or preservation proof missing",
+});
 
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
