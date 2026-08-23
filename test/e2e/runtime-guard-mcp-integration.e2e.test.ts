@@ -42,8 +42,8 @@ import {
 } from "../../src/adapters/vba-sync/vba-modules-adapter.js";
 import type { OperationResult } from "../../src/core/contracts/index.js";
 import { successResult } from "../../src/core/contracts/index.js";
-import type { AccessOperationPreflightCleanupResult } from "../../src/core/operations/access-operation-preflight.js";
 import { VbaFormService } from "../../src/core/services/vba-form-service.js";
+import { runNoopPreflightCleanup } from "../_helpers/noop-preflight-cleanup.js";
 
 type Harness = {
   client: Client;
@@ -87,14 +87,7 @@ async function createHarness(): Promise<Harness> {
       }),
   );
   const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
-  const runPreflightCleanup = vi.fn(
-    async (_target: VbaModulesExecutionTarget): Promise<AccessOperationPreflightCleanupResult> => ({
-      cleaned: [],
-      killed: [],
-      orphanedKilled: [],
-      errors: [],
-    }),
-  );
+  const runPreflightCleanup = vi.fn(runNoopPreflightCleanup);
   // exportAllWithPrune calls executeMappedTool("export_all", ...) first to
   // gather the list of exported modules. Stub a benign empty-list result so
   // the adapter proceeds past that step into its OWN runtime guard.

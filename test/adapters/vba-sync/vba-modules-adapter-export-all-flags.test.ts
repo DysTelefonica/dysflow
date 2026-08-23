@@ -31,7 +31,7 @@ import { describe, expect, it } from "vitest";
 import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import type { OperationResult } from "../../../src/core/contracts/index.js";
-import type { AccessOperationPreflightCleanupResult } from "../../../src/core/operations/access-operation-preflight.js";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 function buildAdapterWithSpy(): {
   adapter: VbaModulesAdapter;
@@ -75,13 +75,7 @@ function buildAdapterWithSpy(): {
       diagnostics: [],
       durationMs: 0,
     }),
-    runPreflightCleanup: async () =>
-      ({
-        cleaned: [],
-        killed: [],
-        orphanedKilled: [],
-        errors: [],
-      }) satisfies AccessOperationPreflightCleanupResult,
+    runPreflightCleanup: runNoopPreflightCleanup,
     executeMappedTool: async (toolName, params) => {
       executeCalls.push({ toolName, params: { ...params } });
       return {

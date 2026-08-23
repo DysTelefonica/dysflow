@@ -33,6 +33,7 @@ import type { VbaModulesExecutionTarget } from "../../../src/adapters/vba-sync/v
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
 import type { OperationResult } from "../../../src/core/contracts/index.js";
 import { successResult } from "../../../src/core/contracts/index.js";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const RUNTIME_HOME = "C:/runtime/dysflow";
 const RUNTIME_APP = "C:/runtime/dysflow/app/scripts";
@@ -67,7 +68,7 @@ function makeHarness(): Harness {
   );
   const executeMappedTool = vi.fn(async () => successResult({ ok: true }));
   const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
-  const runPreflightCleanup = vi.fn();
+  const runPreflightCleanup = vi.fn(runNoopPreflightCleanup);
 
   const adapter = new VbaModulesAdapter({
     scriptPath: "scripts/dysflow-vba-manager.ps1",

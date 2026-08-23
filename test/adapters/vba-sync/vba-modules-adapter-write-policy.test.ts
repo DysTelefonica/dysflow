@@ -28,6 +28,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { AccessOperationPreflightCleanupResult } from "../../../src/core/operations/access-operation-preflight.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 // ─── Adapter-direct truth table — dryRun / apply dispatcher behavior ────────
 
@@ -37,6 +38,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("import_modules with dryRun:false forwarded → runner invoked (not planImport)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -70,6 +72,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("import_modules with dryRun:true → planImport (no runner)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -103,6 +106,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("import_all with dryRun:false forwarded → runner invoked", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -130,6 +134,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     // now reach the runner, which is the documented post-refactor behavior.
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -158,6 +163,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("delete_module with dryRun:false → runner invoked (Delete action)", async () => {
     const calls: Array<{ action: string }> = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push({ action: request.action });
         return {
@@ -187,6 +193,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("delete_module with dryRun:true → planDelete (no runner)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -223,6 +230,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     // `apply` verbatim, so the adapter still sees the explicit intent.
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -249,6 +257,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("delete_module with apply:false → planDelete (no runner)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -282,6 +291,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("export_modules with apply:false returns a plan without invoking the runner", async () => {
     const calls: Array<{ readOnly?: boolean }> = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push({
           readOnly: (request.extra as Record<string, unknown> | undefined)?.readOnly === true,
@@ -324,6 +334,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     // re-introduce `apply` precedence must update this test deliberately.
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -354,6 +365,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("apply:true && dryRun:false → runner invoked (commit wins)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -387,6 +399,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
   it("verify_code is unaffected by the dryRun/apply policy (still runs as read-only)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor: async (request) => {
         calls.push(request);
         return {
@@ -557,6 +570,7 @@ describe("VbaModulesAdapter — no implicit absence-default (#785, capa 2)", () 
       };
     };
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/db/front.accdb",
       destinationRoot: "C:/repo/src",
@@ -587,6 +601,7 @@ describe("VbaModulesAdapter — no implicit absence-default (#785, capa 2)", () 
       };
     };
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/db/front.accdb",
       destinationRoot: "C:/repo/src",

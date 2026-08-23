@@ -18,6 +18,7 @@ import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const VALID_FORM_TXT = [
   "Version =21",
@@ -66,6 +67,7 @@ const MALFORMED_FORM_TXT = [
 
 function buildAdapter(executor: VbaManagerExecutor, destinationRoot: string) {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor,
     scriptPath: "scripts/dysflow-vba-manager.ps1",
     accessPath: "C:/db/front.accdb",

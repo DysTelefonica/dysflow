@@ -15,6 +15,7 @@ import {
 } from "../../../src/core/contracts/index";
 import { FileAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
 import { detectWriteSqlKeyword, looksLikeReadOnlySql } from "../../../src/core/utils/index";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const startedServers: Server[] = [];
 type HttpServerOptions = NonNullable<Parameters<typeof startDysflowHttpServer>[0]>;
@@ -919,6 +920,7 @@ describe("Dysflow HTTP adapter", () => {
     it("rejects test_vba before PowerShell side effects with the real VbaSyncAdapter default-deny gate", async () => {
       let executorCalled = false;
       const vbaSyncToolService = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => {
           executorCalled = true;
           return {
@@ -1062,6 +1064,7 @@ describe("Dysflow HTTP adapter", () => {
       ["[]", "VBA_NO_TESTS_SELECTED"],
     ])("maps invalid proceduresJson %s to HTTP 400", async (proceduresJson, expectedCode) => {
       const vbaSyncToolService = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         executor: async () => {
           throw new Error("executor must not run for invalid test plans");
         },

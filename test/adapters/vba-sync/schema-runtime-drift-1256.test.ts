@@ -12,6 +12,7 @@ import {
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
 import { successResult } from "../../../src/core/contracts/index.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -48,7 +49,12 @@ describe("VBA schema/runtime drift regressions (#1256)", () => {
       join(root, "src", "modules", "Drift.bas"),
       Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("Option Explicit\r\n")]),
     );
-    const adapter = new VbaSyncAdapter({ cwd: root, env: {}, executor: runner });
+    const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor: runner,
+    });
 
     const result = await adapter.execute("fix_encoding", { location: "Src", apply: false });
 
@@ -65,7 +71,12 @@ describe("VBA schema/runtime drift regressions (#1256)", () => {
 
   it("delete_module plan rejects an explicit missing backendPath", async () => {
     const root = await fixture();
-    const adapter = new VbaSyncAdapter({ cwd: root, env: {}, executor: runner });
+    const adapter = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor: runner,
+    });
     const missing = join(root, "missing-backend.accdb");
 
     const result = await adapter.execute("delete_module", {

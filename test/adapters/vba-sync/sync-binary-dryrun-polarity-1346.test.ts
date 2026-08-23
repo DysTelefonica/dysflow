@@ -17,6 +17,7 @@ import {
   type VbaVerifyResult,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
 import { compareSourceAgainstBinary } from "../../../src/core/services/vba-source-comparison.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const mockedCompare = vi.mocked(compareSourceAgainstBinary);
 
@@ -74,6 +75,7 @@ function buildAdapter() {
   return {
     executor,
     adapter: new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       executor,
       accessPath: "C:/db/front.accdb",
       destinationRoot: "C:/repo/src",

@@ -27,6 +27,7 @@ import { nodeFormFileSystem } from "../../../src/adapters/services/node-form-fil
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { successResult } from "../../../src/core/contracts/index.js";
 import { VbaFormService } from "../../../src/core/services/vba-form-service";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 describe("Issue #574 — runtime guard for VbaModulesAdapter.execute exportPath (#185)", () => {
   const runtimeEnv = {
@@ -314,7 +315,7 @@ describe("Issue #574 — runtime guard for VbaModulesAdapter.exportAllWithPrune"
       }),
     );
     const validateStrictContext = vi.fn(() => successResult<undefined>(undefined));
-    const runPreflightCleanup = vi.fn().mockResolvedValue({ performed: false });
+    const runPreflightCleanup = vi.fn(runNoopPreflightCleanup);
     const adapter = new VbaModulesAdapter({
       scriptPath: "scripts/dysflow-vba-manager.ps1",
       cwd: "C:/projects/anywhere",

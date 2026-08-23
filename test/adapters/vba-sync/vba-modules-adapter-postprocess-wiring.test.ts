@@ -7,6 +7,7 @@ import type {
   ControlPropertyReader,
 } from "../../../src/adapters/vba-sync/control-property-reader";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const FORM_WITH_MISSING_BOUND_COLUMN = `Version =21
 Begin Form
@@ -79,13 +80,7 @@ function buildAdapter(args: AdapterArgs): VbaModulesAdapter {
         diagnostics: [],
         durationMs: 0,
       }),
-      runPreflightCleanup: async () => ({
-        cleaned: [],
-        killed: [],
-        orphanedKilled: [],
-        errors: [],
-        diagnostics: [],
-      }),
+      runPreflightCleanup: runNoopPreflightCleanup,
       executeMappedTool: async () => {
         // Simulate Access SaveAsText producing a .form.txt on disk.
         const formsFolder = join(sourceRoot, "forms");

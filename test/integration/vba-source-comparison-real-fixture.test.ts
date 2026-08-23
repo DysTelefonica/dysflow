@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VbaOperationsAdapter } from "../../src/adapters/vba-sync/vba-operations-adapter";
 import { VbaSyncAdapter, type VbaVerifyResult } from "../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../_helpers/noop-preflight-cleanup.js";
 
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const FIXTURE_FRONT = join(REPO_ROOT, "E2E_testing", "NoConformidades.accdb");
@@ -39,6 +40,7 @@ describe.skipIf(skipReason !== undefined)(
 
       // Instantiate VbaSyncAdapter pointing to our copied database and temp source folder
       const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
         accessPath: dbPath,
         destinationRoot,
         cwd: REPO_ROOT,

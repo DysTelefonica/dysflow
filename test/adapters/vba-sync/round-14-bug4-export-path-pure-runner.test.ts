@@ -31,6 +31,7 @@ import {
   type VbaManagerExecutionRequest,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 describe("Round-14 bug 4 — exportPath routes through the pure runner (#1228)", () => {
   async function executeProductionExport(params: Record<string, unknown>) {
@@ -39,6 +40,7 @@ describe("Round-14 bug 4 — exportPath routes through the pure runner (#1228)",
     await writeFile(accessPath, "fixture", "utf8");
     const calls: VbaManagerExecutionRequest[] = [];
     const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath,
       destinationRoot: join(root, "configured-src"),

@@ -3,6 +3,7 @@ import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 /**
  * issue #861 — `import_modules` must return a SINGLE, consistent envelope.
@@ -21,6 +22,7 @@ import {
  */
 function buildAdapter(executor: VbaManagerExecutor) {
   return new VbaSyncAdapter({
+    preflightCleanup: noopPreflightCleanup(),
     executor,
     scriptPath: "scripts/dysflow-vba-manager.ps1",
     accessPath: "C:/db/front.accdb",

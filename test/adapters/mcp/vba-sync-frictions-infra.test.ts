@@ -14,6 +14,7 @@ import {
 } from "../../../src/core/contracts/index.js";
 import { sanitizeMcpErrorMessage } from "../../../src/core/utils/sanitize-error.js";
 import { validateInput } from "../../../src/shared/validation/validator.js";
+import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 /* biome-ignore-start lint/suspicious/noExplicitAny: test mocks and type casts */
 
@@ -319,6 +320,7 @@ describe("HRESULT translation advice", () => {
 describe("vba_orphan_audit tool behavior", () => {
   it("audits modules, maps source paths, and flags suspicious placeholders", async () => {
     const fakeOrchestrator: any = {
+      runPreflightCleanup: runNoopPreflightCleanup,
       resolveExecutionTarget: async () => ({
         ok: true,
         data: { destinationRoot: "C:\\fake\\src", accessPath: "C:\\fake\\db.accdb" },
@@ -389,6 +391,7 @@ describe("vba_orphan_audit tool behavior", () => {
 
   it("matches VBE names to disk files case-insensitively (VBA identifiers are case-insensitive)", async () => {
     const fakeOrchestrator: any = {
+      runPreflightCleanup: runNoopPreflightCleanup,
       resolveExecutionTarget: async () => ({
         ok: true,
         data: { destinationRoot: "C:\\fake\\src", accessPath: "C:\\fake\\db.accdb" },
