@@ -4,6 +4,7 @@ import {
   type AgentWorkflowPhase,
   isAdvertisedUnderSurface,
   PREFERRED_AGENT_WORKFLOWS,
+  type ToolInventorySnapshot,
   type ToolSurface,
 } from "./agent-workflow-registry.js";
 import { BOOTSTRAP_INPUT_SCHEMA } from "./bootstrap-schema.js";
@@ -18,14 +19,6 @@ import { validateInput } from "./validator.js";
 export type BootstrapWorkflowMap = {
   tools: { count: number };
 } & Partial<Record<AgentWorkflowPhase, readonly string[]>>;
-
-export type ToolInventorySnapshot = {
-  /** Every registered contract; callable by name even when not advertised. */
-  callable: number;
-  /** Contracts present in tools/list under the active surface. */
-  advertised: number;
-  surface: ToolSurface;
-};
 
 export type BootstrapSnapshot = {
   adapterVersion: string;

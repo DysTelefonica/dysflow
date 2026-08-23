@@ -20,9 +20,9 @@ import {
   PREFERRED_AGENT_WORKFLOWS,
   type PreferredAgentWorkflow,
   type ToolAdvertisementMetadata,
+  type ToolInventorySnapshot,
   type ToolSurface,
 } from "./agent-workflow-registry.js";
-import type { ToolInventorySnapshot } from "./bootstrap-tool.js";
 import {
   CAPABILITIES_INPUT_SCHEMA,
   CAPABILITY_BLOCK_NAMES,

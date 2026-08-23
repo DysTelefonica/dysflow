@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -85,11 +85,14 @@ describe("release-owned Dysflow skill integrity (#1520)", () => {
     for (const name of skillNames) {
       const root = path.join(repoRoot, "skills", name);
       const skill = await readFile(path.join(root, "SKILL.md"), "utf8");
-      const references = [...skill.matchAll(/(?:`|\()((?:assets|references)\/[A-Za-z0-9_./-]+)(?:`|\))/g)].map(
-        (match) => match[1] as string,
-      );
+      const references = [
+        ...skill.matchAll(/(?:`|\()((?:assets|references)\/[A-Za-z0-9_./-]+)(?:`|\))/g),
+      ].map((match) => match[1] as string);
       for (const relativePath of references.filter((value) => !value.includes("<"))) {
-        expect((await stat(path.join(root, relativePath))).isFile() || relativePath.endsWith("/"), `${name}/${relativePath}`).toBe(true);
+        expect(
+          (await stat(path.join(root, relativePath))).isFile() || relativePath.endsWith("/"),
+          `${name}/${relativePath}`,
+        ).toBe(true);
       }
     }
   });
