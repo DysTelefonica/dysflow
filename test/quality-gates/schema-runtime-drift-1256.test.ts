@@ -25,6 +25,12 @@ describe("issue #1256 release E2E records", () => {
     expect(source).toContain(literal);
   });
 
+  it("keeps the release telemetry schema probe on an explicit bounded view", () => {
+    expect(source).toMatch(
+      /await record\(\s*"release-telemetry",\s*"schema",\s*\{\s*projectId,\s*view:\s*"index",?\s*\}\s*\);/,
+    );
+  });
+
   it("pins every SQL tool named by the issue", () => {
     expect(source).toContain(
       'const sqlTools = ["query_execute", "create_table", "drop_table", "list_access_files",',
