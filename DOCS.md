@@ -9,6 +9,7 @@ Dysflow documentation is organized by the task you need to complete. Start here,
 | If you need to... | Start here | Audience |
 |---|---|---|
 | Install Dysflow or configure a project | [Install and verify Dysflow](./docs/SETUP.md) | Operators, contributors |
+| Choose an install channel, or roll one back | [Installation channels](./docs/installation-channels.md) | Operators, maintainers |
 | Call the local HTTP API | [HTTP API reference](./docs/api/http-api.md) | Integration authors |
 | Integrate through MCP | [MCP protocol](./docs/mcp-protocol.md) and [real-world examples](./docs/mcp-examples.md) | Agent and plugin authors |
 | Look up an MCP tool's parameters or result contract | [MCP tool reference](./docs/api/mcp-tools.md) | Agent and plugin authors |
