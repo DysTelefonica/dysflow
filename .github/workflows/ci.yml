@@ -156,7 +156,20 @@ jobs:
         shell: pwsh
         run: |
           $report = Join-Path $env:RUNNER_TEMP "windows-access-smoke-vitest.json"
-          pnpm vitest run --config vitest.integration.config.ts --reporter=default --reporter=json --outputFile=$report test/e2e/access-fixture.e2e.test.ts test/e2e/access-relink-directory.test.ts test/e2e/access-relink-directory-apply.test.ts
+          pnpm vitest run --config vitest.integration.config.ts --reporter=default --reporter=json --outputFile=$report `
+            test/e2e/access-fixture.e2e.test.ts `
+            test/e2e/access-relink-directory.test.ts `
+            test/e2e/access-relink-directory-apply.test.ts `
+            test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts `
+            test/e2e/mcp-catalog-dryrun.e2e.test.ts `
+            test/e2e/mcp-harness-watchdog.e2e.test.ts `
+            test/e2e/mcp-input-validation.e2e.test.ts `
+            test/e2e/mcp-orphan-cleanup.e2e.test.ts `
+            test/e2e/mcp-query-validation.e2e.test.ts `
+            test/e2e/runtime-guard-mcp-integration.e2e.test.ts `
+            test/integration/form-ir-mutation-preservation.test.ts `
+            test/integration/mcp-harness-process-tree.test.ts `
+            test/integration/vba-manager-sentinel-trap.test.ts
           $vitestExit = $LASTEXITCODE
           node scripts/access-smoke-evidence.mjs $report
           $evidenceExit = $LASTEXITCODE

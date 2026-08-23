@@ -1,0 +1,76 @@
+name: Nightly Access E2E
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+
+# One physical Access runner serves the repository. Queue a later nightly run
+# instead of cancelling an active database operation or overlapping two runs.
+concurrency:
+  group: nightly-access-e2e
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-validation:
+    name: Full Access E2E on main
+    if: github.ref == 'refs/heads/main'
+    runs-on: dysflow-e2e
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main schedule revision
+        uses: actions/checkout@v5
+
+      - name: Pre-stage E2E fixtures
+        # The fixture databases are intentionally gitignored. They are copied
+        # from the self-hosted runner, never fetched from production storage.
+        shell: pwsh
+        env:
+          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE || 'C:\00repos\codigo\dysflow\E2E_testing' }}
+        run: |
+          $source = $env:FIXTURES_SOURCE
+          $db1 = Join-Path $source 'NoConformidades.accdb'
+          $db2 = Join-Path $source 'NoConformidades_Datos.accdb'
+          if (-not (Test-Path -LiteralPath $db1)) {
+            Write-Error "::error::E2E fixture not found: $db1. Pre-stage NoConformidades.accdb at the source path or set DYSFLOW_FIXTURES_SOURCE."
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $db2)) {
+            Write-Error "::error::E2E fixture not found: $db2. Pre-stage NoConformidades_Datos.accdb at the source path or set DYSFLOW_FIXTURES_SOURCE."
+            exit 1
+          }
+          New-Item -ItemType Directory -Path 'E2E_testing' -Force | Out-Null
+          Copy-Item -LiteralPath $db1 -Destination 'E2E_testing\NoConformidades.accdb' -Force
+          Copy-Item -LiteralPath $db2 -Destination 'E2E_testing\NoConformidades_Datos.accdb' -Force
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          pnpm config set store-dir "$GITHUB_WORKSPACE/.pnpm-store"
+          pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install throwaway test runtime
+        shell: pwsh
+        # The harness refuses the production runtime. Keep the nightly run on
+        # the same repository-local throwaway path as the release gate.
+        run: node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui
+
+      - name: Run full E2E battery
+        shell: pwsh
+        env:
+          ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+        run: pnpm test:e2e:mcp:release
