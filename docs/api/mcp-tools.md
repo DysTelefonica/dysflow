@@ -273,8 +273,9 @@ Return static tool contracts in progressive views. Read-only — never opens Acc
 - `compact` — low-context discovery across every callable tool.
 - `full` — complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts.
 
-Omitting `view` fails closed with typed `SCHEMA_VIEW_REQUIRED`. This runtime-required
-parameter is exposed through machine metadata without adding JSON Schema
+Omitting `view` fails closed with typed `SCHEMA_VIEW_REQUIRED`.
+
+This runtime-required parameter is exposed through machine metadata without adding JSON Schema
 `required:["view"]`, so the handler preserves the typed error envelope.
 
 All views are deterministic and support `toolName`; index also supports workflow filters.
