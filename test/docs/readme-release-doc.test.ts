@@ -125,24 +125,61 @@ describe("README release and update guidance", () => {
   });
 });
 
+/** `env.SOME_NAME` — an environment variable read directly off an env object. */
+const ENVIRONMENT_PROPERTY = /\b(?:env|environment)\.([A-Z][A-Z0-9_]*)\b/g;
+
+/** `env[SOME_CONSTANT]` — the same read, indirected through a named constant. */
+const ENVIRONMENT_INDEX = /\b(?:env|environment)\[\s*([A-Za-z_$][\w$]*)\s*\]/g;
+
+/** Narrows the environment variables to the one that gates insecure updates. */
+const GATE_SUBJECT = /INSECURE/;
+
 /**
  * The insecure-update gate is enforced by the installer, not by prose. Deriving its name from the
  * installer source means renaming the variable in code fails this test until both documents are
  * corrected, instead of leaving docs that name a variable nothing reads.
+ *
+ * A name qualifies because of the ROLE it plays in that source — it is read off an environment
+ * object — not because of what its spelling contains. Matching the substring `INSECURE` alone also
+ * caught error-code constants such as `DYSFLOW_INSECURE_GATE_MISSING`, which are object properties
+ * and string literals that nothing reads from the environment. Keying on the read is what keeps a
+ * future `DYSFLOW_*INSECURE*` error code out of this set.
  */
 async function installerGateNames(): Promise<string[]> {
   const directory = "src/cli/commands/install";
-  const names = new Set<string>();
+  const sources: string[] = [];
 
   for (const entry of await readdir(directory)) {
     if (!entry.endsWith(".ts")) continue;
-    const source = await readFile(join(directory, entry), "utf8");
-    for (const match of source.matchAll(/\bDYSFLOW_[A-Z0-9_]*INSECURE[A-Z0-9_]*\b/g)) {
-      names.add(match[0]);
+    sources.push(await readFile(join(directory, entry), "utf8"));
+  }
+
+  const names = new Set<string>();
+  for (const source of sources) {
+    for (const match of source.matchAll(ENVIRONMENT_PROPERTY)) {
+      if (match[1]) names.add(match[1]);
+    }
+    for (const match of source.matchAll(ENVIRONMENT_INDEX)) {
+      const literal = match[1] === undefined ? undefined : stringConstant(match[1], sources);
+      if (literal) names.add(literal);
     }
   }
 
-  return [...names];
+  return [...names].filter((name) => GATE_SUBJECT.test(name));
+}
+
+/** Resolves `const NAME = "literal"` across the installer sources, for `env[NAME]` reads. */
+function stringConstant(identifier: string, sources: readonly string[]): string | undefined {
+  const declaration = new RegExp(
+    `\\b(?:const|let|var)\\s+${identifier}\\s*(?::[^=]*)?=\\s*"([^"]+)"`,
+  );
+
+  for (const source of sources) {
+    const match = declaration.exec(source);
+    if (match?.[1]) return match[1];
+  }
+
+  return undefined;
 }
 
 function sectionBetween(content: string, startHeading: string, endHeading: string): string {
