@@ -33,14 +33,6 @@ import { successResult } from "../../src/core/contracts/index.js";
  * "no stale exemption" assertion fails if an entry outlives its gap.
  */
 const UNCOVERED_BY_DESIGN: Readonly<Record<string, string>> = Object.freeze({
-  // #1504 — the form phase is a third of the advertised surface and has the
-  // thinnest coverage. These mutate `.form.txt`, so they need a real Access
-  // round trip rather than an IR-level unit test.
-  form_align_controls: "form mutation scenario pending #1504",
-  form_distribute_controls: "form mutation scenario pending #1504",
-  form_serialize: "form round-trip scenario pending #1504",
-  form_deserialize: "form round-trip scenario pending #1504",
-  create_form_from_template: "form creation scenario pending #1504",
   // Non-form gaps.
   lint_module: "source-only linter; no Access round trip to exercise",
   register_worktree: "worktree pre-warm covered by adapters/config unit tests",

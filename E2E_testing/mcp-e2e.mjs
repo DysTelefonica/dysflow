@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   EXPECTED_ADVERTISED_TOOL_COUNT,
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
@@ -242,26 +242,41 @@ function controlSource(source, controlName) {
   return end < 0 ? undefined : lines.slice(start, end + 1).join("\n");
 }
 
+function numericControlProperty(source, controlName, propertyName) {
+  const control = controlSource(source, controlName);
+  if (control === undefined) return undefined;
+  const propertyLine = control
+    .split(/\r?\n/)
+    .find((line) => line.trim().startsWith(`${propertyName} =`));
+  if (propertyLine === undefined) return undefined;
+  const value = Number(propertyLine.slice(propertyLine.indexOf("=") + 1).trim());
+  return Number.isFinite(value) ? value : undefined;
+}
+
 const unrelatedFormEntryBaseline = Object.freeze({
   duplicateNoSaveCount: countExactFormEntry(uiFormFixture, "NoSaveCTIWhenDisabled", "1"),
   guidBlob: opaqueFormEntry(uiFormFixture, "GUID"),
   prtMipBlob: opaqueFormEntry(uiFormFixture, "PrtMip"),
 });
 
-function unrelatedFormEntriesSurvived(source) {
+function unrelatedFormEntriesSurvived(source, { requireGuid = true } = {}) {
   const duplicateNoSaveCount = countExactFormEntry(source, "NoSaveCTIWhenDisabled", "1");
+  const guidSurvived =
+    unrelatedFormEntryBaseline.guidBlob !== undefined &&
+    opaqueFormEntry(source, "GUID") === unrelatedFormEntryBaseline.guidBlob;
   const pass = Boolean(
     unrelatedFormEntryBaseline.duplicateNoSaveCount >= 2 &&
       duplicateNoSaveCount === unrelatedFormEntryBaseline.duplicateNoSaveCount &&
-      unrelatedFormEntryBaseline.guidBlob !== undefined &&
-      opaqueFormEntry(source, "GUID") === unrelatedFormEntryBaseline.guidBlob &&
+      (!requireGuid || guidSurvived) &&
       unrelatedFormEntryBaseline.prtMipBlob !== undefined &&
       opaqueFormEntry(source, "PrtMip") === unrelatedFormEntryBaseline.prtMipBlob,
   );
   return {
     pass,
     summary: pass
-      ? `duplicate NoSaveCTIWhenDisabled=${duplicateNoSaveCount}; GUID and PrtMip blobs preserved`
+      ? requireGuid
+        ? `duplicate NoSaveCTIWhenDisabled=${duplicateNoSaveCount}; GUID and PrtMip blobs preserved`
+        : `duplicate NoSaveCTIWhenDisabled=${duplicateNoSaveCount}; PrtMip blob preserved; form-level GUID is Access-managed`
       : "unrelated duplicate keys or opaque blobs changed",
   };
 }
@@ -295,6 +310,10 @@ const mutatingAssertionSteps = new Set([
   "forms/form_delete_control:round-trip",
   "forms/form_set_properties:round-trip",
   "forms/form_duplicate_control:round-trip",
+  "forms/form_deserialize:round-trip",
+  "forms/form_align_controls:round-trip",
+  "forms/form_distribute_controls:round-trip",
+  "forms/create_form_from_template:round-trip",
 ]);
 const resultRows = createResultRows();
 const { rows, appendUnchecked } = resultRows;
@@ -2557,6 +2576,164 @@ addResult({
   summary: duplicateControlPass
     ? duplicatePreservation.summary
     : "duplicated control or preservation proof missing",
+});
+
+const serializedFormResult = await record("forms", "form_serialize", {
+  projectId,
+  sourcePath: uiFormPath,
+  outputMode: "full",
+});
+const serializedForm = payloadOf(serializedFormResult);
+const currentFormSource = await readFile(uiFormPath, "utf8");
+const serializePreservation = unrelatedFormEntriesSurvived(serializedForm?.serialized ?? "");
+const serializePass = Boolean(
+  serializedForm?.name === "DysflowMcpE2E" &&
+    serializedForm?.kind === "Form" &&
+    serializedForm?.byteEqual === true &&
+    serializedForm?.byteDiff === 0 &&
+    serializedForm?.serialized === currentFormSource.replace(/\r\n/g, "\n") &&
+    serializePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_serialize:round-trip",
+  pass: serializePass,
+  expected: "serialized FormIR is byte-equal after normalization and preserves duplicate/blob entries",
+  ms: 0,
+  summary: serializePass ? serializePreservation.summary : "serialize round-trip or preservation proof missing",
+});
+
+const { parseFormTxt } = await import(
+  pathToFileURL(join(repoRoot, "dist", "core", "services", "form-ir-service.js")).href
+);
+const deserializeIr = parseFormTxt(serializedForm.serialized, { name: "DysflowMcpE2E" });
+const deserializeCaption = deserializeIr.root.entries.find(
+  (entry) => entry.kind === "scalar" && entry.key === "Caption",
+);
+if (deserializeCaption === undefined) {
+  throw new Error("mcp-e2e: sandbox form is missing the Caption entry required by form_deserialize");
+}
+deserializeCaption.value = '"Dysflow Structural Round Trip"';
+const deserializeResult = await record("forms", "form_deserialize", {
+  projectId,
+  sourcePath: uiFormPath,
+  ir: deserializeIr,
+  apply: true,
+});
+const deserializeData = payloadOf(deserializeResult);
+const deserializedFormSource = await readFile(uiFormPath, "utf8");
+const deserializePreservation = unrelatedFormEntriesSurvived(deserializedFormSource);
+const deserializePass = Boolean(
+  deserializeData?.mode === "apply" &&
+    deserializeData?.written === true &&
+    deserializeData?.loadFromTextGate === "passed" &&
+    deserializedFormSource.includes('Caption ="Dysflow Structural Round Trip"') &&
+    deserializePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_deserialize:round-trip",
+  pass: deserializePass,
+  expected: "Caption persisted through FormIR deserialization with unrelated entries preserved",
+  ms: 0,
+  summary: deserializePass
+    ? deserializePreservation.summary
+    : "deserialized Caption or preservation proof missing",
+});
+
+await record("forms", "form_align_controls", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlNames: ["txtProbe", "cmdApply"],
+  edge: "left",
+  apply: true,
+});
+const alignedFormSource = await readFile(uiFormPath, "utf8");
+const alignedProbeLeft = numericControlProperty(alignedFormSource, "txtProbe", "Left");
+const alignedApplyLeft = numericControlProperty(alignedFormSource, "cmdApply", "Left");
+const alignPreservation = unrelatedFormEntriesSurvived(alignedFormSource);
+const alignPass = Boolean(
+  alignedProbeLeft !== undefined &&
+    alignedProbeLeft === alignedApplyLeft &&
+    alignPreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_align_controls:round-trip",
+  pass: alignPass,
+  expected: "txtProbe and cmdApply persisted on the same left edge with unrelated entries preserved",
+  ms: 0,
+  summary: alignPass ? alignPreservation.summary : "aligned geometry or preservation proof missing",
+});
+
+const distributedControlNames = ["txtProbe", "cmdApply", "txtMutationRenamed"];
+await record("forms", "form_distribute_controls", {
+  projectId,
+  sourcePath: uiFormPath,
+  controlNames: distributedControlNames,
+  axis: "vertical",
+  spacing: 75,
+  apply: true,
+});
+const distributedFormSource = await readFile(uiFormPath, "utf8");
+const distributedGeometry = distributedControlNames
+  .map((name) => ({
+    name,
+    top: numericControlProperty(distributedFormSource, name, "Top"),
+    height: numericControlProperty(distributedFormSource, name, "Height"),
+  }))
+  .sort((left, right) => (left.top ?? 0) - (right.top ?? 0));
+const distributePreservation = unrelatedFormEntriesSurvived(distributedFormSource);
+const distributePass = Boolean(
+  distributedGeometry.every(
+    (geometry) => geometry.top !== undefined && geometry.height !== undefined,
+  ) &&
+    distributedGeometry.slice(1).every((geometry, index) => {
+      const previous = distributedGeometry[index];
+      return geometry.top === previous.top + previous.height + 75;
+    }) &&
+    distributePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "form_distribute_controls:round-trip",
+  pass: distributePass,
+  expected: "three controls persisted with exact 75-twip vertical gaps and unrelated entries preserved",
+  ms: 0,
+  summary: distributePass
+    ? distributePreservation.summary
+    : "distributed geometry or preservation proof missing",
+});
+
+const clonedFormResult = await record("forms", "create_form_from_template", {
+  projectId,
+  sourceForm: "Form_DysflowMcpE2E",
+  targetForm: "Form_DysflowMcpE2EStructural",
+  tokenMap: {},
+  overwrite: true,
+  apply: true,
+});
+const clonedForm = payloadOf(clonedFormResult);
+const clonedFormSource =
+  typeof clonedForm?.targetPath === "string" ? await readFile(clonedForm.targetPath, "utf8") : "";
+// Access removes the source form-level GUID while importing a newly named form.
+// PrtMip remains byte-identical and the duplicate scalar entries remain present;
+// requiring the source GUID here would assert the wrong identity for the clone.
+const clonePreservation = unrelatedFormEntriesSurvived(clonedFormSource, { requireGuid: false });
+const clonePass = Boolean(
+  clonedForm?.mode === "apply" &&
+    clonedForm?.importGate === "passed" &&
+    basename(clonedForm?.targetPath ?? "") === "Form_DysflowMcpE2EStructural.form.txt" &&
+    controlSource(clonedFormSource, "txtProbe") !== undefined &&
+    clonePreservation.pass,
+);
+addResult({
+  area: "forms",
+  tool: "create_form_from_template:round-trip",
+  pass: clonePass,
+  expected: "sandbox form cloned to a new managed form with controls and unrelated entries preserved",
+  ms: 0,
+  summary: clonePass ? clonePreservation.summary : "cloned form structure or preservation proof missing",
 });
 
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
