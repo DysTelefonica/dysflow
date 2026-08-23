@@ -354,15 +354,16 @@ describe("Access operation registry and cleanup safety", () => {
         const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
         return {
           ...actual,
-          rmdir: async (
-            path: Parameters<typeof actual.rmdir>[0],
-            options?: Parameters<typeof actual.rmdir>[1],
-          ) => {
+          // Node 26 dropped the options overload from `fs/promises.rmdir`, so
+          // the mock mirrors the one-argument signature. The parameter type is
+          // still derived from `actual.rmdir`, so a future signature change
+          // fails here rather than drifting (#1506).
+          rmdir: async (path: Parameters<typeof actual.rmdir>[0]) => {
             if (path === lockPath) {
               releaseCleanupFailures += 1;
               throw new Error("simulated release cleanup failure");
             }
-            return actual.rmdir(path, options);
+            return actual.rmdir(path);
           },
         };
       });

@@ -52,7 +52,7 @@ describe("MCP context budget helpers", () => {
     ).toEqual({ tools: [{ name: "large_tool" }] });
   });
 
-  it("wires the built-runtime shrink-only command into the Node 20 CI leg", async () => {
+  it("wires the built-runtime shrink-only command into the single CI leg", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       scripts?: Record<string, string>;
     };
@@ -60,8 +60,11 @@ describe("MCP context budget helpers", () => {
     expect(packageJson.scripts?.["mcp:context-budget"]).toBe(
       "node scripts/mcp-context-budget.mjs --baseline scripts/baselines/mcp-context-budget.json",
     );
-    expect(workflow).toMatch(
-      /name: MCP context budget \(shrink-only\)[\s\S]*?if: matrix\.node-version == 20[\s\S]*?run: pnpm mcp:context-budget/,
-    );
+    const budgetStep =
+      /name: MCP context budget \(shrink-only\)([\s\S]*?)(?=\n\s*- name:|\n\s{0,4}\S)/.exec(
+        workflow,
+      )?.[1];
+    expect(budgetStep).toContain("run: pnpm mcp:context-budget");
+    expect(budgetStep).not.toMatch(/^\s*if:/m);
   });
 });

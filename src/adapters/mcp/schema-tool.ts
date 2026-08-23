@@ -1451,7 +1451,7 @@ export function createDescribeToolTool(): DysflowMcpTool {
       const catalog = buildToolSchemaCatalog({ toolName: rawName });
       const entry = catalog.tools[0];
       if (entry === undefined) {
-        const message = `Tool '${rawName}' not found. Call the 'schema' tool (no filter) to list every advertised tool name.`;
+        const message = `Tool '${rawName}' not found. Call schema({ view: 'index' }) to list every advertised tool name.`;
         return {
           content: [{ type: "text", text: `TOOL_NOT_FOUND: ${message}` }],
           isError: true,
