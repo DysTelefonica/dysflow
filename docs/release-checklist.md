@@ -18,15 +18,15 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
      against the generated file. A malformed entry aborts before `git add`,
      commit, or push.
   5. Pushes the `chore(release): prepare vX.Y.Z` commit to `origin/main`.
-  6. **Polls `gh run list --workflow ci.yml` filtered by the release commit's
-     SHA** — not by `latest run` — and refuses to tag unless the conclusion
-     is `success`. The CI workflow (`pnpm test` + `pnpm test:ps1` + `pnpm build`
-     + `pnpm lint`) does NOT run the heavy `pnpm test:e2e:mcp:release`
-     battery, which takes ~30 minutes; see the E2E row below.
-  7. On CI green: creates an annotated `vX.Y.Z` tag and pushes it. The
-     `.github/workflows/release.yml` workflow fires on the tag push, builds
-     the tarball, signs `SHA256SUMS` with Ed25519, and publishes the
-     GitHub Release.
+  6. **Polls `gh run list --workflow ci.yml` for the release commit's exact
+     SHA** — not the latest run — and refuses to tag unless exact-SHA `main` CI
+     succeeds.
+  7. On CI green, creates and pushes an annotated `vX.Y.Z` tag. That tag starts
+     `.github/workflows/release.yml`, whose `e2e-validation` job runs
+     `pnpm test:e2e:mcp:release` on the self-hosted Access runner.
+  8. The GitHub Release is published only after `build`, `quality-authority`,
+     and `e2e-validation` succeed. The publication job declares all three in
+     its `needs` dependency.
 
 Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this
 contract, including a generated entry that passes the real Vitest quality gate
@@ -79,15 +79,13 @@ Reference: `docs/testing/mcp-protocol-maintenance.md`.
 - [ ] `pnpm test` passes locally.
 - [ ] Integration/E2E (`vitest.integration.config.ts`) passes locally where the
   host platform supports it.
-- [ ] Real MCP E2E (`pnpm test:e2e:mcp:release`) passes against the safe
-  `test-runtime/` build, with `DYSFLOW_E2E_COMMAND` pointing at it. Never run
-  E2E against `%LOCALAPPDATA%\dysflow` or `~/.config/opencode/opencode.json`.
-  **Run the heavy E2E only at the very end, after every other issue on this
-  checklist is closed and `release-prepare.ps1` is the next thing to run.**
-  The full battery takes ~30 minutes; it is NOT run by CI.
 - [ ] The optional-presence guard passes:
   `node scripts/check-optional-presence-guards.mjs`.
 - [ ] `biome check src/ test/` passes.
+
+The tag-triggered `e2e-validation` job is the sole heavy release E2E authority.
+It runs `pnpm test:e2e:mcp:release` against a safe, run-scoped build and blocks
+publication on failure. Agents must not run it locally as a pre-tag gate.
 
 ### Cheap e2e-suite contract tests (run in <100ms total, in CI)
 

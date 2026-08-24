@@ -430,6 +430,13 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
 - **Never** build/install to or modify the production runtime at `%LOCALAPPDATA%\dysflow` or
   `~/.config/opencode/opencode.json` during development/testing. Build to the throwaway
   `test-runtime/` and point E2E at it with `DYSFLOW_E2E_COMMAND`.
+- **The tag workflow is the sole heavy release E2E authority.**
+
+  `.github/workflows/release.yml` runs `pnpm test:e2e:mcp:release` in its
+  tag-triggered `e2e-validation` job. Publication depends on that job.
+
+  Agents must not run it locally as a pre-tag gate. That duplicates the same
+  expensive authority without controlling whether the GitHub Release publishes.
 - Conventional commits. No AI co-author / attribution lines in commit messages.
 - A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.8` → title `v1.2.8`). Human edits
   are checked by `.github/workflows/release-title-guard.yml` (`release: [edited]`); the job fails when the two
