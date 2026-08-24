@@ -45,6 +45,13 @@ describe("describe_tool (#1057 F5)", () => {
     expect(parsed?.name).toBe("verify_code");
   });
 
+  it("advertises verify_code diagnostic evidence as an explicit opt-in", async () => {
+    const { parsed } = await callDescribe({ name: "verify_code" });
+    expect(parsed?.description).toMatch(/diagnostic:true/i);
+    const params = parsed?.params as Record<string, { type: string; required: boolean }>;
+    expect(params.diagnostic).toMatchObject({ type: "boolean", required: false });
+  });
+
   it("rejects an unknown tool with a typed error", async () => {
     const { result, text } = await callDescribe({ name: "no_such_tool" });
     expect(result.isError).toBe(true);

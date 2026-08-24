@@ -740,8 +740,8 @@ Read-class tools that open the binary through Access COM (`list_vba_modules`, `v
 Rules of thumb for a consumer:
 
 - **Never `git add` the `.accdb` blindly after a dysflow run.** An LSN-only change is noise; committing it churns the repository for nothing.
-- **Verify real changes before staging**: `git diff --stat <file>.accdb` with an identical byte size is almost always LSN-only; when in doubt, `verify_code` is the authoritative content-drift check (read its `moduleCounts` — module units, not presence counts).
-- **Distinguish the two summaries**: `list_vba_modules.summary.modulesInBinaryOnly` counts module *presence*; `verify_code.moduleCounts.sourceNewerModules` counts *content drift*. "All presence counts 0" does not mean "no drift".
+- **Verify real changes before staging**: `git diff --stat <file>.accdb` with an identical byte size is almost always LSN-only; when in doubt, `verify_code` is the authoritative content-drift check. Its compact default exposes `actionableOk`, `recommendedAction`, `summaryByCategory`, and bulk sync lists without raw serialization noise.
+- **Distinguish the two summaries**: `list_vba_modules.summary.modulesInBinaryOnly` counts module *presence*; `verify_code.summaryByCategory.sourceNewer` counts actionable *content drift*. Pass `diagnostic:true` only when you need the full `moduleCounts`, `summaryUnits`, classified arrays, or snippets. "All presence counts 0" does not mean "no drift".
 
 An LSN-free read path (opening without the COM lock) is a deeper Access-runner change and is intentionally not attempted here; this section is the documented contract.
 

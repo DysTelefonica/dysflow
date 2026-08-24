@@ -319,16 +319,48 @@ const CONTRACTS = {
         dryRun: z.literal(true),
         willModifyAccess: z.literal(false),
         sourceRoot: z.string(),
-        matched: z.array(z.unknown()),
-        different: z.array(z.unknown()),
-        missingInSource: z.array(z.unknown()),
-        missingInBinary: z.array(z.unknown()),
+        matched: z.array(z.unknown()).optional(),
+        different: z.array(z.unknown()).optional(),
+        diffs: z.array(z.unknown()).optional(),
+        missingInSource: z.array(z.unknown()).optional(),
+        missingInBinary: z.array(z.unknown()).optional(),
         summary: passthroughObject.optional(),
+        summaryStructured: z
+          .union([
+            z.object({
+              matched: z.number().int().nonnegative(),
+              actionableTotal: z.number().int().nonnegative(),
+              nonActionableTotal: z.number().int().nonnegative(),
+            }),
+            z.object({
+              matched: z.number().int().nonnegative(),
+              different: z.number().int().nonnegative(),
+              missingInSource: z.number().int().nonnegative(),
+              missingInBinary: z.number().int().nonnegative(),
+              actionable: passthroughObject,
+              nonActionable: passthroughObject,
+            }),
+          ])
+          .optional(),
+        summaryByCategory: z
+          .object({
+            sourceNewer: z.number().int().nonnegative(),
+            binaryNewer: z.number().int().nonnegative(),
+            bothChanged: z.number().int().nonnegative(),
+          })
+          .optional(),
+        actionableDifferent: z.array(z.unknown()).optional(),
+        nonActionableDifferent: z.array(z.unknown()).optional(),
+        moduleCounts: passthroughObject.optional(),
+        summaryUnits: passthroughObject.optional(),
         hasFunctionalDifferences: z.boolean().optional(),
         actionableOk: z.boolean().optional(),
         recommendedAction: z.string().optional(),
         bulkImportable: stringArray.optional(),
+        bulkImportableCount: z.number().int().nonnegative().optional(),
         bulkExportable: stringArray.optional(),
+        bulkExportableCount: z.number().int().nonnegative().optional(),
+        warnings: z.array(z.unknown()).optional(),
         vbeCacheNote: z.string(),
       })
       .loose(),

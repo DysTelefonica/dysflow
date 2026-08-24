@@ -41,7 +41,7 @@
   },
   "composition_patterns": {
     "path": "assets/examples/composition-patterns.md",
-    "sha256": "6e4d3962ef003ea68452fd82cb8e73b2880e2050a84ee10f83c7421687ca4ae0",
+    "sha256": "310ce0a9e3f01299d8446a4660af4ace35d9d7b32d9a1ff1e82485131e7f81fc",
     "needs_human_content": false
   },
   "copy_form_ui_pattern": {
@@ -221,7 +221,7 @@
   },
   "verify_code": {
     "path": "assets/examples/verify-code.md",
-    "sha256": "8a1bbddd645c9aec0363eb80b87206e53e72ea7ad7300a2ac88c3633846d0326",
+    "sha256": "7453986cf16198748d1c15ded081d391e7ec57b49d59c3fea65eef26711d0b31",
     "needs_human_content": false
   },
   "verify_form_bindings": {

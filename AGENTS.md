@@ -372,6 +372,7 @@ Five anchors do the second kind today:
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
 - `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
+- `verify-code-diagnostic-contract-1535.test.ts` compares the documented compact/diagnostic response split against the live `verify_code` schema and MCP response shaper.
 - `write-tool-preflight.test.ts` reads the MCP schema source.
 
 Every other anchor pins a literal string. Asserting that a doc merely *contains* a source path is a string anchor, not a runtime anchor.
