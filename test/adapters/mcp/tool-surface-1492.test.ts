@@ -41,7 +41,7 @@ const services: DysflowMcpServices = {
 
 const allTools = createDysflowMcpTools({ services });
 const HIDDEN_FORM_TOOL = "verify_form_ui";
-const CORE_TOOL_COUNT = 39;
+const CORE_TOOL_COUNT = 38;
 
 function createProject(toolSurface: unknown): { root: string; cleanup(): void } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-tool-surface-"));

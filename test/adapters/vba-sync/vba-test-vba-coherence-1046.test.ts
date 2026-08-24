@@ -164,7 +164,7 @@ describe("Issue #1046 / Test 2 — test_vba dryRun:true bypasses the allowlist g
     // PROCEDURE_NOT_ALLOWED. The FIXED order short-circuits on dryRun:true
     // before the gate — a plan-shaped success is the contract.
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(["Test_Other", "Test_Third"]);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
@@ -199,7 +199,7 @@ describe("Issue #1046 / Test 2 — test_vba dryRun:true bypasses the allowlist g
     // declared at all. Old behavior emitted MCP_ALLOWLIST_NOT_CONFIGURED
     // even with dryRun:true. Fixed: dryRun short-circuit returns plan.
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(undefined);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
@@ -232,7 +232,7 @@ describe("Issue #1046 / Test 2 — test_vba dryRun:true bypasses the allowlist g
       cwd: "C:/repo",
     };
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(undefined);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
@@ -396,7 +396,7 @@ describe("Issue #1046 / Test 5 — cross-coherence regression net", () => {
       cwd: "C:/repo",
     };
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(undefined);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
     const dryRunResult = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
       dryRun: true,

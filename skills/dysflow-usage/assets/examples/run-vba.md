@@ -67,6 +67,25 @@ When the procedure is not (yet) in `allowedProcedures`, pass `apply:false` once.
 
 `apply:false` does not execute the procedure; it lets the runtime validate the call shape without raising `MCP_PROCEDURE_NOT_ALLOWED` / `MCP_ALLOWLIST_NOT_CONFIGURED`. To make the call stick across sessions, declare the procedure in the `capabilities` block of `.dysflow/project.json` (the runtime re-reads `allowedProcedures` per call).
 
+## One-shot `_Temp_*.bas` workflow (v4)
+
+`vba_inline_execution` no longer exists. For one-shot VBA, create a source-controlled module such
+as `src/modules/_Temp_Audit_ReadFlags.bas` and add its exact public procedure name to
+`capabilities.allowedProcedures`.
+
+1. Preview and apply `import_modules` with `moduleNames`, `transactional:true`, and explicit
+   `apply:false` then `apply:true` calls.
+2. Stop and wait for the human to compile with **Debug > Compile VBA Project**. This is a project
+   policy checkpoint; do not describe it as automatic runtime compilation.
+3. Preview and apply `run_vba` for the allowlisted procedure.
+4. Preview and apply `delete_module`, then delete the `.bas` source and temporary allowlist entry.
+5. Finish with `vba_orphan_audit` plus `verify_code`; no `_Temp_` orphan or unexpected actionable
+   drift may remain.
+
+Keep useful code by renaming it to a registered `Test_*` atom or a permanent descriptive module
+before cleanup. The temporary-module workflow does not relax `m_TestingMode=True` or permit
+production backend writes.
+
 ## Anti-patterns for this call
 
 - Don't invent `procedureName` strings without checking the binary — use `list_objects` or an existing capability doc to confirm.

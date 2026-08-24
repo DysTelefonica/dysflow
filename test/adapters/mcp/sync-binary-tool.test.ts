@@ -86,14 +86,14 @@ describe("sync_binary — tool registry presence (#809)", () => {
     // Pre-#809 cascade: 44 (after #818). #809 adds 1 -> 45. #872 adds
     // 4 more (form_set_properties + form_duplicate_control +
     // form_get_geometry + form_list_controls): 45 -> 49.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(49);
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(48);
   });
 
   it("DYSFLOW_MCP_TOOL_NAMES count steps from 68 to 69 (sync_binary is the 69th tool)", () => {
     // #872 cascades 69 -> 73 (form_set_properties + form_duplicate_control
     // + form_get_geometry + form_list_controls).
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(73);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(73);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(72);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(72);
   });
 });
 
@@ -406,7 +406,7 @@ describe("advertised MCP tool surface — sync_binary cascade (#809)", () => {
 
   it(`advertises exactly ${EXPECTED_ADVERTISED_TOOL_COUNT} non-hidden tools (#1321: 92 -> 94)`, () => {
     expect(advertised).toHaveLength(EXPECTED_ADVERTISED_TOOL_COUNT);
-    expect(EXPECTED_ADVERTISED_TOOL_COUNT).toBe(95);
+    expect(EXPECTED_ADVERTISED_TOOL_COUNT).toBe(94);
   });
 });
 

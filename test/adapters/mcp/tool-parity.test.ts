@@ -73,10 +73,10 @@ describe("Dysflow MCP tool parity inventory", () => {
     // applyGuardedFormWrite seam) + form_get_geometry + form_list_controls
     // (read-only geometry + inventory helpers): vba-sync 45 -> 49,
     // query unchanged at 24, total 69 -> 73.
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(49);
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(48);
     expect(QUERY_TOOL_NAMES).toHaveLength(24);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(73);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(73);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(72);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(72);
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("export_modules");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("test_vba");
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("query_sql");
@@ -125,8 +125,8 @@ describe("Dysflow MCP tool parity inventory", () => {
     // #809 added sync_binary: parity-registry 68 -> 69.
     // #872 added form_set_properties + form_duplicate_control +
     // form_get_geometry + form_list_controls: parity-registry 69 -> 73.
-    expect(TOOL_PARITY_REGISTRY).toHaveLength(73);
-    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(73);
+    expect(TOOL_PARITY_REGISTRY).toHaveLength(72);
+    expect(new Set(TOOL_PARITY_REGISTRY.map((entry) => entry.name)).size).toBe(72);
 
     const implemented = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "implemented");
     const pending = TOOL_PARITY_REGISTRY.filter((entry) => entry.status === "pending");

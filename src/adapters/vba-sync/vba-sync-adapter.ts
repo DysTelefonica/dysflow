@@ -223,7 +223,6 @@ const TIMEOUT_PHASE_BY_TOOL: Readonly<Record<string, string>> = {
   localize_backend_links: "link",
   run_vba: "execute",
   test_vba: "execute",
-  vba_inline_execution: "execute",
 };
 
 export function deriveTimeoutPhase(toolName: string): string {
@@ -474,12 +473,9 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.executionAdapter = new VbaExecutionAdapter(
       {
         cwd: this.cwd,
-        env: this.env,
         executeMappedTool: (toolName, params, mapping) =>
           this.executeMappedTool(toolName, params, mapping),
-        resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
       },
-      undefined, // fileSystem: use the adapter's default (Node fs/promises)
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
     );
     this.formsAdapter = new VbaFormsAdapter(

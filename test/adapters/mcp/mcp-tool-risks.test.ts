@@ -125,7 +125,6 @@ describe("effectiveDryRunDefaultForTool — truth table (#779)", () => {
     fix_encoding: { "safe-by-default": true, developer: true },
     compact_repair: { "safe-by-default": true, developer: true },
     relink_directory: { "safe-by-default": true, developer: true },
-    vba_inline_execution: { "safe-by-default": true, developer: true },
     // arbitrary SQL/CLI surface
     exec_sql: { "safe-by-default": true, developer: true },
     run_script: { "safe-by-default": true, developer: true },

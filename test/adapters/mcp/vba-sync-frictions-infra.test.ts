@@ -7,11 +7,6 @@ import { DYSFLOW_MCP_TOOL_NAMES } from "../../../src/adapters/mcp/mcp-tool-regis
 import { VBA_SYNC_TOOL_SCHEMAS } from "../../../src/adapters/mcp/schemas/vba-sync-schemas.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter.js";
-import {
-  createDysflowError,
-  failureResult,
-  successResult,
-} from "../../../src/core/contracts/index.js";
 import { sanitizeMcpErrorMessage } from "../../../src/core/utils/sanitize-error.js";
 import { validateInput } from "../../../src/shared/validation/validator.js";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
@@ -26,75 +21,6 @@ describe("MCP tool schema registration for vba-sync-frictions", () => {
     expect(schema.type).toBe("object");
     expect(schema.properties.projectRoot).toBeDefined();
     expect(schema.properties.destinationRoot).toBeDefined();
-  });
-
-  it("includes vba_inline_execution in tool names and defines its schema", () => {
-    expect(DYSFLOW_MCP_TOOL_NAMES).toContain("vba_inline_execution");
-    const schema = VBA_SYNC_TOOL_SCHEMAS.vba_inline_execution;
-    expect(schema).toBeDefined();
-    expect(schema.type).toBe("object");
-    expect(schema.properties.code).toBeDefined();
-    expect(schema.properties.code?.description).toContain('result = "OK"');
-  });
-});
-
-describe("vba_inline_execution public MCP contract (#850)", () => {
-  const baseServices = {
-    vbaService: {},
-    queryService: {},
-    diagnosticsService: {},
-  } as any;
-
-  it("exposes returnValue in the JSON object carried by MCP text content", async () => {
-    const tools = createDysflowMcpTools({
-      services: {
-        ...baseServices,
-        vbaSyncToolService: {
-          execute: async () => successResult({ ok: true, returnValue: "OK", error: null }),
-        },
-      },
-      writes: true,
-    });
-    const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
-    if (!tool) throw new Error("vba_inline_execution should be registered");
-
-    const response = await tool.handler({ code: 'result = "OK"', apply: true });
-
-    expect(response).toMatchObject({ ok: true, isError: false });
-    expect(JSON.parse(response.content[0]?.text ?? "null")).toMatchObject({ returnValue: "OK" });
-    expect(response).not.toHaveProperty("returnValue");
-  });
-
-  it("exposes typed line and remediation for rejected inline syntax", async () => {
-    const tools = createDysflowMcpTools({
-      services: {
-        ...baseServices,
-        vbaSyncToolService: {
-          execute: async () =>
-            failureResult(
-              createDysflowError("INVALID_INPUT", "Inline VBA line 3 is invalid.", {
-                details: { line: 3 },
-                remediation: 'Assign the return value explicitly: result = "OK"',
-              }),
-            ),
-        },
-      },
-      writes: true,
-    });
-    const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
-    if (!tool) throw new Error("vba_inline_execution should be registered");
-
-    const response = await tool.handler({ code: '"OK"' });
-
-    expect(response).toMatchObject({
-      ok: false,
-      isError: true,
-      error: {
-        code: "INVALID_INPUT",
-        details: { line: 3 },
-        remediation: 'Assign the return value explicitly: result = "OK"',
-      },
-    });
   });
 });
 
@@ -189,7 +115,7 @@ describe("VBA-modifying tools write-gating", () => {
     }
   });
 
-  it("blocks delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=false (compile_vba removed in v1.19.0)", async () => {
+  it("blocks delete_module, import_modules, and import_all when writesEnabled=false (compile_vba removed in v1.19.0)", async () => {
     const tools = createDysflowMcpTools({
       services: services,
     });
@@ -234,21 +160,9 @@ describe("VBA-modifying tools write-gating", () => {
     // write-gate no longer needs to fire for it. Use delete_module as
     // a representative write-gate check (it is the canonical binary
     // mutator that is still write-gated).
-
-    // Test vba_inline_execution
-    {
-      const tool = tools.find((t) => t.name === "vba_inline_execution");
-      expect(tool).toBeDefined();
-      if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ code: "Sub Test(): End Sub", apply: true }, {} as any);
-      expect(res.isError).toBe(true);
-      expect(res.content?.[0]?.text).toContain(
-        "MCP_WRITES_DISABLED: Write tools are disabled for this MCP adapter (attempted: vba_inline_execution).",
-      );
-    }
   });
 
-  it("allows delete_module, import_modules, import_all, and vba_inline_execution when writesEnabled=true (compile_vba removed in v1.19.0)", async () => {
+  it("allows delete_module, import_modules, and import_all when writesEnabled=true (compile_vba removed in v1.19.0)", async () => {
     const tools = createDysflowMcpTools({
       services: services,
       writes: true,
@@ -281,14 +195,6 @@ describe("VBA-modifying tools write-gating", () => {
     // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
     // write-gate no longer needs to fire for it. Use delete_module as
     // a representative write-gate check.
-
-    // Test vba_inline_execution
-    {
-      const tool = tools.find((t) => t.name === "vba_inline_execution");
-      if (!tool) throw new Error("tool should be defined");
-      const res = await tool.handler({ code: "Sub Test(): End Sub", apply: true }, {} as any);
-      expect(res.isError).toBeFalsy();
-    }
   });
 });
 
@@ -432,142 +338,4 @@ describe("vba_orphan_audit tool behavior", () => {
   });
 });
 
-describe("vba_inline_execution tool behavior", () => {
-  it("writes a temporary module, imports it, runs it, and cleans up", async () => {
-    const executedTools: Array<{ name: string; params: any }> = [];
-    const writtenFiles: Array<{ path: string; content: string }> = [];
-    const removedFiles: string[] = [];
-
-    const fakeOrchestrator: any = {
-      cwd: "C:\\fake",
-      resolveExecutionTarget: async () => ({
-        ok: true,
-        data: { destinationRoot: "C:\\fake\\src", accessPath: "C:\\fake\\db.accdb" },
-      }),
-      validateStrictContext: () => ({ ok: true }),
-      executeMappedTool: async (name: string, params: any) => {
-        executedTools.push({ name, params });
-        // feat-759-no-compile (v1.19.0) — compile_vba was removed; the
-        // inline path no longer makes an explicit compile call. The
-        // flow is now delete-pre -> import -> run -> delete-post.
-        if (name === "import_modules" || name === "run_vba" || name === "delete_module") {
-          return { ok: true, data: { status: "success" } };
-        }
-        return { ok: false };
-      },
-    };
-
-    const mockFs: any = {
-      writeFile: async (path: string, content: string) => {
-        writtenFiles.push({ path, content });
-      },
-      rm: async (path: string) => {
-        removedFiles.push(path);
-      },
-    };
-
-    const adapter = new (
-      await import("../../../src/adapters/vba-sync/vba-execution-adapter.js")
-    ).VbaExecutionAdapter(fakeOrchestrator, mockFs);
-    const result = await adapter.execute("vba_inline_execution", {
-      code: "MsgBox 123",
-      apply: true,
-    });
-
-    expect(result.ok).toBe(true);
-
-    // Expecting 4 tools to be executed in sequence (delete pre-cleanup, import, run, delete post-cleanup)
-    // — compile is gone in v1.19.0.
-    expect(executedTools.length).toBe(4);
-    expect(executedTools[0]?.name).toBe("delete_module");
-    expect(executedTools[1]?.name).toBe("import_modules");
-    expect(executedTools[2]?.name).toBe("run_vba");
-    expect(executedTools[3]?.name).toBe("delete_module");
-
-    // The generated module name is __dysflow_inline__
-    const importParams = executedTools[1]?.params;
-    expect(importParams?.moduleNames?.length).toBe(1);
-    const generatedModuleName = importParams?.moduleNames?.[0];
-    expect(generatedModuleName).toBe("__dysflow_inline__");
-
-    // Verify written file and content (separator-agnostic: CI runs on Linux)
-    expect(writtenFiles[0]?.path?.replace(/\\/g, "/")).toContain(
-      `modules/${generatedModuleName}.bas`,
-    );
-    expect(writtenFiles[0]?.content).toContain(`Attribute VB_Name = "${generatedModuleName}"`);
-    // #786 — snippet wrapped in a Function that returns `result` (not a Sub, so
-    // an introspection snippet can return a value).
-    expect(writtenFiles[0]?.content).toContain("Public Function ExecuteInline() As Variant");
-    expect(writtenFiles[0]?.content).toContain("ExecuteInline = result");
-    expect(writtenFiles[0]?.content).toContain("MsgBox 123");
-
-    // Verify run_vba params
-    const runParams = executedTools[2]?.params;
-    expect(runParams?.moduleNames).toContain(generatedModuleName);
-    // #786 — bare procedure name; a module-qualified name is read by
-    // Application.Run as a (non-existent) project qualifier and fails.
-    expect(runParams?.procedureName).toBe("ExecuteInline");
-
-    // Verify delete_module params
-    const deleteParams = executedTools[3]?.params;
-    expect(deleteParams?.moduleName).toBe(generatedModuleName);
-
-    // Verify file removal (pre-cleanup and post-cleanup)
-    expect(removedFiles.length).toBe(2);
-    expect(removedFiles[1]?.replace(/\\/g, "/")).toContain(`modules/${generatedModuleName}.bas`);
-  });
-
-  it("cleans up even if execution fails", async () => {
-    const executedTools: Array<{ name: string; params: any }> = [];
-    const removedFiles: string[] = [];
-
-    const fakeOrchestrator: any = {
-      cwd: "C:\\fake",
-      resolveExecutionTarget: async () => ({
-        ok: true,
-        data: { destinationRoot: "C:\\fake\\src", accessPath: "C:\\fake\\db.accdb" },
-      }),
-      validateStrictContext: () => ({ ok: true }),
-      executeMappedTool: async (name: string, params: any) => {
-        executedTools.push({ name, params });
-        // feat-759-no-compile (v1.19.0) — compile_vba was removed.
-        if (name === "import_modules") {
-          return { ok: true };
-        }
-        if (name === "run_vba") {
-          return { ok: false, error: { message: "VBA Execution Failed" } };
-        }
-        if (name === "delete_module") {
-          return { ok: true };
-        }
-        return { ok: false };
-      },
-    };
-
-    const mockFs: any = {
-      writeFile: async () => {},
-      rm: async (path: string) => {
-        removedFiles.push(path);
-      },
-    };
-
-    const adapter = new (
-      await import("../../../src/adapters/vba-sync/vba-execution-adapter.js")
-    ).VbaExecutionAdapter(fakeOrchestrator, mockFs);
-    const result = await adapter.execute("vba_inline_execution", {
-      code: "MsgBox 123",
-      apply: true,
-    });
-
-    expect(result.ok).toBe(false);
-
-    // Verify delete_module was still called
-    const deleteCall = executedTools.find((x) => x.name === "delete_module");
-    expect(deleteCall).toBeDefined();
-
-    // Verify file was still removed (pre-cleanup and post-cleanup)
-    expect(removedFiles.length).toBe(2);
-  });
-});
-
-/* biome-ignore-end lint/suspicious/noExplicitAny: end */
+/* biome-ignore-end lint/suspicious/noExplicitAny: test mocks and type casts */

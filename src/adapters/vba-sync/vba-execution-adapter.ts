@@ -1,13 +1,10 @@
-import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
-  createDiagnostic,
   createDysflowError,
   failureResult,
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
-import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
 import {
   isAbsolutePath,
@@ -15,7 +12,6 @@ import {
   readJsonFileAsync,
   stringValue,
 } from "../../core/utils/index.js";
-import { isWithinRuntime } from "../../shared/runtime-dir.js";
 import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import {
   type AllowedProcedures,
@@ -25,18 +21,7 @@ import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
 // feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool and the general
 // compile-and-save path were removed; user modules are compiled by the human
-// in Access. The `compile_vba` MCP tool no longer exists, and the inline path
-// deliberately does NOT compile — save-only import is enough for run_vba to
-// resolve the snippet (verified against real Access, #786).
-//
-// #786 — vba_inline_execution failed with "no encuentra el procedimiento
-// '__dysflow_inline__.ExecuteInline'". Root cause was NOT a missing compile: it
-// was the module-qualified procedure name passed to Application.Run, which
-// treats the dotted prefix as a PROJECT qualifier, so "__dysflow_inline__.X"
-// resolved to a non-existent project. The fix passes the bare procedure name
-// (see the run_vba call below) and wraps the snippet in a Function so a
-// `result = <expr>` assignment is returned to the caller.
-// See openspec/specs/vba-inline-execution/spec.md.
+// in Access. The `compile_vba` MCP tool no longer exists.
 const EXECUTION_MAPPINGS = {
   test_vba: mapping(
     "Run-Tests",
@@ -53,73 +38,7 @@ const EXECUTION_MAPPINGS = {
       argsJson: stringValue(input.argsJson),
     }),
   ),
-  import_modules: mapping(
-    "Import",
-    false,
-    (input) => stringArray(input.moduleNames),
-    (input) => ({ importMode: stringValue(input.importMode) }),
-  ),
-  delete_module: mapping(
-    "Delete",
-    true,
-    (input) => {
-      const moduleNames = stringArray(input.moduleNames);
-      const moduleName = stringValue(input.moduleName);
-      return moduleNames.length > 0 ? moduleNames : moduleName ? [moduleName] : [];
-    },
-    (input) => ({ force: input.force === true ? true : undefined }),
-  ),
 };
-
-/** Defense-in-depth limits for vba_inline_execution (issue #533). */
-const MAX_INLINE_CODE_CHARS = 1024;
-
-function trailingBareStringLiteral(code: string): { line: number; value: string } | undefined {
-  const lines = code.split(/\r?\n/);
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? "";
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("'")) continue;
-    const match = /^"((?:""|[^"])*)"\s*(?:'.*)?$/.exec(trimmed);
-    if (match === null) return undefined;
-    return { line: index + 1, value: (match[1] ?? "").replace(/""/g, '"') };
-  }
-  return undefined;
-}
-
-function unterminatedStringLiteralLine(code: string): number | undefined {
-  const lines = code.split(/\r?\n/);
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex] ?? "";
-    let inString = false;
-    let statementStart = true;
-    for (let index = 0; index < line.length; index += 1) {
-      const char = line[index];
-      if (!inString) {
-        if (/\s/.test(char ?? "")) continue;
-        if (statementStart && /^Rem(?:\s|$)/i.test(line.slice(index))) break;
-        if (char === "'") break;
-        if (char === ":") {
-          statementStart = true;
-          continue;
-        }
-        statementStart = false;
-      }
-      if (char !== '"') continue;
-      if (inString && line[index + 1] === '"') {
-        index += 1;
-        continue;
-      }
-      inString = !inString;
-    }
-    if (inString) return lineIndex + 1;
-  }
-  return undefined;
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /**
  * F23 — extract the access path from a tool input. Mirrors the helper in
@@ -147,19 +66,7 @@ export interface VbaSyncOrchestrator {
     mapping: DirectMapping,
   ): Promise<OperationResult<unknown>>;
   cwd: string;
-  resolveExecutionTarget?(params: Record<string, unknown>): Promise<OperationResult<unknown>>;
-  env?: Record<string, string | undefined>;
 }
-
-export interface ExecutionFileSystemPort {
-  writeFile(path: string, content: string): Promise<void>;
-  rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void>;
-}
-
-const defaultExecutionFileSystem: ExecutionFileSystemPort = {
-  writeFile: (path, content) => writeFile(path, content, "utf8"),
-  rm: (path, options) => rm(path, options),
-};
 
 export class VbaExecutionAdapter {
   /**
@@ -174,23 +81,19 @@ export class VbaExecutionAdapter {
    */
   constructor(
     private readonly orchestrator: VbaSyncOrchestrator,
-    private readonly fileSystem: ExecutionFileSystemPort = defaultExecutionFileSystem,
     private readonly allowedProcedures?: AllowedProcedures,
   ) {}
 
   static handles(toolName: string): boolean {
     // feat-759-no-compile (v1.19.0) — `compile_vba` was removed from the
     // MCP surface. Compile is no longer a tool the adapter routes through.
-    return toolName === "run_vba" || toolName === "test_vba" || toolName === "vba_inline_execution";
+    return toolName === "run_vba" || toolName === "test_vba";
   }
 
   async execute(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
-    if (toolName === "vba_inline_execution") {
-      return this.executeInline(params);
-    }
     if (toolName === "run_vba") {
       // Just map it using normal flow. If run_vba is handled manually, this acts as fallback.
       return this.orchestrator.executeMappedTool(toolName, params, EXECUTION_MAPPINGS.run_vba);
@@ -203,253 +106,6 @@ export class VbaExecutionAdapter {
         "TOOL_NOT_IMPLEMENTED",
         `Tool ${toolName} not supported by VbaExecutionAdapter.`,
       ),
-    );
-  }
-
-  private async executeInline(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
-    const rawCode = stringValue(params.code) || "";
-
-    // Guardrail (#533): 1024-character code cap — reject before touching the binary.
-    if (rawCode.length > MAX_INLINE_CODE_CHARS) {
-      return failureResult(
-        createDysflowError(
-          "INVALID_INPUT",
-          `Inline VBA code exceeds the ${MAX_INLINE_CODE_CHARS}-character cap (got ${rawCode.length}). Move larger logic into a module and run it with run_vba.`,
-        ),
-      );
-    }
-
-    // Safety guardrail: reject blocklisted unsafe keywords case-insensitively
-    if (/\b(Declare|Shell|CreateObject|GetObject|Lib)\b/i.test(rawCode)) {
-      return failureResult(
-        createDysflowError("INVALID_INPUT", "Unsafe keywords detected in inline VBA snippet"),
-      );
-    }
-
-    // Guardrail (#533): the snippet is wrapped in Public Function ExecuteInline()/
-    // End Function, so a snippet that closes its own procedure block produces
-    // malformed VBA that Access refuses to import. Reject it and point the caller
-    // at run_vba.
-    if (/\bEnd\s+(?:Sub|Function|Property)\b/i.test(rawCode)) {
-      return failureResult(
-        createDysflowError(
-          "INVALID_INPUT",
-          "Inline VBA code must be a single procedure body and must not contain 'End Sub'/'End Function'/'End Property'. Define helpers in a module and call them with run_vba.",
-        ),
-      );
-    }
-
-    const bareLiteral = trailingBareStringLiteral(rawCode);
-    if (bareLiteral !== undefined) {
-      const example = `result = "${bareLiteral.value.replace(/"/g, '""')}"`;
-      return failureResult(
-        createDysflowError(
-          "INVALID_INPUT",
-          `Inline VBA line ${bareLiteral.line} is a bare string literal, which is not a valid VBA statement.`,
-          {
-            details: { line: bareLiteral.line },
-            remediation: `Assign the return value explicitly: ${example}`,
-          },
-        ),
-      );
-    }
-
-    const unterminatedStringLine = unterminatedStringLiteralLine(rawCode);
-    if (unterminatedStringLine !== undefined) {
-      return failureResult(
-        createDysflowError(
-          "INVALID_INPUT",
-          `Inline VBA line ${unterminatedStringLine} contains an unterminated string literal.`,
-          {
-            details: { line: unterminatedStringLine },
-            remediation: `Close the string literal on line ${unterminatedStringLine} before retrying.`,
-          },
-        ),
-      );
-    }
-
-    if (resolveIsDryRun(params)) {
-      return successResult({
-        operation: "vba_inline_execution",
-        dryRun: true,
-        willExecute: false,
-        willModifyAccess: false,
-        willModifyFilesystem: false,
-        codeLength: rawCode.length,
-      });
-    }
-
-    if (typeof this.orchestrator.resolveExecutionTarget !== "function") {
-      return failureResult(
-        createDysflowError(
-          "ORCHESTRATOR_ERROR",
-          "Orchestrator must implement resolveExecutionTarget to run inline VBA.",
-        ),
-      );
-    }
-    const targetRes = await this.orchestrator.resolveExecutionTarget(params);
-    if (!targetRes.ok) return targetRes;
-    const targetData = targetRes.data as { destinationRoot: string };
-    const destinationRoot = targetData.destinationRoot;
-
-    // Guardrail (#548): inline execution writes a temp module under destinationRoot,
-    // which a writes-enabled caller can override via ACCESS_OVERRIDE. Refuse to write
-    // into the dysflow production runtime (AGENTS.md hard rule).
-    if (isWithinRuntime(destinationRoot, this.orchestrator.env ?? process.env)) {
-      return failureResult(
-        createDysflowError(
-          "INVALID_INPUT",
-          "Refusing to run inline VBA against a destinationRoot inside the dysflow production runtime. Point destinationRoot at your project, not the installed runtime.",
-        ),
-      );
-    }
-
-    // Inline execution shares its deadline between import_modules (Access
-    // startup + module import) and run_vba. The previous 30s hard-cap
-    // (issue #533) was added as defense-in-depth but proved too tight
-    // for real-world Access projects (14MB frontend + slow VBE warm-up
-    // can spend most of the 30s in the import phase). Trust the caller's
-    // `timeoutMs`; if absent, the orchestrator falls back to its
-    // configured default (30s) — same shape every other adapter uses.
-    const inlineParams = { ...params };
-
-    const moduleName = "__dysflow_inline__";
-
-    const folder = resolve(destinationRoot, "modules");
-    const filePath = resolve(folder, `${moduleName}.bas`);
-
-    // The snippet runs inside a Function so it can return a value: a bare
-    // `result = <expr>` assignment in the snippet is surfaced to the caller as
-    // run_vba's `returnValue`. `result` is an implicit Variant (the wrapper
-    // module has no `Option Explicit`), Empty when the snippet never assigns it
-    // (→ null returnValue). This is what makes inline usable for read-only
-    // introspection (e.g. `result = "Attrs=" & fld.Attributes`) — see #786.
-    const wrapper = `Attribute VB_Name = "${moduleName}"
-Public Function ExecuteInline() As Variant
-${rawCode}
-ExecuteInline = result
-End Function
-`;
-
-    // 1. Delete pre-existing database module and file on disk
-    const cleanupDiagnostics = [];
-    try {
-      await this.orchestrator.executeMappedTool(
-        "delete_module",
-        { ...inlineParams, moduleName, force: true },
-        EXECUTION_MAPPINGS.delete_module,
-      );
-    } catch {
-      // Suppress pre-cleanup failures
-    }
-    try {
-      await this.fileSystem.rm(filePath, { force: true });
-    } catch {
-      // Suppress pre-cleanup failures
-    }
-
-    // 2. Write file
-    try {
-      await this.fileSystem.writeFile(filePath, wrapper);
-    } catch (err) {
-      return failureResult(
-        createDysflowError(
-          "WRITE_ERROR",
-          `Failed to write temporary inline VBA file: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
-    }
-
-    let inlineResult: OperationResult<unknown> = failureResult(
-      createDysflowError("EXECUTION_ERROR", "Inline execution did not produce a result."),
-    );
-    try {
-      // 3. Import module
-      const importRes = await this.orchestrator.executeMappedTool(
-        "import_modules",
-        { ...inlineParams, moduleNames: [moduleName], dryRun: false },
-        EXECUTION_MAPPINGS.import_modules,
-      );
-      if (!importRes.ok) {
-        inlineResult = importRes;
-      } else {
-        // #786 — run the freshly-imported snippet by its BARE procedure name.
-        // Save-only import (no compile) is sufficient for Application.Run to
-        // resolve it; run_vba surfaces any runtime error the snippet raises.
-        inlineResult = await this.orchestrator.executeMappedTool(
-          "run_vba",
-          {
-            ...inlineParams,
-            moduleNames: [moduleName],
-            // #786 — bare procedure name. Application.Run treats a dotted prefix
-            // as a PROJECT qualifier, not a module: "__dysflow_inline__.ExecuteInline"
-            // resolves to project "__dysflow_inline__" (which does not exist) and
-            // fails with "no encuentra el procedimiento". The procedure name is
-            // unique to the throwaway module, so the bare name resolves correctly.
-            procedureName: "ExecuteInline",
-          },
-          EXECUTION_MAPPINGS.run_vba,
-        );
-      }
-    } catch (err) {
-      inlineResult = failureResult(
-        createDysflowError(
-          "EXECUTION_ERROR",
-          `Inline execution encountered an error: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
-    } finally {
-      // 6. Clean up
-      try {
-        const deleteResult = await this.orchestrator.executeMappedTool(
-          "delete_module",
-          { ...inlineParams, moduleName, force: true },
-          EXECUTION_MAPPINGS.delete_module,
-        );
-        if (!deleteResult.ok) {
-          cleanupDiagnostics.push(
-            createDiagnostic(
-              "warning",
-              "vba_inline_execution.cleanup",
-              `Temporary module cleanup failed (${deleteResult.error.code}): ${deleteResult.error.message}`,
-            ),
-          );
-        }
-      } catch (error) {
-        cleanupDiagnostics.push(
-          createDiagnostic(
-            "warning",
-            "vba_inline_execution.cleanup",
-            `Temporary module cleanup threw: ${errorText(error)}`,
-          ),
-        );
-      }
-      try {
-        await this.fileSystem.rm(filePath, { force: true });
-      } catch (error) {
-        cleanupDiagnostics.push(
-          createDiagnostic(
-            "warning",
-            "vba_inline_execution.cleanup",
-            `Temporary file cleanup failed: ${errorText(error)}`,
-          ),
-        );
-      }
-    }
-
-    if (cleanupDiagnostics.length === 0) return inlineResult;
-    if (!inlineResult.ok) {
-      return {
-        ...inlineResult,
-        diagnostics: [...inlineResult.diagnostics, ...cleanupDiagnostics],
-      };
-    }
-    return failureResult(
-      createDysflowError(
-        "INLINE_CLEANUP_FAILED",
-        "Inline VBA executed, but Dysflow could not completely remove its temporary artifacts.",
-      ),
-      { diagnostics: [...inlineResult.diagnostics, ...cleanupDiagnostics] },
     );
   }
 

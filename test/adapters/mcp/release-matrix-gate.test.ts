@@ -128,10 +128,10 @@ describe("MCP Release Matrix Gate & Coverage Report", () => {
     // +1 for #973 logs, +1 for #1057 describe_tool, +1 for #1177 migrate_project_config,
     // +1 for #1312 setup_project)
     //     = 94 visible (was 64 before #795).
-    expect(toolCount).toBe(73);
+    expect(toolCount).toBe(72);
     expect(stubCount).toBe(0);
     expect(modernCount).toBe(22);
-    expect(visibleCount).toBe(95);
+    expect(visibleCount).toBe(94);
   });
 
   it("verifies split-mode coverage explicitly", () => {

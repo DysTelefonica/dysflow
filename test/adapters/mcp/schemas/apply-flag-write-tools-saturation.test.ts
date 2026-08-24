@@ -21,7 +21,7 @@
  *      `properties.apply` declarations.
  *
  * Issue #1031 extends the direct scope to `fix_encoding`, `import_all`,
- * `run_vba`, and `vba_inline_execution`. Query-maintenance saturation
+ * and `run_vba`. Query-maintenance saturation
  * lives in `apply-flag-query-maintenance-saturation.test.ts`.
  */
 import { describe, expect, it } from "vitest";
@@ -63,8 +63,8 @@ describe("Issue #1014 — vba-sync apply:true family saturation", () => {
     expect(applyFamily).toContain("delete_module");
   });
 
-  it("the apply:true family covers the four vba-sync siblings #1031 fixes", () => {
-    for (const toolName of ["fix_encoding", "import_all", "run_vba", "vba_inline_execution"]) {
+  it("the apply:true family covers the remaining vba-sync siblings #1031 fixes", () => {
+    for (const toolName of ["fix_encoding", "import_all", "run_vba"]) {
       expect(applyFamily).toContain(toolName);
     }
   });

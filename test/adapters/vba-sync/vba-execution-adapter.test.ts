@@ -6,11 +6,7 @@ import {
   VbaExecutionAdapter,
   type VbaSyncOrchestrator,
 } from "../../../src/adapters/vba-sync/vba-execution-adapter";
-import {
-  createDysflowError,
-  failureResult,
-  successResult,
-} from "../../../src/core/contracts/index";
+import { successResult } from "../../../src/core/contracts/index";
 
 /**
  * PR1b (#621 F1) — allowlist forwarded to `new VbaExecutionAdapter(...)` so
@@ -72,7 +68,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("compile_vba", {
       accessPath: "C:/custom/front.accdb",
@@ -85,376 +81,6 @@ describe("VbaExecutionAdapter", () => {
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  // --- vba_inline_execution guardrails (#533) ---------------------------------
-
-  function makeInlineAdapter() {
-    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
-    const resolveExecutionTarget = vi
-      .fn()
-      .mockResolvedValue(successResult({ destinationRoot: "C:/repo/src", projectRoot: "C:/repo" }));
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool,
-      cwd: "C:/repo",
-      resolveExecutionTarget,
-    };
-    const fileSystem = {
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      rm: vi.fn().mockResolvedValue(undefined),
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem, TEST_ALLOWED_PROCEDURES);
-    return { adapter, executeMappedTool, fileSystem };
-  }
-
-  it("rejects inline code over the 1024-char cap before doing any work (#533)", async () => {
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", { code: "a".repeat(1025) });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error.code).toBe("INVALID_INPUT");
-    expect(fileSystem.writeFile).not.toHaveBeenCalled();
-    expect(executeMappedTool).not.toHaveBeenCalled();
-  });
-
-  it("rejects inline code that closes its own procedure block (#533)", async () => {
-    const { adapter, fileSystem } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'Debug.Print "x"\nEnd Sub',
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error.code).toBe("INVALID_INPUT");
-    expect(fileSystem.writeFile).not.toHaveBeenCalled();
-  });
-
-  it("rejects a trailing bare string literal before any write with caller-relative remediation (#850)", async () => {
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'Dim value As String\nvalue = "valid"\n"OK" \' return it',
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error).toMatchObject({
-      code: "INVALID_INPUT",
-      details: { line: 3 },
-      remediation: 'Assign the return value explicitly: result = "OK"',
-    });
-    expect(fileSystem.writeFile).not.toHaveBeenCalled();
-    expect(executeMappedTool).not.toHaveBeenCalled();
-  });
-
-  it("renders embedded quotes with VBA escaping in bare-literal remediation (#850)", async () => {
-    const { adapter } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", { code: '"a""b"' });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error.remediation).toBe('Assign the return value explicitly: result = "a""b"');
-  });
-
-  it("rejects an unterminated string with a caller-relative line before any write (#850)", async () => {
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'Dim value As String\nvalue = "unterminated',
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error).toMatchObject({
-      code: "INVALID_INPUT",
-      details: { line: 2 },
-      remediation: "Close the string literal on line 2 before retrying.",
-    });
-    expect(fileSystem.writeFile).not.toHaveBeenCalled();
-    expect(executeMappedTool).not.toHaveBeenCalled();
-  });
-
-  it("accepts quotes inside a VBA Rem comment without reporting an unterminated string (#850)", async () => {
-    const { adapter } = makeInlineAdapter();
-    const result = await adapter.execute("vba_inline_execution", {
-      code: '  Rem explain the "legacy value',
-    });
-    expect(result.ok).toBe(true);
-  });
-
-  it("does not mistake strings or comments in valid statements for trailing bare literals (#850)", async () => {
-    const { adapter, executeMappedTool } = makeInlineAdapter();
-    for (const code of [
-      'result = "OK"',
-      'Debug.Print "OK"',
-      'result = "a""b" \' quoted content',
-      '\' "OK" is only a comment\nresult = 1',
-    ]) {
-      const result = await adapter.execute("vba_inline_execution", { code, apply: true });
-      expect(result.ok, code).toBe(true);
-    }
-    expect(executeMappedTool).toHaveBeenCalled();
-  });
-
-  it("rejects inline code containing blocklisted unsafe keywords case-insensitively while allowing concatenated words", async () => {
-    const { adapter, fileSystem } = makeInlineAdapter();
-
-    for (const kw of ["Declare", "Shell", "CreateObject", "GetObject", "Lib"]) {
-      const result = await adapter.execute("vba_inline_execution", {
-        code: `Debug.Print "hello"\n${kw} something`,
-      });
-      expect(result.ok).toBe(false);
-      if (result.ok) throw new Error(`expected rejection for keyword ${kw}`);
-      expect(result.error.code).toBe("INVALID_INPUT");
-      expect(result.error.message).toContain("Unsafe keywords detected in inline VBA snippet");
-      expect(fileSystem.writeFile).not.toHaveBeenCalled();
-    }
-
-    const resultUpper = await adapter.execute("vba_inline_execution", {
-      code: 'CREATEOBJECT("Scripting.FileSystemObject")',
-    });
-    expect(resultUpper.ok).toBe(false);
-    if (resultUpper.ok) throw new Error("expected rejection for CREATEOBJECT");
-    expect(resultUpper.error.code).toBe("INVALID_INPUT");
-
-    const resultAllowed = await adapter.execute("vba_inline_execution", {
-      code: 'Dim myLib As String\nShellExecute 0, "open", "cmd.exe"',
-    });
-    expect(resultAllowed.ok).toBe(true);
-
-    const resultLibBlocked = await adapter.execute("vba_inline_execution", {
-      code: "Dim lib As Object",
-    });
-    expect(resultLibBlocked.ok).toBe(false);
-    if (resultLibBlocked.ok) throw new Error("expected rejection for lib keyword");
-    expect(resultLibBlocked.error.code).toBe("INVALID_INPUT");
-
-    const resultLibVarAllowed = await adapter.execute("vba_inline_execution", {
-      code: "Dim libVar As Object",
-    });
-    expect(resultLibVarAllowed.ok).toBe(true);
-  });
-
-  it("refuses inline execution when destinationRoot is inside the production runtime (#548)", async () => {
-    const executeMappedTool = vi.fn().mockResolvedValue(successResult({ ok: true }));
-    const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool,
-      cwd: "C:/runtime/dysflow",
-      env: { DYSFLOW_HOME: "C:/runtime/dysflow" } as NodeJS.ProcessEnv,
-      resolveExecutionTarget: vi
-        .fn()
-        .mockResolvedValue(successResult({ destinationRoot: "C:/runtime/dysflow/app" })),
-    };
-    const fileSystem = {
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      rm: vi.fn().mockResolvedValue(undefined),
-    };
-    const adapter = new VbaExecutionAdapter(orchestrator, fileSystem, TEST_ALLOWED_PROCEDURES);
-
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'Debug.Print "x"',
-      apply: true,
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected rejection");
-    expect(result.error.code).toBe("INVALID_INPUT");
-    expect(fileSystem.writeFile).not.toHaveBeenCalled();
-    expect(executeMappedTool).not.toHaveBeenCalled();
-  });
-
-  it("forwards the caller-supplied timeoutMs to import_modules and run_vba (no #533 ceiling)", async () => {
-    // The 30s ceiling added for #533 was too tight for real Access projects
-    // (14MB frontend + VBE warm-up routinely exceeded 30s end-to-end).
-    // Trust the caller's `timeoutMs`; the orchestrator's own default still
-    // applies when the caller does not specify one.
-    const { adapter, executeMappedTool } = makeInlineAdapter();
-    await adapter.execute("vba_inline_execution", {
-      code: 'Debug.Print "ok"',
-      timeoutMs: 120_000,
-      apply: true,
-    });
-    for (const toolName of ["import_modules", "run_vba"]) {
-      const call = executeMappedTool.mock.calls.find((c) => c[0] === toolName);
-      expect(call, `expected a ${toolName} call`).toBeDefined();
-      expect((call?.[1] as { timeoutMs?: number }).timeoutMs).toBe(120_000);
-    }
-  });
-
-  it("executes inline code using a stable __dysflow_inline__ module name, runs, and cleans up (compile is gone in v1.19.0)", async () => {
-    // feat-759-no-compile (v1.19.0) — inline execution no longer makes an
-    // explicit compile step. The flow is now import -> run -> cleanup.
-    // Access implicitly validates the procedure at call time.
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-
-    executeMappedTool.mockImplementation((toolName, _params) => {
-      if (toolName === "delete_module") return Promise.resolve(successResult({ ok: true }));
-      if (toolName === "import_modules") return Promise.resolve(successResult({ ok: true }));
-      if (toolName === "run_vba") return Promise.resolve(successResult("success return"));
-      return Promise.resolve(successResult({ ok: true }));
-    });
-
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'Debug.Print "Hello World"',
-      apply: true,
-    });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data).toBe("success return");
-    }
-
-    expect(fileSystem.writeFile).toHaveBeenCalledWith(
-      expect.stringContaining("__dysflow_inline__.bas"),
-      expect.stringContaining('Attribute VB_Name = "__dysflow_inline__"'),
-    );
-    expect(fileSystem.rm).toHaveBeenCalledWith(
-      expect.stringContaining("__dysflow_inline__.bas"),
-      expect.objectContaining({ force: true }),
-    );
-
-    const callNames = executeMappedTool.mock.calls.map((c) => c[0]);
-    expect(callNames).toEqual(["delete_module", "import_modules", "run_vba", "delete_module"]);
-  });
-
-  it("wraps the snippet in a Function that returns `result` (#786)", async () => {
-    // #786 — inline must be able to RETURN a value so it is usable for
-    // read-only introspection (e.g. `result = "Attrs=" & fld.Attributes`).
-    // The snippet is wrapped in a Function whose return is a bare `result`
-    // variable; a `Sub` wrapper would silently discard the value. Assert on
-    // the exact source written to the temp .bas — the byte contract the VBE
-    // imports.
-    const { adapter, fileSystem } = makeInlineAdapter();
-
-    await adapter.execute("vba_inline_execution", { code: 'result = "ok"', apply: true });
-
-    const written = fileSystem.writeFile.mock.calls[0]?.[1] as string;
-    expect(written).toContain("Public Function ExecuteInline() As Variant");
-    expect(written).toContain("ExecuteInline = result");
-    expect(written).not.toContain("Public Sub ExecuteInline");
-  });
-
-  it("runs the inline snippet by its BARE procedure name, not module-qualified (#786)", async () => {
-    // #786 — Application.Run treats a dotted prefix as a PROJECT qualifier, so
-    // passing "__dysflow_inline__.ExecuteInline" made Access look for a project
-    // named "__dysflow_inline__" and fail with "no encuentra el procedimiento".
-    // run_vba must receive the bare procedure name so the snippet resolves.
-    const { adapter, executeMappedTool } = makeInlineAdapter();
-
-    await adapter.execute("vba_inline_execution", { code: 'result = "ok"', apply: true });
-
-    const runCall = executeMappedTool.mock.calls.find((c) => c[0] === "run_vba");
-    expect(runCall, "expected a run_vba call").toBeDefined();
-    const runParams = runCall?.[1] as { procedureName?: string };
-    expect(runParams.procedureName).toBe("ExecuteInline");
-    expect(runParams.procedureName).not.toContain("__dysflow_inline__.");
-  });
-
-  it("returns run_vba's public returnValue payload for explicit result assignment (#850)", async () => {
-    const { adapter, executeMappedTool } = makeInlineAdapter();
-    executeMappedTool.mockImplementation((toolName) =>
-      Promise.resolve(
-        toolName === "run_vba"
-          ? successResult({ result: "OK", returnValue: "OK" })
-          : successResult({ ok: true }),
-      ),
-    );
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'result = "OK"',
-      apply: true,
-    });
-    expect(result).toMatchObject({ ok: true, data: { returnValue: "OK" } });
-  });
-
-  it("inspects cleanup OperationResult failures, preserves the primary error, and attempts both cleanups (#850)", async () => {
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-    let deleteCalls = 0;
-    executeMappedTool.mockImplementation((toolName) => {
-      if (toolName === "run_vba") {
-        return Promise.resolve(failureResult(createDysflowError("VBA_SYNTAX_ERROR", "bad syntax")));
-      }
-      if (toolName === "delete_module" && ++deleteCalls === 2) {
-        return Promise.resolve(
-          failureResult(createDysflowError("DELETE_FAILED", "module remained")),
-        );
-      }
-      return Promise.resolve(successResult({ ok: true }));
-    });
-    fileSystem.rm
-      .mockRejectedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("file remained"));
-
-    const result = await adapter.execute("vba_inline_execution", {
-      code: "result = missingName",
-      apply: true,
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected primary failure");
-    expect(result.error.code).toBe("VBA_SYNTAX_ERROR");
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          level: "warning",
-          message: expect.stringContaining("DELETE_FAILED"),
-        }),
-        expect.objectContaining({
-          level: "warning",
-          message: expect.stringContaining("file remained"),
-        }),
-      ]),
-    );
-    expect(executeMappedTool.mock.calls.filter((call) => call[0] === "delete_module")).toHaveLength(
-      2,
-    );
-    expect(fileSystem.rm).toHaveBeenCalledTimes(2);
-  });
-
-  it("fails a successful execution when the temporary module cannot be removed (#850)", async () => {
-    const { adapter, executeMappedTool } = makeInlineAdapter();
-    let deleteCalls = 0;
-    executeMappedTool.mockImplementation((toolName) => {
-      if (toolName === "run_vba") return Promise.resolve(successResult({ returnValue: "OK" }));
-      if (toolName === "delete_module" && ++deleteCalls === 2) {
-        return Promise.resolve(
-          failureResult(createDysflowError("DELETE_FAILED", "module remained")),
-        );
-      }
-      return Promise.resolve(successResult({ ok: true }));
-    });
-
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'result = "OK"',
-      apply: true,
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected cleanup failure");
-    expect(result.error.code).toBe("INLINE_CLEANUP_FAILED");
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining("DELETE_FAILED") }),
-      ]),
-    );
-  });
-
-  it.each([
-    ["import failure", "import_modules", "IMPORT_FAILED"],
-    ["execution timeout", "run_vba", "VBA_MANAGER_TIMEOUT"],
-  ])("cleans both temporary artifacts after %s (#850)", async (_case, failingTool, code) => {
-    const { adapter, executeMappedTool, fileSystem } = makeInlineAdapter();
-    executeMappedTool.mockImplementation((toolName) => {
-      if (toolName === failingTool) {
-        return Promise.resolve(failureResult(createDysflowError(code, `${failingTool} failed`)));
-      }
-      return Promise.resolve(successResult({ ok: true }));
-    });
-
-    const result = await adapter.execute("vba_inline_execution", {
-      code: 'result = "OK"',
-      apply: true,
-    });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected phase failure");
-    expect(result.error.code).toBe(code);
-    expect(executeMappedTool.mock.calls.at(-1)?.[0]).toBe("delete_module");
-    expect(fileSystem.rm).toHaveBeenCalledTimes(2);
-  });
-
   it("maps test_vba direct calls to a Run-Tests procedures JSON payload", async () => {
     const executeMappedTool = vi
       .fn()
@@ -463,7 +89,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_RunAll",
@@ -497,7 +123,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_X", args: [] }]),
@@ -552,7 +178,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -593,7 +219,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests/tests.vba.json",
@@ -628,7 +254,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -661,7 +287,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: root,
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "tests.vba.json",
@@ -681,7 +307,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { proceduresJson: "[]" });
 
@@ -710,7 +336,7 @@ describe("VbaExecutionAdapter", () => {
     await writeFile(join(root, "tests.vba.json"), JSON.stringify(tests), "utf8");
     const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
     return { adapter, executeMappedTool };
   }
 
@@ -967,7 +593,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/nonexistent-dir",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       testsPath: "nonexistent.json",
@@ -984,7 +610,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Run",
@@ -1002,7 +628,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
     const result = await adapter.execute("unsupported_tool", {});
     expect(result).toMatchObject({
       ok: false,
@@ -1021,7 +647,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_Run" });
     expect(result.ok).toBe(true);
@@ -1040,7 +666,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: "{ not valid json }",
@@ -1055,7 +681,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Sanitized" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const payloads = [
       '\uFEFF[\n  "Test_Sanitized"\n]',
@@ -1087,7 +713,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([123]),
@@ -1106,7 +732,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Shorthand" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["Test_Shorthand"]),
@@ -1126,7 +752,7 @@ describe("VbaExecutionAdapter", () => {
   it("accepts proceduresJson mixing shorthand strings and full objects", async () => {
     const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["Test_A", { procedure: "Test_B", args: ["x"] }]),
@@ -1150,7 +776,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify(["   "]),
@@ -1165,7 +791,7 @@ describe("VbaExecutionAdapter", () => {
     await writeFile(join(root, "tests.vba.json"), JSON.stringify(["Test_FromManifest"]), "utf8");
     const executeMappedTool = vi.fn().mockResolvedValue(successResult([{ ok: true }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
 
@@ -1195,7 +821,7 @@ describe("VbaExecutionAdapter", () => {
     };
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(runnerResult));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_A" });
 
@@ -1214,7 +840,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(tests));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_A" }, { procedure: "Test_C" }]),
@@ -1244,7 +870,7 @@ describe("VbaExecutionAdapter", () => {
         successResult("unexpected", { diagnostics, durationMs: 41, operation, metadata }),
       );
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_A" });
 
@@ -1287,7 +913,7 @@ describe("VbaExecutionAdapter", () => {
         successResult(runnerResult, { diagnostics, durationMs: 2375, operation, metadata }),
       );
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
 
@@ -1315,7 +941,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
 
@@ -1339,7 +965,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_B" });
 
@@ -1373,7 +999,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -1407,7 +1033,7 @@ describe("VbaExecutionAdapter", () => {
     ];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_Throws" });
 
@@ -1429,7 +1055,7 @@ describe("VbaExecutionAdapter", () => {
     const results = [{ ok: false, procedure: "Test_NoMessage", payload: "<<not-json>>" }];
     const executeMappedTool = vi.fn().mockResolvedValue(successResult(results));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { procedureName: "Test_NoMessage" });
 
@@ -1465,7 +1091,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromTestsSubdir" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -1492,7 +1118,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromRootManifest" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -1513,7 +1139,7 @@ describe("VbaExecutionAdapter", () => {
 
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", {}); // no testsPath
 
@@ -1541,7 +1167,7 @@ describe("VbaExecutionAdapter", () => {
     const absolutePath = join(root, "elsewhere", "my-tests.json");
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: absolutePath });
 
@@ -1563,7 +1189,7 @@ describe("VbaExecutionAdapter", () => {
 
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: "missing.json" });
 
@@ -1593,7 +1219,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromCwd" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { projectRoot: "" });
 
@@ -1615,7 +1241,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "",
     } as unknown as VbaSyncOrchestrator;
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { projectRoot: "" });
 
@@ -1655,7 +1281,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromAbsolutePath" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: root };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     const result = await adapter.execute("test_vba", { testsPath: absolutePath });
 
@@ -1705,7 +1331,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_FromDestinationRoot" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectRoot };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, TEST_ALLOWED_PROCEDURES);
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
 
     // No testsPath: adapter must walk projectRoot first (no manifest there),
     // then fall back to destinationRoot and find the manifest there.
@@ -1791,7 +1417,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, []);
+    const adapter = new VbaExecutionAdapter(orchestrator, []);
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_DeleteAll", args: [] }]),
     });
@@ -1845,7 +1471,7 @@ describe("VbaExecutionAdapter", () => {
     // must return a plan-shaped result (no runner call) — matching the spec.
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_A"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
@@ -1880,7 +1506,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_A" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_A"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
@@ -1903,7 +1529,7 @@ describe("VbaExecutionAdapter", () => {
       .fn()
       .mockResolvedValue(successResult([{ ok: true, procedure: "Test_A" }]));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_A"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_A"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
@@ -1921,10 +1547,7 @@ describe("VbaExecutionAdapter", () => {
         .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Allowed" }])),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, [
-      "Test_Allowed",
-      "Test_AlsoAllowed",
-    ]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed", "Test_AlsoAllowed"]);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Allowed",
@@ -1956,7 +1579,7 @@ describe("VbaExecutionAdapter", () => {
     // Resolver function: returns the allowlist based on the input each call.
     // In production this reads the project config of the target project.
     const resolver = vi.fn().mockResolvedValue(["Test_Allowed", "Test_AlsoAllowed"]);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Allowed",
@@ -1991,7 +1614,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_NotInList", args: [] }]),
@@ -2017,7 +1640,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Allowed"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -2042,10 +1665,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn().mockResolvedValue(successResult([{ ok: true }])),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, [
-      "Test_Allowed",
-      "Test_AlsoAllowed",
-    ]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed", "Test_AlsoAllowed"]);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -2081,7 +1701,7 @@ describe("VbaExecutionAdapter", () => {
     };
     // Allowlist does NOT contain Test_FromManifest — gate must catch it after
     // the adapter loads the manifest.
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, ["Test_Other"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Other"]);
 
     const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
 

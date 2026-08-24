@@ -1,8 +1,7 @@
 /**
  * Runtime-guard coverage for filesystem-writing tools (issue #574).
  *
- * The `isWithinRuntime` guard already protects `vba_inline_execution` (#548).
- * Three other write/delete paths can still receive destination/export/catalog
+ * Filesystem write/delete paths can receive destination/export/catalog
  * paths that point into the production runtime directory:
  *
  *   1. `VbaModulesAdapter.execute` — `export_modules` / `export_all` when

@@ -30,7 +30,7 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**95 visible MCP tools · Windows / Node 26**
+**94 visible MCP tools · Windows / Node 26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -76,7 +76,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 |---|---|
 | A local automation runtime for Microsoft Access (`.accdb`/`.mdb`) focused on safety and ownership | `src/adapters/vba-sync/`, `src/core/runtime/` |
 | A core-first platform with thin protocol adapters | `src/core/`, with `src/adapters/mcp/` and `src/adapters/http/` |
-| A platform with 95 visible MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
+| A platform with 94 visible MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
 | An AI-assisted form UI surface, from layout rendering to binding validation | `src/adapters/vba-sync/vba-forms-ai-tools.ts` |
 
 ### It is not
@@ -755,7 +755,7 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
-**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, `vba_inline_execution`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
+**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
 
 **Option 1 — per-repo.** Set `"allowWrites": false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
 

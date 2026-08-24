@@ -40,7 +40,7 @@ function makeAdapter(allowedProcedures: readonly string[] = ["Test_Alpha"]) {
     .fn()
     .mockResolvedValue(successResult([{ ok: true, procedure: "Test_Alpha" }]));
   const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-  const adapter = new VbaExecutionAdapter(orchestrator, undefined, allowedProcedures);
+  const adapter = new VbaExecutionAdapter(orchestrator, allowedProcedures);
   return { adapter, executeMappedTool };
 }
 

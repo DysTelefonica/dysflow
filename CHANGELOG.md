@@ -6,6 +6,17 @@
 
 - feat(mcp): make `verify_code` compact by default and expose full comparison evidence through `diagnostic:true` (#1535)
 
+## [v4.0.0] - 2026-08-24
+
+### Breaking changes
+
+- **MCP:** remove `vba_inline_execution` from the registry, schema, dispatcher, runtime adapter,
+  and documentation (#1534). Migrate one-shot code to a version-controlled `_Temp_*.bas` module:
+  add its public procedure to `allowedProcedures`, preview/apply `import_modules`, stop for the
+  human compile checkpoint, preview/apply `run_vba`, preview/apply `delete_module`, delete the
+  source file, then confirm `vba_orphan_audit` and `verify_code` are clean. See
+  [`docs/vba-execution.md`](docs/vba-execution.md).
+
 ## [v3.0.1] - 2026-08-24
 
 ### Changes
@@ -2738,9 +2749,10 @@ that locks the regression class in.
 ## [v1.2.34] - 2026-06-09
 
 Clean-release tidy-up. No runtime behavior changes — repo hygiene, a regression
-guard, and ledger accuracy. Closes the trivial items from the post-v1.2.33 fresh
-audit; the PowerShell mega-script restructure (#494) and the `processTimeoutMs`
-consolidation (#493) remain deferred and tracked.
+guard, and ledger accuracy.
+
+Closes the trivial items from the post-v1.2.33 fresh audit. The PowerShell mega-script
+restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferred and tracked.
 
 ### Added
 

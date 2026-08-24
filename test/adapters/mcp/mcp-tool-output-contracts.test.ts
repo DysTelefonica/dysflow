@@ -177,7 +177,6 @@ const OUTPUT_CONTRACT_GROUPS = {
     "form_get_geometry",
     "form_list_controls",
     "vba_orphan_audit",
-    "vba_inline_execution",
   ],
   accessRunnerQuery: [
     "query_sql",
