@@ -4,7 +4,6 @@ import { wrapWithErrorAbsorber } from "../../../src/adapters/mcp/stdio-wrappers.
 describe("error envelope has a structured code field", () => {
   const tools = [
     "run_script",
-    "vba_inline_execution",
     "list_procedures",
     "get_procedure",
     "find_references",

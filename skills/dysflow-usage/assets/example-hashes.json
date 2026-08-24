@@ -181,7 +181,7 @@
   },
   "run_vba": {
     "path": "assets/examples/run-vba.md",
-    "sha256": "dce82be770e722723f51267a42265dc7aa057b91cdcdec750897e437842bdb9c",
+    "sha256": "edbc61b1da1b5e9ba1859eaa9969911c577cdb204f573eff4e3ca4bbb367c335",
     "needs_human_content": false
   },
   "schema": {
@@ -212,11 +212,6 @@
   "validate_manifest": {
     "path": "assets/examples/validate-manifest.md",
     "sha256": "1e14a3a7645ea7556cf6f90d42fd1dad24c8fe07ed7fe68fe9fd14e8a3adb1da",
-    "needs_human_content": false
-  },
-  "vba_inline_execution": {
-    "path": "assets/examples/vba-inline-execution.md",
-    "sha256": "84fe1426dfb2fe581250c00f5b8bbfb5c109fea9805c93ecd0a23c2220f0db04",
     "needs_human_content": false
   },
   "verify_code": {

@@ -137,24 +137,6 @@ const GENERATE_ERD_CONTRACT = defineResultContract({
   schema: z.object({ ok: z.boolean().optional(), markdownFile: z.string() }).loose(),
 });
 
-const VBA_INLINE_EXECUTION_CONTRACT = defineResultContract({
-  description: "Inline VBA plan or execution result returned by the temporary run_vba procedure.",
-  modes: ["plan", "apply"],
-  schema: z.union([
-    z.object({ returnValue: z.json() }).loose(),
-    z
-      .object({
-        operation: z.literal("vba_inline_execution"),
-        dryRun: z.literal(true),
-        willExecute: z.literal(false),
-        willModifyAccess: z.literal(false),
-        willModifyFilesystem: z.literal(false),
-        codeLength: z.number().int().nonnegative(),
-      })
-      .loose(),
-  ]),
-});
-
 const IMPORT_QUERIES_CONTRACT = defineResultContract({
   description: "Query-definition import plan/apply result.",
   modes: ["plan", "apply"],
@@ -418,7 +400,6 @@ export function deriveDispatchResultContract(
 export function resultContractForDispatchTool(
   name: GeneratedDispatchToolName,
 ): AnyExecutableResultContract {
-  if (name === "vba_inline_execution") return VBA_INLINE_EXECUTION_CONTRACT;
   if (name === "fix_encoding") return FIX_ENCODING_CONTRACT;
   if (name === "delete_module") return DELETE_MODULE_CONTRACT;
   if (name === "generate_erd") return GENERATE_ERD_CONTRACT;

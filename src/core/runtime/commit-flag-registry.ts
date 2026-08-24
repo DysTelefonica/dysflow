@@ -95,7 +95,6 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   import_all: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   delete_module: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   fix_encoding: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
-  vba_inline_execution: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "plan" },
   // #1250: omission is an explicit plan default. Historical `diff:true`
   // remains a deprecated no-write alias; only `apply:true` commits.
   export_modules: { commitFlag: "apply", noWriteAlias: "diff", defaultBehavior: "plan" },

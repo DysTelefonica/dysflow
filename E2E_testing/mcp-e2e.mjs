@@ -1255,10 +1255,6 @@ await record("protocol", "discovered_projects_isolation", { projectId: "A" });
 await recordContract("diagnostics", "doctor", { projectId, includeEnvironment: true }, {}, ["bootstrap", "success"]);
 await recordContract("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath }, {}, ["sql"]);
 await recordContract("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" }, ["alias", "typed-error"]);
-// #786 regression — inline execution must run a snippet and return its `result`.
-// (record() asserts the transport did not error; the deep inner-ok + returnValue
-// assertion lives in test/e2e/vba-inline-execution.e2e.test.ts.)
-await record("vba", "vba_inline_execution", { projectId, code: 'result = "ok"', timeoutMs: 120000 }, { timeoutMs: 120000 });
 await record("operations", "list_access_operations", {});
 await recordContract("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" }, ["recovery"]);
 await record("operations", "access_force_cleanup_orphaned", {
@@ -1339,7 +1335,7 @@ await record("v2.34.2-regressions", "setup_project:missing-target-evidence", {
 // process so the one-shot contract is exercised end-to-end.
 await recordRecoveryTokenTrioJourney();
 
-const tools = ["run_script", "vba_inline_execution", "list_procedures",
+const tools = ["run_script", "list_procedures",
                "get_procedure", "find_references", "detect_dead_code"];
 for (const tool of tools) {
   await record("vba", `${tool}:error-envelope-code`, { projectId }, { expected: "error" });
@@ -1601,10 +1597,6 @@ await record("vba", "run_script:sandbox-only", {
   accessPath: "C:/Production/real.accdb", scriptPath: "/path/to/anything.sql", apply: false,
 }, { expected: "error" });
 // assertion: error.code in {SANDBOX_ONLY, RUNNING_PRODUCTION, HR3_VIOLATION}
-await record("vba", "vba_inline_execution:runtime-mutating-code-needs-confirmation", {
-  code: "Application.Quit", apply: true,
-}, { expected: "error" });
-// assertion: error.code in {HR1_VIOLATION, COMPILE_REQUIRED, CONFIRMATION_REQUIRED}
 await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: TEST_ID_BASE + 3, Name: "seed" }], apply: true, allowTable: probeTable });
 // teardown_fixture refuses an unbounded DELETE. The predicate range must sit at or
 // above TEST_ID_BASE, which is why every probe row above is seeded inside it.

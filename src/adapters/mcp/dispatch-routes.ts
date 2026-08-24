@@ -481,13 +481,6 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
     writeIntent: "policy-default",
     risk: "read-only",
   },
-  vba_inline_execution: {
-    kind: "vba-sync",
-    mutatesBinary: true,
-    mutatesFilesystem: false,
-    writeIntent: "policy-default",
-    risk: "arbitrary-write",
-  },
   // query maintenance (9)
   list_links: { kind: "query-maintenance", queryMode: "read", risk: "read-only" },
   export_queries: { kind: "query-maintenance", queryMode: "read", risk: "read-only" },

@@ -354,9 +354,7 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
 
   describe("registry-driven truth-table sweep", () => {
     it.each(
-      WRITE_CLASS_TOOLS.filter(
-        (name) => name !== "fix_encoding" && name !== "vba_inline_execution",
-      ),
+      WRITE_CLASS_TOOLS.filter((name) => name !== "fix_encoding"),
     )("%s — { apply: true, dryRun: true } is rejected with structured envelope", async (toolName) => {
       if (!schemaDeclares(toolName, "apply")) return;
       if (!schemaDeclares(toolName, "dryRun")) return;

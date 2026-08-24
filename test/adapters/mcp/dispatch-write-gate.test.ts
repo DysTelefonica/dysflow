@@ -140,15 +140,10 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it.each([
-    "fix_encoding",
-    "vba_inline_execution",
-  ] as const)("allows %s apply:false preview through public dispatch with writes disabled", async (name) => {
+  it("allows fix_encoding apply:false preview through public dispatch with writes disabled", async () => {
+    const name = "fix_encoding" as const;
     const { tool, vbaSyncToolService } = toolByName(name, false);
-    const input =
-      name === "fix_encoding"
-        ? { location: "module", apply: false }
-        : { code: 'result = "OK"', apply: false };
+    const input = { location: "module", apply: false };
 
     const result = await tool.handler(input);
 
@@ -157,16 +152,11 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([expect.objectContaining({ apply: false })]);
   });
 
-  it.each([
-    "fix_encoding",
-    "vba_inline_execution",
-  ] as const)("keeps %s diff:true and omitted intent as safe plans", async (name) => {
+  it("keeps fix_encoding diff:true and omitted intent as safe plans", async () => {
+    const name = "fix_encoding" as const;
     for (const intent of [{ diff: true }, {}]) {
       const { tool, vbaSyncToolService } = toolByName(name, false);
-      const input =
-        name === "fix_encoding"
-          ? { location: "module", ...intent }
-          : { code: 'result = "OK"', ...intent };
+      const input = { location: "module", ...intent };
 
       const result = await tool.handler(input);
 
@@ -175,15 +165,10 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     }
   });
 
-  it.each([
-    "fix_encoding",
-    "vba_inline_execution",
-  ] as const)("rejects removed dryRun even when apply:true is present for %s", async (name) => {
+  it("rejects removed dryRun even when apply:true is present for fix_encoding", async () => {
+    const name = "fix_encoding" as const;
     const { tool, vbaSyncToolService } = toolByName(name, true);
-    const input =
-      name === "fix_encoding"
-        ? { location: "module", apply: true, dryRun: true }
-        : { code: 'result = "OK"', apply: true, dryRun: true };
+    const input = { location: "module", apply: true, dryRun: true };
 
     const result = await tool.handler(input);
 
@@ -418,7 +403,6 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
       tokenMap: { FormName: "FormCustomerClone" },
       apply: true,
     },
-    vba_inline_execution: { code: "Sub T()\r\nEnd Sub" },
     // Issue #809 — sync_binary is dryRun-capable (apply:true forces isDryRun=false)
     // so the gate must fire on apply:true even when writes are disabled.
     sync_binary: {
@@ -463,7 +447,6 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
         "form_set_properties",
         "form_set_property",
         "sync_binary",
-        "vba_inline_execution",
       ].sort(),
     );
   });

@@ -157,7 +157,6 @@ describe("MCP_TOOL_ROUTES coverage (regression pin)", () => {
         "form_set_properties",
         "form_set_property",
         "sync_binary",
-        "vba_inline_execution",
       ].sort(),
     );
   });

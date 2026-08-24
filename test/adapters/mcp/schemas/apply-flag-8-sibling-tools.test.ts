@@ -16,12 +16,7 @@ import {
   validateInput,
 } from "../../../../src/shared/validation/index.js";
 
-const VBA_SYNC_SIBLINGS = [
-  "fix_encoding",
-  "import_all",
-  "run_vba",
-  "vba_inline_execution",
-] as const;
+const VBA_SYNC_SIBLINGS = ["fix_encoding", "import_all", "run_vba"] as const;
 
 const QUERY_MAINTENANCE_SIBLINGS = [
   "relink_tables",
@@ -51,11 +46,6 @@ const BASE_INPUTS: Record<AffectedTool, Record<string, unknown>> = {
   run_vba: {
     accessPath: "C:/project/Foo.accdb",
     procedureName: "Issue1031Proc",
-  },
-  vba_inline_execution: {
-    accessPath: "C:/project/Foo.accdb",
-    projectRoot: "C:/project",
-    code: 'result = "OK"',
   },
   relink_tables: {
     accessPath: "C:/project/Foo.accdb",

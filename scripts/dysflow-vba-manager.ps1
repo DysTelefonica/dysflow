@@ -2052,7 +2052,7 @@ function Get-AccessDatabaseLockedOwner {
 # itself, and a consumer can observe helper output that does not match
 # what the binary currently contains (verified against an EXPEDIENTES
 # reproducer where test_vba ran helper code that differed from the same
-# binary executed via vba_inline_execution).
+# binary executed through a temporary imported module).
 #
 # The fix is two pure helpers + an integration point in
 # Invoke-RunTestsAction. The helpers stay pure (no COM, no MSACCESS) so
@@ -5166,7 +5166,7 @@ function Invoke-RunProcedureAction {
     Param(
         [Parameter(Mandatory = $true)]$Session,
         [Parameter(Mandatory = $true)][string]$ProcedureName,
-        # AllowEmptyString: a no-arg procedure (run_vba / vba_inline_execution with no
+        # AllowEmptyString: a no-arg run_vba procedure with no
         # args) passes "". A bare Mandatory [string] rejects empty with a binding error
         # before the body runs; Convert-ProcedureArgsJson already maps empty -> @().
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ProcedureArgsJson,
@@ -5212,7 +5212,7 @@ function Invoke-RunTestsAction {
     # this copy, MSACCESS.EXE may reuse compiled-bytecode state or stale
     # in-memory helpers from a prior open of the same binary, and the
     # consumer observes helper output that differs from what
-    # vba_inline_execution produces against the same binary.
+    # a temporary imported module produces against the same binary.
     #
     # The copy is opened in place of the source; Open-AccessDatabase
     # therefore points at the sandbox path. The sandbox is removed in the
@@ -5481,9 +5481,7 @@ try {
         Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson $ProceduresJson -ProceduresJsonFile $ProceduresJsonFile -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -Json:$Json
 
     # feat-759-no-compile (v1.19.0) — the `Compile` action dispatcher branch
-    # was removed. The compile_vba MCP tool is gone, the inline execution
-    # path skips the explicit compile step (letting run_vba surface any
-    # compile error as a regular run failure), and the helper functions
+    # was removed. The compile_vba MCP tool is gone, and the helper functions
     # Invoke-CompileVbaProject / Invoke-CompileAction / New-CompileFailureResult
     # are gone. No path routes -Action "Compile" anymore.
 

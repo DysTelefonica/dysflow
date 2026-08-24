@@ -125,7 +125,6 @@ describe("get_capabilities — writeExecutionPolicy + effectiveDryRunDefault (#7
       "fix_encoding",
       "compact_repair",
       "relink_directory",
-      "vba_inline_execution",
       "exec_sql",
       "run_script",
       "query_execute",

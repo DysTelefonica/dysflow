@@ -60,7 +60,6 @@ describe("route-declared write intent saturation (#1353)", () => {
 
   it("keeps preview-capable policy tools distinct from unconditional binary writes", () => {
     expect(writeIntent(MCP_TOOL_ROUTES.fix_encoding)).toBe("policy-default");
-    expect(writeIntent(MCP_TOOL_ROUTES.vba_inline_execution)).toBe("policy-default");
     expect(writeIntent(MCP_TOOL_ROUTES.import_modules)).toBe("always-gated");
     expect(writeIntent(MCP_TOOL_ROUTES.import_all)).toBe("always-gated");
   });

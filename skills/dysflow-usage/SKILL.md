@@ -244,7 +244,6 @@ silently picking one intent — always read
 | `assets/examples/export-all.md` | `export_all` — full project export, optional `prune:true` |
 | `assets/examples/verify-code.md` | `verify_code` — drift detection (read-only) |
 | `assets/examples/run-vba.md` | `run_vba` — invoke a public VBA procedure |
-| `assets/examples/vba-inline-execution.md` | `vba_inline_execution` — execute a guarded throwaway snippet |
 | `assets/examples/test-vba.md` | `test_vba` — run a JSON manifest of test atoms |
 | `assets/examples/lint-module.md` | `lint_module` — parse-error hint per module |
 | `assets/examples/query-execute.md` | `query_execute` — read/write SQL |

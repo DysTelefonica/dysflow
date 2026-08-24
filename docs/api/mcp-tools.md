@@ -438,12 +438,10 @@ See the shipped [`references/error-codes.md`](../../references/error-codes.md) f
   - Parameters: `operationId` (string, required), `force` (boolean, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
-* **`run_vba`**: Alias for executing a public VBA procedure in an already compiled project.
+* **`run_vba`**: Execute an allowlisted public VBA procedure in an already compiled project. For one-shot code, use the version-controlled [`_Temp_*.bas` migration workflow](../vba-execution.md): preview/apply the import, stop for the human compile checkpoint, preview/apply `run_vba`, preview/apply `delete_module`, delete the source, and verify no orphan or unexpected drift remains.
   - Parameters: `procedureName` (string, required), `argsJson` (string, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
   - Parameters: none (uses the active project context)
-* **`vba_inline_execution`**: Run a throwaway VBA procedure-body snippet in one call — writes a temporary module, imports it, executes its public entry point, and cleans up both the binary component and temp file. Return values are explicit: write `result = "OK"`; the adapter result contains `data.returnValue`, while MCP carries `{ "returnValue": "OK" }` in `content[0].text` as JSON. A final bare literal such as `"OK"` is not an implicit return (it is invalid VBA) and is rejected before any import. Write-gated.
-  - Parameters: `code` (string, required), `timeoutMs` (number, optional)
 
 ### Semantic diff classification
 

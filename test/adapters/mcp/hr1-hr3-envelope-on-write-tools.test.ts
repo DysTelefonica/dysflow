@@ -46,15 +46,4 @@ describe("HR-1 human compile and HR-3 sandbox gates", () => {
     expect(result?.error?.code).toMatch(/SANDBOX_ONLY|RUNNING_PRODUCTION|HR3_VIOLATION/);
     expect(queryService.calls).toBe(0);
   });
-
-  it("vba_inline_execution refuses runtime mutation without confirmation", async () => {
-    const { tools, vbaSyncToolService } = makeTools();
-    const tool = tools.find((candidate) => candidate.name === "vba_inline_execution");
-
-    const result = await tool?.handler({ code: "Application.Quit", apply: true });
-
-    expect(result?.ok).toBe(false);
-    expect(result?.error?.code).toMatch(/HR1_VIOLATION|COMPILE_REQUIRED|CONFIRMATION_REQUIRED/);
-    expect(vbaSyncToolService.calls).toBe(0);
-  });
 });

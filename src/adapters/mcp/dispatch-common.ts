@@ -100,38 +100,6 @@ export function enforceSandboxOnlyAccess(
   );
 }
 
-const INLINE_RUNTIME_MUTATION =
-  /\b(?:Application|Access\.Application|DoCmd)\s*\.\s*(?:Quit|CloseDatabase)\b/i;
-
-export function isInlineRuntimeMutation(input: unknown): boolean {
-  if (typeof input !== "object" || input === null) return false;
-  const request = input as Record<string, unknown>;
-  return (
-    request.apply === true &&
-    typeof request.code === "string" &&
-    INLINE_RUNTIME_MUTATION.test(request.code)
-  );
-}
-
-/**
- * HR-1: inline code that can terminate or replace the active Access runtime
- * needs explicit human confirmation before the apply path can execute.
- */
-export function enforceInlineRuntimeMutationConfirmation(
-  input: unknown,
-): McpToolResult | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
-  const request = input as Record<string, unknown>;
-  if (!isInlineRuntimeMutation(input) || request.confirmedRequiresConfirmation === true) {
-    return undefined;
-  }
-  return typedRuleViolation(
-    "CONFIRMATION_REQUIRED",
-    "vba_inline_execution contains runtime-mutating code and requires explicit human confirmation.",
-    "After the human explicitly approves the runtime mutation, retry with confirmedRequiresConfirmation: true.",
-  );
-}
-
 /**
  * Round-12 (#972) — uniform `diagnostics` array. Every error envelope
  * MUST carry this field (possibly empty). When the source error already

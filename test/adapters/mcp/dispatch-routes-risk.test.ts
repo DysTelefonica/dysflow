@@ -43,8 +43,6 @@ const EXPECTED_ROUTE_RISK: Readonly<Partial<Record<GeneratedDispatchToolName, To
   form_delete_control: "destructive-write",
   // VBA sync — protected family (1)
   fix_encoding: "protected-write",
-  // VBA sync — arbitrary family (1)
-  vba_inline_execution: "arbitrary-write",
   // VBA sync — routine dev writes (8)
   import_modules: "routine-dev-write",
   import_all: "routine-dev-write",
@@ -251,7 +249,7 @@ describe("MCP_TOOL_ROUTES — risk classification (#779)", () => {
     expect(protectedRoutes).toEqual(["compact_repair", "fix_encoding", "relink_directory"]);
   });
 
-  it("arbitrary family = vba_inline_execution (no other generated route is arbitrary)", () => {
+  it("has no arbitrary-write generated route after the v4 inline-execution removal", () => {
     const arbitrary = (
       Object.entries(MCP_TOOL_ROUTES) as Array<
         [GeneratedDispatchToolName, (typeof MCP_TOOL_ROUTES)[GeneratedDispatchToolName]]
@@ -260,7 +258,7 @@ describe("MCP_TOOL_ROUTES — risk classification (#779)", () => {
       .filter(([, r]) => (r as { risk?: string }).risk === "arbitrary-write")
       .map(([n]) => n)
       .sort();
-    expect(arbitrary).toEqual(["vba_inline_execution"]);
+    expect(arbitrary).toEqual([]);
   });
 
   it("process-control lives behind aliases, NEVER in generated routes", () => {

@@ -36,7 +36,7 @@
  *                            `confirmOverwriteSource: true` when the
  *                            destination overlaps the active source root.
  * - `arbitrary-write`      — arbitrary side effects (exec_sql, run_script,
- *                            query_execute write mode, vba_inline_execution).
+ *                            query_execute write mode).
  * - `process-control`      — can kill a process (cleanup_access_operation
  *                            with force=true, access_force_cleanup_orphaned
  *                            with confirmPid).

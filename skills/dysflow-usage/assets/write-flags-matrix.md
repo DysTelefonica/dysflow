@@ -106,7 +106,6 @@
 | `access_force_cleanup_orphaned` | `noop` | `[]` | `read-only` (despite the name) | Lists orphan candidates OR retires one verified orphan PID. `pid:<positive>` requires `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true` AFTER explicit human approval. |
 | `clean_stale_markers` | `plan` | `[]` | `routine-dev-write` | Marker-file maintenance for the dispatch seam. |
 | `setup_project` | `plan` | `[]` | `conditional-write` | Bootstrap a missing per-worktree project config. Plan + apply form a 2-call sequence. `projectId` is REQUIRED and the trio `projectId` + `projectChoiceReason` + `recoveryToken` is the ambiguity-recovery contract. |
-| `vba_inline_execution` | `plan` | `[]` | `destructive-write` | Run a guarded throwaway snippet. |
 
 > The 4 write-class tools listed here are the ones with `access` of `conditional-write` or `destructive-write` AND that participate in workflow orchestration. They are not exhaustive; see `get_capabilities.writeClassToolsPermitted` (44 in total) for the runtime-mandated list.
 

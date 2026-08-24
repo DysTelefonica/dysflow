@@ -11,6 +11,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | Expected capability | Status in this repository |
 |---|---|
 | `compile_vba` MCP tool | Removed in v1.19.0 (`feat-759-no-compile`). Guard entries remain so a legacy `compile: true` fails loudly. |
+| `vba_inline_execution` MCP tool | Removed in v4.0.0. Use the version-controlled [`_Temp_*.bas` workflow](../vba-execution.md) with `import_modules`, the human compile checkpoint, and `run_vba`. |
 | Web dashboard or server-rendered UI | Not found. No HTMX, template, or UI route exists. |
 | Auth, login, OAuth, session, or tenant boundary | Not implemented. |
 | Git-clone or source-build update fallback | Not found. |

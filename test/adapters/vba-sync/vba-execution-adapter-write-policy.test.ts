@@ -42,11 +42,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 /**
  * Build a `VbaExecutionAdapter` with a stubbed orchestrator. The adapter
  * construction is the post-capa-3 wiring:
- *   `new VbaExecutionAdapter(orchestrator, fileSystem, allowedProcedures)`
- *
- * `fileSystem` is `undefined` (defaults to the real `node:fs` port) — the
- * capa-3 tests do not exercise `vba_inline_execution`, so the FS port is
- * inert for the test_vba/run_vba paths.
+ *   `new VbaExecutionAdapter(orchestrator, allowedProcedures)`
  */
 function makeAdapter(opts: {
   allowedProcedures?: AllowedProcedures | null | "missing";
@@ -62,7 +58,7 @@ function makeAdapter(opts: {
   // into the refusal branch without the helper's fallback overriding them.
   const allowedProcedures: AllowedProcedures | undefined =
     opts.allowedProcedures === "missing" ? undefined : (opts.allowedProcedures ?? ["Test_Alpha"]);
-  const adapter = new VbaExecutionAdapter(orchestrator, undefined, allowedProcedures);
+  const adapter = new VbaExecutionAdapter(orchestrator, allowedProcedures);
   return { adapter, executeMappedTool };
 }
 

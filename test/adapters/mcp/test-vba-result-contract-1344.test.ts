@@ -12,7 +12,7 @@ const ALLOWED_PROCEDURES = ["Test_One", "Test_Two"] as const;
 function createTestVbaTool(rawRunnerData: unknown) {
   const executeMappedTool = vi.fn().mockResolvedValue(successResult(rawRunnerData));
   const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
-  const adapter = new VbaExecutionAdapter(orchestrator, undefined, ALLOWED_PROCEDURES);
+  const adapter = new VbaExecutionAdapter(orchestrator, ALLOWED_PROCEDURES);
   const tools = createDysflowMcpTools({
     services: {
       vbaService: {

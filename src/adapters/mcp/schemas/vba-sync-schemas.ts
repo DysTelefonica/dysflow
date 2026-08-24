@@ -1861,19 +1861,4 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
     },
   },
-  vba_inline_execution: {
-    type: "object",
-    required: ["code"],
-    additionalProperties: false,
-    properties: {
-      ...CTX_PROPS,
-      ...ACCESS_OVERRIDE,
-      ...STRICT_CTX,
-      code: SCHEMA_PROPS.code,
-      // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
-      ...WRITE_INTENT_BLOCK,
-      ...CONFIRMATION_OVERRIDE_BLOCK,
-      timeoutMs: SCHEMA_PROPS.timeoutMs,
-    },
-  },
 };

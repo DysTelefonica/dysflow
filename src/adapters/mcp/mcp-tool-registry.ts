@@ -100,7 +100,6 @@ export const VBA_SYNC_TOOL_NAMES = [
   // vba-sync 44 -> 45, total 68 -> 69. Advertised 79 -> 80.
   "sync_binary",
   "vba_orphan_audit",
-  "vba_inline_execution",
 ] as const;
 
 export const QUERY_TOOL_NAMES = [

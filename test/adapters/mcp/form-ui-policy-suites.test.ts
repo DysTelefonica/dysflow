@@ -152,9 +152,9 @@ describe("tool registry — three-tool presence (#813 phase 6)", () => {
 
   it("tool counts step from 36/60 to 38/62 (Phase 6 cascade), then 39/63 (#814), then 40/64 (#815), then 42/66 (#816), then 43/67 (#817), then 44/68 (#818), then 45/69 (#809), then 49/73 (#872)", () => {
     // VBA_SYNC_TOOL_NAMES gains 2 at Phase 6, then 1 more at #814, then 1 more at #815, then 2 more at #816, then 1 more at #817, then 1 more at #818, then 1 more at #809 (sync_binary), then 4 more at #872 (form_set_properties + form_duplicate_control + form_get_geometry + form_list_controls).
-    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(49);
-    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(73);
-    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(73);
+    expect(VBA_SYNC_TOOL_NAMES).toHaveLength(48);
+    expect(DYSFLOW_MCP_TOOL_NAMES).toHaveLength(72);
+    expect(new Set(DYSFLOW_MCP_TOOL_NAMES).size).toBe(72);
   });
 });
 
@@ -547,6 +547,6 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     expect(
       visible,
       "visible tool count after #872 + #971 + #965 + #976 + #973 + #978 + #1057 + #1177",
-    ).toBe(95);
+    ).toBe(94);
   });
 });

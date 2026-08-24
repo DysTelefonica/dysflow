@@ -17,7 +17,6 @@ describe("dispatch-family executable result contracts — #1098", () => {
       const contract = resultContractForDispatchTool(name as GeneratedDispatchToolName);
       if (
         ![
-          "vba_inline_execution",
           "import_queries",
           "compact_repair",
           "relink_tables",
@@ -102,25 +101,6 @@ describe("dispatch-family executable result contracts — #1098", () => {
         moduleName: "",
       }).success,
     ).toBe(true);
-  });
-
-  it("models vba_inline_execution's real run_vba payload instead of a mutation mode", () => {
-    const contract = resultContractForDispatchTool("vba_inline_execution");
-    expect(contract.kind).toBe("dataSchema");
-    if (contract.kind !== "dataSchema") return;
-
-    expect(contract.schema.safeParse({ returnValue: "ok" }).success).toBe(true);
-    expect(
-      contract.schema.safeParse({
-        operation: "vba_inline_execution",
-        dryRun: true,
-        willExecute: false,
-        willModifyAccess: false,
-        willModifyFilesystem: false,
-        codeLength: 13,
-      }).success,
-    ).toBe(true);
-    expect(contract.schema.safeParse({ mode: "apply" }).success).toBe(false);
   });
 
   it("models import_queries' real dry-run payload", () => {

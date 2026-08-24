@@ -233,7 +233,6 @@ describe("dryRunDefault contract — global + per-tool alignment (#746)", () => 
     "import_all",
     "delete_module",
     "fix_encoding",
-    "vba_inline_execution",
     "form_add_control",
     "form_move_control",
     "form_rename_control",

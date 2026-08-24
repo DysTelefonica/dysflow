@@ -381,7 +381,6 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   verify_form_bindings: ["#818"],
   sync_binary: ["#809"],
   vba_orphan_audit: [],
-  vba_inline_execution: ["#746"],
   query_execute: ["#746", "#962"],
   doctor: [],
   access_force_cleanup_orphaned: ["#777"],
@@ -996,14 +995,14 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
       },
     );
   }
-  if (writeClass && (name === "run_script" || name === "vba_inline_execution")) {
+  if (writeClass && name === "run_script") {
     codes.push({
       code: "SANDBOX_ONLY",
       description: "The explicit Access target is outside the active worktree sandbox.",
       recoverable: true,
     });
   }
-  if (writeClass && (name === "vba_inline_execution" || name === "access_force_cleanup_orphaned")) {
+  if (writeClass && name === "access_force_cleanup_orphaned") {
     codes.push({
       code: "CONFIRMATION_REQUIRED",
       description: "The operation requires explicit human confirmation before it can execute.",

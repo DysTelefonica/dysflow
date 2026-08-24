@@ -94,7 +94,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     // called with each test_vba input and returns the allowlist of the project
     // the input targets.
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(["Test_A", "Test_B", "Test_C"]);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_A",
@@ -224,7 +224,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     // config that has NO allowedProcedures (the original F23 condition: even
     // when the config DOES have entries, the gate emits this envelope).
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue(undefined);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -262,7 +262,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     const executeMappedTool = vi.fn();
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectDir };
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue([]);
-    const adapter = new VbaExecutionAdapter(orchestrator, undefined, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Any",

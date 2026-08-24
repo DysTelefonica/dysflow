@@ -8,14 +8,11 @@ import { isRecord } from "../../core/utils/index.js";
 import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import {
   destinationRootRequired,
-  enforceInlineRuntimeMutationConfirmation,
   enforceRequiresConfirmation,
-  enforceSandboxOnlyAccess,
   enrichmentForValidationMessage,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
-  isInlineRuntimeMutation,
   isWriteAllowed,
   mcpSchemaFor,
   normalizeLegacyReadToolDetails,
@@ -195,23 +192,7 @@ export function createDispatchTool(
       // and either demands the override or returns a typed envelope.
       // Centralised here so every mutating tool inherits it without
       // per-handler wiring.
-      if (name === "vba_inline_execution") {
-        const context = await accessContextResolver?.(normalizedInput);
-        const sandboxRoot = context?.ok ? context.data.projectRoot : undefined;
-        const sandboxViolation = enforceSandboxOnlyAccess(normalizedInput, name, sandboxRoot);
-        if (sandboxViolation !== undefined) return sandboxViolation;
-        const runtimeMutationConfirmation =
-          enforceInlineRuntimeMutationConfirmation(normalizedInput);
-        if (runtimeMutationConfirmation !== undefined) return runtimeMutationConfirmation;
-      }
-      const confirmedInlineRuntimeMutation =
-        name === "vba_inline_execution" &&
-        isInlineRuntimeMutation(normalizedInput) &&
-        isRecord(normalizedInput) &&
-        normalizedInput.confirmedRequiresConfirmation === true;
-      const confirmationCheck = confirmedInlineRuntimeMutation
-        ? undefined
-        : enforceRequiresConfirmation(normalizedInput, name);
+      const confirmationCheck = enforceRequiresConfirmation(normalizedInput, name);
       if (confirmationCheck !== undefined) return confirmationCheck;
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
@@ -438,28 +419,6 @@ export function createDispatchTool(
                   }
                 : coreResult;
             const mcpResult = translateCoreResultToMcpContent(resultForWire);
-            // #850 — inline syntax validation returns caller-relative details and
-            // remediation from the adapter. Preserve those fields at the public
-            // MCP boundary instead of forcing consumers to parse the text body.
-            // Scope this enrichment to vba_inline_execution so the generic
-            // translator's established envelope remains backward compatible.
-            if (
-              name === "vba_inline_execution" &&
-              !coreResult.ok &&
-              coreResult.error.code === "INVALID_INPUT"
-            ) {
-              const prefix = `${coreResult.error.code}: `;
-              const text = mcpResult.content[0]?.text ?? prefix;
-              const line = coreResult.error.details?.line;
-              mcpResult.error = {
-                code: coreResult.error.code,
-                message: text.startsWith(prefix) ? text.slice(prefix.length) : text,
-                ...(typeof line === "number" ? { details: { line } } : {}),
-                ...(coreResult.error.remediation
-                  ? { remediation: coreResult.error.remediation }
-                  : {}),
-              };
-            }
             const accessPath = extractAccessPathFromInput(normalizedInput);
             if (accessPath === undefined) return mcpResult;
             return withHumanCompileReminder(mcpResult, { toolName: name, accessPath });
