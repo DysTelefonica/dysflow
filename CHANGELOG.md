@@ -1,5 +1,32 @@
 # Changelog
 
+## [v3.0.0] - 2026-08-24
+
+### Changes
+
+- fix(skills): align bundled harness with progressive discovery (#1523)
+- test(e2e): cover structural form tools (#1519)
+- fix(e2e): request bounded schema view (#1518)
+- test(e2e): cover single-control form mutations (#1517)
+- fix(e2e): select full release tool surface (#1516)
+- fix(tooling): use supported Biome format check (#1513)
+- test(e2e): cover read-only form tools (#1510)
+- ci(e2e): add nightly Access coverage (#1511)
+- test(vba-sync): isolate preflight cleanup from unit tests (#1509)
+- perf(mcp): advertise core tool surface by default (#1508)
+- ci(workflows): eliminate duplicate pull-request gates (#1507)
+- refactor(core): extract query pre-flight from runLockedOperation (#1491) (#1499)
+- fix(mcp): point TOOL_NOT_FOUND at a bounded discovery view (#1497)
+- test(e2e): gate that every advertised tool has an E2E scenario (#1505)
+- perf(process): probe for a live Access process before the CIM job (#1498)
+- docs(mcp): add the add-a-tool registration checklist and anchor it (#1493) (#1500)
+- docs(changelog): split #1485 BREAKING entry to satisfy Alan Style paragraph-length (#1485) (#1496)
+- feat(mcp): add dysflow.bootstrap() one-call surface (#1484) (#1495)
+- refactor(mcp): default get_capabilities view to compact (#1483) (#1487)
+- refactor(mcp): require explicit view in schema tool to prevent full-by-default (#1485) (#1489)
+- docs(skill): teach compact progressive path as the default first call (#1482) (#1488)
+
+
 ## [v2.38.2] - 2026-08-22
 
 ### Changes
