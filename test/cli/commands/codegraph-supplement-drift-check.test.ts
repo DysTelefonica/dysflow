@@ -146,6 +146,8 @@ describe("runSupplementDriftCheck — missing files", () => {
       expect(error.code).toBe("FILE_READ_FAILED");
     }
     expect(diagnostic.message).toMatch(/skipped 10 unreadable/i);
+    expect(diagnostic.message).toContain(join(HOME, ".config/opencode/AGENTS.md"));
+    expect(diagnostic.message).toContain("ENOENT");
     // ok=true because no drift was found; missing files alone do NOT
     // flip the verdict — dysflow can't be held responsible for files
     // the user hasn't laid down on disk.
@@ -261,5 +263,6 @@ describe("formatSupplementDriftDiagnostic", () => {
     expect(diagnostic.message).toMatch(/1 stale/i);
     expect(diagnostic.message).toMatch(/1 malformed/i);
     expect(diagnostic.message).toMatch(/skipped 1 unreadable/i);
+    expect(diagnostic.message).toContain("b (e)");
   });
 });
