@@ -1,5 +1,14 @@
 # Changelog
 
+## [v3.0.1] - 2026-08-24
+
+### Changes
+
+- docs(release): centralize heavy E2E authority
+- fix(paths): preserve POSIX form source paths
+- fix(release): restore exact-SHA quality authority
+
+
 ## [v3.0.0] - 2026-08-24
 
 ### Changes
