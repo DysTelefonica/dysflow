@@ -21,9 +21,13 @@
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  normalizePathForDetails,
+  resolveMutationPath,
+} from "../../../src/adapters/vba-sync/vba-forms-paths";
 import {
   type VbaManagerExecutor,
   VbaSyncAdapter,
@@ -42,6 +46,35 @@ const FAKE_FORM_TXT = [
   "Option Compare Database",
   "",
 ].join("\r\n");
+
+describe("destinationRoot path portability (#1525)", () => {
+  it("preserves POSIX absolute form paths independently of the host platform", () => {
+    const destinationRoot = posix.join(posix.sep, "dysflow-1525");
+    const sourcePath = posix.join(destinationRoot, "forms", "Form_DemoForm.form.txt");
+
+    expect(normalizePathForDetails(destinationRoot)).toBe(destinationRoot);
+    expect(resolveMutationPath(destinationRoot, sourcePath, destinationRoot)).toBe(sourcePath);
+    expect(resolveMutationPath(String.raw`C:\projects\demo\src`, sourcePath)).toBe(sourcePath);
+  });
+
+  it("preserves Windows drive and both UNC separator styles", () => {
+    const driveRoot = String.raw`C:\projects\demo\src`;
+    const driveSource = win32.join(driveRoot, "forms", "Form_DemoForm.form.txt");
+    const uncRoot = String.raw`\\server\share\demo\src`;
+    const uncSource = win32.join(uncRoot, "forms", "Form_DemoForm.form.txt");
+    const forwardSlashUncRoot = "//server/share/demo/src";
+    const forwardSlashUncSource = `${forwardSlashUncRoot}/forms/Form_DemoForm.form.txt`;
+
+    expect(normalizePathForDetails(driveRoot)).toBe(win32.normalize(driveRoot));
+    expect(resolveMutationPath(driveRoot, driveSource, driveRoot)).toBe(driveSource);
+    expect(normalizePathForDetails(uncRoot)).toBe(win32.normalize(uncRoot));
+    expect(resolveMutationPath(uncRoot, uncSource, uncRoot)).toBe(uncSource);
+    expect(normalizePathForDetails(forwardSlashUncRoot)).toBe(win32.normalize(forwardSlashUncRoot));
+    expect(
+      resolveMutationPath(forwardSlashUncRoot, forwardSlashUncSource, forwardSlashUncRoot),
+    ).toBe(win32.normalize(forwardSlashUncSource));
+  });
+});
 
 function okExecutor(): VbaManagerExecutor {
   return async () => ({
@@ -186,6 +219,21 @@ describe("destinationRoot override (#1169) — every write-class tool honors the
     expect(result.ok, `form_deserialize failed: ${JSON.stringify(result)}`).toBe(true);
     if (!result.ok) return;
     assertOverrideHonored(result.data, "form_deserialize");
+  });
+
+  it("form_deserialize still reports FORM_NOT_FOUND for a genuinely missing source", async () => {
+    const adapter = buildAdapter();
+    const missingFormPath = join(overrideRoot, "forms", "Form_Missing.form.txt");
+    const result = await adapter.execute("form_deserialize", {
+      sourcePath: missingFormPath,
+      destinationRoot: overrideRoot,
+      ir: { name: "Form_Missing", kind: "Form", root: { entries: [], children: [] } },
+      dryRun: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("FORM_NOT_FOUND");
   });
 
   it("when no override is supplied, the configured destinationRoot is reported with source=config", async () => {
