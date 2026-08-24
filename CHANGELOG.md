@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changes
+
+- feat(mcp): make `verify_code` compact by default and expose full comparison evidence through `diagnostic:true` (#1535)
+
 ## [v3.0.1] - 2026-08-24
 
 ### Changes

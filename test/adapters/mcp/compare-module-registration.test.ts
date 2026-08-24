@@ -48,12 +48,13 @@ describe("compare-tool consolidation — verify_code remains the single compare 
     expect(VbaModulesAdapter.handles(TOOL)).toBe(true);
   });
 
-  it("verify_code schema exposes the unified knobs (moduleNames, strict, diff)", () => {
+  it("verify_code schema exposes the unified knobs (moduleNames, strict, diff, diagnostic)", () => {
     const schema = (VBA_SYNC_TOOL_SCHEMAS as Record<string, unknown>).verify_code as {
       properties?: Record<string, unknown>;
     };
     expect(schema?.properties).toHaveProperty("moduleNames");
     expect(schema?.properties).toHaveProperty("strict");
     expect(schema?.properties).toHaveProperty("diff");
+    expect(schema?.properties).toHaveProperty("diagnostic");
   });
 });

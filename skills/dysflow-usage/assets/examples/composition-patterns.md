@@ -37,7 +37,7 @@ Anchor examples: `assets/examples/import-modules.md`,
 ## 2 — Drift-and-act: keep source and binary in sync
 
 ```text
-(1) verify_code(diff:true) → recommendedAction + bulk lists:
+(1) verify_code() → recommendedAction + bulk lists:
        no_action         — already in sync; stop here.
        import_to_binary  — disk is newer; read bulkImportable[].
        export_to_src     — binary is newer; read bulkExportable[].
@@ -46,8 +46,12 @@ Anchor examples: `assets/examples/import-modules.md`,
        import_to_binary   → import_modules({moduleNames:bulkImportable, apply:true})
        export_to_src      → export_modules({moduleNames:bulkExportable, apply:true, mutateBinary:false})
        manual_merge       → reconcile by hand; reserve bothChanged entries for conflicts
-(3) Re-run verify_code; require ok:true before stopping.
+(3) Re-run verify_code; require actionableOk:true before stopping.
 ```
+
+Pass `diagnostic:true` only when the compact decision fields are insufficient
+and you need classified entries or inline snippets. Raw `ok` describes textual
+parity and can remain false for non-actionable serialization noise.
 
 Do NOT iterate step (2) more than twice. Persistent drift means real
 divergence — escalate instead of re-running.

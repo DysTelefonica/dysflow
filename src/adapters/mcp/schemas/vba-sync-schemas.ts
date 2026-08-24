@@ -580,6 +580,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       strict: SCHEMA_PROPS.strict,
       moduleNames: SCHEMA_PROPS.moduleNames,
       diff: WRITE_INTENT_BLOCK.diff,
+      diagnostic: {
+        type: "boolean",
+        description:
+          "Opt in to the full source/binary evidence arrays (including non-actionable noise, classifications, and snippets). Omit or pass false for the compact actionable response. diagnostic:true also enables the existing diff snippet calculation.",
+      },
       // Issue #807 (Feature 3) — internal chunking and parallelism for
       // whole-project verify_code over a non-trivial list. Defaults preserve
       // the v2.3.x single-round-trip behavior: omit both chunkSize and

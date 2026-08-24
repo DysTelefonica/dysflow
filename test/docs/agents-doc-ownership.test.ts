@@ -20,6 +20,7 @@ const RUNTIME_ANCHORS = [
   "architecture-doc.test.ts",
   "mcp-readme-tool-surface.test.ts",
   "resolve-project-recovery-example.test.ts",
+  "verify-code-diagnostic-contract-1535.test.ts",
   "write-tool-preflight.test.ts",
 ] as const;
 

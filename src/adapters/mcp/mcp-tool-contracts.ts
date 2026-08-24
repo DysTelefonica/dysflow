@@ -60,6 +60,12 @@ const generatedContracts = {
     summary:
       "Conditional-write MCP contract; test execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
   },
+  verify_code: {
+    access: "read-only",
+    writeGate: "none",
+    summary:
+      "Read-only source/binary drift contract. The default response is compact and actionable; pass diagnostic:true to include full noise arrays, classifications, and snippets.",
+  },
 } as Record<GeneratedDispatchToolName, McpToolContract>;
 
 const aliasContracts: Record<AliasToolName, McpToolContract> = {

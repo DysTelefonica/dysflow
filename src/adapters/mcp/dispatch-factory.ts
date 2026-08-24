@@ -36,6 +36,7 @@ import {
 } from "./result-translation.js";
 import { getToolDefinition, isHiddenStubTool } from "./tool-parity-registry.js";
 import { validateInput } from "./validator.js";
+import { shapeVerifyCodeResponse, verifyCodeServiceInput } from "./verify-code-response-shaping.js";
 import {
   requiresExportSourceConfirmation,
   resolveEffectiveDryRunInput,
@@ -397,8 +398,14 @@ export function createDispatchTool(
             let coreResult: Awaited<
               ReturnType<NonNullable<typeof services.vbaSyncToolService>["execute"]>
             >;
+            const diagnostic =
+              name === "verify_code" &&
+              isRecord(normalizedInput) &&
+              normalizedInput.diagnostic === true;
+            const serviceInput =
+              name === "verify_code" ? verifyCodeServiceInput(normalizedInput) : normalizedInput;
             try {
-              coreResult = await services.vbaSyncToolService.execute(name, normalizedInput);
+              coreResult = await services.vbaSyncToolService.execute(name, serviceInput);
             } catch (caught) {
               const err = caught instanceof Error ? caught : new Error(String(caught));
               return internalError({ error: err });
@@ -423,7 +430,14 @@ export function createDispatchTool(
                 };
               }
             }
-            const mcpResult = translateCoreResultToMcpContent(coreResult);
+            const resultForWire =
+              name === "verify_code" && coreResult.ok
+                ? {
+                    ...coreResult,
+                    data: shapeVerifyCodeResponse(coreResult.data, { diagnostic }),
+                  }
+                : coreResult;
+            const mcpResult = translateCoreResultToMcpContent(resultForWire);
             // #850 — inline syntax validation returns caller-relative details and
             // remediation from the adapter. Preserve those fields at the public
             // MCP boundary instead of forcing consumers to parse the text body.
