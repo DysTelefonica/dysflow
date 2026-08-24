@@ -407,7 +407,9 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
   - **Whole project** — omit `moduleNames`.
   - **A subset or a single module** — pass `moduleNames`. The filter is sent to the export phase, so the Access export targets only the requested modules (plus their normal form/report/code-behind artifacts), then the disk comparison is filtered to the same module names. It is not a broad whole-project export followed only by a filtered compare. If `moduleNames` is explicitly provided as an empty list, the request is rejected with `INVALID_INPUT`; omit `moduleNames` for a whole-project verify. If a non-empty `moduleNames` filter matches nothing in either side, it returns `MODULE_NOT_FOUND`.
 
-  It always classifies each differing module semantically (see [Semantic diff classification](#semantic-diff-classification)), separating non-functional noise from actionable functional differences. The MCP response is compact by default; `diagnostic:true` opts into the complete comparison evidence without changing classifier semantics.
+  It always classifies each differing module semantically (see [Semantic diff classification](#semantic-diff-classification)), separating non-functional noise from actionable functional differences.
+
+  The MCP response is compact by default. Pass `diagnostic:true` for the complete comparison evidence without changing classifier semantics.
 
   - Noise covers line endings/whitespace, `Attribute VB_*` headers, `.form.txt` serialization metadata, and encoding/mojibake.
   - The compact default reports `summaryStructured` as `{ matched, actionableTotal, nonActionableTotal }`, actionable `summaryByCategory`, `bulkImportable[]`/`bulkExportable[]`, warnings, version/rule fingerprints, and the `hasFunctionalDifferences` / `actionableOk` decision.
