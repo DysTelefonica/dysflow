@@ -234,6 +234,7 @@ describe("MCP_TOOL_ROUTES — risk classification (#779)", () => {
       "export_modules",
       "form_delete_control",
       "form_deserialize",
+      "localize_backend_links",
     ]);
   });
 

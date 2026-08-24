@@ -11,6 +11,19 @@
 | `Stop-Process -Name MSACCESS` (any variant: `taskkill /F /IM MSACCESS.EXE`, `pkill MSACCESS`, `Get-Process | Stop-Process -Force`, `kill -9`) | Use only dysflow-owned cleanup paths: `list_access_operations` -> `cleanup_access_operation({operationId:<real>})`, or `access_force_cleanup_orphaned({pid:<listed>, implements_check:"orphans_msaccess", confirmedRequiresConfirmation:true})` AFTER explicit human approval. HR-2 of `dysflow-arnes`. |
 | Forcing a kill on a `MSACCESS.EXE` you suspect is stuck | First read `list_access_operations` to confirm what `dysflow` itself owns. Then `cleanup_access_operation({force:false, operationId:<id>})` for owned operations. Only the orphan PID path should reach `kill` semantics. |
 
+## Missing destructive confirmation
+
+| Symptom | Fix |
+|---|---|
+| `delete_module({apply:true})` | Plan first, verify references and backup/export state, then add `implements_check:"delete_module_precheck", confirmedRequiresConfirmation:true`. |
+| `compact_repair({apply:true})` | Back up the target and close VBE references, then add `implements_check:"compact_repair_precheck", confirmedRequiresConfirmation:true`. |
+| `relink_directory({apply:true})` | Validate the backend path and production impact, then add `implements_check:"relink_directory_precheck", confirmedRequiresConfirmation:true`. |
+| `localize_backend_links({apply:true})` | Confirm the irreversible conversion and backup linked data, then add `implements_check:"localize_backend_precheck", confirmedRequiresConfirmation:true`. |
+| `drop_table({apply:true})` | Confirm the table is disposable test data or backed up, then add `implements_check:"drop_table_precheck", confirmedRequiresConfirmation:true`. |
+| `teardown_fixture({apply:true})` | Confirm the creating test atom completed and the bounded predicate is correct, then add `implements_check:"teardown_fixture_precheck", confirmedRequiresConfirmation:true`. |
+
+`apply:false` remains the non-mutating planning path and needs no second confirmation. Do not add this gate to reversible bulk sync, registry cleanup, or human-compile-gated VBA execution.
+
 ## Skipping the human-compile gate
 
 | Symptom | Fix |

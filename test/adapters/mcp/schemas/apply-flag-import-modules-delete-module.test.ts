@@ -165,6 +165,8 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
           projectRoot: "C:/project",
           moduleName: "Mod1",
           apply: true,
+          implements_check: "delete_module_precheck",
+          confirmedRequiresConfirmation: true,
         },
         {} as any,
       );
@@ -172,7 +174,11 @@ describe("Issue #1014 — import_modules + delete_module accept apply:true (writ
       expect(result.isError).toBe(false);
       expect(captured).toHaveLength(1);
       expect(captured[0]?.name).toBe("delete_module");
-      expect(captured[0]?.input).toMatchObject({ apply: true });
+      expect(captured[0]?.input).toMatchObject({
+        apply: true,
+        implements_check: "delete_module_precheck",
+        confirmedRequiresConfirmation: true,
+      });
     });
 
     it("import_modules rejects the hard-removed dryRun public flag", async () => {

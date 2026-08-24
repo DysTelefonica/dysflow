@@ -208,7 +208,18 @@ describe("Issue #1031 — eight sibling tools accept apply:true", () => {
         const { handler, vbaSyncCalls, queryRequests } = generatedHandlerFor(toolName);
 
         if (QUERY_MAINTENANCE_SIBLING_NAMES.has(toolName)) {
-          const applyResult = await handler(inputFor(toolName, { apply: true }));
+          const applyResult = await handler(
+            inputFor(
+              toolName,
+              toolName === "localize_backend_links"
+                ? {
+                    apply: true,
+                    implements_check: "localize_backend_precheck",
+                    confirmedRequiresConfirmation: true,
+                  }
+                : { apply: true },
+            ),
+          );
           const previewResult = await handler(inputFor(toolName, { apply: false }));
           const defaultResult = await handler(inputFor(toolName));
 

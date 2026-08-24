@@ -140,6 +140,8 @@ export type ToolParameterSchema = {
   required: boolean;
   description: string;
   enumValues?: string[];
+  /** Exact literal required by a JSON Schema `const`. */
+  expectedValue?: unknown;
   default?: unknown;
   canonicalName?: string;
   aliases?: string[];
@@ -636,7 +638,7 @@ const READ_ONLY_ERROR_CODES: ToolErrorCodeSchema[] = [
 function parameterFromJsonSchema(
   name: string,
   property:
-    | { type?: string; enum?: unknown[]; description?: string; default?: unknown }
+    | { type?: string; enum?: unknown[]; const?: unknown; description?: string; default?: unknown }
     | undefined,
   required: boolean,
 ): ToolParameterSchema {
@@ -672,6 +674,7 @@ function parameterFromJsonSchema(
   if (isEnum) {
     result.enumValues = (property?.enum ?? []).map((value) => String(value));
   }
+  if (property?.const !== undefined) result.expectedValue = property.const;
   if (property?.default !== undefined) {
     result.default = property.default === "runtime-defined" ? null : property.default;
   }

@@ -40,6 +40,7 @@
  * / accessPath / destinationRoot / etc. copies.
  */
 import { describe, expect, it } from "vitest";
+import { DESTRUCTIVE_TOOL_CONFIRMATIONS } from "../../../src/adapters/mcp/destructive-tool-confirmation.js";
 import { isWriteIntentTool } from "../../../src/adapters/mcp/mcp-tool-risks.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
@@ -248,6 +249,25 @@ describe("schema composition blocks (#1076)", () => {
       const schema = advertisedSchema(tool.name);
       for (const [name, expected] of WRITE_INTENT_FIELDS) {
         const value = propertyOf(schema, name);
+        const property = value as { const?: unknown; type?: unknown } | undefined;
+        const destructiveToken = (DESTRUCTIVE_TOOL_CONFIRMATIONS as Record<string, string>)[
+          tool.name
+        ];
+        if (
+          destructiveToken !== undefined &&
+          name === "implements_check" &&
+          property?.const === destructiveToken &&
+          property.type === expected.type
+        ) {
+          continue;
+        }
+        if (
+          destructiveToken !== undefined &&
+          name === "confirmedRequiresConfirmation" &&
+          property?.type === expected.type
+        ) {
+          continue;
+        }
         if (value !== undefined && value !== expected) {
           failures.push(`${tool.name}.${name}`);
         }

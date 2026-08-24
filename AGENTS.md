@@ -40,7 +40,16 @@ authoritative.
   (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`. Failures from
   `test_vba` are test failures, never compile errors.
 
-- **HR-2 — NEVER kill MSACCESS.EXE generically.** Forbidden operations
+- **HR-2 — Confirm destructive operations; NEVER kill MSACCESS.EXE generically.**
+  Every public destructive `apply:true` call requires the exact schema-advertised
+  `implements_check` token AND `confirmedRequiresConfirmation:true` after the
+  human approves the risk. The enforced tokens are:
+  `delete_module_precheck`, `compact_repair_precheck`,
+  `relink_directory_precheck`, `localize_backend_precheck`,
+  `drop_table_precheck`, and `teardown_fixture_precheck`. `apply:false` remains
+  the safe planning path. The Access-kill escape hatch keeps its stricter
+  PID-bound `orphans_msaccess` contract. Forbidden generic kill operations
+  (verbatim):
   (verbatim):
   `Stop-Process -Name MSACCESS`,
   `taskkill /F /IM MSACCESS.EXE`,

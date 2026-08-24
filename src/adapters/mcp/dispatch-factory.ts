@@ -7,6 +7,11 @@ import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-po
 import { isRecord } from "../../core/utils/index.js";
 import { resultContractForDispatchTool } from "./contracts/dispatch-result-contracts.js";
 import {
+  enforceDestructiveToolConfirmation,
+  isDestructiveTool,
+  isDestructiveToolApplyCall,
+} from "./destructive-tool-confirmation.js";
+import {
   destinationRootRequired,
   enforceRequiresConfirmation,
   enrichmentForValidationMessage,
@@ -174,6 +179,16 @@ export function createDispatchTool(
       normalizedInput = normalizeFormSetPropertyInput(name, normalizedInput);
       const validation = validateInput(normalizedInput, schema);
       if (validation !== undefined) {
+        if (
+          isDestructiveToolApplyCall(normalizedInput, name) &&
+          isRecord(normalizedInput) &&
+          normalizedInput.implements_check !== undefined
+        ) {
+          const destructiveRejection = enforceDestructiveToolConfirmation(normalizedInput, name);
+          if (destructiveRejection?.error?.rejectedFlag === "implements_check") {
+            return destructiveRejection;
+          }
+        }
         // Issue #1078 / #757 (C4) — `enrichmentForValidationMessage`
         // produces the structured enrichment (rejectedFlag /
         // rejectedFlags / toolCommitFlag / remediation) for the two
@@ -186,14 +201,6 @@ export function createDispatchTool(
         }
         return invalidInput(validation, undefined, { toolName: name });
       }
-      // Slice 3 — unified `requires_confirmation` enforcement. The
-      // helper reads `params.implements_check` + `params.confirmedRequiresConfirmation`,
-      // looks up the matched check's `requires_confirmation` policy,
-      // and either demands the override or returns a typed envelope.
-      // Centralised here so every mutating tool inherits it without
-      // per-handler wiring.
-      const confirmationCheck = enforceRequiresConfirmation(normalizedInput, name);
-      if (confirmationCheck !== undefined) return confirmationCheck;
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
       // caller-supplied payload, untouched by the policy injection) and
@@ -223,6 +230,15 @@ export function createDispatchTool(
               'Example: { "passwordEnv": "DYSFLOW_BACKEND_PASSWORD" }',
           );
         }
+      }
+      const destructiveConfirmation = enforceDestructiveToolConfirmation(normalizedInput, name);
+      if (destructiveConfirmation !== undefined) return destructiveConfirmation;
+      // Diagnostic confirmation remains separate from the six mandatory
+      // destructive-operation tokens. A satisfied destructive call must not
+      // be reinterpreted as an unknown Doctor check.
+      if (!isDestructiveTool(name)) {
+        const confirmationCheck = enforceRequiresConfirmation(normalizedInput, name);
+        if (confirmationCheck !== undefined) return confirmationCheck;
       }
       // DELTA-003 — filesystem-mutating dispatch tools reject arguments:{} with
       // MCP_INPUT_INVALID. Empty input does NOT silently target the startup

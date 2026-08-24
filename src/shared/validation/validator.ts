@@ -92,13 +92,17 @@ function validateJsonSchemaProperty(
   // `enum` without `type` is still enforceable (string-by-default per
   // the existing enum branch below). Skip the early-return only when
   // neither guard is set.
-  if (property.type === undefined && property.enum === undefined) return undefined;
+  if (property.type === undefined && property.enum === undefined && property.const === undefined)
+    return undefined;
   if (property.type !== undefined && !matchesJsonSchemaType(value, property.type))
     return `${path} must be ${articleFor(property.type)} ${property.type}.`;
 
   if (property.enum !== undefined) {
     if (typeof value !== "string" || !property.enum.includes(value))
       return `${path} must be one of: ${property.enum.join(", ")}.`;
+  }
+  if (property.const !== undefined && value !== property.const) {
+    return `${path} must equal ${JSON.stringify(property.const)}.`;
   }
 
   if (property.minLength !== undefined && typeof value === "string") {

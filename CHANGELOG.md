@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Breaking changes
+
+- Destructive MCP calls now require a tool-specific `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`: `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture`. Plan calls with `apply:false` are unchanged. Rejections return copyable structured remediation. (#1537)
+
 ### Changes
 
 - feat(mcp): make `verify_code` compact by default and expose full comparison evidence through `diagnostic:true` (#1535)

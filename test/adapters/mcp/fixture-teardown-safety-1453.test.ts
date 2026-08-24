@@ -44,6 +44,8 @@ describe("#1453 teardown_fixture MCP contract", () => {
       tableName: "2026 Fixture-Rows",
       predicate: { column: "Test Id", min: 900_000, max: 900_010 },
       apply: true,
+      implements_check: "teardown_fixture_precheck",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(result.ok).toBe(true);
@@ -80,6 +82,8 @@ describe("#1453 teardown_fixture MCP contract", () => {
       allowTables: ["FixtureRows"],
       denyTables: ["ProductionRows"],
       apply: true,
+      implements_check: "teardown_fixture_precheck",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(result.ok).toBe(true);

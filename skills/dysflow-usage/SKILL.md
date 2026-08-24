@@ -391,6 +391,7 @@ Use `sync_binary` whenever the agent would otherwise script the 5-step loop manu
 - A `risk: "read-only"` tool ignores both flags (no-op either way).
 
 **Per-call gating is authoritative and never bypassed** (independent of policy):
+- `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture` require their schema-advertised `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`; `apply:false` plans without the second confirmation.
 - `cleanup_access_operation` with `force: true` requires explicit confirmation regardless of mode.
 - `access_force_cleanup_orphaned` with a positive `pid` requires `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` after explicit human approval.
 - The `test_vba` / `run_vba` allowlist gate (`allowedProcedures`) is enforced in both modes.

@@ -99,9 +99,9 @@ const MAINTENANCE_INPUTS: ReadonlyArray<{ name: string; input: Record<string, un
   },
 ];
 
-describe("#847 — developer mode: query-maintenance writes execute (dryRun:false forwarded)", () => {
+describe("#847 — developer mode respects query-maintenance risk classification", () => {
   for (const { name, input } of MAINTENANCE_INPUTS) {
-    it(`${name} without dryRun/apply forwards dryRun:false to the runner`, async () => {
+    it(`${name} without dryRun/apply forwards its risk-derived default`, async () => {
       const queryService = new CapturingQueryService();
       const tools = buildTools(queryService, "developer");
       const tool = tools.find((candidate) => candidate.name === name);
@@ -110,9 +110,11 @@ describe("#847 — developer mode: query-maintenance writes execute (dryRun:fals
       await tool.handler(input);
 
       expect(queryService.requests).toHaveLength(1);
-      // The write-gate let this through as a real write; the runner MUST
-      // therefore receive an execute request, not a silent plan.
-      expect(queryService.requests[0]).toMatchObject({ dryRun: false });
+      // Issue #1537 classifies localize_backend_links as destructive, so
+      // developer mode can no longer turn an omitted intent into a commit.
+      expect(queryService.requests[0]).toMatchObject({
+        dryRun: name === "localize_backend_links",
+      });
     });
   }
 });

@@ -363,7 +363,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
     - `groupBy` (`"tool"`, optional): Add per-tool calls, split contract/runtime errors, p50/p95 latency, last-use timestamps, rejected-parameter frequencies, and omitted-required-parameter frequencies.
     - `limit` (number, optional, 1..1000): Maximum entries to return. Defaults to `100`.
     - `orderBy` (string, optional): `asc` or `desc`. Defaults to `desc` (most recent first).
-* **Returns**: `{ entries, totalCount, truncated, aggregate? }` where each entry carries exact `tool`, separate `action`, nullable `operationId`, and privacy-safe invocation context. With `groupBy:"tool"`, `aggregate` contains `tools[]`, `rejectedParams[]`, and `missingParams[]`; it is computed across all filtered invocation entries rather than the paginated raw slice.
+* **Returns**: `{ entries, totalCount, truncated, aggregate? }` where each entry carries exact `tool`, separate `action`, nullable `operationId`, and privacy-safe invocation context. With `groupBy:"tool"`, `aggregate` contains `calls.confirmationRequired`, `calls.confirmationProvided`, `tools[]`, `rejectedParams[]`, and `missingParams[]`; it is computed across all filtered invocation entries rather than the paginated raw slice.
 
 ---
 
@@ -420,7 +420,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
   - Timeout contract: `timeoutMs` is the overall operation budget. `verify_code` keeps a small reserve before that deadline so preflight/export/compare stalls fail with a typed Dysflow error instead of falling through to the outer MCP request timeout. Export stalls return `VBA_MANAGER_TIMEOUT`; preflight and compare stalls return `VERIFY_CODE_PHASE_TIMEOUT`. All typed errors include `error.details` with `tool: "verify_code"`, `phase`, `moduleName`/`moduleNames`, `operationTimeoutMs`, and `phaseTimeoutMs`. Export-phase errors additionally carry `error.details.durationMs` (how long PowerShell had been running before the stall). Post-timeout Access orphan cleanup and temporary-directory cleanup are each bounded; if either exceeds its bound, the result returns promptly with a warning diagnostic instead of waiting indefinitely, and an export-phase stall where post-timeout cleanup also stalled additionally sets `error.details.cleanupTimedOut: true` and `error.details.cleanupTimeoutMs` so consumers can distinguish "the export stalled" from "the export stalled AND we could not reap the orphan within the bound".
 
   > **Migration note:** `verify_binary`, `reconcile_binary`, and `compare_module` were four names over this one engine and have been **removed**. Use `verify_code` for all of them: omit `moduleNames` for the whole project (old `verify_binary`), pass a single module for the old `compare_module`, and read `recommendation`/`recommendedAction` for the old `reconcile_binary` plan.
-* **`delete_module`**: Delete one or more modules from the VBA project. Pass `moduleNames` (array) to delete a batch in a single Access session — this avoids the COM collisions that arise from issuing many parallel single-module calls; `moduleName` (singular) is still accepted for one module. The result reports per-module outcomes. When deletion fails with the corruption HRESULT `0x800ADEB9`, pass `force: true` to attempt a fallback (compact + retry / `DoCmd.DeleteObject`); otherwise the error returns bilingual remediation steps (see [`docs/diagnostics/hresult-guide.md`](../diagnostics/hresult-guide.md)). Write-gated.
+* **`delete_module`**: Delete one or more modules from the VBA project. `apply:false` plans; `apply:true` additionally requires `implements_check:"delete_module_precheck"` and `confirmedRequiresConfirmation:true`. Pass `moduleNames` (array) to delete a batch in one Access session; `moduleName` remains accepted for one module. When deletion fails with corruption HRESULT `0x800ADEB9`, `force:true` attempts the guarded fallback. See [`docs/diagnostics/hresult-guide.md`](../diagnostics/hresult-guide.md).
 
 Typed error envelopes expose a top-level `error.remediation` when the runtime has a canonical next action.
 
@@ -513,11 +513,11 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
 * **`create_table`**: Programmatically create a table in the database.
   - Parameters: `tableName` (string, optional), `definition` (string, optional), `dryRun`, `apply`
 * **`drop_table`**: Drop a table.
-  - Parameters: `tableName` (string, optional), `dryRun`, `apply`
+  - Parameters: `tableName` (string, optional), `apply`; committing with `apply:true` requires `implements_check:"drop_table_precheck"` and `confirmedRequiresConfirmation:true`.
 * **`seed_fixture`**: Populates mock rows in a table.
   - Parameters: `tableName` (string, optional), `rows` (array of objects, optional), `dryRun`, `apply`
 * **`teardown_fixture`**: Clears only fixture rows inside a validated numeric test-id range. Unbounded teardown is rejected before Access is opened for mutation, and every generated `DELETE` includes a `WHERE ... BETWEEN ... AND ...` clause.
-  - Parameters: `tableName` (string, required; `table` alias), `predicate` (required object: `column`, inclusive integer `min`, inclusive integer `max`; both bounds must be at or above `TEST_ID_BASE` 900000), `allowTables`/`denyTables` (optional), `dryRun`, `apply`
+  - Parameters: `tableName` (string, required; `table` alias), `predicate` (required object: `column`, inclusive integer `min`, inclusive integer `max`; both bounds must be at or above `TEST_ID_BASE` 900000), `allowTables`/`denyTables` (optional), `apply`; committing requires `implements_check:"teardown_fixture_precheck"` and `confirmedRequiresConfirmation:true`.
   - Preview returns the exact bounded SQL under `sql` and the structured values under `plan`; apply repeats the same validation at the PowerShell runner boundary.
 
 Structured table and column identifiers used by schema, count, distinct, and fixture operations share one contract.
@@ -552,17 +552,17 @@ Empty or whitespace-only names and either bracket character are rejected before 
 * **`relink_tables`**: Rebind existing linked tables to a backend file.
   - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
 * **`localize_backend_links`**: Convert absolute linked paths to local relative links.
-  - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
+  - Parameters: `accessPath`, `backendPath` (optional), `apply`; committing requires `implements_check:"localize_backend_precheck"` and `confirmedRequiresConfirmation:true`.
 * **`unlink_table`**: Delete a linked table definition.
   - Parameters: `tableName` (string, optional), `accessPath` (optional), `dryRun`
 * **`export_queries`**: Export Access QueryDefs.
   - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
 * **`import_queries`**: Bulk import Access QueryDefs.
   - Parameters: `queryDefinitions`/`queries` (optional), `accessPath` (optional), `dryRun`
-* **`compact_repair`**: Execute compact and repair operations. `target` defaults to `frontend`; use `target: "backend"` for the configured backend. Explicit paths override the semantic target with deterministic precedence: `databasePath`, then its `sourcePath` alias, then `accessPath`.
+* **`compact_repair`**: Execute compact and repair operations. `apply:true` requires `implements_check:"compact_repair_precheck"` and `confirmedRequiresConfirmation:true`; `apply:false` plans. `target` defaults to `frontend`; use `target:"backend"` for the configured backend. Explicit paths override the semantic target with deterministic precedence: `databasePath`, then `sourcePath`, then `accessPath`.
   - Parameters: `accessPath`/`databasePath`/`sourcePath` (optional), `backupFirst` (boolean, optional), `dryRun`
 * **`relink_directory`**: Bulk relink table references recursively under a directory root.
-  - Parameters: `rootPath` (string, required), `dryRun`, `apply`, `backup` (boolean, optional), `recursive` (boolean, optional), `maps` (array, optional), `denyPrefixes` (array, optional), `strictLocal` (boolean, optional), `removeUnresolved` (boolean, optional), `timeoutMs` (number, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional overrides)
+  - Parameters: `rootPath` (string, required), `apply`, `backup` (boolean, optional), `recursive` (boolean, optional), `maps` (array, optional), `denyPrefixes` (array, optional), `strictLocal` (boolean, optional), `removeUnresolved` (boolean, optional), `timeoutMs` (number, optional), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional overrides). `apply:true` requires `implements_check:"relink_directory_precheck"` and `confirmedRequiresConfirmation:true`.
   - Traversal, relink planning, action order, cycle handling, and partial-failure reporting are core-owned; PowerShell supplies filesystem and DAO primitives. See [relink-directory orchestration](../architecture/relink-directory-orchestration.md).
 
 ### 4. GUI & Forms

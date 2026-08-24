@@ -106,7 +106,7 @@ describe("effectiveDryRunDefaultForTool — truth table (#779)", () => {
     import_queries: { "safe-by-default": true, developer: false },
     link_tables: { "safe-by-default": true, developer: false },
     relink_tables: { "safe-by-default": true, developer: false },
-    localize_backend_links: { "safe-by-default": true, developer: false },
+    localize_backend_links: { "safe-by-default": true, developer: true },
     unlink_table: { "safe-by-default": true, developer: false },
     generate_form: { "safe-by-default": true, developer: false },
     create_form_from_template: { "safe-by-default": true, developer: false },

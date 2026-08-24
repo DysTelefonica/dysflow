@@ -271,6 +271,8 @@ describe("shared-block class coverage (#1192)", () => {
     const result = await dropTable.handler({
       tableName: "Disposable",
       apply: true,
+      implements_check: "drop_table_precheck",
+      confirmedRequiresConfirmation: true,
       strictContext: true,
       expectedAccessPath: "C:/sandbox/frontend.accdb",
       expectedProjectRoot: "C:/sandbox",

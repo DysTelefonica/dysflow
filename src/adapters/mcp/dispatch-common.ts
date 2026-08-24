@@ -13,6 +13,11 @@ import {
   validateInput,
 } from "../../shared/validation/validator.js";
 import type { ProjectConfigDiagnostic } from "../config/project-config-diagnostic.js";
+import {
+  enforceDestructiveToolConfirmation,
+  isDestructiveTool,
+  isDestructiveToolApplyCall,
+} from "./destructive-tool-confirmation.js";
 import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
   type McpToolError,
@@ -1466,6 +1471,18 @@ export async function handleValidatedMcpWrite<TData>(
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
+    if (
+      toolName !== undefined &&
+      isDestructiveToolApplyCall(input, toolName) &&
+      typeof input === "object" &&
+      input !== null &&
+      (input as Record<string, unknown>).implements_check !== undefined
+    ) {
+      const destructiveRejection = enforceDestructiveToolConfirmation(input, toolName);
+      if (destructiveRejection?.error?.rejectedFlag === "implements_check") {
+        return destructiveRejection;
+      }
+    }
     if (toolName !== undefined) {
       const enrichment = enrichmentForValidationMessage(validation, toolName, schema);
       if (enrichment !== undefined) return invalidInput(validation, undefined, enrichment);
@@ -1473,8 +1490,12 @@ export async function handleValidatedMcpWrite<TData>(
     return invalidInput(validation);
   }
   if (toolName !== undefined) {
-    const confirmation = enforceRequiresConfirmation(input, toolName);
-    if (confirmation !== undefined) return confirmation;
+    const destructiveConfirmation = enforceDestructiveToolConfirmation(input, toolName);
+    if (destructiveConfirmation !== undefined) return destructiveConfirmation;
+    if (!isDestructiveTool(toolName)) {
+      const confirmation = enforceRequiresConfirmation(input, toolName);
+      if (confirmation !== undefined) return confirmation;
+    }
   }
   const isDryRun = resolveIsDryRun(input);
   if (!isDryRun && !(await isWriteAllowed(input, writesEnabled, writeAccessResolver)))
