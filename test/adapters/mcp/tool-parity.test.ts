@@ -299,6 +299,8 @@ describe("Dysflow MCP tool parity inventory", () => {
           tableName: "People",
           predicate: { column: "TestId", min: 900_000, max: 900_010 },
           apply: true,
+          implements_check: "teardown_fixture_precheck",
+          confirmedRequiresConfirmation: true,
         }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
@@ -416,6 +418,8 @@ describe("Dysflow MCP tool parity inventory", () => {
         sourcePath: "C:/source-alias.accdb",
         tableName: "ZZZ_Target",
         apply: true,
+        implements_check: "drop_table_precheck",
+        confirmedRequiresConfirmation: true,
       });
     await tools
       .find((tool) => tool.name === "run_script")
@@ -442,6 +446,8 @@ describe("Dysflow MCP tool parity inventory", () => {
         tableName: "ZZZ_Target",
         predicate: { column: "TestId", min: 900_000, max: 900_010 },
         apply: true,
+        implements_check: "teardown_fixture_precheck",
+        confirmedRequiresConfirmation: true,
       });
 
     expect(queryCalls).toEqual([

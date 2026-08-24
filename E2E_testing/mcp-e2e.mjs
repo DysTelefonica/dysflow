@@ -1346,7 +1346,7 @@ for (const tool of tools) {
 await record("vba", "delete_module", { projectId, module: "DysflowE2ENoSuchModule" }, { expected: "error" });
 // #1057 (F8) — contradictory apply+dryRun is rejected as mutually exclusive
 // at validation, before the write gate.
-await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, diff: true }, { expected: "error" });
+await record("vba", "delete_module", { projectId, moduleName: "DysflowE2ENoSuchModule", apply: true, diff: true, implements_check: "delete_module_precheck", confirmedRequiresConfirmation: true }, { expected: "error" });
 
 // #1212 — release-only friction paths must remain observable in the real
 // stdio transport. Keep every call behind record(): that seam owns the
@@ -1572,7 +1572,7 @@ await record("maintenance", "compact_repair:target-precedence", {
 // the write-ready ownership boundary.
 // dry-run never calls DAO CompactDatabase, so this is the only E2E that actually compacts a
 // protected database — it guards the source-password (5th DAO arg) fix.
-await record("maintenance", "compact_repair", { projectId, accessPath, apply: true, backupFirst: true });
+await record("maintenance", "compact_repair", { projectId, accessPath, apply: true, backupFirst: true, implements_check: "compact_repair_precheck", confirmedRequiresConfirmation: true });
 await record("links", "link_tables", {
   projectId,
   backendPath,
@@ -1581,11 +1581,11 @@ await record("links", "link_tables", {
   apply: true,
 });
 await record("links", "relink_tables", { projectId, backendPath, apply: true });
-await record("links", "localize_backend_links", { projectId, backendPath, apply: true });
+await record("links", "localize_backend_links", { projectId, backendPath, apply: true, implements_check: "localize_backend_precheck", confirmedRequiresConfirmation: true });
 // Remove the deterministic link created above, leaving the disposable frontend
 // in its pre-link state while exercising a real unlink write.
 await record("links", "unlink_table", { projectId, accessPath, tableName: "TbNoConformidades", apply: true });
-await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false });
+await record("links", "relink_directory", { projectId, rootPath: tempRoot, apply: true, recursive: false, strictLocal: false, implements_check: "relink_directory_precheck", confirmedRequiresConfirmation: true });
 
 await record("write", "create_table", { ...ctx, databasePath: backendPath, tableName: probeTable, definition: "ID INTEGER, Name TEXT(50)", apply: true });
 // #1452 — arbitrary Access SQL cannot prove which tables it touches, so exec_sql
@@ -1600,8 +1600,8 @@ await record("vba", "run_script:sandbox-only", {
 await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, rows: [{ ID: TEST_ID_BASE + 3, Name: "seed" }], apply: true, allowTable: probeTable });
 // teardown_fixture refuses an unbounded DELETE. The predicate range must sit at or
 // above TEST_ID_BASE, which is why every probe row above is seeded inside it.
-await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, allowTable: probeTable, predicate: { column: "ID", min: TEST_ID_BASE, max: TEST_ID_BASE + 999 } });
-await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true });
+await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, implements_check: "teardown_fixture_precheck", confirmedRequiresConfirmation: true, allowTable: probeTable, predicate: { column: "ID", min: TEST_ID_BASE, max: TEST_ID_BASE + 999 } });
+await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, implements_check: "drop_table_precheck", confirmedRequiresConfirmation: true });
 
 await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });

@@ -76,7 +76,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   verify_code:
     "Compare the on-disk source against the VBA source exported live from the binary. Read-only and dry-run. moduleNames is a true focused export request (Access exports only requested modules, then the compare is filtered to the same modules). The default response is compact: read recommendedAction, actionableOk, summaryStructured.actionableTotal/nonActionableTotal, and bulkImportable/bulkExportable. Raw different[], diffs[], matched/missing arrays, actionable/nonActionable detail, moduleCounts, and summaryUnits require diagnostic:true; that opt-in also enables per-module snippets. USE BEFORE AND AFTER import_modules / import_all to confirm Unicode characters round-trip cleanly (no mojibake drift) and that the per-module result matches the binary. Timeout failures are phase-aware: export stalls return VBA_MANAGER_TIMEOUT; preflight and compare stalls return VERIFY_CODE_PHASE_TIMEOUT with details.phase, details.moduleName/details.moduleNames, details.operationTimeoutMs and details.phaseTimeoutMs. Export-phase errors also carry details.durationMs; if post-timeout Access orphan cleanup exceeds its own bound, details.cleanupTimedOut:true and details.cleanupTimeoutMs are set on the parent error. Folding is string-aware. strict:true does a byte-exact compare; diagnostic:true respects strict mode while exposing its byte-exact evidence.",
   delete_module:
-    "Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.",
+    'Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). apply:true also requires implements_check:"delete_module_precheck" and confirmedRequiresConfirmation:true. force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.',
   generate_erd:
     "Generate an entity-relationship Markdown document of the database schema to the erdPath file. An extension-less erdPath is normalized by appending .md; erdPath is never interpreted as a directory. Read-only.",
   fix_encoding:
@@ -325,17 +325,18 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
     "Run multi-statement Access SQL. Preview is non-mutating with statementCount. Apply uses an isolated DAO transaction; failures roll back and identify statement position without SQL text. Table policies are rejected.",
   create_table:
     "Create a table from a definition/fields list. Write-gated; dryRun/apply control plan vs commit.",
-  drop_table: "Drop a table (DESTRUCTIVE). Write-gated; dryRun/apply control plan vs commit.",
+  drop_table:
+    'Drop a table (DESTRUCTIVE). Write-gated; apply:false plans, while apply:true requires implements_check:"drop_table_precheck" and confirmedRequiresConfirmation:true.',
   seed_fixture:
     "Insert fixture rows. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. Write-gated; dryRun/apply.",
   teardown_fixture:
-    "Delete fixture rows within a required test-id range. Same name rules; no brackets. Unbounded DELETE is rejected. Write-gated; dryRun returns SQL.",
+    'Delete fixture rows within a required test-id range. Same name rules; no brackets. Unbounded DELETE is rejected. apply:true requires implements_check:"teardown_fixture_precheck" and confirmedRequiresConfirmation:true.',
   link_tables:
     "Link tables from backendPath into the frontend. Write-gated; dryRun:true plans without writing. NOTE: when backendPassword is set, Access stores the credential inside the linked-table Connect string in the .accdb.",
   relink_tables:
     "Re-point existing linked tables to a new/updated backendPath. Write-gated; dryRun:true plans without writing. NOTE: a set backendPassword is persisted in the linked-table Connect string.",
   localize_backend_links:
-    "Rewrite backend links to a local copy of the backend. Write-gated; dryRun:true plans without writing.",
+    'Rewrite backend links to local tables (DESTRUCTIVE and irreversible without a backup). apply:true requires implements_check:"localize_backend_precheck" and confirmedRequiresConfirmation:true.',
   unlink_table:
     "Remove a linked table from the frontend (does not drop backend data). Write-gated; dryRun:true plans without writing.",
   export_queries:
@@ -343,9 +344,9 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   import_queries:
     "Import saved query definitions into the frontend. Frontend-only; omission resolves to accessPath. Write-gated; dryRun:true plans without writing.",
   compact_repair:
-    "Compact and repair a database (maintenance; mutates the file). target defaults to frontend; target:'backend' selects the configured backend. Explicit databasePath/sourcePath/accessPath overrides target in that precedence order. Write-gated; backupFirst:true backs up before, dryRun/apply control plan vs commit.",
+    "Compact and repair a database (DESTRUCTIVE file replacement). target defaults to frontend; target:'backend' selects the configured backend. apply:true requires implements_check:\"compact_repair_precheck\" and confirmedRequiresConfirmation:true; backupFirst:true backs up first.",
   relink_directory:
-    "Batch-relink Access frontends under a root directory to local backends, with alias maps and verification. Large surface (maps/denyPrefixes/strictLocal/removeUnresolved/recursive); write-gated; dryRun/apply control plan vs commit. Prefer passwordEnv over a raw password argument.",
+    'Batch-relink Access frontends under a root directory (DESTRUCTIVE bulk link rewrite). apply:true requires implements_check:"relink_directory_precheck" and confirmedRequiresConfirmation:true. Prefer passwordEnv over a raw password argument.',
 };
 
 export const TOOL_PARITY_REGISTRY: readonly ParityToolDefinition[] = DYSFLOW_MCP_TOOL_NAMES.map(

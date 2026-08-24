@@ -54,6 +54,7 @@ export type InvocationTelemetryContextResolver = ((
 };
 
 const CONTRACT_FAILURE_CODES = new Set([
+  "CONFIRMATION_REQUIRED",
   "MCP_INPUT_INVALID",
   "MCP_TOOL_NOT_FOUND",
   "MCP_WRITES_DISABLED",

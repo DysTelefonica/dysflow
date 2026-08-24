@@ -3,6 +3,7 @@
 import {
   ACCESS_OVERRIDE,
   CTX_PROPS,
+  destructiveWriteIntentBlock,
   type JsonObjectSchema,
   type JsonSchemaProperty,
   OUTPUT_MODE_BLOCK,
@@ -118,7 +119,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...WRITE_TARGET_OVERRIDE,
       tableName: SCHEMA_PROPS.tableName,
       table: SCHEMA_PROPS.table,
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("drop_table_precheck"),
     },
   },
   seed_fixture: {
@@ -176,7 +177,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
         description:
           "Required bounded teardown predicate. Deletes only rows whose numeric fixture/test id is within the inclusive range.",
       },
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("teardown_fixture_precheck"),
       allowTables: SCHEMA_PROPS.allowTables,
       allowTable: SCHEMA_PROPS.allowTable,
       denyTables: SCHEMA_PROPS.denyTables,
@@ -334,7 +335,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...FRONTEND_TARGET_OVERRIDE,
       ...STRICT_CTX,
       backendPath: SCHEMA_PROPS.backendPath,
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("localize_backend_precheck"),
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
     },
   },
@@ -384,7 +385,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
           "Database role to compact. Required when both frontend and backend are configured. When only one role is configured, the runtime selects it and returns the selected target. Explicit databasePath/sourcePath/accessPath overrides the semantic target in that precedence order.",
       } as JsonSchemaProperty,
       backupFirst: SCHEMA_PROPS.backupFirst,
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("compact_repair_precheck"),
       ...STRICT_CTX,
       ...PROCESS_TIMEOUT_BLOCK,
     },
@@ -397,7 +398,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       rootPath: SCHEMA_PROPS.rootPath,
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("relink_directory_precheck"),
       backup: SCHEMA_PROPS.backup,
       recursive: {
         type: "boolean",

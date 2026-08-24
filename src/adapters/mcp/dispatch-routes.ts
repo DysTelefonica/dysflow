@@ -489,7 +489,7 @@ const BASE_MCP_TOOL_ROUTES: Record<GeneratedDispatchToolName, McpToolRouteBase> 
   localize_backend_links: {
     kind: "query-maintenance",
     queryMode: "write",
-    risk: "routine-dev-write",
+    risk: "destructive-write",
   },
   unlink_table: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },
   import_queries: { kind: "query-maintenance", queryMode: "write", risk: "routine-dev-write" },

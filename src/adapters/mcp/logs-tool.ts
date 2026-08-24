@@ -73,6 +73,10 @@ export type LogsResult = {
   totalCount: number;
   truncated: boolean;
   aggregate?: {
+    calls: {
+      confirmationRequired: number;
+      confirmationProvided: number;
+    };
     tools: Array<{
       tool: string;
       calls: number;
@@ -413,7 +417,7 @@ function percentile(values: number[], ratio: number): number {
   return ordered[Math.max(0, Math.ceil(ordered.length * ratio) - 1)] ?? 0;
 }
 
-function buildInvocationAggregate(
+export function buildInvocationAggregate(
   records: InvocationTelemetryEntry[],
 ): NonNullable<LogsResult["aggregate"]> {
   const perTool = new Map<string, InvocationTelemetryEntry[]>();
@@ -461,7 +465,16 @@ function buildInvocationAggregate(
     .sort(
       (left, right) => right.count - left.count || left.parameter.localeCompare(right.parameter),
     );
-  return { tools, rejectedParams, missingParams };
+  const calls = {
+    confirmationRequired: records.filter((record) => record.errorCode === "CONFIRMATION_REQUIRED")
+      .length,
+    confirmationProvided: records.filter(
+      (record) =>
+        record.paramNamesPresent.includes("implements_check") &&
+        record.paramNamesPresent.includes("confirmedRequiresConfirmation"),
+    ).length,
+  };
+  return { calls, tools, rejectedParams, missingParams };
 }
 
 function clampLimit(value: number | undefined): number {

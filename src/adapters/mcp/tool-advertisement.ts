@@ -62,7 +62,7 @@ const SAFETY_PARAMETER_DESCRIPTIONS: Record<string, string> = {
   compile: "Compilation is human-owned; this flag never bypasses the manual compile gate.",
   confirm: "Required confirmation for a destructive filesystem transition.",
   confirmedRequiresConfirmation:
-    "Required confirmation for destructive process cleanup after ownership checks.",
+    "Required explicit approval for a destructive operation after safety checks.",
   dryRun:
     "The safe preview path; use the canonical apply flag to commit when this tool supports it.",
   force: "Enables destructive cleanup only after ownership and safety checks.",

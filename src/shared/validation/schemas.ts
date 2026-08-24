@@ -6,6 +6,8 @@ export type JsonSchemaProperty = {
   type?: JsonSchemaPrimitiveType;
   description?: string;
   enum?: readonly string[];
+  /** Exact literal accepted by the validator and advertised in JSON Schema. */
+  const?: unknown;
   minLength?: number;
   maxLength?: number;
   minimum?: number;

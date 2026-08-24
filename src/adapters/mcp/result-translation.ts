@@ -146,6 +146,8 @@ export type McpToolError = {
    * docs.
    */
   rejectedFlag?: string;
+  /** Exact accepted token when a supplied constrained flag is rejected. */
+  expected?: string;
   /**
    * Issue #1078 — when the schema-rejection is for multiple flags
    * simultaneously (today: the apply/dryRun contradiction surface),

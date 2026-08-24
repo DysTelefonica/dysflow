@@ -1337,6 +1337,8 @@ describe("MCP tool registration over core services", () => {
     const result = await localizeTool?.handler({
       backendPath: "C:/custom/backend.accdb",
       apply: true,
+      implements_check: "localize_backend_precheck",
+      confirmedRequiresConfirmation: true,
     });
 
     expect(result?.isError).toBe(false);

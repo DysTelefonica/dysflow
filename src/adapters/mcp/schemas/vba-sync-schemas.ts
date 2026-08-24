@@ -4,6 +4,7 @@ import {
   ACCESS_OVERRIDE,
   CONFIRMATION_OVERRIDE_BLOCK,
   CTX_PROPS,
+  destructiveWriteIntentBlock,
   type JsonObjectSchema,
   type JsonSchemaProperty,
   OUTPUT_MODE_BLOCK,
@@ -811,7 +812,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // the plan. Unlike `import_*`/`import_all` this is an EXPLICIT-only
       // flag — `delete_module` without `dryRun` keeps the legacy execute
       // path so production deletes don't accidentally dry-run.
-      ...WRITE_INTENT_BLOCK,
+      ...destructiveWriteIntentBlock("delete_module_precheck"),
       // Issue #1014 — write-tool convention parity. The description
       // template promises "apply:true or dryRun:false" as the commit
       // signal; the schema must declare the `apply` flag so a caller

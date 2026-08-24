@@ -94,6 +94,23 @@ export const WRITE_INTENT_BLOCK = {
   ...CONFIRMATION_OVERRIDE_BLOCK,
 } as const satisfies Record<string, JsonSchemaProperty>;
 
+/** Public schema block for an apply-mode destructive confirmation contract. */
+export function destructiveWriteIntentBlock(implementsCheck: string) {
+  return {
+    ...WRITE_INTENT_BLOCK,
+    implements_check: {
+      ...CONFIRMATION_OVERRIDE_BLOCK.implements_check,
+      const: implementsCheck,
+      description: `Required with apply:true. Pass exactly "${implementsCheck}" after completing the tool-specific destructive precheck.`,
+    },
+    confirmedRequiresConfirmation: {
+      ...CONFIRMATION_OVERRIDE_BLOCK.confirmedRequiresConfirmation,
+      description:
+        "Required with apply:true. Pass true only after explicit approval of the destructive operation.",
+    },
+  } as const satisfies Record<string, JsonSchemaProperty>;
+}
+
 /** Issue #1076 — large-response output mode selector. */
 export const OUTPUT_MODE_BLOCK = {
   outputMode: SCHEMA_PROPS.outputMode,

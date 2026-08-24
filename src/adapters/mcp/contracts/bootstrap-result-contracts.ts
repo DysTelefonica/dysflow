@@ -223,6 +223,12 @@ export const logsResultContract = defineResultContract({
       truncated: z.boolean(),
       aggregate: z
         .object({
+          calls: z
+            .object({
+              confirmationRequired: z.number().int().nonnegative(),
+              confirmationProvided: z.number().int().nonnegative(),
+            })
+            .strict(),
           tools: z.array(unknownRecord),
           rejectedParams: z.array(unknownRecord),
           missingParams: z.array(unknownRecord),

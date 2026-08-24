@@ -305,6 +305,8 @@ describe("vba-sync write-gate derives from MCP_TOOL_ROUTES.mutatesBinary", () =>
     delete_module: {
       moduleName: "TestModule",
       apply: true,
+      implements_check: "delete_module_precheck",
+      confirmedRequiresConfirmation: true,
     },
     form_add_control: {
       sourcePath: "C:/project/forms/Form_Customer.form.txt",

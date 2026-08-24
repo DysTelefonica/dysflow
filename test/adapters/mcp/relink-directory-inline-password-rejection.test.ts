@@ -75,6 +75,7 @@ describe("relink_directory inline password rejection (#694)", () => {
     const result = await tool.handler({
       rootPath: "C:\\data",
       apply: true,
+      implements_check: "relink_directory_precheck",
       backendPassword: "super-secret-123",
     });
 
