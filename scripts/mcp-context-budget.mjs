@@ -91,9 +91,12 @@ export async function measureContextBudget({
       name: "bootstrap",
       arguments: {},
     });
+    // `view: "full"` is explicit because #1483 inverted the default: an omitted
+    // view yields the compact snapshot, so this metric silently measured the same
+    // payload as `getCapabilitiesCompact` and left the full surface ungated.
     const getCapabilities = await client.request("tools/call", {
       name: "get_capabilities",
-      arguments: { projectId: "context-budget" },
+      arguments: { projectId: "context-budget", view: "full" },
     });
     const getCapabilitiesCompact = await client.request("tools/call", {
       name: "get_capabilities",
@@ -103,9 +106,12 @@ export async function measureContextBudget({
         include: ["tools", "sharedBlockSupport", "effectiveDryRunDefault", "migrationNotes"],
       },
     });
+    // `view: "full"` is explicit because #1485 made the view mandatory: an omitted
+    // view returns a SCHEMA_VIEW_REQUIRED error envelope, so this metric measured
+    // the error (198 bytes) instead of the full catalog it names.
     const schemaFull = await client.request("tools/call", {
       name: "schema",
-      arguments: { projectId: "context-budget" },
+      arguments: { projectId: "context-budget", view: "full" },
     });
     const schemaCompact = await client.request("tools/call", {
       name: "schema",
