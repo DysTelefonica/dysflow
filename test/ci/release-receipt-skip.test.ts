@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CI_RECEIPT_JOB_NAME,
   evaluateCiReceipt,
   verifyCiReceiptFromGitHub,
 } from "../../.github/scripts/verify-ci-receipt.mjs";
@@ -34,11 +35,11 @@ function run(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function qualityJob(overrides: Record<string, unknown> = {}) {
+function ciResultJob(overrides: Record<string, unknown> = {}) {
   return {
     id: 84,
     run_id: 42,
-    name: "Quality gates (20)",
+    name: "CI result",
     status: "completed",
     conclusion: "success",
     head_sha: SHA,
@@ -50,7 +51,7 @@ function qualityJob(overrides: Record<string, unknown> = {}) {
 
 function evaluate(
   workflowRuns: unknown[] = [run()],
-  jobsByRunId: ReadonlyMap<number, unknown[]> = new Map([[42, [qualityJob()]]]),
+  jobsByRunId: ReadonlyMap<number, unknown[]> = new Map([[42, [ciResultJob()]]]),
 ) {
   return evaluateCiReceipt({
     workflowRuns,
@@ -60,7 +61,7 @@ function evaluate(
     expectedBranch: "main",
     expectedWorkflowName: "CI",
     expectedWorkflowPath: ".github/workflows/ci.yml",
-    expectedJobName: "Quality gates (20)",
+    expectedJobName: CI_RECEIPT_JOB_NAME,
     now: NOW,
     maxAgeHours: 24,
   });
@@ -93,20 +94,20 @@ describe("release CI receipt", () => {
 
   it.each([
     ["missing", []],
-    ["wrong identity", [qualityJob({ name: "Quality gates (26)" })]],
-    ["wrong SHA", [qualityJob({ head_sha: "b".repeat(40) })]],
-    ["failed", [qualityJob({ conclusion: "failure" })]],
-    ["incomplete", [qualityJob({ status: "in_progress", completed_at: null })]],
-    ["exactly 24 hours old", [qualityJob({ completed_at: "2026-08-01T12:00:00.000Z" })]],
-    ["older than 24 hours", [qualityJob({ completed_at: "2026-08-01T11:59:59.000Z" })]],
-    ["future-dated", [qualityJob({ completed_at: "2026-08-02T12:00:01.000Z" })]],
-  ])("falls through for a %s quality job", (_label, jobs) => {
+    ["wrong identity", [ciResultJob({ name: "Quality gates (26)" })]],
+    ["wrong SHA", [ciResultJob({ head_sha: "b".repeat(40) })]],
+    ["failed", [ciResultJob({ conclusion: "failure" })]],
+    ["incomplete", [ciResultJob({ status: "in_progress", completed_at: null })]],
+    ["exactly 24 hours old", [ciResultJob({ completed_at: "2026-08-01T12:00:00.000Z" })]],
+    ["older than 24 hours", [ciResultJob({ completed_at: "2026-08-01T11:59:59.000Z" })]],
+    ["future-dated", [ciResultJob({ completed_at: "2026-08-02T12:00:01.000Z" })]],
+  ])("falls through for a %s CI result job", (_label, jobs) => {
     expect(evaluate([run()], new Map([[42, jobs]])).decision).toBe("full-validation");
   });
 
   it("fails safe when multiple receipts have the same newest completion time", () => {
-    const duplicate = qualityJob({ id: 85 });
-    const result = evaluate([run()], new Map([[42, [qualityJob(), duplicate]]]));
+    const duplicate = ciResultJob({ id: 85 });
+    const result = evaluate([run()], new Map([[42, [ciResultJob(), duplicate]]]));
     expect(result).toMatchObject({ decision: "full-validation", reason: "ambiguous-receipt" });
   });
 
@@ -137,8 +138,15 @@ describe("release CI receipt", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            total_count: 1,
-            jobs: [qualityJob({ completed_at: new Date(current - 1_000).toISOString() })],
+            total_count: 2,
+            jobs: [
+              ciResultJob({ completed_at: new Date(current - 1_000).toISOString() }),
+              ciResultJob({
+                id: 85,
+                name: "Quality gates (26)",
+                completed_at: new Date(current - 2_000).toISOString(),
+              }),
+            ],
           }),
           { status: 200 },
         ),
@@ -184,13 +192,17 @@ describe("release CI receipt", () => {
   });
 
   it("requires exact-SHA quality authority while preserving build and release E2E", async () => {
-    const [ci, release, weekly] = await Promise.all([
+    const [ci, release, weekly, docs] = await Promise.all([
       readFile(".github/workflows/ci.yml", "utf8"),
       readFile(".github/workflows/release.yml", "utf8"),
       readFile(".github/workflows/verify-receipt-skip.yml", "utf8"),
+      readFile("docs/ci/release-receipt-skip.md", "utf8"),
     ]);
     const authority = workflowJobBlock(release, "quality-authority");
     const publication = workflowJobBlock(release, "release");
+    const ciResult = workflowJobBlock(ci, "ci-result");
+
+    expect(ciResult).toContain(`name: ${CI_RECEIPT_JOB_NAME}`);
 
     expect(ci).toMatch(
       /quality:[\s\S]*?if: github\.event_name == 'push' \|\| needs\.changes\.outputs\.code_required == 'true'/,
@@ -207,8 +219,14 @@ describe("release CI receipt", () => {
     expect(authority).toContain("node .github/scripts/verify-ci-receipt.mjs");
     expect(authority).toContain("steps.receipt.outputs.decision != 'skip'");
     expect(authority).toContain("run: pnpm lint");
+    expect(authority).toContain("run: pnpm build");
     expect(authority).toContain("run: pnpm test");
     expect(authority).toContain("run: pnpm coverage");
+    const directCommands = ["pnpm lint", "pnpm build", "pnpm test", "pnpm coverage"].map(
+      (command) => authority.indexOf(`run: ${command}`),
+    );
+    expect(directCommands.every((index) => index >= 0)).toBe(true);
+    expect(directCommands).toEqual([...directCommands].sort((left, right) => left - right));
     expect(authority).toContain(
       "AUTHORITY_TYPE: $" +
         "{{ steps.receipt.outputs.decision == 'skip' && 'ci-receipt' || 'direct-gates' }}",
@@ -226,6 +244,38 @@ describe("release CI receipt", () => {
     expect(release).toContain("Sign checksums (Ed25519)");
     expect(release).toContain("Assert release name == tag (#668)");
     expect(weekly).toContain("cron:");
-    expect(weekly).toContain("test/ci/release-receipt-skip.test.ts");
+    expect(weekly).toContain("run: pnpm test");
+
+    const engine = JSON.parse(await readFile("package.json", "utf8")) as {
+      engines?: { node?: string };
+    };
+    const supportedMajor = /\u003e=(\d+)\./.exec(engine.engines?.node ?? "")?.[1];
+    expect(supportedMajor).toBeDefined();
+    for (const [name, workflow] of [
+      ["release", release],
+      ["weekly receipt verification", weekly],
+    ] as const) {
+      const configured = [...workflow.matchAll(/^\s*node-version:\s*(\d+)\s*$/gm)].map(
+        (match) => match[1],
+      );
+      expect(configured.length, `${name} configures no literal Node version`).toBeGreaterThan(0);
+      expect(new Set(configured), `${name} drifts from package.json engines.node`).toEqual(
+        new Set([supportedMajor]),
+      );
+    }
+
+    const weeklyCommands = ["pnpm lint", "pnpm build", "pnpm test", "pnpm coverage"];
+    for (const command of weeklyCommands) expect(weekly).toContain(`run: ${command}`);
+    expect(weeklyCommands.map((command) => weekly.indexOf(`run: ${command}`))).toEqual(
+      weeklyCommands
+        .map((command) => weekly.indexOf(`run: ${command}`))
+        .sort((left, right) => left - right),
+    );
+    expect(docs).toContain("unambiguous `CI result` job");
+    expect(docs).toContain(
+      "`pnpm lint`, `pnpm build`, `pnpm test`, and `pnpm coverage` in that order",
+    );
+    expect(docs).toContain("scripts/release-prepare.ps1 -Bump patch");
+    expect(docs).not.toContain("`Quality gates (20)`");
   });
 });

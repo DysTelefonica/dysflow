@@ -25,11 +25,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify fail-safe receipt behavior and workflow wiring
-        run: pnpm exec vitest run test/ci/release-receipt-skip.test.ts
+      # Exercise the exact direct-gate sequence from a clean scheduled checkout.
+      # The receipt test pins this list and its order against release.yml.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Test with coverage
+        run: pnpm coverage
