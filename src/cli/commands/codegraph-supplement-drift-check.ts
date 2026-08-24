@@ -148,6 +148,9 @@ export function formatSupplementDriftDiagnostic(
   }
   if (errorCount > 0) {
     message += ` Skipped ${errorCount} unreadable file(s).`;
+    message += ` Unreadable: ${result.errors
+      .map((error) => `${error.filePath} (${error.message})`)
+      .join("; ")}.`;
   }
   if (driftCount === 0 && malformedCount === 0 && errorCount === 0) {
     message += " No drift detected.";

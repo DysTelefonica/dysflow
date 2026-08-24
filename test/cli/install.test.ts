@@ -915,8 +915,59 @@ describe("handleUpdateCommand end-to-end", () => {
     expect(await readFile(join(home, ".codex", "skills", "dysflow-arnes", "SKILL.md"))).toEqual(
       await readFile(join(releasePackageRoot, "skills", "dysflow-arnes", "SKILL.md")),
     );
+    expect(await readFile(join(home, ".codex", "AGENTS.md"), "utf8")).toEqual(
+      await readFile(
+        join(releasePackageRoot, "skills", "dysflow-pointer-rollout", "assets", "pointer.md"),
+        "utf8",
+      ),
+    );
+    expect(result.stdout).toContain("Pointer rollout:");
 
     await rm(root, { recursive: true, force: true });
+  });
+
+  it("refreshes an existing user-global even when its SkillsDir target is undiscovered", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-update-pointer-discovery-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const appDir = join(runtimeDir, "app");
+    const releasePackageRoot = await createPackageRoot(root, "9.9.9", "CURRENT_RUNTIME");
+    const claudeInstructions = join(home, ".claude", "CLAUDE.md");
+    await mkdir(appDir, { recursive: true });
+    await writeFile(
+      join(appDir, "package.json"),
+      JSON.stringify({ name: "dysflow", version: "9.9.9", type: "module" }, null, 2),
+      "utf8",
+    );
+    await mkdir(join(claudeInstructions, ".."), { recursive: true });
+    await writeFile(
+      claudeInstructions,
+      "before\n<!-- user-supplement:dysflow:pointer -->\nstale\n<!-- /user-supplement:dysflow:pointer -->\nafter\n",
+      "utf8",
+    );
+
+    try {
+      const result = await handleUpdateCommand(["--runtime-dir", runtimeDir], {
+        env: { USERPROFILE: home },
+        packageRoot: releasePackageRoot,
+        releaseUpdateProvider: {
+          resolveLatestRelease: async () => ({ version: "9.9.9" }),
+          preparePackage: async () => {
+            throw new Error("preparePackage must not be called when the runtime is up to date");
+          },
+        },
+      });
+
+      expect(result.exitCode).toBe(0);
+      const installed = await readFile(claudeInstructions, "utf8");
+      expect(installed).toContain("before\n");
+      expect(installed).toContain("after\n");
+      expect(installed).toContain("## Dysflow runtime-first rule");
+      expect(installed).not.toContain("\nstale\n");
+      expect(result.stdout).toContain("- claude: replaced");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("forces GitHub release reinstall when latest version is already installed", async () => {

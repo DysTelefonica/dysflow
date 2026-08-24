@@ -7,13 +7,23 @@ The actual 9-target table and per-file recipes. Read fully before running.
 1. Read `<bundle-root>\skills\dysflow-arnes\SKILL.md`.
 2. Extract content between `<!-- dysflow:arnés -->` and `<!-- /dysflow:arnés -->` by marker, never by line number. Confirm both delimiters exist. If not, **abort** and report "upstream arnés delimiters missing — fix dysflow-arnes/SKILL.md first".
 3. Compute SHA256 of the extracted block. Store as `HARNESS_HASH` (the contracted value for the per-project AGENTS.md embed).
-4. Read `assets/pointer.md`. Compute SHA256. Store as `POINTER_HASH`.
+4. Read `assets/pointer.md`. Extract the literal bytes **between** the opening and
+   closing `user-supplement:dysflow:pointer` markers, including the boundary
+   newlines but excluding both marker lines. Compute SHA256 of that inlined
+   region and store it as `POINTER_HASH`. Do not hash the whole file.
 5. The two hashes are NOT comparable. `POINTER_HASH` is the contract for targets 1–8; `HARNESS_HASH` is the contract for target 9. The skill must NEVER compare a pointer's inlined hash against `HARNESS_HASH`.
 
 ## Step 1 — Enumerate the 9 active targets
 
 The 9-target active list is FIXED. Adding a new instruction file requires explicit user
 sign-off — the deployment surface does not grow by drift.
+
+Routine `dysflow update` rollout follows the five-agent install matrix:
+OpenCode, Claude, Codex, Cursor, and Pi. Their instruction
+targets are `.config/opencode/AGENTS.md`, `.claude/CLAUDE.md`,
+`.codex/AGENTS.md`, `.cursor/rules/dysflow-vba.mdc`, and
+`.pi/agent/APPEND_SYSTEM.md`. The extended table below remains the manual ARN-2
+fallback for agents outside that install matrix.
 
 ### User-global pointers (8 files)
 
@@ -53,9 +63,11 @@ Target 9 is validated against `HARNESS_HASH` (the dysflow-arnés delimited block
 read file
 find open marker index O
 find close marker index C
-if O or C absent:
+if O and C are both absent:
     append `assets/pointer.md` at end of file, wrapped in markers
     log: appended
+else if exactly one marker is absent:
+    fail closed; do not modify the malformed file
 else:
     extract content between O and C
     compute SHA256 of inlined content against `assets/pointer.md`

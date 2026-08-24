@@ -17,6 +17,11 @@ import {
 } from "./extractor.js";
 import { resolvePackageRoot } from "./package-root.js";
 import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
+import {
+  discoverPointerRolloutTargets,
+  formatPointerRolloutReport,
+  installBundledPointerBlocks,
+} from "./pointer-rollout.js";
 import { getSystemMarkerPath, resolveRuntimeDir } from "./runtime-dir.js";
 import {
   discoverSkillTargets,
@@ -305,16 +310,28 @@ export async function handleUpdateCommand(
     // (without --runtime-dir) can still discover this runtime directory.
     try {
       await writeRuntimeMarker(getSystemMarkerPath(env), runtimeDir);
+      const home = getHome(env);
+      const skillTargets = discoverSkillTargets(home, {
+        only: parsed.options.onlySkills,
+        exclude: parsed.options.excludeSkills,
+      });
       const skillInstall = await installBundledSkills({
         bundleRoot: localPackageRoot,
-        targets: discoverSkillTargets(getHome(env), {
+        targets: skillTargets,
+      });
+      const pointerRollout = await installBundledPointerBlocks({
+        bundleRoot: localPackageRoot,
+        home,
+        targets: discoverPointerRolloutTargets({
+          home,
+          installedSkillTargets: skillTargets,
           only: parsed.options.onlySkills,
           exclude: parsed.options.excludeSkills,
         }),
       });
       return {
         exitCode: 0,
-        stdout: `${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}`,
+        stdout: `${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}\n${formatPointerRolloutReport(pointerRollout)}`,
         stderr: "",
       };
     } catch (error) {
@@ -336,9 +353,21 @@ export async function handleUpdateCommand(
       preparedPackage.packageRoot,
       env,
     );
+    const home = getHome(env);
+    const skillTargets = discoverSkillTargets(home, {
+      only: parsed.options.onlySkills,
+      exclude: parsed.options.excludeSkills,
+    });
     const skillInstall = await installBundledSkills({
       bundleRoot: preparedPackage.packageRoot,
-      targets: discoverSkillTargets(getHome(env), {
+      targets: skillTargets,
+    });
+    const pointerRollout = await installBundledPointerBlocks({
+      bundleRoot: preparedPackage.packageRoot,
+      home,
+      targets: discoverPointerRolloutTargets({
+        home,
+        installedSkillTargets: skillTargets,
         only: parsed.options.onlySkills,
         exclude: parsed.options.excludeSkills,
       }),
@@ -360,6 +389,7 @@ export async function handleUpdateCommand(
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
         createInstallReport(runtimeDir, [], { copiedFiles: runtimeInstall.copiedFiles }) +
         `\n${formatSkillInstallReport(skillInstall)}` +
+        `\n${formatPointerRolloutReport(pointerRollout)}` +
         (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
       stderr: "",
     };
