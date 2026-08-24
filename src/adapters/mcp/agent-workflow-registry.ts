@@ -14,6 +14,14 @@ export type AgentWorkflowStatus = "preferred" | "specialized" | "legacy";
 export const TOOL_SURFACE_MODES = ["core", "full"] as const;
 export type ToolSurface = (typeof TOOL_SURFACE_MODES)[number];
 
+export type ToolInventorySnapshot = {
+  /** Every registered contract; callable by name even when not advertised. */
+  callable: number;
+  /** Contracts present in tools/list under the active surface. */
+  advertised: number;
+  surface: ToolSurface;
+};
+
 /** Phases that belong to the default `core` advertised surface. */
 export const CORE_SURFACE_PHASES: readonly AgentWorkflowPhase[] = [
   "bootstrap",

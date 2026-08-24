@@ -268,6 +268,18 @@ describe("createDysflowMcpTools — schema tool wiring (#971)", () => {
     expect(properties).toHaveProperty("projectId");
     expect(properties).toHaveProperty("toolName");
   });
+
+  it("advertises the handler-required view through machine-readable typed-error metadata", () => {
+    const tools = createDysflowMcpTools({ services: makeServices() });
+    const schemaTool = tools.find((t) => t.name === "schema");
+    const view = schemaTool?.inputSchema?.properties?.view;
+
+    expect(view).toMatchObject({
+      runtimeRequired: true,
+      omissionErrorCode: "SCHEMA_VIEW_REQUIRED",
+    });
+    expect(schemaTool?.inputSchema?.required ?? []).not.toContain("view");
+  });
 });
 
 describe("SchemaInput — type contract smoke test (#971)", () => {

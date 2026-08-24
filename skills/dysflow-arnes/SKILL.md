@@ -1,14 +1,14 @@
 ---
 name: dysflow-arnes
-description: "MUST-LOAD for any AI agent touching dysflow artifacts (.dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, tests/*.json). Load dysflow-usage FIRST, then this operating harness; call get_capabilities({}) before static diagnosis. Self-contained hard rules, workflow loop, companion-skill matrix, and anti-patterns."
+description: "Trigger: MUST-LOAD for any AI agent touching dysflow artifacts (.dysflow/*, *.accdb, *.bas, *.cls, *.form.txt, tests/*.json). Load dysflow-usage FIRST, then this operating harness; call bootstrap({}) before static diagnosis and expand capabilities explicitly. Self-contained hard rules, workflow loop, companion-skill matrix, and anti-patterns."
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "0.8.0"
+  version: "1.0.0"
   status: active
-  last_verified: "2026-08-06"
-  last_dysflow_version: "2.36.2"
-  requires: "dysflow MCP >= 2.34, dysflow-usage skill"
+  last_verified: "2026-08-23"
+  last_dysflow_version: "3.0.0"
+  requires: "dysflow MCP >= 3.0, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
     in_scope: "operating rules, hard constraints, workflow loop, companion-skills matrix, anti-patterns for any AI agent using dysflow"
@@ -26,8 +26,11 @@ dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
 execution, test execution, and form UI operations on Access projects.
 
 **MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call
-`get_capabilities({})` before reading static project files, forming a diagnosis,
-or modifying `.dysflow/project.json`; the live runtime is authoritative.
+`bootstrap({})` before reading static project files, forming a diagnosis, or
+modifying `.dysflow/project.json`. Route with
+`schema({view:"index"})`; expand through an explicit compact/full capability
+view or selective `describe_tool` only when needed. The live runtime is
+authoritative.
 
 ## 1. When this arnés applies (load it when...)
 
@@ -63,16 +66,19 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
   ONLY path for test data. If sandbox unreachable → surface "TESTS BLOCKED",
   do NOT touch data. Production writes = silent corruption.
 
-- **HR-4 — Pre-flight BEFORE every dysflow write call.** Self-check (5 points):
-  (1) `adapterVersion` is current,
+- **HR-4 — Pre-flight BEFORE every dysflow write call.** Start from
+  `bootstrap({})`, then fetch the bounded capability blocks needed by the
+  selected tool. Self-check (5 points): (1) `adapterVersion` is current,
   (2) `effectiveDryRunDefault[toolName]` matches your intent,
   (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
   (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
-  (5) `toolsVisible` is consistent with anything you cite.
+  (5) `toolInventory.advertised` or `.callable` matches the claim you cite;
+  legacy `toolsVisible` has context-dependent meaning.
   If any check fails, STOP and surface the gap.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
-  defaults, or error codes from any doc. Re-fetch via `get_capabilities`
+  defaults, or error codes from any doc. Re-fetch `bootstrap`, route through
+  `schema({view:"index"})`, and expand the relevant capability/schema blocks
   before any non-trivial call sequence. If runtime value disagrees with
   this arnés or any skill, trust runtime and surface drift to the user.
 
@@ -100,7 +106,7 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
   weaken the guard or edit configs to switch worktrees.
 
 - **HR-10 — Bootstrap missing project config before any other write.** When
-  `get_capabilities({}).projectConfig.status === "missing"`, call
+  `get_capabilities({view:"full"}).projectConfig.status === "missing"`, call
   `setup_project({cwd,projectId,frontendFile,apply:false})`, review
   `resolvedConfig`, then repeat with `apply:true`. A fresh worktree MUST provide
   an explicit `projectId`; `setup_project` may reuse an existing
@@ -123,10 +129,12 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
   `setup_project` may consume the trio only to return `mode:"resolution"` for
   the selected existing project; that route never writes config.
 
-- **HR-12 — Let runtime metadata route discovery.** Read standard Tool
+- **HR-12 — Let runtime metadata route discovery.** `tools/list` contains the
+  advertised surface, while schema index contains every callable tool and an
+  `advertised` marker. Read standard Tool
   `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]`
   for `phases`, `preferredFor`, and `status`. Use
-  `get_capabilities({}).preferredAgentWorkflows` to select the active phase,
+  `bootstrap({phase:"<phase>"}).preferredAgentWorkflows` to select the phase,
   then call `describe_tool({name})` only for the tools about to run. Metadata
   guides selection; the full schema and `describe_tool` remain authoritative
   for parameters, composition constraints, result contracts, and errors.
@@ -136,6 +144,12 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
   entire envelope as a JSON string, so parse once when `typeof raw === "string"`
   and then require the discriminator. Missing or different `schemaVersion`
   fails closed; never continue by guessing a payload shape.
+
+- **HR-13.1 — Prefer structured payloads over summaries.** Hosts may place a
+  bounded summary in `content[0].text` while preserving the complete result in
+  `structuredContent`. For semantic audits and schema-derived verification,
+  consume `structuredContent` first; use text only when it is the complete
+  payload. Never audit the truncation summary as though it were the contract.
 
 - **HR-14 — Bindings vacíos en `.form.txt` no son bug; son formularios desatendidos.**
   When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the
@@ -152,14 +166,18 @@ or modifying `.dysflow/project.json`; the live runtime is authoritative.
 
 For any feature that touches dysflow-managed artifacts:
 
-- **Step 0** — `get_capabilities({})`. Capture `adapterVersion`,
-  `writeExecutionPolicy`, `effectiveDryRunDefault`, `humanCompilePending`,
-  `toolsVisible`, `projectConfig.status`, and `projectConfig.writeReady`.
+- **Step 0** — `bootstrap({})`. Capture `adapterVersion`, the write gates,
+  `writeExecutionPolicy`, `toolInventory`, `humanCompilePending`, and the
+  preferred workflow. Route through `schema({view:"index"})`; then call
+  `get_capabilities({view:"compact",include:[...]})` or `{view:"full"}` only
+  for the exact deeper fields needed (`effectiveDryRunDefault`,
+  `projectConfig.status`, `projectConfig.writeReady`, and so on).
   If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and
   `frontendFile` through `setup_project` before any other write-class tool,
   then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
-- **Step 0.25** — Read `preferredAgentWorkflows`, choose the active phase, and
-  inspect only the relevant tools through `describe_tool` (HR-12).
+- **Step 0.25** — Read the bootstrap `preferredAgentWorkflows`, choose the
+  active phase, and inspect only relevant callable tools through
+  `describe_tool` (HR-12).
 - **Step 0.5** — If `resolve_project` is ambiguous, follow HR-11 and wait for
   the human choice before any write-class dispatch.
 - **Step 1** — Test FIRST. New feature → write `Test_<Feature>.bas` in
@@ -244,11 +262,9 @@ load `access-vba-e2e-methodology`.
 
 The arnés is the LEAN pointer. Depth lives in:
 
-- `C:\Users\adm1\.config\opencode\rules\dysflow-codegraph.md` — operational
-  depth for dysflow + codegraph-vba (kill ban, liveness, human-compile loop,
-  codegraph-vba operation).
-- `C:\Users\adm1\.config\opencode\AGENTS.md` — global core (persona, rules,
-  engram protocol) — always-on, not dysflow-specific.
+- `../dysflow-codegraph-update/references/procedure.md` — release-maintenance
+  depth and candidate-runtime audit procedure.
+- Repository `AGENTS.md` — the byte-equal embedded harness plus project rules.
 - `dysflow-usage` skill — canonical tool names, flags, defaults, error codes.
 - `access-vba-tdd-*` skills — TDD discipline details.
 - `access-vba-e2e-methodology` — TDD ↔ UAT bridge.
@@ -280,10 +296,10 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v0.8.0 · last_verified 2026-08-06 · requires
-dysflow MCP >= 2.34 · author: Andrés Román · license: Apache-2.0
+dysflow harness v1.0.0 · last_verified 2026-08-23 · requires
+dysflow MCP >= 3.0 · author: Andrés Román · license: Apache-2.0
 
-Source of truth: live `get_capabilities`. If this arnés disagrees with
+Source of truth: live `bootstrap` plus explicit schema/capability views. If this arnés disagrees with
 runtime, **runtime wins**; surface the drift and update via
 `dysflow-codegraph-update`.
 <!-- /dysflow:arnés -->

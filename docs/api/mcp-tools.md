@@ -89,9 +89,14 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
   - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
 
 ### `bootstrap`
-Minimal first-call read-only surface. Returns adapter version, tool count, write-gate state, write execution policy, and the `preferredAgentWorkflows` map in a single ~700-byte call.
+Minimal first-call read-only surface. Returns adapter version, write-gate state,
+write policy, and unambiguous callable/advertised `toolInventory`.
 
-Recommended first call when only routing metadata is required. Replaces the heavier two-call path (`get_capabilities({ compact: true })` + `schema({ view: "index" })`).
+It also returns the active surface, human-compile state, and the
+`preferredAgentWorkflows` map.
+
+This is the recommended first call. Route next through
+`schema({ view: "index" })`; expand capabilities or one tool only when needed.
 
 Pure read-only; never opens Access, never spawns PowerShell, never mutates state. Reuses the capabilities snapshot pipeline but omits per-tool metadata.
 * **Parameters**: optional `cwd`; omit to use the MCP startup worktree. Optional `phase` filter for `preferredAgentWorkflows`.
@@ -99,25 +104,28 @@ Pure read-only; never opens Access, never spawns PowerShell, never mutates state
 ### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
 
-Call `get_capabilities({})` first. It reports:
+Call `bootstrap({})` first. Use `get_capabilities` when the selected step needs:
 
 - The running version, live write gates, and project resolution.
 - Effective defaults and canonical commit flags.
 - Six machine-readable `preferredAgentWorkflows`.
 
-For a bounded bootstrap, use `get_capabilities({ "compact": true })`, then
-`schema({ "view": "index" })` to choose a tool.
+The default `{}` response is compact. Use `{ "view": "compact" }` explicitly
+in agent-authored calls and `{ "view": "full" }` only for the complete snapshot.
+
+`compact:true` remains a compatibility alias.
 
 Use `describe_tool({ "name": "<tool>", "sections": ["parameters"] })` for
-one-tool details. Full defaults remain available for compatibility.
+one-tool details.
 
 Every MCP response, including this one, carries top-level `schemaVersion: "dysflow.result/v1"`.
 
 Consumers must defensively parse a stringified host-wrapper result before requiring that discriminator.
 * **Parameters**: optional `cwd`; omit it to use the MCP startup worktree. An empty `{}` remains valid.
-* **Progressive parameters**: `compact:true` (or `view:"compact"`) returns a bounded bootstrap projection. `include` selects large blocks (`tools`, `sharedBlockSupport`, `effectiveDryRunDefault`, `migrationNotes`, `preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`, `documentationBundle`, `projectConfig`, `worktreeCache`); `toolNames` filters per-tool maps without changing the full default.
+* **Progressive parameters**: `view:"compact"` returns the bounded projection; `view:"full"` opts into every block. Compact always includes base identity/gates and, by default, compact `tools`, `sharedBlockSupport`, `effectiveDryRunDefault`, and `migrationNotes`. `include` selects blocks and `toolNames` filters per-tool maps.
+* **Count semantics**: `toolInventory` always distinguishes `{callable, advertised, surface}`. Legacy `toolsVisible` means callable registry count here, while bootstrap retains its advertised-count compatibility meaning.
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
-* **Per-tool advertisement**: every `tools/list` entry carries a compact, routing-safe description, the complete callable `inputSchema.properties` set, standard MCP `annotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`), and namespaced workflow routing metadata at `_meta["dysflow/workflow"]`. The hot-path namespaced value contains only `phases[]` and `status`; deep `preferredFor[]` guidance remains in `schema` and `describe_tool`. Safety-critical parameter semantics such as `apply`, `dryRun`, `confirm`, `force`, and compile/allowlist gates stay explicit in the compact schema. MCP 2025-06-18 does **not** define `annotations.category` or `annotations.preferredFor`, so Dysflow does not emit them or claim that generic clients group tools automatically.
+* **Per-tool advertisement**: the default core `tools/list` is a bounded advertised subset; non-advertised contracts remain callable by name. Every listed entry carries a compact, routing-safe description, complete callable `inputSchema.properties`, standard MCP annotations, and namespaced workflow metadata. Use schema index for the complete callable inventory and each entry's `advertised` state.
 
 The compact advertisement is derived from the same canonical contracts as the deep
 catalog. It removes issue-history and migration prose from the hot path without
@@ -262,17 +270,22 @@ Read `.dysflow/project.json` and, optionally with `apply:true`, rewrite it in pl
 Return static tool contracts in progressive views. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 
 - `index` — routing-only entries with optional `phase`, `status`, and `toolName` filters.
-- `compact` — low-context discovery across all 94 advertised tools.
+- `compact` — low-context discovery across every callable tool.
 - `full` — complete input JSON Schema, canonical aliases, errors, use cases, references, and tool-specific result contracts.
 
-Omitting `view` preserves the legacy full response. All views are deterministic and support the same `toolName` filter; `index` additionally supports workflow `phase` and `status` filters.
+Omitting `view` fails closed with typed `SCHEMA_VIEW_REQUIRED`.
+
+This runtime-required parameter is exposed through machine metadata without adding JSON Schema
+`required:["view"]`, so the handler preserves the typed error envelope.
+
+All views are deterministic and support `toolName`; index also supports workflow filters.
 * **Parameters**:
   - `projectId` (string, optional): Reserved for a future per-project scoping extension. The current catalog is global.
-  - `toolName` (string, optional): Filter either view to one exact tool name. Omit for every advertised tool.
-  - `view` (`"index" | "compact" | "full"`, optional, default `"full"`): Select routing-only, low-context, or complete discovery.
+  - `toolName` (string, optional): Filter to one exact callable tool name.
+  - `view` (`"index" | "compact" | "full"`, runtime-required): Select routing-only, low-context, or complete discovery. Omission returns `SCHEMA_VIEW_REQUIRED`.
   - `phase` (`"bootstrap" | "sync" | "tests" | "sql" | "forms" | "recovery"`, optional): Filter routing views by canonical workflow phase.
   - `status` (`"preferred" | "specialized" | "legacy"`, optional): Filter routing views by canonical workflow status.
-* **Index returns**: `{ projectId, tools: [{ name, purpose, access, phases, status, preferredFor, annotations }] }`.
+* **Index returns**: `{ projectId, tools: [{ name, purpose, access, phases, status, preferredFor, annotations, advertised }] }` for every callable contract.
 * **Compact returns**: `{ projectId, tools: [{ name, purpose, access, annotations, _meta, agentWorkflow, requiredParameters, requiredParameterGroups, defaults, writeIntent, primaryResult, recommendations }] }`.
 * **Full returns**: `{ projectId, tools: [{ name, description, access, annotations, _meta, agentWorkflow, inputSchema, parameters, returns, errorCodes, crossReferences, requiredCapabilities, safeByDefault, useCases, compositionConstraints, resultContract }] }`.
 * **Workflow classification**:
@@ -281,10 +294,10 @@ Omitting `view` preserves the legacy full response. All views are deterministic 
   - `legacy`: `supersededBy`, `migrationGuidance`, and `deprecationPolicy` provide a terminal migration path. `query_sql` and `exec_sql` remain callable compatibility tools; new SQL consumers use `query_execute`.
   - `useCases` is copied from `agentWorkflow.preferFor`, so compact, full, and one-tool discovery cannot drift.
 * **Recommended discovery path**:
-  1. `get_capabilities({})` for live version, gates, policy, and canonical commit flags.
-  2. `schema({ "view": "compact" })` to choose a tool, optionally filtered with `toolName`.
+  1. `bootstrap({})` for live version, gates, surface, phase routing, and human-compile state.
+  2. `schema({ "view": "index" })` to choose a callable tool and inspect advertisement state.
   3. `describe_tool({ "name": "<tool>" })` for the preferred one-tool deep view.
-  4. `schema({ "view": "full" })` only for bulk analysis that genuinely needs every complete contract.
+  4. `get_capabilities({ "view": "compact" })` for bounded write/tool metadata, or full capability/schema views only for deliberate bulk analysis.
 
 ### `describe_tool`
 Preferred one-tool deep introspection view. Read-only — never opens Access, never spawns PowerShell, never mutates state.

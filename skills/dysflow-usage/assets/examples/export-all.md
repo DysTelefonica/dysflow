@@ -1,13 +1,48 @@
-# Export all modules with verbose snapshots
+# `export_all`
+
+## What it does
+
+Exports every managed Access source object and can return semantic verbose evidence.
+
+## When to use
+
+Use for a complete binary-to-source refresh. Prefer `export_modules` for a focused slice.
+
+## Required flags
+
+Pass explicit `apply:false` to preview and `apply:true` to commit. `prune:true` is destructive and keeps its clean-export guards.
+
+## All input properties
+
+Read the live full schema; do not combine `prune` with `filter`.
+
+## Call shape
 
 ```json
 {
-  "destinationRoot": "C:/project/src",
-  "apply": true,
-  "verbose": true
+  "tool": "export_all",
+  "arguments": {
+    "destinationRoot": "src",
+    "apply": false,
+    "verbose": true
+  }
 }
 ```
 
-`export_all` returns the same per-module `verbose[]` entries as `export_modules`: binary-before and file-after `{ lines, bytes, sha256 }` snapshots plus the canonical semantic actionability verdict. The field is absent unless explicitly requested.
+## Result shape
 
-`prune:true` keeps its existing guards: no pruning after warnings, no `filter` plus `prune`, and saved queries are never pruned.
+Verbose entries include binary/file snapshots plus `classification`, `reason`, `actionable`, `recommendation`, and `classifierRules`.
+
+## Common errors
+
+| Code | Description | Fix |
+|---|---|---|
+| `MCP_INPUT_INVALID` | Invalid flag or incompatible prune/filter intent. | Re-read the full schema and retry the plan. |
+
+## Cross-reference
+
+- `../write-flags-matrix.md`
+
+## TODO before production use
+
+Review the plan and resolved destination before changing `apply` to `true`.

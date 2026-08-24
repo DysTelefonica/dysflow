@@ -1,6 +1,16 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { readPackageVersionNear } from "../../../core/utils/package-info.js";
 
@@ -19,6 +29,7 @@ export type SkillAgentId = (typeof SKILL_AGENT_IDS)[number];
 /** Product version that owns the bundled harness bytes. */
 export const MCP_HARNESS_VERSION = readPackageVersionNear(import.meta.url);
 export const HARNESS_METADATA_FILE = ".dysflow-harness.json";
+export const HARNESS_METADATA_SCHEMA_VERSION = 2;
 
 export type SkillTarget = {
   agentId: SkillAgentId;
@@ -66,6 +77,48 @@ type LinkSnapshot = {
 
 function sha256(content: Uint8Array): string {
   return createHash("sha256").update(content).digest("hex");
+}
+
+type BundledSkill = {
+  files: Map<string, Buffer>;
+};
+
+function skillTreeHash(files: ReadonlyMap<string, Buffer>): string {
+  const manifest = [...files.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([relativePath, content]) => `${relativePath}\0${sha256(content)}`)
+    .join("\n");
+  return sha256(Buffer.from(manifest, "utf8"));
+}
+
+async function readSkillTree(skillRoot: string): Promise<Map<string, Buffer>> {
+  const files = new Map<string, Buffer>();
+
+  async function visit(directory: string, relativeDirectory: string): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(directory, entry.name);
+      const relativePath = relativeDirectory
+        ? path.posix.join(relativeDirectory, entry.name)
+        : entry.name;
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Bundled skill assets must not contain symbolic links: ${absolutePath}`);
+      }
+      if (entry.isDirectory()) {
+        await visit(absolutePath, relativePath);
+      } else if (entry.isFile()) {
+        files.set(relativePath, await readFile(absolutePath));
+      } else {
+        throw new Error(`Unsupported bundled skill asset: ${absolutePath}`);
+      }
+    }
+  }
+
+  await visit(skillRoot, "");
+  if (!files.has("SKILL.md")) {
+    throw new Error(`Bundled skill is missing SKILL.md: ${path.join(skillRoot, "SKILL.md")}`);
+  }
+  return files;
 }
 
 function canonicalSkillTargets(home: string): SkillTarget[] {
@@ -213,18 +266,19 @@ async function rollbackLinks(links: readonly LinkSnapshot[]): Promise<void> {
 }
 
 async function readBundle(bundleRoot: string): Promise<{
-  contents: Record<DysflowSkillName, Buffer>;
+  skills: Record<DysflowSkillName, BundledSkill>;
   hashes: Record<DysflowSkillName, string>;
   harnessVersion: string;
 }> {
   const skillsRoot = path.resolve(bundleRoot, "skills");
-  const contents = {} as Record<DysflowSkillName, Buffer>;
+  const skills = {} as Record<DysflowSkillName, BundledSkill>;
   const hashes = {} as Record<DysflowSkillName, string>;
   for (const name of DYSSKILL_NAMES) {
-    const source = childPath(skillsRoot, name, "SKILL.md");
-    const content = await readFile(source);
-    contents[name] = content;
-    hashes[name] = sha256(content);
+    const skillRoot = childPath(skillsRoot, name);
+    const files = await readSkillTree(skillRoot);
+    const hash = skillTreeHash(files);
+    skills[name] = { files };
+    hashes[name] = hash;
   }
   let harnessVersion = MCP_HARNESS_VERSION;
   try {
@@ -238,7 +292,51 @@ async function readBundle(bundleRoot: string): Promise<{
     // Unit fixtures may consist solely of the skill bundle. Production release
     // packages always carry package.json and therefore take the product version.
   }
-  return { contents, hashes, harnessVersion };
+  return { skills, hashes, harnessVersion };
+}
+
+async function ensureManagedDirectory(
+  skillDir: string,
+  relativeDirectory: string,
+  directories: DirectorySnapshot[],
+  links: LinkSnapshot[],
+): Promise<void> {
+  let current = skillDir;
+  for (const segment of relativeDirectory.split("/").filter(Boolean)) {
+    current = childPath(current, segment);
+    const existed = await pathExists(current);
+    await replaceManagedLink(current, links);
+    if (!directories.some((snapshot) => snapshot.path === current)) {
+      directories.push({ path: current, existed });
+    }
+    await mkdir(current, { recursive: true });
+  }
+}
+
+async function pruneUnexpectedSkillFiles(
+  skillDir: string,
+  expectedPaths: ReadonlySet<string>,
+  files: FileSnapshot[],
+  links: LinkSnapshot[],
+  relativeDirectory = "",
+): Promise<void> {
+  const directory = relativeDirectory
+    ? childPath(skillDir, ...relativeDirectory.split("/"))
+    : skillDir;
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const relativePath = relativeDirectory
+      ? path.posix.join(relativeDirectory, entry.name)
+      : entry.name;
+    const absolutePath = childPath(skillDir, ...relativePath.split("/"));
+    if (entry.isSymbolicLink()) {
+      await replaceManagedLink(absolutePath, links);
+    } else if (entry.isDirectory()) {
+      await pruneUnexpectedSkillFiles(skillDir, expectedPaths, files, links, relativePath);
+    } else if (entry.isFile() && !expectedPaths.has(relativePath)) {
+      files.push({ path: absolutePath, previous: await readFile(absolutePath) });
+      await rm(absolutePath, { force: true });
+    }
+  }
 }
 
 /**
@@ -252,7 +350,7 @@ export async function assertBundledSkillsAvailable(bundleRoot: string): Promise<
 function metadataContent(hashes: Record<DysflowSkillName, string>, harnessVersion: string): string {
   return `${JSON.stringify(
     {
-      schemaVersion: 1,
+      schemaVersion: HARNESS_METADATA_SCHEMA_VERSION,
       mcpHarnessVersion: harnessVersion,
       skills: hashes,
     },
@@ -292,18 +390,32 @@ export async function installBundledSkills(options: {
 
       for (const name of DYSSKILL_NAMES) {
         const skillDir = childPath(skillsDir, name);
-        const skillFile = childPath(skillsDir, name, "SKILL.md");
         const skillDirExisted = await pathExists(skillDir);
         await replaceManagedLink(skillDir, links);
         if (!directories.some((snapshot) => snapshot.path === skillDir)) {
           directories.push({ path: skillDir, existed: skillDirExisted });
         }
         await mkdir(skillDir, { recursive: true });
-        await replaceManagedLink(skillFile, links);
-        const previous = await readFile(skillFile).catch(() => undefined);
-        files.push({ path: skillFile, previous });
-        await writeFile(skillFile, bundle.contents[name]);
-        writtenFiles.push(skillFile);
+        for (const [relativePath, content] of bundle.skills[name].files) {
+          await ensureManagedDirectory(
+            skillDir,
+            path.posix.dirname(relativePath) === "." ? "" : path.posix.dirname(relativePath),
+            directories,
+            links,
+          );
+          const skillFile = childPath(skillsDir, name, ...relativePath.split("/"));
+          await replaceManagedLink(skillFile, links);
+          const previous = await readFile(skillFile).catch(() => undefined);
+          files.push({ path: skillFile, previous });
+          await writeFile(skillFile, content);
+          writtenFiles.push(skillFile);
+        }
+        await pruneUnexpectedSkillFiles(
+          skillDir,
+          new Set(bundle.skills[name].files.keys()),
+          files,
+          links,
+        );
       }
 
       const metadataFile = childPath(skillsDir, HARNESS_METADATA_FILE);
@@ -346,10 +458,12 @@ export async function diagnoseBundledSkills(options: {
     }
     const staleSkills: DysflowSkillName[] = [];
     for (const name of DYSSKILL_NAMES) {
-      const installed = await readFile(childPath(skillsDir, name, "SKILL.md")).catch(
-        () => undefined,
-      );
-      if (installed === undefined || sha256(installed) !== bundle.hashes[name]) {
+      const installedFiles = await readSkillTree(childPath(skillsDir, name)).catch(() => undefined);
+      if (
+        installedFiles === undefined ||
+        installedFiles.size !== bundle.skills[name].files.size ||
+        skillTreeHash(installedFiles) !== bundle.hashes[name]
+      ) {
         staleSkills.push(name);
       }
     }

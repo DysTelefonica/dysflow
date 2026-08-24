@@ -1,6 +1,6 @@
-﻿# ``setup_project``
+# ``setup_project``
 
-> **Phase**: bootstrap  Â·  **Access**: conditional-write  Â·  **Status**: preferred (`_meta["dysflow/workflow"].status`)
+> **Phase**: bootstrap  ·  **Access**: conditional-write  ·  **Status**: preferred (`_meta["dysflow/workflow"].status`)
 
 ## What it does
 
@@ -12,7 +12,10 @@ Bootstrap a missing per-worktree project config through MCP when shell access is
 
 ## Required flags
 
-- (none - all inputs optional under current contract)
+- Bootstrap mode requires `frontendFile` and an explicit `projectId` unless a
+  selected WorktreeContext already owns one. Recovery mode requires the full
+  `projectId` / `projectChoiceReason` / `recoveryToken` trio.
+- Pass explicit `apply:false` to preview and `apply:true` to commit.
 
 ## All input properties (live ``inputSchema.properties`` keys)
 
@@ -40,15 +43,15 @@ This tool's schema uses a ``anyOf`` constraint:
 
 Pick exactly one alternative per call.
 
-## Call shape (HR-2: ``apply:false`` then review then ``apply:true``)
+## Call shape
 
 ```json
 {
-  "name": "setup_project",
+  "tool": "setup_project",
   "arguments": {
-    /* TODO: populate per live `describe_tool({name:"setup_project"})` output. */
-    /* Per HR-9: pass ``apply:true|false`` EXPLICITLY on every write-class call. */
-    /* Per HR-3: ``query_execute`` requires ``mode:"read"|"write"`` -- ``apply`` alone never picks a path. */
+    "cwd": "<worktree>",
+    "projectId": "<project-id>",
+    "frontendFile": "frontend.accdb",
     "apply": false
   }
 }
@@ -61,7 +64,7 @@ Pick exactly one alternative per call.
   "ok": true,
   "schemaVersion": "dysflow.result/v1",
   "isError": false,
-  "...": "see describe_tool({name:"setup_project"}) for the live result contract"
+  "...": "see describe_tool({name:'setup_project'}) for the live result contract"
 }
 ```
 
@@ -81,22 +84,22 @@ On failure, ``env.error.code`` is one of the codes below; ``error.remediation`` 
 
 ## Cross-reference
 
-- Canonical contract: ``../../../SKILL.md`` section 3 Decision Gates and section 4 Execution Steps.
+- Canonical contract: ``../../SKILL.md`` section 3 Decision Gates and section 4 Execution Steps.
 - Full error taxonomy: ``../../references/error-codes.md`` (relative to the skill bundle).
-- Write-flag semantics: ``../../write-flags-matrix.md``.
-- Anti-patterns: ``../../anti-patterns.md``.
-- Live schema: ``schema({view:"full"})`` or ``describe_tool({name:"setup_project"})``.
+- Write-flag semantics: ``../write-flags-matrix.md``.
+- Anti-patterns: ``../anti-patterns.md``.
+- Live schema: ``schema({view:"full"})`` or ``describe_tool({name:'setup_project'})``.
 
 ## TODO before production use
 
 Replace these placeholders with values from your worktree (HR-10, HR-11):
 
-- ``projectId``: TODO -- your resolved ``00-vba-toolkit-bench-develop`` (or the human-selected entry on ambiguity via ``resolve_project({outcome:"ambiguous"})``).
+- ``projectId``: TODO -- your resolved ``<project-id>`` (or the human-selected entry on ambiguity via ``resolve_project({outcome:"ambiguous"})``).
 - ``cwd``: TODO -- worktree root, or omit for the startup worktree.
 - ``accessPath`` / ``backendPath``: TODO -- only if resolving a non-default frontend/backend.
 - ``apply``: TODO -- ``false`` to plan, ``true`` to commit (default plans in ``safe-by-default``).
 - For ``query_execute``: ``mode`` is REQUIRED (``read`` or ``write``, never omitted).
 - For confirmation flags: ``implements_check`` + ``confirmedRequiresConfirmation:true`` paired (NEVER legacy ``dryRun:true`` / ``options.confirm:true`` / ``confirmPid:N`` -- HR-9, migration map in ``dysflow-usage`` section 6).
-- Other tool-specific runtime values per ``describe_tool({name:"setup_project"})``.
+- Other tool-specific runtime values per ``describe_tool({name:'setup_project'})``.
 
 The live ``inputSchema.properties`` (read once per session via ``describe_tool``) is authoritative. This file is a scaffold, not a frozen contract.
