@@ -42,7 +42,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies
@@ -118,7 +118,7 @@ jobs:
         if: steps.receipt.outputs.decision != 'skip'
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies for direct gates
@@ -128,6 +128,10 @@ jobs:
       - name: Lint
         if: steps.receipt.outputs.decision != 'skip'
         run: pnpm lint
+
+      - name: Build
+        if: steps.receipt.outputs.decision != 'skip'
+        run: pnpm build
 
       - name: Test
         if: steps.receipt.outputs.decision != 'skip'
@@ -224,7 +228,7 @@ jobs:
         # runner (the runner persists across jobs and keeps its own
         # setup-pnpm store).
         with:
-          node-version: 20
+          node-version: 26
 
       - name: Install dependencies
         # pnpm/action-setup@v6 pins PNPM_HOME to its bundled pnpm install

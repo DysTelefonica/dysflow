@@ -2,6 +2,7 @@ import { appendFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 const HOUR_MS = 60 * 60 * 1000;
+export const CI_RECEIPT_JOB_NAME = "CI result";
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -211,7 +212,7 @@ export async function verifyCiReceiptFromGitHub(env = process.env) {
       expectedBranch: "main",
       expectedWorkflowName: "CI",
       expectedWorkflowPath: ".github/workflows/ci.yml",
-      expectedJobName: "Quality gates (20)",
+      expectedJobName: CI_RECEIPT_JOB_NAME,
       now: new Date().toISOString(),
       maxAgeHours: 24,
     });

@@ -1,3 +1,5 @@
+export const CI_RECEIPT_JOB_NAME: "CI result";
+
 export interface ReceiptEvaluationOptions {
   workflowRuns: unknown[];
   jobsByRunId: ReadonlyMap<number, unknown[]>;
