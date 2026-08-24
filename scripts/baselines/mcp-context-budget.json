@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "runtime": {
-    "version": "2.38.2",
-    "commit": "fba659c2f2b988a8b152c83ea343b5c033247e6a",
+    "version": "3.0.1",
+    "commit": "597283d468e1aa293fbf64d81591d939a785c57c",
     "runtimePath": "dist/cli/index.js"
   },
   "toolCount": 39,
@@ -12,20 +12,20 @@
       "wireBytes": 43253
     },
     "bootstrap": {
-      "logicalBytes": 1104,
-      "wireBytes": 3809
+      "logicalBytes": 1103,
+      "wireBytes": 3806
     },
     "getCapabilities": {
-      "logicalBytes": 50155,
-      "wireBytes": 50859
+      "logicalBytes": 63350,
+      "wireBytes": 64195
     },
     "getCapabilitiesCompact": {
-      "logicalBytes": 50155,
-      "wireBytes": 50859
+      "logicalBytes": 50154,
+      "wireBytes": 50858
     },
     "schemaFull": {
-      "logicalBytes": 198,
-      "wireBytes": 2484
+      "logicalBytes": 789748,
+      "wireBytes": 790200
     },
     "schemaCompact": {
       "logicalBytes": 119816,
@@ -253,7 +253,58 @@
         "share": 0.03339
       }
     ],
-    "schemaFull": [],
+    "schemaFull": [
+      {
+        "name": "sync_binary",
+        "logicalBytes": 19546,
+        "share": 0.024754
+      },
+      {
+        "name": "import_modules",
+        "logicalBytes": 17732,
+        "share": 0.022457
+      },
+      {
+        "name": "export_modules",
+        "logicalBytes": 15947,
+        "share": 0.020196
+      },
+      {
+        "name": "apply_form_design_plan",
+        "logicalBytes": 14006,
+        "share": 0.017738
+      },
+      {
+        "name": "form_set_property",
+        "logicalBytes": 12803,
+        "share": 0.016214
+      },
+      {
+        "name": "export_all",
+        "logicalBytes": 12545,
+        "share": 0.015888
+      },
+      {
+        "name": "form_duplicate_control",
+        "logicalBytes": 12469,
+        "share": 0.015791
+      },
+      {
+        "name": "relink_directory",
+        "logicalBytes": 12271,
+        "share": 0.015541
+      },
+      {
+        "name": "create_form_from_template",
+        "logicalBytes": 12050,
+        "share": 0.015261
+      },
+      {
+        "name": "verify_form_ui",
+        "logicalBytes": 11924,
+        "share": 0.015101
+      }
+    ],
     "schemaCompact": [
       {
         "name": "verify_code",
@@ -358,7 +409,7 @@
     "stdioToolsListVsSchemaFull": false,
     "stdioToolsListVsDescribeTool": true,
     "toolsListCount": 39,
-    "schemaFullCount": 0,
+    "schemaFullCount": 95,
     "describeToolCount": 39,
     "schemaIndexCount": 9
   },
@@ -368,8 +419,8 @@
   },
   "baseline": {
     "generatedFrom": {
-      "version": "2.38.2",
-      "commit": "fba659c2f2b988a8b152c83ea343b5c033247e6a",
+      "version": "3.0.1",
+      "commit": "597283d468e1aa293fbf64d81591d939a785c57c",
       "runtimePath": "dist/cli/index.js"
     }
   }
