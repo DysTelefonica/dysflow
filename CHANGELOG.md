@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.0.2] - 2026-08-25
+
+### Fixes
+
+- No-PID orphan enumeration now satisfies the executable result contract for both bounded and
+  complete scans while preserving PID-specific confirmation and fail-closed validation (#1567).
+
 ## [v4.0.1] - 2026-08-25
 
 ### Fixes
