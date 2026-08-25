@@ -1336,6 +1336,7 @@ export class VbaModulesAdapter {
     const keep = new Set(exported.map((name) => name.toLowerCase()));
 
     const deleted: string[] = [];
+    const failed: { path: string; message: string }[] = [];
     for (const folder of managedFolders(destinationRoot)) {
       let entries: readonly { name: string }[] | readonly string[];
       try {
@@ -1348,8 +1349,20 @@ export class VbaModulesAdapter {
         const modName = managedDiskModuleName(entryName);
         if (modName === null || keep.has(modName.toLowerCase())) continue;
         const fullPath = resolve(folder, entryName);
-        await this.fileSystem.rm(fullPath, { recursive: false, force: true });
-        deleted.push(fullPath);
+        // #1573 — a locked file (Access or an editor holding a handle) rejects with
+        // EPERM/EBUSY on Windows; `force: true` suppresses only ENOENT. Letting that
+        // escape aborted the sweep and discarded `deleted` with the stack unwind,
+        // leaving no audit record of an irreversible action. Record and continue so
+        // the envelope always reports what was removed and what resisted.
+        try {
+          await this.fileSystem.rm(fullPath, { recursive: false, force: true });
+          deleted.push(fullPath);
+        } catch (error) {
+          failed.push({
+            path: fullPath,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 
@@ -1357,7 +1370,7 @@ export class VbaModulesAdapter {
       {
         ...data,
         postprocess: postProc.ok ? postProc.summary : undefined,
-        prune: { applied: true, deleted },
+        prune: { applied: true, deleted, failed },
       },
       { ...meta, diagnostics: exportResultWithPostprocess.diagnostics },
     );
