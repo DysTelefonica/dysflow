@@ -228,9 +228,7 @@ export const TIMEOUT_EXCEPTIONS = {
   clean_stale_markers: "Synchronous marker-file maintenance; no child process is spawned.",
   compare_form: "Pure offline form-source comparison; no child process is spawned.",
   copy_form_ui_pattern: "Pure offline FormIR planning; no child process is spawned.",
-  detect_dead_code: "Pure source analysis; no child process is spawned.",
   diff_form_preview: "Pure offline preview comparison; no child process is spawned.",
-  find_references: "Pure source analysis; no child process is spawned.",
   form_get_geometry: "Pure offline form-source read; no child process is spawned.",
   form_list_controls: "Pure offline form-source read; no child process is spawned.",
   generate_form: "Generates an offline form-spec file; no child process is spawned.",
@@ -238,7 +236,6 @@ export const TIMEOUT_EXCEPTIONS = {
   harvest_form_catalog: "Reads offline form sources; no child process is spawned.",
   inspect_form: "Reads one offline form source; no child process is spawned.",
   lint_form_code: "Pure source linting; no child process is spawned.",
-  lint_module: "Pure source linting; no child process is spawned.",
   list_access_files: "Uses the filesystem adapter directly; no child process is spawned.",
   map_form_behavior:
     "FormIR mapping does not spawn Access or PowerShell; optional CodeGraph enrichment is outside this timeout class.",
@@ -246,7 +243,6 @@ export const TIMEOUT_EXCEPTIONS = {
   render_form_preview: "Pure offline preview rendering; no child process is spawned.",
   validate_form_spec: "Pure JSON/form-spec validation; no child process is spawned.",
   validate_manifest: "Pure manifest validation; no child process is spawned.",
-  vba_orphan_audit: "Pure source-tree audit; no child process is spawned.",
   verify_form_bindings: "Pure offline binding validation; no child process is spawned.",
   verify_form_ui: "Pure offline contract comparison; no child process is spawned.",
 } as const satisfies Readonly<Record<string, string>>;
@@ -256,6 +252,9 @@ const PROCESS_BACKED_MODERN_OR_ALIAS_TOOLS = new Set([
   "doctor",
   "exec_sql",
   "get_procedure",
+  "detect_dead_code",
+  "find_references",
+  "lint_module",
   "list_procedures",
   "query_execute",
   "query_sql",
@@ -265,6 +264,7 @@ const PROCESS_BACKED_MODERN_OR_ALIAS_TOOLS = new Set([
   "drop_table",
   "seed_fixture",
   "teardown_fixture",
+  "vba_orphan_audit",
 ]);
 
 const TRANSACTIONAL_TOOLS = new Set(["export_modules", "import_modules", "sync_binary"]);

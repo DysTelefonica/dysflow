@@ -215,28 +215,16 @@ type ProcedureSourceResolution =
   | { ok: true; source: string | undefined }
   | { ok: false; response: McpToolResult };
 
-/** Resolve inline, project-source, or explicitly opted-in binary module code. */
-async function resolveProcedureSource(
-  input: unknown,
-  moduleName: string,
-  source: string | undefined,
-  destinationRoot: string | undefined,
-  accessContextResolver: McpAccessContextResolver,
-  services: DysflowMcpServices,
-): Promise<ProcedureSourceResolution> {
-  if (source !== "binary") {
-    return {
-      ok: true,
-      source: await resolveVbaSourceFile(
-        input,
-        moduleName,
-        source,
-        destinationRoot,
-        accessContextResolver,
-      ),
-    };
-  }
+type BinaryModulesResolution =
+  | { ok: true; modules: readonly Record<string, unknown>[] }
+  | { ok: false; response: McpToolResult };
 
+/** Inspect an explicitly opted-in Access binary through the existing read-only port. */
+async function inspectBinaryModules(
+  input: unknown,
+  services: DysflowMcpServices,
+  namePattern?: string,
+): Promise<BinaryModulesResolution> {
   const params =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
   const accessPath = typeof params.accessPath === "string" ? params.accessPath.trim() : "";
@@ -244,20 +232,20 @@ async function resolveProcedureSource(
     return {
       ok: false,
       response: invalidInput(
-        'source:"binary" requires allowExternalAccessPath:true. The opt-in is scoped to this read-only inspection.',
+        "Binary inspection requires allowExternalAccessPath:true. The opt-in is scoped to this read-only inspection.",
       ),
     };
   }
   if (accessPath.length === 0) {
     return {
       ok: false,
-      response: invalidInput('source:"binary" requires an explicit accessPath.'),
+      response: invalidInput("Binary inspection requires an explicit accessPath."),
     };
   }
   if (!/\.(?:accdb|mdb)$/i.test(accessPath)) {
     return {
       ok: false,
-      response: invalidInput('source:"binary" accessPath must end in .accdb or .mdb.'),
+      response: invalidInput("Binary inspection accessPath must end in .accdb or .mdb."),
     };
   }
   if (services.vbaSyncToolService === undefined) {
@@ -277,7 +265,7 @@ async function resolveProcedureSource(
     accessPath,
     allowExternalAccessPath: true,
     includeSource: true,
-    namePattern: moduleName,
+    ...(namePattern === undefined ? {} : { namePattern }),
   };
   for (const key of [
     "projectId",
@@ -315,6 +303,34 @@ async function resolveProcedureSource(
       },
     };
   }
+  return { ok: true, modules };
+}
+
+/** Resolve inline, project-source, or explicitly opted-in binary module code. */
+async function resolveProcedureSource(
+  input: unknown,
+  moduleName: string,
+  source: string | undefined,
+  destinationRoot: string | undefined,
+  accessContextResolver: McpAccessContextResolver,
+  services: DysflowMcpServices,
+): Promise<ProcedureSourceResolution> {
+  if (source !== "binary") {
+    return {
+      ok: true,
+      source: await resolveVbaSourceFile(
+        input,
+        moduleName,
+        source,
+        destinationRoot,
+        accessContextResolver,
+      ),
+    };
+  }
+
+  const inspected = await inspectBinaryModules(input, services, moduleName);
+  if (!inspected.ok) return inspected;
+  const modules = inspected.modules;
   const match = modules.find(
     (candidate) =>
       candidate.binaryExists === true &&
@@ -1087,14 +1103,12 @@ export function createModernAnalysisTools(
         };
       },
     },
-    // issue #705 — read-only dead-code analysis. The handler runs the
-    // pure `detectDeadCode` core function over the caller-supplied
-    // `modules` map (or, when omitted, the project source tree resolved
-    // via the Access context). It never opens Access, never spawns
-    // PowerShell, and never consults the write gate.
+    // issue #705 — read-only dead-code analysis. Inline `modules` stay pure;
+    // #1542 additionally permits explicit external-binary inspection through
+    // the list_vba_modules port before the same pure core analysis runs.
     {
       name: "detect_dead_code",
-      description: `Find VBA procedures and module-level declarations defined but never referenced. Pure string-in / string-out analysis over the supplied \`modules\` map; never opens Access, never spawns PowerShell, never mutates the filesystem. Sibling of \`find_references\` (#701). ${MCP_TOOL_CONTRACTS.detect_dead_code.summary}`,
+      description: `Find VBA procedures and module-level declarations defined but never referenced. Inline \`modules\` analysis is process-free; scope \`binary\` can inspect an explicit Access binary read-only with \`allowExternalAccessPath:true\`. Never mutates the filesystem. Sibling of \`find_references\` (#701). ${MCP_TOOL_CONTRACTS.detect_dead_code.summary}`,
       inputSchema: DETECT_DEAD_CODE_SCHEMA,
       resultContract: detectDeadCodeResultContract,
       handler: async (input) => {
@@ -1114,6 +1128,38 @@ export function createModernAnalysisTools(
           params.modules !== null
         ) {
           modules = params.modules as Record<string, string>;
+        }
+
+        if (
+          modules === undefined &&
+          scope === "binary" &&
+          params.allowExternalAccessPath === true
+        ) {
+          const inspected = await inspectBinaryModules(input, services);
+          if (!inspected.ok) return inspected.response;
+
+          modules = {};
+          for (const candidate of inspected.modules) {
+            if (
+              candidate.binaryExists === true &&
+              typeof candidate.name === "string" &&
+              typeof candidate.binarySource === "string"
+            ) {
+              modules[candidate.name] = candidate.binarySource;
+            }
+          }
+          if (Object.keys(modules).length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "BINARY_INSPECTION_UNAVAILABLE: list_vba_modules returned no readable binary module source.",
+                },
+              ],
+              isError: true,
+              ok: false,
+            };
+          }
         }
 
         if (modules === undefined) {
@@ -1224,7 +1270,7 @@ export function createModernAnalysisTools(
     },
     {
       name: "lint_module",
-      description: `Lint one VBA .bas/.cls module before import. Pass inline source or omit it to resolve the module from the configured project source root. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). The cross-form openargs-contract-mismatch rule (#1006) is a project-lint that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree and is dispatched when its rule id appears in the input rules list. Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
+      description: `Lint one VBA .bas/.cls module before import. Pass inline source, omit it to resolve managed source, or use \`source:"binary"\` with the explicit external-path opt-in. Rules cover Access Option declarations, identifier safety, declaration ordering, conservative literal argument type checks, and the F22 forbidden-name rule (flags identifiers that shadow VBA / Access / DAO globals such as Err, Date, Name, Form, DoCmd — case-insensitive — on Dim/Const/Type/Enum/Sub/Function/Property/parameter declarations, with a project-convention recommendation). The cross-form openargs-contract-mismatch rule (#1006) is a project-lint that pairs DoCmd.OpenForm producer sites against Me.OpenArgs consumers across the configured project's .cls tree and is dispatched when its rule id appears in the input rules list. Read-only. ${MCP_TOOL_CONTRACTS.lint_module.summary}`,
       inputSchema: LINT_MODULE_SCHEMA,
       resultContract: lintModuleResultContract,
       handler: async (input) => {
@@ -1233,13 +1279,16 @@ export function createModernAnalysisTools(
 
         const params = input as Record<string, unknown>;
         const module = params.module as string;
-        const resolvedSource = await resolveVbaSourceFile(
+        const sourceResolution = await resolveProcedureSource(
           input,
           module,
           params.source as string | undefined,
           params.destinationRoot as string | undefined,
           accessContextResolver,
+          services,
         );
+        if (!sourceResolution.ok) return sourceResolution.response;
+        const resolvedSource = sourceResolution.source;
         if (resolvedSource === undefined) {
           return {
             content: [

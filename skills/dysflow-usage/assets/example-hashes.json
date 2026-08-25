@@ -59,6 +59,11 @@
     "sha256": "185962206c1fee8449ecbbb559eb73848c29b65ed2c67d3e42ac333f016cc014",
     "needs_human_content": false
   },
+  "detect_dead_code": {
+    "path": "assets/examples/detect-dead-code.md",
+    "sha256": "11d579749e2c65bc46bb4a98acb9987d1cd3688bfb27b0f6a462903208f583ba",
+    "needs_human_content": false
+  },
   "diagnose": {
     "path": "assets/examples/diagnose.md",
     "sha256": "ddba694e709502c0a17803523641b1159f7c26a544c3c236b209f26571c8bdfa",
@@ -81,7 +86,12 @@
   },
   "export_modules": {
     "path": "assets/examples/export-modules.md",
-    "sha256": "7933dc4cefdb57269b1ef85e10cb0bdffe55c03230b99bb507d42680c4dde2bc",
+    "sha256": "7a0ab3233c0471197a84a67ae1ed8531de9d8f0e05b7b6ca04cd8460ee5d646b",
+    "needs_human_content": false
+  },
+  "find_references": {
+    "path": "assets/examples/find-references.md",
+    "sha256": "4f0738d98db493f0b46e73ba4751776f32dcbde25e390a7c5e235c1f3d24c71d",
     "needs_human_content": false
   },
   "form_align_controls": {
@@ -114,6 +124,11 @@
     "sha256": "0bd222bbc4582dea37ffecb8a5f0adc9595dc805e490a7c41732277781274bdc",
     "needs_human_content": false
   },
+  "get_procedure": {
+    "path": "assets/examples/get-procedure.md",
+    "sha256": "a340640f71ec4606ee4bc57f3242e90181ab08d4e1ade23870a7c01d2b38eddb",
+    "needs_human_content": false
+  },
   "import_modules": {
     "path": "assets/examples/import-modules.md",
     "sha256": "dc95412aed6d4122c675119304874da966ec69c6ad61466ec226662dcd5c891d",
@@ -126,12 +141,17 @@
   },
   "lint_module": {
     "path": "assets/examples/lint-module.md",
-    "sha256": "11f6aaf59d98302b3a3eaea105bfffcb703dfc1ca7af2bb707e5ea6fdb1ce452",
+    "sha256": "8562a1aab9597f65d5c6d048c20a1a029c8cb6f1ca7ddce6b2eb0fe8c567797f",
     "needs_human_content": false
   },
   "list_objects": {
     "path": "assets/examples/list-objects.md",
     "sha256": "952200185e5118c0c2f59b965d4ac4c62e5a88e3de72662f1ad009f07d480473",
+    "needs_human_content": false
+  },
+  "list_procedures": {
+    "path": "assets/examples/list-procedures.md",
+    "sha256": "915b9241a97c9b864013a582185f775d28e17718ecedc3c3413aa332cd8ace2e",
     "needs_human_content": false
   },
   "logs": {
@@ -212,6 +232,11 @@
   "validate_manifest": {
     "path": "assets/examples/validate-manifest.md",
     "sha256": "1e14a3a7645ea7556cf6f90d42fd1dad24c8fe07ed7fe68fe9fd14e8a3adb1da",
+    "needs_human_content": false
+  },
+  "vba_orphan_audit": {
+    "path": "assets/examples/vba-orphan-audit.md",
+    "sha256": "f8816297c2bc3c3a338c0a0607b3009810f9a905e208d7700df87edf5a668f16",
     "needs_human_content": false
   },
   "verify_code": {

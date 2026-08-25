@@ -232,6 +232,7 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       // atom as `confirmOverwriteSource` so the description for the new
       // contract lives in one place.
       "allowConfiguredDestinationRoot",
+      "allowExternalDestinationRoot",
     ];
     expect(Object.keys(SCHEMA_PROPS).sort()).toEqual(expectedKeys.sort());
   });

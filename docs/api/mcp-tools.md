@@ -204,22 +204,28 @@ The literal `source: "binary"` follows the same explicit `accessPath` and `allow
 ### `find_references`
 Find all references to a given symbol across a set of modules. Read-only.
 
-The tool parses inline `modules` when supplied, otherwise it resolves modules from the configured source root and/or exports them from the binary.
+The tool parses inline `modules` when supplied. Binary/all scopes inspect live
+module bytes through `list_vba_modules`; an external binary requires explicit
+`accessPath` and `allowExternalAccessPath:true`.
 * **Parameters**:
   - `symbol` (string, **required**): Symbol name to find references for.
   - `scope` (string, optional): `module`, `binary`, `source`, or `all` (default).
   - `module` (string, optional): Search only in this specific module.
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code.
+  - `accessPath`, `allowExternalAccessPath` (optional together): Explicit binary target and read-only external-path opt-in.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `detect_dead_code`
 Find VBA procedures and module-level declarations defined but never referenced. Read-only.
 
-Pure string-in / string-out analysis over the supplied `modules` map — never opens Access, never spawns PowerShell, never mutates the filesystem.
+Inline `modules` use pure string-in / string-out analysis. With `scope:"binary"`,
+an explicit `accessPath` plus `allowExternalAccessPath:true` loads the live
+binary module bytes before running the same pure analyser. It never mutates files.
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code. When omitted, the tool resolves modules from the configured source root.
   - `module` (string, optional): Module-name constraint; restricts the analysis to a single module and elevates risk for surviving private-procedure findings.
+  - `accessPath`, `allowExternalAccessPath` (optional together): Explicit binary target and read-only external-path opt-in.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `validate_manifest`
@@ -237,12 +243,11 @@ It returns `valid`, separate `errors`/`warnings`, and a `summary`.
 ### `lint_module`
 Lint one `.bas`/`.cls` VBA module before importing it into Access. Read-only.
 
-The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`).
-
-It never opens Access, never spawns PowerShell, and never mutates files.
+The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). The literal `source:"binary"` reads an explicit external binary when opted in. It never mutates files.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
-  - `source` (string, optional): Inline VBA source text.
+  - `source` (string, optional): Inline VBA source text, or `binary` for direct binary inspection.
+  - `accessPath`, `allowExternalAccessPath` (optional together): Explicit binary target and read-only external-path opt-in.
   - `rules` (array, optional): Filter to any of `option-declaration`, `identifier-safety`, `declaration-order`, `arg-type-match`, `forbidden-name` (F22 — flags identifiers that shadow VBA / Access / DAO globals).
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 * **Returns**: `{ module, rules, isClean, diagnostics, flatDiagnostics, summary }`, where `diagnostics` groups findings by rule name, `flatDiagnostics` is a flat array for backward compatibility, and `summary` counts `errors` and `warnings`.

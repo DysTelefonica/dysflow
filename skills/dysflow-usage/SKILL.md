@@ -246,6 +246,11 @@ silently picking one intent — always read
 | `assets/examples/run-vba.md` | `run_vba` — invoke a public VBA procedure |
 | `assets/examples/test-vba.md` | `test_vba` — run a JSON manifest of test atoms |
 | `assets/examples/lint-module.md` | `lint_module` — parse-error hint per module |
+| `assets/examples/get-procedure.md` | `get_procedure` — inspect one managed or external-binary procedure |
+| `assets/examples/list-procedures.md` | `list_procedures` — list managed or external-binary procedures |
+| `assets/examples/detect-dead-code.md` | `detect_dead_code` — process-free or opted-in binary dead-code analysis |
+| `assets/examples/find-references.md` | `find_references` — managed/binary symbol references |
+| `assets/examples/vba-orphan-audit.md` | `vba_orphan_audit` — binary/source orphan inventory |
 | `assets/examples/query-execute.md` | `query_execute` — read/write SQL |
 | `assets/examples/link-tables.md` | `link_tables` — plan or create/relink backend TableDefs |
 | `assets/examples/list-objects.md` | `list_objects` — inventory of the binary |

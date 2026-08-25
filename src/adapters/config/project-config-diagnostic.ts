@@ -93,6 +93,10 @@ export type ProjectConfigRequest = {
    * `OUTSIDE_PROJECT_ROOT` verdict.
    */
   allowExternalAccessPath?: boolean;
+  /** Preview-only export destination escape hatch; never authorizes writes. */
+  allowExternalDestinationRoot?: boolean;
+  /** Canonical caller intent used to keep destination bypass plan-only. */
+  apply?: boolean;
   /**
    * Issue #968 — forwarded by the MCP dispatcher from
    * `MCP_TOOL_ROUTES[name].mutatesBinary`. When true, `allowExternalAccessPath`
@@ -468,6 +472,10 @@ export function diagnoseProjectConfig(
             : resolve(projectRootNative, requestDestinationRootRaw),
         )
       : destinationRoot;
+  const externalDestinationPlanAllowed =
+    request.operation === "export_modules" &&
+    request.allowExternalDestinationRoot === true &&
+    request.apply === false;
   Object.assign(base, {
     configPath: normalize(selectedConfig),
     projectId,
@@ -573,7 +581,10 @@ export function diagnoseProjectConfig(
       }
     })();
     const isEqualToConfigured = requestedDestinationRoot === identity(destinationRoot);
-    const accepted = isEqualToConfigured || (withinProjectRoot && !isLegacyAbsoluteAccessPath);
+    const accepted =
+      isEqualToConfigured ||
+      (withinProjectRoot && !isLegacyAbsoluteAccessPath) ||
+      externalDestinationPlanAllowed;
     if (!accepted)
       return failWith(
         base,
@@ -591,6 +602,11 @@ export function diagnoseProjectConfig(
     );
   try {
     const canonicalDestinationRoot = canonical(effectiveDestinationRoot);
+    if (
+      externalDestinationPlanAllowed &&
+      identity(canonicalDestinationRoot) !== identity(effectiveDestinationRoot)
+    )
+      throw new Error();
     const destinationWorktree = identity(worktreeRoot(canonicalDestinationRoot) ?? "");
     const destinationOwningRoot =
       destinationWorktree === identity(effectiveOwning)
@@ -598,7 +614,10 @@ export function diagnoseProjectConfig(
         : destinationWorktree === identity(canonicalProjectRoot)
           ? canonicalProjectRoot
           : null;
-    if (destinationOwningRoot === null || !within(canonicalDestinationRoot, destinationOwningRoot))
+    if (
+      !externalDestinationPlanAllowed &&
+      (destinationOwningRoot === null || !within(canonicalDestinationRoot, destinationOwningRoot))
+    )
       throw new Error();
   } catch {
     return failWith(
