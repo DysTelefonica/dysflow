@@ -1040,6 +1040,69 @@ describe("VbaFormService", () => {
       }
     });
 
+    it("harvestFormCatalog applies a case-insensitive filter before reading source files", async () => {
+      const unrelatedEntries = Array.from(
+        { length: 250 },
+        (_, index) => `Unrelated_${index}.form.txt`,
+      );
+      const readJson = vi.fn().mockResolvedValue({
+        name: "Form_DysflowMcpE2E",
+        kind: "Form",
+        controls: [],
+      });
+      const readFileSpy = vi.fn().mockRejectedValue(new Error("unmatched source was read"));
+      const fs = makeFs({
+        readdir: vi.fn().mockImplementation(async (path: string) => {
+          if (path.includes("forms")) {
+            return [...unrelatedEntries, "Form_DysflowMcpE2E.form.json"];
+          }
+          return ["Unrelated.report.txt"];
+        }),
+        readJson,
+        readFile: readFileSpy,
+      });
+
+      const service = createService({ fileSystem: fs });
+      const result = await service.harvestFormCatalog({
+        destinationRoot: "/fake/root",
+        filter: "  dysflowmcpe2e  ",
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        data: {
+          total: 1,
+          forms: [{ name: "Form_DysflowMcpE2E" }],
+          reports: [],
+        },
+      });
+      expect(readJson).toHaveBeenCalledTimes(1);
+      expect(readFileSpy).not.toHaveBeenCalled();
+    });
+
+    it("harvestFormCatalog returns without source reads when the filter matches nothing", async () => {
+      const readJson = vi.fn().mockRejectedValue(new Error("unmatched JSON was read"));
+      const readFileSpy = vi.fn().mockRejectedValue(new Error("unmatched source was read"));
+      const fs = makeFs({
+        readdir: vi.fn().mockResolvedValue(["Unrelated.form.json", "Unrelated.form.txt"]),
+        readJson,
+        readFile: readFileSpy,
+      });
+
+      const service = createService({ fileSystem: fs });
+      const result = await service.harvestFormCatalog({
+        destinationRoot: "/fake/root",
+        filter: "MissingForm",
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        data: { total: 0, forms: [], reports: [] },
+      });
+      expect(readJson).not.toHaveBeenCalled();
+      expect(readFileSpy).not.toHaveBeenCalled();
+    });
+
     it("harvestFormCatalog skips files that are not .form.json or .report.json", async () => {
       const fs = makeFs({
         readdir: vi.fn().mockImplementation(async (path: string) => {
