@@ -144,9 +144,8 @@ Consumers must defensively parse a stringified host-wrapper result before requir
 * **Preferred workflows**: `bootstrap`, `sync`, `tests`, `sql`, `forms`, and `recovery`; every listed tool is classified as `preferred` in the schema catalog. `resolve_project` intentionally belongs to both `bootstrap` and `recovery`.
 * **Per-tool advertisement**: the default core `tools/list` is a bounded advertised subset; non-advertised contracts remain callable by name. Every listed entry carries a compact, routing-safe description, complete callable `inputSchema.properties`, standard MCP annotations, and namespaced workflow metadata. Use schema index for the complete callable inventory and each entry's `advertised` state.
 
-The core subset includes all 28 read-only SQL/form inspection tools and `query_execute`.
-This is an exact allow-list in `src/adapters/mcp/agent-workflow-registry.ts`; it does not
-widen the surface to write-capable SQL or form siblings.
+- **Inspection promotion**: the core subset includes all 28 read-only SQL/form tools plus `query_execute`.
+- **Write boundary**: the exact allow-list in `src/adapters/mcp/agent-workflow-registry.ts` does not widen SQL or form phases.
 
 The compact advertisement is derived from the same canonical contracts as the deep
 catalog. It removes issue-history and migration prose from the hot path without
