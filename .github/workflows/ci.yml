@@ -160,13 +160,6 @@ jobs:
             test/e2e/access-fixture.e2e.test.ts `
             test/e2e/access-relink-directory.test.ts `
             test/e2e/access-relink-directory-apply.test.ts `
-            test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts `
-            test/e2e/mcp-catalog-dryrun.e2e.test.ts `
-            test/e2e/mcp-harness-watchdog.e2e.test.ts `
-            test/e2e/mcp-input-validation.e2e.test.ts `
-            test/e2e/mcp-orphan-cleanup.e2e.test.ts `
-            test/e2e/mcp-query-validation.e2e.test.ts `
-            test/e2e/runtime-guard-mcp-integration.e2e.test.ts `
             test/integration/form-ir-mutation-preservation.test.ts `
             test/integration/mcp-harness-process-tree.test.ts `
             test/integration/vba-manager-sentinel-trap.test.ts

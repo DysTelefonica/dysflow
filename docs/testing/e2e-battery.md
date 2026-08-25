@@ -14,14 +14,16 @@ que dejan un estado inseguro o no verificable abortan para no contaminar la evid
 
 | Capa | Comando | Coste | Cuándo |
 |---|---|---|---|
-| Unit (Vitest) | `pnpm test` | segundos | en cada cambio |
-| Integración (Vitest + Access) | `pnpm test:integration` | segundos–minuto | en cada PR o rama |
-| **E2E MCP (Node + Access real)** | `pnpm test:e2e:mcp` | **5–15 min** | **solo en release** |
+| Unit (Vitest) | `pnpm test` | segundos | en cada cambio, incluidos contratos MCP con puertos falsos |
+| Integración (Vitest + Access) | `pnpm test:integration` | segundos–minuto | smoke alojado en cada PR; suite Access completa por la noche |
+| **E2E MCP (Node + Access real)** | `pnpm test:e2e:mcp` | **5–15 min** | **nightly y release** |
 | Pester (PowerShell runner) | `pnpm test:ps1` | segundos | cuando cambias scripts `*.ps1` |
 
-El E2E **no se ejecuta en CI por defecto** porque necesita Microsoft Access instalado, lo
-cual solo está disponible en la máquina de desarrollo. La cobertura barata del E2E vive en
-los **cheap-gates** de `test/quality-gates/mcp-e2e-*.test.ts` (ver [§ Relación con la suite unit (cheap gates)](#relación-con-la-suite-unit-cheap-gates)).
+El E2E con Access **no se ejecuta en cada PR**: el smoke compatible con el runner alojado sí,
+y las pruebas que necesitan Access real se serializan en el runner nocturno. La clasificación
+ejecutable vive en `test/e2e-suite-authority.ts`; su gate rechaza archivos sin dueño o con dos
+dueños. La cobertura barata vive en la suite unit y en los **cheap-gates** de
+`test/quality-gates/mcp-e2e-*.test.ts` (ver [§ Relación con la suite unit (cheap gates)](#relación-con-la-suite-unit-cheap-gates)).
 
 ## Qué prueba y dónde vive
 
@@ -207,8 +209,8 @@ resolución: `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE
    temporalmente `E2E_testing/mcp-e2e.mjs`, comenta todas las filas de `runBattery()` excepto
    la que necesitas, y re-ejecuta. **No comitees esa edición.**
 
-4. **Full E2E.** Solo al cortar release (`scripts/release-prepare.ps1`). Si quieres ver
-   todas las áreas de un vistazo, ejecuta la batería entera y lee el informe Markdown.
+4. **Full E2E local.** Solo al cortar release (`scripts/release-prepare.ps1`). CI ejecuta
+   la misma batería por la noche; durante desarrollo, usa las capas más baratas.
 
 ### Cómo añadir cobertura para una herramienta nueva
 
@@ -426,8 +428,9 @@ redirija al install de producción (issue #475). Si necesitas otra, usa
 
 - **Qué es.** Batería Node.js que lanza `dysflow mcp` por JSON-RPC contra un `.accdb`
   real, ejecutando cada herramienta visible y midiendo zombies por llamada.
-- **Cuándo correrla.** Solo en release. Durante feature/bug, usa `pnpm test`,
-  `pnpm test:integration` y los cheap-gates `test/quality-gates/mcp-e2e-*.test.ts`.
+- **Cuándo correrla.** CI la ejecuta por la noche y al publicar una release. Durante
+  feature/bug, usa `pnpm test`, el smoke de integración y los cheap-gates
+  `test/quality-gates/mcp-e2e-*.test.ts`; no dupliques localmente la autoridad pesada.
 - **Cómo se completa o aborta.** Los FAIL ordinarios se agregan y producen salida final no cero.
   `UNSAFE-STOP` aborta cuando continuar invalidaría la evidencia. `REFUSE-START` evita iniciar
   otra herramienta si sobrevive un zombie propio.

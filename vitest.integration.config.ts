@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { E2E_EXEMPTIONS, UNIT_E2E_TESTS } from "./test/e2e-suite-authority.js";
 
 delete process.env.DYSFLOW_HOME;
 
@@ -10,11 +11,8 @@ export default defineConfig({
       "test/integration/**/*.test.ts",
     ],
     exclude: [
-      // Pure contract test (reads scripts as text, spawns nothing) — it runs in
-      // the fast unit suite, not here.
-      "test/integration/dysflow-result-writer-contract.test.ts",
-      // Pure-filesystem sweep helper test — runs in the fast unit suite (#562).
-      "test/integration/global-setup-temp-sweep.test.ts",
+      ...UNIT_E2E_TESTS,
+      ...Object.keys(E2E_EXEMPTIONS),
     ],
     environment: "node",
     // Real Access/COM operations are slow and MUST NOT run concurrently: parallel
