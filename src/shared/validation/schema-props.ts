@@ -246,7 +246,7 @@ export const SCHEMA_PROPS = {
   allowExternalAccessPath: {
     type: "boolean",
     description:
-      "Issue #968 — opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior.",
+      "Opt-in acknowledgment that the supplied accessPath lives outside the active worktree. Honored only by read-only-side tools (`export_modules`, `list_objects`, `list_vba_modules`, `list_procedures`, `get_procedure`, `verify_code`); ignored for binary-mutating tools. Default false preserves current behavior.",
   } as JsonSchemaProperty,
   // Issue #975 — transactional mode for write-tools. When true, the binary
   // is copied to `<projectRoot>/.dysflow/runtime/transactional/<uuid>/`,
