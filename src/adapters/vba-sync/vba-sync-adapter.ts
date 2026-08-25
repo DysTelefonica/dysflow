@@ -135,12 +135,9 @@ export type VbaSyncAdapterOptions = {
   accessPassword?: string;
   timeoutMs?: number;
   /**
-   * PR1b (#621 F1) — `allowedProcedures` allowlist forwarded to
-   * `VbaExecutionAdapter` so the `test_vba` default-deny gate can enforce it
-   * at the adapter boundary. When undefined or empty, `test_vba` refuses
-   * execution unless the caller passes `dryRun: true` (the same semantics
-   * as the MCP-handler gate in `canonical-handlers.ts:ensureProcedureAllowed`,
-   * which already covers `run_vba`).
+   * `allowedProcedures` is forwarded to `VbaExecutionAdapter` as an opt-in
+   * test_vba whitelist. Undefined or empty permits tests; a non-empty list is
+   * enforced atomically. run_vba keeps its separate default-deny MCP gate.
    *
    * #757 (F7) — accepts a per-input RESOLVER (function) as well as a frozen
    * array. The composition root passes a resolver so `test_vba` re-reads the
@@ -420,8 +417,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
   public readonly accessPassword?: string;
   public readonly timeoutMs: number;
   /**
-   * PR1b (#621 F1) — allowlist forwarded to `VbaExecutionAdapter` so the
-   * `test_vba` default-deny gate can enforce it. Kept on the adapter for
+   * Allowlist forwarded to `VbaExecutionAdapter` so test_vba can enforce an
+   * opt-in whitelist. Kept on the adapter for
    * inspection / debugging; the gate logic lives in
    * `VbaExecutionAdapter.ensureTestProceduresAllowed`. #757 (F7) — may be a
    * per-input resolver function, not just a frozen array.

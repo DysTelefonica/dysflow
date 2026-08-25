@@ -8,6 +8,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - feat(mcp): promote 28 read-only inspection tools plus `query_execute` to the bounded core surface, with external SQL reads remaining explicit and write paths closed (#1544)
 - feat(mcp): complete `allowExternalAccessPath` propagation on advertised read-only tools, reject it on write tools, and add preview-only external export destinations (#1542)
 - feat(mcp): support direct read-only procedure inspection of external Access binaries via explicit `source:"binary"` and `allowExternalAccessPath:true` (#1541)
@@ -29,6 +30,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - docs(release): centralize heavy E2E authority
 - fix(paths): preserve POSIX form source paths
 - fix(release): restore exact-SHA quality authority
@@ -38,6 +40,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(skills): align bundled harness with progressive discovery (#1523)
 - test(e2e): cover structural form tools (#1519)
 - fix(e2e): request bounded schema view (#1518)
@@ -65,6 +68,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(quality-gates): move the lint-scope pin with the scope change
 - fix(e2e): recover payload fields the wire envelope shadows
 - docs(e2e): correct stale comment about the inspect_form text channel
@@ -77,6 +81,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(e2e): stop passing rejected table policies to arbitrary SQL (#1452)
 
 
@@ -84,6 +89,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - research(mcp): sampling protocol and evidence tooling for surface profiles (#1481)
 - refactor(vba): move import orchestration behind core ports (#1480)
 - fix(export): absolutize relative destinationRoot overrides (#1478) (#1479)
@@ -122,6 +128,7 @@
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(export): a relative `destinationRoot` override is absolutized by the resolver, so `destinationRoot: "src"` against a configured `src` root no longer writes to `<root>/src/src/` (#1478). `resolvedDestinationRoot` now reports the effective absolute path instead of echoing the raw input.
 - fix(sql): reject unenforceable allowTables/denyTables policies on arbitrary SQL entry points (#1452)
 - test(e2e): bump mcp-e2e harness default timeoutMs from 30s to 60s (DYSFLOW_E2E_TIMEOUT_MS env still overrides). Flaky `unlink_table` hung at ~30s on a self-hosted runner while passing cleanly in 5s on a different run; the bump gives ~2x headroom without hiding a real hang. No runtime production change.
@@ -134,6 +141,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - test(schema-props): add testFilter to the shared schema property atoms (#1447)
 - docs(dysflow-usage): scaffold 22 canonical examples for status:preferred tools (#1444)
 - docs(dysflow-usage): add error-codes reference, write-flags matrix, anti-patterns, examples verifier (#1446)
@@ -144,6 +152,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(run-vba): honor per-call destinationRoot override in preflight (#1440) (#1441)
 - ci(release): disable setup-node cache on e2e-validation
 - test(quality-gates): assert e2e-validation gate in release.yml (#1438)
@@ -163,6 +172,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(adapter): honor explicit destinationRoot override in pre-flight gate (#1438)
 
 
@@ -170,6 +180,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - docs(agents): add the documentation ownership contract and anchor it (#1437)
 - docs: extract the MCP tool reference and apply the page-anatomy patterns (#1436)
 - chore(docs): archive superseded documents and drop the closed epic handoff (#1435)
@@ -181,6 +192,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(tests): stabilize integration timeout budgets (#1433)
 - docs(agents): make local worktree cleanup after a merge prescriptive (#1430)
 - fix(vba-sync): return verbose snapshots for new modules (#1431)
@@ -194,6 +206,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - Improve: dysflow-usage and dysflow-arnes skills surface as MUST-LOAD when .dysflow/ artifacts are in cwd. (#1403)
 - Improve: typed error envelopes include additive remediationHint.skill / remediationHint.tool hints pointing to the canonical skill. (#1403)
 - docs(prompts): record the round 1 maintainer evidence and repository-owned scope for skill discoverability (#1403)
@@ -203,6 +216,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - docs(prompts): add round 18 maintainer prompt
 - fix(mcp): assign precedence 'alias' to non-legacy write flags (#1396) (#1401)
 - docs(skills): document frontmatter schema and last_dysflow_version semantics (#1388) (#1402)
@@ -217,6 +231,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(mcp): prevent project configuration secrets from leaking through `setup_project` responses (#1374)
 - fix(transactional): surface rollback failures and cover transactional failure paths (#1375)
 - fix(config): keep worktree configuration caches coherent after creation and migration (#1376)
@@ -229,6 +244,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(installer): target Pi global skills directory (#1373)
 
 
@@ -236,6 +252,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(mcp): preserve setup target evidence (#1371)
 - fix(skills): align bundled metadata for v2.35.0 (#1369)
 - fix(config): surface worktree discovery errors (#1367)
@@ -274,6 +291,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(release): bundle skills in release archive
 
 
@@ -281,6 +299,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - test(e2e): align release harness with runtime contracts
 - fix(mcp): preserve sync_binary apply polarity
 - fix(mcp): normalize test_vba apply result contract
@@ -300,6 +319,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - feat(mcp): add cwd-aware worktree cache (#1322)
 - docs(agents): align v2.33.0 runtime harness (#1320)
 
@@ -308,6 +328,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(release): preserve explicit version dispatch (#1319)
 - feat(mcp): advertise tool workflow metadata (#1317)
 - feat(mcp): add project resolution recovery tokens (#1316)
@@ -335,6 +356,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(config): honor legacy `projectId` as a diagnostic fallback and emit an actionable migration warning (#1240)
 - feat(dispatch): unified `requires_confirmation` policy across every mutating MCP tool. Every mutating tool schema declares an `implements_check: CheckId` field that points to a diagnostic check in `DOCTOR_CHECK_METADATA`. The dispatch seam (`src/adapters/mcp/dispatch-factory.ts:247`) calls `enforceRequiresConfirmation(input, toolName)` after `validateInput` and before any policy injection; the helper looks up the matched check and either demands `confirmedRequiresConfirmation: true` (returns `CONFIRMATION_REQUIRED` if missing) or rejects the override (returns `CONFIRMATION_NOT_NEEDED` if the override is present on a check that does not require it).
 - feat(dispatch): new `confirmedRequiresConfirmation: true` override flag at the call site is the preferred way to confirm a mutating tool that maps to a `requires_confirmation: true` check. Tools currently wired: `export_modules`, `export_all` (both map to `export_overwrites_source_precheck`), `clean_stale_markers` (maps to `stale_markers`), and `access_force_cleanup_orphaned` (maps to `orphans_msaccess`). The override is optional for the 21 advisory checks that declare `requires_confirmation: false`.
@@ -345,6 +367,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(vba-sync): harden PowerShell startup and temp cleanup (#1234)
 
 
@@ -352,6 +375,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(mcp-error-envelope): include contradiction metadata in result contracts (#1230)
 - fix(mcp-precedence): normalize deprecated alias precedence from alias to deprecated (#1230)
 - fix(mcp-composition): align compact requiredParameterGroups with full inputSchema.anyOf required groups (#1230)
@@ -362,6 +386,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(import-modules): validate post-write content matches source when importMode is Code (#1228)
 - fix(sync-binary): honor dryRun contract and surface typed error on plan violation (#1228)
 - fix(export-modules): support destinationRoot override with modern frontendFile config (#1228)
@@ -371,6 +396,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - feat(mcp): require destinationRoot or allowConfiguredDestinationRoot on export_modules and export_all (new `allowConfiguredDestinationRoot` opt-in flag; new typed error code `DESTINATION_ROOT_REQUIRED`) (#1226)
 - docs: align export-source guard description in `dysflow-usage` and `describe_tool` (#1226)
 
@@ -378,6 +404,7 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Changes
 
+- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(mcp): require moduleName or moduleNames on delete_module (#1224) (#1225)
 - test(e2e): cover MCP friction contracts (#1223)
 - fix(telemetry): reap orphaned pending locks (#1222)

@@ -5,6 +5,14 @@
 Put one-shot code in a reviewable `_Temp_*.bas` module. Import it, compile it manually in Access,
 run its allowlisted public procedure, and remove both the binary module and source file.
 
+`run_vba` remains default-deny: an execute call requires a non-empty
+`allowedProcedures` list containing the target.
+
+This differs intentionally from stdio `test_vba`, where a missing or empty list imposes no
+restriction and a non-empty list enables an opt-in whitelist.
+
+HTTP `/vba/test` keeps its stricter default-deny network boundary.
+
 ## Migration path
 
 1. Add the exact procedure name (for example, `_Temp_Audit_ReadFlags`) to

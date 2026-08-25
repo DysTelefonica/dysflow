@@ -48,17 +48,15 @@ const generatedContracts = {
       contractFromGeneratedRoute(name),
     ]),
   ),
-  // PR1b (#621 F1) — `test_vba` runtime gate lives in
-  // `VbaExecutionAdapter.executeTestVba` (default-deny when
-  // `allowedProcedures` is undefined/empty with a `dryRun:true` escape
-  // hatch, per-procedure allowlist verification with `error.allowedProcedures`
-  // + `error.remediation` when configured). The dispatcher route stays
+  // `test_vba` uses an opt-in whitelist: missing/empty allows execution,
+  // while a non-empty `allowedProcedures` list is enforced atomically with
+  // `error.allowedProcedures` + `error.remediation`. The dispatcher route stays
   // `mutatesBinary: false` so the tool remains conditional-write.
   test_vba: {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
-      "Conditional-write MCP contract; test execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
+      "Conditional-write MCP contract; test execution is unrestricted when allowedProcedures is missing or empty, and a non-empty list acts as an opt-in allowlist. Plan mode remains non-executing.",
   },
   verify_code: {
     access: "read-only",

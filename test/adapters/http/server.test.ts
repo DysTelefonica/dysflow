@@ -917,7 +917,23 @@ describe("Dysflow HTTP adapter", () => {
       testVbaCalls.length = 0;
     });
 
-    it("rejects test_vba before PowerShell side effects with the real VbaSyncAdapter default-deny gate", async () => {
+    it("keeps HTTP /vba/test default-deny when the service itself is default-allow", async () => {
+      const vbaSyncToolService = createFakeVbaSyncToolService(undefined);
+      const services = createFakeServices({ vbaSyncToolService });
+      const server = await startTestServer({ services, writesEnabled: true });
+
+      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proceduresJson: '["Test_A"]' }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
+      expect(testVbaCalls).toEqual([]);
+    });
+
+    it("rejects test_vba at the HTTP boundary before the real adapter can invoke PowerShell", async () => {
       let executorCalled = false;
       const vbaSyncToolService = new VbaSyncAdapter({
         preflightCleanup: noopPreflightCleanup(),
@@ -946,7 +962,7 @@ describe("Dysflow HTTP adapter", () => {
 
       expect(response.status).toBe(400);
       expect(body.ok).toBe(false);
-      // #757 (F6) — the no-allowlist branch now carries its own distinct code.
+      // The HTTP boundary retains the established no-allowlist diagnostic.
       expect(body.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
       expect(body.error.message).toContain("allowedProcedures");
       expect(body.error.message).toContain("dryRun:true");

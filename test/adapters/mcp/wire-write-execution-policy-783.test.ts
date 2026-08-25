@@ -30,8 +30,8 @@
  *   7. `access_force_cleanup_orphaned` with `confirmPid` still requires explicit
  *      confirmation.
  *   8. `allowWrites: false` still blocks every write, regardless of policy.
- *   9. `test_vba` without `allowedProcedures` is still rejected with
- *      `MCP_ALLOWLIST_NOT_CONFIGURED` in both modes.
+ *   9. `test_vba` without `allowedProcedures` executes in developer mode
+ *      and remains plan-shaped in safe-by-default mode.
  *  10. The dispatch layer consults the resolver — there must be NO other
  *      place that hardcodes per-tool defaults.
  *
@@ -43,20 +43,14 @@
  *   - `mcp-tool-risks.test.ts` (#779) — risk registry + helper + anti-divergence.
  *   - `vba-execution-adapter-allowlist.test.ts` (F23/#757/#621) — adapter-level
  *     allowlist gate; the integration layer that backs AC9's "the gate fires"
- *     half. This file pins the dispatch seam's interaction with that gate via
- *     a simulated failure envelope.
+ *     half. This file pins the dispatch seam's effective plan/execute intent.
  */
 
 import { describe, expect, it } from "vitest";
 import { EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION } from "../../../src/adapters/mcp/dispatch-common";
 import type { McpAccessContextResolver } from "../../../src/adapters/mcp/result-translation";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
-import {
-  createDysflowError,
-  failureResult,
-  type OperationResult,
-  successResult,
-} from "../../../src/core/contracts/index";
+import { type OperationResult, successResult } from "../../../src/core/contracts/index";
 
 // ─── Test fixture factories ──────────────────────────────────────────────────
 
@@ -79,12 +73,8 @@ class FakeVbaService {
 }
 
 /**
- * Adapter-aware fake — simulates the VbaExecutionAdapter allowlist gate.
- * When `test_vba` arrives without `allowedProcedures` (per-input resolver
- * returns undefined or empty), it emits the same MCP_ALLOWLIST_NOT_CONFIGURED
- * envelope the real adapter emits. This proves the dispatch seam threads
- * the call to the gate without bypassing it, while keeping the test
- * self-contained (no real `.accdb` fixture required).
+ * Adapter-aware fake — simulates test_vba plan mode plus its opt-in whitelist
+ * input resolution while keeping this dispatch test free of an `.accdb`.
  */
 class AdapterAwareFakeVbaService {
   public requests: unknown[] = [];
@@ -123,16 +113,9 @@ class AdapterAwareFakeVbaService {
         this.allowedProceduresByInput !== undefined
           ? await this.allowedProceduresByInput(forwarded)
           : this.allowedProcedures;
-      if (resolved === undefined || resolved.length === 0) {
-        // Mirror VbaExecutionAdapter's gate behavior.
-        return failureResult(
-          createDysflowError(
-            "MCP_ALLOWLIST_NOT_CONFIGURED",
-            `Refusing to execute VBA procedure: project config declares no allowedProcedures allowlist.`,
-            { details: { planProcedures: extractProcedureNames(forwarded) } },
-          ),
-        );
-      }
+      // Missing/empty is unrestricted for test_vba. A non-empty allowlist
+      // remains an opt-in whitelist and is exercised by adapter-level tests.
+      void resolved;
     }
     return successResult({ returnValue: "ok" });
   }
@@ -720,17 +703,9 @@ describe("AC8 — allowWrites:false blocks every write regardless of policy (#78
   }
 });
 
-// ─── AC9: test_vba allowlist gate preserved in developer mode ───────────────
+// ─── AC9: test_vba default-allow preserved in developer mode ───────────────
 
-describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", () => {
-  // We use an adapter-aware fake vbaSyncToolService that simulates the
-  // VbaExecutionAdapter's MCP_ALLOWLIST_NOT_CONFIGURED refusal when
-  // allowedProcedures is undefined/empty. The dispatch seam must:
-  //   1. forward the test_vba call to the adapter (no policy bypass)
-  //   2. return the adapter's failure envelope verbatim
-  // This mirrors the production wiring where the dispatch seam consults
-  // the policy (forwarding dryRun:false in developer mode) and the
-  // adapter's allowlist gate fires immediately afterwards.
+describe("AC9 — test_vba policy defaults with opt-in allowlist (#783, #1556)", () => {
   function makeAdapterAwareServices(allowedProcedures: readonly string[] | undefined) {
     return {
       ...makeServices({
@@ -739,7 +714,7 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
     };
   }
 
-  it("developer mode + test_vba without allowedProcedures → MCP_ALLOWLIST_NOT_CONFIGURED", async () => {
+  it("developer mode + test_vba without allowedProcedures → runner engaged", async () => {
     const services = makeAdapterAwareServices(undefined);
     const tools = buildTools(services, {
       writes: true,
@@ -752,8 +727,8 @@ describe("AC9 — test_vba allowlist gate preserved in developer mode (#783)", (
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
+    expect(result.isError).toBeFalsy();
+    expect(services.vbaSyncToolService.requests).toHaveLength(1);
   });
 
   it("safe-by-default mode + test_vba without allowedProcedures → plan-shaped success (Bug B #1046 short-circuits before the gate)", async () => {

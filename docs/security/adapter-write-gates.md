@@ -96,16 +96,17 @@ the locked precedence contract.
 |-----------|------|-----|-----|
 | SQL writes (`exec_sql`, fixtures, maintenance writes) | gated on `writesEnabled` | gated on `writesEnabled` / write resolver | Same on both — destructive SQL is always gated. |
 | `force` cleanup | gated | gated (the `force` branch of `handleMcpAccessCleanup` in `canonical-handlers.ts`) | Destructive escalation, gated on both. |
-| **VBA execution** (`/vba/execute`, `dysflow_vba_execute`, `run_vba`) | gated on `writesEnabled` (the `POST /vba/execute` handler in `server.ts`) | **controlled by the `allowedProcedures` allowlist, NOT the write-gate** (`handleMcpVbaExecute` in `canonical-handlers.ts` takes no `writesEnabled`) | See below. |
+| **Arbitrary VBA execution** (`/vba/execute`, `dysflow_vba_execute`, `run_vba`) | gated on `writesEnabled`; configured lists reject procedures outside them | `run_vba` is default-deny and requires a non-empty `allowedProcedures` list for execution | Arbitrary compiled VBA keeps the strongest procedure gate. |
+| **VBA tests** (`/vba/test`, `test_vba`) | `/vba/test` is default-deny when the allowlist is missing/empty | stdio `test_vba` is unrestricted when the list is missing/empty; a non-empty list is an opt-in whitelist | The local parent process is the stdio trust boundary; HTTP remains stricter. |
 
 ## Why VBA on MCP is allowlist-controlled, not write-gated
 
-On MCP, the control for VBA is the `allowedProcedures` allowlist. This is intentional
-and is locked by tests:
+On MCP, `allowedProcedures` has two intentional contracts, locked by tests:
 
-- The `allowedProcedures` describe blocks in `test/adapters/mcp/tools.test.ts` lock the
-  allowlist as the gate: a procedure not in the list is blocked; one in the list runs;
-  an empty/unset list runs.
+- `run_vba` is default-deny: a missing/empty list refuses execution, while a
+  configured list permits only named procedures.
+- `test_vba` treats a missing/empty list as unrestricted. A non-empty list is
+  an opt-in whitelist and atomically rejects a plan containing any other test.
 - VBA executes under the default (writes-disabled) MCP configuration across many of the
   modern-tool and `run_vba` tests in that same file.
 
@@ -117,16 +118,16 @@ because a network caller is not necessarily the operator — hence its blanket w
 
 ## Residual consideration (not a code change)
 
-The one case worth an operator's attention: **writes disabled AND no `allowedProcedures`
-configured** ⇒ any public VBA procedure can be invoked over MCP. On stdio this has no
-remote vector (the client is the trust boundary), so it is not a vulnerability. For
-shared or less-trusted deployments, the recommendation is operational, not structural:
+The one case worth an operator's attention: **no `allowedProcedures` configured** means
+any manifest-selected test can run through stdio `test_vba`. It does not open arbitrary
+`run_vba`, and the write, sandbox, manifest, and human-compile gates remain intact. On
+stdio there is no remote vector because the client is the trust boundary. For projects
+that want a narrower test surface:
 
-> Configure `allowedProcedures` in the project config to constrain MCP VBA execution to
-> a known set of procedures.
+> Configure a non-empty `allowedProcedures` list to opt into a test whitelist.
 
 ## Decision
 
 The HTTP/MCP VBA gate asymmetry is **by design** and stays. Tracked as
 [#522](https://github.com/DysTelefonica/dysflow/issues/522) (reclassified from bug to
-documentation). No code change is made; this document is the deliverable.
+documentation), with the `test_vba` refinement tracked by #1556.

@@ -1358,26 +1358,10 @@ describe("VbaExecutionAdapter", () => {
     );
   });
 
-  // --- PR1b (#621 F1) — test_vba default-deny gate in VbaExecutionAdapter -------
-  //
-  // PR1a added the gate at the MCP adapter boundary (`handleMcpVbaExecute`),
-  // which covers `run_vba` and `dysflow_vba_execute`. `test_vba` does NOT
-  // route through that handler — it routes through `VbaSyncAdapter` →
-  // `VbaExecutionAdapter.executeTestVba`. This block exercises the parallel
-  // gate added in PR1b so the contract-truth gap ("read-only" tool that ran
-  // arbitrary compiled VBA via `proceduresJson: '[{"procedure":"DeleteAll",
-  // "args":[]}]'`) stays closed for `test_vba` too.
-  //
-  // Gate semantics mirror the MCP-handler gate in `canonical-handlers.ts`:
-  //   1. When `allowedProcedures` is undefined OR empty, refuse unless the
-  //      caller passes `dryRun: true` (default-deny).
-  //   2. When `allowedProcedures` is configured, ALL procedures in the plan
-  //      must be in the list — the plan is atomic.
-  //
-  // The tests construct an adapter with no allowlist (the default) and assert
-  // the observable gate behavior at the port: `result.ok` is false AND the
-  // runner (`executeMappedTool`) is NOT invoked. They do NOT assert on private
-  // call order or internal data shape.
+  // --- #1556 — test_vba opt-in whitelist -----------------------------------
+  // Missing and empty lists allow execution. A non-empty list remains an
+  // atomic whitelist, covered by the configured-list tests below. run_vba's
+  // independent MCP gate remains default-deny.
 
   function makeUnconfiguredAdapter(executeMappedTool = vi.fn()): {
     adapter: VbaExecutionAdapter;
@@ -1387,34 +1371,35 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool,
       cwd: "C:/repo",
     };
-    // No `allowedProcedures` passed — exercises the default-deny branch.
+    // No `allowedProcedures` passed — exercises test_vba's default-allow branch.
     return { adapter: new VbaExecutionAdapter(orchestrator), executeMappedTool };
   }
 
-  it("PR1b — refuses test_vba when allowedProcedures is unconfigured AND no dryRun (default-deny)", async () => {
-    const { adapter, executeMappedTool } = makeUnconfiguredAdapter();
+  it("allows test_vba when allowedProcedures is unconfigured", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult({ passed: 1, failed: 0, errors: 0, tests: [] }));
+    const { adapter } = makeUnconfiguredAdapter(executeMappedTool);
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_RunAll",
       argsJson: "[]",
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected default-deny refusal");
-    // #757 (F6) — same `MCP_ALLOWLIST_NOT_CONFIGURED` code as PR1a's MCP-handler
-    // gate so consumers grep for the same string regardless of which layer caught
-    // the call (was the generic MCP_INPUT_INVALID before the split).
-    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
-    expect(result.error.message).toContain("allowedProcedures");
-    expect(result.error.message).toContain("dryRun");
-    expect(result.error.message).toContain("Test_RunAll");
-    // The runner MUST NOT be invoked — the gate short-circuits before any
-    // PowerShell spawn.
-    expect(executeMappedTool).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalledWith(
+      "test_vba",
+      expect.objectContaining({
+        proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: [] }]),
+      }),
+      expect.any(Object),
+    );
   });
 
-  it("PR1b — refuses test_vba when allowedProcedures is empty AND no dryRun (default-deny)", async () => {
+  it("allows test_vba when allowedProcedures is empty", async () => {
     const orchestrator: VbaSyncOrchestrator = {
-      executeMappedTool: vi.fn(),
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValue(successResult({ passed: 1, failed: 0, errors: 0, tests: [] })),
       cwd: "C:/repo",
     };
     const adapter = new VbaExecutionAdapter(orchestrator, []);
@@ -1422,12 +1407,8 @@ describe("VbaExecutionAdapter", () => {
       proceduresJson: JSON.stringify([{ procedure: "Test_DeleteAll", args: [] }]),
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected default-deny refusal for empty allowlist");
-    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
-    expect(result.error.message).toContain("allowedProcedures");
-    expect(result.error.message).toContain("Test_DeleteAll");
-    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalled();
   });
 
   it("PR1b + Round-3 Item 5 — test_vba with dryRun:true is plan-only (no runner call, no Access spawn)", async () => {

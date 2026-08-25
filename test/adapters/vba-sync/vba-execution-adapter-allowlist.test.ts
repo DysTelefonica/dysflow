@@ -27,18 +27,9 @@ import { successResult } from "../../../src/core/contracts/index.js";
  * the per-input resolver returned `undefined` and the gate refused with
  * `MCP_ALLOWLIST_NOT_CONFIGURED`.
  *
- * The fix has two parts:
- *   1. `loadDysflowConfigShared` now loads the project config from disk when
- *      both an explicit `accessPath` AND a project config file exist. The
- *      project config loader honors the explicit `accessPath` internally (via
- *      the `??` chain in `buildProjectConfig`), so the caller's path still
- *      wins; the rest of the project config (allowlist, allowWrites, lint
- *      overrides, password env) is now surfaced for the gate.
- *   2. `VbaExecutionAdapter.ensureTestProceduresAllowed` enriches the
- *      `MCP_ALLOWLIST_NOT_CONFIGURED` envelope with `error.details` carrying
- *      `configPath`, `allowedProcedures`, `planProcedures`, `inputProjectId`,
- *      and `inputAccessPath` so a consumer can diagnose the project the
- *      refusal targeted.
+ * The original regression remains covered for configured whitelists. Issue
+ * #1556 additionally locks missing/empty as unrestricted, eliminating the
+ * obsolete missing-allowlist refusal while preserving configured-list drift.
  */
 
 function writeProjectConfig(
@@ -210,15 +201,11 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
     }
   });
 
-  // ─── Layer 3: enriched error envelope (acceptance criterion 2) ────────────
-  // When the gate DOES refuse, the MCP_ALLOWLIST_NOT_CONFIGURED envelope MUST
-  // include `error.details: { configPath, allowedProcedures, planProcedures,
-  // inputProjectId, inputAccessPath }` so consumers can diagnose which
-  // project the call targeted. The plan-procedures list MUST always be
-  // present; the config fields MAY be undefined when the resolver cannot
-  // resolve the project (so the field shape stays uniform).
-  it("MCP_ALLOWLIST_NOT_CONFIGURED envelope carries structured error.details for diagnosis", async () => {
-    const executeMappedTool = vi.fn();
+  // ─── Layer 3: opt-in allowlist semantics (#1556) ─────────────────────────
+  it("executes when the resolver returns undefined (no allowlist configured)", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult({ passed: 2, failed: 0, errors: 0, tests: [] }));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectDir };
     // No allowlist: the resolver returns undefined to simulate a project
     // config that has NO allowedProcedures (the original F23 condition: even
@@ -235,31 +222,14 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
       accessPath: resolve(projectDir, "front.accdb"),
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected refusal for unconfigured allowlist");
-    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
-
-    // The error envelope MUST carry the structured details for diagnosis.
-    expect(result.error.details).toBeDefined();
-    const details = result.error.details as Record<string, unknown>;
-    expect(details.planProcedures).toEqual(["Test_First", "Test_Second"]);
-    // inputProjectId / inputAccessPath echo what the caller sent so a
-    // consumer can see exactly which project the call targeted.
-    expect(details.inputProjectId).toBe("f23-project");
-    expect(details.inputAccessPath).toBe(resolve(projectDir, "front.accdb"));
-    // The allowlist is surfaced (undefined when the resolver could not load
-    // it; an array when the config declares one — even an empty one).
-    expect("allowedProcedures" in details).toBe(true);
-    // The runner MUST NOT have been called.
-    expect(executeMappedTool).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalled();
   });
 
-  it("MCP_ALLOWLIST_NOT_CONFIGURED envelope surfaces the empty allowlist when the resolver returns []", async () => {
-    // Distinct case: the resolver returns an EMPTY array (config has the
-    // `allowedProcedures: []` shape). The error MUST still report the empty
-    // allowlist, not omit it — the consumer needs to know the resolver did
-    // load the config but found an explicit deny-all.
-    const executeMappedTool = vi.fn();
+  it("executes when the resolver returns [] (empty means no restrictions)", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult({ passed: 1, failed: 0, errors: 0, tests: [] }));
     const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: projectDir };
     const resolver: AllowedProcedures = vi.fn().mockResolvedValue([]);
     const adapter = new VbaExecutionAdapter(orchestrator, resolver);
@@ -271,11 +241,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
       accessPath: resolve(projectDir, "front.accdb"),
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected refusal for empty allowlist");
-    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
-    const details = result.error.details as Record<string, unknown>;
-    expect(details.allowedProcedures).toEqual([]);
-    expect(details.planProcedures).toEqual(["Test_Any"]);
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalled();
   });
 });

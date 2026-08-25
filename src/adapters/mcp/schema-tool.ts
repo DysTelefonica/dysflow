@@ -346,7 +346,7 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   list_objects: ["#405"],
   list_vba_modules: ["#807"],
   exists: [],
-  test_vba: ["#621", "#746"],
+  test_vba: ["#621", "#746", "#1556"],
   verify_code: ["#701", "#959"],
   delete_module: ["#619"],
   generate_erd: [],

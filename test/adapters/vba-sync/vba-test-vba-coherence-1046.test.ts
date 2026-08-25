@@ -220,13 +220,10 @@ describe("Issue #1046 / Test 2 — test_vba dryRun:true bypasses the allowlist g
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("adapter: test_vba with dryRun:false/undefined STILL runs the gate (commit path is preserved)", async () => {
-    // Anti-regression for Bug B fix: the gate must STILL fire when the
-    // caller asks for an actual execute (dryRun absent or false). The fix
-    // moves dryRun FIRST; it does not remove the gate from the commit
-    // path. This test pins the negative case so a future refactor cannot
-    // silently drop the gate.
-    const executeMappedTool = vi.fn();
+  it("adapter: test_vba execute mode runs without an unconfigured allowlist", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult({ passed: 1, failed: 0, errors: 0, tests: [] }));
     const orchestrator: VbaSyncOrchestrator = {
       executeMappedTool,
       cwd: "C:/repo",
@@ -239,10 +236,8 @@ describe("Issue #1046 / Test 2 — test_vba dryRun:true bypasses the allowlist g
       // no dryRun → execute mode
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected gate refusal on execute-mode call");
-    expect(result.error.code).toMatch(/PROCEDURE_NOT_ALLOWED|ALLOWLIST_NOT_CONFIGURED/);
-    expect(executeMappedTool).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalled();
   });
 });
 
