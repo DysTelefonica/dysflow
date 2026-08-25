@@ -121,11 +121,11 @@ Keep secrets in environment variables, not in the committed project file.
 
 ### Select the advertised MCP tool surface
 
-The stdio server advertises the 39-tool core surface by default. It includes the bootstrap,
-recovery, test, and source-sync workflows.
+The stdio server advertises the 67-tool core surface by default. It includes bootstrap,
+recovery, test, source-sync, read-only SQL/form inspection, and the guarded `query_execute` entry point.
 
-SQL and form tools remain callable by name and discoverable with `schema({ view: "index" })`.
-They are hidden only from `tools/list`.
+Write-capable SQL and form specialists remain callable by name and discoverable with
+`schema({ view: "index" })`; they stay hidden from core `tools/list`.
 
 Opt in to the complete surface per project:
 

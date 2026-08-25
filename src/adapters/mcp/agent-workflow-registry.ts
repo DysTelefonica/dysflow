@@ -30,8 +30,48 @@ export const CORE_SURFACE_PHASES: readonly AgentWorkflowPhase[] = [
   "sync",
 ] as const;
 
+/**
+ * Issue #1544 — focused inspection tools that belong in the bounded core
+ * surface even though their workflow phase is `sql` or `forms`.
+ *
+ * Keep this list explicit. Adding either phase to CORE_SURFACE_PHASES would
+ * advertise write-capable siblings such as exec_sql and apply_form_design_plan.
+ */
+export const CORE_INSPECTION_TOOLS = new Set([
+  "get_schema",
+  "list_tables",
+  "list_links",
+  "list_linked_tables",
+  "get_relationships",
+  "query_sql",
+  "count_rows",
+  "distinct_values",
+  "analyze_form_layout",
+  "analyze_form_ui",
+  "render_form_preview",
+  "map_form_behavior",
+  "verify_form_ui",
+  "verify_form_bindings",
+  "diff_form_preview",
+  "inspect_form",
+  "form_list_controls",
+  "form_get_geometry",
+  "form_serialize",
+  "copy_form_ui_pattern",
+  "generate_form_design_plan",
+  "harvest_form_catalog",
+  "lint_form_code",
+  "validate_form_spec",
+  "compare_backends",
+  "compare_form",
+  "export_queries",
+  "list_access_files",
+  "query_execute",
+]);
+
 /** True when the tool's workflow membership intersects the core phases. */
 export function isCoreSurfaceTool(name: string): boolean {
+  if (CORE_INSPECTION_TOOLS.has(name)) return true;
   const phases = classifyWorkflowPhases(name);
   return phases.some((phase) => CORE_SURFACE_PHASES.includes(phase));
 }

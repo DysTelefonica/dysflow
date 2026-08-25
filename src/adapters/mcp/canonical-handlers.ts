@@ -183,6 +183,18 @@ export async function handleMcpQueryExecute(
     return invalidInput(validation);
   }
 
+  if (isRecord(input) && input.mode === "write" && input.allowExternalAccessPath === true) {
+    return invalidInput(
+      "allowExternalAccessPath is accepted only when query_execute mode is 'read'.",
+      "Remove allowExternalAccessPath for mode:'write', or use mode:'read' to inspect an external binary.",
+      {
+        kind: "rejected-write-flag",
+        rejectedFlag: "allowExternalAccessPath",
+        toolName: "query_execute",
+      },
+    );
+  }
+
   const confirmation = enforceRequiresConfirmation(input, "query_execute");
   if (confirmation !== undefined) return confirmation;
 

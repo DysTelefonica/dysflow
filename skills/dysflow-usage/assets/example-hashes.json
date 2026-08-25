@@ -176,7 +176,7 @@
   },
   "query_execute": {
     "path": "assets/examples/query-execute.md",
-    "sha256": "557125f19c17defb28e142a227834d98a0baee2f16a169c76f9cfa02f20cd4f8",
+    "sha256": "d08f25faa6da71e34d155171746738b209356e23615d2e13453b1e972518a79d",
     "needs_human_content": false
   },
   "register_worktree": {

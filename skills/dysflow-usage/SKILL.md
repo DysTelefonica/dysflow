@@ -101,6 +101,10 @@ details. Use `get_capabilities({ view: "compact" })` for compact tool/write
 metadata; use `{ view: "full" }` only as deliberate complete-snapshot opt-in.
 The compatibility alias `{ compact: true }` is accepted but is not canonical.
 
+Core `tools/list` includes the read-only SQL/form inspection family plus `query_execute`.
+External database reads require `allowExternalAccessPath:true`; source/FormIR tools do not.
+`query_execute` accepts that opt-in only with `mode:"read"` and rejects it in write mode.
+
 > **`setup_project` identity is fail-closed:** a fresh bootstrap requires an
 > explicit `projectId`. If it is omitted, the runtime may reuse only the
 > selected WorktreeContext's existing configured id and emits a warning that

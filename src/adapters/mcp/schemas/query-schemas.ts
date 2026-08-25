@@ -24,6 +24,7 @@ const WRITE_TARGET_OVERRIDE = {
 
 export const EXPLICIT_READ_TARGET_OVERRIDE = {
   accessPath: SCHEMA_PROPS.accessPath,
+  allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
   backendPath: SCHEMA_PROPS.backendPath,
   databasePath: SCHEMA_PROPS.databasePath,
   sourcePath: SCHEMA_PROPS.sourcePath,
@@ -55,6 +56,11 @@ const FRONTEND_TARGET_OVERRIDE = {
       "This operation is frontend-only. Omit target to use the configured accessPath, or pass target:'frontend' to make the role explicit. backend and auto are invalid.",
   } as JsonSchemaProperty,
   ...PROCESS_TIMEOUT_BLOCK,
+};
+
+const FRONTEND_READ_TARGET_OVERRIDE = {
+  ...FRONTEND_TARGET_OVERRIDE,
+  allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
 };
 
 const TABLE_NAME_ALIAS_REQUIREMENT: Pick<JsonObjectSchema, "anyOf"> = {
@@ -198,7 +204,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...FRONTEND_TARGET_OVERRIDE,
+      ...FRONTEND_READ_TARGET_OVERRIDE,
     },
   },
   get_schema: {
@@ -247,6 +253,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       accessPath: SCHEMA_PROPS.accessPath,
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       backendPath: SCHEMA_PROPS.backendPath,
       comparePath: SCHEMA_PROPS.comparePath,
       ...PROCESS_TIMEOUT_BLOCK,
@@ -258,6 +265,7 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
     properties: {
       ...CTX_PROPS,
       accessPath: SCHEMA_PROPS.accessPath,
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
       rootPath: SCHEMA_PROPS.rootPath,
       directory: SCHEMA_PROPS.directory,
     },
@@ -270,14 +278,14 @@ export const QUERY_TOOL_SCHEMAS: Record<QueryToolName, JsonObjectSchema> = {
   list_links: {
     type: "object",
     additionalProperties: false,
-    properties: { ...CTX_PROPS, ...FRONTEND_TARGET_OVERRIDE },
+    properties: { ...CTX_PROPS, ...FRONTEND_READ_TARGET_OVERRIDE },
   },
   export_queries: {
     type: "object",
     additionalProperties: false,
     properties: {
       ...CTX_PROPS,
-      ...FRONTEND_TARGET_OVERRIDE,
+      ...FRONTEND_READ_TARGET_OVERRIDE,
       ...OUTPUT_MODE_BLOCK,
       exportPath: SCHEMA_PROPS.exportPath,
       path: SCHEMA_PROPS.path,

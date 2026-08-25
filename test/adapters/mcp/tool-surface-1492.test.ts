@@ -40,8 +40,8 @@ const services: DysflowMcpServices = {
 };
 
 const allTools = createDysflowMcpTools({ services });
-const HIDDEN_FORM_TOOL = "verify_form_ui";
-const CORE_TOOL_COUNT = 38;
+const HIDDEN_FORM_TOOL = "apply_form_design_plan";
+const CORE_TOOL_COUNT = 67;
 
 function createProject(toolSurface: unknown): { root: string; cleanup(): void } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-tool-surface-"));
@@ -92,7 +92,7 @@ async function callToolPayload(
 }
 
 describe("tool-surface (#1492)", () => {
-  it("advertises exactly the phase-derived core surface by default", async () => {
+  it("advertises the bounded core surface by default", async () => {
     const listed = await listToolsOnce();
     try {
       expect(listed.tools).toHaveLength(CORE_TOOL_COUNT);

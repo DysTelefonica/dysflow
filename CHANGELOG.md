@@ -8,6 +8,7 @@
 
 ### Changes
 
+- feat(mcp): promote 28 read-only inspection tools plus `query_execute` to the bounded core surface, with external SQL reads remaining explicit and write paths closed (#1544)
 - feat(mcp): complete `allowExternalAccessPath` propagation on advertised read-only tools, reject it on write tools, and add preview-only external export destinations (#1542)
 - feat(mcp): support direct read-only procedure inspection of external Access binaries via explicit `source:"binary"` and `allowExternalAccessPath:true` (#1541)
 - feat(mcp): append non-blocking preferred/legacy tool-selection warnings, expose `forceSpecialized`, and aggregate warning codes in `logs` (#1536)

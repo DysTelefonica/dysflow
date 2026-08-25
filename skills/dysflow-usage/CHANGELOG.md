@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Document external `query_execute` reads and their write-mode rejection boundary.
+
 ## 2.0.0 (2026-08-23)
 
 ### Fixed

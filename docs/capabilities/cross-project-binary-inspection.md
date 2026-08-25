@@ -17,6 +17,17 @@ bytes when their scope is `"binary"`; an inline `modules` map remains process-fr
 
 `vba_orphan_audit` forwards the opt-in to its binary/source inventory adapter.
 
+The bounded core MCP surface also advertises these database readers:
+
+- Schema and links: `get_schema`, `list_tables`, `list_links`, `list_linked_tables`, and `get_relationships`.
+- Queries and values: `query_sql`, `count_rows`, and `distinct_values`.
+- Comparison and export: `compare_backends`, `export_queries`, and `list_access_files`.
+
+Their explicit `accessPath` accepts the same opt-in.
+
+`query_execute` accepts it only with `mode:"read"`. `mode:"write"` rejects the flag as
+`MCP_INPUT_INVALID` before the query service runs.
+
 The schemas live in `src/adapters/mcp/schemas/`. Procedure behavior is covered by `test/adapters/mcp/external-binary-procedure-inspection-1541.test.ts`.
 
 ```json
@@ -32,6 +43,20 @@ The schemas live in `src/adapters/mcp/schemas/`. Procedure behavior is covered b
 The binary path must be explicit and end in `.accdb` or `.mdb`. Omitting the opt-in fails before Access or PowerShell is invoked.
 
 Results come from the external binary's live module code and do not populate the managed source tree.
+
+## Source and FormIR inspection
+
+The promoted form tools operate on version-controlled source paths or caller-supplied FormIR,
+not an external Access binary. They therefore do not expose `allowExternalAccessPath`:
+
+- Analysis: `analyze_form_layout`, `analyze_form_ui`, `render_form_preview`, and `map_form_behavior`.
+- Verification: `verify_form_ui`, `verify_form_bindings`, `diff_form_preview`, and `inspect_form`.
+- FormIR: `form_list_controls`, `form_get_geometry`, `form_serialize`, and `copy_form_ui_pattern`.
+- Planning: `generate_form_design_plan`, `harvest_form_catalog`, `lint_form_code`, and `validate_form_spec`.
+- Comparison: `compare_form` compares source representations.
+
+The exact advertised inventory and negative write boundary are covered by
+`test/adapters/mcp/external-inspection-surface-1544.test.ts`.
 
 ## Write boundaries remain closed
 
