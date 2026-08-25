@@ -8,6 +8,7 @@
 
 ### Changes
 
+- feat(mcp): append non-blocking preferred/legacy tool-selection warnings, expose `forceSpecialized`, and aggregate warning codes in `logs` (#1536)
 - feat(mcp): make `verify_code` compact by default and expose full comparison evidence through `diagnostic:true` (#1535)
 
 ## [v4.0.0] - 2026-08-24

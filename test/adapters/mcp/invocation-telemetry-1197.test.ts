@@ -193,6 +193,32 @@ describe("invocation telemetry privacy contract (#1197)", () => {
     expect(JSON.stringify(entry)).not.toContain("secret-token");
   });
 
+  it("records warning codes without persisting warning text or arguments", () => {
+    const entry = buildInvocationTelemetryEntry({
+      toolName: "import_modules",
+      toolKnown: true,
+      args: { moduleNames: ["PrivateModule"] },
+      result: {
+        content: [],
+        structuredContent: {
+          warnings: [
+            {
+              code: "PREFERRED_TOOL_AVAILABLE",
+              rationale: "sensitive free-form text is not telemetry",
+            },
+          ],
+        },
+        isError: false,
+      },
+      durationMs: 1,
+      writeIntent: "dryRun",
+    });
+
+    expect(entry.warningCodes).toEqual(["PREFERRED_TOOL_AVAILABLE"]);
+    expect(JSON.stringify(entry)).not.toContain("PrivateModule");
+    expect(JSON.stringify(entry)).not.toContain("sensitive free-form text");
+  });
+
   it("classifies unknown names and runtime failures separately", () => {
     const unknown = buildInvocationTelemetryEntry({
       toolName: "import_module",

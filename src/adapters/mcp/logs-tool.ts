@@ -89,6 +89,9 @@ export type LogsResult = {
     }>;
     rejectedParams: Array<{ parameter: string; count: number }>;
     missingParams: Array<{ parameter: string; count: number }>;
+    warnings: {
+      byCode: Array<{ code: string; count: number }>;
+    };
   };
 };
 
@@ -308,7 +311,10 @@ function isInvocationTelemetryEntry(value: unknown): value is InvocationTelemetr
         record.missingParams.every((name) => typeof name === "string"))) &&
     Array.isArray(record.rejectedParams) &&
     record.rejectedParams.every((name) => typeof name === "string") &&
-    (record.unknownToolName === null || typeof record.unknownToolName === "string")
+    (record.unknownToolName === null || typeof record.unknownToolName === "string") &&
+    (record.warningCodes === undefined ||
+      (Array.isArray(record.warningCodes) &&
+        record.warningCodes.every((code) => typeof code === "string")))
   );
 }
 
@@ -331,6 +337,7 @@ function invocationToLogEntry(record: InvocationTelemetryEntry): LogEntry {
       missingParams: record.missingParams,
       rejectedParams: record.rejectedParams,
       unknownToolName: record.unknownToolName,
+      warningCodes: record.warningCodes ?? [],
     },
   };
 }
@@ -423,6 +430,7 @@ export function buildInvocationAggregate(
   const perTool = new Map<string, InvocationTelemetryEntry[]>();
   const rejected = new Map<string, number>();
   const missing = new Map<string, number>();
+  const warnings = new Map<string, number>();
   for (const record of records) {
     const bucket = perTool.get(record.tool) ?? [];
     bucket.push(record);
@@ -432,6 +440,9 @@ export function buildInvocationAggregate(
     }
     for (const parameter of record.missingParams) {
       missing.set(parameter, (missing.get(parameter) ?? 0) + 1);
+    }
+    for (const code of record.warningCodes ?? []) {
+      warnings.set(code, (warnings.get(code) ?? 0) + 1);
     }
   }
   const tools = [...perTool.entries()]
@@ -474,7 +485,10 @@ export function buildInvocationAggregate(
         record.paramNamesPresent.includes("confirmedRequiresConfirmation"),
     ).length,
   };
-  return { calls, tools, rejectedParams, missingParams };
+  const byCode = [...warnings.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code));
+  return { calls, tools, rejectedParams, missingParams, warnings: { byCode } };
 }
 
 function clampLimit(value: number | undefined): number {
@@ -587,7 +601,7 @@ export const LOGS_TOOL_SCHEMA: JsonObjectSchema = {
           type: "string",
           enum: ["tool"],
           description:
-            "Return aggregate per-tool call/error/latency statistics plus rejected and omitted-required parameter frequencies.",
+            "Return aggregate per-tool call/error/latency statistics, warning counts by code, plus rejected and omitted-required parameter frequencies.",
         },
         limit: {
           type: "number",
@@ -620,7 +634,7 @@ export function createLogsTool(opts: { cwd: string }): DysflowMcpTool {
     name: "logs",
     resultContract: logsResultContract,
     description:
-      "Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Sources: invocations.jsonl (real MCP attempts), operations.json (lock ledger), and markers/*.json. Filter exact tool and coarse action independently; groupBy:'tool' adds per-tool counts, split errors, latency percentiles, last use, and rejected/omitted-required parameter frequencies. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
+      "Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Sources: invocations.jsonl (real MCP attempts), operations.json (lock ledger), and markers/*.json. Filter exact tool and coarse action independently; groupBy:'tool' adds per-tool counts, split errors, latency percentiles, last use, warning counts by code, and rejected/omitted-required parameter frequencies. Read-only — never opens Access, never spawns PowerShell, never mutates state. " +
       MCP_TOOL_CONTRACTS.logs.summary,
     inputSchema: LOGS_TOOL_SCHEMA,
     handler: async (input): Promise<McpToolResult> => {

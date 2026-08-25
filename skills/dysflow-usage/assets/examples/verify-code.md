@@ -85,3 +85,6 @@ get_capabilities  # confirm dysflowVersion agrees with adapterVersion
 - Anti-patterns: `assets/anti-patterns.md#11-warning-dont-act-on-verify_code-raw-diff-entries` (parse noise vs actionable)
 - Error codes: `references/error-codes.md#MODULE_NOT_FOUND`
 - Companion: `assets/examples/import-modules.md`, `assets/examples/export-all.md` (apply the recommended action).
+## Choosing the right tool
+
+`verify_code` is read-only, so the runtime deliberately does not emit `PREFERRED_TOOL_AVAILABLE` for this call. Use it when you need drift evidence only. For a complete write-capable verify/plan/apply/re-verify round trip, use the preferred `sync_binary` workflow. Other write-capable specialized calls receive additive guidance in `warnings[]`; intentional granular calls can pass `forceSpecialized:true`.

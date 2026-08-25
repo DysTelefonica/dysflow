@@ -151,6 +151,7 @@ describe("MCP tool registration over core services", () => {
           procedureName: "Refresh",
           argsJson: JSON.stringify([2026]),
           apply: false,
+          forceSpecialized: true,
         }),
     ).resolves.toMatchObject({
       content: [{ type: "text", text: JSON.stringify({ returnValue: "refreshed" }) }],
@@ -573,7 +574,13 @@ describe("MCP tool registration over core services", () => {
     await expect(
       tools
         .find((tool) => tool.name === "seed_fixture")
-        ?.handler({ tableName: "People", allowTable: "People", rows: [{ id: 1 }], apply: false }),
+        ?.handler({
+          tableName: "People",
+          allowTable: "People",
+          rows: [{ id: 1 }],
+          apply: false,
+          forceSpecialized: true,
+        }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ rows: [] }) }],
@@ -764,6 +771,7 @@ describe("MCP tool registration over core services", () => {
           tableName: "People",
           rows: [{ id: 1 }],
           apply: true,
+          forceSpecialized: true,
         }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
@@ -822,7 +830,12 @@ describe("MCP tool registration over core services", () => {
       error: { code: "MCP_INPUT_INVALID", message: "argsJson must be valid JSON." },
     });
     await expect(
-      runVba?.handler({ procedureName: "Blank", argsJson: "   ", apply: false }),
+      runVba?.handler({
+        procedureName: "Blank",
+        argsJson: "   ",
+        apply: false,
+        forceSpecialized: true,
+      }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -830,7 +843,12 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      runVba?.handler({ procedureName: "Array", argsJson: '[1,"two"]', apply: false }),
+      runVba?.handler({
+        procedureName: "Array",
+        argsJson: '[1,"two"]',
+        apply: false,
+        forceSpecialized: true,
+      }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -838,7 +856,12 @@ describe("MCP tool registration over core services", () => {
       ok: true,
     });
     await expect(
-      runVba?.handler({ procedureName: "Single", argsJson: "42", apply: false }),
+      runVba?.handler({
+        procedureName: "Single",
+        argsJson: "42",
+        apply: false,
+        forceSpecialized: true,
+      }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       content: [{ type: "text", text: JSON.stringify({ returnValue: "ok" }) }],
@@ -1132,6 +1155,7 @@ describe("MCP tool registration over core services", () => {
         moduleNames: ["DysflowMcpE2EMissing"],
         importMode: "code",
         apply: false,
+        forceSpecialized: true,
       });
 
       expect(result).toEqual({

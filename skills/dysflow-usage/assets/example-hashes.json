@@ -76,7 +76,7 @@
   },
   "export_all": {
     "path": "assets/examples/export-all.md",
-    "sha256": "3865eb7adcd1723e9c68049793d4fd69565bd4297e89714c4a42e7207d115a6c",
+    "sha256": "a79d4c789bc8d1fd71628a401faa8c1216a0771fedb310be38d6f2c91c9c897c",
     "needs_human_content": false
   },
   "export_modules": {
@@ -116,7 +116,7 @@
   },
   "import_modules": {
     "path": "assets/examples/import-modules.md",
-    "sha256": "954496b610d10df1dabdce2348c123b458df0710b25be21662ac0c81f6fbf2f0",
+    "sha256": "dc95412aed6d4122c675119304874da966ec69c6ad61466ec226662dcd5c891d",
     "needs_human_content": false
   },
   "link_tables": {
@@ -171,7 +171,7 @@
   },
   "resolve_project_recovery": {
     "path": "assets/examples/resolve-project-recovery.md",
-    "sha256": "0630edc449c865fea6c08a62bc0180f97e22c181df0a64bdf82fef65b5b74568",
+    "sha256": "3cf9443d807da11aa0e9d8e6c44258c7930ce1fd42b2e7381fc784ef2f8badc0",
     "needs_human_content": false
   },
   "resolve_project": {
@@ -191,7 +191,7 @@
   },
   "setup_project": {
     "path": "assets/examples/setup-project.md",
-    "sha256": "44220ff33e108af4fc6c67fd49d04f337b6ca811e30033d02f19e847fda329bf",
+    "sha256": "bd5d35757e5b224eeb23fa40c4bdd85f4b9aec31a80b4e9d71516111672a8891",
     "needs_human_content": false
   },
   "state": {
@@ -201,7 +201,7 @@
   },
   "sync_binary": {
     "path": "assets/examples/sync-binary.md",
-    "sha256": "1f7f439796d47ac32f087d6e40dc9a414f600db3f046b7fbf4f50f6dc1688bac",
+    "sha256": "027f2ecfcb378fee0307123293ed06bdaab97eafb624a561b0989a67742c16f0",
     "needs_human_content": false
   },
   "test_vba": {
@@ -216,7 +216,7 @@
   },
   "verify_code": {
     "path": "assets/examples/verify-code.md",
-    "sha256": "7453986cf16198748d1c15ded081d391e7ec57b49d59c3fea65eef26711d0b31",
+    "sha256": "f8155aec9e07c0bb9b46b1215ad82c495fe7613aff510d2c38d511d3212ca169",
     "needs_human_content": false
   },
   "verify_form_bindings": {

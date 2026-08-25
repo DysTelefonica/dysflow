@@ -29,6 +29,8 @@ export type InvocationTelemetryEntry = {
   missingParams: string[];
   rejectedParams: string[];
   unknownToolName: string | null;
+  /** Privacy-safe warning codes emitted by the runtime response envelope. */
+  warningCodes?: string[];
   /** Privacy-safe dispatch evidence; argument values never belong here. */
   auditEvents?: string[];
 };

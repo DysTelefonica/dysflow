@@ -87,6 +87,7 @@ describe("logs invocation source and filters (#1197)", () => {
         errorCode: "MCP_INPUT_INVALID",
         missingParams: ["databasePath"],
         rejectedParams: ["dryRun"],
+        warningCodes: ["LEGACY_TOOL_AVAILABLE"],
       }),
       entry("query_sql", {
         durationMs: 100,
@@ -94,6 +95,7 @@ describe("logs invocation source and filters (#1197)", () => {
         outcome: "error",
         failureClass: "runtime",
         errorCode: "ACCESS_DATABASE_LOCKED",
+        warningCodes: ["LEGACY_TOOL_AVAILABLE"],
       }),
       entry("schema", {
         durationMs: 3,
@@ -134,6 +136,9 @@ describe("logs invocation source and filters (#1197)", () => {
       { parameter: "project", count: 1 },
     ]);
     expect(result.aggregate?.missingParams).toEqual([{ parameter: "databasePath", count: 1 }]);
+    expect(result.aggregate?.warnings.byCode).toEqual([
+      { code: "LEGACY_TOOL_AVAILABLE", count: 2 },
+    ]);
   });
 
   it("advertises separate action and aggregate controls", () => {

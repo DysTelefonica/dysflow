@@ -29,6 +29,7 @@ import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import { createMigrateProjectConfigTool } from "./migrate-project-config-tool.js";
 import { createModernAnalysisTools } from "./modern-analysis-tools.js";
 import { withSharedOutputModes } from "./output-mode.js";
+import { withPreferredToolWarnings } from "./preferred-tool-warning.js";
 import {
   createProjectResolutionRecovery,
   PROJECT_RECOVERY_SCHEMA_BLOCK,
@@ -494,7 +495,10 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     ),
   }));
   if (projectConfigResolver === undefined)
-    return withProjectResolutionRecovery(registered, projectResolutionRecovery);
+    return withProjectResolutionRecovery(
+      withPreferredToolWarnings(registered, readAdapterVersion()),
+      projectResolutionRecovery,
+    );
   const gated = registered.map((tool) => {
     const contract = MCP_TOOL_CONTRACTS[tool.name as keyof typeof MCP_TOOL_CONTRACTS];
     if (contract === undefined || contract.access === "read-only") return tool;
@@ -652,7 +656,10 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       },
     };
   });
-  return withProjectResolutionRecovery(gated, projectResolutionRecovery);
+  return withProjectResolutionRecovery(
+    withPreferredToolWarnings(gated, readAdapterVersion()),
+    projectResolutionRecovery,
+  );
 }
 
 const RECOVERY_ENABLED_READ_TOOLS = new Set([
