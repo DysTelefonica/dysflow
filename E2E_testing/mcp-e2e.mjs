@@ -1659,9 +1659,9 @@ await record("vba", "test_vba:plan-mode", { ...ctx, proceduresJson: "[{...}]" })
 // (`E2E_testing/NoConformidades.accdb`) the round-trip plus 131 module
 // exports runs well over the 30s default — 180s leaves headroom for the
 // Access COM open / export / close cycle per module.
-const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diff: false, timeoutMs: 180000 }, { timeoutMs: 180000 });
-// Semantic path assertion: verify_code now runs in semantic mode by default.
-// The result JSON must include the additive semantic fields introduced in vba-semantic-diff.
+const verifyResult = await record("vba-sync", "verify_code", { ...ctx, moduleNames: [existingModuleName], diagnostic: true, timeoutMs: 180000 }, { timeoutMs: 180000 });
+// This scenario validates full semantic evidence, so it explicitly opts out of
+// the compact default. Compact response behavior is pinned by cheap tests.
 try {
   const verifyData = (payloadOf(verifyResult) ?? {});
   const hasSemanticFields = "summary" in verifyData && "hasFunctionalDifferences" in verifyData && "actionableOk" in verifyData;
