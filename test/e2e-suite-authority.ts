@@ -31,7 +31,6 @@ export const NIGHTLY_ACCESS_TESTS = [
   "test/e2e/import-modules-broken-project.e2e.test.ts",
   "test/e2e/import-modules-long-list.e2e.test.ts",
   "test/e2e/import-modules-regression.e2e.test.ts",
-  "test/e2e/run-vba-procedure-exists-after-import-1440.e2e.test.ts",
   "test/integration/access-relink-apply.test.ts",
   "test/integration/dysflow-access-runner-password.test.ts",
   "test/integration/form-ir-loadfromtext.test.ts",
