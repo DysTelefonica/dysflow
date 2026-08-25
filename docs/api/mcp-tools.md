@@ -207,6 +207,7 @@ Find all references to a given symbol across a set of modules. Read-only.
 The tool parses inline `modules` when supplied. Binary/all scopes inspect live
 module bytes through `list_vba_modules`; an external binary requires explicit
 `accessPath` and `allowExternalAccessPath:true`.
+
 * **Parameters**:
   - `symbol` (string, **required**): Symbol name to find references for.
   - `scope` (string, optional): `module`, `binary`, `source`, or `all` (default).
@@ -221,6 +222,7 @@ Find VBA procedures and module-level declarations defined but never referenced. 
 Inline `modules` use pure string-in / string-out analysis. With `scope:"binary"`,
 an explicit `accessPath` plus `allowExternalAccessPath:true` loads the live
 binary module bytes before running the same pure analyser. It never mutates files.
+
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
   - `modules` (object, optional): Key-value pair of module names to their inline VBA source code. When omitted, the tool resolves modules from the configured source root.
@@ -243,7 +245,12 @@ It returns `valid`, separate `errors`/`warnings`, and a `summary`.
 ### `lint_module`
 Lint one `.bas`/`.cls` VBA module before importing it into Access. Read-only.
 
-The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`). The literal `source:"binary"` reads an explicit external binary when opted in. It never mutates files.
+The tool parses inline `source` when supplied. Otherwise it resolves `module`
+from the configured source root.
+
+The literal `source:"binary"` reads an explicitly opted-in external binary. It
+never mutates files.
+
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `source` (string, optional): Inline VBA source text, or `binary` for direct binary inspection.
