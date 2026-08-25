@@ -11,8 +11,7 @@
  *   - `allowWrites: false` blocks writes even in `developer` mode
  *     (the dispatch fires `MCP_WRITES_DISABLED`).
  *   - `allowedProcedures` undefined + `developer` + `test_vba` without flags
- *     → `MCP_ALLOWLIST_NOT_CONFIGURED` (the allowlist is the real safety
- *     boundary in developer mode too).
+ *     → execute (missing/empty is unrestricted for tests).
  *   - Explicit `dryRun: true` + `developer` mode → plan (caller intent wins).
  *   - Explicit `apply: true` + `safe-by-default` mode → execute (caller intent
  *     wins).
@@ -23,8 +22,7 @@
  *     behavior change — the headline).
  *   - `developer` + `test_vba` without flags + allowed → execute (the loop is
  *     zero-friction).
- *   - `developer` + `test_vba` without flags + allowlist missing → refusal
- *     (allowlist wins over policy).
+ *   - `developer` + `test_vba` without flags + allowlist missing → execute.
  *   - `developer` + `export_modules` + external path → execute (no guard);
  *     `safe-by-default` returns plan.
  *   - `developer` + `catalog_add_control` (form family exempt) + no flags
@@ -95,14 +93,12 @@ describe("hard gates win over policy default (#785, capa 5)", () => {
     expect(vbaSyncToolService.requests).toHaveLength(0);
   });
 
-  it("allowlist gate is the real safety boundary in developer mode (pinned at capa 3)", async () => {
-    // This test documents the layering: the allowlist gate is enforced
-    // by the VbaExecutionAdapter (capa 3), NOT by the dispatch seam.
+  it("test_vba reaches its adapter in developer mode without an allowlist", async () => {
+    // This test documents the layering: opt-in whitelist semantics are owned
+    // by VbaExecutionAdapter (capa 3), not by the dispatch seam.
     // The dispatcher's job is to forward the developer-mode `dryRun:
     // false` injection so the adapter sees the execute-mode call. The
-    // full gate-refusal envelope is pinned by
-    // `vba-execution-adapter-allowlist.test.ts` (F23/#757/#621).
-    // Here we just verify the dispatch seam forwards `dryRun: false` for
+    // Here we verify the dispatch seam forwards `dryRun: false` for
     // `test_vba` (routine-dev-write) under `developer` mode without an
     // explicit caller flag.
     const services = makeServices();
@@ -116,9 +112,8 @@ describe("hard gates win over policy default (#785, capa 5)", () => {
     await tool.handler({
       proceduresJson: JSON.stringify([{ procedure: "Test_Alpha", args: [] }]),
     });
-    // The dispatch reaches vbaSyncToolService.execute with the helper-
-    // injected dryRun:false; the adapter layer (not the dispatcher)
-    // applies the allowlist gate.
+    // The dispatch reaches vbaSyncToolService.execute with helper-injected
+    // dryRun:false; the adapter decides whether a configured whitelist applies.
     expect(services.vbaSyncToolService.requests).toHaveLength(1);
     expect(services.vbaSyncToolService.requests[0]).toMatchObject({
       dryRun: false,

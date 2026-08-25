@@ -47,9 +47,8 @@ export async function createHttpServices(
     }),
   });
 
-  // PR1b (#621 F1) — VbaSyncAdapter carries the test_vba default-deny gate
-  // (ensureTestProceduresAllowed). Creating it here so the /vba/test HTTP route
-  // can route through it and get the same allowlist enforcement as MCP.
+  // VbaSyncAdapter enforces a configured test_vba whitelist. The HTTP route
+  // owns its stricter missing/empty default-deny check at the network boundary.
   const vbaSyncToolService = new VbaSyncAdapter({
     operationRegistry,
     cleanupService: undefined, // VBA sync operations don't need Access-level cleanup
@@ -57,7 +56,7 @@ export async function createHttpServices(
     cwd: configResult.data.projectRoot ?? process.cwd(),
     env: env ?? process.env,
     accessPassword: configResult.data.accessPassword,
-    // PR1b: forward allowlist so VbaExecutionAdapter can enforce the gate
+    // Forward a configured allowlist so VbaExecutionAdapter enforces the whitelist.
     allowedProcedures: configResult.data.allowedProcedures,
   });
 
@@ -79,7 +78,7 @@ export async function createHttpServices(
       processKiller: new WindowsProcessKiller(),
       processScanner: new WindowsMsAccessProcessScanner(),
     }),
-    // PR1b (#621 F1): VBA sync tool service for test_vba with default-deny gate
+    // VBA sync tool service for HTTP test_vba after the route-level gate.
     vbaSyncToolService,
   };
 }

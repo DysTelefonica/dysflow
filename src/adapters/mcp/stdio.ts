@@ -694,11 +694,9 @@ export function createConfiguredServices(
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,
       accessPassword: config.accessPassword,
-      // PR1b (#621 F1) — forward the project's allowedProcedures allowlist so
-      // `VbaExecutionAdapter.executeTestVba` enforces the same default-deny
-      // gate as the MCP-handler `handleMcpVbaExecute`. The MCP-handler gate
-      // covers `run_vba` / `dysflow_vba_execute` (PR1a); `test_vba` routes
-      // through the adapter (PR1b) and shares the same allowlist.
+      // Forward the project's allowedProcedures list so test_vba enforces it
+      // as an opt-in whitelist. Missing/empty allows tests; run_vba keeps its
+      // separate default-deny gate in `handleMcpVbaExecute`.
       //
       // #757 (F7) — pass a per-input RESOLVER instead of the frozen
       // config.allowedProcedures. This service bundle is cached by serviceCache

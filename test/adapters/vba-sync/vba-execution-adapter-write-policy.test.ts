@@ -18,8 +18,8 @@
  *
  *   `dryRun: true`                       → plan (allowlist gate consulted first,
  *                                          plan short-circuit returns).
- *   `dryRun: false`                      → runner invocation when allowlist permits;
- *                                          MCP_ALLOWLIST_NOT_CONFIGURED when missing.
+ *   `dryRun: false`                      → runner invocation when the allowlist is
+ *                                          missing/empty or permits the plan.
  *   Apply legacy: `apply: true`           → commit (legacy contract).
  *
  * Truth table (`run_vba`):
@@ -112,13 +112,10 @@ describe("VbaExecutionAdapter — test_vba write-policy truth table (#785, capa 
     expect(executeMappedTool).not.toHaveBeenCalled();
   });
 
-  it("test_vba with dryRun:false forwarded + allowlist missing → MCP_ALLOWLIST_NOT_CONFIGURED", async () => {
-    // The allowlist gate is consulted FIRST (before the dryRun
-    // short-circuit), so an execute-mode call hits the gate regardless.
-    // In developer mode + routine-dev-write tools the dispatcher injects
-    // `dryRun:false`, so this is the observed contract for "developer
-    // mode + test_vba + no allowlist".
-    const executeMappedTool = vi.fn();
+  it("test_vba with dryRun:false forwarded + allowlist missing → runner invocation", async () => {
+    const executeMappedTool = vi
+      .fn()
+      .mockResolvedValue(successResult({ passed: 1, failed: 0, errors: 0, tests: [] }));
     const { adapter } = makeAdapter({ allowedProcedures: "missing", executeMappedTool });
 
     const result = await adapter.execute("test_vba", {
@@ -126,10 +123,8 @@ describe("VbaExecutionAdapter — test_vba write-policy truth table (#785, capa 
       dryRun: false,
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected gate refusal");
-    expect(result.error.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
-    expect(executeMappedTool).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(executeMappedTool).toHaveBeenCalled();
   });
 
   it("test_vba with dryRun:true + allowlist missing → plan (gate passes when caller plans)", async () => {

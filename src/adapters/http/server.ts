@@ -61,7 +61,7 @@ export type DysflowHttpServices = {
       force?: boolean;
     }): Promise<OperationResult<AccessCleanupResult>>;
   };
-  /** PR1b (#621 F1): VBA sync tools (test_vba) routed through VbaSyncAdapter with the default-deny gate. */
+  /** VBA sync tools used after the HTTP route's network-surface gates. */
   vbaSyncToolService?: VbaSyncPort;
 };
 
@@ -360,11 +360,9 @@ async function routeRequest(
     return;
   }
 
-  // PR1b (#621 F1) — HTTP route for test_vba with the same default-deny
-  // allowlist gate as MCP. VbaSyncAdapter.execute("test_vba", ...) calls
-  // VbaExecutionAdapter.executeTestVba which runs ensureTestProceduresAllowed
-  // BEFORE compile_vba or the test runner, so neither side effect fires when
-  // the gate rejects.
+  // HTTP is a network surface and keeps its default-deny test_vba posture.
+  // The stdio adapter uses an opt-in whitelist, so the HTTP boundary owns the
+  // missing/empty-allowlist refusal before delegating to that shared service.
   if (method === "POST" && path === "/vba/test") {
     if (!context.writesEnabled) {
       sendWritesDisabled(response);
@@ -387,10 +385,23 @@ async function routeRequest(
       );
       return;
     }
-    // The gate (ensureTestProceduresAllowed) lives inside VbaSyncAdapter's
-    // execute("test_vba", ...) -> VbaExecutionAdapter.executeTestVba.
-    // It fires AFTER plan resolution and BEFORE compile/test, so no side effects
-    // occur on rejection. The explicit escape hatch is dryRun: true.
+    const isPlan = body.data.dryRun === true || body.data.apply === false;
+    if (
+      !isPlan &&
+      isValidInlineTestPlan(body.data.proceduresJson) &&
+      (context.allowedProcedures === undefined || context.allowedProcedures.length === 0)
+    ) {
+      send(
+        failureResult(
+          createDysflowError(
+            "MCP_ALLOWLIST_NOT_CONFIGURED",
+            "Refusing to execute HTTP test_vba: project config declares no allowedProcedures allowlist. Declare a non-empty allowedProcedures list, or pass apply:false (or dryRun:true) to plan without executing.",
+          ),
+        ),
+        400,
+      );
+      return;
+    }
     const result = await context.services.vbaSyncToolService.execute("test_vba", body.data);
     const status =
       !result.ok &&
@@ -411,6 +422,33 @@ async function routeRequest(
   }
 
   send(failureResult(createDysflowError("HTTP_NOT_FOUND", `No route for ${method} ${path}.`)), 404);
+}
+
+function isValidInlineTestPlan(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    let tests: unknown[] | undefined;
+    if (Array.isArray(parsed)) {
+      tests = parsed;
+    } else if (typeof parsed === "object" && parsed !== null) {
+      const candidate = (parsed as JsonBody).tests;
+      if (Array.isArray(candidate)) tests = candidate;
+    }
+    return (
+      tests !== undefined &&
+      tests.length > 0 &&
+      tests.every((test) => {
+        if (typeof test === "string") return test.trim().length > 0;
+        if (typeof test !== "object" || test === null) return false;
+        const entry = test as JsonBody;
+        const procedure = entry.procedure ?? entry.proc;
+        return typeof procedure === "string" && procedure.trim().length > 0;
+      })
+    );
+  } catch {
+    return false;
+  }
 }
 
 function handleValidation(

@@ -17,9 +17,9 @@ matches the call you are making.
 - `capabilities.allowWrites = true` in `.dysflow/project.json` AND
   `writesProcess.enabled = true` at the runtime level.
 - The manifest file exists and parses to a valid JSON array.
-- Every procedure in the manifest is declared in the `capabilities`
-  block of `.dysflow/project.json` under `allowedProcedures`, or the
-  manifest passes `apply: false` / `dryRun: true` once for an opt-out.
+- If the project declares a non-empty `allowedProcedures` list, every
+  procedure in the manifest is included. Missing and empty lists impose no
+  restriction on stdio `test_vba`.
 
 ## Canonical commit flag (issue #1167)
 
@@ -57,9 +57,8 @@ After #1167 `test_vba` joins the homogenized single-flag design:
 
 `apply: true` is the canonical commit signal across the dysflow
 toolset. The dispatch boundary honors it; the adapter routes it to the
-runner; the allowlist gate consults the project's `allowedProcedures`
-config and refuses only when the plan contains a procedure NOT in the
-list (or when no allowlist is configured — see below).
+runner; a non-empty `allowedProcedures` list is an opt-in whitelist and
+refuses only plans containing a procedure outside that list.
 
 ### Plan a test_vba run (no PowerShell, no Access)
 
@@ -98,9 +97,8 @@ result:
 }
 ```
 
-The plan mode bypasses the allowlist gate — useful for reviewing the
-plan shape before configuring `allowedProcedures` in
-`.dysflow/project.json`.
+Plan mode never spawns Access and remains useful for reviewing the plan
+shape before execution.
 
 ### Backward compatibility: `dryRun: false` still commits
 
@@ -116,25 +114,21 @@ plan shape before configuring `allowedProcedures` in
 preserved for the pre-#1167 orchestrator briefs that hard-coded the
 old contract. New code should use `apply: true`.
 
-## Allowlist gate (PR1b #621 F1)
+## Opt-in allowlist (#1556)
 
-`test_vba` enforces the project's `allowedProcedures` allowlist at the
-adapter boundary. The gate fires ONLY on the commit path (no plan
-signal). A plan-shaped result never spawns Access and never invokes a
-`Test_*` procedure — the only thing the gate could refuse is a
-hypothetical execution that the plan path explicitly opts out of.
+For stdio `test_vba`, missing or empty `allowedProcedures` means no
+restriction. A non-empty list enables whitelist mode: every procedure in
+the resolved plan must appear in the list, or the whole plan is rejected
+before Access starts. HTTP `/vba/test` is a network surface and remains
+default-deny when the list is missing or empty.
 
-The gate has three failure modes:
+The stdio contract has two outcomes:
 
-- `MCP_ALLOWLIST_NOT_CONFIGURED` — the project config declares no
-  `allowedProcedures` allowlist. Fix: declare one in
-  `.dysflow/project.json`, or pass `apply: false` (or `dryRun: true`)
-  to plan without executing.
-- `MCP_PROCEDURE_NOT_ALLOWED` — the allowlist IS configured and the
+- `PROCEDURE_NOT_ALLOWED` — the allowlist is configured and the
   plan contains a procedure NOT in the list. Fix: add the procedure
   to the allowlist or test a procedure that is in the list.
-- `ok: true` with `apply: false` (or `dryRun: true`) plan shape — the
-  gate passed.
+- Missing/empty allowlist — execution proceeds, subject to the write,
+  sandbox, manifest, and human-compile gates.
 
 ## Failure envelope (issue #1166)
 
@@ -292,10 +286,9 @@ returned one structured record, not a per-atom expansion.
 - `dryRun: true` + `apply: true` — rejected up-front as
   `MCP_INPUT_INVALID: apply and dryRun are mutually exclusive`.
   Pick one signal.
-- `test_vba` without `allowedProcedures` in `.dysflow/project.json` —
-  the default-deny gate refuses the commit path. Use `apply: false`
-  (or `dryRun: true`) to plan without executing, or declare the
-  allowlist.
+- A non-empty `allowedProcedures` list is an opt-in whitelist. Keep it in
+  sync with the manifest, or omit/empty it when the project does not want
+  this extra restriction.
 - Don't `test_vba` against an uncompiled binary — runtime will run
   stale code and the failure will be opaque. Compile first.
 - Don't construct a non-string `proceduresJson`. The argument is a
@@ -332,7 +325,6 @@ get_capabilities  # confirm humanCompilePending:false before the manifest run
   `test/adapters/vba-sync/vba-test-vba-coherence-1046.test.ts`,
   `test/adapters/mcp/contradictory-write-flags-1078.test.ts`.
 - Error codes: `references/error-codes.md#VBA_TESTS_FAILED`,
-  `references/error-codes.md#MCP_ALLOWLIST_NOT_CONFIGURED`,
-  `references/error-codes.md#MCP_PROCEDURE_NOT_ALLOWED`,
+  `references/error-codes.md#PROCEDURE_NOT_ALLOWED`,
   `references/error-codes.md#VBA_MANAGER_TIMEOUT`,
   `references/error-codes.md#VBA_MANAGER_FAILED`.

@@ -12,7 +12,6 @@ import {
   readJsonFileAsync,
   stringValue,
 } from "../../core/utils/index.js";
-import { loadDysflowConfigAsync } from "../config/dysflow-config-node.js";
 import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
@@ -40,25 +39,6 @@ const EXECUTION_MAPPINGS = {
   ),
 };
 
-/**
- * F23 — extract the access path from a tool input. Mirrors the helper in
- * `adapters/mcp/result-translation.ts` (kept local to avoid an adapter
- * → adapter import chain; the MCP path is the canonical one and the gate
- * sits behind a different module). Accepts the explicit override fields
- * the MCP wire protocol allows (`accessPath`, `accessDbPath`,
- * `databasePath`, `sourcePath`) so the diagnostic echoes whichever alias
- * the caller used.
- */
-function extractAccessPathFromInput(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
-  const obj = input as Record<string, unknown>;
-  for (const key of ["accessPath", "accessDbPath", "databasePath", "sourcePath"] as const) {
-    const value = obj[key];
-    if (typeof value === "string" && value.length > 0) return value;
-  }
-  return undefined;
-}
-
 export interface VbaSyncOrchestrator {
   executeMappedTool(
     toolName: string,
@@ -70,14 +50,10 @@ export interface VbaSyncOrchestrator {
 
 export class VbaExecutionAdapter {
   /**
-   * PR1b (#621 F1) — `allowedProcedures` allowlist used by the test_vba gate.
-   * When undefined or empty, the gate refuses execution unless the caller
-   * passes `dryRun: true`. When non-empty, every procedure in the test plan
-   * must appear in the list — the plan is atomic. Mirrors the MCP-handler
-   * gate semantics from `canonical-handlers.ts:ensureProcedureAllowed`
-   * (PR1a), relocated to the adapter boundary because `test_vba` routes
-   * through `VbaExecutionAdapter.executeTestVba`, NOT through
-   * `handleMcpVbaExecute`.
+   * `allowedProcedures` is an opt-in whitelist for test_vba. Undefined and
+   * empty allowlists impose no restriction; when non-empty, every procedure
+   * in the test plan must appear in the list. run_vba keeps its separate
+   * default-deny gate at the MCP boundary.
    */
   constructor(
     private readonly orchestrator: VbaSyncOrchestrator,
@@ -179,7 +155,7 @@ export class VbaExecutionAdapter {
       });
     }
 
-    // PR1b (#621 F1) + #667 — default-deny gate. Fires AFTER plan resolution
+    // Opt-in whitelist gate. Fires AFTER plan resolution
     // (so we know which procedures will execute) and AFTER the dryRun
     // short-circuit (so a plan-only call does not consult the allowlist at
     // all — Bug B fix #1046). On the commit path (no dryRun) the gate still
@@ -200,21 +176,14 @@ export class VbaExecutionAdapter {
   }
 
   /**
-   * PR1b (#621 F1) — default-deny gate for test_vba at the adapter
-   * boundary. Mirrors the MCP-handler gate semantics from
-   * `canonical-handlers.ts:ensureProcedureAllowed`:
+   * Opt-in whitelist gate for test_vba at the adapter boundary:
    *
-   *   1. When `allowedProcedures` is undefined OR empty, refuse unless the
-   *      caller passes `dryRun: true` (default-deny).
+   *   1. When `allowedProcedures` is undefined OR empty, execution proceeds.
    *   2. When `allowedProcedures` is configured, EVERY procedure in the
    *      plan must appear in the list — the plan is atomic.
    *
-   * Returns an `OperationResult<unknown>` failure when the gate refuses, or
-   * `undefined` when execution may proceed. The error code is `MCP_INPUT_INVALID`
-   * so consumers can grep for the same string regardless of which layer
-   * caught the call (MCP-handler vs adapter). This layer returns
-   * OperationResult, so the result translator wraps the code in the MCP text
-   * exactly as it does for PR1a's MCP-handler refusals.
+   * Returns an `OperationResult<unknown>` failure when a configured whitelist
+   * refuses the plan, or `undefined` when execution may proceed.
    */
   private async ensureTestProceduresAllowed(
     params: Record<string, unknown>,
@@ -227,69 +196,6 @@ export class VbaExecutionAdapter {
     // #674 AllowedProcedures contract.
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
-      // Issue #785 (v2.1.1, capa 3) — the gate's plan-mode check is the
-      // inverse of the dispatcher-seam's "execute mode" signal. When the
-      // dispatch seam injected `dryRun: false` (developer + routine
-      // dev-write), `params.dryRun` is `false` here and this branch
-      // fires: the gate refuses the execute-mode call when the
-      // allowlist is missing, even when the operator enabled developer
-      // mode opt-in. The MCP contract is "no allowlist = no plan-less
-      // execution"; `dryRun: true` (legacy alias) AND `apply: false`
-      // (canonical, post-#1167) bypass this refusal because the call is
-      // in plan mode.
-      //
-      // Issue #1167 — `apply: false` is the canonical plan signal after
-      // the test_vba apply-flag unification. The gate recognizes the
-      // same polarity as the early short-circuit above: `params.dryRun
-      // === true || params.apply === false` is plan mode.
-      if (params.dryRun !== true && params.apply !== false) {
-        // F23 — best-effort config-path lookup so the refusal envelope names
-        // the actual `.dysflow/project.json` the resolver was consulting.
-        // When the lookup fails (no project config on disk, no projectId in
-        // the input, etc.) the field is `undefined` — the gate never BLOCKS
-        // on this lookup; it is purely diagnostic.
-        const diagnosticConfigPath = await this.resolveConfigPathForDiagnostic(params);
-        // #757 (F6) — distinct `MCP_ALLOWLIST_NOT_CONFIGURED` code (was the
-        // generic `MCP_INPUT_INVALID`) so consumers can tell "project declares
-        // no allowlist" apart from a schema error. Same string the MCP-handler
-        // gate (`ensureProcedureAllowed`, run_vba) emits, so the consumer greps
-        // one code regardless of which layer refused. The config is re-read per
-        // call (#757 F7), so adding the allowlist takes effect without restart.
-        return failureResult(
-          createDysflowError(
-            "MCP_ALLOWLIST_NOT_CONFIGURED",
-            `Refusing to execute test_vba plan [${procedures.join(", ")}]: ` +
-              `project config declares no allowedProcedures allowlist. ` +
-              `Declare a non-empty allowedProcedures in .dysflow/project.json ` +
-              `(re-read per call — no restart needed), or pass apply:false (or dryRun:true) to plan without executing.`,
-            {
-              remediation:
-                "Declare a non-empty allowedProcedures in .dysflow/project.json, or pass apply:false (or dryRun:true).",
-              details: {
-                // The `.dysflow/project.json` path the resolver was consulting
-                // (or `undefined` when no project config was found).
-                configPath: diagnosticConfigPath,
-                // The allowlist as the resolver resolved it — may be an empty
-                // array (explicit deny-all) or `undefined` (no allowlist
-                // declared). Surfacing the EMPTY case lets a consumer tell
-                // apart "config has allowlist: []" from "config is missing
-                // the field entirely" without a second config read.
-                allowedProcedures: resolved,
-                // The plan procedures the gate was checking, so a consumer can
-                // confirm the input was routed to the gate they expected.
-                planProcedures: [...procedures],
-                // Echo the projectId the caller sent so a multi-project
-                // workspace can attribute the refusal to the right project.
-                inputProjectId: typeof params.projectId === "string" ? params.projectId : undefined,
-                // Same for accessPath — accepted under `accessPath`,
-                // `accessDbPath`, `databasePath`, and `sourcePath` aliases so
-                // a consumer can see which binary the call was targeting.
-                inputAccessPath: extractAccessPathFromInput(params),
-              },
-            },
-          ),
-        );
-      }
       return undefined;
     }
 
@@ -321,48 +227,6 @@ export class VbaExecutionAdapter {
       );
     }
     return undefined;
-  }
-
-  /**
-   * F23 — best-effort lookup of the project config path the resolver was
-   * consulting, for the diagnostic `error.details.configPath` field on
-   * `MCP_ALLOWLIST_NOT_CONFIGURED` refusals. Returns `undefined` when no
-   * project config could be resolved (no projectId, no projectRoot, no
-   * `.dysflow/project.json` on disk, etc.) — the gate NEVER blocks on
-   * this; the diagnostic is purely informational.
-   *
-   * Reuses the same `loadDysflowConfigAsync` the per-input resolver in the
-   * composition root uses, so the surfaced path is the one the resolver
-   * actually consulted. When the resolver returned a frozen array (no
-   * project config to consult), the lookup still runs against the input
-   * `projectRoot` / `projectId` so the diagnostic is useful.
-   */
-  private async resolveConfigPathForDiagnostic(
-    params: Record<string, unknown>,
-  ): Promise<string | undefined> {
-    try {
-      const configResult = await loadDysflowConfigAsync({
-        cwd: this.orchestrator.cwd,
-        projectId: typeof params.projectId === "string" ? params.projectId : undefined,
-        contextId: typeof params.contextId === "string" ? params.contextId : undefined,
-        projectRoot: typeof params.projectRoot === "string" ? params.projectRoot : undefined,
-        accessDbPath:
-          typeof params.accessPath === "string"
-            ? params.accessPath
-            : typeof params.accessDbPath === "string"
-              ? params.accessDbPath
-              : undefined,
-      });
-      if (configResult.ok) {
-        return configResult.data.configPath;
-      }
-      return undefined;
-    } catch {
-      // Diagnostic-only: any failure here is swallowed so the gate
-      // refuses (which is the correct behavior) and the diagnostic is
-      // simply absent.
-      return undefined;
-    }
   }
 
   private async resolveTestProceduresJson(

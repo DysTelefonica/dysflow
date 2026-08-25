@@ -62,7 +62,7 @@ Reference: issue #1438, section "What changes" in the v2.37.2 CHANGELOG entry.
 ## Core MCP Tools
 
 ### `run_vba`
-Execute a public VBA procedure via COM automation. Enforces `allowedProcedures` when configured.
+Execute a public VBA procedure via COM automation. Default-deny: execution requires a non-empty `allowedProcedures` list containing the requested procedure; plan mode remains non-executing.
 * **Parameters**:
   - `procedureName` (string, **required**): Public VBA procedure name to execute.
   - `moduleName` (string, optional): Target module containing the procedure.
@@ -439,6 +439,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
 * **`test_vba`**: Execute VBA unit tests.
   - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
+  - Missing or empty `allowedProcedures` imposes no restriction on stdio `test_vba`. A non-empty list is an opt-in whitelist applied atomically to the resolved plan. HTTP `/vba/test` remains default-deny because it is a network surface.
   - On failure the result is `ok: false` with code `VBA_TESTS_FAILED`. The message names the failing procedures, and `error.details` carries the structured per-procedure report: `{ failedCount, failures[], results[] }`, where each failure keeps `procedure`, `error`, `logs`, `durationMs`, and `payload`.
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
 * **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.

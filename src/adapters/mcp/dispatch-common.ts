@@ -294,10 +294,8 @@ export type McpProcedureNotAllowedCode = typeof MCP_PROCEDURE_NOT_ALLOWED;
  * "this project declares no allowedProcedures at all" (a config problem the
  * operator fixes in `.dysflow/project.json`) from a genuine input-shape error.
  * Reserved earlier in `canonical-handlers-procedure-not-allowed.test.ts`
- * ("other SDD work owns MCP_ALLOWLIST_NOT_CONFIGURED"). Emitted by BOTH the
- * MCP-handler gate (`ensureProcedureAllowed`, run_vba/dysflow_vba_execute) and
- * the adapter gate (`VbaExecutionAdapter.ensureTestProceduresAllowed`,
- * test_vba) so a consumer greps one string regardless of which layer refused.
+ * ("other SDD work owns MCP_ALLOWLIST_NOT_CONFIGURED"). Emitted by the
+ * default-deny run_vba MCP gate and by the stricter HTTP test_vba boundary.
  */
 export const MCP_ALLOWLIST_NOT_CONFIGURED = "MCP_ALLOWLIST_NOT_CONFIGURED" as const;
 export type McpAllowlistNotConfiguredCode = typeof MCP_ALLOWLIST_NOT_CONFIGURED;
