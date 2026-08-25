@@ -74,3 +74,11 @@ jobs:
         env:
           ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
         run: pnpm test:e2e:mcp:release
+
+      - name: Run classified Access Vitest suite
+        shell: pwsh
+        env:
+          ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+          DYSFLOW_RUN_ACCESS_RELINK_APPLY: '1'
+          DYSFLOW_ACCESS_TEST_ROOT: ${{ runner.temp }}
+        run: pnpm vitest run --config vitest.nightly-access.config.ts

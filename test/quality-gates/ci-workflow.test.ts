@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { PR_SMOKE_TESTS } from "../e2e-suite-authority.js";
 
 async function readText(path: string): Promise<string> {
   return readFile(path, "utf8");
@@ -31,25 +32,6 @@ function workflowRunTestPaths(workflow: string): string[] {
   }
   return out;
 }
-
-const EXISTING_HOSTED_ACCESS_SMOKE_TESTS = [
-  "test/e2e/access-fixture.e2e.test.ts",
-  "test/e2e/access-relink-directory.test.ts",
-  "test/e2e/access-relink-directory-apply.test.ts",
-] as const;
-
-const ACCESS_INDEPENDENT_HOSTED_TESTS = [
-  "test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts",
-  "test/e2e/mcp-catalog-dryrun.e2e.test.ts",
-  "test/e2e/mcp-harness-watchdog.e2e.test.ts",
-  "test/e2e/mcp-input-validation.e2e.test.ts",
-  "test/e2e/mcp-orphan-cleanup.e2e.test.ts",
-  "test/e2e/mcp-query-validation.e2e.test.ts",
-  "test/e2e/runtime-guard-mcp-integration.e2e.test.ts",
-  "test/integration/form-ir-mutation-preservation.test.ts",
-  "test/integration/mcp-harness-process-tree.test.ts",
-  "test/integration/vba-manager-sentinel-trap.test.ts",
-] as const;
 
 /** The body of one top-level job in a workflow, without the neighbouring jobs. */
 function workflowJobBlock(workflow: string, job: string): string {
@@ -432,10 +414,8 @@ describe("repository quality gates", () => {
   it("runs exactly the audited Access-independent integration files on hosted Windows (#1503)", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
     const hosted = workflowJobBlock(workflow, "windows-integration-smoke");
-    const expected = [...EXISTING_HOSTED_ACCESS_SMOKE_TESTS, ...ACCESS_INDEPENDENT_HOSTED_TESTS];
-
     expect(hosted).toContain("runs-on: windows-latest");
-    expect([...new Set(workflowRunTestPaths(hosted))].sort()).toEqual(expected.sort());
+    expect([...new Set(workflowRunTestPaths(hosted))].sort()).toEqual([...PR_SMOKE_TESTS].sort());
   });
 
   it("pins LF checkouts so the Windows quality gate is not defeated by CRLF", async () => {

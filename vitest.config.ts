@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { UNIT_E2E_TESTS } from "./test/e2e-suite-authority.js";
 
 export default defineConfig({
   test: {
@@ -11,19 +12,10 @@ export default defineConfig({
       "test/quality-gates/**/*.test.ts",
       "test/ci/**/*.test.ts",
       "test/docs/**/*.test.ts",
-      // Real-Access integration tests live in vitest.integration.config.ts so the
-      // default unit run never spawns MSACCESS/PowerShell in parallel — concurrent
-      // process spawning under the fork pool races and throws spawn UNKNOWN
-      // (errno -4094) on Windows. Only the pure file-reading contract test, which
-      // spawns nothing, stays in the fast unit run.
-      "test/integration/dysflow-result-writer-contract.test.ts",
-      // Pure-filesystem sweep helper test (#562). No Access, no PowerShell,
-      // no COM — runs in the fast unit suite, not the integration pool.
-      "test/integration/global-setup-temp-sweep.test.ts",
+      // In-process/fake-port E2E contracts belong here so the cheapest suite
+      // detects protocol regressions before hosted or real-Access execution.
+      ...UNIT_E2E_TESTS,
       "test/shared/**/*.test.ts",
-    ],
-    exclude: [
-      "test/e2e/**",
     ],
     environment: "node",
     // Bounded fork pool: Windows spawn stability requires capped parallelism.
