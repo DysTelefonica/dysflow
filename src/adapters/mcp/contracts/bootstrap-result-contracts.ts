@@ -269,6 +269,18 @@ const orphanCandidate = z
   })
   .strict();
 
+const preferredToolWarning = z
+  .object({
+    code: z.enum(["PREFERRED_TOOL_AVAILABLE", "LEGACY_TOOL_AVAILABLE"]),
+    severity: z.enum(["info", "warning"]),
+    called: z.string(),
+    preferred: z.string(),
+    rationale: z.string(),
+    docsAnchor: z.string(),
+    release: z.string(),
+  })
+  .strict();
+
 export const orphanCleanupResultContract = defineResultContract({
   modes: ["plan", "apply"],
   schema: z.union([
@@ -276,6 +288,7 @@ export const orphanCleanupResultContract = defineResultContract({
       .object({
         orphans: z.array(orphanCandidate),
         totalCount: z.number().int().nonnegative(),
+        warnings: z.array(preferredToolWarning).optional(),
       })
       .strict(),
     z
@@ -284,6 +297,7 @@ export const orphanCleanupResultContract = defineResultContract({
         refused: z.array(z.object({ pid: z.number().int(), reason: z.string() }).strict()),
         syntheticOperationId: z.string().optional(),
         errors: z.array(z.object({ code: z.string(), message: z.string() }).strict()),
+        warnings: z.array(preferredToolWarning).optional(),
       })
       .strict(),
   ]),
