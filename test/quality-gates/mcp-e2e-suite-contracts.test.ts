@@ -57,6 +57,18 @@ describe("mcp-e2e.mjs — verify_code timeout contracts (#fix-verify-code-timeou
       );
     }
   });
+
+  it("opts the semantic-fields scenario into diagnostic evidence (#1561)", () => {
+    const scenario = src.match(
+      /const verifyResult = await record\([\s\S]*?tool: "verify_code:semantic-fields"/,
+    )?.[0];
+
+    expect(scenario, "verify_code semantic-fields scenario not found").toBeDefined();
+    expect(scenario).toMatch(/"verify_code"[\s\S]*?diagnostic\s*:\s*true/);
+    expect(scenario).toContain('"summary" in verifyData');
+    expect(scenario).toContain('"hasFunctionalDifferences" in verifyData');
+    expect(scenario).toContain('"actionableOk" in verifyData');
+  });
 });
 
 // feat-759-no-compile (v1.19.0) — the compile_vba mojibake pin was
