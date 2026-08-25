@@ -1775,6 +1775,9 @@ await record("vba-sync", "generate_erd", { ...ctx, backendPath, erdPath: join(te
 await record("forms", "validate_form_spec", { ...ctx, specPath: formSpec });
 await recordContract("forms", "generate_form", { ...ctx, specPath: formSpec, kind: "Form", name: "Form_DysflowMcpE2E", apply: false, replace: true }, {}, ["forms", "plan"]);
 await record("forms", "catalog_add_control", { ...ctx, specPath: formSpec, catalogPath: sandboxPlan.sandbox.catalogPath, controlName: "txtProbe", controlType: "TextBox" });
+// The filter is a liveness boundary: this targeted scenario must not parse the
+// fixture's 100+ unrelated form/report sources. Keep the global 60s watchdog;
+// a filtered harvest that reaches it is a regression, not a reason to weaken it.
 await record("forms", "harvest_form_catalog", { ...ctx, catalogPath: sandboxPlan.sandbox.catalogPath, filter: "DysflowMcpE2E" });
 const formEventDeadCodeResult = await record("vba", "detect_dead_code:form-event-false-positive", {
   scope: "source",

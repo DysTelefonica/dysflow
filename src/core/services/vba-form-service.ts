@@ -267,6 +267,7 @@ export class VbaFormService {
   async harvestFormCatalog(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
     const destinationRoot =
       stringValue(params.destinationRoot) || stringValue(params.projectRoot) || this.cwd;
+    const filter = stringValue(params.filter)?.trim().toLowerCase() || undefined;
     const formsDir = resolve(destinationRoot, "forms");
     const reportsDir = resolve(destinationRoot, "reports");
     const catalog: Array<Record<string, unknown>> = [];
@@ -279,6 +280,7 @@ export class VbaFormService {
         return Number(rightIsJson) - Number(leftIsJson) || left.localeCompare(right);
       });
       for (const entry of entries) {
+        if (filter !== undefined && !entry.toLowerCase().includes(filter)) continue;
         const entryPath = resolve(folder, entry);
         if (/\.(?:form|report)\.json$/i.test(entry)) {
           let spec: Record<string, unknown> | undefined;
