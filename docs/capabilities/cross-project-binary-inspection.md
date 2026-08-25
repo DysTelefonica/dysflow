@@ -10,6 +10,13 @@ This is an explicit read-only escape hatch: pass the absolute `accessPath` toget
 
 `list_procedures` and `get_procedure` additionally accept `source: "binary"`. They read the requested VBComponent directly and never create an export directory.
 
+`lint_module` accepts the same `source: "binary"` selector.
+
+`detect_dead_code` and `find_references` load the external binary's real module
+bytes when their scope is `"binary"`; an inline `modules` map remains process-free.
+
+`vba_orphan_audit` forwards the opt-in to its binary/source inventory adapter.
+
 The schemas live in `src/adapters/mcp/schemas/`. Procedure behavior is covered by `test/adapters/mcp/external-binary-procedure-inspection-1541.test.ts`.
 
 ```json
@@ -34,6 +41,13 @@ The flag never authorizes binary mutation. `import_modules`, `import_all`, and s
 
 `test/adapters/mcp/readonly-external-access.test.ts` covers the rejection contract.
 
+Unknown `allowExternalAccessPath` input on write tools is rejected by their
+closed schemas as `MCP_INPUT_INVALID`; it is never silently ignored.
+
 `export_modules` is read-only on the Access binary but writes source files. Supply an explicit `destinationRoot` or `exportPath`.
 
-Existing destination and overwrite guards apply independently of the external-source opt-in.
+For a review-only export outside the worktree, pass
+`allowExternalDestinationRoot:true` together with explicit `apply:false`.
+
+`apply:true`, omitted intent, and destinations whose canonical path differs
+from their lexical path all fail closed. Existing overwrite guards still apply.

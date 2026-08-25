@@ -212,8 +212,10 @@ export const FIND_REFERENCES_SCHEMA: JsonObjectSchema = {
       description: "Optional in-memory mapping of module names to source code.",
       additionalProperties: { type: "string" },
     },
+    allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
   },
 };
 
@@ -278,7 +280,7 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
     source: {
       type: "string",
       description:
-        "Inline VBA module source code. When omitted, the module is resolved via the project's source root.",
+        'Inline VBA module source code, or the literal "binary" to inspect the requested Access binary directly. Binary inspection requires accessPath and allowExternalAccessPath:true. When omitted, the module is resolved via the project\'s source root.',
     },
     rules: {
       type: "array",
@@ -304,8 +306,10 @@ export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
         ],
       },
     },
+    allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
   },
 };
 
@@ -395,10 +399,12 @@ export const DETECT_DEAD_CODE_SCHEMA: JsonObjectSchema = {
     modules: {
       type: "object",
       description:
-        "In-memory mapping of module name to VBA source code. The handler operates exclusively on this map and never opens Access or reads from disk. Omit to defer to the project-source-tree fallback resolved via the Access context.",
+        "In-memory mapping of module name to VBA source code. Inline modules remain process-free. With scope:'binary', an explicit accessPath and allowExternalAccessPath:true inspect the binary read-only; otherwise omission falls back to the project source tree.",
       additionalProperties: { type: "string" },
     },
+    allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
   },
 };

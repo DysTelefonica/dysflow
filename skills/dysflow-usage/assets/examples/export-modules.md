@@ -36,6 +36,26 @@ silently choosing another destination.
 }
 ```
 
+An external destination is allowed only for a preview. Keep the source and
+destination opt-ins separate and pass explicit `apply:false`:
+
+```json
+{
+  "tool": "export_modules",
+  "arguments": {
+    "moduleNames": ["LegacyRules"],
+    "accessPath": "C:/archives/legacy.accdb",
+    "allowExternalAccessPath": true,
+    "destinationRoot": "C:/exports/review",
+    "allowExternalDestinationRoot": true,
+    "apply": false
+  }
+}
+```
+
+`allowExternalDestinationRoot` with `apply:true` is rejected. Symlink or
+reparse-point destinations that canonicalize elsewhere also fail closed.
+
 ## Result shape
 
 Read `resolvedDestinationRoot`. With `verbose:true`, each entry includes binary/file snapshots and the semantic actionability verdict.

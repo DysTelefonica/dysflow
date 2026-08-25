@@ -201,6 +201,18 @@ export function createDispatchTool(
         }
         return invalidInput(validation, undefined, { toolName: name });
       }
+      if (
+        name === "export_modules" &&
+        isRecord(normalizedInput) &&
+        normalizedInput.allowExternalDestinationRoot === true &&
+        normalizedInput.apply !== false
+      ) {
+        return invalidInput(
+          "allowExternalDestinationRoot is allowed only with explicit apply:false on export_modules.",
+          "Use apply:false for an external preview destination. External filesystem writes remain forbidden.",
+          { rejectedFlag: "allowExternalDestinationRoot", toolName: name },
+        );
+      }
       // Issue #785 (v2.1.1) — inject the policy-driven dry-run default
       // AFTER `stripDeprecatedCompileParams` (so the strip runs on the
       // caller-supplied payload, untouched by the policy injection) and

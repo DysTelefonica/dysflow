@@ -333,6 +333,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // mismatchReason} entries.
       verbose: SCHEMA_PROPS.verboseContract,
       allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
+      allowExternalDestinationRoot: SCHEMA_PROPS.allowExternalDestinationRoot,
       // Issue #975 — opt-in transactional mode. See SCHEMA_PROPS.transactional.
       transactional: SCHEMA_PROPS.transactional,
       // Issue #977 — preflight validation that fires the same gates
@@ -1860,6 +1861,8 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     properties: {
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
+      allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
+      timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },
 };

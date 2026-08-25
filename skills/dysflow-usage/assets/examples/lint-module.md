@@ -20,6 +20,24 @@ None. Read-only and offline.
 }
 ```
 
+To lint a module directly from an external Access binary, use `source:"binary"`
+with an explicit `.accdb`/`.mdb` path and the read-only opt-in:
+
+```json
+{
+  "tool": "lint_module",
+  "arguments": {
+    "module": "LegacyRules",
+    "source": "binary",
+    "accessPath": "C:/archives/legacy.accdb",
+    "allowExternalAccessPath": true
+  }
+}
+```
+
+The opt-in does not authorize writes and omission fails before the external
+binary is inspected.
+
 ## Anti-patterns for this call
 
 - Don't expect `lint_module` to compile the project. Compilation is the human's job; lint is a parser check, not a runtime check.
