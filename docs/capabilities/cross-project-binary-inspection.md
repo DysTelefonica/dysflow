@@ -10,9 +10,10 @@ This is an explicit read-only escape hatch: pass the absolute `accessPath` toget
 
 `list_procedures` and `get_procedure` additionally accept `source: "binary"`. They read the requested VBComponent directly and never create an export directory.
 
-`lint_module` accepts the same `source: "binary"` selector. `detect_dead_code`
-and `find_references` load the external binary's real module bytes when their
-scope is `"binary"`; an inline `modules` map remains process-free.
+`lint_module` accepts the same `source: "binary"` selector.
+
+`detect_dead_code` and `find_references` load the external binary's real module
+bytes when their scope is `"binary"`; an inline `modules` map remains process-free.
 
 `vba_orphan_audit` forwards the opt-in to its binary/source inventory adapter.
 

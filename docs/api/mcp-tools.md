@@ -204,9 +204,10 @@ The literal `source: "binary"` follows the same explicit `accessPath` and `allow
 ### `find_references`
 Find all references to a given symbol across a set of modules. Read-only.
 
-The tool parses inline `modules` when supplied. Binary/all scopes inspect live
-module bytes through `list_vba_modules`; an external binary requires explicit
-`accessPath` and `allowExternalAccessPath:true`.
+The tool parses inline `modules` when supplied.
+
+Binary/all scopes inspect live module bytes through `list_vba_modules`. An
+external binary requires explicit `accessPath` and `allowExternalAccessPath:true`.
 
 * **Parameters**:
   - `symbol` (string, **required**): Symbol name to find references for.
@@ -219,9 +220,11 @@ module bytes through `list_vba_modules`; an external binary requires explicit
 ### `detect_dead_code`
 Find VBA procedures and module-level declarations defined but never referenced. Read-only.
 
-Inline `modules` use pure string-in / string-out analysis. With `scope:"binary"`,
-an explicit `accessPath` plus `allowExternalAccessPath:true` loads the live
-binary module bytes before running the same pure analyser. It never mutates files.
+Inline `modules` use pure string-in / string-out analysis.
+
+With `scope:"binary"`, an explicit `accessPath` plus
+`allowExternalAccessPath:true` loads live binary module bytes before running
+the same pure analyser. It never mutates files.
 
 * **Parameters**:
   - `scope` (string, **required**): `binary`, `source`, or `module`. Echoed back on the report for caller introspection.
