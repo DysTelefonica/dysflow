@@ -163,6 +163,33 @@ describe("repository quality gates", () => {
     expect(commands.indexOf("pnpm lint")).toBeLessThan(commands.indexOf("pnpm build"));
   });
 
+  it("does not repeat full tests after a validated PR merge (#1571)", async () => {
+    const [workflow, docs] = await Promise.all([
+      readText(".github/workflows/ci.yml"),
+      readText("docs/testing/repo-quality-gates.md"),
+    ]);
+    const integrity = workflowJobBlock(workflow, "main-integrity");
+    const quality = workflowJobBlock(workflow, "quality");
+    const result = workflowJobBlock(workflow, "ci-result");
+
+    expect(integrity).toContain("validated_pr_merge");
+    expect(integrity).toContain("merge_commit_sha");
+    expect(integrity).toContain("base.sha");
+    expect(integrity).toContain("head.sha");
+    expect(integrity).toContain("actions/workflows/ci.yml/runs");
+    expect(integrity).toContain("node scripts/dependency-audit-evidence.mjs");
+    expect(integrity).not.toContain("pnpm coverage");
+    expect(integrity).not.toContain("pnpm test:public");
+    expect(integrity).not.toContain("pnpm mcp:context-budget");
+
+    expect(quality).toContain("needs.main-integrity.outputs.validated_pr_merge != 'true'");
+    expect(quality).not.toContain("node scripts/dependency-audit-evidence.mjs");
+    expect(result).toContain("validated PR merge: full quality already passed before merge");
+    expect(result).toContain("direct or unverifiable push: full quality required");
+    expect(docs).toMatch(/Validated PR merges do not\s+repeat the full quality suite/);
+    expect(docs).toMatch(/Direct, ambiguous, or API-unverifiable pushes remain fail-closed/);
+  });
+
   it("builds exactly once per job, before anything reads dist (#1506)", async () => {
     // The build ran twice per leg: the root `prepare` lifecycle during
     // `pnpm install`, then an explicit step. Removing the explicit step and
