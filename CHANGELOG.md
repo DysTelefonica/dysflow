@@ -1,5 +1,14 @@
 # Changelog
 
+## [v4.0.1] - 2026-08-25
+
+### Fixes
+
+- The release E2E battery now opts into `verify_code` diagnostics before asserting detailed
+  semantic fields, while a cheap contract test prevents compact-default drift (#1561).
+- Filtered `harvest_form_catalog` calls now use a bounded table subset, and the heavy scenario
+  has an explicit latency budget backed by cheap liveness and timeout assertions (#1562).
+
 ## [v4.0.0] - 2026-08-25
 
 ### Breaking changes
