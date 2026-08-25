@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import {
@@ -1971,6 +1971,120 @@ describe("VbaModulesAdapter", () => {
       await expect(
         readFile(join(sourceRoot, "classes", "OrphanClass.cls"), "utf8"),
       ).rejects.toThrow();
+    });
+
+    it("export_all prune records a failing rm and keeps deleting the rest (#1573)", async () => {
+      // A locked file (Access or an editor holding a handle) makes `rm` reject with
+      // EPERM/EBUSY on Windows; `force: true` suppresses only ENOENT. An unguarded
+      // reject aborted the loop and discarded `deleted[]` with the stack unwind,
+      // leaving the operator without the audit record of an irreversible action.
+      // The adapter builds every candidate with `resolve`, so the fixture paths use it
+      // too — a `join`-built driveless path would never match on Windows.
+      const root = resolve(tmpdir(), "dysflow-prune-rm-failure");
+      const sourceRoot = resolve(root, "src");
+      const modulesRoot = resolve(sourceRoot, "modules");
+      const lockedPath = resolve(modulesRoot, "Locked.bas");
+      const gonePath = resolve(modulesRoot, "Gone.bas");
+      const livePath = resolve(modulesRoot, "Live.bas");
+
+      const removed: string[] = [];
+      const adapter = new VbaModulesAdapter(
+        {
+          scriptPath: "scripts/dysflow-vba-manager.ps1",
+          cwd: root,
+          env: {},
+          executor: async () => ({
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          }),
+          resolveExecutionTarget: async () => ({
+            ok: true,
+            data: {
+              configSource: "explicit-request",
+              accessDbPath: resolve(root, "front.accdb"),
+              accessPath: resolve(root, "front.accdb"),
+              destinationRoot: sourceRoot,
+              projectRoot: root,
+            },
+            diagnostics: [],
+            durationMs: 0,
+          }),
+          validateStrictContext: () => ({
+            ok: true,
+            data: undefined,
+            diagnostics: [],
+            durationMs: 0,
+          }),
+          runPreflightCleanup: async () => ({
+            cleaned: [],
+            killed: [],
+            orphanedKilled: [],
+            errors: [],
+            diagnostics: [],
+          }),
+          executeMappedTool: async () => ({
+            ok: true,
+            data: { ok: true, exported: ["Live"], warnings: [] },
+            diagnostics: [],
+            durationMs: 0,
+          }),
+        },
+        {
+          mkdtemp: async () => root,
+          readdir: async (path) =>
+            path === modulesRoot
+              ? ["Live.bas", "Locked.bas", "Gone.bas"].map((name) => ({
+                  name,
+                  isDirectory: () => false,
+                  isFile: () => true,
+                }))
+              : [],
+          readFile: async () => "",
+          readFileBytes: async () => new Uint8Array(),
+          rm: async (path: string) => {
+            if (path === lockedPath) {
+              const error = new Error(
+                "EPERM: operation not permitted, unlink 'Locked.bas'",
+              ) as NodeJS.ErrnoException;
+              error.code = "EPERM";
+              throw error;
+            }
+            removed.push(path);
+          },
+          tmpdir: () => tmpdir(),
+        },
+      );
+
+      const result = await adapter.execute("export_all", { prune: true, apply: true });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      const prune = (
+        result.data as {
+          prune: {
+            applied: boolean;
+            deleted: string[];
+            failed: { path: string; message: string }[];
+          };
+        }
+      ).prune;
+
+      // The locked entry does not stop the sweep: the orphan after it is still removed.
+      expect(prune.applied).toBe(true);
+      expect(removed).toContain(gonePath);
+      expect(prune.deleted).toContain(gonePath);
+
+      // The failure is reported instead of thrown, and the file is not claimed as deleted.
+      expect(prune.deleted).not.toContain(lockedPath);
+      expect(prune.failed).toHaveLength(1);
+      expect(prune.failed[0]?.path).toBe(lockedPath);
+      expect(prune.failed[0]?.message).toContain("EPERM");
+
+      // `Live.bas` is in the exported set, so it was never a prune candidate.
+      expect(removed).not.toContain(livePath);
     });
 
     it("export_all prune ignores .txt and other non-allow-listed extensions (#619)", async () => {
