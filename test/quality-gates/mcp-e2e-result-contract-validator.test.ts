@@ -13,6 +13,18 @@ function response(payload: unknown, isError = false) {
   };
 }
 
+function responseWithStructuredContent(text: string, structuredContent: unknown, isError = false) {
+  return {
+    response: {
+      result: {
+        content: [{ type: "text", text }],
+        structuredContent,
+        isError,
+      },
+    },
+  };
+}
+
 const described = response({
   name: "probe",
   resultContract: {
@@ -60,6 +72,27 @@ describe("real MCP result-contract validator (#1101)", () => {
         descriptionResult: described,
         executionResult: response(
           { ok: false, error: { code: "PROBE_FAILED", message: "failed" } },
+          true,
+        ),
+        expectError: true,
+      }),
+    ).toMatchObject({ ok: true, contractKind: "errorEnvelope" });
+  });
+
+  it("uses structuredContent when presentation text is a non-JSON typed-error summary", () => {
+    expect(
+      validateMcpResultAgainstDescription({
+        tool: "probe",
+        descriptionResult: described,
+        executionResult: responseWithStructuredContent(
+          "PROCEDURE_NOT_CALLABLE: Recompile in Access VBE then retry",
+          {
+            ok: false,
+            error: {
+              code: "PROCEDURE_NOT_CALLABLE",
+              message: "Recompile in Access VBE then retry",
+            },
+          },
           true,
         ),
         expectError: true,

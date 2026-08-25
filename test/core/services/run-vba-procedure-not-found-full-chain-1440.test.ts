@@ -6,9 +6,11 @@
  * divergence between the resolver and the parser, or a wiring break in
  * `createConfiguredServices`).
  *
- * Cost: a few ms of real fs I/O, no Access, no PowerShell. The full
- * Access roundtrip lives in
- * `test/e2e/run-vba-procedure-exists-after-import-1448.e2e.test.ts`.
+ * Cost: a few ms of real fs I/O, no Access, no PowerShell. The
+ * already-compiled public wiring lives in
+ * `test/e2e/import-modules-regression.e2e.test.ts`; the impossible automated
+ * import-to-execution flow is intentionally not an E2E because it requires a
+ * human compile checkpoint.
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -74,7 +76,7 @@ describe("#1440 — full chain: disk file → nodeVbaSourceResolver → AccessVb
   let destinationRoot: string;
 
   beforeEach(async () => {
-    destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-1448-chain-"));
+    destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-1440-chain-"));
     await mkdir(join(destinationRoot, "modules"), { recursive: true });
   });
 
