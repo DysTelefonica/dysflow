@@ -177,22 +177,28 @@ modified.
 * **Parameters**: optional `cwd`; omit it to clear all entries.
 
 ### `list_procedures`
-List VBA procedures in a source module without opening Access. Read-only.
+List VBA procedures from inline or managed source, or directly from an Access binary. Read-only.
 
-The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`).
+The tool parses inline `source` when supplied. Otherwise, it resolves `module` from the configured source root (`modules/`, `classes/`, `forms/`, or `reports/`).
+
+The literal `source: "binary"` reads the live VBComponent through `list_vba_modules` without exporting files. It requires an explicit `.accdb`/`.mdb` `accessPath` and `allowExternalAccessPath:true`.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `filter` (string, optional): Substring filter for procedure names.
   - `kind` (string, optional): `Sub`, `Function`, `Property`, or `both`.
-  - `source` (string, optional): Inline VBA source text.
+  - `source` (string, optional): Inline VBA source text, or `binary` for direct binary inspection.
+  - `accessPath`, `allowExternalAccessPath` (optional together): Explicit binary target and read-only external-path opt-in.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `get_procedure`
-Retrieve one VBA procedure body from a source module without opening Access. The tool parses inline `source` when supplied, otherwise it resolves `module` from the configured source root. Read-only.
+Retrieve one VBA procedure body from inline or managed source, or directly from an Access binary. Read-only.
+
+The literal `source: "binary"` follows the same explicit `accessPath` and `allowExternalAccessPath:true` contract as `list_procedures`. It does not export files.
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `procedure` (string, **required**): Procedure name to retrieve.
-  - `source` (string, optional): Inline VBA source text.
+  - `source` (string, optional): Inline VBA source text, or `binary` for direct binary inspection.
+  - `accessPath`, `allowExternalAccessPath` (optional together): Explicit binary target and read-only external-path opt-in.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
 ### `find_references`

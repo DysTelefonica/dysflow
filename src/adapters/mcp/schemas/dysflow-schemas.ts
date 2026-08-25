@@ -130,10 +130,12 @@ export const LIST_PROCEDURES_SCHEMA: JsonObjectSchema = {
     source: {
       type: "string",
       description:
-        "VBA module source code. When provided, the procedure catalog is built by parsing this text. When omitted, the module is resolved via the project's source root.",
+        'VBA module source code, or the literal "binary" to inspect the requested Access binary directly. Binary inspection requires accessPath and allowExternalAccessPath:true. When omitted, the module is resolved via the project\'s source root.',
     },
+    allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
   },
 };
 
@@ -155,10 +157,12 @@ export const GET_PROCEDURE_SCHEMA: JsonObjectSchema = {
     source: {
       type: "string",
       description:
-        "VBA module source code. When provided, the procedure is located by parsing this text. When omitted, the module is resolved via the project's source root.",
+        'VBA module source code, or the literal "binary" to inspect the requested Access binary directly. Binary inspection requires accessPath and allowExternalAccessPath:true. When omitted, the module is resolved via the project\'s source root.',
     },
+    allowExternalAccessPath: SCHEMA_PROPS.allowExternalAccessPath,
     ...ACCESS_OVERRIDE,
     ...STRICT_CTX,
+    ...PROCESS_TIMEOUT_BLOCK,
   },
 };
 

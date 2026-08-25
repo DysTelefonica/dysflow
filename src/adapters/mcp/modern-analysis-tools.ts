@@ -211,6 +211,135 @@ async function resolveVbaSourceFile(
   return await resolveModuleSource(configuredRoot, moduleName);
 }
 
+type ProcedureSourceResolution =
+  | { ok: true; source: string | undefined }
+  | { ok: false; response: McpToolResult };
+
+/** Resolve inline, project-source, or explicitly opted-in binary module code. */
+async function resolveProcedureSource(
+  input: unknown,
+  moduleName: string,
+  source: string | undefined,
+  destinationRoot: string | undefined,
+  accessContextResolver: McpAccessContextResolver,
+  services: DysflowMcpServices,
+): Promise<ProcedureSourceResolution> {
+  if (source !== "binary") {
+    return {
+      ok: true,
+      source: await resolveVbaSourceFile(
+        input,
+        moduleName,
+        source,
+        destinationRoot,
+        accessContextResolver,
+      ),
+    };
+  }
+
+  const params =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const accessPath = typeof params.accessPath === "string" ? params.accessPath.trim() : "";
+  if (params.allowExternalAccessPath !== true) {
+    return {
+      ok: false,
+      response: invalidInput(
+        'source:"binary" requires allowExternalAccessPath:true. The opt-in is scoped to this read-only inspection.',
+      ),
+    };
+  }
+  if (accessPath.length === 0) {
+    return {
+      ok: false,
+      response: invalidInput('source:"binary" requires an explicit accessPath.'),
+    };
+  }
+  if (!/\.(?:accdb|mdb)$/i.test(accessPath)) {
+    return {
+      ok: false,
+      response: invalidInput('source:"binary" accessPath must end in .accdb or .mdb.'),
+    };
+  }
+  if (services.vbaSyncToolService === undefined) {
+    return {
+      ok: false,
+      response: {
+        content: [
+          { type: "text", text: "SERVICE_UNAVAILABLE: vbaSyncToolService is not configured." },
+        ],
+        isError: true,
+        ok: false,
+      },
+    };
+  }
+
+  const inspectionInput: Record<string, unknown> = {
+    accessPath,
+    allowExternalAccessPath: true,
+    includeSource: true,
+    namePattern: moduleName,
+  };
+  for (const key of [
+    "projectId",
+    "contextId",
+    "backendPath",
+    "projectRoot",
+    "strictContext",
+    "expectedAccessPath",
+    "expectedProjectRoot",
+    "expectedDestinationRoot",
+    "timeoutMs",
+    "cwd",
+  ]) {
+    if (params[key] !== undefined) inspectionInput[key] = params[key];
+  }
+
+  const inspected = await services.vbaSyncToolService.execute("list_vba_modules", inspectionInput);
+  if (!inspected.ok) {
+    return { ok: false, response: translateCoreResultToMcpContent(inspected) };
+  }
+
+  const modules = (inspected.data as { modules?: readonly Record<string, unknown>[] }).modules;
+  if (!Array.isArray(modules)) {
+    return {
+      ok: false,
+      response: {
+        content: [
+          {
+            type: "text",
+            text: "BINARY_INSPECTION_UNAVAILABLE: list_vba_modules returned no modules array.",
+          },
+        ],
+        isError: true,
+        ok: false,
+      },
+    };
+  }
+  const match = modules.find(
+    (candidate) =>
+      candidate.binaryExists === true &&
+      typeof candidate.name === "string" &&
+      candidate.name.toLowerCase() === moduleName.toLowerCase(),
+  );
+  if (match === undefined) return { ok: true, source: undefined };
+  if (typeof match.binarySource !== "string") {
+    return {
+      ok: false,
+      response: {
+        content: [
+          {
+            type: "text",
+            text: `BINARY_INSPECTION_UNAVAILABLE: Module '${moduleName}' returned no binary source.`,
+          },
+        ],
+        isError: true,
+        ok: false,
+      },
+    };
+  }
+  return { ok: true, source: match.binarySource };
+}
+
 async function resolveAllProjectModules(
   input: unknown,
   destinationRoot: string | undefined,
@@ -609,7 +738,7 @@ export function createModernAnalysisTools(
     // issue #701 — read-only VBA procedure introspection
     {
       name: "list_procedures",
-      description: `List VBA procedures in a module with optional name filter. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.list_procedures.summary}`,
+      description: `List VBA procedures in a module with optional name filter. Pass source directly, use source:"binary" with accessPath and allowExternalAccessPath:true for direct read-only binary inspection, or omit source to resolve via the project's source root. Returns procedure catalog entries with name, kind, visibility, and declaration line. Read-only. ${MCP_TOOL_CONTRACTS.list_procedures.summary}`,
       inputSchema: LIST_PROCEDURES_SCHEMA,
       resultContract: listProceduresResultContract,
       handler: async (input) => {
@@ -622,13 +751,16 @@ export function createModernAnalysisTools(
           source?: string;
           destinationRoot?: string;
         };
-        const resolvedSource = await resolveVbaSourceFile(
+        const sourceResolution = await resolveProcedureSource(
           input,
           module,
           source,
           destinationRoot,
           accessContextResolver,
+          services,
         );
+        if (!sourceResolution.ok) return sourceResolution.response;
+        const resolvedSource = sourceResolution.source;
         if (resolvedSource === undefined) {
           return {
             content: [
@@ -656,7 +788,7 @@ export function createModernAnalysisTools(
     },
     {
       name: "get_procedure",
-      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly or omit to resolve via the project's source root (source root resolution requires Access context). Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.get_procedure.summary}`,
+      description: `Retrieve a single VBA procedure's declaration line, end line, and body text. Pass source directly, use source:"binary" with accessPath and allowExternalAccessPath:true for direct read-only binary inspection, or omit source to resolve via the project's source root. Returns module, procedure name, startLine, endLine, and verbatim body. Read-only. ${MCP_TOOL_CONTRACTS.get_procedure.summary}`,
       inputSchema: GET_PROCEDURE_SCHEMA,
       resultContract: getProcedureResultContract,
       handler: async (input) => {
@@ -680,13 +812,16 @@ export function createModernAnalysisTools(
         ) {
           return moduleMismatch(module, parsedProcedure.moduleName);
         }
-        const resolvedSource = await resolveVbaSourceFile(
+        const sourceResolution = await resolveProcedureSource(
           input,
           module,
           source,
           destinationRoot,
           accessContextResolver,
+          services,
         );
+        if (!sourceResolution.ok) return sourceResolution.response;
+        const resolvedSource = sourceResolution.source;
         if (resolvedSource === undefined) {
           return {
             content: [
