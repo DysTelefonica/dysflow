@@ -17,6 +17,14 @@ bytes when their scope is `"binary"`; an inline `modules` map remains process-fr
 
 `vba_orphan_audit` forwards the opt-in to its binary/source inventory adapter.
 
+The bounded core MCP surface also advertises the database readers `get_schema`,
+`list_tables`, `list_links`, `list_linked_tables`, `get_relationships`, `query_sql`,
+`count_rows`, `distinct_values`, `compare_backends`, `export_queries`, and
+`list_access_files`. Their explicit `accessPath` accepts the same opt-in.
+
+`query_execute` accepts it only with `mode:"read"`. `mode:"write"` rejects the flag as
+`MCP_INPUT_INVALID` before the query service runs.
+
 The schemas live in `src/adapters/mcp/schemas/`. Procedure behavior is covered by `test/adapters/mcp/external-binary-procedure-inspection-1541.test.ts`.
 
 ```json
@@ -32,6 +40,19 @@ The schemas live in `src/adapters/mcp/schemas/`. Procedure behavior is covered b
 The binary path must be explicit and end in `.accdb` or `.mdb`. Omitting the opt-in fails before Access or PowerShell is invoked.
 
 Results come from the external binary's live module code and do not populate the managed source tree.
+
+## Source and FormIR inspection
+
+The promoted form tools operate on version-controlled source paths or caller-supplied FormIR,
+not an external Access binary. They therefore do not expose `allowExternalAccessPath`:
+`analyze_form_layout`, `analyze_form_ui`, `render_form_preview`, `map_form_behavior`,
+`verify_form_ui`, `verify_form_bindings`, `diff_form_preview`, `inspect_form`,
+`form_list_controls`, `form_get_geometry`, `form_serialize`, `copy_form_ui_pattern`,
+`generate_form_design_plan`, `harvest_form_catalog`, `lint_form_code`, and
+`validate_form_spec`. `compare_form` likewise compares source representations.
+
+The exact advertised inventory and negative write boundary are covered by
+`test/adapters/mcp/external-inspection-surface-1544.test.ts`.
 
 ## Write boundaries remain closed
 

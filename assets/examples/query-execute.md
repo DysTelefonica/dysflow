@@ -113,6 +113,12 @@ The structured `error.rejectedFlag: "mode"` lets a consumer branch
 without regex-parsing the text body, and `error.remediation` names the
 literal fix.
 
+## External read-only target
+
+Use `allowExternalAccessPath:true` only with `mode:"read"` and an absolute
+`.accdb` or `.mdb` `accessPath`. Write mode rejects this opt-in before query
+execution; it never authorizes mutation outside the managed project.
+
 ## Anti-patterns
 
 - Omitting `mode` and relying on `apply: true` to pick a write path —
