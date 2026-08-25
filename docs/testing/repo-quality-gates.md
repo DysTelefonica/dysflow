@@ -4,11 +4,12 @@ Owner: repo-engineering-hardening
 
 ## Dependency audit evidence
 
-CI reports dependency audit evidence as `clean`, `vulnerable`, or `unavailable`.
-High/critical advisories fail every run. Registry, protocol, malformed-response,
-and network failures are retried at most three times. After exhaustion, pull
-requests remain unblocked with a visible warning, while the `main` push check
-fails. The job summary records the sanitized registry source, freshness,
+The `main-integrity` job reports dependency audit evidence as `clean`,
+`vulnerable`, or `unavailable`. High/critical advisories fail every main push.
+Registry, protocol, malformed-response, and network failures are retried at
+most three times and then fail the job. Pull requests do not repeat this audit;
+their merge receives the exact-main-SHA audit before release automation may
+continue. The job summary records the sanitized registry source, freshness,
 attempts, and policy. `unavailable` is NEVER evidence that dependencies are clean.
 
 ## Current gates
@@ -33,6 +34,21 @@ attempts, and policy. `unavailable` is NEVER evidence that dependencies are clea
   - `pnpm format` / `pnpm format:check` — auto-format / verify formatting.
 - `pnpm coverage` — Vitest coverage for `src/**/*.ts`.
 
+## Pull-request and main-push authority
+
+The full Windows quality and integration suites run against GitHub's synthetic
+pull-request merge ref, so they verify the proposed change integrated with its
+current base rather than the feature branch alone. Validated PR merges do not
+repeat the full quality suite on the resulting `main` push. The lightweight
+`main-integrity` job verifies the associated PR's merge, base, head, and green
+CI identities, runs the fail-closed dependency audit, and preserves the exact
+main-SHA `CI` conclusion consumed by release automation.
+
+Direct, ambiguous, or API-unverifiable pushes remain fail-closed: they run the
+complete Windows quality suite on `main`. Documentation-only pull requests keep
+their existing path classification and omit code quality and integration jobs;
+the same merged PR still receives the lightweight main integrity signal.
+
 ## Access E2E cadence and runner split
 
 The full MCP battery runs from `main` every day at 02:17 UTC in
@@ -42,9 +58,11 @@ detection to 24 hours without serializing every pull request behind the single
 cancelling an active Access operation.
 
 The tag-only release gate in `.github/workflows/release.yml` remains mandatory
-and unchanged. Both workflows use the self-hosted Access runner, pre-staged
-fixture copies, `ACCESS_VBA_PASSWORD`, and a repository-local `test-runtime`.
-Neither workflow may fall back to the production runtime.
+and unchanged.
+
+Both workflows use the self-hosted Access runner, pre-staged fixture copies,
+`ACCESS_VBA_PASSWORD`, and a repository-local `test-runtime`. Neither workflow
+may fall back to the production runtime.
 
 The issue #1503 audit classified the 30 previously unselected files as follows:
 
@@ -71,9 +89,10 @@ The hosted subset is pinned by
 - `test/integration/vba-manager-sentinel-trap.test.ts`
 
 `test/integration/dysflow-result-writer-contract.test.ts` and
-`test/integration/global-setup-temp-sweep.test.ts` stay in the unit suite. The
-benchmark-only `test/integration/form-template-clone-bench.test.ts` stays out of
-hosted CI until it has a deterministic committed or downloaded fixture.
+`test/integration/global-setup-temp-sweep.test.ts` stay in the unit suite.
+
+The benchmark-only `test/integration/form-template-clone-bench.test.ts` stays
+out of hosted CI until it has a deterministic committed or downloaded fixture.
 
 ## Coverage thresholds
 

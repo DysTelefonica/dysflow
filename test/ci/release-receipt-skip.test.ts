@@ -200,18 +200,19 @@ describe("release CI receipt", () => {
     ]);
     const authority = workflowJobBlock(release, "quality-authority");
     const publication = workflowJobBlock(release, "release");
+    const mainIntegrity = workflowJobBlock(ci, "main-integrity");
+    const quality = workflowJobBlock(ci, "quality");
     const ciResult = workflowJobBlock(ci, "ci-result");
 
     expect(ciResult).toContain(`name: ${CI_RECEIPT_JOB_NAME}`);
 
-    expect(ci).toMatch(
-      /quality:[\s\S]*?if: github\.event_name == 'push' \|\| needs\.changes\.outputs\.code_required == 'true'/,
-    );
+    expect(mainIntegrity).toContain("if: github.event_name == 'push'");
+    expect(mainIntegrity).toContain("name: Audit dependencies");
+    expect(mainIntegrity).toContain("AUDIT_UNAVAILABLE_POLICY: fail");
+    expect(quality).toContain("needs.main-integrity.outputs.validated_pr_merge != 'true'");
+    expect(quality).toContain("needs.changes.outputs.code_required == 'true'");
     expect(ci).toMatch(
       /windows-integration-smoke:[\s\S]*?needs\.changes\.outputs\.code_required == 'true'[\s\S]*?runs-on: windows-latest/,
-    );
-    expect(ci).toMatch(
-      /name: Audit dependencies[\s\S]*?if: github\.event_name == 'push'[\s\S]*?AUDIT_UNAVAILABLE_POLICY: fail/,
     );
     expect(authority).toContain("needs: build");
     expect(authority).toContain("actions: read");

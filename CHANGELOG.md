@@ -7,6 +7,12 @@
 - No-PID orphan enumeration now satisfies the executable result contract for both bounded and
   complete scans while preserving PID-specific confirmation and fail-closed validation (#1567).
 
+### Changes
+
+- Validated PR merges now reuse their green full-suite evidence instead of repeating the Windows
+  tests on `main`; direct and unverifiable pushes retain the fail-closed full-quality fallback
+  (#1571).
+
 ## [v4.0.1] - 2026-08-25
 
 ### Fixes
