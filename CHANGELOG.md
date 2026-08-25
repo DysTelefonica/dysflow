@@ -1,21 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking changes
-
-- Destructive MCP calls now require a tool-specific `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`: `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture`. Plan calls with `apply:false` are unchanged. Rejections return copyable structured remediation. (#1537)
-
-### Changes
-
-- feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
-- feat(mcp): promote 28 read-only inspection tools plus `query_execute` to the bounded core surface, with external SQL reads remaining explicit and write paths closed (#1544)
-- feat(mcp): complete `allowExternalAccessPath` propagation on advertised read-only tools, reject it on write tools, and add preview-only external export destinations (#1542)
-- feat(mcp): support direct read-only procedure inspection of external Access binaries via explicit `source:"binary"` and `allowExternalAccessPath:true` (#1541)
-- feat(mcp): append non-blocking preferred/legacy tool-selection warnings, expose `forceSpecialized`, and aggregate warning codes in `logs` (#1536)
-- feat(mcp): make `verify_code` compact by default and expose full comparison evidence through `diagnostic:true` (#1535)
-
-## [v4.0.0] - 2026-08-24
+## [v4.0.0] - 2026-08-25
 
 ### Breaking changes
 
@@ -25,6 +10,30 @@
   human compile checkpoint, preview/apply `run_vba`, preview/apply `delete_module`, delete the
   source file, then confirm `vba_orphan_audit` and `verify_code` are clean. See
   [`docs/vba-execution.md`](docs/vba-execution.md).
+- Destructive MCP calls now require a tool-specific `implements_check` token plus
+  `confirmedRequiresConfirmation:true` whenever `apply:true`: `delete_module`,
+  `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and
+  `teardown_fixture`. Plan calls with `apply:false` are unchanged, and rejections return
+  copyable structured remediation (#1537).
+
+### Changes
+
+- `test_vba` now executes without a configured allowlist while preserving configured non-empty
+  allowlists, `run_vba` default-deny, and HTTP default-deny (#1556).
+- The bounded core surface now includes 28 read-only inspection tools plus `query_execute`;
+  external SQL reads remain explicit and write paths remain closed (#1544).
+- Advertised read-only tools propagate `allowExternalAccessPath`, write tools reject it, and
+  external export destinations remain preview-only (#1542).
+- Procedure inspection can read external Access binaries directly with explicit
+  `source:"binary"` and `allowExternalAccessPath:true` (#1541).
+- MCP responses emit non-blocking preferred/legacy tool-selection warnings, expose
+  `forceSpecialized`, and aggregate warning codes in `logs` (#1536).
+- `verify_code` is compact by default and exposes full comparison evidence through
+  `diagnostic:true`; the context-budget baseline covers both compact and full views (#1535).
+- User-global harness updates now receive canonical pointer-block propagation (#1530).
+- The E2E pyramid now enforces compile-safe `run_vba`, destructive-confirmation stdio coverage,
+  and deterministic PR/nightly suite authority without stale test paths (#1545, #1546, #1547,
+  #1552).
 
 ## [v3.0.1] - 2026-08-24
 
@@ -2746,12 +2755,16 @@ of the real VBE error. Investigation surfaced three coordinated defects:
    fixed in v1.2.30 to convert to `object[]` first; the happy path was
    left untouched.
 3. The early read path in `dysflow-access-runner.ps1` (line ~1495)
-   opened the DAO database inside a try-block with NO catch. If the
-   target database did not exist, the exception escaped, no
-   `DYSFLOW_RESULT` was emitted, the script exited with `exitCode 0`,
-   and the TS adapter collapsed the response to the generic
+   opened the DAO database inside a try-block with NO catch.
+
+   If the target database did not exist, the exception escaped, no
+   `DYSFLOW_RESULT` was emitted, and the script exited with `exitCode 0`.
+
+   The TS adapter then collapsed the response to the generic
    `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`
-   message. The user saw the same generic error class as defect 1,
+   message.
+
+   The user saw the same generic error class as defect 1,
    but for a different reason (read-path, not write-path).
 
 This release fixes all three and ships the contract + E2E coverage
