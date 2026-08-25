@@ -232,6 +232,7 @@ export const logsResultContract = defineResultContract({
           tools: z.array(unknownRecord),
           rejectedParams: z.array(unknownRecord),
           missingParams: z.array(unknownRecord),
+          warnings: z.object({ byCode: z.array(unknownRecord) }).strict(),
         })
         .strict()
         .optional(),

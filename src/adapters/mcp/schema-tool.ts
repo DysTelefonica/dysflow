@@ -71,6 +71,7 @@ import { LOGS_TOOL_SCHEMA } from "./logs-tool.js";
 import { MCP_TOOL_CONTRACTS, type McpToolAccess } from "./mcp-tool-contracts.js";
 import { DYSFLOW_MCP_TOOL_NAMES } from "./mcp-tool-registry.js";
 import { MIGRATE_PROJECT_CONFIG_SCHEMA } from "./migrate-project-config-tool.js";
+import { withPreferredToolControlSchema } from "./preferred-tool-warning.js";
 import { PROJECT_RECOVERY_SCHEMA_BLOCK } from "./project-resolution-recovery.js";
 import { RESOLVE_PROJECT_SCHEMA } from "./resolve-project-tool.js";
 import {
@@ -1102,7 +1103,7 @@ function advertisedToolNames(): string[] {
 function buildSchemaForTool(name: string): ToolSchema {
   const contract = MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS];
   const access: McpToolAccess = contract?.access ?? "read-only";
-  const inputSchema = inputSchemaForTool(name);
+  const inputSchema = withPreferredToolControlSchema(name, inputSchemaForTool(name));
   const crossReferences = [...(TOOL_CROSS_REFERENCES[name] ?? [])];
   const description = descriptionForTool(name);
   const agentWorkflow = buildAgentWorkflowMetadata(name);

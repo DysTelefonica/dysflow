@@ -46,3 +46,6 @@ Verbose entries include binary/file snapshots plus `classification`, `reason`, `
 ## TODO before production use
 
 Review the plan and resolved destination before changing `apply` to `true`.
+## Choosing the right tool
+
+This is a specialized tool. When its write-capable path is covered by a preferred workflow tool, Dysflow keeps the call successful and appends an informational `PREFERRED_TOOL_AVAILABLE` item to `warnings[]`. Follow the warning's `preferred`, `rationale`, and `docsAnchor` fields on the next iteration. Pass `forceSpecialized:true` only when granular control is intentional; the dispatcher consumes the flag before invoking this tool. Read-only specialized calls are not warned, and legacy calls use the escalated `LEGACY_TOOL_AVAILABLE` code.

@@ -257,6 +257,7 @@ describe("Dysflow MCP tool parity inventory", () => {
           accessPath: "C:/db.accdb",
           destinationRoot: "C:/elsewhere/parity-1226",
           exportPath: "C:/elsewhere/parity-1226",
+          forceSpecialized: true,
         }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
@@ -275,7 +276,11 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "exec_sql")
-        ?.handler({ sql: "UPDATE People SET Name='Ada'", apply: false }),
+        ?.handler({
+          sql: "UPDATE People SET Name='Ada'",
+          apply: false,
+          forceSpecialized: true,
+        }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -285,7 +290,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "run_script")
-        ?.handler({ path: "fixtures.sql", apply: true }),
+        ?.handler({ path: "fixtures.sql", apply: true, forceSpecialized: true }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -301,6 +306,7 @@ describe("Dysflow MCP tool parity inventory", () => {
           apply: true,
           implements_check: "teardown_fixture_precheck",
           confirmedRequiresConfirmation: true,
+          forceSpecialized: true,
         }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
@@ -544,7 +550,7 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "link_tables")
-        ?.handler({ backendPath: "C:/backend.accdb" }),
+        ?.handler({ backendPath: "C:/backend.accdb", forceSpecialized: true }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,
@@ -554,7 +560,11 @@ describe("Dysflow MCP tool parity inventory", () => {
     await expect(
       tools
         .find((tool) => tool.name === "compact_repair")
-        ?.handler({ databasePath: "C:/db.accdb", apply: false }),
+        ?.handler({
+          databasePath: "C:/db.accdb",
+          apply: false,
+          forceSpecialized: true,
+        }),
     ).resolves.toEqual({
       schemaVersion: "dysflow.result/v1",
       isError: false,

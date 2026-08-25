@@ -76,3 +76,6 @@ partial, or mismatched recovery inputs fail closed with `MCP_INPUT_INVALID`.
 Duplicate selected ids preserve `PROJECT_ID_COLLISION`. Multiple frontend files
 inside one project remain unresolved until `frontendFile` is configured; a
 project-id choice cannot safely choose a file.
+## Choosing the right tool
+
+This tool belongs to the preferred bootstrap path. Dysflow never blocks a specialized call solely because a preferred equivalent exists: applicable write-capable specialized calls succeed with an additive `PREFERRED_TOOL_AVAILABLE` warning. Intentional granular calls can pass `forceSpecialized:true`; legacy calls receive `LEGACY_TOOL_AVAILABLE` instead. Read-only specialized calls remain silent.

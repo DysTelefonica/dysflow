@@ -121,3 +121,6 @@ Replace these placeholders with values from your worktree (HR-10, HR-11):
 - Other tool-specific runtime values per `describe_tool({name:'sync_binary'})`.
 
 The live `inputSchema.properties` (read once per session via `describe_tool`) is authoritative. This file is a scaffold, not a frozen contract.
+## Choosing the right tool
+
+This is a preferred workflow tool. When a write-capable `specialized` tool covers the same runtime phases, Dysflow keeps that call successful and appends an informational `PREFERRED_TOOL_AVAILABLE` item to `warnings[]` pointing here. Intentional granular calls can pass `forceSpecialized:true`; the dispatcher consumes that flag and suppresses only this guidance. Legacy calls instead receive the escalated `LEGACY_TOOL_AVAILABLE` warning. Warning counts are observable through `logs({options:{groupBy:"tool"}}).aggregate.warnings.byCode`.

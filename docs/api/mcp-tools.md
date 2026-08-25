@@ -23,10 +23,21 @@ Many MCP tools share common context and override parameters:
   - `timeoutMs` (number, optional): Operation timeout override in milliseconds.
   - `dryRun` (boolean, optional): Evaluate operations (like writes or imports) without applying changes.
   - `apply` (boolean, optional): Explicitly apply write actions (mutually exclusive with `dryRun` mode).
+  - `forceSpecialized` (boolean, optional): Available on specialized write-capable and legacy tools. Suppresses additive preferred-tool guidance for an intentional granular call; the dispatcher consumes the flag and never forwards it to the implementation.
+
+### Preferred-tool warning contract
+
+The runtime compares each specialized write-capable or legacy call with the in-memory workflow catalog before returning. When a preferred tool covers every phase of a specialized call, the successful response appends a `PREFERRED_TOOL_AVAILABLE` item to `warnings[]` with `severity`, `called`, `preferred`, `rationale`, `docsAnchor`, and the runtime `release`. The warning is informational and never changes a successful call into an error. Read-only specialized calls and calls to preferred tools remain silent.
+
+Legacy tools use the escalated `LEGACY_TOOL_AVAILABLE` code with `severity: "warning"` and point to their explicit `supersededBy` replacement. Intentional granular or compatibility calls may pass `forceSpecialized:true`. Aggregate adoption evidence is available at `logs({options:{groupBy:"tool"}}).aggregate.warnings.byCode` without recording argument values.
+
+Evidence: `src/core/runtime/preferred-tool-warning.ts`, `src/adapters/mcp/preferred-tool-warning.ts`, and `test/adapters/mcp/preferred-tool-warning-1536.test.ts`.
 
 ### `destinationRoot` override contract
 
-Override precedence, path normalization, and the pre-flight gate contract for `destinationRoot` are uniform across every write-class tool that reads or writes managed source files (`export_modules`, `export_all`, `import_modules`, `import_all`, `delete_module`, `sync_binary`, `form_serialize`, `form_deserialize`).
+Override precedence, path normalization, and the pre-flight gate contract for `destinationRoot` are uniform across every write-class tool that reads or writes managed source files.
+
+The contract covers `export_modules`, `export_all`, `import_modules`, `import_all`, `delete_module`, `sync_binary`, `form_serialize`, and `form_deserialize`.
 
 | Aspect | Contract | Evidence |
 |---|---|---|
@@ -36,7 +47,13 @@ Override precedence, path normalization, and the pre-flight gate contract for `d
 | Containment | An override that escapes the worktree fails with `OUTSIDE_PROJECT_ROOT` (typed), not the generic `DESTINATION_ROOT_NOT_FOUND`. The round-14 containment check (#1228) runs **before** the existence check so escape paths get the typed verdict. | `src/adapters/config/project-config-diagnostic.ts:555-587` |
 | Error envelope | `DESTINATION_ROOT_NOT_FOUND` references the exact path the gate tried to read, post-normalization. The legacy wording "Configured destinationRoot" is gone. | `src/adapters/config/project-config-diagnostic.ts:587-593`, `src/core/contracts/remediation.ts:144-156` |
 
-The success envelope adds two stable fields for every write-class tool that resolved the override path: `resolvedDestinationRoot` (the path the pure runner actually wrote to) and `destinationRootSource` (`override | config | projectRoot | cwd | default`). Consumers can audit override-vs-configured precedence without re-running the resolver. `resolvedDestinationRoot` reports the EFFECTIVE absolute path, not the caller's raw input: a relative override reads back as the resolved root, so the envelope can be trusted as the audit record of where the write landed (#1478, `test/adapters/vba-sync/destination-root-override-effective-1478.test.ts`).
+The success envelope adds two stable fields for every write-class tool that resolved the override path.
+
+`resolvedDestinationRoot` names the path the pure runner wrote to. `destinationRootSource` is one of `override | config | projectRoot | cwd | default`.
+
+Consumers can audit override-vs-configured precedence without re-running the resolver. `resolvedDestinationRoot` reports the effective absolute path, not the caller's raw input.
+
+A relative override reads back as the resolved root, so the envelope is the audit record of where the write landed (#1478, `test/adapters/vba-sync/destination-root-override-effective-1478.test.ts`).
 
 Reference: issue #1438, section "What changes" in the v2.37.2 CHANGELOG entry.
 
@@ -346,6 +363,11 @@ Pairs with `resolve_project` (config), `diagnose` (current health), and `logs` (
 * **Returns**: `{ operations, markers, locks, counters }`. Each `operations[]` entry carries `operationId`, `tool` (= action), `status`, `startedAt`, `updatedAt`, and `metadata`. Each `markers[]` entry carries `operationId`, `action`, `status`, `updatedAt`, and `ageMinutes`. `counters.totalOperations` is the registry's full cardinality; `*Last24h` slices the registry's persisted records (terminal `completed` / `cleaned` records are ephemeral by design — see `logs` for the full audit trail).
 
 ### `logs`
+
+With `options.groupBy: "tool"`, `aggregate.warnings.byCode` reports runtime warning-code counts from invocation telemetry.
+
+The warning aggregate appears alongside per-tool calls, errors, latency, and rejected or missing parameter frequencies.
+
 Return runtime log entries from `.dysflow/runtime/` as a structured envelope. Read-only — never opens Access, never spawns PowerShell, never mutates state.
 
 Sources are `invocations.jsonl`, `operations.json`, and per-operation markers.

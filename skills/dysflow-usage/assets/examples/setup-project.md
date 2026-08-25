@@ -103,3 +103,6 @@ Replace these placeholders with values from your worktree (HR-10, HR-11):
 - Other tool-specific runtime values per ``describe_tool({name:'setup_project'})``.
 
 The live ``inputSchema.properties`` (read once per session via ``describe_tool``) is authoritative. This file is a scaffold, not a frozen contract.
+## Choosing the right tool
+
+This tool belongs to the preferred bootstrap path. Dysflow never blocks a specialized call solely because a preferred equivalent exists: applicable write-capable specialized calls succeed with an additive `PREFERRED_TOOL_AVAILABLE` warning. Intentional granular calls can pass `forceSpecialized:true`; legacy calls receive `LEGACY_TOOL_AVAILABLE` instead. Read-only specialized calls remain silent.

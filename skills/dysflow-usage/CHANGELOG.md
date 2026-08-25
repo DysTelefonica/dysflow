@@ -29,6 +29,7 @@
 
 ### docs(consumer-skills)
 
+- Explain additive preferred/legacy tool warnings and the intentional `forceSpecialized` escape hatch across six workflow examples; refresh their exact-byte hashes.
 - Align v2.27 candidate contracts: `MCP_TOOL_NOT_FOUND`, missing required-input `missingParam`, conflicting write flags, local names-only invocation telemetry, and `logs` aggregates.
 - Replace all fifteen example scaffolds with schema-verified call shapes, add `logs.md`, and refresh the example hash manifest.
 

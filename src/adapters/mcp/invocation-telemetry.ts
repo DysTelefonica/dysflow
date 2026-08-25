@@ -111,6 +111,22 @@ function missingParameterNames(result: McpToolResult): string[] {
   return missingParam === null ? [] : [missingParam];
 }
 
+function warningCodes(result: McpToolResult): string[] {
+  const warnings = result.structuredContent?.warnings;
+  if (!Array.isArray(warnings)) return [];
+  return [
+    ...new Set(
+      warnings
+        .map((warning) =>
+          warning !== null && typeof warning === "object" && !Array.isArray(warning)
+            ? boundedName((warning as Record<string, unknown>).code)
+            : null,
+        )
+        .filter((code): code is string => code !== null),
+    ),
+  ].sort();
+}
+
 function failureClassFor(
   toolKnown: boolean,
   result: McpToolResult,
@@ -203,6 +219,7 @@ export function buildInvocationTelemetryEntry(input: {
     ? (boundedName(input.result.error?.code ?? input.result.error?.errorCode) ??
       (input.result.isError ? "MCP_TOOL_HANDLER_ERROR" : null))
     : "MCP_TOOL_NOT_FOUND";
+  const emittedWarningCodes = warningCodes(input.result);
   return {
     timestamp: input.timestamp ?? new Date().toISOString(),
     tool,
@@ -218,6 +235,7 @@ export function buildInvocationTelemetryEntry(input: {
     missingParams: missingParameterNames(input.result),
     rejectedParams: rejectedParameterNames(input.result),
     unknownToolName: input.toolKnown ? null : tool,
+    ...(emittedWarningCodes.length === 0 ? {} : { warningCodes: emittedWarningCodes }),
     ...(input.auditEvents !== undefined && input.auditEvents.length > 0
       ? {
           auditEvents: input.auditEvents

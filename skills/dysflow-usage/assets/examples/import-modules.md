@@ -53,3 +53,6 @@ Verbose entries include source/destination snapshots, `truncated`, `mismatchReas
 ## TODO before production use
 
 After commit, stop and wait for the human to compile in Access before tests.
+## Choosing the right tool
+
+This is a specialized tool. When its write-capable path is covered by a preferred workflow tool, Dysflow keeps the call successful and appends an informational `PREFERRED_TOOL_AVAILABLE` item to `warnings[]`. Follow the warning's `preferred`, `rationale`, and `docsAnchor` fields on the next iteration. Pass `forceSpecialized:true` only when granular control is intentional; the dispatcher consumes the flag before invoking this tool. Read-only specialized calls are not warned, and legacy calls use the escalated `LEGACY_TOOL_AVAILABLE` code.
