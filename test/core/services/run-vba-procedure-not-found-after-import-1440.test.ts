@@ -17,9 +17,10 @@
  *
  * This file is the red-team gate at the **service** boundary. The
  * resolver-layer pin lives in
- * `test/adapters/services/node-vba-source-resolver-after-import-1448.test.ts`;
- * the full Access roundtrip lives in
- * `test/e2e/run-vba-procedure-exists-after-import-1448.e2e.test.ts`.
+ * `test/adapters/services/node-vba-source-resolver-after-import-1440.test.ts`.
+ * The already-compiled public wiring is covered by
+ * `test/e2e/import-modules-regression.e2e.test.ts`; an automated
+ * import-to-execution roundtrip would violate the human compile checkpoint.
  *
  * Tests use the in-memory `VbaSourceResolver` port so the underlying
  * file-system adapter is irrelevant to the assertion — the bug is in

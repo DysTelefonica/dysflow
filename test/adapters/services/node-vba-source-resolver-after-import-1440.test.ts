@@ -9,7 +9,10 @@
  * is caught before shipping.
  *
  * Cheap by construction: pure filesystem I/O, no Access, no PowerShell.
- * The real-Access coverage lives in `test/e2e/run-vba-procedure-exists-after-import.e2e.test.ts`.
+ * The already-compiled `run_vba` public wiring remains covered by
+ * `test/e2e/import-modules-regression.e2e.test.ts`. Do not combine an import
+ * and execution in one automated E2E: Access requires a human compile
+ * checkpoint between those operations.
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -34,7 +37,7 @@ describe("#1440 — nodeVbaSourceResolver (disk-backed) for run_vba preflight", 
   let destinationRoot: string;
 
   beforeEach(async () => {
-    destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-1448-resolver-"));
+    destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-1440-resolver-"));
     await mkdir(join(destinationRoot, "modules"), { recursive: true });
     await mkdir(join(destinationRoot, "classes"), { recursive: true });
     await mkdir(join(destinationRoot, "forms"), { recursive: true });
