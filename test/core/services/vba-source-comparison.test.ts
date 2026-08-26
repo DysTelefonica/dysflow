@@ -9,6 +9,7 @@ import {
   compareVbaSourceTrees,
   type VbaExecutionRequest,
 } from "../../../src/core/services/vba-source-comparison";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 const testFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
@@ -63,7 +64,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest("/src"), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -96,7 +97,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest("/src"), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -131,7 +132,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 10_000, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 10_000,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -193,7 +198,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest(sourceRoot),
+          timeoutMs: 5,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -245,7 +254,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 5,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -287,7 +300,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 5,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -343,7 +360,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 5, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 5,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -392,7 +413,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 1000,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -430,7 +455,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 1000,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -466,7 +495,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest("/src"), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -501,7 +530,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 5000 },
+        data: { destinationRoot: await resolveDestinationRootForTest("/src"), timeoutMs: 5000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -538,7 +567,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 90_000 },
+        data: { destinationRoot: await resolveDestinationRootForTest("/src"), timeoutMs: 90_000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -574,7 +603,11 @@ describe("vba-source-comparison", () => {
       scriptPath: "script.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: "/src", timeoutMs: 1000, accessPath: "C:/db/app.accdb" },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest("/src"),
+          timeoutMs: 1000,
+          accessPath: "C:/db/app.accdb",
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -616,7 +649,10 @@ describe("vba-source-comparison", () => {
         ok: true as const,
         // This test exercises warning propagation, not timeout behavior. Keep
         // enough budget for filesystem setup on slower Windows CI runners.
-        data: { destinationRoot: sourceRoot, timeoutMs: 10_000 },
+        data: {
+          destinationRoot: await resolveDestinationRootForTest(sourceRoot),
+          timeoutMs: 10_000,
+        },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -682,7 +718,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest(sourceRoot), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -737,7 +773,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest(sourceRoot), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -785,7 +821,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest(sourceRoot), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -846,7 +882,7 @@ describe("vba-source-comparison", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest(sourceRoot), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),
@@ -1051,7 +1087,7 @@ describe("vba-source-comparison", () => {
       resolveExecutionTarget: async () => ({
         ok: true as const,
         data: {
-          destinationRoot: sourceRoot,
+          destinationRoot: await resolveDestinationRootForTest(sourceRoot),
           accessPath: "some.accdb",
           timeoutMs: 1000,
         },
@@ -1112,7 +1148,7 @@ describe("vba-source-comparison", () => {
       resolveExecutionTarget: async () => ({
         ok: true as const,
         data: {
-          destinationRoot: sourceRoot,
+          destinationRoot: await resolveDestinationRootForTest(sourceRoot),
           accessPath: "some.accdb",
           timeoutMs: 1000,
         },
@@ -1518,7 +1554,7 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       scriptPath: "mock.ps1",
       resolveExecutionTarget: async () => ({
         ok: true as const,
-        data: { destinationRoot: sourceRoot, timeoutMs: 1000 },
+        data: { destinationRoot: await resolveDestinationRootForTest(sourceRoot), timeoutMs: 1000 },
         diagnostics: [],
         durationMs: 0,
       }),

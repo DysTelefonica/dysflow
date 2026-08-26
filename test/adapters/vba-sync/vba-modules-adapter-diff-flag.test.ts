@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 /**
  * Build a `VbaModulesAdapter` with a spied orchestrator. The spy's `executeMappedTool`
@@ -67,7 +68,7 @@ function buildAdapterWithSpy(): {
           configSource: "explicit-request",
           accessDbPath: "C:/db/front.accdb",
           accessPath: "C:/db/front.accdb",
-          destinationRoot: "C:/repo/src",
+          destinationRoot: await resolveDestinationRootForTest("C:/repo/src"),
           projectRoot: "C:/repo",
         },
         diagnostics: [],

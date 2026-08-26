@@ -29,6 +29,7 @@ import {
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { AccessOperationPreflightCleanupResult } from "../../../src/core/operations/access-operation-preflight.js";
 import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 // ─── Adapter-direct truth table — dryRun / apply dispatcher behavior ────────
 
@@ -449,7 +450,7 @@ describe("VbaModulesAdapter — direct adapter truth table (#785, capa 2)", () =
           configSource: "explicit-request",
           accessDbPath: "C:/db/front.accdb",
           accessPath: "C:/db/front.accdb",
-          destinationRoot: "C:/repo/src",
+          destinationRoot: await resolveDestinationRootForTest("C:/repo/src"),
           projectRoot: "C:/repo",
         },
         diagnostics: [],

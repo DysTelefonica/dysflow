@@ -23,16 +23,33 @@ export type TargetProvenance =
   | "explicit-cwd"
   | "explicit-backend-path";
 
-export type ExecutionTarget = Pick<
-  DysflowConfig,
-  | "accessDbPath"
-  | "backendPath"
-  | "destinationRoot"
-  | "projectRoot"
-  | "projectId"
-  | "configSource"
-  | "timeoutMs"
-> & { accessPath?: string; destinationRoot: string; targetProvenance: TargetProvenance };
+declare const resolvedDestinationRootBrand: unique symbol;
+
+/**
+ * An absolute destination root that has crossed the canonical execution-target
+ * resolver. Raw request/config DTOs deliberately remain strings.
+ */
+export type ResolvedDestinationRoot = string & {
+  readonly [resolvedDestinationRootBrand]: true;
+};
+
+export type ExecutionTarget = Omit<
+  Pick<
+    DysflowConfig,
+    | "accessDbPath"
+    | "backendPath"
+    | "destinationRoot"
+    | "projectRoot"
+    | "projectId"
+    | "configSource"
+    | "timeoutMs"
+  >,
+  "destinationRoot"
+> & {
+  accessPath?: string;
+  destinationRoot: ResolvedDestinationRoot;
+  targetProvenance: TargetProvenance;
+};
 
 /**
  * Issue #1478 — absolutize a caller-supplied path override against the
@@ -54,6 +71,11 @@ function absolutizeOverride(value: unknown, base: string): string | undefined {
   const normalized = stringValue(value);
   if (normalized === undefined) return undefined;
   return isAbsolutePath(normalized) ? normalized : resolve(base, normalized);
+}
+
+function resolveDestinationRoot(value: string, base: string): ResolvedDestinationRoot {
+  const absolute = isAbsolutePath(value) ? value : resolve(base, value);
+  return absolute as ResolvedDestinationRoot;
 }
 
 export async function resolveExecutionTarget(
@@ -90,11 +112,13 @@ export async function resolveExecutionTarget(
     return successResult({
       ...config.data,
       accessPath: config.data.accessDbPath,
-      destinationRoot:
+      destinationRoot: resolveDestinationRoot(
         absolutizeOverride(params.destinationRoot, explicitBase) ??
-        config.data.destinationRoot ??
-        config.data.projectRoot ??
-        context.cwd,
+          config.data.destinationRoot ??
+          config.data.projectRoot ??
+          context.cwd,
+        explicitBase,
+      ),
       // Issue #1169 — when the caller supplies a `destinationRoot`
       // override, the `projectRoot` MUST also follow the override so a
       // form/serialization consumer can place `sourcePath` inside the
@@ -129,11 +153,13 @@ export async function resolveExecutionTarget(
       return successResult({
         ...repoConfig.data,
         accessPath: repoConfig.data.accessDbPath,
-        destinationRoot:
+        destinationRoot: resolveDestinationRoot(
           absolutizeOverride(params.destinationRoot, repoBase) ??
-          repoConfig.data.destinationRoot ??
-          repoConfig.data.projectRoot ??
-          context.cwd,
+            repoConfig.data.destinationRoot ??
+            repoConfig.data.projectRoot ??
+            context.cwd,
+          repoBase,
+        ),
         // Issue #1169 — see the matching comment in the explicit-override
         // branch above. The override flows through the same precedence.
         projectRoot:
@@ -147,11 +173,13 @@ export async function resolveExecutionTarget(
     return repoConfig;
   }
 
-  const destinationRoot =
+  const destinationRoot = resolveDestinationRoot(
     absolutizeOverride(params.destinationRoot, context.cwd) ??
-    absolutizeOverride(params.projectRoot, context.cwd) ??
-    context.destinationRoot ??
-    context.cwd;
+      absolutizeOverride(params.projectRoot, context.cwd) ??
+      context.destinationRoot ??
+      context.cwd,
+    context.cwd,
+  );
   return successResult({
     configSource: "runtime-default" as const,
     accessDbPath: context.accessPath ?? "",

@@ -15,6 +15,7 @@ import {
   runChunkedVerify,
   splitIntoChunks,
 } from "../../../src/core/services/vba-source-comparison-chunking";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 class StubFs implements ComparisonFileSystemPort {
   async mkdtemp(prefix: string): Promise<string> {
@@ -47,7 +48,9 @@ function makeContext(): VbaComparisonContext {
       ok: true as const,
       data: {
         accessPath: typeof p.accessPath === "string" ? p.accessPath : "C:/db.accdb",
-        destinationRoot: typeof p.destinationRoot === "string" ? p.destinationRoot : "C:/src",
+        destinationRoot: await resolveDestinationRootForTest(
+          typeof p.destinationRoot === "string" ? p.destinationRoot : "C:/src",
+        ),
         timeoutMs: 1000,
       },
       diagnostics: [],
