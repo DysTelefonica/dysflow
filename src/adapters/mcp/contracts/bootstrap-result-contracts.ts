@@ -314,6 +314,7 @@ export const cleanStaleMarkersResultContract = defineResultContract({
       removedMarkerIds: z.array(z.string()),
       keptMarkerIds: z.array(z.string()),
       errors: z.array(z.object({ markerId: z.string(), error: z.string() }).strict()),
+      warnings: z.array(preferredToolWarning).optional(),
     })
     .strict(),
 });
