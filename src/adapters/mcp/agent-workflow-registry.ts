@@ -35,7 +35,8 @@ export const CORE_SURFACE_PHASES: readonly AgentWorkflowPhase[] = [
  * surface even though their workflow phase is `sql` or `forms`.
  *
  * Keep this list explicit. Adding either phase to CORE_SURFACE_PHASES would
- * advertise write-capable siblings such as exec_sql and apply_form_design_plan.
+ * advertise every write-capable sibling instead of the deliberately promoted
+ * preferred tools below.
  */
 export const CORE_INSPECTION_TOOLS = new Set([
   "get_schema",
@@ -69,9 +70,17 @@ export const CORE_INSPECTION_TOOLS = new Set([
   "query_execute",
 ]);
 
+/** Issue #1589 — preferred form writes must be discoverable on the default surface. */
+export const CORE_PREFERRED_WRITE_TOOLS = new Set([
+  "apply_form_design_plan",
+  "form_align_controls",
+  "form_distribute_controls",
+  "form_set_properties",
+]);
+
 /** True when the tool's workflow membership intersects the core phases. */
 export function isCoreSurfaceTool(name: string): boolean {
-  if (CORE_INSPECTION_TOOLS.has(name)) return true;
+  if (CORE_INSPECTION_TOOLS.has(name) || CORE_PREFERRED_WRITE_TOOLS.has(name)) return true;
   const phases = classifyWorkflowPhases(name);
   return phases.some((phase) => CORE_SURFACE_PHASES.includes(phase));
 }

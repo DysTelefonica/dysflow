@@ -56,6 +56,12 @@ const BINARY_READERS = [
 const SOURCE_READERS = READ_ONLY_INSPECTION_TOOLS.filter(
   (name) => !BINARY_READERS.includes(name as (typeof BINARY_READERS)[number]),
 );
+const PREFERRED_FORM_WRITE_TOOLS = [
+  "apply_form_design_plan",
+  "form_set_properties",
+  "form_align_controls",
+  "form_distribute_controls",
+] as const;
 const HIDDEN_WRITE_SIBLINGS = [
   "exec_sql",
   "run_script",
@@ -77,13 +83,9 @@ const HIDDEN_WRITE_SIBLINGS = [
   "form_rename_control",
   "form_deserialize",
   "create_form_from_template",
-  "apply_form_design_plan",
   "form_set_property",
   "form_delete_control",
-  "form_set_properties",
   "form_duplicate_control",
-  "form_align_controls",
-  "form_distribute_controls",
 ] as const;
 
 function makeHarness() {
@@ -118,7 +120,11 @@ describe("external inspection core surface (#1544)", () => {
     expect(isAdvertisedUnderSurface("query_execute", "core")).toBe(true);
   });
 
-  it("does not widen the core surface to write-capable SQL or form siblings", () => {
+  it("advertises preferred form writes without widening to other write-capable siblings", () => {
+    for (const name of PREFERRED_FORM_WRITE_TOOLS) {
+      expect(MCP_TOOL_CONTRACTS[name].access, name).not.toBe("read-only");
+      expect(isAdvertisedUnderSurface(name, "core"), name).toBe(true);
+    }
     for (const name of HIDDEN_WRITE_SIBLINGS) {
       expect(MCP_TOOL_CONTRACTS[name].access, name).not.toBe("read-only");
       expect(isAdvertisedUnderSurface(name, "core"), name).toBe(false);
