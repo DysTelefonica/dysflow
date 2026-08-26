@@ -39,8 +39,8 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       include: ["src/**/*.ts"],
       exclude: ["dist/**", "test/**", "**/*.test.ts", "vitest.config.ts"],
-      // The historical branch floor is restored after repeated coverage runs
-      // converged near 80.5%, leaving roughly 0.5 percentage points of margin.
+      // Behavior coverage for the telemetry-evidence CLI lifts the deterministic
+      // baseline near 80.9%, leaving roughly 0.9 percentage points of margin.
       thresholds: {
         statements: 82,
         branches: 80,
