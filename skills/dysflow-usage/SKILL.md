@@ -254,9 +254,6 @@ use `diff` only when reported as a compatibility alias. `apply_form_design_plan`
 
 `form_set_properties` accepts a `properties` map and validates every property name and value before opening a guarded write. Every form mutation is transactional: when the import gate fails, dysflow restores the original source instead of leaving a partial filesystem mutation.
 
-`compact_repair` defaults to the frontend. Pass its explicit target selector only when the intended database is the backend; never rely on path fallback when the target matters.
-
-
 ## Multi-worktree operation — explicit target per call
 
 Git creates worktrees; Dysflow resolves targets safely. The current Git worktree is always the
@@ -372,6 +369,10 @@ Use `sync_binary` whenever the agent would otherwise script the 5-step loop manu
 - A `risk: "read-only"` tool ignores both flags (no-op either way).
 
 **Per-call gating is authoritative and never bypassed** (independent of policy):
+
+`compact_repair` defaults to the frontend. Pass its explicit target selector only when the
+intended database is the backend; never rely on path fallback when the target matters.
+
 - `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture` require their schema-advertised `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`; `apply:false` plans without the second confirmation.
 - `cleanup_access_operation` with `force: true` requires explicit confirmation regardless of mode.
 - `access_force_cleanup_orphaned` with a positive `pid` requires `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` after explicit human approval.
