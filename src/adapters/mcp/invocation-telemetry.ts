@@ -295,7 +295,9 @@ export function createJsonlTelemetrySink<TEntry>(
     for (let generation = maxFiles; generation >= 1; generation -= 1) {
       const destination = `${sinkPath}.${generation}`;
       if (generation === maxFiles) {
-        await rm(destination, { force: true });
+        try {
+          await rm(destination, { force: true });
+        } catch {}
       }
       const source = generation === 1 ? sinkPath : `${sinkPath}.${generation - 1}`;
       try {

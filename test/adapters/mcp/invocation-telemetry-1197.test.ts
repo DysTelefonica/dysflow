@@ -20,10 +20,25 @@ const releaseRenameBarrier = vi.hoisted(() => ({
   waitUntilReleased: null as Promise<void> | null,
 }));
 
+const removeFailure = vi.hoisted(() => ({
+  path: null as string | null,
+}));
+
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   return {
     ...actual,
+    rm: async (
+      path: Parameters<typeof actual.rm>[0],
+      options?: Parameters<typeof actual.rm>[1],
+    ) => {
+      if (String(path) === removeFailure.path) {
+        const error = new Error("EPERM: operation not permitted") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      await actual.rm(path, options);
+    },
     rename: async (
       oldPath: Parameters<typeof actual.rename>[0],
       newPath: Parameters<typeof actual.rename>[1],
@@ -71,6 +86,7 @@ afterEach(() => {
   releaseRenameBarrier.targetLockPath = null;
   releaseRenameBarrier.signalStarted = null;
   releaseRenameBarrier.waitUntilReleased = null;
+  removeFailure.path = null;
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
@@ -387,6 +403,27 @@ describe("local invocation JSONL sink (#1197)", () => {
     }
     expect(existing).toEqual(files);
     await expect(readFile(join(runtime, "invocations.jsonl.3"), "utf8")).rejects.toThrow();
+  });
+
+  it("keeps recording when the oldest rotated generation is locked", async () => {
+    const cwd = tempRoot();
+    const runtime = join(cwd, ".dysflow", "runtime");
+    const sinkPath = join(runtime, "invocations.jsonl");
+    const oldestGeneration = `${sinkPath}.2`;
+    await mkdir(runtime, { recursive: true });
+    await writeFile(sinkPath, `${JSON.stringify(entry(`existing_${"x".repeat(512)}`))}\n`, "utf8");
+    await writeFile(`${sinkPath}.1`, "previous generation", "utf8");
+    await writeFile(oldestGeneration, "locked generation", "utf8");
+    removeFailure.path = oldestGeneration;
+    const recorder = createInvocationTelemetryRecorder({ cwd, maxBytes: 512, maxFiles: 2 });
+
+    await expect(recorder.record(entry("schema"))).resolves.toBeUndefined();
+
+    const currentEntries = (await readFile(sinkPath, "utf8"))
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as InvocationTelemetryEntry);
+    expect(currentEntries.map(({ tool }) => tool)).toContain("schema");
   });
 
   it("does not create a sink when project telemetry is disabled", async () => {
