@@ -1441,12 +1441,33 @@ export class VbaModulesAdapter {
       }
     }
 
+    const formKeys = new Set(vbeForms.map((name) => name.toLowerCase()));
+    const formsFolder = resolve(destinationRoot, "forms").toLowerCase();
+    const formSourceAlias = (name: string) => `form_${name.toLowerCase()}`;
+    const findFormSource = (name: string) => {
+      const candidate = diskModulesMap.get(formSourceAlias(name));
+      return candidate && parse(candidate.path).dir.toLowerCase() === formsFolder
+        ? candidate
+        : undefined;
+    };
+    const findDiskModule = (name: string) => {
+      const key = name.toLowerCase();
+      const exact = diskModulesMap.get(key);
+      if (exact || !formKeys.has(key)) return exact;
+      return findFormSource(name);
+    };
+
     const vbeKeys = new Set<string>([...vbeAll].map((n) => n.toLowerCase()));
+    for (const formName of vbeForms) {
+      if (findFormSource(formName)) {
+        vbeKeys.add(formSourceAlias(formName));
+      }
+    }
     const SUSPICIOUS_REGEX =
       /^(Form_|Report_)?(Módulo|Modulo|Class|Clase|Form|Formulario|Report|Reporte)\d+$/i;
     const orphans = [];
     for (const name of vbeAll) {
-      const disk = diskModulesMap.get(name.toLowerCase());
+      const disk = findDiskModule(name);
       orphans.push({
         moduleName: name,
         isOrphan: disk === undefined,
