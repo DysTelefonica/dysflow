@@ -1,5 +1,29 @@
 # Changelog
 
+## [v4.0.5] - 2026-08-26
+
+### Changes
+
+- docs(skills): align friction anchors and hashes
+- test(skills): compose runtime verifier fixtures
+- docs(skills): verify example input properties
+- docs(skills): expand agent friction examples
+- docs: register tool example anchor
+- docs(dysflow-usage): prefer advertised form property tool
+- test(coverage): exercise telemetry evidence CLI
+- docs(skills): replace drifting tool index
+- docs(dysflow-usage): enforce version stamps
+- refactor(mcp): align migrate result contract
+- fix(vba-sync): ignore managed-extension directories
+- fix(vba-sync): preserve form source candidates
+- fix(vba-sync): normalize report orphan aliases
+- docs(config): move migration note to quality-gated page
+- docs: satisfy documentation paragraph limits
+- fix(mcp): honor registered worktree cache in resolve_project
+- fix(config): surface removed-field migration path
+- fix(mcp): accept preferred warnings in stale cleanup
+
+
 ## [v4.0.4] - 2026-08-26
 
 ### Changes
