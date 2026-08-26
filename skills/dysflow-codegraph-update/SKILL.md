@@ -7,12 +7,11 @@ metadata:
   author: "Andrés Román"
   version: "3.0.0"
   status: active
-  last_verified: "2026-08-23"
-  last_dysflow_version: "3.0.0"
+  last_verified: "2026-08-26"
+  last_dysflow_version: "4.0.3"
   last_codegraph_vba_version: "1.15.0"
   requires: "dysflow MCP >= 3.0, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
   managed_by: "`dysflow install` (one-shot), `dysflow update` (release-driven refresh), `dysflow doctor` (runtime contract audit). This user-owned skill fires only when those commands cannot resolve the drift on their own."
-  supersedes: "v2.5.4 (2026-08-01; adds managed_by pointer + raises floor to 2.34, drops ARN-1/2/3 references that v2.34.2 absorbs into the install pipeline)"
   trigger_patterns:
     - "dysflow release ships and the canonical mirror needs review"
     - "codegraph-vba release ships"

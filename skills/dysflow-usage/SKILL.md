@@ -6,14 +6,13 @@ metadata:
   author: "Andrés Román"
   version: "2.0.0"
   status: active
-  last_verified: "2026-08-23"
-  last_dysflow_version: "3.0.0"
+  last_verified: "2026-08-26"
+  last_dysflow_version: "4.0.3"
   requires: "dysflow MCP >= 3.0"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
     in_scope: "canonical dysflow tool names, write-flags matrix, error codes, write-execution-policy, human-compile contract, defensive parsing for transport wrappers that still double-encode envelopes"
     out_of_scope: "high-level workflow (dysflow-codegraph-update), single-tool usage examples (skills per feature)"
-  supersedes: "v1.14.0 (2026-08-01; refresh against dysflow v2.34.2 contract — universal schemaVersion, fail-closed setup_project, recovery-token trio, every tool canonicalCommitFlag=apply)"
   changelog: "CHANGELOG.md (in this skill directory)"
 ---
 

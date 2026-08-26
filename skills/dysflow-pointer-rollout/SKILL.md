@@ -7,14 +7,13 @@ metadata:
   author: "Andrés Román"
   version: "1.0.0"
   status: active
-  last_verified: "2026-08-23"
-  last_dysflow_version: "3.0.0"
+  last_verified: "2026-08-26"
+  last_dysflow_version: "4.0.3"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-arnes skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow-plugin` for routine install/update refresh"
   managed_by: "`dysflow install` / `dysflow update` for routine pointer refresh; this skill is the manual fallback when those commands cannot reach a target (permissions, OS-specific path, agent not in the install matrix)."
   in_scope: "user-global agent instruction files (OpenCode / Codex / Claude Code / Cursor / Kiro / Copilot / Gemini / Antigravity / Hermes / OpenClaw / Pi) + dysflow project AGENTS.md embedded harness. Targets are discovered dynamically from the agent config the user invokes; the legacy hardcoded 8+1 target list is preserved only as a fallback when discovery fails."
   out_of_scope: "dysflow-arnes itself (ARN-1 of dysflow-codegraph-update), per-tool example files in dysflow-usage/assets/examples/ (dysflow-examples-sync), gentle-ai-owned skills, anything outside the canonical skills repo + user-global config"
-  supersedes: "v0.2.3 (2026-07-30; explicit managed_by + fallback role; raised floor to 2.34)"
   trigger_patterns:
     - "ARN-2 — dysflow-arnes/SKILL.md content drifted from inlined pointer blocks across agent instruction files"
     - "ARN-2 — dysflow/AGENTS.md lost the embedded harness block between <!-- dysflow:arnés --> and <!-- /dysflow:arnés -->"
