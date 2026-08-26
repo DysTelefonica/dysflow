@@ -10,6 +10,11 @@ import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.j
 
 const root = resolve("C:/project/src");
 const formSourceName = "Form_FormGestionRiesgos";
+const fileEntry = (name: string) => ({
+  name,
+  isDirectory: () => false,
+  isFile: () => true,
+});
 
 async function auditFormSources(documentModules: readonly string[]) {
   const orchestrator = {
@@ -29,7 +34,7 @@ async function auditFormSources(documentModules: readonly string[]) {
   const fileSystem = {
     readdir: async (folder: string) =>
       folder === resolve(root, "forms")
-        ? [`${formSourceName}.cls`, `${formSourceName}.form.txt`]
+        ? [fileEntry(`${formSourceName}.cls`), fileEntry(`${formSourceName}.form.txt`)]
         : [],
   } as unknown as ComparisonFileSystemPort;
 

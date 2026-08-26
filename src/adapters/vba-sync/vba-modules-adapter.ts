@@ -220,6 +220,14 @@ function managedDiskModuleName(entryName: string): string | null {
   return null;
 }
 
+function managedSourceFile(
+  entry: ComparisonFileSystemEntry,
+): { entryName: string; moduleName: string } | null {
+  if (!entry.isFile()) return null;
+  const moduleName = managedDiskModuleName(entry.name);
+  return moduleName === null ? null : { entryName: entry.name, moduleName };
+}
+
 /** Folders that hold managed source artifacts. Queries are intentionally excluded. */
 function managedFolders(destinationRoot: ResolvedDestinationRoot): string[] {
   return [
@@ -1347,10 +1355,9 @@ export class VbaModulesAdapter {
         continue;
       }
       for (const entry of entries) {
-        if (!entry.isFile()) continue;
-        const entryName = entry.name;
-        const modName = managedDiskModuleName(entryName);
-        if (modName === null || keep.has(modName.toLowerCase())) continue;
+        const sourceFile = managedSourceFile(entry);
+        if (sourceFile === null || keep.has(sourceFile.moduleName.toLowerCase())) continue;
+        const { entryName } = sourceFile;
         const fullPath = resolve(folder, entryName);
         // #1573 — a locked file (Access or an editor holding a handle) rejects with
         // EPERM/EBUSY on Windows; `force: true` suppresses only ENOENT. Letting that
@@ -1425,18 +1432,17 @@ export class VbaModulesAdapter {
       try {
         const entries = await this.fileSystem.readdir(folder);
         for (const entry of entries) {
-          const entryName = typeof entry === "string" ? entry : entry.name;
-          const modName = managedDiskModuleName(entryName);
+          const sourceFile = managedSourceFile(entry);
+          if (sourceFile === null) continue;
+          const { entryName, moduleName: modName } = sourceFile;
 
-          if (modName) {
-            const key = modName.toLowerCase();
-            const fullPath = resolve(folder, entryName);
-            const current = diskModulesMap.get(key);
-            if (!current) {
-              diskModulesMap.set(key, { name: modName, path: fullPath });
-            } else if (current.path.endsWith(".form.txt") || current.path.endsWith(".report.txt")) {
-              diskModulesMap.set(key, { name: modName, path: fullPath });
-            }
+          const key = modName.toLowerCase();
+          const fullPath = resolve(folder, entryName);
+          const current = diskModulesMap.get(key);
+          if (!current) {
+            diskModulesMap.set(key, { name: modName, path: fullPath });
+          } else if (current.path.endsWith(".form.txt") || current.path.endsWith(".report.txt")) {
+            diskModulesMap.set(key, { name: modName, path: fullPath });
           }
         }
       } catch {
@@ -1856,7 +1862,7 @@ async function discoverManagedSource(
   ] as const;
 
   for (const folder of folders) {
-    let entries: readonly { name: string }[] | readonly string[];
+    let entries: readonly ComparisonFileSystemEntry[];
     try {
       entries = await fileSystem.readdir(folder.path);
     } catch (error) {
@@ -1881,9 +1887,9 @@ async function discoverManagedSource(
     }
 
     for (const entry of entries) {
-      const entryName = typeof entry === "string" ? entry : entry.name;
-      const moduleName = managedDiskModuleName(entryName);
-      if (moduleName === null) continue;
+      const sourceFile = managedSourceFile(entry);
+      if (sourceFile === null) continue;
+      const { moduleName } = sourceFile;
       modules.add(moduleName);
       protectedNames.add(moduleName);
       if (folder.kind === "form") addDocumentAliases(protectedNames, moduleName, "Form_");
