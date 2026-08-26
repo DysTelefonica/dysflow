@@ -1,9 +1,9 @@
 ---
 name: dysflow-protocol
-description: Canonical entry point for dysflow MCP usage. Load BEFORE calling any dysflow tool. Mirrors `engram-memory-protocol` so AI agents do not have to invent the workflow.
+description: "Trigger: dysflow MCP usage. Canonical entry point loaded before any dysflow tool so agents follow the runtime-first workflow instead of inventing one."
 triggers:
   - Calling any dysflow MCP tool (read OR write)
-  - Choosing between `apply: true`, `apply: false`, or `confirmedRequiresConfirmation`
+  - "Choosing between `apply: true`, `apply: false`, or `confirmedRequiresConfirmation`"
   - Pre-write preflight (`doctor`, `diagnose`, `state`)
   - Session start on a dysflow project
   - Recovery (orphaned access processes, drift, missing config)
