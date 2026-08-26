@@ -61,7 +61,7 @@
   },
   "detect_dead_code": {
     "path": "assets/examples/detect-dead-code.md",
-    "sha256": "11d579749e2c65bc46bb4a98acb9987d1cd3688bfb27b0f6a462903208f583ba",
+    "sha256": "647b56afdaf2fb5beb571dca2d19a1746688d01fd672007ffdc86e86f97abb7d",
     "needs_human_content": false
   },
   "diagnose": {
@@ -91,7 +91,7 @@
   },
   "find_references": {
     "path": "assets/examples/find-references.md",
-    "sha256": "4f0738d98db493f0b46e73ba4751776f32dcbde25e390a7c5e235c1f3d24c71d",
+    "sha256": "eb41fbae778275095f777e49a9794176cae16add1a05dadf0b4a63e43312d8c2",
     "needs_human_content": false
   },
   "form_align_controls": {
@@ -236,7 +236,7 @@
   },
   "vba_orphan_audit": {
     "path": "assets/examples/vba-orphan-audit.md",
-    "sha256": "f8816297c2bc3c3a338c0a0607b3009810f9a905e208d7700df87edf5a668f16",
+    "sha256": "3b10c56f6c01c3e2a0e2dc4e039b4495a6650f99705d9c0cfb439b970b5d93df",
     "needs_human_content": false
   },
   "verify_code": {
@@ -258,13 +258,13 @@
   "clean_stale_markers": { "path": "assets/examples/clean-stale-markers.md", "sha256": "e2635c2bf0d5576aea2a2703713ecdd4eb7ca1b15dc095c35157bc10beb6f42b", "needs_human_content": true },
   "compare_backends": { "path": "assets/examples/compare-backends.md", "sha256": "f718b627924a554f5c8d3458c21b7f6f96a09ce0479331e77c82f025f6f74881", "needs_human_content": true },
   "compare_form": { "path": "assets/examples/compare-form.md", "sha256": "fa0de5795d4fe8e42eeae31864b33b08b7d7d01c7ccc703555bdc2a71230b477", "needs_human_content": true },
-  "count_rows": { "path": "assets/examples/count-rows.md", "sha256": "57ce4f529cd4a166552fe00e09d6e05ca1efec22657c4e744322305994d7f7c4", "needs_human_content": true },
+  "count_rows": { "path": "assets/examples/count-rows.md", "sha256": "a1ea34a9f740e6ec1e47daafdfbad6e3c835bbaf065465beb66289a19042fcf3", "needs_human_content": false },
   "create_table": { "path": "assets/examples/create-table.md", "sha256": "48d7c24b6205e9199c5d8c964bcbcd921be06102aa5fedca3b933a7be43db7ab", "needs_human_content": true },
   "delete_module": { "path": "assets/examples/delete-module.md", "sha256": "c9f7c9623d74d8ce4eb15e53c7c14868604737be737c86ee4457841cdd9c535c", "needs_human_content": true },
-  "distinct_values": { "path": "assets/examples/distinct-values.md", "sha256": "eb403c00e047fe61c67ac3d2a11e3d887362d4c67e8a2210deb642e1323cf5a6", "needs_human_content": true },
+  "distinct_values": { "path": "assets/examples/distinct-values.md", "sha256": "ae576fd1dcada0d52da3e7ad2d8380ae5880e7140f4c83379083f375b103c39a", "needs_human_content": false },
   "drop_table": { "path": "assets/examples/drop-table.md", "sha256": "0b6f8653555b7543640ff01250b1d066efcf9b2fad7740da21eea9d03b19f5e6", "needs_human_content": true },
   "exec_sql": { "path": "assets/examples/exec-sql.md", "sha256": "61da7957520f9a536a8806511ea52c6fff02774179e1a82e8403aefe46884752", "needs_human_content": true },
-  "exists": { "path": "assets/examples/exists.md", "sha256": "eb34d8b26f8c08e00c5ac13b9581af71f46e0408d11996fb4bae1fb373954fd2", "needs_human_content": true },
+  "exists": { "path": "assets/examples/exists.md", "sha256": "717cfd4e6e5113ba4e5e85fce87627f635129af53b32146828997d5de6a6fe97", "needs_human_content": false },
   "export_queries": { "path": "assets/examples/export-queries.md", "sha256": "8c94b11ef04a9f23de65a5e26e44b9aff88b5ade2a4eaa568d316db339fd81b7", "needs_human_content": true },
   "fix_encoding": { "path": "assets/examples/fix-encoding.md", "sha256": "e08d361fe50c01cd6dfc42635e11c85f40e1cc11fb010b1777afc92415983233", "needs_human_content": true },
   "form_add_control": { "path": "assets/examples/form-add-control.md", "sha256": "fd68081cb374bfe5a8eb18a8a35132fbb1b010fc0e88cadbf0bcd06424cdad6a", "needs_human_content": true },

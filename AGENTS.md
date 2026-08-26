@@ -375,9 +375,10 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Nine anchors do the second kind today:
+Ten anchors do the second kind today:
 
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
+- `agent-friction-examples-1614.test.ts` derives the callable MCP surface from the runtime and checks that each friction family links concrete live tools and complete examples.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `dysflow-usage-examples-1611.test.ts` derives the advertised MCP tool set from the runtime and proves each tool has a canonical example file.
 - `example-input-properties-contract.test.ts` derives advertised tool schemas from the runtime and checks exact scaffold input-property parity.
