@@ -257,6 +257,49 @@ describe("issue #1313 project recovery token", () => {
     }
   });
 
+  it("honors a worktree context pre-warmed by register_worktree", async () => {
+    const fixture = createRealSiblingWorktrees();
+    const service = new FakeService();
+    const tools = createDysflowMcpTools({
+      services: {
+        vbaService: service,
+        vbaSyncToolService: service,
+        queryService: service,
+        diagnosticsService: service,
+      } as unknown as DysflowMcpServices,
+      cwd: fixture.main,
+    });
+    const registerWorktree = toolByName(tools, "register_worktree");
+    const resolveProject = toolByName(tools, "resolve_project");
+    const clearWorktreeCache = toolByName(tools, "clear_worktree_cache");
+
+    try {
+      const registered = payload(await registerWorktree.handler({ cwd: fixture.main }));
+      expect(registered).toMatchObject({
+        ok: true,
+        context: {
+          projectId: fixture.mainId,
+          discoveredProjects: [expect.objectContaining({ id: fixture.mainId })],
+        },
+      });
+
+      const resolved = payload(await resolveProject.handler({ cwd: fixture.main }));
+      expect(resolved).toMatchObject({
+        outcome: "resolved",
+        projectId: fixture.mainId,
+        projectConfig: expect.objectContaining({ status: "valid" }),
+      });
+      expect(
+        realpathSync
+          .native((resolved.projectConfig as { projectRoot: string }).projectRoot)
+          .toLowerCase(),
+      ).toBe(realpathSync.native(fixture.main).toLowerCase());
+    } finally {
+      await clearWorktreeCache.handler({ cwd: fixture.main });
+      await removeRealSiblingWorktrees(fixture);
+    }
+  });
+
   it("uses cwd to disambiguate duplicate IDs in real sibling worktrees", async () => {
     const fixture = createRealSiblingWorktrees({ duplicateIds: true });
     try {

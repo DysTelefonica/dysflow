@@ -170,7 +170,8 @@ Plan or atomically create `.dysflow/project.json` for a fresh Git worktree.
 ### `register_worktree`
 Eagerly scan and cache one canonical worktree context without changing files or
 opening Access. The result exposes `cache.status` (`hit` or `miss`) plus bounded
-cache telemetry.
+cache telemetry. A subsequent `resolve_project` for that exact `cwd` uses the
+valid pre-warmed context instead of scanning sibling worktrees again.
 * **Parameters**: `cwd` (string, **required**).
 
 ### `clear_worktree_cache`
@@ -269,6 +270,10 @@ never mutates files.
 Read `.dysflow/project.json` from the supplied `cwd` and return a structured diagnosis. It never writes files, opens Access, or spawns PowerShell.
 
 Companion to `get_capabilities`: the snapshot tool reports the `projectId` captured at factory construction, while this tool re-checks the project config on disk.
+
+When `register_worktree` has already cached a valid context for the exact
+`cwd`, `resolve_project` treats that context as the implicit target. On a cache
+miss it retains sibling-worktree discovery and the recovery-token flow below.
 
 On ambiguity it creates a short-lived, process-local recovery token, so an exact human choice can be cached without editing project config.
 * **Parameters**:

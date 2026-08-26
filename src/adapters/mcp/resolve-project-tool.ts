@@ -247,6 +247,9 @@ export const RESOLVE_PROJECT_SCHEMA = {
 export function createResolveProjectTool(opts: {
   cwd: string;
   recovery?: ProjectResolutionRecovery;
+  cachedProjectConfigResolver?: (
+    cwd: string,
+  ) => ProjectConfigDiagnostic | null | Promise<ProjectConfigDiagnostic | null>;
   projectConfigResolver?: (
     cwd: string,
     input: Record<string, unknown>,
@@ -318,13 +321,30 @@ export function createResolveProjectTool(opts: {
         }
       }
 
+      if (
+        selectedRoot === undefined &&
+        projectId === undefined &&
+        params.clearResolution !== true &&
+        opts.cachedProjectConfigResolver !== undefined
+      ) {
+        const cachedProjectConfig = await opts.cachedProjectConfigResolver(effectiveCwd);
+        if (
+          cachedProjectConfig?.status === "valid" &&
+          typeof cachedProjectConfig.projectId === "string"
+        ) {
+          projectId = cachedProjectConfig.projectId;
+          selectedRoot = cachedProjectConfig.projectRoot;
+        }
+      }
+
       // #1313 — production ambiguity discovery. `diagnoseProjectConfig`
       // intentionally scopes its final `discoveredProjects` projection to the
       // selected worktree, which is correct for diagnostics isolation but too
-      // narrow for the explicit recovery surface. Resolve discovery is bounded
-      // to the current worktree and its registered sibling directory; it never
-      // scans arbitrary roots. An explicit/cached/token-backed selection skips
-      // this branch and resolves only its frozen candidate.
+      // narrow for the explicit recovery surface. A valid context pre-warmed
+      // for the exact cwd skips sibling discovery. Otherwise discovery is
+      // bounded to the current worktree and sibling Git worktrees under its
+      // parent; it never scans arbitrary roots. An explicit/recovery-backed
+      // selection also resolves only its frozen candidate.
       if (selectedRoot === undefined) {
         const visibleProjects = discoverWorktreeProjectConfigs(effectiveCwd, nodeConfigFileSystem);
         if (projectId === undefined && visibleProjects.length > 1) {
