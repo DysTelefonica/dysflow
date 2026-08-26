@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { isAdvertisedUnderSurface } from "../../src/adapters/mcp/agent-workflow-registry";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
 import { successResult } from "../../src/core/contracts/index";
 
@@ -53,6 +52,14 @@ describe("Dysflow example input-property parity (#1613)", () => {
     temporaryRoots.push(isolatedSkillRoot);
     const isolatedExamples = path.join(isolatedSkillRoot, "assets/examples");
     await mkdir(isolatedExamples, { recursive: true });
+    await writeFile(
+      path.join(isolatedSkillRoot, "SKILL.md"),
+      await readFile(path.join(skillRoot, "SKILL.md")),
+    );
+    await writeFile(
+      path.join(isolatedSkillRoot, "assets/write-flags-matrix.md"),
+      await readFile(path.join(skillRoot, "assets/write-flags-matrix.md")),
+    );
     for (const file of await readdir(examplesRoot)) {
       if (!file.endsWith(".md")) continue;
       await writeFile(
@@ -106,7 +113,7 @@ async function writeCapture(): Promise<string> {
     return {
       name: tool.name,
       access: "apply" in (inputSchema.properties ?? {}) ? "conditional-write" : "read-only",
-      advertised: !tool.hidden && isAdvertisedUnderSurface(tool.name, "core"),
+      advertised: !tool.hidden,
       inputSchema: {
         properties: Object.fromEntries(
           Object.entries(inputSchema.properties ?? {}).map(([name, schema]) => [
@@ -125,6 +132,11 @@ async function writeCapture(): Promise<string> {
   });
   await writeFile(
     path.join(root, "full.json"),
+    JSON.stringify({ schemaVersion: "dysflow.result/v1", tools }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(root, "index.json"),
     JSON.stringify({ schemaVersion: "dysflow.result/v1", tools }),
     "utf8",
   );

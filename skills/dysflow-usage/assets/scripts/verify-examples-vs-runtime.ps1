@@ -40,7 +40,7 @@ $tools = @{}
 foreach ($tool in @($capture.tools)) { $tools[[string]$tool.name] = $tool }
 $advertisedTools = @{}
 foreach ($tool in @($indexCapture.tools | Where-Object { $_.advertised -eq $true })) {
-    $advertisedTools[[string]$tool.name] = $tool
+    $advertisedTools[[string]$tool.name] = $true
 }
 $findings = [Collections.Generic.List[object]]::new()
 $checked = 0
@@ -159,7 +159,7 @@ function Test-DocumentedInputProperties([string]$File,[string]$ToolName,[string]
     $section = [regex]::Match($Text, $sectionPattern)
     if (-not $section.Success) { return }
 
-    $expected = @($advertisedTools[$ToolName].inputSchema.properties.PSObject.Properties.Name | Sort-Object -Unique)
+    $expected = @($tools[$ToolName].inputSchema.properties.PSObject.Properties.Name | Sort-Object -Unique)
     $documentedAll = @([regex]::Matches($section.Groups['body'].Value, '`([A-Za-z_][A-Za-z0-9_]*)`') | ForEach-Object { $_.Groups[1].Value })
     $documented = @($documentedAll | Sort-Object -Unique)
     foreach ($name in @($expected | Where-Object { $_ -notin $documented })) {
