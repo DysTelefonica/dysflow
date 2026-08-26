@@ -19,6 +19,7 @@ Inspect one selected tool's complete contract after compact discovery.
     - `name`
     - `toolName`
     - `projectId`
+    - `sections`
 
 ## Call shape
 

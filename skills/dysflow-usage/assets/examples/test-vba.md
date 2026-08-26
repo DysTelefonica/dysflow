@@ -28,7 +28,6 @@ Execute the validated VBA test manifest after the human-compile gate is clear.
     - `expectedDestinationRoot`
     - `proceduresJson`
     - `filter`
-    - `testFilter`
     - `testsPath`
     - `apply`
     - `diff`

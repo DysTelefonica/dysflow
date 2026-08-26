@@ -153,6 +153,25 @@ function Test-CanonicalDocumentationTools {
 }
 
 Test-CanonicalDocumentationTools
+
+function Test-DocumentedInputProperties([string]$File,[string]$ToolName,[string]$Text) {
+    $sectionPattern = '(?ms)^## All input properties \(live `inputSchema\.properties` keys\)\r?\n(?<body>.*?)(?=^## |\z)'
+    $section = [regex]::Match($Text, $sectionPattern)
+    if (-not $section.Success) { return }
+
+    $expected = @($tools[$ToolName].inputSchema.properties.PSObject.Properties.Name | Sort-Object -Unique)
+    $documentedAll = @([regex]::Matches($section.Groups['body'].Value, '`([A-Za-z_][A-Za-z0-9_]*)`') | ForEach-Object { $_.Groups[1].Value })
+    $documented = @($documentedAll | Sort-Object -Unique)
+    foreach ($name in @($expected | Where-Object { $_ -notin $documented })) {
+        Add-Finding $File $ToolName 'MISSING_INPUT_PROPERTY' "Live input property '$name' is absent from the documented set."
+    }
+    foreach ($name in @($documented | Where-Object { $_ -notin $expected })) {
+        Add-Finding $File $ToolName 'UNKNOWN_INPUT_PROPERTY' "Documented input property '$name' is absent from the live schema."
+    }
+    foreach ($name in @($documentedAll | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)) {
+        Add-Finding $File $ToolName 'DUPLICATE_INPUT_PROPERTY' "Input property '$name' is documented more than once."
+    }
+}
 Test-VersionStamp 'references/error-codes.md'
 Test-VersionStamp 'assets/write-flags-matrix.md'
 
@@ -177,6 +196,9 @@ foreach ($file in Get-ChildItem -LiteralPath $examplesDir -Filter '*.md' -File |
     }
     $inferredTool = $file.BaseName -replace '-','_'
     $declaresToolScaffold = [regex]::IsMatch($text, '(?m)^#\s+`' + [regex]::Escape($inferredTool) + '`\s*$')
+    if ($declaresToolScaffold -and $advertisedTools.ContainsKey($inferredTool)) {
+        Test-DocumentedInputProperties $file.Name $inferredTool $text
+    }
     if ($declaresToolScaffold -and $tools.ContainsKey($inferredTool) -and $checked -eq $fileCheckedBefore) {
         Add-Finding $file.Name $inferredTool 'MISSING_CALL' 'Tool example has no machine-readable JSON invocation block.'
     }
