@@ -4,8 +4,9 @@ BeforeAll {
     $script:Verifier = Join-Path $PSScriptRoot 'verify-examples-vs-runtime.ps1'
     $script:Root = Join-Path $TestDrive 'skill'
     $script:Examples = Join-Path $script:Root 'assets/examples'
+    $script:References = Join-Path $script:Root 'references'
     $script:Captures = Join-Path $TestDrive 'captures'
-    New-Item -ItemType Directory -Force -Path $script:Examples,$script:Captures | Out-Null
+    New-Item -ItemType Directory -Force -Path $script:Examples,$script:References,$script:Captures | Out-Null
     $catalog = @{
         schemaVersion = 'dysflow.result/v1'
         tools = @(
@@ -17,9 +18,15 @@ BeforeAll {
     @{ok=$true;source='structuredContent';payload=$catalog} | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $script:Captures 'full.json') -Encoding utf8NoBOM
     @{ok=$true;source='structuredContent';payload=@{adapterVersion='3.0.0';schemaVersion='dysflow.result/v1'}} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $script:Captures 'bootstrap.json') -Encoding utf8NoBOM
     $script:InvokeFixture = {
-        param([string]$Body)
+        param(
+            [string]$Body,
+            [string]$ErrorCodesVersion = '3.0.0',
+            [string]$WriteFlagsVersion = '3.0.0'
+        )
         Get-ChildItem -LiteralPath $script:Examples -File -ErrorAction SilentlyContinue | Remove-Item -Force
         Set-Content -LiteralPath (Join-Path $script:Examples 'fixture.md') -Value $Body -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:References 'error-codes.md') -Value "Verified for the v$ErrorCodesVersion release." -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:Root 'assets/write-flags-matrix.md') -Value "Verified for the v$WriteFlagsVersion release." -Encoding utf8NoBOM
         $report = Join-Path $TestDrive "report-$([guid]::NewGuid()).json"
         & pwsh -NoProfile -File $script:Verifier -Path $script:Root -CapturesDir $script:Captures -SkipLive -OutputJson $report | Out-Null
         [pscustomobject]@{ ExitCode=$LASTEXITCODE; Report=(Get-Content -Raw $report | ConvertFrom-Json -Depth 20) }
@@ -57,5 +64,12 @@ Describe 'schema-derived example verification' {
         $empty = Join-Path $TestDrive 'empty'
         New-Item -ItemType Directory -Path $empty | Out-Null
         { & $script:Verifier -Path $script:Root -CapturesDir $empty -SkipLive } | Should -Throw
+    }
+
+    It 'rejects a documented version stamp that differs from bootstrap.adapterVersion' {
+        $result = & $script:InvokeFixture '' '2.9.0' '3.0.0'
+        $result.ExitCode | Should -Be 1
+        $result.Report.findings.code | Should -Contain 'VERSION_STAMP_MISMATCH'
+        $result.Report.findings.file | Should -Contain 'references/error-codes.md'
     }
 }

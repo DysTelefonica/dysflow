@@ -1427,7 +1427,9 @@ export class VbaModulesAdapter {
     // import, so a disk file "myform.bas" and a VBE name "MyForm" are the SAME
     // module. Key the cross-reference by lowercase name (keeping the original
     // disk name for display) to avoid reporting one real module as two orphans.
-    const diskModulesMap = new Map<string, { name: string; path: string }>();
+    type DiskModule = { name: string; path: string };
+    const diskModulesMap = new Map<string, DiskModule>();
+    const diskModuleCandidates = new Map<string, DiskModule[]>();
     for (const folder of managedFolders(destinationRoot)) {
       try {
         const entries = await this.fileSystem.readdir(folder);
@@ -1438,11 +1440,15 @@ export class VbaModulesAdapter {
 
           const key = modName.toLowerCase();
           const fullPath = resolve(folder, entryName);
+          const candidate = { name: modName, path: fullPath };
+          const candidates = diskModuleCandidates.get(key);
+          if (candidates) candidates.push(candidate);
+          else diskModuleCandidates.set(key, [candidate]);
           const current = diskModulesMap.get(key);
           if (!current) {
-            diskModulesMap.set(key, { name: modName, path: fullPath });
+            diskModulesMap.set(key, candidate);
           } else if (current.path.endsWith(".form.txt") || current.path.endsWith(".report.txt")) {
-            diskModulesMap.set(key, { name: modName, path: fullPath });
+            diskModulesMap.set(key, candidate);
           }
         }
       } catch {
@@ -1460,10 +1466,13 @@ export class VbaModulesAdapter {
       keys: new Set(category.names.map((name) => name.toLowerCase())),
     }));
     const findDocumentSource = (name: string, category: (typeof documentSources)[number]) => {
-      const candidate = diskModulesMap.get(documentAlias(name, category.prefix).toLowerCase());
-      return candidate && parse(candidate.path).dir.toLowerCase() === category.folderPath
-        ? candidate
-        : undefined;
+      const candidates = (
+        diskModuleCandidates.get(documentAlias(name, category.prefix).toLowerCase()) ?? []
+      ).filter((candidate) => parse(candidate.path).dir.toLowerCase() === category.folderPath);
+      return (
+        candidates.find((candidate) => candidate.path.toLowerCase().endsWith(".cls")) ??
+        candidates[0]
+      );
     };
     const findDiskModule = (name: string) => {
       const key = name.toLowerCase();

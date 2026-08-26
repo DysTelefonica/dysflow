@@ -115,10 +115,10 @@ Thresholds are set at measured baseline minus a safety margin (ADR-6). Current f
 > not depend on host CPU availability. The authoritative coverage measurement runs on the same
 > Windows platform that hosts Microsoft Access and PowerShell in production.
 
-The branch floor restores its historical 80% value after three repeated measurements converged
-near 80.5%.
+The branch floor keeps its historical 80% value. Port-level coverage for the telemetry-evidence
+CLI raises the deterministic Windows measurement from 80.55% to 80.97%.
 
-That leaves approximately 0.5 percentage points of measured margin; it does not claim
+That leaves approximately 0.9 percentage points of measured margin; it does not claim
 headroom comparable to the deliberately broader floors on the other metrics.
 
 > Raise thresholds only after sustained coverage improvements and CI validation.

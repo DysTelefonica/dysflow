@@ -21,6 +21,8 @@ async function auditDocumentSources(options: {
   binaryName: string;
   documentModules: readonly string[];
   kind: "form" | "report";
+  moduleEntries?: readonly string[];
+  sourceEntries?: readonly string[];
   sourceName: string;
 }) {
   const orchestrator = {
@@ -38,13 +40,18 @@ async function auditDocumentSources(options: {
       }),
   } as unknown as VbaModulesOrchestrator;
   const fileSystem = {
-    readdir: async (folder: string) =>
-      folder === resolve(root, `${options.kind}s`)
-        ? [
-            fileEntry(`${options.sourceName}.cls`),
-            fileEntry(`${options.sourceName}.${options.kind}.txt`),
+    readdir: async (folder: string) => {
+      if (folder === resolve(root, `${options.kind}s`)) {
+        return (
+          options.sourceEntries ?? [
+            `${options.sourceName}.cls`,
+            `${options.sourceName}.${options.kind}.txt`,
           ]
-        : [],
+        ).map(fileEntry);
+      }
+      if (folder === resolve(root, "modules")) return (options.moduleEntries ?? []).map(fileEntry);
+      return [];
+    },
   } as unknown as ComparisonFileSystemPort;
 
   const result = await new VbaModulesAdapter(orchestrator, fileSystem).execute(
@@ -88,6 +95,39 @@ describe("Access form orphan normalization (#1591)", () => {
 
     expect(data.orphans).not.toContainEqual(
       expect.objectContaining({ moduleName: formSourceName, isOrphan: true }),
+    );
+  });
+
+  it("prefers the forms code-behind when a module has the same alias", async () => {
+    const data = await auditDocumentSources({
+      binaryName: "FormGestionRiesgos",
+      documentModules: [formSourceName],
+      kind: "form",
+      moduleEntries: [`${formSourceName}.bas`],
+      sourceEntries: [`${formSourceName}.form.txt`, `${formSourceName}.cls`],
+      sourceName: formSourceName,
+    });
+
+    expect(data.orphans.find(({ moduleName }) => moduleName === "FormGestionRiesgos")).toEqual(
+      expect.objectContaining({
+        isOrphan: false,
+        sourcePath: expect.stringMatching(/[\\/]forms[\\/]Form_FormGestionRiesgos\.cls$/i),
+      }),
+    );
+  });
+
+  it("does not treat a same-named module as form code-behind", async () => {
+    const data = await auditDocumentSources({
+      binaryName: "FormGestionRiesgos",
+      documentModules: [formSourceName],
+      kind: "form",
+      moduleEntries: [`${formSourceName}.bas`],
+      sourceEntries: [],
+      sourceName: formSourceName,
+    });
+
+    expect(data.orphans.find(({ moduleName }) => moduleName === "FormGestionRiesgos")).toEqual(
+      expect.objectContaining({ isOrphan: true, sourcePath: null }),
     );
   });
 });
