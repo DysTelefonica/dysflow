@@ -5,8 +5,9 @@ BeforeAll {
     $script:Root = Join-Path $TestDrive 'skill'
     $script:Examples = Join-Path $script:Root 'assets/examples'
     $script:Assets = Join-Path $script:Root 'assets'
+    $script:References = Join-Path $script:Root 'references'
     $script:Captures = Join-Path $TestDrive 'captures'
-    New-Item -ItemType Directory -Force -Path $script:Examples,$script:Captures | Out-Null
+    New-Item -ItemType Directory -Force -Path $script:Examples,$script:References,$script:Captures | Out-Null
     $catalog = @{
         schemaVersion = 'dysflow.result/v1'
         tools = @(
@@ -34,12 +35,15 @@ BeforeAll {
         param(
             [string]$Body,
             [string]$ProseTool = 'form_set_properties',
-            [string]$PreferredMatrixTool = 'form_set_properties'
+            [string]$PreferredMatrixTool = 'form_set_properties',
+            [string]$ErrorCodesVersion = '3.0.0',
+            [string]$WriteFlagsVersion = '3.0.0'
         )
         Get-ChildItem -LiteralPath $script:Examples -File -ErrorAction SilentlyContinue | Remove-Item -Force
         Set-Content -LiteralPath (Join-Path $script:Examples 'fixture.md') -Value $Body -Encoding utf8NoBOM
         Set-Content -LiteralPath (Join-Path $script:Root 'SKILL.md') -Value "## Form UI tools — perceive → act → verify`nUse ``$ProseTool`` for guarded property writes.`n`n## Next section" -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $script:Assets 'write-flags-matrix.md') -Value "| Tool | Notes |`n|---|---|`n| ``$PreferredMatrixTool`` | ``preferred`` tool. |" -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:References 'error-codes.md') -Value "Verified for the v$ErrorCodesVersion release." -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:Assets 'write-flags-matrix.md') -Value "Verified for the v$WriteFlagsVersion release.`n`n| Tool | Notes |`n|---|---|`n| ``$PreferredMatrixTool`` | ``preferred`` tool. |" -Encoding utf8NoBOM
         $report = Join-Path $TestDrive "report-$([guid]::NewGuid()).json"
         & pwsh -NoProfile -File $script:Verifier -Path $script:Root -CapturesDir $script:Captures -SkipLive -OutputJson $report | Out-Null
         [pscustomobject]@{ ExitCode=$LASTEXITCODE; Report=(Get-Content -Raw $report | ConvertFrom-Json -Depth 20) }
@@ -80,14 +84,21 @@ Describe 'schema-derived example verification' {
     }
 
     It 'rejects a callable but non-advertised tool in canonical form prose' {
-        $result = & $script:InvokeFixture '' 'form_set_property' 'form_set_properties'
+        $result = & $script:InvokeFixture -Body '' -ProseTool 'form_set_property'
         $result.ExitCode | Should -Be 1
         $result.Report.findings.code | Should -Contain 'NON_ADVERTISED_PROSE_TOOL'
     }
 
     It 'rejects a callable but non-advertised tool marked preferred in the matrix' {
-        $result = & $script:InvokeFixture '' 'form_set_properties' 'form_set_property'
+        $result = & $script:InvokeFixture -Body '' -PreferredMatrixTool 'form_set_property'
         $result.ExitCode | Should -Be 1
         $result.Report.findings.code | Should -Contain 'NON_ADVERTISED_MATRIX_TOOL'
+    }
+
+    It 'rejects a documented version stamp that differs from bootstrap.adapterVersion' {
+        $result = & $script:InvokeFixture -Body '' -ErrorCodesVersion '2.9.0'
+        $result.ExitCode | Should -Be 1
+        $result.Report.findings.code | Should -Contain 'VERSION_STAMP_MISMATCH'
+        $result.Report.findings.file | Should -Contain 'references/error-codes.md'
     }
 }

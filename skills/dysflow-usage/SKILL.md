@@ -231,37 +231,10 @@ silently picking one intent — always read
 4. **Error codes** (`references/error-codes.md`) — typed envelope codes, verified live.
 5. **Agent contract map** (`references/agent-friction-map.md`) — functionality-by-functionality zero-friction behavior.
 
-## Examples (index)
+## Examples (canonical directory)
 
-| File | Action |
-|---|---|
-| `assets/examples/bootstrap.md` | `bootstrap` — mandatory minimal first call |
-| `assets/examples/get-capabilities.md` | `get_capabilities` — compact/full capability expansion |
-| `assets/examples/describe-tool.md` | `describe_tool` — one-tool on-demand introspection |
-| `assets/examples/setup-project.md` | `setup_project` — plan/apply bootstrap for a missing worktree config |
-| `assets/examples/resolve-project.md` | `resolve_project` — select and verify a worktree without restarting MCP |
-| `assets/examples/resolve-project-recovery.md` | `resolve_project` / `setup_project` — consume an opaque ambiguity recovery token |
-| `assets/examples/doctor.md` | `dysflow doctor` — category-based project/runtime diagnosis |
-| `assets/examples/import-modules.md` | `import_modules` — disk source → Access binary |
-| `assets/examples/export-modules.md` | `export_modules` — Access binary → disk source |
-| `assets/examples/export-all.md` | `export_all` — full project export, optional `prune:true` |
-| `assets/examples/verify-code.md` | `verify_code` — drift detection (read-only) |
-| `assets/examples/run-vba.md` | `run_vba` — invoke a public VBA procedure |
-| `assets/examples/test-vba.md` | `test_vba` — run a JSON manifest of test atoms |
-| `assets/examples/lint-module.md` | `lint_module` — parse-error hint per module |
-| `assets/examples/get-procedure.md` | `get_procedure` — inspect one managed or external-binary procedure |
-| `assets/examples/list-procedures.md` | `list_procedures` — list managed or external-binary procedures |
-| `assets/examples/detect-dead-code.md` | `detect_dead_code` — process-free or opted-in binary dead-code analysis |
-| `assets/examples/find-references.md` | `find_references` — managed/binary symbol references |
-| `assets/examples/vba-orphan-audit.md` | `vba_orphan_audit` — binary/source orphan inventory |
-| `assets/examples/query-execute.md` | `query_execute` — read/write SQL |
-| `assets/examples/link-tables.md` | `link_tables` — plan or create/relink backend TableDefs |
-| `assets/examples/list-objects.md` | `list_objects` — inventory of the binary |
-| `assets/examples/access-force-cleanup-orphaned.md` | `access_force_cleanup_orphaned` — safely retire stuck Access processes |
-| `assets/examples/create-form-from-template.md` | `create_form_from_template` — scaffold a form from a spec |
-| `assets/examples/sync-binary.md` | `sync_binary` — verify → plan → import/export → re-verify → recommend in one call |
-| `assets/examples/migrate-project-config.md` | `migrate_project_config` — drive legacy `.dysflow/project.json` migrations deterministically (#1177) |
-| `assets/examples/logs.md` | `logs` — local invocation filters and names-only friction aggregates |
+See `assets/examples/` for the canonical per-tool index. Every advertised MCP
+tool has a kebab-case `.md` example file there.
 
 ## Form UI tools — perceive → act → verify
 

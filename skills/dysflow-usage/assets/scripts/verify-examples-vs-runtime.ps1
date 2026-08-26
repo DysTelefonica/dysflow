@@ -49,6 +49,28 @@ function Add-Finding([string]$File,[string]$Tool,[string]$Code,[string]$Detail) 
     $findings.Add([pscustomobject]@{kind='DRIFT';file=$File;tool=$Tool;code=$Code;detail=$Detail})
 }
 
+function Test-VersionStamp([string]$RelativePath) {
+    $documentPath = Join-Path $Path $RelativePath
+    if (-not (Test-Path -LiteralPath $documentPath)) {
+        Add-Finding $RelativePath '' 'VERSION_STAMP_MISSING' 'Version-stamped document is missing.'
+        return
+    }
+    $document = Get-Content -Raw -LiteralPath $documentPath
+    $match = [regex]::Match($document, 'verified for the v([^\s]+) release', 'IgnoreCase')
+    if (-not $match.Success) {
+        Add-Finding $RelativePath '' 'VERSION_STAMP_MISSING' 'Expected a release version stamp.'
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$adapterVersion)) {
+        Add-Finding $RelativePath '' 'VERSION_STAMP_UNAVAILABLE' 'bootstrap.adapterVersion is required to verify the document stamp.'
+        return
+    }
+    $documentedVersion = $match.Groups[1].Value
+    if ($documentedVersion -ne [string]$adapterVersion) {
+        Add-Finding $RelativePath '' 'VERSION_STAMP_MISMATCH' "Documented v$documentedVersion does not match bootstrap.adapterVersion $adapterVersion."
+    }
+}
+
 function Test-Type($Value,$Schema) {
     if ($null -eq $Schema -or $null -eq $Schema.type) { return $true }
     if ($null -eq $Value) { return $Schema.nullable -eq $true -or $Schema.type -eq 'array' }
@@ -131,6 +153,8 @@ function Test-CanonicalDocumentationTools {
 }
 
 Test-CanonicalDocumentationTools
+Test-VersionStamp 'references/error-codes.md'
+Test-VersionStamp 'assets/write-flags-matrix.md'
 
 $examplesDir = Join-Path $Path 'assets\examples'
 foreach ($file in Get-ChildItem -LiteralPath $examplesDir -Filter '*.md' -File | Sort-Object Name) {
