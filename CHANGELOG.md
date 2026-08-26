@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.0.4] - 2026-08-26
+
+### Changes
+
+- fix(skills): make protocol frontmatter valid yaml
+
+
 ## [v4.0.3] - 2026-08-26
 
 ### Changes
