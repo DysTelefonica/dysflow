@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "runtime": {
     "version": "4.0.2",
-    "commit": "e825505eb678bba0d8178f75d8dbd6d73fa097bd",
+    "commit": "155a7e90934ec9782f7e5297c1c99fd28c821ea3",
     "runtimePath": "dist/cli/index.js"
   },
   "toolCount": 71,
@@ -24,20 +24,20 @@
       "wireBytes": 49956
     },
     "schemaFull": {
-      "logicalBytes": 822576,
-      "wireBytes": 823028
+      "logicalBytes": 823047,
+      "wireBytes": 823499
     },
     "schemaCompact": {
-      "logicalBytes": 120092,
-      "wireBytes": 120544
+      "logicalBytes": 120103,
+      "wireBytes": 120555
     },
     "schemaIndex": {
       "logicalBytes": 4001,
       "wireBytes": 12996
     },
     "describeTool": {
-      "logicalBytes": 740599,
-      "wireBytes": 2069868
+      "logicalBytes": 741070,
+      "wireBytes": 2071453
     },
     "describeToolSelected": {
       "logicalBytes": 180014,
@@ -205,156 +205,156 @@
       {
         "name": "sync_binary",
         "logicalBytes": 26894,
-        "share": 0.036314
+        "share": 0.036291
       },
       {
         "name": "import_modules",
         "logicalBytes": 25543,
-        "share": 0.03449
+        "share": 0.034468
       },
       {
         "name": "export_modules",
         "logicalBytes": 23857,
-        "share": 0.032213
+        "share": 0.032193
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 17893,
-        "share": 0.02416
+        "share": 0.024145
       },
       {
         "name": "export_all",
         "logicalBytes": 17876,
-        "share": 0.024137
+        "share": 0.024122
       },
       {
         "name": "lint_module",
         "logicalBytes": 17295,
-        "share": 0.023353
+        "share": 0.023338
       },
       {
         "name": "verify_code",
         "logicalBytes": 16930,
-        "share": 0.02286
+        "share": 0.022845
       },
       {
         "name": "import_all",
         "logicalBytes": 15426,
-        "share": 0.020829
+        "share": 0.020816
       },
       {
         "name": "test_vba",
         "logicalBytes": 15410,
-        "share": 0.020807
+        "share": 0.020794
       },
       {
         "name": "form_distribute_controls",
         "logicalBytes": 15395,
-        "share": 0.020787
+        "share": 0.020774
       }
     ],
     "schemaFull": [
       {
         "name": "sync_binary",
         "logicalBytes": 19546,
-        "share": 0.023766
+        "share": 0.023752
       },
       {
         "name": "import_modules",
         "logicalBytes": 18257,
-        "share": 0.022199
+        "share": 0.022186
       },
       {
         "name": "export_modules",
         "logicalBytes": 17271,
-        "share": 0.021
+        "share": 0.020988
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 14006,
-        "share": 0.01703
+        "share": 0.01702
       },
       {
         "name": "form_set_property",
         "logicalBytes": 13328,
-        "share": 0.016205
+        "share": 0.016196
       },
       {
         "name": "export_all",
         "logicalBytes": 13070,
-        "share": 0.015892
+        "share": 0.015883
       },
       {
         "name": "form_duplicate_control",
         "logicalBytes": 12994,
-        "share": 0.015799
+        "share": 0.01579
       },
       {
         "name": "relink_directory",
         "logicalBytes": 12910,
-        "share": 0.015697
+        "share": 0.015688
       },
       {
         "name": "verify_code",
         "logicalBytes": 12798,
-        "share": 0.015561
+        "share": 0.015552
       },
       {
         "name": "lint_module",
         "logicalBytes": 12615,
-        "share": 0.015338
+        "share": 0.01533
       }
     ],
     "schemaCompact": [
       {
         "name": "verify_code",
         "logicalBytes": 1743,
-        "share": 0.01453
+        "share": 0.014529
       },
       {
         "name": "vba_orphan_audit",
         "logicalBytes": 1644,
-        "share": 0.013705
+        "share": 0.013704
       },
       {
         "name": "migrate_project_config",
-        "logicalBytes": 1589,
-        "share": 0.013246
+        "logicalBytes": 1600,
+        "share": 0.013337
       },
       {
         "name": "access_force_cleanup_orphaned",
         "logicalBytes": 1569,
-        "share": 0.01308
+        "share": 0.013078
       },
       {
         "name": "import_modules",
         "logicalBytes": 1562,
-        "share": 0.013021
+        "share": 0.01302
       },
       {
         "name": "clean_stale_markers",
         "logicalBytes": 1556,
-        "share": 0.012971
+        "share": 0.01297
       },
       {
         "name": "bootstrap",
         "logicalBytes": 1538,
-        "share": 0.012821
+        "share": 0.01282
       },
       {
         "name": "export_modules",
         "logicalBytes": 1537,
-        "share": 0.012813
+        "share": 0.012812
       },
       {
         "name": "sync_binary",
         "logicalBytes": 1515,
-        "share": 0.012629
+        "share": 0.012628
       },
       {
         "name": "exec_sql",
         "logicalBytes": 1448,
-        "share": 0.012071
+        "share": 0.01207
       }
     ],
     "schemaIndex": [
@@ -420,7 +420,7 @@
   "baseline": {
     "generatedFrom": {
       "version": "4.0.2",
-      "commit": "e825505eb678bba0d8178f75d8dbd6d73fa097bd",
+      "commit": "155a7e90934ec9782f7e5297c1c99fd28c821ea3",
       "runtimePath": "dist/cli/index.js"
     }
   }

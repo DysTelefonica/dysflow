@@ -31,9 +31,14 @@ import { describe, expect, it } from "vitest";
 import type { VbaModulesOrchestrator } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import type { OperationResult } from "../../../src/core/contracts/index.js";
+import type { ComparisonFileSystemEntry } from "../../../src/core/services/vba-source-comparison.js";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
-function buildAdapterWithSpy(): {
+function buildAdapterWithSpy(
+  entries: readonly ComparisonFileSystemEntry[] = [
+    { name: "Orphan.bas", isDirectory: () => false, isFile: () => true },
+  ],
+): {
   adapter: VbaModulesAdapter;
   executeCalls: Array<{ toolName: string; params: Record<string, unknown> }>;
   rmCalls: string[];
@@ -89,7 +94,7 @@ function buildAdapterWithSpy(): {
 
   const adapter = new VbaModulesAdapter(orchestrator, {
     mkdtemp: async () => "C:/repo",
-    readdir: async () => [{ name: "Orphan.bas", isDirectory: () => false, isFile: () => true }],
+    readdir: async () => entries,
     readFile: async () => "",
     readFileBytes: async () => new Uint8Array(),
     rm: async (path) => {
@@ -190,6 +195,34 @@ describe("VbaModulesAdapter — export_all apply flag unification (#757 C1)", ()
     expect(executeCalls).toHaveLength(1);
     expect(rmCalls).not.toEqual([]);
     expect(result.data).toMatchObject({ prune: { applied: true } });
+  });
+
+  it("export_all prune ignores directories whose names have managed extensions (#1578)", async () => {
+    const { adapter, rmCalls } = buildAdapterWithSpy([
+      { name: "Orphan.bas", isDirectory: () => true, isFile: () => false },
+      { name: "RealOrphan.cls", isDirectory: () => false, isFile: () => true },
+    ]);
+
+    const result = await adapter.execute("export_all", {
+      apply: true,
+      prune: true,
+      destinationRoot: "C:/repo/src",
+      projectId: "test",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    const prune = (
+      result.data as {
+        prune: { applied: boolean; deleted: string[]; failed: unknown[] };
+      }
+    ).prune;
+    expect(prune.applied).toBe(true);
+    expect(prune.failed).toEqual([]);
+    expect(prune.deleted).toEqual(rmCalls);
+    expect(rmCalls).not.toEqual([]);
+    expect(rmCalls.every((path) => path.endsWith("RealOrphan.cls"))).toBe(true);
+    expect(rmCalls.some((path) => path.endsWith("Orphan.bas"))).toBe(false);
   });
 
   it("export_all({diff:true}) no longer errors with DIFF_MODE_REQUIRES_VERIFY_CODE (#757 unification)", async () => {
