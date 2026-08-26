@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { isAdvertisedUnderSurface } from "../../src/adapters/mcp/agent-workflow-registry";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
 import { successResult } from "../../src/core/contracts/index";
 
@@ -27,7 +28,9 @@ describe("README MCP tool surface", () => {
   it("keeps the visible tool count aligned with the tools/list surface (#590)", async () => {
     const readme = await readFile("README.md", "utf8");
     const tools = advertisedTools();
-    const visibleCount = tools.filter((tool) => !tool.hidden).length;
+    const visibleCount = tools.filter(
+      (tool) => !tool.hidden && isAdvertisedUnderSurface(tool.name, "core"),
+    ).length;
     const statedCounts = [...readme.matchAll(/(\d+) visible MCP tools/g)].map((match) =>
       Number(match[1]),
     );

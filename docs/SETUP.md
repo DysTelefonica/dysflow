@@ -121,7 +121,7 @@ Keep secrets in environment variables, not in the committed project file.
 
 ### Select the advertised MCP tool surface
 
-The stdio server advertises the 67-tool core surface by default. It includes bootstrap,
+The stdio server advertises the 71-tool core surface by default. It includes bootstrap,
 recovery, test, source-sync, read-only SQL/form inspection, and the guarded `query_execute` entry point.
 
 Write-capable SQL and form specialists remain callable by name and discoverable with
