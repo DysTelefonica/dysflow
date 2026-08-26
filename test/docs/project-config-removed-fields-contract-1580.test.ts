@@ -17,7 +17,7 @@ const CONTRACT_SOURCES = [
   "src/adapters/mcp/migrate-project-config-tool.ts",
 ] as const;
 
-const UPGRADE_NOTES = "CHANGELOG.md";
+const UPGRADE_NOTES = "docs/migrations/v4-0-3.md";
 const APPLY_MIGRATION_CALL = "migrate_project_config({ apply: true })";
 
 const workspaces: string[] = [];
@@ -63,16 +63,16 @@ describe("#1580 removed top-level project config fields", () => {
 
   it("anchors the runtime remediation to the v4.0.3 upgrade note", async () => {
     const result = loadLegacyProjectConfig("allowWrites");
-    const changelog = await readFile(UPGRADE_NOTES, "utf8");
+    const upgradeNote = await readFile(UPGRADE_NOTES, "utf8");
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected removed top-level field to be rejected");
     expect(result.error.message).toContain("migrate_project_config");
     expect(result.error.message).toContain(APPLY_MIGRATION_CALL);
-    expect(changelog).toContain("## [v4.0.3]");
-    expect(changelog).toContain("### Breaking changes");
-    expect(changelog).toContain("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
-    expect(changelog).toContain(APPLY_MIGRATION_CALL);
+    expect(upgradeNote).toContain("# v4.0.3 Config Migration");
+    expect(upgradeNote).toContain("## Breaking change");
+    expect(upgradeNote).toContain("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
+    expect(upgradeNote).toContain(APPLY_MIGRATION_CALL);
   });
 
   it.each(
