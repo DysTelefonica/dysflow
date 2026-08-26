@@ -67,7 +67,6 @@
 | `generate_form_design_plan` | `noop` | `[]` | `read-only` | `preferred` tool. Generates a guarded plan from analyzed behavior. |
 | `apply_form_design_plan` | `plan` | `[]` | `destructive-write` | `preferred` tool. Apply a plan through the guarded write seam. Pair `mode:"dry-run"` to preview — the returned `mode` / `filesystemApplied` reflects the real write. |
 | `copy_form_ui_pattern` | `noop` | `[]` | `read-only` | Pure offline FormIR planning. |
-| `form_set_property` | `plan` | `[]` | `routine-dev-write` | Update exactly one property; `propertyName` is canonical, `property` is alias. |
 | `form_delete_control` | `plan` | `[]` | `destructive-write` | Removes a control. |
 | `form_set_properties` | `plan` | `[]` | `routine-dev-write` | `preferred` tool. Update several properties on one control atomically. |
 | `form_duplicate_control` | `plan` | `[]` | `routine-dev-write` | Duplicate an existing control. |

@@ -4,6 +4,7 @@ BeforeAll {
     $script:Verifier = Join-Path $PSScriptRoot 'verify-examples-vs-runtime.ps1'
     $script:Root = Join-Path $TestDrive 'skill'
     $script:Examples = Join-Path $script:Root 'assets/examples'
+    $script:Assets = Join-Path $script:Root 'assets'
     $script:References = Join-Path $script:Root 'references'
     $script:Captures = Join-Path $TestDrive 'captures'
     New-Item -ItemType Directory -Force -Path $script:Examples,$script:References,$script:Captures | Out-Null
@@ -12,21 +13,37 @@ BeforeAll {
         tools = @(
             @{ name='read_tool'; access='read-only'; annotations=@{readOnlyHint=$true}; inputSchema=@{type='object';additionalProperties=$false;properties=@{}}; compositionConstraints=@() },
             @{ name='write_tool'; access='conditional-write'; annotations=@{readOnlyHint=$false}; inputSchema=@{type='object';additionalProperties=$false;properties=@{apply=@{type='boolean'}}}; compositionConstraints=@() },
-            @{ name='schema'; access='read-only'; annotations=@{readOnlyHint=$true}; inputSchema=@{type='object';additionalProperties=$false;properties=@{view=@{type='string';enum=@('index','compact','full');runtimeRequired=$true}}}; compositionConstraints=@() }
+            @{ name='schema'; access='read-only'; annotations=@{readOnlyHint=$true}; inputSchema=@{type='object';additionalProperties=$false;properties=@{view=@{type='string';enum=@('index','compact','full');runtimeRequired=$true}}}; compositionConstraints=@() },
+            @{ name='form_set_property'; access='conditional-write'; annotations=@{readOnlyHint=$false}; inputSchema=@{type='object';additionalProperties=$false;properties=@{apply=@{type='boolean'}}}; compositionConstraints=@() },
+            @{ name='form_set_properties'; access='conditional-write'; annotations=@{readOnlyHint=$false}; inputSchema=@{type='object';additionalProperties=$false;properties=@{apply=@{type='boolean'}}}; compositionConstraints=@() }
         )
     }
     @{ok=$true;source='structuredContent';payload=$catalog} | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $script:Captures 'full.json') -Encoding utf8NoBOM
+    $index = @{
+        schemaVersion = 'dysflow.result/v1'
+        tools = @(
+            @{name='read_tool';advertised=$true},
+            @{name='write_tool';advertised=$true},
+            @{name='schema';advertised=$true},
+            @{name='form_set_property';advertised=$false},
+            @{name='form_set_properties';advertised=$true}
+        )
+    }
+    @{ok=$true;source='structuredContent';payload=$index} | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $script:Captures 'index.json') -Encoding utf8NoBOM
     @{ok=$true;source='structuredContent';payload=@{adapterVersion='3.0.0';schemaVersion='dysflow.result/v1'}} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $script:Captures 'bootstrap.json') -Encoding utf8NoBOM
     $script:InvokeFixture = {
         param(
             [string]$Body,
+            [string]$ProseTool = 'form_set_properties',
+            [string]$PreferredMatrixTool = 'form_set_properties',
             [string]$ErrorCodesVersion = '3.0.0',
             [string]$WriteFlagsVersion = '3.0.0'
         )
         Get-ChildItem -LiteralPath $script:Examples -File -ErrorAction SilentlyContinue | Remove-Item -Force
         Set-Content -LiteralPath (Join-Path $script:Examples 'fixture.md') -Value $Body -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:Root 'SKILL.md') -Value "## Form UI tools — perceive → act → verify`nUse ``$ProseTool`` for guarded property writes.`n`n## Next section" -Encoding utf8NoBOM
         Set-Content -LiteralPath (Join-Path $script:References 'error-codes.md') -Value "Verified for the v$ErrorCodesVersion release." -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $script:Root 'assets/write-flags-matrix.md') -Value "Verified for the v$WriteFlagsVersion release." -Encoding utf8NoBOM
+        Set-Content -LiteralPath (Join-Path $script:Assets 'write-flags-matrix.md') -Value "Verified for the v$WriteFlagsVersion release.`n`n| Tool | Notes |`n|---|---|`n| ``$PreferredMatrixTool`` | ``preferred`` tool. |" -Encoding utf8NoBOM
         $report = Join-Path $TestDrive "report-$([guid]::NewGuid()).json"
         & pwsh -NoProfile -File $script:Verifier -Path $script:Root -CapturesDir $script:Captures -SkipLive -OutputJson $report | Out-Null
         [pscustomobject]@{ ExitCode=$LASTEXITCODE; Report=(Get-Content -Raw $report | ConvertFrom-Json -Depth 20) }
@@ -66,8 +83,20 @@ Describe 'schema-derived example verification' {
         { & $script:Verifier -Path $script:Root -CapturesDir $empty -SkipLive } | Should -Throw
     }
 
+    It 'rejects a callable but non-advertised tool in canonical form prose' {
+        $result = & $script:InvokeFixture -Body '' -ProseTool 'form_set_property'
+        $result.ExitCode | Should -Be 1
+        $result.Report.findings.code | Should -Contain 'NON_ADVERTISED_PROSE_TOOL'
+    }
+
+    It 'rejects a callable but non-advertised tool marked preferred in the matrix' {
+        $result = & $script:InvokeFixture -Body '' -PreferredMatrixTool 'form_set_property'
+        $result.ExitCode | Should -Be 1
+        $result.Report.findings.code | Should -Contain 'NON_ADVERTISED_MATRIX_TOOL'
+    }
+
     It 'rejects a documented version stamp that differs from bootstrap.adapterVersion' {
-        $result = & $script:InvokeFixture '' '2.9.0' '3.0.0'
+        $result = & $script:InvokeFixture -Body '' -ErrorCodesVersion '2.9.0'
         $result.ExitCode | Should -Be 1
         $result.Report.findings.code | Should -Contain 'VERSION_STAMP_MISMATCH'
         $result.Report.findings.file | Should -Contain 'references/error-codes.md'
