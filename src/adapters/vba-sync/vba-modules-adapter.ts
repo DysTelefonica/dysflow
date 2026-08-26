@@ -1413,37 +1413,17 @@ export class VbaModulesAdapter {
     if (!targetResult.ok) return targetResult;
     const destinationRoot = targetResult.data.destinationRoot;
 
-    const folders = [
-      destinationRoot,
-      resolve(destinationRoot, "modules"),
-      resolve(destinationRoot, "classes"),
-      resolve(destinationRoot, "forms"),
-      resolve(destinationRoot, "reports"),
-    ];
-
     // VBA identifiers are case-insensitive and the VBE re-cases module names on
     // import, so a disk file "myform.bas" and a VBE name "MyForm" are the SAME
     // module. Key the cross-reference by lowercase name (keeping the original
     // disk name for display) to avoid reporting one real module as two orphans.
     const diskModulesMap = new Map<string, { name: string; path: string }>();
-    for (const folder of folders) {
+    for (const folder of managedFolders(destinationRoot)) {
       try {
         const entries = await this.fileSystem.readdir(folder);
         for (const entry of entries) {
           const entryName = typeof entry === "string" ? entry : entry.name;
-          const lower = entryName.toLowerCase();
-          let modName: string | null = null;
-
-          if (lower.endsWith(".form.txt")) {
-            modName = entryName.slice(0, -".form.txt".length);
-          } else if (lower.endsWith(".report.txt")) {
-            modName = entryName.slice(0, -".report.txt".length);
-          } else {
-            const ext = extname(entryName).toLowerCase();
-            if ([".bas", ".cls"].includes(ext)) {
-              modName = parse(entryName).name;
-            }
-          }
+          const modName = managedDiskModuleName(entryName);
 
           if (modName) {
             const key = modName.toLowerCase();
