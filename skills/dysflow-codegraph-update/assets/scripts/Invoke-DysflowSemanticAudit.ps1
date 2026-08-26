@@ -10,6 +10,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $helper = Join-Path $PSScriptRoot 'Invoke-DysflowJsonRpc.ps1'
 if (-not $CapturesDir) { $CapturesDir = Join-Path $env:TEMP 'dysflow-semantic-audit' }
+$repoRoot = (Resolve-Path (Join-Path $SkillRoot '..\..')).Path
+$repositoryHead = [string](& git -C $repoRoot rev-parse HEAD 2>$null)
+if ($LASTEXITCODE -ne 0 -or $repositoryHead -notmatch '^[0-9a-f]{40}$') {
+    throw "Could not bind semantic audit evidence to repository HEAD at $repoRoot."
+}
+$repositoryStatus = @(& git -C $repoRoot status --porcelain 2>$null)
+if ($LASTEXITCODE -ne 0) { throw "Could not inspect repository status at $repoRoot." }
+$repositoryClean = $repositoryStatus.Count -eq 0
 
 function Read-Capture([string]$Path) {
     $value = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json -Depth 100
@@ -237,7 +245,7 @@ if (Test-Path -LiteralPath $examplesDir) {
     }
 }
 
-$report = [pscustomobject]@{adapterVersion=$caps.adapterVersion;toolInventory=$bootstrap.toolInventory;callableCount=$capNames.Count;advertisedCount=$advertisedCount;compactCount=$compactNames.Count;fullCount=$fullNames.Count;describedCount=$describeByName.Count;classification=[pscustomobject]$statuses;workflowPhases=@($seenPhases);compositionConstraintsCount=@($full.tools | Where-Object { @($_.compositionConstraints).Count -gt 0 }).Count;DRIFT=@($drift);'RUNTIME CONTRACT GAP'=@($gaps);findings=@($drift);runtimeGaps=@($gaps)}
+$report = [pscustomobject]@{schemaVersion='dysflow.semantic-audit/v1';repositoryHead=$repositoryHead;repositoryClean=$repositoryClean;adapterVersion=$caps.adapterVersion;toolInventory=$bootstrap.toolInventory;callableCount=$capNames.Count;advertisedCount=$advertisedCount;compactCount=$compactNames.Count;fullCount=$fullNames.Count;describedCount=$describeByName.Count;classification=[pscustomobject]$statuses;workflowPhases=@($seenPhases);compositionConstraintsCount=@($full.tools | Where-Object { @($_.compositionConstraints).Count -gt 0 }).Count;DRIFT=@($drift);'RUNTIME CONTRACT GAP'=@($gaps);findings=@($drift);runtimeGaps=@($gaps)}
 if ($OutputJson) { [IO.File]::WriteAllText($OutputJson, ($report | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false)) }
 $report | ConvertTo-Json -Depth 100
 if ($drift.Count) { exit 1 }

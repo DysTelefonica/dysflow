@@ -16,10 +16,12 @@
 #      GitHub Release with the assets.
 #
 # Usage:
-#   pwsh -File scripts/release-prepare.ps1 -Bump minor
-#   pwsh -File scripts/release-prepare.ps1 -Bump patch
-#   pwsh -File scripts/release-prepare.ps1 -Version 1.11.2
+#   pwsh -File scripts/release-prepare.ps1 -Bump minor -SemanticAuditEvidencePath C:\audit\semantic-audit.json
+#   pwsh -File scripts/release-prepare.ps1 -Bump patch -SemanticAuditEvidencePath C:\audit\semantic-audit.json
+#   pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 -SemanticAuditEvidencePath C:\audit\semantic-audit.json
 #   pwsh -File scripts/release-prepare.ps1 -Resume -Version 1.11.2
+# Non-resume preparation requires the current, candidate-bound, gate-clean JSON report emitted by
+# Invoke-DysflowSemanticAudit.ps1.
 #
 # Pre-flight:
 #   - Working tree clean (the script refuses to start on dirty trees so the
@@ -36,7 +38,8 @@ Param(
     [ValidateSet("patch", "minor", "major")]
     [string]$Bump,
     [string]$Version,
-    [switch]$Resume
+    [switch]$Resume,
+    [string]$SemanticAuditEvidencePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -189,6 +192,102 @@ function Update-ReleaseVersionStamp {
     [IO.File]::WriteAllBytes($Path, $output)
 }
 
+function Update-SkillDysflowVersionStamp {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+        [Parameter(Mandatory)]
+        [Version]$Version
+    )
+
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $encoding = [Text.UTF8Encoding]::new($false, $true)
+    $preambleLength = 0
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $encoding = [Text.UTF8Encoding]::new($true, $true)
+        $preambleLength = 3
+    } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+        $encoding = [Text.UnicodeEncoding]::new($false, $true, $true)
+        $preambleLength = 2
+    } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+        $encoding = [Text.UnicodeEncoding]::new($true, $true, $true)
+        $preambleLength = 2
+    }
+
+    $text = $encoding.GetString($bytes, $preambleLength, $bytes.Length - $preambleLength)
+    $pattern = '(?m)^[ \t]*last_dysflow_version:[ \t]*"(?<version>[^"\r\n]+)"[^\r\n]*\r?$'
+    $matches = [regex]::Matches($text, $pattern)
+    if ($matches.Count -ne 1) {
+        throw "Expected exactly one last_dysflow_version field in $Path; found $($matches.Count)."
+    }
+    $versionToken = $matches[0].Groups['version']
+    $updated = $text.Remove($versionToken.Index, $versionToken.Length).Insert(
+        $versionToken.Index,
+        [string]$Version
+    )
+    $body = $encoding.GetBytes($updated)
+    if ($preambleLength -eq 0) {
+        [IO.File]::WriteAllBytes($Path, $body)
+        return
+    }
+    $preamble = $encoding.GetPreamble()
+    $output = [byte[]]::new($preamble.Length + $body.Length)
+    [Array]::Copy($preamble, 0, $output, 0, $preamble.Length)
+    [Array]::Copy($body, 0, $output, $preamble.Length, $body.Length)
+    [IO.File]::WriteAllBytes($Path, $output)
+}
+
+function Assert-ReleaseSemanticAuditEvidence {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+        [Parameter(Mandatory)]
+        [Version]$CurrentVersion,
+        [Parameter(Mandatory)]
+        [string]$CurrentHead
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Current drift-free semantic-audit evidence is required before release preparation: $Path"
+    }
+    try {
+        $evidence = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json -Depth 100
+    } catch {
+        throw "Semantic-audit evidence is not valid JSON: $Path"
+    }
+    $requiredFields = @(
+        'schemaVersion', 'repositoryHead', 'repositoryClean', 'adapterVersion',
+        'DRIFT', 'RUNTIME CONTRACT GAP', 'findings', 'runtimeGaps'
+    )
+    $missingFields = @($requiredFields | Where-Object { $_ -notin $evidence.PSObject.Properties.Name })
+    if ($missingFields.Count -gt 0) {
+        throw "Semantic-audit evidence does not match the canonical report; missing: $($missingFields -join ', ')."
+    }
+    if ($evidence.schemaVersion -cne 'dysflow.semantic-audit/v1') {
+        throw "Semantic-audit evidence uses unsupported schemaVersion '$($evidence.schemaVersion)'."
+    }
+    if ([string]$evidence.repositoryHead -notmatch '^[0-9a-f]{40}$') {
+        throw "Semantic-audit evidence has a malformed repositoryHead binding."
+    }
+    if ([string]$evidence.repositoryHead -cne $CurrentHead) {
+        throw "Semantic-audit evidence targets repository HEAD $($evidence.repositoryHead), not current candidate $CurrentHead."
+    }
+    if ($evidence.repositoryClean -isnot [bool] -or $evidence.repositoryClean -ne $true) {
+        throw "Semantic-audit evidence is not bound to a clean repository candidate."
+    }
+    if ([string]$evidence.adapterVersion -ne [string]$CurrentVersion) {
+        throw "Semantic-audit evidence targets adapter $($evidence.adapterVersion), not current candidate $CurrentVersion."
+    }
+    if (@($evidence.DRIFT).Count -gt 0 -or @($evidence.findings).Count -gt 0) {
+        throw "Semantic-audit evidence reports drift; release metadata will not be advanced."
+    }
+    if (@($evidence.'RUNTIME CONTRACT GAP').Count -gt 0 -or @($evidence.runtimeGaps).Count -gt 0) {
+        throw "Semantic-audit evidence reports a runtime contract gap; release metadata will not be advanced."
+    }
+}
+
 function Invoke-ReleasePrepare {
     [CmdletBinding()]
     Param(
@@ -196,6 +295,7 @@ function Invoke-ReleasePrepare {
         [string]$Bump,
         [string]$Version,
         [switch]$Resume,
+        [string]$SemanticAuditEvidencePath,
         [int]$GateTimeoutSeconds = 120,
         [int]$CiMaxWaitSeconds = 600,
         [int]$CiPollSeconds = 10
@@ -266,6 +366,20 @@ if (-not $Resume -and $next -le $current) {
     throw "Next version $next is not greater than current $current. Use a higher version."
 }
 
+if (-not $Resume) {
+    if ([string]::IsNullOrWhiteSpace($SemanticAuditEvidencePath)) {
+        throw "Current drift-free semantic-audit evidence is required before release preparation."
+    }
+    $candidateHead = [string](git rev-parse HEAD)
+    if ($candidateHead -notmatch '^[0-9a-f]{40}$') {
+        throw "Semantic-audit evidence cannot be bound because current repository HEAD is invalid."
+    }
+    Assert-ReleaseSemanticAuditEvidence `
+        -Path $SemanticAuditEvidencePath `
+        -CurrentVersion $current `
+        -CurrentHead $candidateHead
+}
+
 $tag = "v$next"
 if ($Resume) {
     Write-Host "Resuming already prepared $tag without mutating release files." -ForegroundColor Cyan
@@ -279,6 +393,11 @@ $stampPaths = @(
     (Join-Path (Get-Location).Path "skills/dysflow-usage/references/error-codes.md"),
     (Join-Path (Get-Location).Path "skills/dysflow-usage/assets/write-flags-matrix.md")
 )
+$skillRelativePaths = @(
+    "skills/dysflow-arnes/SKILL.md", "skills/dysflow-usage/SKILL.md", "skills/dysflow-codegraph-update/SKILL.md",
+    "skills/dysflow-examples-sync/SKILL.md", "skills/dysflow-pointer-rollout/SKILL.md"
+)
+$skillPaths = @($skillRelativePaths | ForEach-Object { Join-Path (Get-Location).Path $_ })
 
 if ($Resume) {
     $headSha = git rev-parse HEAD
@@ -303,6 +422,11 @@ if ($Resume) {
             throw "Cannot resume $tag because $stampPath does not carry the prepared version stamp."
         }
     }
+    foreach ($skillPath in $skillPaths) {
+        if ((Get-Content $skillPath -Raw) -notmatch "(?m)^[ \t]*last_dysflow_version:[ \t]*`"$([regex]::Escape([string]$next))`"") {
+            throw "Cannot resume $tag because $skillPath does not carry the prepared last_dysflow_version."
+        }
+    }
 } else {
 $packageBefore = [IO.File]::ReadAllBytes($packagePath)
 $changelogExisted = Test-Path $changelogPath
@@ -311,6 +435,11 @@ $stampBytesBefore = @{}
 foreach ($stampPath in $stampPaths) {
     if (-not (Test-Path $stampPath)) { throw "Release-owned version stamp file not found: $stampPath" }
     $stampBytesBefore[$stampPath] = [IO.File]::ReadAllBytes($stampPath)
+}
+$skillBytesBefore = @{}
+foreach ($skillPath in $skillPaths) {
+    if (-not (Test-Path $skillPath)) { throw "Release-owned skill file not found: $skillPath" }
+    $skillBytesBefore[$skillPath] = [IO.File]::ReadAllBytes($skillPath)
 }
 $preCommitSucceeded = $false
 try {
@@ -331,6 +460,9 @@ if ($null -eq $lastTag) {
 
 foreach ($stampPath in $stampPaths) {
     Update-ReleaseVersionStamp -Path $stampPath -Version $next
+}
+foreach ($skillPath in $skillPaths) {
+    Update-SkillDysflowVersionStamp -Path $skillPath -Version $next
 }
 
 $commits = git log $logRange --no-merges --pretty=format:"%s" 2>$null
@@ -357,7 +489,13 @@ if (Test-Path $changelogPath) {
 # Validate the exact file that would be committed. A malformed generated entry
 # must fail locally before the release commit can make main red.
 Assert-ReleaseChangelogQuality -ChangelogPath $changelogPath -TimeoutSeconds $GateTimeoutSeconds
-git add "package.json" "CHANGELOG.md" "skills/dysflow-usage/references/error-codes.md" "skills/dysflow-usage/assets/write-flags-matrix.md"
+$releasePaths = @(
+    "package.json",
+    "CHANGELOG.md",
+    "skills/dysflow-usage/references/error-codes.md",
+    "skills/dysflow-usage/assets/write-flags-matrix.md"
+) + $skillRelativePaths
+git add @releasePaths
 $preCommitSucceeded = $true
 } finally {
     if (-not $preCommitSucceeded) {
@@ -369,6 +507,9 @@ $preCommitSucceeded = $true
         }
         foreach ($stampPath in $stampPaths) {
             [IO.File]::WriteAllBytes($stampPath, $stampBytesBefore[$stampPath])
+        }
+        foreach ($skillPath in $skillPaths) {
+            [IO.File]::WriteAllBytes($skillPath, $skillBytesBefore[$skillPath])
         }
     }
 }
@@ -445,6 +586,9 @@ function Invoke-ReleasePrepareEntryPoint {
     }
     if ($BoundParameters.ContainsKey("Resume")) {
         $releaseParameters.Resume = $BoundParameters.Resume
+    }
+    if ($BoundParameters.ContainsKey("SemanticAuditEvidencePath")) {
+        $releaseParameters.SemanticAuditEvidencePath = $BoundParameters.SemanticAuditEvidencePath
     }
 
     Invoke-ReleasePrepare @releaseParameters
