@@ -373,6 +373,9 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     createResolveProjectTool({
       cwd,
       recovery: projectResolutionRecovery,
+      cachedProjectConfigResolver: (effectiveCwd) =>
+        worktreeCache.peekContext(effectiveCwd, effectiveCwd === cwd ? "startup" : "cwd-param")
+          ?.projectConfig ?? null,
       projectConfigResolver: (effectiveCwd, input) => resolveProjectConfig(input, effectiveCwd),
     }),
     // Issue #971 — runtime contract discovery. Read-only tool that

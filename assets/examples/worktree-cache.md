@@ -12,6 +12,11 @@ const registration = await tools.dysflow.register_worktree({
 // registration.cache.status is "miss" on the first scan and "hit" while the
 // canonical context remains valid. Telemetry includes hits, misses,
 // invalidations, evictions, entries, watchers, maxEntries, and ttlMs.
+const resolution = await tools.dysflow.resolve_project({
+  cwd: "C:/worktrees/my-project",
+});
+// resolve_project uses this exact valid cache entry as its implicit target;
+// it does not rediscover sibling worktrees under the same parent.
 const capabilities = await tools.dysflow.get_capabilities({
   cwd: "C:/worktrees/my-project",
 });

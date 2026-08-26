@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { cleanStaleMarkersResultContract } from "../../../src/adapters/mcp/contracts/bootstrap-result-contracts.js";
 import type { DysflowMcpServices } from "../../../src/adapters/mcp/tools";
 import { createDysflowMcpTools, MODERN_TOOL_NAMES } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
@@ -149,6 +150,8 @@ describe("dysflow.clean_stale_markers (Round-12 #976)", () => {
     expect(payload.removed).toBe(0);
     expect(payload.kept).toBe(4);
     expect(payload.scanned).toBe(4);
+    expect(payload).toHaveProperty("warnings");
+    expect(() => cleanStaleMarkersResultContract.schema.parse(payload)).not.toThrow();
   });
 
   it("apply with unified confirmation removes only stale running markers", async () => {

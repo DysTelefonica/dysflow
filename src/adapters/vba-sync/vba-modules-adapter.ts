@@ -1450,13 +1450,19 @@ export class VbaModulesAdapter {
       }
     }
 
-    const formKeys = new Set(vbeForms.map((name) => name.toLowerCase()));
-    const formsFolder = resolve(destinationRoot, "forms").toLowerCase();
-    const formSourceAlias = (name: string) => `form_${name.toLowerCase()}`;
-    const findFormSource = (name: string) => {
-      const candidates = (diskModuleCandidates.get(formSourceAlias(name)) ?? []).filter(
-        (candidate) => parse(candidate.path).dir.toLowerCase() === formsFolder,
-      );
+    const documentCategories = [
+      { names: vbeForms, folder: "forms", prefix: "Form_" },
+      { names: vbeReports, folder: "reports", prefix: "Report_" },
+    ] as const;
+    const documentSources = documentCategories.map((category) => ({
+      ...category,
+      folderPath: resolve(destinationRoot, category.folder).toLowerCase(),
+      keys: new Set(category.names.map((name) => name.toLowerCase())),
+    }));
+    const findDocumentSource = (name: string, category: (typeof documentSources)[number]) => {
+      const candidates = (
+        diskModuleCandidates.get(documentAlias(name, category.prefix).toLowerCase()) ?? []
+      ).filter((candidate) => parse(candidate.path).dir.toLowerCase() === category.folderPath);
       return (
         candidates.find((candidate) => candidate.path.toLowerCase().endsWith(".cls")) ??
         candidates[0]
@@ -1465,14 +1471,21 @@ export class VbaModulesAdapter {
     const findDiskModule = (name: string) => {
       const key = name.toLowerCase();
       const exact = diskModulesMap.get(key);
-      if (exact || !formKeys.has(key)) return exact;
-      return findFormSource(name);
+      if (exact) return exact;
+      for (const category of documentSources) {
+        if (!category.keys.has(key)) continue;
+        const aliased = findDocumentSource(name, category);
+        if (aliased) return aliased;
+      }
+      return undefined;
     };
 
     const vbeKeys = new Set<string>([...vbeAll].map((n) => n.toLowerCase()));
-    for (const formName of vbeForms) {
-      if (findFormSource(formName)) {
-        vbeKeys.add(formSourceAlias(formName));
+    for (const category of documentSources) {
+      for (const name of category.names) {
+        if (findDocumentSource(name, category)) {
+          vbeKeys.add(documentAlias(name, category.prefix).toLowerCase());
+        }
       }
     }
     const SUSPICIOUS_REGEX =
@@ -1915,12 +1928,15 @@ function isMissingDirectoryError(error: unknown): boolean {
   );
 }
 
-function addDocumentAliases(names: Set<string>, moduleName: string, prefix: "Form_" | "Report_") {
+function documentAlias(moduleName: string, prefix: "Form_" | "Report_"): string {
   if (moduleName.toLowerCase().startsWith(prefix.toLowerCase())) {
-    names.add(moduleName.slice(prefix.length));
-  } else {
-    names.add(`${prefix}${moduleName}`);
+    return moduleName.slice(prefix.length);
   }
+  return `${prefix}${moduleName}`;
+}
+
+function addDocumentAliases(names: Set<string>, moduleName: string, prefix: "Form_" | "Report_") {
+  names.add(documentAlias(moduleName, prefix));
 }
 
 /**
