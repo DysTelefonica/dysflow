@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.0.6] - 2026-08-27
+
+### Changes
+
+- fix(release): advance skill verification metadata
+- docs(skills): align verified runtime metadata
+
+
 ## [v4.0.5] - 2026-08-26
 
 ### Changes
