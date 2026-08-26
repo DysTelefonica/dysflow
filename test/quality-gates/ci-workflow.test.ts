@@ -502,10 +502,14 @@ describe("repository quality gates", () => {
     expect(testConfig.include).toEqual(["src/**/*.ts", "test/**/*.ts", "tests/**/*.ts"]);
   });
 
-  it("configures Vitest coverage for source files without generated output", async () => {
+  it("configures deterministic V8 coverage for source files without generated output", async () => {
     const config = await readText("vitest.config.ts");
 
+    expect(config).toContain('pool: "forks"');
+    expect(config).toContain("maxWorkers: 1");
     expect(config).toContain('provider: "v8"');
+    expect(config).toContain("processingConcurrency: 1");
+    expect(config).toContain("branches: 80");
     expect(config).toContain('include: ["src/**/*.ts"]');
     expect(config).toContain('"dist/**"');
     expect(config).toContain('"test/**"');

@@ -105,13 +105,19 @@ Thresholds are set at measured baseline minus a safety margin (ADR-6). Current f
 | Metric     | Floor   |
 |------------|---------|
 | statements | 82%     |
-| branches   | **78%** |
+| branches   | **80%** |
 | functions  | 85%     |
 | lines      | 84%     |
 
-> **CI is the authoritative gate.** The unit suite is serialized with `maxWorkers: 1` for
-> Windows spawn stability. The authoritative coverage measurement now runs on the same
+> **CI is the authoritative gate.** Vitest uses two independent concurrency controls:
+> `maxWorkers: 1` serializes test execution for Windows spawn stability, while
+> `coverage.processingConcurrency: 1` serializes V8 coverage-result processing so the result does
+> not depend on host CPU availability. The authoritative coverage measurement runs on the same
 > Windows platform that hosts Microsoft Access and PowerShell in production.
+
+The branch floor restores its historical 80% value after three repeated measurements converged
+near 80.5%. That leaves approximately 0.5 percentage points of measured margin; it does not claim
+headroom comparable to the deliberately broader floors on the other metrics.
 
 > Raise thresholds only after sustained coverage improvements and CI validation.
 

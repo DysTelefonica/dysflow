@@ -31,19 +31,19 @@ export default defineConfig({
     hookTimeout: 15_000,
     coverage: {
       provider: "v8",
+      // Coverage result processing has its own concurrency limit; maxWorkers
+      // only serializes test execution. Pin both so one commit produces the
+      // same coverage measurement regardless of host CPU availability.
+      processingConcurrency: 1,
       reportsDirectory: "coverage",
       reporter: ["text", "json", "html"],
       include: ["src/**/*.ts"],
       exclude: ["dist/**", "test/**", "**/*.test.ts", "vitest.config.ts"],
-      // Branches threshold tuned to 78 to absorb the ~0.5pp CI flake on the
-      // Linux runner where parallel v8 coverage collection under the fork pool
-      // measurably differs from a single-worker local run (same source, same
-      // tests, ~79.7% on Linux vs ~80.3% locally). Without the buffer the gate
-      // flakes on every push even when no source changed. Raise again only
-      // after pinning the runner's v8 worker count to match local.
+      // The historical branch floor is restored after repeated coverage runs
+      // converged near 80.5%, leaving roughly 0.5 percentage points of margin.
       thresholds: {
         statements: 82,
-        branches: 78,
+        branches: 80,
         functions: 85,
         lines: 84
       }
