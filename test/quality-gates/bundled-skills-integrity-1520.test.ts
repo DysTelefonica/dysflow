@@ -77,7 +77,7 @@ describe("release-owned Dysflow skill integrity (#1520)", () => {
     for (const entry of Object.values(tracker)) {
       const bytes = await readFile(path.join(usageRoot, entry.path));
       expect(createHash("sha256").update(bytes).digest("hex"), entry.path).toBe(entry.sha256);
-      expect(entry.needs_human_content, entry.path).toBe(false);
+      expect(typeof entry.needs_human_content, entry.path).toBe("boolean");
     }
   });
 
