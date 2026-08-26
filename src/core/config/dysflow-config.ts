@@ -916,7 +916,7 @@ function buildProjectConfig(
     return failureResult(
       createDysflowError(
         "CONFIG_TOP_LEVEL_FIELDS_REMOVED",
-        `.dysflow/project.json sets the deprecated top-level field(s) ${offending.join(", ")}. These fields were removed in v1.15.0; migrate to the top-level "capabilities" block (capabilities.allowWrites, capabilities.procedures.allow).`,
+        `.dysflow/project.json sets the deprecated top-level field(s) ${offending.join(", ")}. These fields were removed in v1.15.0; preview the repair with migrate_project_config({ apply: false }), then rewrite the file with migrate_project_config({ apply: true }). The fields move to the top-level "capabilities" block (capabilities.allowWrites, capabilities.procedures.allow).`,
       ),
     );
   }

@@ -9,6 +9,13 @@
 
 ## [v4.0.3] - 2026-08-26
 
+### Breaking changes
+
+- Configs accepted by v4.0.2 with top-level `allowWrites` or `allowedProcedures` are rejected with
+  `CONFIG_TOP_LEVEL_FIELDS_REMOVED`. Preview the migration with
+  `migrate_project_config({ apply: false })`, then rewrite the file with
+  `migrate_project_config({ apply: true })` before retrying the original operation.
+
 ### Changes
 
 - docs(quality): split coverage margin paragraph
