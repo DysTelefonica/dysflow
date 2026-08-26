@@ -166,7 +166,7 @@
   },
   "migrate_project_config": {
     "path": "assets/examples/migrate-project-config.md",
-    "sha256": "3873b32443b616fcac7b3a3ddbd1addd7939b25fe74039b66d178380e4e43056",
+    "sha256": "75302fdb3f76dc851e2a5f33e3c21e506ed1f0eafe655598b9c6cbb202d24c53",
     "needs_human_content": false
   },
   "preflight_checklist": {

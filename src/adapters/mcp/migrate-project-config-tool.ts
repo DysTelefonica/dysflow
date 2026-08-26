@@ -228,12 +228,11 @@ export async function tryMigrateProjectConfig(
       from: LEGACY_ALLOW_WRITES_FIELD,
       to: `${CAPABILITIES_FIELD}.${CAPABILITIES_ALLOW_WRITES_FIELD}`,
       reason:
-        "T18 caps-block migration: top-level allowWrites is deprecated in favour of capabilities.allowWrites",
+        "removed runtime field (CONFIG_TOP_LEVEL_FIELDS_REMOVED): migrate top-level allowWrites to capabilities.allowWrites",
     });
   }
 
-  // 3. Top-level `allowedProcedures` → `capabilities.procedures.allow`
-  //    (deprecation, kept as a read-through alias until v1.15.0).
+  // 3. Removed top-level `allowedProcedures` → `capabilities.procedures.allow`.
   if (Object.hasOwn(proposed, ALLOWED_PROCEDURES_FIELD)) {
     const value = proposed[ALLOWED_PROCEDURES_FIELD];
     const capabilities = isPlainObject(proposed[CAPABILITIES_FIELD])
@@ -253,7 +252,7 @@ export async function tryMigrateProjectConfig(
       from: ALLOWED_PROCEDURES_FIELD,
       to: `${CAPABILITIES_FIELD}.${PROCEDURES_FIELD}.allow`,
       reason:
-        "deprecation: top-level allowedProcedures is read-through to capabilities.procedures.allow until v1.15.0",
+        "removed runtime field (CONFIG_TOP_LEVEL_FIELDS_REMOVED): migrate top-level allowedProcedures to capabilities.procedures.allow",
     });
   }
 
