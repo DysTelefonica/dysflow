@@ -419,6 +419,7 @@ const migrateSuccess = z
     diff: z.string(),
     remediation: z.array(migrateRemediationEntry),
     applied: z.boolean(),
+    warnings: z.array(preferredToolWarning).optional(),
   })
   .strict();
 
