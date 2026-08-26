@@ -40,8 +40,14 @@ const services: DysflowMcpServices = {
 };
 
 const allTools = createDysflowMcpTools({ services });
-const HIDDEN_FORM_TOOL = "apply_form_design_plan";
-const CORE_TOOL_COUNT = 67;
+const HIDDEN_FORM_TOOL = "form_set_property";
+const CORE_TOOL_COUNT = 71;
+const PREFERRED_FORM_WRITE_TOOLS = [
+  "apply_form_design_plan",
+  "form_align_controls",
+  "form_distribute_controls",
+  "form_set_properties",
+] as const;
 
 function createProject(toolSurface: unknown): { root: string; cleanup(): void } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-tool-surface-"));
@@ -132,6 +138,39 @@ describe("tool-surface (#1492)", () => {
     } finally {
       await client.close();
       await serverDone.catch(() => undefined);
+    }
+  });
+
+  it("advertises every preferred workflow tool and every preferred-status tool on core", async () => {
+    const listed = await listToolsOnce("core");
+    try {
+      const listedNames = new Set(listed.tools.map((tool) => String(tool.name)));
+      const schemaPayload = await callToolPayload(allTools, "schema", { view: "index" });
+      const schemaEntries = schemaPayload.tools as Array<{
+        name: string;
+        status: string;
+        advertised: boolean;
+      }>;
+      const bootstrapPayload = await callToolPayload(allTools, "bootstrap", {});
+      const workflows = bootstrapPayload.preferredAgentWorkflows as Record<string, unknown>;
+      const workflowNames = Object.values(workflows).flatMap((value) =>
+        Array.isArray(value)
+          ? value.filter((name): name is string => typeof name === "string")
+          : [],
+      );
+
+      expect(workflowNames.filter((name) => !listedNames.has(name))).toEqual([]);
+      expect(
+        schemaEntries
+          .filter((entry) => entry.status === "preferred" && !entry.advertised)
+          .map((entry) => entry.name),
+      ).toEqual([]);
+      for (const name of PREFERRED_FORM_WRITE_TOOLS) {
+        expect(listedNames.has(name), name).toBe(true);
+        expect(schemaEntries.find((entry) => entry.name === name)?.advertised, name).toBe(true);
+      }
+    } finally {
+      await listed.close();
     }
   });
 
