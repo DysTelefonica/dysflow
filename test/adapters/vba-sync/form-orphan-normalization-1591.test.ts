@@ -10,13 +10,19 @@ import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.j
 
 const root = resolve("C:/project/src");
 const formSourceName = "Form_FormGestionRiesgos";
+const reportSourceName = "Report_RptMonthly";
 const fileEntry = (name: string) => ({
   name,
   isDirectory: () => false,
   isFile: () => true,
 });
 
-async function auditFormSources(documentModules: readonly string[]) {
+async function auditDocumentSources(options: {
+  binaryName: string;
+  documentModules: readonly string[];
+  kind: "form" | "report";
+  sourceName: string;
+}) {
   const orchestrator = {
     runPreflightCleanup: runNoopPreflightCleanup,
     resolveExecutionTarget: async () =>
@@ -26,15 +32,18 @@ async function auditFormSources(documentModules: readonly string[]) {
       successResult({
         modules: ["__dysflow_inline__"],
         classes: [],
-        forms: ["FormGestionRiesgos"],
-        reports: [],
-        documentModules,
+        forms: options.kind === "form" ? [options.binaryName] : [],
+        reports: options.kind === "report" ? [options.binaryName] : [],
+        documentModules: options.documentModules,
       }),
   } as unknown as VbaModulesOrchestrator;
   const fileSystem = {
     readdir: async (folder: string) =>
-      folder === resolve(root, "forms")
-        ? [fileEntry(`${formSourceName}.cls`), fileEntry(`${formSourceName}.form.txt`)]
+      folder === resolve(root, `${options.kind}s`)
+        ? [
+            fileEntry(`${options.sourceName}.cls`),
+            fileEntry(`${options.sourceName}.${options.kind}.txt`),
+          ]
         : [],
   } as unknown as ComparisonFileSystemPort;
 
@@ -51,7 +60,12 @@ async function auditFormSources(documentModules: readonly string[]) {
 
 describe("Access form orphan normalization (#1591)", () => {
   it("pairs a binary form with its prefixed document-module source", async () => {
-    const data = await auditFormSources([formSourceName]);
+    const data = await auditDocumentSources({
+      binaryName: "FormGestionRiesgos",
+      documentModules: [formSourceName],
+      kind: "form",
+      sourceName: formSourceName,
+    });
 
     expect(data.orphans.find(({ moduleName }) => moduleName === "FormGestionRiesgos")).toEqual(
       expect.objectContaining({
@@ -65,10 +79,46 @@ describe("Access form orphan normalization (#1591)", () => {
   });
 
   it("does not emit the prefixed source as a second orphan when document modules are omitted", async () => {
-    const data = await auditFormSources([]);
+    const data = await auditDocumentSources({
+      binaryName: "FormGestionRiesgos",
+      documentModules: [],
+      kind: "form",
+      sourceName: formSourceName,
+    });
 
     expect(data.orphans).not.toContainEqual(
       expect.objectContaining({ moduleName: formSourceName, isOrphan: true }),
+    );
+  });
+});
+
+describe("Access report orphan normalization (#1605)", () => {
+  it("pairs a binary report with its prefixed document-module source", async () => {
+    const data = await auditDocumentSources({
+      binaryName: "RptMonthly",
+      documentModules: [reportSourceName],
+      kind: "report",
+      sourceName: reportSourceName,
+    });
+
+    expect(data.orphans.find(({ moduleName }) => moduleName === "RptMonthly")).toEqual(
+      expect.objectContaining({
+        isOrphan: false,
+        sourcePath: expect.stringMatching(/Report_RptMonthly\.cls$/i),
+      }),
+    );
+  });
+
+  it("does not emit the prefixed report source as a second orphan", async () => {
+    const data = await auditDocumentSources({
+      binaryName: "RptMonthly",
+      documentModules: [],
+      kind: "report",
+      sourceName: reportSourceName,
+    });
+
+    expect(data.orphans).not.toContainEqual(
+      expect.objectContaining({ moduleName: reportSourceName, isOrphan: true }),
     );
   });
 });

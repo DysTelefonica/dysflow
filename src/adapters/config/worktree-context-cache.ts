@@ -80,6 +80,19 @@ export class WorktreeContextCache {
     sourceHint: WorktreeContextSource,
   ): Promise<{ context: WorktreeContext; status: "hit" | "miss" }> {
     const cwd = canonicalCwd(cwdInput);
+    const cached = this.peekContext(cwd, sourceHint);
+    if (cached !== null) return { context: cached, status: "hit" };
+
+    const now = this.#now();
+    this.#misses += 1;
+    const diagnostic = await this.#resolveDiagnostic(cwd, {});
+    const context = buildContext(cwd, sourceHint, diagnostic, now);
+    this.#insert(identity(cwd), context);
+    return { context, status: "miss" };
+  }
+
+  peekContext(cwdInput: string, sourceHint: WorktreeContextSource): WorktreeContext | null {
+    const cwd = canonicalCwd(cwdInput);
     const key = identity(cwd);
     const now = this.#now();
     let cached = this.#entries.get(key);
@@ -95,14 +108,10 @@ export class WorktreeContextCache {
       this.#entries.delete(key);
       this.#entries.set(key, cached);
       this.#hits += 1;
-      return { context: { ...cached.context, sourceHint }, status: "hit" };
+      return { ...cached.context, sourceHint };
     }
     if (cached !== undefined) this.#invalidateKey(key);
-    this.#misses += 1;
-    const diagnostic = await this.#resolveDiagnostic(cwd, {});
-    const context = buildContext(cwd, sourceHint, diagnostic, now);
-    this.#insert(key, context);
-    return { context, status: "miss" };
+    return null;
   }
 
   async resolveDiagnostic(

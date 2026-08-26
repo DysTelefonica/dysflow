@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
 import { WorktreeContextCache } from "../../../src/adapters/config/worktree-context-cache.js";
+import { migrateProjectConfigResultContract } from "../../../src/adapters/mcp/contracts/bootstrap-result-contracts.js";
 import {
   createMigrateProjectConfigTool,
   type MigrateProjectConfigInput,
@@ -182,6 +183,34 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
     expect(payload.applied).toBe(false);
     expect(payload.diff).toContain("frontendFile");
     expect(readFileSync(configPath, "utf-8")).toBe(before);
+  });
+
+  it("declares only the successful payload shape that its handler can emit", async () => {
+    writeProjectConfig(MIGRATED_FRONTEND_FILE);
+    const tool = createMigrateProjectConfigTool({ cwd: workdir, writesEnabled: true });
+
+    const result = await tool.handler({});
+    const payload = JSON.parse(result.content[0]?.text ?? "null") as unknown;
+
+    expect(result.isError).toBe(false);
+    expect(migrateProjectConfigResultContract.schema.safeParse(payload).success).toBe(true);
+    expect(
+      migrateProjectConfigResultContract.schema.safeParse({
+        outcome: "error",
+        error: { code: "PROJECT_CONFIG_NOT_FOUND", message: "missing" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps helper failures as typed MCP errors outside the success contract", async () => {
+    const tool = createMigrateProjectConfigTool({ cwd: workdir, writesEnabled: true });
+
+    const result = await tool.handler({});
+    const payload = JSON.parse(result.content[0]?.text ?? "null") as unknown;
+
+    expect(result.isError).toBe(true);
+    expect(result.error?.code).toBe("PROJECT_CONFIG_NOT_FOUND");
+    expect(migrateProjectConfigResultContract.schema.safeParse(payload).success).toBe(false);
   });
 
   it("apply:true handler rewrites the file in place", async () => {

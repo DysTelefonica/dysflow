@@ -314,6 +314,7 @@ export const cleanStaleMarkersResultContract = defineResultContract({
       removedMarkerIds: z.array(z.string()),
       keptMarkerIds: z.array(z.string()),
       errors: z.array(z.object({ markerId: z.string(), error: z.string() }).strict()),
+      warnings: z.array(preferredToolWarning).optional(),
     })
     .strict(),
 });
@@ -397,10 +398,8 @@ export const clearWorktreeCacheResultContract = defineResultContract({
     .strict(),
 });
 
-// Issue #1177 — `migrate_project_config` result contract. The success
-// branch carries the full diff preview (current / proposed / diff /
-// remediation) plus an `applied` flag; the error branch is a typed
-// envelope so consumers can branch on `outcome` instead of catching.
+// Issue #1177 — `migrate_project_config` success result contract. Failures
+// use the shared typed MCP error envelope and skip success-payload validation.
 const migrateRemediationEntry = z
   .object({
     field: z.string(),
@@ -423,22 +422,9 @@ const migrateSuccess = z
   })
   .strict();
 
-const migrateError = z
-  .object({
-    outcome: z.literal("error"),
-    error: z
-      .object({
-        code: z.string(),
-        message: z.string(),
-        remediation: z.string().optional(),
-      })
-      .strict(),
-  })
-  .strict();
-
 export const migrateProjectConfigResultContract = defineResultContract({
   modes: ["plan", "apply"],
-  schema: z.discriminatedUnion("outcome", [migrateSuccess, migrateError]),
+  schema: migrateSuccess,
 });
 
 export const bootstrapRecoveryResultContracts = {

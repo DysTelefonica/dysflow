@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-
+import { buildAgentWorkflowMetadata } from "../../../../src/adapters/mcp/agent-workflow-registry.js";
 import {
   bootstrapRecoveryResultContracts,
   cleanStaleMarkersResultContract,
@@ -13,6 +13,8 @@ import {
   resolveProjectResultContract,
   schemaResultContract,
 } from "../../../../src/adapters/mcp/contracts/bootstrap-result-contracts.js";
+import { executableResultContractForTool } from "../../../../src/adapters/mcp/contracts/executable-result-contract-registry.js";
+import { MCP_TOOL_CONTRACTS } from "../../../../src/adapters/mcp/mcp-tool-contracts.js";
 import { createResolveProjectTool } from "../../../../src/adapters/mcp/resolve-project-tool.js";
 import {
   createDescribeToolTool,
@@ -26,6 +28,22 @@ afterEach(() => {
 
 function payload(result: { content: readonly { text?: string }[] }): unknown {
   return JSON.parse(result.content[0]?.text ?? "null");
+}
+
+function schemaAllowsWarnings(schema: unknown): boolean {
+  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) return false;
+  const record = schema as Record<string, unknown>;
+  const variants = [record.anyOf, record.oneOf].filter(Array.isArray).flat() as unknown[];
+  if (variants.length > 0) return variants.some(schemaAllowsWarnings);
+  if (record.type !== "object") return false;
+  if (record.additionalProperties !== false) return true;
+  const properties = record.properties;
+  return (
+    properties !== null &&
+    typeof properties === "object" &&
+    !Array.isArray(properties) &&
+    Object.hasOwn(properties, "warnings")
+  );
 }
 
 describe("bootstrap/recovery executable result contracts", () => {
@@ -109,5 +127,23 @@ describe("bootstrap/recovery executable result contracts", () => {
     expect(() =>
       cleanStaleMarkersResultContract.schema.parse({ ...fixture, mode: "apply" }),
     ).toThrow();
+  });
+
+  it("keeps every warning-eligible tool compatible with preferred-tool decoration", () => {
+    const warningEligibleTools = Object.keys(MCP_TOOL_CONTRACTS).filter((name) => {
+      const workflow = buildAgentWorkflowMetadata(name);
+      const access = MCP_TOOL_CONTRACTS[name as keyof typeof MCP_TOOL_CONTRACTS].access;
+      return (
+        workflow.status === "legacy" ||
+        (workflow.status === "specialized" && access !== "read-only")
+      );
+    });
+
+    const incompatible = warningEligibleTools.filter((name) => {
+      const contract = executableResultContractForTool(name);
+      return contract?.kind !== "dataSchema" || !schemaAllowsWarnings(contract.introspectionSchema);
+    });
+
+    expect(incompatible).toEqual([]);
   });
 });
