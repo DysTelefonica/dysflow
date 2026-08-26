@@ -22,6 +22,13 @@ if (-not (Test-Path -LiteralPath $fullPath)) {
 $capture = Get-Content -Raw -LiteralPath $fullPath | ConvertFrom-Json -Depth 100
 if ($capture.PSObject.Properties.Name -contains 'payload') { $capture = $capture.payload }
 if ($capture.schemaVersion -ne 'dysflow.result/v1') { throw 'full.json is not a Dysflow result/v1 capture.' }
+$indexPath = Join-Path $CapturesDir 'index.json'
+if (-not (Test-Path -LiteralPath $indexPath)) {
+    throw 'A complete candidate-runtime index.json capture is required to verify advertised documentation references.'
+}
+$indexCapture = Get-Content -Raw -LiteralPath $indexPath | ConvertFrom-Json -Depth 100
+if ($indexCapture.PSObject.Properties.Name -contains 'payload') { $indexCapture = $indexCapture.payload }
+if ($indexCapture.schemaVersion -ne 'dysflow.result/v1') { throw 'index.json is not a Dysflow result/v1 capture.' }
 $bootstrapPath = Join-Path $CapturesDir 'bootstrap.json'
 $adapterVersion = $null
 if (Test-Path -LiteralPath $bootstrapPath) {
@@ -31,6 +38,10 @@ if (Test-Path -LiteralPath $bootstrapPath) {
 }
 $tools = @{}
 foreach ($tool in @($capture.tools)) { $tools[[string]$tool.name] = $tool }
+$advertisedTools = @{}
+foreach ($tool in @($indexCapture.tools | Where-Object { $_.advertised -eq $true })) {
+    $advertisedTools[[string]$tool.name] = $true
+}
 $findings = [Collections.Generic.List[object]]::new()
 $checked = 0
 
@@ -91,6 +102,35 @@ function Test-Invocation([string]$File,[string]$ToolName,$Arguments) {
         Add-Finding $File $ToolName 'MISSING_WRITE_INTENT' 'Write-capable example must declare canonical apply:true|false explicitly.'
     }
 }
+
+function Test-CanonicalDocumentationTools {
+    $skillRelativePath = 'SKILL.md'
+    $skillText = Get-Content -Raw -LiteralPath (Join-Path $Path $skillRelativePath)
+    $formSection = [regex]::Match($skillText, '(?ms)^## Form UI tools\b(?<body>.*?)(?=^## |\z)')
+    if (-not $formSection.Success) {
+        Add-Finding $skillRelativePath '' 'DOCUMENTATION_SECTION_MISSING' 'Expected the canonical Form UI tools section.'
+    } else {
+        $references = @([regex]::Matches($formSection.Groups['body'].Value, '`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+        foreach ($toolName in $references) {
+            if (-not $advertisedTools.ContainsKey($toolName)) {
+                Add-Finding $skillRelativePath $toolName 'NON_ADVERTISED_PROSE_TOOL' 'Canonical Form UI prose must reference a known tool advertised by the active core surface.'
+            }
+        }
+    }
+
+    $matrixRelativePath = 'assets/write-flags-matrix.md'
+    $matrixText = Get-Content -Raw -LiteralPath (Join-Path $Path $matrixRelativePath)
+    foreach ($line in @($matrixText -split "`r?`n")) {
+        $row = [regex]::Match($line, '^\|\s*`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`\s*\|')
+        if (-not $row.Success -or $line -notmatch '`preferred`') { continue }
+        $toolName = $row.Groups[1].Value
+        if (-not $advertisedTools.ContainsKey($toolName)) {
+            Add-Finding $matrixRelativePath $toolName 'NON_ADVERTISED_MATRIX_TOOL' 'A matrix row marked preferred must reference a known tool advertised by the active core surface.'
+        }
+    }
+}
+
+Test-CanonicalDocumentationTools
 
 $examplesDir = Join-Path $Path 'assets\examples'
 foreach ($file in Get-ChildItem -LiteralPath $examplesDir -Filter '*.md' -File | Sort-Object Name) {
