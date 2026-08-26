@@ -12,6 +12,7 @@ temp-runtime/
 *.log
 .DS_Store
 .dysflow/runtime/
+scripts/fixtures/**/.dysflow/runtime/
 Thumbs.db
 /NVIDIA Corporation/
 
@@ -54,5 +55,6 @@ vitest-results*.txt
 /ARCHIVE_SUMMARY_*.md
 /AUDIT_*.md
 /bench-cache/
+.tmp/
 .tmp-mutated-form.txt
 .tmp-mutated-detail.txt
