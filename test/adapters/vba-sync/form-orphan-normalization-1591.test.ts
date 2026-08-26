@@ -11,6 +11,11 @@ import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.j
 const root = resolve("C:/project/src");
 const formSourceName = "Form_FormGestionRiesgos";
 const reportSourceName = "Report_RptMonthly";
+const fileEntry = (name: string) => ({
+  name,
+  isDirectory: () => false,
+  isFile: () => true,
+});
 
 async function auditDocumentSources(options: {
   binaryName: string;
@@ -42,9 +47,9 @@ async function auditDocumentSources(options: {
             `${options.sourceName}.cls`,
             `${options.sourceName}.${options.kind}.txt`,
           ]
-        );
+        ).map(fileEntry);
       }
-      if (folder === resolve(root, "modules")) return options.moduleEntries ?? [];
+      if (folder === resolve(root, "modules")) return (options.moduleEntries ?? []).map(fileEntry);
       return [];
     },
   } as unknown as ComparisonFileSystemPort;

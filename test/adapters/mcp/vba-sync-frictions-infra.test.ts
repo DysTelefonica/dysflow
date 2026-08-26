@@ -13,6 +13,12 @@ import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.j
 
 /* biome-ignore-start lint/suspicious/noExplicitAny: test mocks and type casts */
 
+const fileEntry = (name: string) => ({
+  name,
+  isDirectory: () => false,
+  isFile: () => true,
+});
+
 describe("MCP tool schema registration for vba-sync-frictions", () => {
   it("includes vba_orphan_audit in tool names and defines its schema", () => {
     expect(DYSFLOW_MCP_TOOL_NAMES).toContain("vba_orphan_audit");
@@ -251,9 +257,11 @@ describe("vba_orphan_audit tool behavior", () => {
 
     const mockFs: any = {
       readdir: async (folder: string) => {
-        if (folder.endsWith("modules")) return ["Helper.bas", "Módulo1.bas", "ModDisk.bas"];
-        if (folder.endsWith("classes")) return ["clsUser.cls"];
-        if (folder.endsWith("forms")) return ["Form_Clientes.cls", "Form_Clientes.form.txt"];
+        if (folder.endsWith("modules"))
+          return [fileEntry("Helper.bas"), fileEntry("Módulo1.bas"), fileEntry("ModDisk.bas")];
+        if (folder.endsWith("classes")) return [fileEntry("clsUser.cls")];
+        if (folder.endsWith("forms"))
+          return [fileEntry("Form_Clientes.cls"), fileEntry("Form_Clientes.form.txt")];
         return [];
       },
       stat: async () => ({ isFile: () => true }),
@@ -321,7 +329,8 @@ describe("vba_orphan_audit tool behavior", () => {
       },
     };
     const mockFs: any = {
-      readdir: async (folder: string) => (folder.endsWith("modules") ? ["mimodulo.bas"] : []),
+      readdir: async (folder: string) =>
+        folder.endsWith("modules") ? [fileEntry("mimodulo.bas")] : [],
       stat: async () => ({ isFile: () => true }),
     };
 

@@ -18,18 +18,23 @@ describe("managed source layout parity (#1577)", () => {
     );
 
     expect(audit).toContain("managedFolders(destinationRoot)");
-    expect(audit).toContain("managedDiskModuleName(entryName)");
+    expect(audit).toContain("managedSourceFile(entry)");
     expect(audit).not.toContain('[".bas", ".cls"]');
   });
 
   it("audits every managed extension across every managed folder", async () => {
     const root = resolve("C:/project/src");
+    const file = (name: string) => ({
+      name,
+      isDirectory: () => false,
+      isFile: () => true,
+    });
     const entries = new Map([
-      [root, ["RootModule.bas"]],
-      [resolve(root, "modules"), ["Standard.bas"]],
-      [resolve(root, "classes"), ["Customer.cls"]],
-      [resolve(root, "forms"), ["Orders.form.txt"]],
-      [resolve(root, "reports"), ["Summary.report.txt"]],
+      [root, [file("RootModule.bas")]],
+      [resolve(root, "modules"), [file("Standard.bas")]],
+      [resolve(root, "classes"), [file("Customer.cls")]],
+      [resolve(root, "forms"), [file("Orders.form.txt")]],
+      [resolve(root, "reports"), [file("Summary.report.txt")]],
     ]);
     const orchestrator = {
       runPreflightCleanup: runNoopPreflightCleanup,
@@ -62,6 +67,43 @@ describe("managed source layout parity (#1577)", () => {
           expect.objectContaining({ moduleName, isOrphan: false, sourcePath: expect.any(String) }),
         ),
       ),
+    });
+  });
+
+  it("does not pair a VBE module with a managed-extension directory", async () => {
+    const root = resolve("C:/project/src");
+    const orchestrator = {
+      runPreflightCleanup: runNoopPreflightCleanup,
+      resolveExecutionTarget: async () =>
+        successResult({ destinationRoot: root, accessPath: "C:/project/front.accdb" }),
+      validateStrictContext: () => successResult(undefined),
+      executeMappedTool: async () =>
+        successResult({
+          modules: ["Legacy"],
+          classes: [],
+          forms: [],
+          reports: [],
+          documentModules: [],
+        }),
+    } as unknown as VbaModulesOrchestrator;
+    const fileSystem = {
+      readdir: async (folder: string) =>
+        folder === resolve(root, "modules")
+          ? [{ name: "Legacy.bas", isDirectory: () => true, isFile: () => false }]
+          : [],
+    } as unknown as ComparisonFileSystemPort;
+
+    const result = await new VbaModulesAdapter(orchestrator, fileSystem).execute(
+      "vba_orphan_audit",
+      {},
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual({
+      orphans: [
+        expect.objectContaining({ moduleName: "Legacy", isOrphan: true, sourcePath: null }),
+      ],
     });
   });
 });

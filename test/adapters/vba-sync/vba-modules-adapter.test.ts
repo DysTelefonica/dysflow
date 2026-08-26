@@ -1037,6 +1037,44 @@ describe("VbaModulesAdapter", () => {
     expect(actions).toEqual([]);
   });
 
+  it("import_all prune:true does not count a managed-extension directory as source", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-directory-source-"));
+    const sourceRoot = join(root, "src");
+    await mkdir(join(sourceRoot, "modules", "Legacy.bas"), { recursive: true });
+    await mkdir(join(root, ".dysflow"), { recursive: true });
+    await writeFile(join(root, "front.accdb"), "", "utf8");
+    await writeFile(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({ id: "directory-source", accessPath: "front.accdb", destinationRoot: "src" }),
+      "utf8",
+    );
+
+    const actions: string[] = [];
+    const service = new VbaSyncAdapter({
+      preflightCleanup: noopPreflightCleanup(),
+      cwd: root,
+      env: {},
+      executor: async (request) => {
+        actions.push(request.action);
+        return {
+          exitCode: 0,
+          stdout:
+            'DYSFLOW_RESULT {"modules":["Legacy"],"classes":[],"forms":[],"reports":[],"documentModules":[]}',
+          stderr: "",
+          durationMs: 1,
+          timedOut: false,
+        };
+      },
+    });
+
+    const result = await service.execute("import_all", { prune: true, apply: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected directory-only source root failure");
+    expect(result.error.code).toBe("IMPORT_PRUNE_SOURCE_UNSAFE");
+    expect(actions).toEqual([]);
+  });
+
   it("import_all prune:true fails safely before delete when source discovery fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-import-prune-discovery-fails-"));
     const sourceRoot = join(root, "src");
