@@ -34,6 +34,7 @@ import {
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
 import {
+  type ComparisonFileSystemEntry,
   type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
@@ -1338,14 +1339,15 @@ export class VbaModulesAdapter {
     const deleted: string[] = [];
     const failed: { path: string; message: string }[] = [];
     for (const folder of managedFolders(destinationRoot)) {
-      let entries: readonly { name: string }[] | readonly string[];
+      let entries: readonly ComparisonFileSystemEntry[];
       try {
         entries = await this.fileSystem.readdir(folder);
       } catch {
         continue;
       }
       for (const entry of entries) {
-        const entryName = typeof entry === "string" ? entry : entry.name;
+        if (!entry.isFile()) continue;
+        const entryName = entry.name;
         const modName = managedDiskModuleName(entryName);
         if (modName === null || keep.has(modName.toLowerCase())) continue;
         const fullPath = resolve(folder, entryName);
