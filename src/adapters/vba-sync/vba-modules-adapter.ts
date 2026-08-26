@@ -158,6 +158,7 @@ const MODULE_MAPPINGS: Record<string, DirectMapping> = {
 };
 
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
+import type { ResolvedDestinationRoot } from "../../core/config/execution-target.js";
 import type { AccessOperationPreflightCleanupResult } from "../../core/operations/access-operation-preflight.js";
 import type { VbaExecutionTarget } from "../../core/services/vba-source-comparison.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
@@ -220,7 +221,7 @@ function managedDiskModuleName(entryName: string): string | null {
 }
 
 /** Folders that hold managed source artifacts. Queries are intentionally excluded. */
-function managedFolders(destinationRoot: string): string[] {
+function managedFolders(destinationRoot: ResolvedDestinationRoot): string[] {
   return [
     destinationRoot,
     resolve(destinationRoot, "modules"),
@@ -1826,7 +1827,7 @@ function normalizeImportMode(importMode: string | undefined): string | undefined
   }
 }
 
-async function discoverImportModules(destinationRoot: string): Promise<string[]> {
+async function discoverImportModules(destinationRoot: ResolvedDestinationRoot): Promise<string[]> {
   const discovered = await discoverManagedSource(destinationRoot, nodeComparisonFileSystem, {
     failOnRootReadError: false,
     failOnManagedFolderReadError: false,
@@ -1840,7 +1841,7 @@ type ManagedSourceDiscovery = {
 };
 
 async function discoverManagedSource(
-  destinationRoot: string,
+  destinationRoot: ResolvedDestinationRoot,
   fileSystem: Pick<ComparisonFileSystemPort, "readdir">,
   options: { failOnRootReadError: boolean; failOnManagedFolderReadError: boolean },
 ): Promise<OperationResult<ManagedSourceDiscovery>> {

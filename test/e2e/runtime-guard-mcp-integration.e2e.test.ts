@@ -44,6 +44,7 @@ import type { OperationResult } from "../../src/core/contracts/index.js";
 import { successResult } from "../../src/core/contracts/index.js";
 import { VbaFormService } from "../../src/core/services/vba-form-service.js";
 import { runNoopPreflightCleanup } from "../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../_helpers/resolve-destination-root.js";
 
 type Harness = {
   client: Client;
@@ -81,7 +82,7 @@ async function createHarness(): Promise<Harness> {
     async (_params: unknown): Promise<OperationResult<VbaModulesExecutionTarget>> =>
       successResult<VbaModulesExecutionTarget>({
         accessDbPath: "C:/projects/myapp/MyApp.accdb",
-        destinationRoot: RUNTIME_APP,
+        destinationRoot: await resolveDestinationRootForTest(RUNTIME_APP),
         projectRoot: RUNTIME_APP,
         configSource: "explicit-request",
       }),

@@ -1,4 +1,5 @@
 import { extname, parse, relative, resolve } from "node:path";
+import type { ResolvedDestinationRoot } from "../config/execution-target.js";
 import {
   createDysflowError,
   type Diagnostic,
@@ -215,7 +216,7 @@ export type VbaVerifyResult = {
 
 export type VbaExecutionTarget = {
   accessPath?: string;
-  destinationRoot: string;
+  destinationRoot: ResolvedDestinationRoot;
   projectRoot?: string;
   timeoutMs?: number;
 };

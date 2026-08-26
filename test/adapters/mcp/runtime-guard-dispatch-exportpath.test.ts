@@ -34,6 +34,7 @@ import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-ad
 import type { OperationResult } from "../../../src/core/contracts/index.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 const RUNTIME_HOME = "C:/runtime/dysflow";
 const RUNTIME_APP = "C:/runtime/dysflow/app/scripts";
@@ -60,7 +61,7 @@ function makeHarness(): Harness {
       successResult<VbaModulesExecutionTarget>({
         accessDbPath: "C:/projects/myapp/MyApp.accdb",
         backendPath: "C:/projects/myapp/MyApp_be.accdb",
-        destinationRoot: RUNTIME_APP,
+        destinationRoot: await resolveDestinationRootForTest(RUNTIME_APP),
         projectRoot: RUNTIME_APP,
         projectId: "test-project",
         configSource: "explicit-request",

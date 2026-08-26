@@ -8,6 +8,7 @@ import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-ad
 import type { VbaManagerExecutor } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { OperationResult } from "../../../src/core/contracts/index";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 /**
  * Issue #975 — transactional mode integration through VbaModulesAdapter.
@@ -52,7 +53,7 @@ function makeAdapter(executor: VbaManagerExecutor): {
           accessDbPath: accessPath,
           accessPath,
           backendPath: undefined,
-          destinationRoot: projectRoot,
+          destinationRoot: await resolveDestinationRootForTest(projectRoot),
           projectRoot,
           projectId: "test-project",
           timeoutMs: 30_000,
@@ -282,7 +283,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
           accessDbPath: "",
           accessPath: undefined,
           backendPath: undefined,
-          destinationRoot: projectRoot,
+          destinationRoot: await resolveDestinationRootForTest(projectRoot),
           projectRoot,
           projectId: undefined,
           timeoutMs: 30_000,

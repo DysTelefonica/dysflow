@@ -9,6 +9,7 @@ import {
 } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { buildImportPlanResult } from "../../../src/core/services/vba-import-plan";
 import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 describe("VbaModulesAdapter", () => {
   it("handles module tools", () => {
@@ -1068,7 +1069,7 @@ describe("VbaModulesAdapter", () => {
             configSource: "explicit-request",
             accessDbPath: join(root, "front.accdb"),
             accessPath: join(root, "front.accdb"),
-            destinationRoot: sourceRoot,
+            destinationRoot: await resolveDestinationRootForTest(sourceRoot),
             projectRoot: root,
           },
           diagnostics: [],
@@ -1153,7 +1154,7 @@ describe("VbaModulesAdapter", () => {
             configSource: "explicit-request",
             accessDbPath: join(root, "front.accdb"),
             accessPath: join(root, "front.accdb"),
-            destinationRoot: sourceRoot,
+            destinationRoot: await resolveDestinationRootForTest(sourceRoot),
             projectRoot: root,
           },
           diagnostics: [],
@@ -2006,7 +2007,7 @@ describe("VbaModulesAdapter", () => {
               configSource: "explicit-request",
               accessDbPath: resolve(root, "front.accdb"),
               accessPath: resolve(root, "front.accdb"),
-              destinationRoot: sourceRoot,
+              destinationRoot: await resolveDestinationRootForTest(sourceRoot),
               projectRoot: root,
             },
             diagnostics: [],

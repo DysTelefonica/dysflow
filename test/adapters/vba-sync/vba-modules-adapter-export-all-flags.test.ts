@@ -33,6 +33,7 @@ import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-ad
 import type { OperationResult } from "../../../src/core/contracts/index.js";
 import type { ComparisonFileSystemEntry } from "../../../src/core/services/vba-source-comparison.js";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 function buildAdapterWithSpy(
   entries: readonly ComparisonFileSystemEntry[] = [
@@ -67,7 +68,7 @@ function buildAdapterWithSpy(
           configSource: "explicit-request",
           accessDbPath: "C:/db/front.accdb",
           accessPath: "C:/db/front.accdb",
-          destinationRoot: "C:/repo/src",
+          destinationRoot: await resolveDestinationRootForTest("C:/repo/src"),
           projectRoot: "C:/repo",
         },
         diagnostics: [],
@@ -321,7 +322,7 @@ describe("VbaModulesAdapter — binary isolation (#1065)", () => {
         configSource: "explicit-request",
         accessDbPath: accessPath,
         accessPath,
-        destinationRoot: directory,
+        destinationRoot: await resolveDestinationRootForTest(directory),
         projectRoot: directory,
       },
       diagnostics: [],

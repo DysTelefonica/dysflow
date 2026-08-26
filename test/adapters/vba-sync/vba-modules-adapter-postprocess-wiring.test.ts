@@ -8,6 +8,7 @@ import type {
 } from "../../../src/adapters/vba-sync/control-property-reader";
 import { VbaModulesAdapter } from "../../../src/adapters/vba-sync/vba-modules-adapter";
 import { runNoopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
+import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
 const FORM_WITH_MISSING_BOUND_COLUMN = `Version =21
 Begin Form
@@ -68,7 +69,7 @@ function buildAdapter(args: AdapterArgs): VbaModulesAdapter {
           configSource: "explicit-request",
           accessDbPath: join(root, "front.accdb"),
           accessPath: join(root, "front.accdb"),
-          destinationRoot: sourceRoot,
+          destinationRoot: await resolveDestinationRootForTest(sourceRoot),
           projectRoot: root,
         },
         diagnostics: [],
