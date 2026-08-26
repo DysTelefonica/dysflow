@@ -6,6 +6,11 @@ config migrations deterministically so consumers do not have to hand-edit
 `accessPath` vs `frontendFile` or top-level `allowWrites` vs
 `capabilities.allowWrites`.
 
+The top-level `allowWrites` and `allowedProcedures` fields are not live aliases.
+Normal config loading rejects them with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`.
+Preview this tool to migrate them to `capabilities.allowWrites` and
+`capabilities.procedures.allow` before retrying the original Dysflow call.
+
 ## TL;DR
 
 ## Call shape
@@ -90,7 +95,7 @@ to:
       "field": "allowWrites",
       "from": "allowWrites",
       "to": "capabilities.allowWrites",
-      "reason": "T18 caps-block migration: top-level allowWrites is deprecated..."
+      "reason": "removed runtime field (CONFIG_TOP_LEVEL_FIELDS_REMOVED): migrate top-level allowWrites to capabilities.allowWrites"
     }
   ],
   "applied": false
@@ -165,8 +170,8 @@ The current revision handles three legacy shapes:
 | Legacy field                                  | Migrated to                                      | Reference |
 |-----------------------------------------------|--------------------------------------------------|-----------|
 | `accessPath` (absolute or non-basename path)  | `frontendFile` (basename only)                   | #1092 / v2.23.1 |
-| top-level `allowWrites: boolean`              | `capabilities.allowWrites: boolean`              | T18 caps-block |
-| top-level `allowedProcedures: string[]`       | `capabilities.procedures.allow: string[]`        | deprecation read-through until v1.15.0 |
+| top-level `allowWrites: boolean`              | `capabilities.allowWrites: boolean`              | removed runtime field / `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
+| top-level `allowedProcedures: string[]`       | `capabilities.procedures.allow: string[]`        | removed runtime field / `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
 Future migrations are additive and reviewed here. Add the new entry to the
 migration engine in `src/adapters/mcp/migrate-project-config-tool.ts`,

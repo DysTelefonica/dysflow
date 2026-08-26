@@ -12,6 +12,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 |---|---|
 | `compile_vba` MCP tool | Removed in v1.19.0 (`feat-759-no-compile`). Guard entries remain so a legacy `compile: true` fails loudly. |
 | `vba_inline_execution` MCP tool | Removed in v4.0.0. Use the version-controlled [`_Temp_*.bas` workflow](../vba-execution.md) with `import_modules`, the human compile checkpoint, and `run_vba`. |
+| Top-level project-config `allowWrites` / `allowedProcedures` | Removed in v1.15.0. Config loading rejects them with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`. |
 | Web dashboard or server-rendered UI | Not found. No HTMX, template, or UI route exists. |
 | Auth, login, OAuth, session, or tenant boundary | Not implemented. |
 | Git-clone or source-build update fallback | Not found. |
@@ -26,6 +27,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | Local HTTP surface | `src/adapters/http/server.ts` serves a JSON API bound to `127.0.0.1`, writes-disabled by default. |
 | Update path | The signed GitHub Release archive with SHA-256 verification. See [update trust model](../security/update-trust-model.md). |
 | Orphan reaping | `access_force_cleanup_orphaned` terminates one PID-verified orphan, and only after an explicit `confirmPid`. |
+| Project write and procedure gates | Use `capabilities.allowWrites` and `capabilities.procedures.allow`; `migrate_project_config` rewrites removed top-level fields. |
 
 ## Invariants for Future Work
 

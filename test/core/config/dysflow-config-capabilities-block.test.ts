@@ -2,8 +2,8 @@
 //
 // The `capabilities` block is the only home for the write gate and
 // procedure allowlist/denylist. The top-level `allowWrites` /
-// `allowedProcedures` aliases were marked deprecated and removed in v1.15.0;
-// we are on v1.22.0 and the read-through fallback is gone (T18).
+// `allowedProcedures` inputs were removed in v1.15.0; the read-through fallback
+// is gone (T18).
 // Setting either top-level field now surfaces a typed
 // `CONFIG_TOP_LEVEL_FIELDS_REMOVED` error at config-load time so the
 // operator migrates the project.json to the `capabilities` block.
@@ -168,11 +168,10 @@ describe("DysflowProjectConfig — capabilities consolidated block (#657, #655, 
 
   // T18 (legacy deprecation finally removed): the top-level `allowWrites`
   // and `allowedProcedures` fields were marked deprecated and removed in
-  // v1.15.0. We are on v1.22.0 and the read-through alias path was still
-  // alive in `buildProjectConfig`. After this fix the top-level fields
+  // v1.15.0. The top-level fields
   // produce a typed `CONFIG_TOP_LEVEL_FIELDS_REMOVED` error so the operator
   // migrates the project.json to the `capabilities` block.
-  describe("top-level allowWrites/allowedProcedures (REMOVED in v1.15.0, surfaced in v1.22.0)", () => {
+  describe("top-level allowWrites/allowedProcedures (removed in v1.15.0)", () => {
     it("rejects top-level allowWrites:true with CONFIG_TOP_LEVEL_FIELDS_REMOVED", () => {
       const result = buildConfigWithCapabilities({
         accessPath: "app.accdb",

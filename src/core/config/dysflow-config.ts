@@ -42,14 +42,10 @@ export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-
 /**
  * Consolidated capabilities block for `.dysflow/project.json`.
  *
- * This is the new home for the write gate (`allowWrites`) and the procedure
- * allowlist / denylist (`procedures.allow` / `procedures.deny`). The top-level
- * `allowWrites` and `allowedProcedures` fields on `DysflowProjectConfig` are
- * kept as DEPRECATED read-through aliases and emit a single warning when both
- * the top-level and `capabilities` forms are present in the same file.
- *
- * Removal of the top-level aliases is reserved for v1.15.0
- * (proposal §"Backward Compatibility").
+ * This is the only runtime home for the write gate (`allowWrites`) and the
+ * procedure allowlist / denylist (`procedures.allow` / `procedures.deny`).
+ * Top-level `allowWrites` and `allowedProcedures` were removed in v1.15.0;
+ * config loading rejects either with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`.
  *
  * `procedures.deny` is exposed as a project-level advisory signal only — the
  * runtime gate stays `procedures.allow`. The shape is preserved so a future
@@ -130,9 +126,9 @@ export type LintRuleOverride = {
 export type DysflowProjectConfig = {
   id?: string;
   name?: string;
-  /** @deprecated Use `capabilities.allowWrites`. Kept as a read-through alias until v1.15.0. */
+  /** @deprecated Removed runtime input. `migrate_project_config` moves it to `capabilities.allowWrites`. */
   allowWrites?: boolean;
-  /** @deprecated Use `capabilities.procedures.allow`. Kept as a read-through alias until v1.15.0. */
+  /** @deprecated Removed runtime input. `migrate_project_config` moves it to `capabilities.procedures.allow`. */
   allowedProcedures?: string[];
   capabilities?: DysflowProjectCapabilities;
   accessPath?: string;
@@ -1331,8 +1327,7 @@ function resolveTimeout(explicitTimeoutMs: number | undefined): number {
  * Resolve the final `allowedProcedures` allowlist for the project (#658).
  *
  * Precedence (PR-3 / #658):
- *   - Explicit (`capabilities.procedures.allow` first, then top-level
- *     `allowedProcedures`) always beats discovery.
+ *   - Explicit `capabilities.procedures.allow` always beats discovery.
  *   - When the explicit slot is `undefined` AND discovery returned a
  *     non-empty prefix list, the discovered list is offered (sorted
  *     alphabetically to match the discovery contract).
@@ -1376,23 +1371,11 @@ function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
 }
 
 /**
- * Resolve the consolidated `capabilities` block (#657) with read-through
- * fallback to the deprecated top-level `allowWrites` / `allowedProcedures`
- * fields.
+ * Resolve the consolidated `capabilities` block (#657).
  *
- * Precedence (#657):
- *
- *   1. If `capabilities` carries any setting (allowWrites OR procedures), it
- *      is the source of truth. `capabilities.allowWrites` resolves
- *      `allowWrites`. The procedure allowlist is `capabilities.procedures.allow`
- *      when defined (including the empty-array default-deny signal); when
- *      absent, it falls through to the deprecated `allowedProcedures` slot.
- *   2. If `capabilities` is absent, the deprecated top-level fields are used
- *      verbatim (no warning — they are the only thing the user has set).
- *   3. If BOTH `capabilities` AND at least one deprecated top-level field are
- *      present, `capabilities` wins and a SINGLE deprecation warning is
- *      surfaced so the consumer can find the duplicate. The user is not
- *      pummeled with one warning per field.
+ * `capabilities.allowWrites` and `capabilities.procedures.allow` are the only
+ * accepted project-config inputs. `buildProjectConfig` rejects the removed
+ * top-level fields before this helper runs.
  *
  * `procedures.deny` is advisory only and is NOT projected into
  * `DysflowConfig.allowedProcedures` — the runtime gate stays `allow`. The

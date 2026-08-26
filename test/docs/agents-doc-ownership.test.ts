@@ -19,6 +19,7 @@ const RUNTIME_ANCHORS = [
   "add-a-tool-checklist-1493.test.ts",
   "architecture-doc.test.ts",
   "mcp-readme-tool-surface.test.ts",
+  "project-config-removed-fields-contract-1580.test.ts",
   "resolve-project-recovery-example.test.ts",
   "verify-code-diagnostic-contract-1535.test.ts",
   "write-tool-preflight.test.ts",

@@ -1,17 +1,14 @@
 /**
- * PR-3 (issue #658) — `allowedProcedures` falls back to the default-prefix
+ * PR-3 (issue #658) — the resolved procedure allowlist falls back to the default-prefix
  * scan of the project's `destinationRoot` when BOTH:
- *   - the top-level `allowedProcedures` field is absent, AND
- *   - the new `capabilities.procedures.allow` slot is absent (PR-3 ships
- *     the wildcard-free canonical slot; legacy `allowedProcedures` is
- *     still the most common wire shape until v1.15.0).
+ *   - the canonical `capabilities.procedures.allow` slot is absent.
  *
  * The discovery runs INSIDE `buildProjectConfig` (sync) so its result
  * already sits on the `DysflowConfig` by the time the async loader returns.
  * These tests pin the contract end-to-end:
  *
- *   - explicit `allowedProcedures: ["X"]` is honoured verbatim;
- *   - explicit `allowedProcedures: []` is treated as an explicit deny-all
+ *   - explicit `capabilities.procedures.allow: ["X"]` is honoured verbatim;
+ *   - explicit `capabilities.procedures.allow: []` is treated as an explicit deny-all
  *     (it WINS over discovery);
  *   - explicit `capabilities.procedures.allow: ["X"]` wins over discovery;
  *   - absent both → discovery result, or `undefined` if the directory is
@@ -70,14 +67,14 @@ function writeTestModule(root: string, fileName: string, body: string): void {
 }
 
 describe("PR-3 / #658 — allowedProcedures discovery fallback in buildProjectConfig", () => {
-  it("uses the top-level `allowedProcedures` list as-is (discovery is skipped)", () => {
+  it("uses `capabilities.procedures.allow` as-is (discovery is skipped)", () => {
     withWorkspace((root) => {
       // Stage a matching module so discovery WOULD return something. If the
       // explicit list wins, the discovered set must NOT pollute the result.
       writeTestModule(root, "Test_FromSource.bas", ["Public Sub Test_X()", "End Sub"].join("\n"));
 
       const throwingDiscovery = vi.fn((): readonly string[] => {
-        throw new Error("discovery must not run for explicit top-level allowedProcedures");
+        throw new Error("discovery must not run for an explicit capabilities allowlist");
       });
 
       const built = buildConfigIn(
@@ -95,14 +92,14 @@ describe("PR-3 / #658 — allowedProcedures discovery fallback in buildProjectCo
     });
   });
 
-  it("treats explicit `allowedProcedures: []` as a deny-all WINS over discovery", () => {
+  it("treats explicit `capabilities.procedures.allow: []` as a deny-all WINS over discovery", () => {
     withWorkspace((root) => {
       // Discovery would otherwise return ['Test_X'] — explicit empty list
       // must shadow it (the project author opted in to deny-all).
       writeTestModule(root, "Test_FromSource.bas", ["Public Sub Test_X()", "End Sub"].join("\n"));
 
       const throwingDiscovery = vi.fn((): readonly string[] => {
-        throw new Error("discovery must not run for explicit empty top-level allowedProcedures");
+        throw new Error("discovery must not run for an explicit empty capabilities allowlist");
       });
 
       const built = buildConfigIn(

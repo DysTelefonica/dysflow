@@ -403,8 +403,8 @@ Use `sync_binary` whenever the agent would otherwise script the 5-step loop manu
 - `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture` require their schema-advertised `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`; `apply:false` plans without the second confirmation.
 - `cleanup_access_operation` with `force: true` requires explicit confirmation regardless of mode.
 - `access_force_cleanup_orphaned` with a positive `pid` requires `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` after explicit human approval.
-- The `test_vba` / `run_vba` allowlist gate (`allowedProcedures`) is enforced in both modes.
-- The `allowWrites: false` write-gate is enforced in both modes (the policy does NOT bypass it).
+- The `test_vba` / `run_vba` allowlist gate (`capabilities.procedures.allow`, resolved as `allowedProcedures`) is enforced in both modes.
+- The `capabilities.allowWrites: false` write-gate is enforced in both modes (the policy does NOT bypass it). Removed top-level fields fail with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`.
 
 **Export-source guard** (both modes reach it once the destination is
 explicitly declared — see Issue #1226 for the pre-resolve

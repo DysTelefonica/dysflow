@@ -29,10 +29,10 @@ mcp`), so it is safe to default that surface **on**. The HTTP adapter is a netwo
 surface — any caller that can reach the port is untrusted by default — so it stays
 **off** until an operator explicitly enables it.
 
-This only changes the default *input* to the write gate. Per-repo `allowWrites`,
-`allowedProcedures`, and the ad hoc `buildExplicitConfig` floor in
+This only changes the default *input* to the write gate. Per-repo
+`capabilities.allowWrites`, `capabilities.procedures.allow`, and the ad hoc `buildExplicitConfig` floor in
 `src/core/config/dysflow-config.ts` are unchanged and still apply on top of this
-default — a repo can still be scoped to read-only with `"allowWrites": false` even
+default — a repo can still be scoped to read-only with `"capabilities": { "allowWrites": false }` even
 while the MCP process default is enabled. See `resolveMcpWriteAccessForInput` in
 `dispatch-common.ts` for the unchanged precedence order.
 
@@ -40,9 +40,10 @@ while the MCP process default is enabled. See `resolveMcpWriteAccessForInput` in
 
 The `capabilities` block in `.dysflow/project.json` is the **canonical home** for
 the per-repo write gate (`allowWrites`) and the procedure allowlist/denylist
-(`procedures.allow` / `procedures.deny`). It supersedes the top-level
-`allowWrites` and `allowedProcedures` fields, which are kept as **deprecated
-read-through aliases** until v1.15.0. Reference implementation: the
+(`procedures.allow` / `procedures.deny`). Top-level `allowWrites` and
+`allowedProcedures` were removed in v1.15.0. The runtime rejects either with
+`CONFIG_TOP_LEVEL_FIELDS_REMOVED`; use `migrate_project_config` to rewrite them
+to `capabilities.allowWrites` and `capabilities.procedures.allow`. Reference implementation: the
 `DysflowProjectCapabilities` type and the `resolveCapabilities` helper,
 both in the dysflow-config module.
 
@@ -61,20 +62,13 @@ both in the dysflow-config module.
 }
 ```
 
-### Precedence table
+### Removed-field behavior
 
-When BOTH the top-level aliases and the `capabilities` block are present in the
-same `.dysflow/project.json`, the `capabilities` block wins and a **single**
-deprecation warning is surfaced on `successResult.diagnostics` (source =
-`project-config`, level = `warning`). The user is not pummeled with one warning
-per field.
-
-| Top-level fields present? | `capabilities` block present? | Effective `allowWrites` | Effective `allowedProcedures` | Warnings |
-|---------------------------|-------------------------------|-------------------------|------------------------------|----------|
-| no                        | no                            | `false` (default)       | `undefined`                  | none     |
-| yes                       | no                            | top-level               | top-level                    | none     |
-| no                        | yes                           | `capabilities.allowWrites` | `capabilities.procedures.allow` | none |
-| yes                       | yes                           | `capabilities.allowWrites` | `capabilities.procedures.allow` | 1      |
+| Top-level removed fields present? | `capabilities` block present? | Result |
+|-----------------------------------|-------------------------------|--------|
+| no                                | no                            | `allowWrites: false`; procedure allowlist unresolved |
+| no                                | yes                           | Values resolve from `capabilities.allowWrites` and `capabilities.procedures.allow` |
+| yes                               | no or yes                     | `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
 `procedures.deny` is a **project-level advisory signal** reserved for a future
 wire. The runtime gate stays `procedures.allow` only — `deny` is preserved in
@@ -82,13 +76,12 @@ the schema so a future PR can wire it without breaking `.dysflow/project.json`
 consumers. See the `dysflow-config-capabilities-block.test.ts` suite for
 the locked precedence contract.
 
-### Migration plan
+### Migration history
 
-- **v1.14.0** (this PR, #657): add `capabilities` block; top-level aliases stay
-  as deprecated read-through; single warning on conflict.
-- **v1.15.0**: remove the top-level `allowWrites` / `allowedProcedures` fields
-  from `DysflowProjectConfig`. `resolveCapabilities` and the deprecation
-  warning go with them.
+- **v1.14.0** (#657): added the `capabilities` block and deprecated the top-level fields.
+- **v1.15.0**: removed the top-level runtime inputs. The TypeScript fields remain
+  only so `migrate_project_config` can type and rewrite legacy JSON before normal
+  config loading.
 
 ## What each adapter gates
 
@@ -101,7 +94,7 @@ the locked precedence contract.
 
 ## Why VBA on MCP is allowlist-controlled, not write-gated
 
-On MCP, `allowedProcedures` has two intentional contracts, locked by tests:
+On MCP, the resolved allowlist from `capabilities.procedures.allow` has two intentional contracts, locked by tests:
 
 - `run_vba` is default-deny: a missing/empty list refuses execution, while a
   configured list permits only named procedures.
@@ -118,13 +111,13 @@ because a network caller is not necessarily the operator — hence its blanket w
 
 ## Residual consideration (not a code change)
 
-The one case worth an operator's attention: **no `allowedProcedures` configured** means
+The one case worth an operator's attention: **no `capabilities.procedures.allow` configured** means
 any manifest-selected test can run through stdio `test_vba`. It does not open arbitrary
 `run_vba`, and the write, sandbox, manifest, and human-compile gates remain intact. On
 stdio there is no remote vector because the client is the trust boundary. For projects
 that want a narrower test surface:
 
-> Configure a non-empty `allowedProcedures` list to opt into a test whitelist.
+> Configure a non-empty `capabilities.procedures.allow` list to opt into a test whitelist.
 
 ## Decision
 

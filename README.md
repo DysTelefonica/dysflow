@@ -252,7 +252,7 @@ The check is implemented in `src/core/utils/path-overlap.ts` (`pathOverlapsSourc
 
 ### 4) VBA procedure allowlist
 
-Set `allowedProcedures` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
+Set `capabilities.procedures.allow` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
 
 - MCP `run_vba`
 - MCP `run_vba`
@@ -571,20 +571,24 @@ Runtime directory resolution order:
   "backendPath": "src/ProjectABC_Datos.accdb",
   "destinationRoot": "src",
   "projectRoot": ".",
-  "allowWrites": false,
+  "capabilities": {
+    "allowWrites": false,
+    "procedures": {
+      "allow": ["Refresh", "ExportReport", "RunMigration"]
+    }
+  },
   "timeoutMs": 120000,
   "passwordEnv": "PROJECTABC_ACCESS_PASSWORD",
   "backendPasswordEnv": "PROJECTABC_BACKEND_PASSWORD",
-  "allowedProcedures": ["Refresh", "ExportReport", "RunMigration"],
   "httpTokenEnv": "DYSFLOW_HTTP_TOKEN"
 }
 ```
 
 HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
-#### `capabilities` consolidated block (preferred — v1.14.0+)
+#### `capabilities` consolidated block
 
-The `capabilities` block is the **canonical home** for the write gate and the procedure allowlist/denylist. The top-level `allowWrites` and `allowedProcedures` fields above are kept as **deprecated read-through aliases** and emit a single warning when both forms are present in the same file. Removal of the aliases is scheduled for **v1.15.0**.
+The `capabilities` block is the **only accepted home** for the write gate and the procedure allowlist/denylist. Top-level `allowWrites` and `allowedProcedures` were removed in v1.15.0. A config containing either field is rejected at load time with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; preview `migrate_project_config` to move them to `capabilities.allowWrites` and `capabilities.procedures.allow`.
 
 ```json
 {
@@ -599,14 +603,13 @@ The `capabilities` block is the **canonical home** for the write gate and the pr
 }
 ```
 
-The four-case precedence (`top-level × capabilities`):
+Runtime behavior:
 
-| Top-level fields | `capabilities` block | Effective `allowWrites` | Effective `allowedProcedures` | Warning |
-|------------------|-----------------------|-------------------------|------------------------------|---------|
-| none             | none                  | `false` (default)       | `undefined`                  | none    |
-| present          | absent                | top-level               | top-level                    | none    |
-| absent           | present               | `capabilities`          | `capabilities.procedures.allow` | none |
-| present          | present               | `capabilities`          | `capabilities.procedures.allow` | 1     |
+| Top-level removed fields | `capabilities` block | Result |
+|--------------------------|-----------------------|--------|
+| absent                   | absent                | `allowWrites: false`; procedure allowlist unresolved |
+| absent                   | present               | Values resolve from `capabilities.allowWrites` and `capabilities.procedures.allow` |
+| present                  | absent or present     | `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
 `procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only. See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
 
@@ -716,7 +719,7 @@ When a Dysflow call returns an error envelope, the first 30 seconds should be sp
 
 | Symptom (error code) | What it really means | Fastest fix | See |
 | --- | --- | --- | --- |
-| `MCP_WRITES_DISABLED` | The MCP session started with `--disable-writes`, or this repo's `.dysflow/project.json` has `allowWrites: false`. | Confirm the session posture first (`get_capabilities.writesProcess.enabled`). If the repo is intentionally read-only, use `dryRun: true` or work in a different worktree; otherwise flip `allowWrites: true` and reload. | #962 |
+| `MCP_WRITES_DISABLED` | The MCP session started with `--disable-writes`, or this repo's `.dysflow/project.json` has `capabilities.allowWrites: false`. | Confirm the session posture first (`get_capabilities.writesProcess.enabled`). If the repo is intentionally read-only, use `dryRun: true` or work in a different worktree; otherwise set `capabilities.allowWrites: true` and reload. | #962 |
 | `PROJECT_CONFIG_NOT_WRITE_READY` (and its 5 split children: `ACCESS_PATH_NOT_FOUND`, `BACKEND_PATH_NOT_FOUND`, `DESTINATION_ROOT_NOT_FOUND`, `OUTSIDE_PROJECT_ROOT`, `PROJECT_ID_MISMATCH`) | The project is unwired, the `destinationRoot` is missing, or the requested `projectId` does not match `.dysflow/project.json`. Each child code tells you exactly which invariant broke. | Run `dysflow resolve_project` first to read the resolved config and `diagnostics[]`; then `dysflow doctor`; then re-run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>` if config is missing. For `OUTSIDE_PROJECT_ROOT`, copy the file into `destinationRoot` or pass an explicit `projectRoot` override — do not bend the path gate. | #962, #966, #968 |
 | `WRITE_LOCKED_BY_RUNNING_OP` / `OPERATION_ALREADY_RUNNING` | A prior Dysflow-owned Access operation is still holding the marker file in `.dysflow/runtime/markers/`. | List the operations with `list_access_operations`, then either wait for completion or call `cleanup_access_operation` on the specific `operationId`. For stale `status:"running"` markers (no PID, idle past the grace window), call `clean_stale_markers` with explicit `confirm: true`. | #967, #976 |
 | `LACCDB_STALE_DETECTED` / `LIVE_PROCESS_HOLDS_LACCDB` | Dysflow found a `*.laccdb` lock file when launching Access. The first means no live Access process holds the lock — it removes the stale lock and continues; the second means a real `MSACCESS.EXE` is bound to the same `accessPath` and refuses to start. | For `LACCDB_STALE_DETECTED`, no action needed (Dysflow removed it). For `LIVE_PROCESS_HOLDS_LACCDB`, identify the holder PID with `access_force_cleanup_orphaned`, verify it is **headless** and bound to **the same** `accessPath`, then pass `confirmPid` explicitly. Never `Stop-Process -Name MSACCESS`. | #967, #976 |
@@ -757,12 +760,14 @@ dysflow mcp
 
 **Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
 
-**Option 1 — per-repo.** Set `"allowWrites": false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
+**Option 1 — per-repo.** Set `capabilities.allowWrites` to `false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
 
 ```json
 {
   "accessDbPath": "path/to/database.accdb",
-  "allowWrites": false
+  "capabilities": {
+    "allowWrites": false
+  }
 }
 ```
 
@@ -811,7 +816,7 @@ Defaults:
 
 Keeping the token in the environment avoids committing secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed. Requests without a valid token return `401`. When neither `httpTokenEnv` nor a local-only inline token resolves a token, all requests pass through (default).
 
-**Procedure allowlist**: `allowedProcedures` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
+**Procedure allowlist**: `capabilities.procedures.allow` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
 
 **Cleanup write gate**: `POST /access/cleanup` matches MCP behavior. Only `force: true` requires `--enable-writes`; non-force cleanup is still allowed to reach core eligibility checks while writes are disabled.
 

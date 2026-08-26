@@ -11,9 +11,9 @@
  * - Setting `"developer"` resolves to the developer mode.
  * - Setting anything else is REJECTED with `CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY`
  *   so a typo cannot silently fall back to `safe-by-default`.
- * - The legacy top-level `allowWrites`/`allowedProcedures` alias path
- *   (T18) is unaffected; `writeExecutionPolicy` lives only inside
- *   `capabilities`.
+ * - Removed top-level `allowWrites`/`allowedProcedures` inputs still fail
+ *   with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; `writeExecutionPolicy` lives only
+ *   inside `capabilities`.
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -139,7 +139,7 @@ describe("DysflowProjectConfig — capabilities.writeExecutionPolicy (#779)", ()
     expect(result.error.code).toBe("CONFIG_UNKNOWN_WRITE_EXECUTION_POLICY");
   });
 
-  it("does not bleed the writeExecutionPolicy into the top-level legacy aliases (T18)", () => {
+  it("does not bleed writeExecutionPolicy into removed top-level fields (T18)", () => {
     // Setting the top-level `allowWrites` is REJECTED (T18). The new
     // writeExecutionPolicy field MUST live under `capabilities` so this
     // assertion also pins the structural placement.
