@@ -11,9 +11,11 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
      bundle unrelated work).
   2. Refuses if local `main` is ahead of `origin/main` (so no un-CI'd commits
      land in the release).
-  3. Bumps `package.json` and prepends a `## [vX.Y.Z] - YYYY-MM-DD` block to
-     `CHANGELOG.md`, with one physical bullet per non-merge commit from
-     `git log <last-tag>..HEAD`.
+  3. Bumps `package.json`, updates the release stamps in
+     `skills/dysflow-usage/references/error-codes.md` and
+     `skills/dysflow-usage/assets/write-flags-matrix.md`, and prepends a
+     `## [vX.Y.Z] - YYYY-MM-DD` block to `CHANGELOG.md`. All four files are
+     staged together, and pre-commit failure restores their original bytes.
   4. Runs `test/quality-gates/changelog-release-entry-format.test.ts` locally
      against the generated file. A malformed entry aborts before `git add`,
      commit, or push.
@@ -41,6 +43,22 @@ them with:
     pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0
     pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
+If a release commit was already prepared but exact-SHA CI prevented the tag,
+fix the blocker through the normal issue/PR path. After that PR is merged and
+`main` is clean and synchronized, resume the prepared version without another
+bump or release commit:
+
+    git fetch origin --tags
+    git switch main
+    git pull --ff-only origin main
+    pwsh -File scripts/release-prepare.ps1 -Resume -Version 4.0.5
+
+Recovery fails closed unless the explicit version equals `package.json`, HEAD
+equals `origin/main`, the changelog and both stamps already name that version,
+the tag and GitHub Release are absent, and exact-SHA CI is green. It does not
+modify or stage release files and does not push `main`; it only creates and
+pushes the annotated tag after those checks pass.
+
 The script exits with a non-zero status if any step fails, including the CI
 gate. Watch progress with `gh run watch <id>`.
 
@@ -53,10 +71,14 @@ wording and grouping.
 
 Dysflow's MCP server runs on the official `@modelcontextprotocol/sdk`, which
 owns the `initialize` handshake and protocol-version negotiation.
+
 `MCP_PROTOCOL_VERSION` in `src/adapters/mcp/stdio.ts` is **derived** from the
-SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION` (it is not hand-pinned), so it
-cannot drift from what the server actually negotiates. On any release that
-upgrades the SDK, revalidate:
+SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION`.
+
+It is not hand-pinned, so it cannot drift from what the server actually
+negotiates.
+
+On any release that upgrades the SDK, revalidate:
 
 - [ ] `MCP_PROTOCOL_VERSION` / `MCP_PROTOCOL_VERSION_LATEST_SUPPORTED` still
   reflect the SDK's negotiated/latest versions after the bump. Cross-check
@@ -85,7 +107,9 @@ Reference: `docs/testing/mcp-protocol-maintenance.md`.
 
 The tag-triggered `e2e-validation` job is the sole heavy release E2E authority.
 It runs `pnpm test:e2e:mcp:release` against a safe, run-scoped build and blocks
-publication on failure. Agents must not run it locally as a pre-tag gate.
+publication on failure.
+
+Agents must not run it locally as a pre-tag gate.
 
 ### Cheap e2e-suite contract tests (run in <100ms total, in CI)
 
@@ -104,6 +128,7 @@ in 100ms:
   removed; the suite no longer asserts the mojibake expectation.
 
 If any of these cheap tests fail, fix them BEFORE running the heavy E2E.
+
 If they pass and the heavy E2E still fails, the regression is in a runtime
 contract these tests don't yet pin — extend the cheap tests, fix the
 regression, then re-run.

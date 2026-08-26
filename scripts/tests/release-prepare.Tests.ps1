@@ -39,6 +39,7 @@ BeforeAll {
     Import-ReleaseFunction "New-ReleaseChangelogSection"
     Import-ReleaseFunction "Test-ReleaseChangelogQuality"
     Import-ReleaseFunction "Assert-ReleaseChangelogQuality"
+    Import-ReleaseFunction "Update-ReleaseVersionStamp"
     Import-ReleaseFunction "Invoke-ReleasePrepare"
     Import-ReleaseFunction "Invoke-ReleasePrepareEntryPoint"
 
@@ -55,8 +56,13 @@ BeforeAll {
     function New-ReleaseRepoFixture {
         $root = Join-Path $TestDrive ([guid]::NewGuid())
         New-Item -ItemType Directory -Path $root | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/references") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/assets") -Force | Out-Null
         Set-Content (Join-Path $root "package.json") '{"version":"2.26.0"}' -NoNewline
-        Set-Content (Join-Path $root "CHANGELOG.md") $script:baseChangelog -NoNewline; $root
+        Set-Content (Join-Path $root "CHANGELOG.md") $script:baseChangelog -NoNewline
+        Set-Content (Join-Path $root "skills/dysflow-usage/references/error-codes.md") "Verified for the v2.26.0 release.`nKeep this content." -NoNewline
+        Set-Content (Join-Path $root "skills/dysflow-usage/assets/write-flags-matrix.md") "Verified for the v2.26.0 release.`nKeep this matrix." -NoNewline
+        $root
     }
 }
 
@@ -142,6 +148,10 @@ Describe "release changelog fail-fast gate" {
         $fixtureRoot = New-ReleaseRepoFixture
         $packageBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json")))
         $changelogBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md")))
+        $errorCodesPath = Join-Path $fixtureRoot "skills/dysflow-usage/references/error-codes.md"
+        $writeFlagsPath = Join-Path $fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md"
+        $errorCodesBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($errorCodesPath))
+        $writeFlagsBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($writeFlagsPath))
 
         $script:gitCalls = [System.Collections.Generic.List[string]]::new()
         $script:gateCalls = 0
@@ -180,12 +190,34 @@ Describe "release changelog fail-fast gate" {
         $script:gitCalls | Where-Object { $_ -match "^(add|commit|push)\b" } | Should -BeNullOrEmpty
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json"))) | Should -Be $packageBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md"))) | Should -Be $changelogBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($errorCodesPath)) | Should -Be $errorCodesBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($writeFlagsPath)) | Should -Be $writeFlagsBefore
 
         Push-Location $fixtureRoot
         try {
             { Invoke-ReleasePrepare -Bump "minor" } | Should -Throw "*retry reached git add*"
         } finally { Pop-Location }
         $script:gitCalls | Where-Object { $_ -match "^add " } | Should -HaveCount 1
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json"))) | Should -Be $packageBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md"))) | Should -Be $changelogBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($errorCodesPath)) | Should -Be $errorCodesBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($writeFlagsPath)) | Should -Be $writeFlagsBefore
+    }
+}
+
+Describe "release version stamps" {
+    It "preserves UTF-8 BOM, line endings, and unrelated bytes" {
+        $path = Join-Path $TestDrive "stamped.md"
+        $encoding = [Text.UTF8Encoding]::new($true)
+        $beforeText = "# Header`r`n`r`nVerified for the v2.26.0 release.`r`nKeep café unchanged.`r`n"
+        [IO.File]::WriteAllBytes($path, $encoding.GetPreamble() + $encoding.GetBytes($beforeText))
+
+        Update-ReleaseVersionStamp -Path $path -Version ([Version]"2.26.1")
+
+        $expectedText = $beforeText.Replace("v2.26.0", "v2.26.1")
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) | Should -Be (
+            [Convert]::ToBase64String($encoding.GetPreamble() + $encoding.GetBytes($expectedText))
+        )
     }
 }
 
@@ -206,12 +238,15 @@ Describe "release safety behavior" {
             if ($call -eq "describe --tags --abbrev=0") { return "v2.26.0" }
             if ($call -match "^log ") { return "fix(release): safe fixture (#1203)" }
             if ($call -eq "rev-parse HEAD") { return "release-sha" }
+            if ($call -eq "rev-parse origin/main") { return "release-sha" }
+            if ($call -match "rev-parse --verify refs/tags/") { return $null }
         }
         Mock gh {
             if (($args -join " ") -eq "--version") {
                 if ($script:ghAvailable) { return "gh version test" }
                 return $null
             }
+            if (($args -join " ") -match "^release view ") { return $null }
             $runs = @(@{ databaseId = 1; headSha = "other-sha"; status = "completed"; conclusion = "failure" })
             if ($script:includeMatchingRun) {
                 $runs += @{ databaseId = 2; headSha = "release-sha"; status = "completed"; conclusion = $script:ciResult }
@@ -250,6 +285,103 @@ Describe "release safety behavior" {
         $writes | Should -Be @("push origin main", "tag -a v2.26.1 -m v2.26.1", "push origin v2.26.1")
     }
 
+    It "updates and stages every release-owned version stamp with package and changelog" {
+        Push-Location $script:fixtureRoot
+        try { Invoke-ReleasePrepare -Bump patch -CiMaxWaitSeconds 1 -CiPollSeconds 1 } finally { Pop-Location }
+
+        Get-Content (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Raw |
+            Should -Match "Verified for the v2.26.1 release"
+        Get-Content (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Raw |
+            Should -Match "Verified for the v2.26.1 release"
+        $script:gitCalls | Where-Object { $_ -match "^add " } | Should -Be @(
+            "add package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md"
+        )
+    }
+
+    It "resumes an already prepared release without another bump or release commit" {
+        Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"2.26.1"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "CHANGELOG.md") ($script:baseChangelog -replace "# Changelog", "# Changelog`n`n## [v2.26.1] - 2026-08-26") -NoNewline
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Version ([Version]"2.26.1")
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Version ([Version]"2.26.1")
+        $releaseFiles = @(
+            "package.json",
+            "CHANGELOG.md",
+            "skills/dysflow-usage/references/error-codes.md",
+            "skills/dysflow-usage/assets/write-flags-matrix.md"
+        )
+        $before = @{}
+        foreach ($path in $releaseFiles) {
+            $before[$path] = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $script:fixtureRoot $path)))
+        }
+
+        Push-Location $script:fixtureRoot
+        try { Invoke-ReleasePrepare -Resume -Version "2.26.1" -CiMaxWaitSeconds 1 -CiPollSeconds 1 } finally { Pop-Location }
+
+        foreach ($path in $releaseFiles) {
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $script:fixtureRoot $path))) |
+                Should -Be $before[$path]
+        }
+        $script:gitCalls | Where-Object { $_ -match "^(add|commit|push origin main)\b" } | Should -BeNullOrEmpty
+        $script:gitCalls | Where-Object { $_ -match "^(tag\b|push origin v)" } | Should -Be @(
+            "tag -a v2.26.1 -m v2.26.1",
+            "push origin v2.26.1"
+        )
+    }
+
+    It "rejects unsafe release recovery before mutation" -ForEach @(
+        @{ Name = "resume with bump"; Params = @{ Resume = $true; Version = "2.26.1"; Bump = "patch" }; Package = "2.26.1"; Head = "release-sha"; Origin = "release-sha"; TagExists = $false; ReleaseExists = $false }
+        @{ Name = "version mismatch"; Params = @{ Resume = $true; Version = "2.26.2" }; Package = "2.26.1"; Head = "release-sha"; Origin = "release-sha"; TagExists = $false; ReleaseExists = $false }
+        @{ Name = "divergent HEAD"; Params = @{ Resume = $true; Version = "2.26.1" }; Package = "2.26.1"; Head = "local-sha"; Origin = "origin-sha"; TagExists = $false; ReleaseExists = $false }
+        @{ Name = "existing tag"; Params = @{ Resume = $true; Version = "2.26.1" }; Package = "2.26.1"; Head = "release-sha"; Origin = "release-sha"; TagExists = $true; ReleaseExists = $false }
+        @{ Name = "existing release"; Params = @{ Resume = $true; Version = "2.26.1" }; Package = "2.26.1"; Head = "release-sha"; Origin = "release-sha"; TagExists = $false; ReleaseExists = $true }
+    ) {
+        Set-Content (Join-Path $script:fixtureRoot "package.json") "{`"version`":`"$Package`"}" -NoNewline
+        $script:resumeHead = $Head
+        $script:resumeOrigin = $Origin
+        $script:resumeTagExists = $TagExists
+        $script:resumeReleaseExists = $ReleaseExists
+        Mock git {
+            $call = $args -join " "
+            $script:gitCalls.Add($call)
+            if ($call -eq "status --porcelain") { return @() }
+            if ($call -eq 'rev-list --count origin/main..HEAD') { return 0 }
+            if ($call -eq "rev-parse HEAD") { return $script:resumeHead }
+            if ($call -eq "rev-parse origin/main") { return $script:resumeOrigin }
+            if ($call -match "rev-parse --verify refs/tags/") {
+                if ($script:resumeTagExists) { return "tag-sha" }
+                return $null
+            }
+        }
+        Mock gh {
+            $call = $args -join " "
+            if ($call -eq "--version") { return "gh version test" }
+            if ($call -match "^release view ") {
+                if ($script:resumeReleaseExists) { return '{"tagName":"v2.26.1"}' }
+                return $null
+            }
+        }
+
+        $paths = @(
+            "package.json",
+            "CHANGELOG.md",
+            "skills/dysflow-usage/references/error-codes.md",
+            "skills/dysflow-usage/assets/write-flags-matrix.md"
+        )
+        $before = @{}
+        foreach ($path in $paths) {
+            $before[$path] = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $script:fixtureRoot $path)))
+        }
+
+        Push-Location $script:fixtureRoot
+        try { { Invoke-ReleasePrepare @Params } | Should -Throw } finally { Pop-Location }
+
+        foreach ($path in $paths) {
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $script:fixtureRoot $path))) |
+                Should -Be $before[$path]
+        }
+        $script:gitCalls | Where-Object { $_ -match "^(add|commit|push)\b" } | Should -BeNullOrEmpty
+    }
+
     It "refuses the tag when exact-SHA CI is red" {
         $script:ciResult = "failure"
         Push-Location $script:fixtureRoot
@@ -259,6 +391,22 @@ Describe "release safety behavior" {
 
         $script:gitCalls | Where-Object { $_ -match "^(tag|push origin v)\b" } |
             Should -BeNullOrEmpty
+    }
+
+    It "refuses a resumed tag when exact-SHA CI is red" {
+        $script:ciResult = "failure"
+        Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"2.26.1"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "CHANGELOG.md") ($script:baseChangelog -replace "# Changelog", "# Changelog`n`n## [v2.26.1] - 2026-08-26") -NoNewline
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Version ([Version]"2.26.1")
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Version ([Version]"2.26.1")
+
+        Push-Location $script:fixtureRoot
+        try {
+            { Invoke-ReleasePrepare -Resume -Version "2.26.1" -CiMaxWaitSeconds 1 -CiPollSeconds 1 } |
+                Should -Throw "*NOT pushing the tag*"
+        } finally { Pop-Location }
+
+        $script:gitCalls | Where-Object { $_ -match "^(add|commit|tag|push)\b" } | Should -BeNullOrEmpty
     }
 
     It "bounds CI polling when no run matches the release SHA" {
@@ -284,6 +432,19 @@ Describe "release command-line dispatch" {
         Invoke-ReleasePrepareEntryPoint -BoundParameters @{ Version = "2.33.0" }
 
         $script:capturedBoundParameters.Version | Should -Be "2.33.0"
+        $script:capturedBoundParameters.ContainsKey("Bump") | Should -BeFalse
+    }
+
+    It "forwards explicit recovery without binding a bump" {
+        $script:capturedBoundParameters = $null
+        Mock Invoke-ReleasePrepare {
+            $script:capturedBoundParameters = @{} + $PesterBoundParameters
+        }
+
+        Invoke-ReleasePrepareEntryPoint -BoundParameters @{ Resume = $true; Version = "4.0.5" }
+
+        $script:capturedBoundParameters.Resume | Should -BeTrue
+        $script:capturedBoundParameters.Version | Should -Be "4.0.5"
         $script:capturedBoundParameters.ContainsKey("Bump") | Should -BeFalse
     }
 }
