@@ -6,14 +6,13 @@ metadata:
   author: "Andrés Román"
   version: "1.0.0"
   status: active
-  last_verified: "2026-08-23"
-  last_dysflow_version: "3.0.0"
+  last_verified: "2026-08-26"
+  last_dysflow_version: "4.0.3"
   requires: "dysflow MCP >= 3.0, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
     in_scope: "operating rules, hard constraints, workflow loop, companion-skills matrix, anti-patterns for any AI agent using dysflow"
     out_of_scope: "canonical tool names / write-flags / error codes (dysflow-usage), TDD discipline details (access-vba-tdd-*), e2e methodology (access-vba-e2e-methodology), form UI perceive→act→verify details (access-form-ui-builder)"
-  supersedes: "v0.5.0 (2026-08-01; refresh against dysflow v2.34.2 contract — cwd-aware cache, fail-closed setup_project, schemaVersion discriminator, recovery-token trio, write-class tool count)"
   injection_format: "the literal markdown block delimited by <!-- dysflow:arnés --> ... <!-- /dysflow:arnés --> HTML comments at the top of SKILL.md, intended for copy-paste into any agent's system prompt"
   pointer_marker: "<!-- user-supplement:dysflow:pointer --><!-- /user-supplement:dysflow:pointer --> in each AGENTS.md / CLAUDE.md of an installed agent; block is rewritten by `dysflow install` / `dysflow update`"
 ---
@@ -305,7 +304,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v1.0.0 · last_verified 2026-08-23 · requires
+dysflow harness v1.0.0 · last_verified 2026-08-26 · requires
 dysflow MCP >= 3.0 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `bootstrap` plus explicit schema/capability views. If this arnés disagrees with

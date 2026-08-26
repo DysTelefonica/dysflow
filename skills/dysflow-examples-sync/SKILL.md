@@ -7,14 +7,13 @@ metadata:
   author: "Andrés Román"
   version: "1.0.0"
   status: active
-  last_verified: "2026-08-23"
-  last_dysflow_version: "3.0.0"
+  last_verified: "2026-08-26"
+  last_dysflow_version: "4.0.3"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-usage skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow install` for routine example refresh, `dysflow doctor` for the gap audit"
   managed_by: "`dysflow install` ships bundled per-tool examples; `dysflow doctor` audits the gap; this skill is the manual scaffolding fallback when the installer path is unavailable or a user wants a per-tool example added offline."
   in_scope: "dysflow-usage/assets/examples/<tool>.md scaffolding + gap reporting + hash tracking of each example file vs runtime schema"
   out_of_scope: "writing example *content* (that is a human + dysflow-usage session), modifying dysflow-usage/SKILL.md itself (ARN-1 of dysflow-codegraph-update), dysflow-pointer-rollout scope, gentle-ai-owned skills"
-  supersedes: "v0.1.5 (2026-07-30; added managed_by + raised floor to 2.34)"
   trigger_patterns:
     - "ARN-3 — dysflow-usage/SKILL.md lists a tool in any per-tool section but assets/examples/<tool>.md is missing"
     - "ARN-3 chain from dysflow-codegraph-update ARN-1 (post-arnés + post-usage regeneration)"

@@ -295,7 +295,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v1.0.0 · last_verified 2026-08-23 · requires
+dysflow harness v1.0.0 · last_verified 2026-08-26 · requires
 dysflow MCP >= 3.0 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `bootstrap` plus explicit schema/capability views. If this arnés disagrees with
