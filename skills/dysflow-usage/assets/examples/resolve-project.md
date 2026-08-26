@@ -9,6 +9,8 @@ Resolve and verify the selected worktree project after bootstrap.
 ## When to use
 
 - Resolve and verify the selected worktree project after bootstrap.
+- After `register_worktree({cwd})`, resolve that exact pre-warmed worktree
+  without rediscovering every sibling worktree under the same parent.
 
 ## Required flags
 
@@ -32,9 +34,13 @@ Resolve and verify the selected worktree project after bootstrap.
 ```json
 {
   "tool": "resolve_project",
-  "arguments": {}
+  "arguments": { "cwd": "C:\\path\\to\\worktree" }
 }
 ```
+
+If the exact `cwd` has a valid `register_worktree` cache entry, that entry is
+the implicit target. A cache miss preserves sibling discovery and returns the
+normal recovery envelope when more than one project is visible.
 
 ## Result shape (always schemaVersion: "dysflow.result/v1")
 

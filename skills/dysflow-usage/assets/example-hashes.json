@@ -196,7 +196,7 @@
   },
   "resolve_project": {
     "path": "assets/examples/resolve-project.md",
-    "sha256": "0cd583f3eba501e350ab82260aafb629f13d48f914ddfb46e0b4fe26cc6e79a8",
+    "sha256": "bba41c42e5853b2c6e8f5261f14719eb9c2ef39101d65776d21e30d81f3c626b",
     "needs_human_content": false
   },
   "run_vba": {
