@@ -1,5 +1,26 @@
 # Changelog
 
+## [v4.0.3] - 2026-08-26
+
+### Changes
+
+- docs(quality): split coverage margin paragraph
+- ci(coverage): stabilize v8 branch floor
+- refactor(core): type resolved destination roots
+- chore(mcp): ratchet preferred tool context budget
+- fix(vba-sync): ignore directories during export prune
+- chore(ci): refresh migrate schema context budget
+- fix(mcp): advertise preferred form workflows
+- fix(vba): normalize form names in orphan audit
+- fix(mcp): preserve decorated migrate previews
+- fix(skills): sync migrate config example hash
+- fix(config): reject removed top-level capability fields
+- fix(telemetry): tolerate locked rotation generations
+- refactor(vba-sync): centralize orphan managed-source rules
+- chore(git): ignore generated tooling artifacts
+- fix(vba-sync): keep the export_all prune deletion record when an rm fails (#1573) (#1575)
+
+
 ## [v4.0.2] - 2026-08-25
 
 ### Fixes
