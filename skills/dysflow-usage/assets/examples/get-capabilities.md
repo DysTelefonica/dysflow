@@ -17,6 +17,10 @@ Bootstrap every agent session with live adapter, project, and write-gate state.
 ## All input properties (live `inputSchema.properties` keys)
 
     - `cwd`
+    - `view`
+    - `compact`
+    - `include`
+    - `toolNames`
 
 ## Call shape
 

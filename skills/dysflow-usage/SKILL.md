@@ -252,7 +252,7 @@ use `diff` only when reported as a compatibility alias. `apply_form_design_plan`
 `mode`/`filesystemApplied` reflect the real write; the pure planning preview is always
 `mode:"dry-run"`.
 
-`form_set_property` uses `propertyName` as the canonical field (`property` remains a compatibility alias) and rejects unknown property names or invalid value types before opening a guarded write. Every form mutation is transactional: when the import gate fails, dysflow restores the original source instead of leaving a partial filesystem mutation.
+`form_set_properties` accepts a `properties` map and validates every property name and value before opening a guarded write. Every form mutation is transactional: when the import gate fails, dysflow restores the original source instead of leaving a partial filesystem mutation.
 
 `compact_repair` defaults to the frontend. Pass its explicit target selector only when the intended database is the backend; never rely on path fallback when the target matters.
 

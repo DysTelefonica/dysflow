@@ -18,6 +18,8 @@ Discover all tools with view:"compact"; request view:"full" only for catalog-wid
 
     - `projectId`
     - `toolName`
+    - `phase`
+    - `status`
     - `view`
 
 ## Call shape

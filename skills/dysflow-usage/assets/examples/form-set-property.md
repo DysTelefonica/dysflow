@@ -1,5 +1,7 @@
 # `form_set_property`
 
+> **Compatibility-only, non-advertised tool.** Prefer `form_set_properties`, which is advertised on the core surface and can update one or several properties atomically. Keep this example only when maintaining an existing singular-tool integration.
+
 ## When to use
 
 Preview a scalar layout or display-property change on a control.

@@ -56,7 +56,7 @@
   },
   "describe_tool": {
     "path": "assets/examples/describe-tool.md",
-    "sha256": "185962206c1fee8449ecbbb559eb73848c29b65ed2c67d3e42ac333f016cc014",
+    "sha256": "8613d3851bd4bb08dabe77ac6a830551fd1f1896586ef1686cfa6317aba10817",
     "needs_human_content": false
   },
   "detect_dead_code": {
@@ -111,7 +111,7 @@
   },
   "form_set_property": {
     "path": "assets/examples/form-set-property.md",
-    "sha256": "22d62b82568c544b949a155cb4ae84917b5eadc27c1fc706568e99f5e4fc398d",
+    "sha256": "f16c9e3fae64719b41c90cafd1d1111f66e0ba00133ece99c2c8fbeeaa599bc9",
     "needs_human_content": false
   },
   "generate_form_design_plan": {
@@ -121,7 +121,7 @@
   },
   "get_capabilities": {
     "path": "assets/examples/get-capabilities.md",
-    "sha256": "0bd222bbc4582dea37ffecb8a5f0adc9595dc805e490a7c41732277781274bdc",
+    "sha256": "14480aca3e11b5b942936cabc9b423a8f83855b698a2e8a7d6174cdaa4a3439c",
     "needs_human_content": false
   },
   "get_procedure": {
@@ -206,7 +206,7 @@
   },
   "schema": {
     "path": "assets/examples/schema.md",
-    "sha256": "e0a1ad4d7b5c388587a872ffe8428e88c79628f7f260a2121cc183a49d54c78f",
+    "sha256": "ff86a16a5086b3f948cf7ff3248cd8b32c0427b912b553bd8a1600cb6d9fb8e2",
     "needs_human_content": false
   },
   "setup_project": {
@@ -226,7 +226,7 @@
   },
   "test_vba": {
     "path": "assets/examples/test-vba.md",
-    "sha256": "143d4a2402be69994359af48cb52ce3996ef4bed6b2d9293ed0fff4148729595",
+    "sha256": "d29578ffef4fba0e377d99865ae3f110f17662b8e2a8305734112977840809c1",
     "needs_human_content": false
   },
   "validate_manifest": {
