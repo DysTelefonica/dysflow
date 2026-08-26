@@ -25,6 +25,21 @@ async function filesBelow(root: string): Promise<string[]> {
 }
 
 describe("release-owned Dysflow skill integrity (#1520)", () => {
+  it("keeps every release-owned skill verified against the package version", async () => {
+    const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")) as {
+      version: string;
+    };
+
+    for (const name of skillNames) {
+      const skill = await readFile(path.join(repoRoot, "skills", name, "SKILL.md"), "utf8");
+      const declaredVersions = [...skill.matchAll(/^ {2}last_dysflow_version: "([^"]+)"$/gm)].map(
+        (match) => match[1],
+      );
+
+      expect(declaredVersions, name).toEqual([packageJson.version]);
+    }
+  });
+
   it("ships every helper, reference, and bootstrap example needed by its own guidance", async () => {
     const required = [
       "skills/dysflow-usage/assets/examples/bootstrap.md",
