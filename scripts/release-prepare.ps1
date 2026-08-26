@@ -19,6 +19,7 @@
 #   pwsh -File scripts/release-prepare.ps1 -Bump minor
 #   pwsh -File scripts/release-prepare.ps1 -Bump patch
 #   pwsh -File scripts/release-prepare.ps1 -Version 1.11.2
+#   pwsh -File scripts/release-prepare.ps1 -Resume -Version 1.11.2
 #
 # Pre-flight:
 #   - Working tree clean (the script refuses to start on dirty trees so the
@@ -34,7 +35,8 @@
 Param(
     [ValidateSet("patch", "minor", "major")]
     [string]$Bump,
-    [string]$Version
+    [string]$Version,
+    [switch]$Resume
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,12 +143,59 @@ function Assert-ReleaseChangelogQuality {
     }
 }
 
+function Update-ReleaseVersionStamp {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+        [Parameter(Mandatory)]
+        [Version]$Version
+    )
+
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $encoding = [Text.UTF8Encoding]::new($false, $true)
+    $preambleLength = 0
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $encoding = [Text.UTF8Encoding]::new($true, $true)
+        $preambleLength = 3
+    } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+        $encoding = [Text.UnicodeEncoding]::new($false, $true, $true)
+        $preambleLength = 2
+    } elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+        $encoding = [Text.UnicodeEncoding]::new($true, $true, $true)
+        $preambleLength = 2
+    }
+
+    $text = $encoding.GetString($bytes, $preambleLength, $bytes.Length - $preambleLength)
+    $pattern = '(?i)verified for the v(?<version>[^\s]+) release'
+    $matches = [regex]::Matches($text, $pattern)
+    if ($matches.Count -ne 1) {
+        throw "Expected exactly one release version stamp in $Path; found $($matches.Count)."
+    }
+    $versionToken = $matches[0].Groups['version']
+    $updated = $text.Remove($versionToken.Index, $versionToken.Length).Insert(
+        $versionToken.Index,
+        [string]$Version
+    )
+    $body = $encoding.GetBytes($updated)
+    if ($preambleLength -eq 0) {
+        [IO.File]::WriteAllBytes($Path, $body)
+        return
+    }
+    $preamble = $encoding.GetPreamble()
+    $output = [byte[]]::new($preamble.Length + $body.Length)
+    [Array]::Copy($preamble, 0, $output, 0, $preamble.Length)
+    [Array]::Copy($body, 0, $output, $preamble.Length, $body.Length)
+    [IO.File]::WriteAllBytes($Path, $output)
+}
+
 function Invoke-ReleasePrepare {
     [CmdletBinding()]
     Param(
         [ValidateSet("patch", "minor", "major")]
         [string]$Bump,
         [string]$Version,
+        [switch]$Resume,
         [int]$GateTimeoutSeconds = 120,
         [int]$CiMaxWaitSeconds = 600,
         [int]$CiPollSeconds = 10
@@ -180,7 +229,21 @@ if (-not $ghOk) {
 $pkgJson = Get-Content "package.json" -Raw | ConvertFrom-Json
 $current = [Version]$pkgJson.version
 
-if ($Version) {
+if ($Resume) {
+    if ($Bump) {
+        throw "-Resume cannot be combined with -Bump. Pass the already prepared -Version only."
+    }
+    if (-not $Version) {
+        throw "-Resume requires the already prepared -Version X.Y.Z."
+    }
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+        throw "Version must be semver (e.g. 1.11.2). Got: $Version"
+    }
+    $next = [Version]$Version
+    if ($next -ne $current) {
+        throw "Resume version $next does not match package.json version $current."
+    }
+} elseif ($Version) {
     if ($Version -notmatch '^\d+\.\d+\.\d+$') {
         throw "Version must be semver (e.g. 1.11.2). Got: $Version"
     }
@@ -199,18 +262,56 @@ if ($Version) {
     throw "Specify -Bump (patch|minor|major) or -Version X.Y.Z"
 }
 
-if ($next -le $current) {
+if (-not $Resume -and $next -le $current) {
     throw "Next version $next is not greater than current $current. Use a higher version."
 }
 
 $tag = "v$next"
-Write-Host "Bumping $current -> $next (tag $tag)" -ForegroundColor Cyan
+if ($Resume) {
+    Write-Host "Resuming already prepared $tag without mutating release files." -ForegroundColor Cyan
+} else {
+    Write-Host "Bumping $current -> $next (tag $tag)" -ForegroundColor Cyan
+}
 
 $packagePath = (Resolve-Path "package.json").Path
 $changelogPath = Join-Path (Get-Location).Path "CHANGELOG.md"
+$stampPaths = @(
+    (Join-Path (Get-Location).Path "skills/dysflow-usage/references/error-codes.md"),
+    (Join-Path (Get-Location).Path "skills/dysflow-usage/assets/write-flags-matrix.md")
+)
+
+if ($Resume) {
+    $headSha = git rev-parse HEAD
+    $originMainSha = git rev-parse origin/main
+    if (-not $headSha -or $headSha -ne $originMainSha) {
+        throw "Release recovery requires HEAD to equal origin/main exactly."
+    }
+    $existingTag = git rev-parse --verify "refs/tags/$tag" 2>$null
+    $existingRemoteTag = git ls-remote --tags origin "refs/tags/$tag" 2>$null
+    if ($existingTag -or $existingRemoteTag) {
+        throw "Cannot resume $tag because the tag already exists."
+    }
+    $existingRelease = gh release view $tag --json tagName 2>$null
+    if ($existingRelease) {
+        throw "Cannot resume $tag because the GitHub Release already exists."
+    }
+    if ((Get-Content $changelogPath -Raw) -notmatch "(?m)^## \[$([regex]::Escape($tag))\] - ") {
+        throw "Cannot resume $tag because CHANGELOG.md has no prepared release section."
+    }
+    foreach ($stampPath in $stampPaths) {
+        if ((Get-Content $stampPath -Raw) -notmatch "(?i)verified for the v$([regex]::Escape([string]$next)) release") {
+            throw "Cannot resume $tag because $stampPath does not carry the prepared version stamp."
+        }
+    }
+} else {
 $packageBefore = [IO.File]::ReadAllBytes($packagePath)
 $changelogExisted = Test-Path $changelogPath
 $changelogBefore = if ($changelogExisted) { [IO.File]::ReadAllBytes($changelogPath) } else { $null }
+$stampBytesBefore = @{}
+foreach ($stampPath in $stampPaths) {
+    if (-not (Test-Path $stampPath)) { throw "Release-owned version stamp file not found: $stampPath" }
+    $stampBytesBefore[$stampPath] = [IO.File]::ReadAllBytes($stampPath)
+}
 $preCommitSucceeded = $false
 try {
 # Update package.json (preserve formatting: parse, modify, emit).
@@ -226,6 +327,10 @@ if ($null -eq $lastTag) {
 } else {
     $logRange = "$lastTag..HEAD"
     $date = (Get-Date).ToString("yyyy-MM-dd")
+}
+
+foreach ($stampPath in $stampPaths) {
+    Update-ReleaseVersionStamp -Path $stampPath -Version $next
 }
 
 $commits = git log $logRange --no-merges --pretty=format:"%s" 2>$null
@@ -252,6 +357,7 @@ if (Test-Path $changelogPath) {
 # Validate the exact file that would be committed. A malformed generated entry
 # must fail locally before the release commit can make main red.
 Assert-ReleaseChangelogQuality -ChangelogPath $changelogPath -TimeoutSeconds $GateTimeoutSeconds
+git add "package.json" "CHANGELOG.md" "skills/dysflow-usage/references/error-codes.md" "skills/dysflow-usage/assets/write-flags-matrix.md"
 $preCommitSucceeded = $true
 } finally {
     if (-not $preCommitSucceeded) {
@@ -261,17 +367,20 @@ $preCommitSucceeded = $true
         } elseif (Test-Path $changelogPath) {
             Remove-Item $changelogPath -Force
         }
+        foreach ($stampPath in $stampPaths) {
+            [IO.File]::WriteAllBytes($stampPath, $stampBytesBefore[$stampPath])
+        }
     }
 }
 
 # --- commit + push ----------------------------------------------------------
 
-git add "package.json" "CHANGELOG.md"
 git commit -m "chore(release): prepare $tag"
 
 $headSha = git rev-parse HEAD
 Write-Host "Release commit $headSha created locally. Pushing to origin/main..." -ForegroundColor Cyan
 git push origin main
+}
 
 # --- wait for CI ------------------------------------------------------------
 
@@ -333,6 +442,9 @@ function Invoke-ReleasePrepareEntryPoint {
     }
     if ($BoundParameters.ContainsKey("Version")) {
         $releaseParameters.Version = $BoundParameters.Version
+    }
+    if ($BoundParameters.ContainsKey("Resume")) {
+        $releaseParameters.Resume = $BoundParameters.Resume
     }
 
     Invoke-ReleasePrepare @releaseParameters
