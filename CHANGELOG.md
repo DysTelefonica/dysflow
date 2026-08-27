@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.0.7] - 2026-08-27
+
+### Changes
+
+- fix(forms): recover transient LoadFromText cancellation
+
+
 ## [v4.0.6] - 2026-08-27
 
 ### Changes
