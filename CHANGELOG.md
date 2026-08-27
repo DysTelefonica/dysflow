@@ -1,5 +1,23 @@
 # Changelog
 
+## [v4.1.0] - 2026-08-27
+
+### Changes
+
+- docs(install): explain channel trust and update gates
+- docs(install): add the install channel operator guide
+- docs(install): document the install channels and their trust levels
+- feat(cli): wire --channel through install, update, and doctor
+- refactor(install): split the release provider per channel
+- feat(install): add channel, install-state, and tag-grammar modules
+- chore(install): track install channel integration
+- fix(mcp): include documentation bundle in compact capabilities
+- fix(mcp): resolve cached write-locked worktrees
+- fix(mcp): preserve structured thrown error details
+- docs(skills): prefer structured MCP results
+- fix(mcp): preserve cwd through query dispatch
+
+
 ## [Unreleased]
 
 ### Changes
