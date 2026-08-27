@@ -35,6 +35,7 @@ Describe "dysflow VBA import transport module (#1463)" {
 
     It "serializes raw failure evidence without duplicating core error mapping" {
         $session = [pscustomobject]@{ VbProject = 'project'; AccessApplication = 'access' }
+        $results = [Collections.Generic.List[object]]::new()
         $passResult = Invoke-VbaImportPrimitivePass `
             -Session $session `
             -ModuleNames @('BadMod') `
@@ -43,17 +44,22 @@ Describe "dysflow VBA import transport module (#1463)" {
             -RollbackOnMutationFailure $true `
             -Total 1 `
             -ResolveExisting { 'BadMod' } `
-            -ImportModule { throw 'VB_NAME_MISMATCH: wrong identity' } `
+            -ImportModule { throw 'LoadFromText retry and terminal canonical restore failed.' } `
             -ResetDiagnostics { } `
             -ReadDiagnostics {
                 [pscustomobject]@{
                     phase = 'import'
-                    data = $null
+                    data = [pscustomobject]@{
+                        firstFailure = 'Canceló la operación anterior.'
+                        retryFailure = "Error en la línea 88. Esperado: 'End'."
+                        rollbackApplied = $false
+                        rollbackError = 'Terminal canonical rollback LoadFromText failed.'
+                    }
                     rollbackAttempted = $true
-                    rollbackApplied = $true
-                    rollbackError = $null
-                    fallbackUsed = $false
-                    fallbackReason = $null
+                    rollbackApplied = $false
+                    rollbackError = 'Terminal canonical rollback LoadFromText failed.'
+                    fallbackUsed = $true
+                    fallbackReason = 'load_from_text_transient_cancellation_retry'
                 }
             } `
             -InspectLockOwner { [pscustomobject]@{ databaseLocked = $false; machine = $null; user = $null } } `
@@ -61,11 +67,32 @@ Describe "dysflow VBA import transport module (#1463)" {
         $attempt = @($passResult.Attempts)
 
         $attempt.ok | Should -Be $false
-        $attempt.message | Should -Be 'VB_NAME_MISMATCH: wrong identity'
+        $attempt.message | Should -Be 'LoadFromText retry and terminal canonical restore failed.'
         $attempt.phase | Should -Be 'import'
-        $attempt.rollbackApplied | Should -Be $true
+        $attempt.data.firstFailure | Should -Be 'Canceló la operación anterior.'
+        $attempt.data.retryFailure | Should -Be "Error en la línea 88. Esperado: 'End'."
+        $attempt.data.rollbackError | Should -Be 'Terminal canonical rollback LoadFromText failed.'
+        $attempt.rollbackApplied | Should -BeFalse
         ($attempt.PSObject.Properties.Name -contains 'code') | Should -Be $false `
             -Because 'typed error projection belongs to the TypeScript core'
+
+        $summary = Invoke-VbaImportTransport `
+            -Targets @('BadMod') `
+            -Scope explicit `
+            -CoreDecision { param($eventName, $payload) Invoke-VbaImportCoreDecision -Event $eventName -Payload $payload } `
+            -RunPass { $passResult } `
+            -Save { throw 'save must not run after a failed import' } `
+            -WriteResult { param($result) $results.Add($result) | Out-Null } `
+            -WriteStatus { }
+
+        $emitted = $results[0].modules[0]
+        $emitted.error.code | Should -Be 'VBA_IMPORT_PHASE_FAILED'
+        $emitted.error.data.firstFailure | Should -Be 'Canceló la operación anterior.'
+        $emitted.error.data.retryFailure | Should -Be "Error en la línea 88. Esperado: 'End'."
+        $emitted.error.data.rollbackError | Should -Be 'Terminal canonical rollback LoadFromText failed.'
+        $emitted.error.rollbackApplied | Should -BeFalse
+        $emitted.error.rollbackError | Should -Be 'Terminal canonical rollback LoadFromText failed.'
+        $summary.HasErrors | Should -BeTrue
     }
 
     It "follows core retry and save decisions while preserving one final result emission" {

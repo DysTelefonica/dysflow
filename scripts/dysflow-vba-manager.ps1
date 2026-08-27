@@ -3410,6 +3410,77 @@ function Import-DocumentCodeBehind {
     }
 }
 
+function Test-AccessDocumentSnapshotEquivalent {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$CanonicalDocumentText,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$VerifiedDocumentText,
+        [Parameter(Mandatory = $true)][string]$ModuleName
+    )
+
+    $normalizedCanonical = Normalize-AccessDocumentTextForLoadFromText `
+        -DocumentText $CanonicalDocumentText `
+        -ModuleName $ModuleName
+    $normalizedVerified = Normalize-AccessDocumentTextForLoadFromText `
+        -DocumentText $VerifiedDocumentText `
+        -ModuleName $ModuleName
+    $normalizedCanonical = Normalize-Newlines -Text $normalizedCanonical -Newline "`n"
+    $normalizedVerified = Normalize-Newlines -Text $normalizedVerified -Newline "`n"
+    return $normalizedCanonical -ceq $normalizedVerified
+}
+
+function Get-ProvenTransientLoadFromTextCancellationEvidence {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$ErrorRecord,
+        [Parameter(Mandatory = $true)][string]$Phase,
+        [Parameter(Mandatory = $true)][string]$Member,
+        [Parameter(Mandatory = $true)][string]$ObjectName,
+        [Parameter(Mandatory = $true)][bool]$SnapshotAvailable
+    )
+
+    $exception = if ($ErrorRecord -is [System.Management.Automation.ErrorRecord]) {
+        $ErrorRecord.Exception
+    } elseif ($ErrorRecord -is [System.Exception]) {
+        $ErrorRecord
+    } else {
+        $null
+    }
+    $chain = [System.Collections.Generic.List[object]]::new()
+    $exactCancellationFound = $false
+    $depth = 0
+    while ($exception) {
+        $errorCode = $null
+        if ($exception.PSObject.Properties['ErrorCode']) {
+            $errorCode = [int64]$exception.ErrorCode
+        }
+        $hresult = [int64]$exception.HResult
+        $chain.Add([pscustomobject][ordered]@{
+            depth     = $depth
+            type      = $exception.GetType().FullName
+            message   = [string]$exception.Message
+            errorCode = $errorCode
+            hresult   = $hresult
+            hresultHex = ('0x{0:X8}' -f ($hresult -band 0xffffffffL))
+        }) | Out-Null
+        if ([string]$exception.Message -ceq 'Canceló la operación anterior.') {
+            $exactCancellationFound = $true
+        }
+        $exception = $exception.InnerException
+        $depth++
+    }
+    $recoverable = $exactCancellationFound -and $Phase -ceq 'import' -and $Member -ceq 'LoadFromText' -and $SnapshotAvailable
+    return [pscustomobject][ordered]@{
+        classification    = if ($exactCancellationFound) { 'load_from_text_transient_cancellation' } else { $null }
+        recoverable       = [bool]$recoverable
+        phase             = $Phase
+        member            = $Member
+        objectName        = $ObjectName
+        snapshotAvailable = $SnapshotAvailable
+        exceptionChain    = $chain.ToArray()
+    }
+}
+
 function Import-VbaModule {
     [CmdletBinding()]
     Param(
@@ -3438,6 +3509,9 @@ function Import-VbaModule {
     $component = $null
     $codeModule = $null
     $canonicalDocumentText = $null
+    $loadFromTextFallbackUsed = $false
+    $loadFromTextFallbackReason = $null
+    $loadFromTextRecoveryDiagnostic = $null
 
     try {
         # FIX: formularios/reportes usan LoadFromText — nunca VBComponents.Import
@@ -3595,6 +3669,108 @@ function Import-VbaModule {
             try {
                 $AccessApplication.LoadFromText($objectType, $objectName, $tmpAnsi)
             } catch {
+                $firstLoadFromTextError = $_
+                $snapshotAvailable = $documentExistsInAccess -and -not [string]::IsNullOrWhiteSpace($canonicalDocumentText)
+                $transientEvidence = Get-ProvenTransientLoadFromTextCancellationEvidence `
+                    -ErrorRecord $firstLoadFromTextError `
+                    -Phase $script:ImportCurrentPhase `
+                    -Member 'LoadFromText' `
+                    -ObjectName $objectName `
+                    -SnapshotAvailable $snapshotAvailable
+                if ($transientEvidence.recoverable) {
+                    $loadFromTextFallbackUsed = $true
+                    $loadFromTextFallbackReason = 'load_from_text_transient_cancellation_retry'
+                    $script:ImportLastFallbackUsed = $true
+                    $script:ImportLastFallbackReason = $loadFromTextFallbackReason
+                    $loadFromTextRecoveryDiagnostic = [ordered]@{
+                        classification  = $transientEvidence.classification
+                        evidence        = $transientEvidence
+                        firstFailure    = [string]$firstLoadFromTextError.Exception.Message
+                        importAttempts  = 1
+                        snapshotRestores = 0
+                        outcome         = 'recovery_started'
+                    }
+                    Write-Status -Message ("WARN: LoadFromText canceló la primera importación de '{0}'; se restaurará el snapshot canónico antes de un único reintento." -f $objectName) -Color DarkYellow
+
+                    $restoreDocumentSnapshot = {
+                        $restorePath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("VBAManager_transient_restore_{0}.txt" -f [guid]::NewGuid().ToString('N'))
+                        $verifyPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("VBAManager_transient_verify_{0}.txt" -f [guid]::NewGuid().ToString('N'))
+                        try {
+                            [IO.File]::WriteAllText($restorePath, $canonicalDocumentText, [Text.Encoding]::GetEncoding(1252))
+                            try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch { Write-Debug "Diagnostics: $_" }
+                            [Threading.Thread]::Sleep(100)
+                            $AccessApplication.LoadFromText($objectType, $objectName, $restorePath)
+                            $AccessApplication.SaveAsText($objectType, $objectName, $verifyPath)
+                            if (-not (Test-Path -LiteralPath $verifyPath)) {
+                                throw "Snapshot restore verification did not produce SaveAsText evidence."
+                            }
+                            $verifiedDocumentText = [IO.File]::ReadAllText($verifyPath, [Text.Encoding]::GetEncoding(1252))
+                            if ([string]::IsNullOrWhiteSpace($verifiedDocumentText)) {
+                                throw "Snapshot restore verification produced an empty SaveAsText document."
+                            }
+                            return $verifiedDocumentText
+                        } finally {
+                            Remove-Item -LiteralPath $restorePath -Force -ErrorAction SilentlyContinue
+                            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
+                        }
+                    }.GetNewClosure()
+
+                    $script:ImportLastRollbackAttempted = $true
+                    try {
+                        $verifiedRestoreDocumentText = & $restoreDocumentSnapshot
+                        Assert-AccessDocumentTextLooksLoadable -DocumentText $verifiedRestoreDocumentText -Kind $documentKindLabel -SourcePath 'transient-recovery SaveAsText verification'
+                        if (-not (Test-AccessDocumentSnapshotEquivalent -CanonicalDocumentText $canonicalDocumentText -VerifiedDocumentText $verifiedRestoreDocumentText -ModuleName $documentModuleName)) {
+                            throw "Snapshot restore verification is not equivalent to the canonical snapshot after existing LoadFromText normalization."
+                        }
+                        $script:ImportLastRollbackApplied = $true
+                        $script:ImportLastRollbackError = $null
+                        $loadFromTextRecoveryDiagnostic.snapshotRestores = 1
+                    } catch {
+                        $script:ImportLastRollbackApplied = $false
+                        $script:ImportLastRollbackError = [string]$_.Exception.Message
+                        $loadFromTextRecoveryDiagnostic.outcome = 'restore_before_retry_failed'
+                        $loadFromTextRecoveryDiagnostic.restoreFailure = [string]$_.Exception.Message
+                        $script:LastRebuildDiagnostic = $loadFromTextRecoveryDiagnostic
+                        throw ("LoadFromText transient recovery failed for '{0}' before retry. First failure: {1} Snapshot restore failure: {2}" -f $objectName, $firstLoadFromTextError.Exception.Message, $_.Exception.Message)
+                    }
+
+                    try {
+                        try { $AccessApplication.DoCmd.Close($objectType, $objectName, 1) } catch { Write-Debug "Diagnostics: $_" }
+                        [Threading.Thread]::Sleep(100)
+                        $AccessApplication.LoadFromText($objectType, $objectName, $tmpAnsi)
+                    } catch {
+                        $retryLoadFromTextError = $_
+                        $loadFromTextRecoveryDiagnostic.importAttempts = 2
+                        $script:ImportLastRollbackAttempted = $true
+                        try {
+                            $verifiedRestoreDocumentText = & $restoreDocumentSnapshot
+                            Assert-AccessDocumentTextLooksLoadable -DocumentText $verifiedRestoreDocumentText -Kind $documentKindLabel -SourcePath 'transient-recovery terminal SaveAsText verification'
+                            if (-not (Test-AccessDocumentSnapshotEquivalent -CanonicalDocumentText $canonicalDocumentText -VerifiedDocumentText $verifiedRestoreDocumentText -ModuleName $documentModuleName)) {
+                                throw "Terminal snapshot restore verification is not equivalent to the canonical snapshot after existing LoadFromText normalization."
+                            }
+                            $script:ImportLastRollbackApplied = $true
+                            $script:ImportLastRollbackError = $null
+                            $loadFromTextRecoveryDiagnostic.snapshotRestores = 2
+                        } catch {
+                            $script:ImportLastRollbackApplied = $false
+                            $script:ImportLastRollbackError = [string]$_.Exception.Message
+                        }
+                        $loadFromTextRecoveryDiagnostic.outcome = 'retry_failed'
+                        $loadFromTextRecoveryDiagnostic.retryFailure = [string]$retryLoadFromTextError.Exception.Message
+                        $loadFromTextRecoveryDiagnostic.rollbackApplied = [bool]$script:ImportLastRollbackApplied
+                        $loadFromTextRecoveryDiagnostic.rollbackError = $script:ImportLastRollbackError
+                        $script:LastRebuildDiagnostic = $loadFromTextRecoveryDiagnostic
+                        if (-not $script:ImportLastRollbackApplied) {
+                            throw ("LoadFromText retry failed for '{0}' and the canonical snapshot could not be restored. First failure: {1} Retry failure: {2} Rollback failure: {3}" -f $objectName, $firstLoadFromTextError.Exception.Message, $retryLoadFromTextError.Exception.Message, $script:ImportLastRollbackError)
+                        }
+                        throw $retryLoadFromTextError
+                    }
+                    $script:ImportLastRollbackAttempted = $false
+                    $script:ImportLastRollbackApplied = $false
+                    $script:ImportLastRollbackError = $null
+                    $loadFromTextRecoveryDiagnostic.importAttempts = 2
+                    $loadFromTextRecoveryDiagnostic.outcome = 'recovered'
+                } else {
                 $detail = $null
                 if ($importErrorsPath -and (Test-Path -LiteralPath $importErrorsPath)) {
                     try { $detail = [System.IO.File]::ReadAllText($importErrorsPath, [System.Text.Encoding]::GetEncoding(1252)) } catch { Write-Debug "Diagnostics: $_" }
@@ -3603,6 +3779,7 @@ function Import-VbaModule {
                     throw ("LoadFromText falló para '{0}'. Detalle de errors.txt: {1}" -f $objectName, ($detail.Trim()))
                 }
                 throw
+                }
             }
 
             # The document we just loaded carries an embedded copy of the
@@ -3662,6 +3839,9 @@ function Import-VbaModule {
                 DurationMs           = 0
                 RollbackApplied      = $false
                 RollbackAction       = $rollbackAction
+                FallbackUsed         = $loadFromTextFallbackUsed
+                FallbackReason       = $loadFromTextFallbackReason
+                Verbose              = if ($loadFromTextRecoveryDiagnostic) { [pscustomobject]@{ transientRecovery = $loadFromTextRecoveryDiagnostic } } else { $null }
             }
         }
 
