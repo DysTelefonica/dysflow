@@ -101,6 +101,10 @@ It can terminate unrelated user sessions.
 
 Dysflow records every Access launch (operation id, action, db path, PID, process metadata, lifecycle) and gates destructive actions so cleanup can only happen on verified operations.
 
+The same principle governs distribution. The signed GitHub Release is the default install path and the only one that establishes authenticity.
+
+A gated development channel sits alongside it for testing unreleased changes. It is opt-in, unverified, and never the default — see [installation channels](./docs/installation-channels.md).
+
 ---
 
 ## Architectural model
@@ -315,6 +319,48 @@ adapters (and create their canonical skill directories), or
 `--exclude=claude,pi` to leave selected detected adapters untouched. `dysflow
 doctor` compares each detected adapter's installed hashes and harness version
 against the running product release.
+
+### Channels
+
+`dysflow install` and `dysflow update` accept `--channel {stable|beta|main}`. The default is `stable`, and omitting the flag keeps the existing behaviour.
+
+| Channel | Purpose | Verification | Prerequisite gate |
+|---|---|---|---|
+| `stable` | Production and everyday installs. | Ed25519 signature over `SHA256SUMS`, then SHA-256. | None |
+| `beta` | Validating a release candidate. | SHA-256 against the published `SHA256SUMS`. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
+| `main` | Testing changes that have not shipped. | None. Unverified by design. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
+
+On `stable`, `dysflow install` does not download. It installs the package the invoked CLI was started from, which is unchanged behaviour; `dysflow update` is the command that fetches.
+
+Only `beta` and `main` reach the network on `install`.
+
+Stable needs no flag, but naming it is worth doing in scripts:
+
+```text
+dysflow install --channel stable
+```
+
+The `beta` channel resolves the newest prerelease tag and verifies the archive against its published checksum manifest. It is not signed, so it is gated:
+
+```text
+$env:DYSFLOW_ALLOW_INSECURE_UPDATE = "1"
+dysflow install --channel beta
+```
+
+**Unreleased development channel — use only to test changes that are not part of a release.**
+
+The `main` channel downloads the branch archive and builds the runtime locally. It has no cryptographic verification of any kind, so treat it as running unreviewed code:
+
+```text
+$env:DYSFLOW_ALLOW_INSECURE_UPDATE = "1"
+dysflow install --channel main
+```
+
+Switching an installed runtime between channels requires `--force` on `dysflow update`; without it the command fails with `DYSFLOW_CHANNEL_PIN_REQUIRES_FORCE` and changes nothing.
+
+Full per-channel recipes, error codes, and rollback steps live in [installation channels](./docs/installation-channels.md).
+
+The guarantees behind each channel are in the [update trust model](./docs/security/update-trust-model.md).
 
 ### Layout (profile install)
 
@@ -869,7 +915,13 @@ Use `--force` to reinstall the latest release even when versions match:
 dysflow update --force
 ```
 
-The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it. There is no source-build or git-clone fallback, protecting the update path from supply-chain risks.
+The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it.
+
+On `stable` and `beta` there is no source-build or git-clone fallback: a failed download never degrades into a source build, which is what protects the update path from supply-chain risks.
+
+The `main` channel is the one deliberate exception. It builds from a downloaded branch archive, is unreachable unless `DYSFLOW_ALLOW_INSECURE_UPDATE=1` is set, and verifies nothing it downloads.
+
+See [installation channels](./docs/installation-channels.md) for what that costs the operator.
 
 If the release asset is missing, the signature is missing/invalid, or the SHA-256 checksum does not match, the update aborts. Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
 
