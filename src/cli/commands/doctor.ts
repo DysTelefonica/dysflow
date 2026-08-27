@@ -29,8 +29,15 @@ import {
 } from "./doctor/checks/types.js";
 import { runVbaStructureChecks } from "./doctor/checks/vba-structure.js";
 import { getHome, resolveAgentConfigPaths } from "./install/agent-config.js";
+import {
+  describeChannelLines,
+  readRequestedChannel,
+  resolveInstallChannel,
+} from "./install/channel.js";
 import { ensureObject } from "./install/file-utils.js";
+import { readInstallState } from "./install/install-state.js";
 import { resolvePackageRoot } from "./install/package-root.js";
+import { resolveRuntimeDir } from "./install/runtime-dir.js";
 import {
   diagnoseBundledSkills,
   discoverSkillTargets,
@@ -38,6 +45,32 @@ import {
 } from "./install/skills-installer.js";
 import { checkOpencodeWiring, type McpWiringCheck } from "./opencode-mcp-wiring.js";
 import type { CliCommandContext, CliResult } from "./types.js";
+
+/**
+ * Reports the install channel this runtime is tracking (issue #1521), resolved
+ * exactly the way `install` / `update` resolve it: `--channel` → `DYSFLOW_CHANNEL`
+ * → install state → `stable`. Read-only — `doctor` reports, it never switches.
+ */
+async function describeDoctorChannel(
+  args: readonly string[],
+  context: CliCommandContext,
+): Promise<{ ok: true; lines: string[] } | { ok: false; message: string }> {
+  const env = (context.env ?? process.env) as NodeJS.ProcessEnv;
+  const channelIndex = args.indexOf("--channel");
+  const rawValue = channelIndex >= 0 ? args[channelIndex + 1] : undefined;
+  if (channelIndex >= 0 && (rawValue === undefined || rawValue.startsWith("--"))) {
+    return { ok: false, message: "Missing value for --channel." };
+  }
+
+  const requested = readRequestedChannel(rawValue, env);
+  if (!requested.ok) return { ok: false, message: requested.message };
+
+  const installState = await readInstallState(resolveRuntimeDir(undefined, env));
+  return {
+    ok: true,
+    lines: describeChannelLines(resolveInstallChannel(requested.requested, installState?.channel)),
+  };
+}
 
 export async function handleDoctorCommand(
   args: readonly string[],
@@ -50,7 +83,7 @@ export async function handleDoctorCommand(
     return {
       exitCode: 0,
       stdout:
-        "Usage: dysflow doctor [--cwd <path>] [--category A|B|C|D|all] [--skills]\n\n" +
+        "Usage: dysflow doctor [--cwd <path>] [--category A|B|C|D|all] [--skills] [--channel stable|beta|main]\n\n" +
         "Check local Dysflow requirements without modifying the target worktree.\n\n" +
         "Categories (#1057 — read-only, no PowerShell, no Access):\n" +
         "  A  .dysflow/project.json schema, path resolution, conventions\n" +
@@ -58,11 +91,29 @@ export async function handleDoctorCommand(
         "  C  runtime consumer contract (apply polarity, param naming)\n" +
         "  D  external dependencies (.laccdb locks, .codegraph freshness)\n" +
         "  all  run every category; exit code reflects critical findings only\n" +
-        "  --skills  compare bundled skill hashes/version in detected adapter SkillsDir targets",
+        "  --skills  compare bundled skill hashes/version in detected adapter SkillsDir targets\n" +
+        "  --channel report the install channel that would be used (does not switch it)",
       stderr: "",
     };
   }
 
+  const channel = await describeDoctorChannel(args, context);
+  if (!channel.ok) {
+    return { exitCode: 1, stdout: "", stderr: channel.message };
+  }
+
+  const result = await runDoctorChecks(args, context);
+  // The channel banner heads the report. A run that produced no report at all —
+  // a hard configuration failure that speaks only through stderr — keeps its
+  // empty stdout, because a banner is not a report.
+  if (result.stdout.length === 0) return result;
+  return { ...result, stdout: `${channel.lines.join("\n")}\n${result.stdout}` };
+}
+
+async function runDoctorChecks(
+  args: readonly string[],
+  context: CliCommandContext,
+): Promise<CliResult> {
   if (args.includes("--skills")) {
     try {
       const statuses = await runSkillsInstallationCheck(context);

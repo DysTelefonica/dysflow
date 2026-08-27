@@ -459,9 +459,28 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   immediately validates the live release. The split is intentional because `GITHUB_TOKEN`-created releases
   do not reliably trigger another workflow.
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
-- Update path security: the ONLY update mechanism is the GitHub Release tar.gz with SHA-256
-  verification. There is NO git-clone / source-build fallback. See
-  [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
+- **Update path security is per channel, and `stable` is the only signed one.** `dysflow install`
+  / `dysflow update` / `dysflow doctor` take `--channel {stable|beta|main}` (issue #1521),
+  resolved as `--channel` -> `DYSFLOW_CHANNEL` -> the channel recorded in
+  `<runtimeDir>/.dysflow-install-state.json` -> `stable`. Omitting the flag keeps every existing
+  call shape on `stable`, unchanged.
+  - `stable` (default, ungated): the GitHub Release tar.gz, verified by an Ed25519 signature over
+    `SHA256SUMS` and then SHA-256 over the archive. Never weaken this path — the signature gate
+    fails closed, and `--skip-checksum` remains a stable-only escape hatch that still requires
+    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+  - `beta` (gated): the newest published prerelease tag's release tar.gz, verified by SHA-256
+    against the published `SHA256SUMS`. Prereleases are NOT covered by the trust anchor, so this
+    channel is unreachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+  - `main` (gated): `archive/refs/heads/main.tar.gz` — repository **source**, built locally with
+    `pnpm install` + `pnpm build` to reproduce the release-tarball shape. **Unverified by design**:
+    GitHub publishes no `SHA256SUMS` for a branch archive and its bytes are not reproducible, so
+    there is nothing to verify against. This is the one source-build path in the product; it is an
+    explicitly gated development channel, never reachable without
+    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, and it is never a fallback for a failed `stable` update.
+  - There is still NO git-clone update path, and no channel may silently substitute for another:
+    the archive-traversal guard runs on every channel, and `update` refuses to move a runtime
+    between channels without `--force`. See
+    [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
 - **`export_all` prune is destructive — preserve its guards.** When `prune: true`, deletions are
   gated on a fully clean export (skip on ANY warning), scoped to managed source extensions
   (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
@@ -529,10 +548,13 @@ recoverable, and aligned with the write-gate contract.
    runtime no longer compiles; the human compiles in Access (Debug > Compile) before re-running tests.
 4. Re-run `verify_code` and the focused `test_vba` plan before trusting the binary.
 5. Form/report sources are protected two ways on import (#958): a structural pre-import gate
-   rejects unparseable `.form.txt`/`.report.txt` (`FORM_SOURCE_MALFORMED`) before Access is
-   spawned, and repairable legacy metadata (missing `AutoResize = NotDefault`, stale/absent
-   `Attribute VB_Name`) is self-healed during import — a file exported by an older dysflow is
-   imported as if the current version had exported it. `export X` → `import X` is idempotent.
+   rejects unparseable `.form.txt`/`.report.txt` (`FORM_SOURCE_MALFORMED`) before Access is spawned.
+
+   Repairable legacy metadata (missing `AutoResize = NotDefault`, stale/absent `Attribute VB_Name`)
+   is self-healed during import.
+
+   A file exported by an older dysflow is imported as if the current version had exported it.
+   `export X` → `import X` is idempotent.
 
 ### Timeout and orphan recovery
 
@@ -550,9 +572,10 @@ recoverable, and aligned with the write-gate contract.
 1. Run write-capable tools with `dryRun` first whenever the tool supports it.
 2. `dysflow mcp` (stdio) enables writes by default — the stdio surface is process-ownership-trusted.
    Scope a repo to read-only with `"allowWrites": false` in `.dysflow/project.json`, or start the
-   whole session read-only with `dysflow mcp --disable-writes`. `dysflow serve` (HTTP) still starts
-   writes-disabled by default; enable it explicitly per session with `--enable-writes` only for
-   trusted local maintenance.
+   whole session read-only with `dysflow mcp --disable-writes`.
+
+   `dysflow serve` (HTTP) still starts writes-disabled by default; enable it explicitly per session
+   with `--enable-writes` only for trusted local maintenance.
 3. Use `apply: true` only for intentional writes after reviewing the dry-run plan.
 4. Treat `MCP_WRITES_DISABLED` as a safety stop, not as a reason to bypass the adapter.
 
@@ -601,17 +624,20 @@ The `path` parameter is accepted as an alias for `sourcePath`. The tool returns
 ### AI form UI builder — analyze, plan, apply, verify
 
 Use `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
-`apply_form_design_plan`, `copy_form_ui_pattern`, and `verify_form_ui` when an AI-assisted form UI
-change must stay behavior-safe.
+`apply_form_design_plan`, and `copy_form_ui_pattern` to plan and apply AI-assisted form UI changes.
+
+Use `verify_form_ui` to keep those changes behavior-safe.
 
 Golden path:
 1. `analyze_form_ui({ sourcePath })` reads `.form.txt` through FormIR and returns semantic controls,
    roles, bindings, and events.
 2. `map_form_behavior({ sourcePath, codegraphEvidence })` merges analysis with caller-supplied
    CodeGraph-VBA evidence. **Issue #830 opt-in**: pass `autoFetchCodeGraph: true` instead to relax
-   the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba). The adapter invokes codegraph-vba
-   internally and merges the result with any caller-supplied evidence; on any failure it falls
-   back to `.form.txt`-declared events alone + a warning, never throws.
+   the no-MCP-to-MCP boundary one-way (dysflow → codegraph-vba).
+
+   The adapter invokes codegraph-vba internally and merges the result with any caller-supplied
+   evidence; on any failure it falls back to `.form.txt`-declared events alone + a warning, never
+   throws.
 3. `generate_form_design_plan({ behaviorMap, plan })` creates explicit operations tied to the
    behavior map.
 4. `apply_form_design_plan({ plan, dryRun: true })` previews. Use `apply: true` only for intentional

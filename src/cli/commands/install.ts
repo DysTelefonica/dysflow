@@ -1,6 +1,19 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
+import {
+  checkChannelGates,
+  describeChannelLines,
+  type InstallChannel,
+  resolveInstallChannel,
+} from "./install/channel.js";
+import {
+  createReleaseUpdateProviderForChannel,
+  type PreparedReleasePackage,
+  type ReleaseUpdateProvider,
+} from "./install/downloader.js";
 import { createInstallReport, installRuntime, resolveRuntimePaths } from "./install/extractor.js";
+import { readInstallState, writeInstallState } from "./install/install-state.js";
 import { configureAgent } from "./install/mcp-configurator.js";
 import { resolvePackageRoot } from "./install/package-root.js";
 import {
@@ -27,6 +40,22 @@ import {
 import type { CliResult } from "./types.js";
 
 export type {
+  ChannelSource,
+  InstallChannel,
+  RequestedChannel,
+  ResolvedChannel,
+} from "./install/channel.js";
+export {
+  CHANNEL_ERROR_CODES,
+  checkChannelGates,
+  checkChannelPin,
+  DEFAULT_INSTALL_CHANNEL,
+  describeChannelLines,
+  INSTALL_CHANNELS,
+  readRequestedChannel,
+  resolveInstallChannel,
+} from "./install/channel.js";
+export type {
   PreparedReleasePackage,
   ReleaseInfo,
   ReleaseUpdateProvider,
@@ -34,8 +63,19 @@ export type {
 export {
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
+  createMainBranchArchiveProvider,
+  createPrereleaseGitHubReleaseProvider,
+  createReleaseUpdateProviderForChannel,
+  createStableGitHubReleaseProvider,
   validateReleaseTagName,
 } from "./install/downloader.js";
+export type { InstallState } from "./install/install-state.js";
+export {
+  getInstallStatePath,
+  INSTALL_STATE_FILE,
+  readInstallState,
+  writeInstallState,
+} from "./install/install-state.js";
 
 export { MAX_PACKAGE_ROOT_DEPTH } from "./install/package-root.js";
 export {
@@ -151,9 +191,14 @@ export {
 
 export async function handleInstallCommand(
   args: readonly string[],
-  context: { env?: NodeJS.ProcessEnv; packageRoot?: string } = {},
+  context: {
+    env?: NodeJS.ProcessEnv;
+    packageRoot?: string;
+    createReleaseUpdateProvider?: (channel: InstallChannel) => ReleaseUpdateProvider;
+  } = {},
 ): Promise<CliResult> {
-  const parsed = parseInstallArgs(args);
+  const env = context.env ?? process.env;
+  const parsed = parseInstallArgs(args, env);
   if (!parsed.ok) {
     const isUsage = parsed.message === INSTALL_USAGE;
     return {
@@ -163,9 +208,40 @@ export async function handleInstallCommand(
     };
   }
 
-  const env = context.env ?? process.env;
   const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
-  const packageRoot = context.packageRoot ?? resolvePackageRoot();
+  const installState = await readInstallState(runtimeDir);
+  const resolvedChannel = resolveInstallChannel(
+    parsed.options.requestedChannel,
+    installState?.channel,
+  );
+  const channelGate = checkChannelGates({ channel: resolvedChannel.channel, env });
+  if (!channelGate.ok) {
+    return { exitCode: 1, stdout: "", stderr: channelGate.message };
+  }
+
+  // `stable` installs the package this CLI was started from — the pre-#1521
+  // behavior, and the only shape that never reaches the network. The unsigned
+  // channels have no local bytes to install, so they fetch and build first.
+  let preparedPackage: PreparedReleasePackage | undefined;
+  let packageRoot: string;
+  try {
+    if (resolvedChannel.channel === "stable") {
+      packageRoot = context.packageRoot ?? resolvePackageRoot();
+    } else {
+      const provider =
+        context.createReleaseUpdateProvider?.(resolvedChannel.channel) ??
+        createReleaseUpdateProviderForChannel(resolvedChannel.channel);
+      const release = await provider.resolveLatestRelease();
+      preparedPackage = await provider.preparePackage(release, { env });
+      packageRoot = preparedPackage.packageRoot;
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch the requested Dysflow channel.";
+    await preparedPackage?.cleanup?.();
+    return { exitCode: 1, stdout: "", stderr: message };
+  }
+
   const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
   const agentConfigPaths = resolveAgentConfigPaths(getHome(env));
   const commandPath = commandPathForConfig(runtimeDir);
@@ -197,9 +273,20 @@ export async function handleInstallCommand(
       agents.filter((agent): agent is "codex" | "opencode" | "claude" => agent !== "pi"),
     );
 
+    await writeInstallState(runtimeDir, {
+      channel: resolvedChannel.channel,
+      version: (await readInstalledVersion(runtimePaths.packageJsonDest)) ?? "unknown",
+      ...(preparedPackage?.commitSha === undefined ? {} : { commitSha: preparedPackage.commitSha }),
+      installedAt: new Date().toISOString(),
+    });
+
     return {
       exitCode: 0,
       stdout: [
+        // The stable channel prints exactly what it printed before #1521.
+        resolvedChannel.channel === "stable"
+          ? ""
+          : describeChannelLines(resolvedChannel).join("\n"),
         createInstallReport(runtimeDir, agents, {
           copiedFiles: runtimeInstall.copiedFiles,
           mcpConfigurations,
@@ -219,6 +306,22 @@ export async function handleInstallCommand(
       stdout: "",
       stderr: message,
     };
+  } finally {
+    await preparedPackage?.cleanup?.();
+  }
+}
+
+/** Reads the version actually written into the runtime, for install state. */
+async function readInstalledVersion(packageJsonPath: string): Promise<string | undefined> {
+  const raw = await readFile(packageJsonPath, "utf8").catch(() => undefined);
+  if (raw === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return typeof parsed.version === "string" && parsed.version.length > 0
+      ? parsed.version
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 
