@@ -15,15 +15,28 @@ export function wrapWithErrorAbsorber(
     try {
       return await handler(input, context);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       const record =
         typeof err === "object" && err !== null ? (err as Record<string, unknown>) : undefined;
+      const nestedMessage =
+        typeof record?.message === "object" && record.message !== null
+          ? (record.message as Record<string, unknown>)
+          : undefined;
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof record?.message === "string"
+            ? record.message
+            : typeof nestedMessage?.message === "string"
+              ? nestedMessage.message
+              : String(err);
       const code =
         typeof record?.code === "string" && record.code.length > 0 ? record.code : "MCP_TOOL_ERROR";
       const remediation =
         typeof record?.remediation === "string" && record.remediation.length > 0
           ? record.remediation
-          : "Inspect the typed error code and message, correct the reported condition, then retry.";
+          : typeof nestedMessage?.remediation === "string" && nestedMessage.remediation.length > 0
+            ? nestedMessage.remediation
+            : "Inspect the typed error code and message, correct the reported condition, then retry.";
       const error = {
         code,
         errorCode: code,
