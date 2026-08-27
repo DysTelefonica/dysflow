@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changes
+
+- feat(install): add `--channel {stable|beta|main}` to `dysflow install`, `dysflow update`, and `dysflow doctor` (#1521). Resolution order is `--channel` -> `DYSFLOW_CHANNEL` -> the channel persisted in `<runtimeDir>/.dysflow-install-state.json` -> `stable`; omitting the flag keeps every existing call shape on the signed stable path, unchanged.
+- feat(install): record install state in `<runtimeDir>/.dysflow-install-state.json` (channel, version, commit sha, timestamp) with an atomic write, so `update` can refuse a silent channel switch and `doctor` can report what is running.
+- feat(install): `beta` installs the newest published prerelease tag, verified by SHA-256 against the published `SHA256SUMS`; `main` builds the branch source locally with `pnpm install` + `pnpm build` and is unverified by design. Both require `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+- feat(install): new error codes `DYSFLOW_UNKNOWN_CHANNEL`, `DYSFLOW_INSECURE_GATE_MISSING`, `DYSFLOW_SKIP_CHECKSUM_REQUIRES_STABLE_CHANNEL`, `DYSFLOW_CHANNEL_PIN_REQUIRES_FORCE`, and `DYSFLOW_PRERELEASE_TAG_NOT_FOUND`, documented in `references/error-codes.md`.
+- refactor(install): split `createGitHubReleaseUpdateProvider` into stable, prerelease, and main-branch providers behind the existing `ReleaseUpdateProvider` contract, and lift release-tag validation into `src/cli/commands/install/validate-tag-name.ts`. The tag grammar now accepts `vX.Y.Z-{rc,beta,alpha,prerelease}.N`; `--skip-checksum` stays stable-only.
+
 ## [v4.0.7] - 2026-08-27
 
 ### Changes
