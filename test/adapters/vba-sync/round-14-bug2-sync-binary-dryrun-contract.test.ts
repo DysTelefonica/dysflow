@@ -136,7 +136,7 @@ describe("Round-14 bug 2 — sync_binary dryRun contract (#1228)", () => {
     const plan = buildSyncBinaryPlan({
       summary: makeVerifyResult(),
       direction: "both",
-      scope: { actionableOnly: true, includeBothChanged: false },
+      scope: { actionableOnly: true, includeBothChanged: false, moduleNamesOnly: false },
     });
     const classification = classifySyncBinaryPlanViolation({ plan, reason: "ok" });
     expect(classification).toBeNull();

@@ -64,6 +64,10 @@ const generatedContracts = {
     summary:
       "Read-only source/binary drift contract. The default response is compact and actionable; pass diagnostic:true to include full noise arrays, classifications, and snippets.",
   },
+  sync_binary: {
+    ...contractFromGeneratedRoute("sync_binary"),
+    summary: "Source/binary sync.",
+  },
 } as Record<GeneratedDispatchToolName, McpToolContract>;
 
 const aliasContracts: Record<AliasToolName, McpToolContract> = {

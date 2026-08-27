@@ -62,6 +62,12 @@ function inputWithoutControlFlag(input: unknown): {
   return { forceSpecialized: forceSpecialized === true, forwarded };
 }
 
+function isExplicitNarrowImport(name: string, input: unknown): boolean {
+  if (name !== "import_modules" || input === null || typeof input !== "object") return false;
+  const moduleNames = (input as Record<string, unknown>).moduleNames;
+  return Array.isArray(moduleNames) && moduleNames.length > 0;
+}
+
 function appendWarnings(result: McpToolResult, warnings: readonly Record<string, unknown>[]) {
   if (result.isError || warnings.length === 0) return result;
   const first = result.content[0];
@@ -106,12 +112,14 @@ export function withPreferredToolWarnings(
       handler: async (input, context) => {
         const { forceSpecialized, forwarded } = inputWithoutControlFlag(input);
         const result = await tool.handler(forwarded, context);
-        const warnings = resolvePreferredToolWarnings({
-          called: descriptor,
-          catalog,
-          release,
-          forceSpecialized,
-        });
+        const warnings = isExplicitNarrowImport(tool.name, forwarded)
+          ? []
+          : resolvePreferredToolWarnings({
+              called: descriptor,
+              catalog,
+              release,
+              forceSpecialized,
+            });
         return appendWarnings(result, warnings);
       },
     };
