@@ -344,6 +344,7 @@ export type AccessQueryRequest = {
   timeoutMs?: number;
   backendPassword?: string;
   // Overrides
+  cwd?: string;
   projectId?: string;
   contextId?: string;
   accessPath?: string;

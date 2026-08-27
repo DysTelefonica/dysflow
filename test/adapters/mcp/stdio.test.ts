@@ -913,6 +913,61 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
 });
 
 describe("createDynamicServices — caching, isolation and routing", () => {
+  it("dispatches through a valid explicit cwd when the startup worktree is broken", async () => {
+    const startup = await mkdtemp(join(tmpdir(), "dysflow-broken-startup-"));
+    const sibling = await mkdtemp(join(tmpdir(), "dysflow-valid-sibling-"));
+    mkdirSync(join(startup, ".dysflow"), { recursive: true });
+    mkdirSync(join(sibling, ".dysflow"), { recursive: true });
+    writeFileSync(
+      join(startup, ".dysflow", "project.json"),
+      JSON.stringify({ id: "startup", frontendFile: "StartupMissing.accdb" }),
+      "utf8",
+    );
+    writeFileSync(join(sibling, "Sibling.accdb"), "", "utf8");
+    writeFileSync(
+      join(sibling, ".dysflow", "project.json"),
+      JSON.stringify({ id: "sibling", frontendFile: "Sibling.accdb" }),
+      "utf8",
+    );
+
+    const dispatchedAccessPaths: string[] = [];
+    const services = createUnavailableServices(
+      {
+        code: "CONFIG_TARGET_NOT_FOUND",
+        message: `Configured accessPath does not exist on disk: ${join(startup, "StartupMissing.accdb")}.`,
+        retryable: false,
+      },
+      {
+        cwd: startup,
+        env: {},
+        serviceFactory: (config) => ({
+          vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
+          queryService: {
+            execute: async () => {
+              dispatchedAccessPaths.push(config.accessDbPath);
+              return successResult({ rows: [] });
+            },
+          },
+          diagnosticsService: new FakeDiagnosticsService(),
+        }),
+      },
+    );
+    try {
+      const listTables = createDysflowMcpTools({ services }).find(
+        (tool) => tool.name === "list_tables",
+      );
+      if (listTables === undefined) throw new Error("missing list_tables tool");
+
+      const result = await listTables.handler({ cwd: sibling });
+
+      expect(result.isError).toBe(false);
+      expect(dispatchedAccessPaths).toEqual([resolve(sibling, "Sibling.accdb")]);
+    } finally {
+      await rm(startup, { recursive: true, force: true });
+      await rm(sibling, { recursive: true, force: true });
+    }
+  });
+
   it("caches and reuses services when configs match, and creates new ones when overrides differ", async () => {
     const dbPathA = resolve("test-runtime/db-a.accdb");
     const dbPathB = resolve("test-runtime/db-b.accdb");
