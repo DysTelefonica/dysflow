@@ -53,7 +53,8 @@ const env = typeof raw === "string" ? JSON.parse(raw) : raw;
 if (env?.schemaVersion !== "dysflow.result/v1") {
   throw new Error("not a dysflow MCP envelope — possibly flattened by the transport wrapper");
 }
-// env.content[0].text is the JSON-encoded tool payload (parse it as needed).
+// Prefer `structuredContent` first; it carries the complete result when present.
+// Use `content[0].text` only when it contains the complete payload, not a bounded summary.
 // env.error.code (when isError === true) is the typed error code.
 ```
 

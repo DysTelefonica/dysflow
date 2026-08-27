@@ -31,6 +31,13 @@ describe("progressive Dysflow discovery bundle (#1520)", () => {
     expectProgressiveDiscovery(await text(relativePath));
   });
 
+  it("teaches structured result parsing without treating bounded text as canonical (#1636)", async () => {
+    const usage = await text("skills/dysflow-usage/SKILL.md");
+
+    expect(usage).toMatch(/prefer `structuredContent` first/i);
+    expect(usage).toMatch(/use `content\[0\]\.text` only when it contains the complete payload/i);
+  });
+
   it("keeps the embedded AGENTS harness byte-equal to the canonical harness", async () => {
     const start = "<!-- dysflow:arnés -->";
     const end = "<!-- /dysflow:arnés -->";
