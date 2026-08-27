@@ -99,6 +99,38 @@ describe("test_vba apply result contract — #1344", () => {
       ],
       procedures: ["Test_One", "Test_Two"],
     },
+    {
+      label: "batch envelope",
+      raw: {
+        tests: [
+          {
+            ok: true,
+            procedure: "Test_One",
+            argsCount: 0,
+            returnValue: true,
+            returnType: "Boolean",
+            byref_values: {},
+            payload: { index: 1 },
+            logs: ['quote " and slash \\ stay escaped'],
+            error: null,
+            durationMs: 5,
+          },
+          {
+            ok: true,
+            procedure: "Test_Two",
+            argsCount: 0,
+            returnValue: true,
+            returnType: "Boolean",
+            byref_values: {},
+            payload: { index: 2 },
+            logs: ["second"],
+            error: null,
+            durationMs: 8,
+          },
+        ],
+      },
+      procedures: ["Test_One", "Test_Two"],
+    },
   ])("translates and validates the $label runner shape through the real MCP handler", async ({
     raw,
     procedures,
@@ -119,11 +151,17 @@ describe("test_vba apply result contract — #1344", () => {
         policy: "enforce",
       }),
     ).toEqual({ ok: true });
+    const expectedTests =
+      typeof raw === "object" && raw !== null && !Array.isArray(raw) && "tests" in raw
+        ? raw.tests
+        : Array.isArray(raw)
+          ? raw
+          : [raw];
     expect(payload).toEqual({
       mode: "apply",
       passed: procedures.length,
       failed: 0,
-      tests: Array.isArray(raw) ? raw : [raw],
+      tests: expectedTests,
     });
   });
 });

@@ -13,7 +13,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -52,6 +52,34 @@ async function runPwsh(
   });
 }
 
+async function runWindowsPowerShellFile(scriptPath: string): Promise<SpawnResult> {
+  return await new Promise((resolvePromise) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("close", (code) => {
+      resolvePromise({ stdout, stderr, exitCode: code ?? -1 });
+    });
+  });
+}
+
+function extractPowerShellFunction(source: string, name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = source.match(new RegExp(`function\\s+${escaped}\\s*\\{[\\s\\S]*?\\n\\}`, "u"));
+  if (match === null) throw new Error(`${name} function was not found`);
+  return match[0];
+}
+
 function parseDysflowResult(stdout: string): Record<string, unknown> | null {
   const lines = stdout.split(/\r?\n/);
   for (const line of lines) {
@@ -74,6 +102,34 @@ function dysflowResultLines(stdout: string): string[] {
 const skipReason = HAS_PWSH ? undefined : "pwsh is not available on this platform";
 
 describe.skipIf(skipReason !== undefined)("dysflow-vba-manager.ps1 top-level trap (#484)", () => {
+  it("serializes a multi-procedure test batch as one object envelope (#1657)", async () => {
+    const source = await readFile(SCRIPT_PATH, "utf8");
+    const root = await mkdtemp(join(tmpdir(), "dysflow-test-batch-envelope-"));
+    const harnessPath = join(root, "batch-envelope.ps1");
+    const harness = `${extractPowerShellFunction(source, "Write-DysflowResult")}
+$tests = @(
+  [pscustomobject]@{ ok = $true; procedure = 'Test_One'; logs = @('quote " slash \\') },
+  [pscustomobject]@{ ok = $true; procedure = 'Test_Two'; logs = @('line one' + [Environment]::NewLine + 'line two') }
+)
+Write-DysflowResult -Result ([pscustomobject]@{ tests = @($tests) }) -Depth 7
+`;
+    await writeFile(harnessPath, harness, "utf8");
+
+    const result = await runWindowsPowerShellFile(harnessPath);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(dysflowResultLines(result.stdout)).toHaveLength(1);
+    const sentinel = parseDysflowResult(result.stdout) as { tests?: unknown[] } | null;
+    expect(sentinel?.tests).toHaveLength(2);
+    expect(sentinel?.tests?.[0]).toMatchObject({
+      procedure: "Test_One",
+      logs: ['quote " slash \\'],
+    });
+    expect(sentinel?.tests?.[1]).toMatchObject({
+      procedure: "Test_Two",
+      logs: ["line one\r\nline two"],
+    });
+  });
+
   it("rejects an unknown Action with non-zero exit (parameter binding is pre-script, the trap does not apply there)", async () => {
     // The Action parameter has a strict ValidateSet. PowerShell parameter
     // binding errors fire BEFORE the script body runs, so the top-level

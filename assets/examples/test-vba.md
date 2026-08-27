@@ -226,7 +226,7 @@ Per-procedure failure entry:
   "content": [
     {
       "type": "text",
-      "text": "[{\"ok\":true,\"procedure\":\"Test_A\",\"durationMs\":4},{\"ok\":true,\"procedure\":\"Test_B\",\"durationMs\":5}]"
+      "text": "{\"mode\":\"apply\",\"passed\":2,\"failed\":0,\"tests\":[{\"ok\":true,\"procedure\":\"Test_A\",\"durationMs\":4},{\"ok\":true,\"procedure\":\"Test_B\",\"durationMs\":5}]}"
     }
   ],
   "isError": false,
@@ -234,11 +234,14 @@ Per-procedure failure entry:
 }
 ```
 
-The success path is unchanged from earlier releases — `test_vba`
-returning a passing manifest still emits `isError: false`, `ok: true`,
-and the structured per-procedure data lives in `content[0].text` as a
-JSON-encoded array. The success path does NOT carry `error` /
-`error.details`.
+`test_vba` returning a passing manifest emits `isError: false`,
+`ok: true`, and an apply summary in `content[0].text`. The `tests[]`
+array contains one independently serialized result per procedure; use
+`passed` and `failed` for aggregate counts. The PowerShell runner also
+keeps the batch behind a named `tests` property before the adapter
+normalizes this public shape, so host wrappers never have to interpret
+concatenated procedure output or a top-level result array (#1657).
+The success path does NOT carry `error` / `error.details`.
 
 ### Structured access path (Code Mode consumers)
 

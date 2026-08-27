@@ -711,10 +711,18 @@ function buildTestsFailedMessage(failures: readonly VbaTestFailureDetail[]): str
  */
 function inspectTestResult(result: OperationResult<unknown>): OperationResult<unknown> {
   if (!result.ok) return result;
+  // Issue #1657 — the PowerShell runner now transports multi-procedure
+  // results inside an object envelope (`{ tests: [...] }`). Keeping the array
+  // below a named property avoids exposing a top-level JSON array to host
+  // wrappers while preserving the existing public MCP apply contract.
+  // Continue accepting the legacy singleton and top-level-array shapes so a
+  // newer adapter can still consume output from an older packaged script.
   const tests = Array.isArray(result.data)
     ? result.data
     : isRecord(result.data)
-      ? [result.data]
+      ? Array.isArray(result.data.tests)
+        ? result.data.tests
+        : [result.data]
       : undefined;
   if (tests === undefined) {
     const failure = failureResult(
