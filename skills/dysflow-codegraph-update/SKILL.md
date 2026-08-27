@@ -8,7 +8,7 @@ metadata:
   version: "3.0.0"
   status: active
   last_verified: "2026-08-26"
-  last_dysflow_version: "4.1.1"
+  last_dysflow_version: "4.2.0"
   last_codegraph_vba_version: "1.15.0"
   requires: "dysflow MCP >= 3.0, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
   managed_by: "`dysflow install` (one-shot), `dysflow update` (release-driven refresh), `dysflow doctor` (runtime contract audit). This user-owned skill fires only when those commands cannot resolve the drift on their own."

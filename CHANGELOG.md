@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.2.0] - 2026-08-27
+
+### Changes
+
+- fix(vba-sync): respect explicit module scope
+- fix(vba): transport large import payloads safely
+
+
 ## [v4.1.1] - 2026-08-27
 
 ### Changes
