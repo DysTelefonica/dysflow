@@ -31,6 +31,7 @@
 ### Changes
 
 - fix(vba): transport large import orchestration payloads over stdin while preserving rollback; direct oversized argv payloads now fail before mutation with `PAYLOAD_TOO_LARGE_FOR_ARGV` (#1661).
+- sync_binary preference now respects explicit moduleNames
 - feat(install): add `--channel {stable|beta|main}` to `dysflow install`, `dysflow update`, and `dysflow doctor` (#1521). Resolution order is `--channel` -> `DYSFLOW_CHANNEL` -> the channel persisted in `<runtimeDir>/.dysflow-install-state.json` -> `stable`; omitting the flag keeps every existing call shape on the signed stable path, unchanged.
 - feat(install): record install state in `<runtimeDir>/.dysflow-install-state.json` (channel, version, commit sha, timestamp) with an atomic write, so `update` can refuse a silent channel switch and `doctor` can report what is running.
 - feat(install): `beta` installs the newest published prerelease tag, verified by SHA-256 against the published `SHA256SUMS`; `main` builds the branch source locally with `pnpm install` + `pnpm build` and is unverified by design. Both require `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.

@@ -37,7 +37,7 @@ async function payload(tool: DysflowMcpTool, input: Record<string, unknown>) {
 }
 
 describe("preferred tool runtime warnings (#1536)", () => {
-  it("adds an informational preferred-tool warning without blocking a specialized write tool", async () => {
+  it("does not prefer whole-project sync_binary for an explicit narrow import", async () => {
     const { tool } = harness();
 
     const result = await payload(tool("import_modules"), {
@@ -46,15 +46,19 @@ describe("preferred tool runtime warnings (#1536)", () => {
     });
 
     expect(result).toMatchObject({ operation: "import_modules", ok: true });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("still recommends sync_binary for an unfiltered import workflow", async () => {
+    const { tool } = harness();
+
+    const result = await payload(tool("import_modules"), { apply: false });
+
     expect(result.warnings).toEqual([
       expect.objectContaining({
         code: "PREFERRED_TOOL_AVAILABLE",
-        severity: "info",
         called: "import_modules",
         preferred: "sync_binary",
-        rationale: expect.any(String),
-        docsAnchor: "dysflow-usage/assets/examples/sync-binary.md",
-        release: expect.any(String),
       }),
     ]);
   });

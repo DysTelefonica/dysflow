@@ -54,6 +54,7 @@ export type SyncBinaryDirection = "src-to-binary" | "binary-to-src" | "both";
 export type SyncBinaryScope = {
   actionableOnly?: boolean;
   includeBothChanged?: boolean;
+  moduleNamesOnly?: boolean;
 };
 
 /**
@@ -80,6 +81,8 @@ export type SyncVerifySummary = {
   hasFunctionalDifferences: boolean;
   recommendedAction: string;
   recommendation: string;
+  sourceNewerEntries?: readonly { moduleName: string }[];
+  binaryNewerEntries?: readonly { moduleName: string }[];
   bothChangedEntries?: readonly { moduleName: string }[];
 };
 
@@ -259,7 +262,66 @@ function effectiveScope(input: SyncBinaryInput): Required<SyncBinaryScope> {
   return {
     actionableOnly: scope?.actionableOnly !== false,
     includeBothChanged: scope?.includeBothChanged === true,
+    moduleNamesOnly: scope?.moduleNamesOnly === true,
   };
+}
+
+function filterSummaryToModuleNames(
+  summary: SyncVerifySummary,
+  moduleNames: readonly string[] | undefined,
+  enabled: boolean,
+): SyncVerifySummary {
+  if (!enabled || moduleNames === undefined || moduleNames.length === 0) return summary;
+
+  const selected = new Set(moduleNames.map((name) => name.toLowerCase()));
+  const inScope = (entry: { moduleName: string }) => selected.has(entry.moduleName.toLowerCase());
+  const missingInBinary = summary.missingInBinary.filter(inScope);
+  const missingInSource = summary.missingInSource.filter(inScope);
+  const sourceNewerEntries = (summary.sourceNewerEntries ?? []).filter(inScope);
+  const binaryNewerEntries = (summary.binaryNewerEntries ?? []).filter(inScope);
+  const bothChangedEntries = (summary.bothChangedEntries ?? []).filter(inScope);
+  const sourceNewer = sourceNewerEntries.length;
+  const binaryNewer = binaryNewerEntries.length;
+  const bothChanged = bothChangedEntries.length;
+  const actionable = {
+    ...summary.actionable,
+    sourceNewer,
+    binaryNewer,
+    bothChanged,
+    total: sourceNewer + binaryNewer + bothChanged,
+  };
+  const hasFunctionalDifferences =
+    missingInBinary.length > 0 || missingInSource.length > 0 || actionable.total > 0;
+  const filtered = {
+    ...summary,
+    missingInBinary,
+    missingInSource,
+    actionable,
+    sourceNewerEntries,
+    binaryNewerEntries,
+    bothChangedEntries,
+    hasFunctionalDifferences,
+  };
+  const recommendation = deriveSyncBinaryRecommendation(filtered);
+
+  return {
+    ...filtered,
+    recommendedAction: recommendation,
+    recommendation: scopedRecommendationMessage(recommendation),
+  };
+}
+
+function scopedRecommendationMessage(recommendation: SyncBinaryRecommendation): string {
+  switch (recommendation) {
+    case "no_action":
+      return "No actionable differences remain in the selected module scope.";
+    case "import_to_binary":
+      return "Import the selected source modules into the binary.";
+    case "export_to_source":
+      return "Export the selected binary modules to the source tree.";
+    case "manual_merge":
+      return "The selected module scope contains conflicts that require a manual merge.";
+  }
 }
 
 // ─── Pure helpers (exported for tests + reuse from VbaSyncAdapter) ──────────
@@ -292,16 +354,15 @@ export function buildSyncBinaryPlan(args: {
   const skipped: SyncBinarySkippedEntry[] = [];
 
   // Direction:'src-to-binary' OR 'both' -> toImport = missingInBinary + sourceNewer
-  // (sourceNewer modules are reported via actionable.sourceNewer in the
-  // summary; we read actionable counts to derive them, but the source
-  // projection needs the names. The VbaSyncAdapter projection includes
-  // the names on missingInBinary and missingInSource only; bothChanged
-  // names are carried via summary.bothChangedEntries.)
+  // Named semantic entries come from the adapter's actionableDifferent
+  // projection, while missing modules retain their dedicated lists.
   if (direction === "src-to-binary" || direction === "both") {
     for (const entry of summary.missingInBinary) importSet.add(entry.moduleName);
+    for (const entry of summary.sourceNewerEntries ?? []) importSet.add(entry.moduleName);
   }
   if (direction === "binary-to-src" || direction === "both") {
     for (const entry of summary.missingInSource) exportSet.add(entry.moduleName);
+    for (const entry of summary.binaryNewerEntries ?? []) exportSet.add(entry.moduleName);
   }
 
   const bothChangedEntries = summary.bothChangedEntries ?? [];
@@ -408,7 +469,11 @@ export async function runSyncBinary(args: {
   if (!preOutcome.ok) {
     return { ok: false, dryRun: isDryRun, error: preOutcome.error };
   }
-  const preSync = preOutcome.summary;
+  const preSync = filterSummaryToModuleNames(
+    preOutcome.summary,
+    focusedModuleNames,
+    scope.moduleNamesOnly,
+  );
 
   // Step 2: plan
   const plan = buildSyncBinaryPlan({
@@ -523,7 +588,11 @@ export async function runSyncBinary(args: {
     if (!postOutcome.ok) {
       return { ok: false, dryRun: false, error: postOutcome.error };
     }
-    postSync = postOutcome.summary;
+    postSync = filterSummaryToModuleNames(
+      postOutcome.summary,
+      focusedModuleNames,
+      scope.moduleNamesOnly,
+    );
   }
 
   // Step 5: recommend. The recommendation is derived from postSync when

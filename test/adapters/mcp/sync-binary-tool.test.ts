@@ -179,7 +179,7 @@ describe("sync_binary schema (#809)", () => {
     expect(direction?.enum).toEqual(["src-to-binary", "binary-to-src", "both"]);
   });
 
-  it("declares scope as an object (actionableOnly default true, includeBothChanged default false)", () => {
+  it("declares scope as an object with deterministic module selection controls", () => {
     const scope = schema?.properties?.scope as
       | {
           type: string;
@@ -190,6 +190,7 @@ describe("sync_binary schema (#809)", () => {
     expect(scope?.type).toBe("object");
     expect(scope?.properties?.actionableOnly).toBeDefined();
     expect(scope?.properties?.includeBothChanged).toBeDefined();
+    expect(scope?.properties?.moduleNamesOnly).toBeDefined();
   });
 
   it("declares apply and unified confirmation fields without dryRun", () => {

@@ -408,6 +408,45 @@ describe("runSyncBinary — ok after successful sync (AC4)", () => {
 // ─── 5. Scope filtering (AC5 + AC6) ─────────────────────────────────────────
 
 describe("runSyncBinary — scope filtering (AC5, AC6)", () => {
+  it("ignores bothChanged modules outside an explicit moduleNames scope", async () => {
+    const fake = makeFakeAdapter({
+      preVerify: {
+        ok: true,
+        summary: makeVerifyResult({
+          actionable: { total: 4, sourceNewer: 2, binaryNewer: 0, bothChanged: 2 },
+          sourceNewerEntries: [{ moduleName: "SelectedSource" }, { moduleName: "UnrelatedSource" }],
+          bothChangedEntries: [
+            { moduleName: "SelectedConflict" },
+            { moduleName: "UnrelatedConflict" },
+          ],
+          hasFunctionalDifferences: true,
+          recommendedAction: "manual_merge",
+        }),
+      },
+    });
+
+    const result = await runSyncBinary({
+      adapter: fake.adapter,
+      input: {
+        direction: "src-to-binary",
+        moduleNames: ["SelectedConflict", "SelectedSource"],
+        dryRun: true,
+        scope: { moduleNamesOnly: true, includeBothChanged: true },
+      },
+    });
+
+    expectSuccess(result);
+    expect(result.preSync.sourceNewerEntries).toEqual([{ moduleName: "SelectedSource" }]);
+    expect(result.preSync.bothChangedEntries).toEqual([{ moduleName: "SelectedConflict" }]);
+    expect(result.plan.toImport).toEqual(["SelectedSource"]);
+    expect(result.plan.skipped).toEqual([
+      { moduleName: "SelectedConflict", reason: "bothChanged_acknowledged" },
+    ]);
+    expect(result.preSync.actionable.sourceNewer).toBe(1);
+    expect(result.preSync.actionable.bothChanged).toBe(1);
+    expect(result.preSync.actionable.total).toBe(2);
+  });
+
   it("scope.actionableOnly:true (default) excludes nonActionable from plan", async () => {
     const fake = makeFakeAdapter({
       preVerify: {
@@ -685,7 +724,7 @@ describe("buildSyncBinaryPlan — pure helper", () => {
         bothChangedEntries: [{ moduleName: "D" }],
       }),
       direction: "both",
-      scope: { actionableOnly: true, includeBothChanged: true },
+      scope: { actionableOnly: true, includeBothChanged: true, moduleNamesOnly: false },
     });
     expect(plan.toImport).toEqual(["A", "B"]);
     expect(plan.toExport).toEqual(["C"]);
@@ -700,7 +739,7 @@ describe("buildSyncBinaryPlan — pure helper", () => {
         missingInSource: [{ moduleName: "B" }],
       }),
       direction: "src-to-binary",
-      scope: { actionableOnly: true, includeBothChanged: false },
+      scope: { actionableOnly: true, includeBothChanged: false, moduleNamesOnly: false },
     });
     expect(plan.toImport).toEqual(["A"]);
     expect(plan.toExport).toEqual([]);

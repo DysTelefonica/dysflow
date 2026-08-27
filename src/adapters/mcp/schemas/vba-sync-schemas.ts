@@ -696,13 +696,13 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         default: "both",
         enum: ["src-to-binary", "binary-to-src", "both"],
         description:
-          "Issue #809 - sync direction. src-to-binary maps to import_modules on the listed names. binary-to-src maps to export_modules on the listed names. both (default) is the union and emits a single recommendation.",
+          "Sync direction: src-to-binary imports, binary-to-src exports, and both (default) plans both.",
       },
       acceptBothChanged: {
         type: "boolean",
         default: false,
         description:
-          "Issue #1065 - explicit escape valve for a bothChanged conflict. With a one-way direction and apply:true, routes each conflict through that direction. Default false; direction:'both' never auto-resolves conflicts.",
+          "One-way conflict escape valve. Defaults false; direction:both never resolves conflicts.",
       },
       // Scope - the sync_binary-specific knob. actionableOnly:true
       // (default) excludes nonActionable diffs from the plan (the same
@@ -714,7 +714,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       scope: {
         type: "object",
         description:
-          "Sync selection controls: actionableOnly (default true) excludes non-functional differences, while includeBothChanged (default false) reports conflicts as acknowledged skips without auto-merging them. Unknown scope keys are rejected.",
+          "Scope filters: actionableOnly excludes noise, includeBothChanged reports conflicts, and moduleNamesOnly restricts results to moduleNames. Unknown keys are rejected.",
         additionalProperties: false,
         properties: {
           actionableOnly: {
@@ -726,6 +726,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
             type: "boolean",
             description:
               "Issue #809 - when true, bothChanged modules are surfaced in plan.skipped with reason:'bothChanged_acknowledged'. Default false (the recommendation already escalates to manual_merge in that case).",
+          },
+          moduleNamesOnly: {
+            type: "boolean",
+            description:
+              "With non-empty moduleNames, restrict pre/post summaries, plans, and recommendations to those names.",
           },
         },
       },
@@ -741,8 +746,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         default: 10,
         minimum: 1,
         maximum: 200,
-        description:
-          "Issue #809 - modules per chunk during execute. Default 10. toImport and toExport are both sliced into chunks of at most batchSize modules; each chunk is one import_modules / export_modules sub-call. A single chunk failure never crosses the runner boundary twice with overlapping modules.",
+        description: "Modules per import/export chunk during execution; defaults to 10.",
       },
       onChunkError: {
         type: "string",

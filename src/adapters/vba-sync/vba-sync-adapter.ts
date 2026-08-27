@@ -1225,12 +1225,21 @@ function readDirection(value: unknown): "src-to-binary" | "binary-to-src" | "bot
 
 function readScope(
   value: unknown,
-): { actionableOnly?: boolean; includeBothChanged?: boolean } | undefined {
+):
+  | { actionableOnly?: boolean; includeBothChanged?: boolean; moduleNamesOnly?: boolean }
+  | undefined {
   if (!isRecord(value)) return undefined;
-  const scope: { actionableOnly?: boolean; includeBothChanged?: boolean } = {};
+  const scope: {
+    actionableOnly?: boolean;
+    includeBothChanged?: boolean;
+    moduleNamesOnly?: boolean;
+  } = {};
   if (typeof value.actionableOnly === "boolean") scope.actionableOnly = value.actionableOnly;
   if (typeof value.includeBothChanged === "boolean") {
     scope.includeBothChanged = value.includeBothChanged;
+  }
+  if (typeof value.moduleNamesOnly === "boolean") {
+    scope.moduleNamesOnly = value.moduleNamesOnly;
   }
   return scope;
 }
@@ -1259,9 +1268,9 @@ function stripSyncBinaryOwnParams(params: Record<string, unknown>): Record<strin
  * I/O. Reads only the additive semantic fields, defaults to safe zeros
  * when the runtime ran in strict mode (which omits the summary).
  *
- * `bothChangedEntries` is derived from `actionableDifferent` filtered by
- * `classification === 'bothChanged'`. Strict mode has no
- * `actionableDifferent`; bothChangedEntries defaults to [].
+ * Named actionable entries are derived from `actionableDifferent` by
+ * classification. Strict mode has no `actionableDifferent`; the named
+ * entry lists default to [].
  */
 function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
   const result = (value ?? {}) as {
@@ -1302,9 +1311,14 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
     bothChanged: 0,
   };
   const nonActionable = result.summaryStructured?.nonActionable ?? { total: 0 };
-  const bothChangedEntries = (result.actionableDifferent ?? [])
-    .filter((entry) => entry.classification === "bothChanged")
-    .map((entry) => ({ moduleName: entry.moduleName }));
+  const actionableEntries = result.actionableDifferent ?? [];
+  const entriesFor = (classification: string) =>
+    dedupeByModuleName(
+      actionableEntries.filter((entry) => entry.classification === classification),
+    ).map((entry) => ({ moduleName: entry.moduleName }));
+  const sourceNewerEntries = entriesFor("sourceNewer");
+  const binaryNewerEntries = entriesFor("binaryNewer");
+  const bothChangedEntries = entriesFor("bothChanged");
   return {
     ok: result.ok === true,
     missingInBinary,
@@ -1314,6 +1328,8 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
     hasFunctionalDifferences: result.hasFunctionalDifferences === true,
     recommendedAction: result.recommendedAction ?? "no_action",
     recommendation: result.recommendation ?? "",
+    sourceNewerEntries,
+    binaryNewerEntries,
     bothChangedEntries,
   };
 }
