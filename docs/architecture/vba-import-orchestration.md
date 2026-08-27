@@ -30,6 +30,10 @@ The executable matrix is `test/fixtures/vba-import-orchestration-contract.json`.
 - Rollback restores the pre-mutation code-module snapshot. A failed snapshot prevents mutation.
 - If the core bridge fails after a pass mutates Access, the transport runs its opaque rollback
   journal in reverse and emits one terminal `VBA_IMPORT_FAILED` result.
+- The PowerShell bridge uses argv for Base64 payloads up to 8192 characters and stdin above that
+  threshold. Transport selection does not change orchestration or rollback state.
+- The internal CLI rejects an oversized legacy argv payload with `PAYLOAD_TOO_LARGE_FOR_ARGV`
+  before evaluating the decision.
 
 ## Migration seam
 

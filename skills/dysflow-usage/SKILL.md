@@ -356,6 +356,13 @@ result. Pass `mutateBinary:true` only when the legacy direct-binary behavior is 
 
 Use `sync_binary` whenever the agent would otherwise script the 5-step loop manually. Use the manual primitives (`verify_code` + `import_modules` + `export_modules`) only when you need the granular control (single-step inspection, partial commits, custom chunking).
 
+Large `import_modules` orchestration payloads are transport-safe on Windows: the PowerShell bridge
+keeps Base64 payloads up to 8192 characters on argv and sends larger payloads over stdin. Do not
+reduce `sync_binary.batchSize` merely to avoid Windows error 206; chunking remains a COM workload
+and error-isolation decision. `PAYLOAD_TOO_LARGE_FOR_ARGV` is the internal CLI's pre-mutation guard
+when a direct caller incorrectly sends an oversized payload through `--payload-base64` instead of
+`--payload-stdin`.
+
 ## Write-execution-policy — `developer` vs `safe-by-default`
 
 `get_capabilities.writeExecutionPolicy` reports the active mode. The dispatch layer consults the resolver per call; **the per-tool `effectiveDryRunDefault` map is the source of truth** (NOT a hardcoded input alias).

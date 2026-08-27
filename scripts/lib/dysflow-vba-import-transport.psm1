@@ -14,7 +14,15 @@ function Invoke-VbaImportCoreDecision {
     }
     $json = $Payload | ConvertTo-Json -Depth 16 -Compress
     $payloadBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
-    $lines = @(& $NodeCommand $CoreCliPath --event $Event --payload-base64 $payloadBase64 2>&1)
+    # Keep small decisions compatible with the legacy argv bridge, but move
+    # larger state/evidence off the Windows command line. Stdin has no
+    # CreateProcess argv limit and does not expose the payload in process lists.
+    $payloadArgvLimit = 8KB
+    if ($payloadBase64.Length -gt $payloadArgvLimit) {
+        $lines = @($payloadBase64 | & $NodeCommand $CoreCliPath --event $Event --payload-stdin 2>&1)
+    } else {
+        $lines = @(& $NodeCommand $CoreCliPath --event $Event --payload-base64 $payloadBase64 2>&1)
+    }
     if ($LASTEXITCODE -ne 0) {
         throw ("VBA import core bridge failed for event '{0}': {1}" -f $Event, ($lines -join [Environment]::NewLine))
     }
