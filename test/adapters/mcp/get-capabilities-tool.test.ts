@@ -308,17 +308,48 @@ describe("get_capabilities tool — registration and read-only contract (#656)",
       allowedProcedures: ["Test_A"],
       projectId: "p",
       allowWrites: true,
+      documentationBundleResolver: () => ({
+        errorCodesMd: true,
+        hresultGuideMd: false,
+        version: "4.0.7-test",
+      }),
     });
 
     const projected = projectCapabilitiesSnapshot(snapshot, {});
 
     expect(projected).toMatchObject({
       adapterVersion: snapshot.adapterVersion,
+      documentationBundle: {
+        errorCodesMd: true,
+        hresultGuideMd: false,
+        version: "4.0.7-test",
+      },
       tools: expect.any(Object),
       effectiveDryRunDefault: expect.any(Object),
     });
     expect(projected).not.toHaveProperty("allowedProcedures");
-    expect(projected).not.toHaveProperty("documentationBundle");
+  });
+
+  it("keeps explicit compact include selection authoritative", () => {
+    const snapshot = getCapabilitiesAll({
+      writesEnabled: true,
+      writeAccessResolver: undefined,
+      allowedProcedures: ["Test_A"],
+      projectId: "p",
+      allowWrites: true,
+      documentationBundleResolver: () => ({
+        errorCodesMd: true,
+        hresultGuideMd: true,
+        version: "4.0.7-test",
+      }),
+    });
+
+    expect(projectCapabilitiesSnapshot(snapshot, { include: ["tools"] })).not.toHaveProperty(
+      "documentationBundle",
+    );
+    expect(
+      projectCapabilitiesSnapshot(snapshot, { include: ["documentationBundle"] }),
+    ).toMatchObject({ documentationBundle: snapshot.documentationBundle });
   });
 
   it("preserves the full projection for explicit view: 'full' callers", () => {

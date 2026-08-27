@@ -127,10 +127,11 @@ External database reads require `allowExternalAccessPath:true`; source/FormIR to
 
 `get_capabilities({ view: "compact" })` always carries the base identity/gates,
 `toolInventory`, and by default compact `tools`, `sharedBlockSupport`,
-`effectiveDryRunDefault`, and `migrationNotes`. It deliberately omits
+`effectiveDryRunDefault`, `migrationNotes`, and the resolver-provided three-key
+`documentationBundle`. It deliberately omits
 `preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`,
-`documentationBundle`, `projectConfig`, `worktreeCache`, and
-`humanCompilePending` unless requested through `include` or `{ view: "full" }`.
+`projectConfig`, `worktreeCache`, and `humanCompilePending` unless requested
+through `include` or `{ view: "full" }`.
 The full/selective capability response carries:
 
 | Field | Meaning |
