@@ -370,7 +370,7 @@ jobs:
         # transitive dep graph with --frozen-lockfile (#666). The downloaded
         # dist tree is bound to this run and verified before entering the archive.
         # The archive helper fails closed before and after tar creation unless
-        # all five canonical bundled skills are present (#1349).
+        # all canonical bundled skills are present (#1349).
         run: node .github/scripts/create-release-archive.mjs "dysflow-${{ github.ref_name }}.tar.gz"
 
       - name: Generate checksums

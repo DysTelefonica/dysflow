@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { tarForceLocalArgsFromVersion } from "../../scripts/tar-force-local.mjs";
 
 export const RELEASE_SKILL_NAMES = [
+  "access-form-ui-builder",
   "dysflow-arnes",
   "dysflow-usage",
   "dysflow-codegraph-update",

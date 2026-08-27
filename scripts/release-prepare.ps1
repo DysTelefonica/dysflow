@@ -394,6 +394,7 @@ $stampPaths = @(
     (Join-Path (Get-Location).Path "skills/dysflow-usage/assets/write-flags-matrix.md")
 )
 $skillRelativePaths = @(
+    "skills/access-form-ui-builder/SKILL.md",
     "skills/dysflow-arnes/SKILL.md", "skills/dysflow-usage/SKILL.md", "skills/dysflow-codegraph-update/SKILL.md",
     "skills/dysflow-examples-sync/SKILL.md", "skills/dysflow-pointer-rollout/SKILL.md"
 )

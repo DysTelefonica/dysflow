@@ -6,6 +6,7 @@ This guide describes the structure, frontmatter metadata, and maintenance lifecy
 
 Bundled skills live under `skills/` at the repository root:
 
+- `skills/access-form-ui-builder/SKILL.md` — Access form perceive → act → verify workflow.
 - `skills/dysflow-usage/SKILL.md` — Canonical MCP tool reference and operational guide.
 - `skills/dysflow-arnes/SKILL.md` — Test harness / assertion rules.
 - `skills/dysflow-codegraph-update/SKILL.md` — CodeGraph indexing workflow.
@@ -55,3 +56,4 @@ metadata:
 
 1. **When updating skill logic**: Bump `metadata.version` (the skill's own version) and refresh `metadata.last_verified`.
 2. **When validating against a new release**: After validating the skill against a new Dysflow release (e.g. via `fix(skills): align bundled metadata`), update `metadata.last_dysflow_version` to record the validated release tag.
+3. **For release-owned skills**: Keep the skill in the installer, release archive, release preparation, and integrity-gate manifests. Release preparation advances its `last_dysflow_version` with the package version after the semantic audit passes.
