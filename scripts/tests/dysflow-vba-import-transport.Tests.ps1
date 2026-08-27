@@ -5,6 +5,28 @@ BeforeAll {
 }
 
 Describe "dysflow VBA import transport module (#1463)" {
+    It "accepts an import orchestration payload through stdin (#1661)" {
+        $coreCliPath = Join-Path $PSScriptRoot '..\..\dist\cli\vba-import-orchestration.js'
+        $json = [ordered]@{ targets = @('LargeModule'); scope = 'explicit' } | ConvertTo-Json -Compress
+        $payloadBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+
+        $lines = @($payloadBase64 | & node $coreCliPath --event start --payload-stdin 2>&1)
+
+        $LASTEXITCODE | Should -Be 0
+        @($lines | Where-Object { [string]$_ -like 'DYSFLOW_IMPORT_DECISION *' }).Count | Should -Be 1
+    }
+
+    It "rejects an oversized legacy argv payload with a typed pre-mutation error (#1661)" {
+        $coreCliPath = Join-Path $PSScriptRoot '..\..\dist\cli\vba-import-orchestration.js'
+        $json = [ordered]@{ targets = @(('x' * 7000)); scope = 'explicit' } | ConvertTo-Json -Compress
+        $payloadBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+
+        $lines = @(& node $coreCliPath --event start --payload-base64 $payloadBase64 2>&1)
+
+        $LASTEXITCODE | Should -Be 1
+        ($lines -join [Environment]::NewLine) | Should -Match 'PAYLOAD_TOO_LARGE_FOR_ARGV'
+    }
+
     It "executes one ordered primitive pass through injected COM ports" {
         $calls = [Collections.Generic.List[string]]::new()
         $session = [pscustomobject]@{ VbProject = 'project'; AccessApplication = 'access' }
@@ -126,6 +148,41 @@ Describe "dysflow VBA import transport module (#1463)" {
         @($saveRequests[0]) | Should -Be @('Dependency')
         $results.Count | Should -Be 1
         @($results[0].status) | Should -Be @('ok', 'ok')
+        $summary.HasErrors | Should -Be $false
+    }
+
+    It "transports a large post-mutation decision without rolling back successful imports (#1661)" {
+        $script:rollbacks = [Collections.Generic.List[string]]::new()
+        $results = [Collections.Generic.List[object]]::new()
+        $largeEvidence = 'x' * 40000
+
+        $summary = Invoke-VbaImportTransport `
+            -Targets @('LargeModule') `
+            -Scope explicit `
+            -CoreDecision { param($eventName, $payload) Invoke-VbaImportCoreDecision -Event $eventName -Payload $payload } `
+            -RunPass {
+                [pscustomobject]@{
+                    Attempts = @(
+                        [pscustomobject]@{
+                            module = 'LargeModule'
+                            ok = $true
+                            durationMs = 1
+                            verbose = [pscustomobject]@{ source = $largeEvidence }
+                        }
+                    )
+                    RollbackActions = @(
+                        { $script:rollbacks.Add('LargeModule') | Out-Null }
+                    )
+                }
+            } `
+            -Save { throw 'save must not run for an existing module' } `
+            -WriteResult { param($result) $results.Add($result) | Out-Null } `
+            -WriteStatus { }
+
+        @($script:rollbacks) | Should -Be @()
+        $results.Count | Should -Be 1
+        $results[0].status | Should -Be 'ok'
+        $results[0].verbose.source.Length | Should -Be 40000
         $summary.HasErrors | Should -Be $false
     }
 
