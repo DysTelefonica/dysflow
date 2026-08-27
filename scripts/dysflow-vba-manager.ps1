@@ -5403,7 +5403,9 @@ function Invoke-RunTestsAction {
         $Session.Value = Open-AccessDatabase -AccessPath $sandboxPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
         $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
         if ($Json) {
-            Write-DysflowResult -Result @($batchResults) -Depth 6
+            # The extra envelope layer needs one additional serialization depth
+            # so nested per-test payloads retain the same fidelity as before.
+            Write-DysflowResult -Result ([pscustomobject]@{ tests = @($batchResults) }) -Depth 7
         }
     } finally {
         Remove-TestSandbox -SandboxPath $sandboxPath

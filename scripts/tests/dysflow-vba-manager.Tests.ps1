@@ -3359,8 +3359,8 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
             $script:BatchCalled | Should -Be $true
             $script:BatchProcedures.Count | Should -Be 2
             $session.AccessApplication.Id | Should -Be "app"
-            $json.Count | Should -Be 2
-            $json[1].procedure | Should -Be "Test_Bar"
+            $json.tests.Count | Should -Be 2
+            $json.tests[1].procedure | Should -Be "Test_Bar"
         } finally {
             if (Test-Path $tmpJson) { Remove-Item -Path $tmpJson -Force }
         }
