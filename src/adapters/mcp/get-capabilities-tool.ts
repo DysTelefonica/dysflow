@@ -320,7 +320,13 @@ export function projectCapabilitiesSnapshot(
   const include = new Set<CapabilityBlockName>(
     input.include ??
       (compact
-        ? ["tools", "sharedBlockSupport", "effectiveDryRunDefault", "migrationNotes"]
+        ? [
+            "tools",
+            "sharedBlockSupport",
+            "effectiveDryRunDefault",
+            "migrationNotes",
+            "documentationBundle",
+          ]
         : [...CAPABILITY_BLOCK_NAMES]),
   );
   const base: Record<string, unknown> = compact
