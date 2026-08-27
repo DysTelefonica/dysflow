@@ -15,6 +15,7 @@ import path from "node:path";
 import { readPackageVersionNear } from "../../../core/utils/package-info.js";
 
 export const DYSSKILL_NAMES = [
+  "access-form-ui-builder",
   "dysflow-arnes",
   "dysflow-usage",
   "dysflow-codegraph-update",

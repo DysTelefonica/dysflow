@@ -54,7 +54,7 @@ afterEach(async () => {
 });
 
 describe("bundled Dysflow skill installation (#1323)", () => {
-  it("copies all five bundled skills byte-for-byte and writes product-tied metadata", async () => {
+  it("copies all bundled skills byte-for-byte and writes product-tied metadata", async () => {
     const root = await tempRoot("dysflow-skills-");
     const bundleRoot = join(root, "bundle");
     const skillsDir = join(root, "consumer", "skills");

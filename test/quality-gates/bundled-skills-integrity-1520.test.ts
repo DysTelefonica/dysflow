@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
 const skillNames = [
+  "access-form-ui-builder",
   "dysflow-arnes",
   "dysflow-usage",
   "dysflow-codegraph-update",

@@ -64,7 +64,7 @@ afterAll(async () => {
 });
 
 describe("release bundled skills (#1349)", () => {
-  it("keeps the release script and runtime installer on the same five-skill manifest", () => {
+  it("keeps the release script and runtime installer on the same skill manifest", () => {
     expect([...RELEASE_SKILL_NAMES].sort()).toEqual([...DYSSKILL_NAMES].sort());
   });
 

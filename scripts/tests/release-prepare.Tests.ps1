@@ -11,7 +11,8 @@ BeforeAll {
     $script:baseChangelog = Get-Content (Join-Path $script:repoRoot "CHANGELOG.md") -Raw
     $script:candidateHead = "a" * 40
     $script:skillNames = @(
-        "dysflow-arnes", "dysflow-usage", "dysflow-codegraph-update", "dysflow-examples-sync", "dysflow-pointer-rollout"
+        "access-form-ui-builder", "dysflow-arnes", "dysflow-usage", "dysflow-codegraph-update",
+        "dysflow-examples-sync", "dysflow-pointer-rollout"
     )
 
     $tokens = $null
@@ -358,7 +359,7 @@ Describe "release safety behavior" {
             [Convert]::ToBase64String([IO.File]::ReadAllBytes($skillPath)) | Should -Be ([Convert]::ToBase64String($expected))
         }
         $script:gitCalls | Where-Object { $_ -match "^add " } | Should -Be @(
-            "add package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
+            "add package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md skills/access-form-ui-builder/SKILL.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
         )
     }
 
