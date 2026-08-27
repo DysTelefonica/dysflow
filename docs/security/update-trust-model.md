@@ -17,11 +17,22 @@ the signed SHA-256 checksum entry.
 | No gh CLI fallback | The latest-release lookup uses only the GitHub REST API. There is no `gh` CLI fallback when the API returns non-OK. |
 | Checksum bypass | `--skip-checksum` is available for development/testing. It MUST NOT be used in production installs. |
 
-If the release archive is missing, the signature asset is missing/invalid, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum/signature is fixed or report the broken release; there is no source-build or git-clone fallback.
+If the release archive is missing, the signature asset is missing/invalid, the checksum entry is absent, or the SHA-256 comparison fails, the update aborts before extraction. Retry after the release asset/checksum/signature is fixed or report the broken release; on `stable` and `beta` there is no source-build or git-clone fallback.
 
-**No git-clone / source-build fallback exists.** The git-clone update path was removed in
-commit `499d5e4`. Any attempt to introduce a source-build fallback reintroduces the
-supply-chain risk that audit finding #436 identified.
+**No git-clone / source-build fallback exists on `stable` or `beta`.** The git-clone update
+path was removed in commit `499d5e4`.
+
+Neither channel may degrade into building from source when a download or checksum fails. That
+removal was not cosmetic.
+
+A source build reintroduces the supply-chain risk that audit finding #436 identified, and that
+risk is unchanged today.
+
+The `main` channel reintroduces a source build deliberately. It is gated behind
+`DYSFLOW_ALLOW_INSECURE_UPDATE=1`, is never reachable by default, and verifies nothing.
+
+An operator who sets that variable accepts exactly the risk #436 named: code from the branch
+archive is built and executed locally, with no signature and no checksum to detect tampering.
 
 ## Archive extraction (tar-slip defense)
 
@@ -72,6 +83,58 @@ The current repository key was generated specifically for issue #572, and the ma
 private key was installed as the `RELEASE_SIGNING_KEY` GitHub Actions secret. If the secret
 is ever rotated, update the embedded public key in the same change. Then delete any local
 private key copy.
+
+## Trust across channels
+
+Everything above describes the `stable` channel, which is the default and the only one with a cryptographic trust anchor. Two further channels exist, and each weakens a different link in that chain.
+
+| Channel | Source | Verified against | Establishes |
+|---|---|---|---|
+| `stable` | `releases/latest` | Ed25519 signature over `SHA256SUMS`, then SHA-256 of the archive | Integrity and authenticity |
+| `beta` | Newest prerelease release tarball | SHA-256 against the published `SHA256SUMS` | Integrity only |
+| `main` | `archive/refs/heads/main.tar.gz` | Nothing | Neither |
+
+Operator recipes for each channel live in [installation channels](../installation-channels.md). This section covers only what each one is worth trusting.
+
+### Why beta and main are gated
+
+Both non-stable channels require `DYSFLOW_ALLOW_INSECURE_UPDATE=1`. The gate is the one that already guards `--skip-checksum`, in `src/cli/commands/install/updater.ts`.
+
+The variable is satisfied by `1` or `true`, matched case-insensitively. Anything else fails closed and the install does not proceed.
+
+The gate exists because these channels cannot fail closed on authenticity the way `stable` does. It converts a silent downgrade in trust into a deliberate, auditable act by the operator.
+
+### stable: signature trust
+
+`stable` is the only channel where a forged archive is detectable. Integrity alone is insufficient, because a publisher who controls the archive also controls `SHA256SUMS`.
+
+The detached Ed25519 signature closes that gap: the archive is trusted only after `SHA256SUMS.sig` verifies against the embedded public key. A tampered mirror cannot forge one.
+
+Threat covered: a compromised release host, a hostile network position, and a corrupted download.
+
+### beta: SHA-256 trust
+
+`beta` verifies the archive against the published `SHA256SUMS`, but does not require a signature over that manifest. A corrupted or truncated download still fails closed.
+
+Threat covered: transport corruption and an incomplete download.
+
+Threat not covered: an attacker who can publish or rewrite the release assets. Such an attacker serves a matching manifest alongside a malicious archive, and the checksum agrees.
+
+### main: unsigned and unverified
+
+`main` has no cryptographic verification at any step. GitHub publishes no `SHA256SUMS` for branch archives, and their bytes are not reproducible, so there is no fixed digest to compare.
+
+The runtime is built locally from the downloaded source. Anyone able to influence the branch, the archive endpoint, or the connection influences what executes on the operator's machine.
+
+Threat covered: none.
+
+In practice, installing from `main` runs unreviewed code with the operator's own privileges. It is a development affordance, not a distribution channel.
+
+### Operator guidance
+
+Use `stable` for anything that matters. Reach for `beta` to validate a release candidate, and for `main` only to reproduce a change that has not shipped.
+
+Return to `stable` when the test is finished. `dysflow doctor` reports the active channel and warns when it is not `stable`, so a weakened machine stays visible.
 
 ## Authentication for GitHub API requests
 

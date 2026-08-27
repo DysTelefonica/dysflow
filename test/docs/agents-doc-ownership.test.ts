@@ -23,6 +23,7 @@ const RUNTIME_ANCHORS = [
   "example-input-properties-contract.test.ts",
   "mcp-readme-tool-surface.test.ts",
   "project-config-removed-fields-contract-1580.test.ts",
+  "readme-release-doc.test.ts",
   "resolve-project-recovery-example.test.ts",
   "verify-code-diagnostic-contract-1535.test.ts",
   "write-tool-preflight.test.ts",
