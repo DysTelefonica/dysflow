@@ -15,7 +15,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | Top-level project-config `allowWrites` / `allowedProcedures` | Removed in v1.15.0. Config loading rejects them with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; see the [v4.0.3 migration note](../migrations/v4-0-3.md). |
 | Web dashboard or server-rendered UI | Not found. No HTMX, template, or UI route exists. |
 | Auth, login, OAuth, session, or tenant boundary | Not implemented. |
-| Git-clone or source-build update fallback | Not found. |
+| Git-clone or source-build update *fallback* | Not found. No failure ever falls back to a source build. The `main` channel builds from source only when an operator names it and sets `DYSFLOW_ALLOW_INSECURE_UPDATE=1`. |
 | Termination of `MSACCESS.EXE` by process name | Not implemented. |
 
 ## What Exists Instead
@@ -25,7 +25,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | Compilation | The human compiles in Access (Debug > Compile). `src/core/runtime/human-compile-state.ts` tracks the pending state. |
 | Interactive UI | `src/cli/tui/` renders a terminal dashboard through the `dysflow` command. It is terminal-only. |
 | Local HTTP surface | `src/adapters/http/server.ts` serves a JSON API bound to `127.0.0.1`, writes-disabled by default. |
-| Update path | The signed GitHub Release archive with SHA-256 verification. See [update trust model](../security/update-trust-model.md). |
+| Update path | The signed GitHub Release archive with SHA-256 verification on `stable`. `beta` is checksum-only and `main` is a gated, unverified source build. See [update trust model](../security/update-trust-model.md) and [installation channels](../installation-channels.md). |
 | Orphan reaping | `access_force_cleanup_orphaned` terminates one PID-verified orphan, and only after an explicit `confirmPid`. |
 | Project write and procedure gates | Use `capabilities.allowWrites` and `capabilities.procedures.allow`; `migrate_project_config` rewrites removed top-level fields. |
 
@@ -33,7 +33,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 
 - **The human compiles**: no code path may reintroduce an automated compile step. The runtime persists modules with save-only and blocks until the human confirms.
 - **Local-only HTTP**: the HTTP adapter binds to loopback and starts writes-disabled. It is a maintenance surface, not a hosted service.
-- **Signed updates only**: the release archive with SHA-256 verification is the sole update mechanism. A source-build fallback would bypass the trust model.
+- **No implicit or fallback source build**: `stable` and `beta` install published release archives and never build from source. `main` builds from source only when the operator names the channel and sets `DYSFLOW_ALLOW_INSECURE_UPDATE=1`; it verifies nothing. What stays absent is an *ungated* source build, a *default* one, and any build reached by a failed download — each would bypass the trust model.
 - **PID-verified termination**: a process is reaped by verified PID, never by image name. Name-based termination kills the operator's own Access session.
 - **Absence is documented, not silent**: when a capability is removed, add a row above and name the release that removed it.
 
