@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.1] - 2026-08-27
+
+### Changes
+
+- fix(vba): envelope batched test results
+- fix(skills): release-manage access form builder
+
+
 ## [v4.1.0] - 2026-08-27
 
 ### Changes
