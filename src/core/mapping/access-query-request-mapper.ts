@@ -76,6 +76,7 @@ function fixtureTeardownPredicateValue(value: unknown): FixtureTeardownPredicate
  * `buildWriteFixtureRequest`, `buildMaintenanceRequest`) cannot drift.
  */
 export type OverrideShape = {
+  cwd: string | undefined;
   projectId: string | undefined;
   contextId: string | undefined;
   accessPath: string | undefined;
@@ -154,6 +155,7 @@ function rowsValue(value: unknown): readonly Record<string, unknown>[] | undefin
  */
 export function pickOverrides(params: Record<string, unknown>): OverrideShape {
   return {
+    cwd: getStr(params, "cwd"),
     projectId: getStr(params, "projectId"),
     contextId: getStr(params, "contextId"),
     accessPath: getStr(params, "accessPath"),
