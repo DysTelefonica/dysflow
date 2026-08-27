@@ -165,6 +165,89 @@ describe("tryResolveProject() — pure helper (round-3 Item 1)", () => {
 });
 
 describe("createResolveProjectTool() — tool factory", () => {
+  it("resolves a uniquely identified cached project while preserving its write lock", async () => {
+    const activeRoot = join(workdir, "active");
+    const siblingRoot = join(workdir, "sibling");
+    for (const [root, config] of [
+      [
+        activeRoot,
+        {
+          id: "write-locked-project",
+          accessPath: "C:/data/app.accdb",
+          projectRoot: activeRoot,
+          sourceRoot: join(activeRoot, "src"),
+        },
+      ],
+      [
+        siblingRoot,
+        {
+          id: "sibling-project",
+          accessPath: "C:/data/sibling.accdb",
+          projectRoot: siblingRoot,
+          sourceRoot: join(siblingRoot, "src"),
+        },
+      ],
+    ] as const) {
+      mkdirSync(join(root, ".dysflow"), { recursive: true });
+      writeFileSync(join(root, ".git"), "gitdir: fixture", "utf-8");
+      writeFileSync(join(root, ".dysflow", "project.json"), JSON.stringify(config), "utf-8");
+    }
+
+    const lockedProjectConfig = {
+      status: "write-locked-by-running-op" as const,
+      cwd: activeRoot,
+      configPath: join(activeRoot, ".dysflow", "project.json"),
+      projectRoot: activeRoot,
+      projectId: "write-locked-project",
+      accessPath: "C:/data/app.accdb",
+      backendPath: null,
+      destinationRoot: join(activeRoot, "src"),
+      writeReady: false,
+      discoveredProjects: [
+        {
+          id: "write-locked-project",
+          projectRoot: activeRoot,
+          accessPath: "C:/data/app.accdb",
+          destinationRoot: join(activeRoot, "src"),
+          configPath: join(activeRoot, ".dysflow", "project.json"),
+          active: true,
+        },
+      ],
+      diagnostics: [
+        {
+          code: "WRITE_LOCKED_BY_RUNNING_OP",
+          severity: "error" as const,
+          message: "A write operation is already running.",
+        },
+      ],
+      remediation: "Wait for the running operation to finish.",
+    };
+    const tool = createResolveProjectTool({
+      cwd: activeRoot,
+      cachedProjectConfigResolver: () => lockedProjectConfig,
+      projectConfigResolver: () => lockedProjectConfig,
+    });
+
+    const result = await tool.handler({});
+    expect(result.isError).toBe(false);
+
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
+      outcome?: string;
+      projectId?: string;
+      projectRoot?: string;
+      projectConfig?: { status?: string; writeReady?: boolean };
+    };
+    expect(payload).toMatchObject({
+      outcome: "resolved",
+      projectId: "write-locked-project",
+      projectRoot: activeRoot,
+      projectConfig: {
+        status: "write-locked-by-running-op",
+        writeReady: false,
+      },
+    });
+  });
+
   it("returns a tool whose handler resolves the project from the supplied cwd", async () => {
     writeProjectConfig({
       id: "captured-cwd",

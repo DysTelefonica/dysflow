@@ -328,10 +328,7 @@ export function createResolveProjectTool(opts: {
         opts.cachedProjectConfigResolver !== undefined
       ) {
         const cachedProjectConfig = await opts.cachedProjectConfigResolver(effectiveCwd);
-        if (
-          cachedProjectConfig?.status === "valid" &&
-          typeof cachedProjectConfig.projectId === "string"
-        ) {
+        if (cachedProjectConfigIdentifiesProject(cachedProjectConfig)) {
           projectId = cachedProjectConfig.projectId;
           selectedRoot = cachedProjectConfig.projectRoot;
         }
@@ -417,6 +414,24 @@ export function createResolveProjectTool(opts: {
       return translateCoreResultToMcpContent(opResult);
     },
   };
+}
+
+function cachedProjectConfigIdentifiesProject(
+  projectConfig: ProjectConfigDiagnostic | null,
+): projectConfig is ProjectConfigDiagnostic & { projectId: string } {
+  if (typeof projectConfig?.projectId !== "string") return false;
+  if (projectConfig.status === "valid") return true;
+  if (projectConfig.status !== "write-locked-by-running-op") return false;
+
+  // A write lock governs mutation, not identity. Reuse it only when the
+  // cwd-bound cache proves that exactly one matching project was discovered;
+  // every other non-valid status remains on the fail-closed discovery path.
+  const discovered = projectConfig.discoveredProjects;
+  return (
+    discovered?.length === 1 &&
+    discovered[0]?.id === projectConfig.projectId &&
+    discovered[0].projectRoot === projectConfig.projectRoot
+  );
 }
 
 function ambiguousDiagnostic(
