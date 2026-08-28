@@ -6,7 +6,7 @@
 // sibling discovery, recovery envelope, and cwd anchoring are exercised
 // through the public MCP handler surface rather than through fakes.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -91,9 +91,34 @@ export function payload(result: ToolResult): Record<string, unknown> {
   }
 }
 
-/** Canonical path comparison, matching the resolver's own worktree identity. */
+/**
+ * Canonical path comparison — an independent reimplementation of the identity
+ * rule, deliberately NOT a re-export of the resolver's own `sameProjectRoot`:
+ * checking the resolver's output with the resolver's own comparison would
+ * prove nothing.
+ *
+ * `realpathSync.native` is load-bearing. On a Windows CI runner `os.tmpdir()`
+ * comes back as an 8.3 short path (`C:\Users\RUNNER~1\AppData\Local\Temp`), and
+ * the resolver canonicalizes it to the long account name before returning
+ * `projectRoot`. A plain `resolve()` comparison leaves the fixture holding the
+ * short form and the two never match — green on a developer box whose profile
+ * has no 8.3 alias, red in CI. A symlinked temp root (macOS `/tmp`) fails the
+ * same way.
+ */
 export function samePath(left: unknown, right: string): boolean {
-  return typeof left === "string" && resolve(left).toLowerCase() === resolve(right).toLowerCase();
+  if (typeof left !== "string") return false;
+  const canonical = (value: string): string => {
+    const absolute = resolve(value);
+    let result = absolute;
+    try {
+      result = realpathSync.native(absolute);
+    } catch {
+      // An unreachable path keeps its absolute identity, exactly as the
+      // resolver treats it.
+    }
+    return process.platform === "win32" ? result.toLowerCase() : result;
+  };
+  return canonical(left) === canonical(right);
 }
 
 /** The real MCP tool set with stub services, rooted at `cwd`. */
