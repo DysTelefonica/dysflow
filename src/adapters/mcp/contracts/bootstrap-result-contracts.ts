@@ -93,6 +93,10 @@ const bootstrapSchema = z
     toolSurfaceGuidance: z.string().optional(),
     preferredAgentWorkflows: bootstrapWorkflowMapSchema,
     humanCompilePending: z.boolean(),
+    // Issue #1668 — whether `humanCompilePending` was evaluated against a
+    // project at all. `bootstrap` never resolves one, so a bare `false` was
+    // indistinguishable from "no project was in scope".
+    humanCompilePendingScope: z.enum(["project-in-scope", "no-project-in-scope"]),
   })
   .strict();
 

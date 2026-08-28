@@ -196,6 +196,16 @@ export type McpCapabilitySnapshot = {
   /** v1.20.0 (#762) — true when the human has not yet compiled since the last dysflow persistence for this project. */
   humanCompilePending: boolean;
   /**
+   * Issue #1668 — what a `humanCompilePending: false` actually means. The
+   * flag answers "does a compile reminder apply to the project this snapshot
+   * was built for?", and a snapshot built with no frontend `.accdb` in scope
+   * has no project to answer for. Reporting a bare `false` there read as
+   * "everything is ready" to a consumer whose worktree was in fact
+   * unresolved. `"project-in-scope"` means the flag was evaluated against a
+   * real project; `"no-project-in-scope"` means it was not evaluated at all.
+   */
+  humanCompilePendingScope: "project-in-scope" | "no-project-in-scope";
+  /**
    * v2.14.1 (#940) — runtime documentation bundle status. Always present
    * (never undefined) so consumers can branch on the shape without a guard.
    * The two booleans report whether the install pipeline copied the
@@ -386,10 +396,14 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
   // v1.20.0 (#762) — surface the human-compile reminder signal. When no
   // accessDbPath is in scope (no project), the flag stays false: there is
   // nothing for the human to compile.
-  const humanCompilePending =
-    input.accessDbPath !== undefined && input.accessDbPath.length > 0
-      ? isHumanCompilePending(input.accessDbPath)
-      : false;
+  const hasProjectInScope = input.accessDbPath !== undefined && input.accessDbPath.length > 0;
+  const humanCompilePending = hasProjectInScope
+    ? isHumanCompilePending(input.accessDbPath as string)
+    : false;
+  // Issue #1668 — make the two very different `false` values distinguishable.
+  const humanCompilePendingScope: "project-in-scope" | "no-project-in-scope" = hasProjectInScope
+    ? "project-in-scope"
+    : "no-project-in-scope";
 
   // v2.1.0 (#779) — resolve the active policy (default safe-by-default
   // when the caller didn't pass one) and compute the per-tool effective
@@ -484,6 +498,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
     })),
     writeClassToolsPermitted,
     humanCompilePending,
+    humanCompilePendingScope,
     documentationBundle,
     tools: Object.freeze(tools),
   };

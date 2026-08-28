@@ -130,6 +130,7 @@ This is the recommended first call. Route next through
 
 Pure read-only; never opens Access, never spawns PowerShell, never mutates state. Reuses the capabilities snapshot pipeline but omits per-tool metadata.
 * **Parameters**: optional `cwd`; omit to use the MCP startup worktree. Optional `phase` filter for `preferredAgentWorkflows`.
+* **Compile-pending state is startup-scoped, not a readiness verdict (#1668)**: `bootstrap` never resolves a project, so `humanCompilePending` is evaluated against the frontend the MCP process started with. `humanCompilePendingScope` says which of the two very different `false` values you received — `"project-in-scope"` means a project was evaluated and nothing is pending, `"no-project-in-scope"` means the flag was never evaluated at all. A `false` alone does not imply that `resolve_project` can target your `cwd`; call `resolve_project` for that.
 
 ### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
