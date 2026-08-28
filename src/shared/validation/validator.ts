@@ -6,7 +6,17 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   if (!isRecord(params)) return "input must be an object.";
 
   const missingRequired = validateRequiredProperties(params, schema.required, "");
-  if (missingRequired !== undefined) return missingRequired;
+  if (missingRequired !== undefined) {
+    // Issue #1668 — when a required parameter is absent AND the caller passed
+    // a key the schema does not declare, the unknown key is almost always the
+    // cause: `lint_module({ moduleName })` is `module` misspelled, not a
+    // forgotten parameter. Reporting "module is required." there sends the
+    // consumer looking for a second parameter to add and hides the
+    // "Did you mean 'module'?" hint the unknown-key path already produces.
+    const unknownKey = firstUnknownKey(params, schema);
+    if (unknownKey !== undefined) return unknownKey;
+    return missingRequired;
+  }
 
   // Issue #1057 (F8) — when a schema declares BOTH `apply` and `dryRun`,
   // a caller passing contradictory values (apply === dryRun, since
@@ -22,10 +32,8 @@ export function validateInput(input: unknown, schema: JsonObjectSchema): string 
   if (applyDiffConflict !== undefined) return applyDiffConflict;
 
   if (schema.additionalProperties === false) {
-    for (const key of Object.keys(params)) {
-      if (schema.properties[key] === undefined)
-        return unknownKeyMessage(key, Object.keys(schema.properties));
-    }
+    const unknownKey = firstUnknownKey(params, schema);
+    if (unknownKey !== undefined) return unknownKey;
   } else if (isSchemaFormAdditionalProperties(schema.additionalProperties)) {
     for (const key of Object.keys(params)) {
       if (schema.properties[key] !== undefined) continue;
@@ -167,6 +175,23 @@ function validateJsonSchemaProperty(
     }
   }
 
+  return undefined;
+}
+
+/**
+ * First caller key the schema does not declare, formatted as the standard
+ * unknown-key rejection. Returns `undefined` when the schema tolerates extra
+ * keys or every key is declared.
+ */
+function firstUnknownKey(
+  params: Record<string, unknown>,
+  schema: JsonObjectSchema,
+): string | undefined {
+  if (schema.additionalProperties !== false) return undefined;
+  for (const key of Object.keys(params)) {
+    if (schema.properties[key] === undefined)
+      return unknownKeyMessage(key, Object.keys(schema.properties));
+  }
   return undefined;
 }
 

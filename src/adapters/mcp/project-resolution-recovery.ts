@@ -48,11 +48,20 @@ export type ProjectRecoveryInput = {
   recoveryToken?: string;
 };
 
-type RecoveryFailure = {
+export type RecoveryFailure = {
   ok: false;
   code: "MCP_INPUT_INVALID" | "PROJECT_ID_COLLISION";
   message: string;
   remediation: string;
+  /**
+   * Issue #1668 — the trio rejection used to collapse six distinct causes
+   * into one sentence, so a consumer could not tell which field to fix.
+   * `missingParam` names a trio member the caller omitted; `rejectedFlag`
+   * names one the caller supplied with an unusable value. Exactly one of
+   * the two is set on an input-shaped rejection.
+   */
+  missingParam?: string;
+  rejectedFlag?: string;
 };
 
 type RecoverySuccess = { ok: true; project: AvailableProject };
@@ -115,28 +124,47 @@ export function createProjectResolutionRecovery(
   };
 
   const consume = (input: ProjectRecoveryInput): RecoveryFailure | RecoverySuccess => {
-    if (
-      input.projectChoiceReason !== PROJECT_CHOICE_REASON ||
-      typeof input.recoveryToken !== "string" ||
-      input.recoveryToken.length === 0 ||
-      typeof input.projectId !== "string" ||
-      input.projectId.length === 0
-    ) {
+    // Issue #1668 — check each trio member on its own so the rejection names
+    // the one field the caller has to change. A single lumped message forced
+    // consumers to guess which of the three was at fault.
+    if (typeof input.projectId !== "string" || input.projectId.length === 0) {
       return invalidRecovery(
-        "The recovery selection must include the exact projectId, projectChoiceReason, and recoveryToken trio.",
+        "The recovery selection is missing projectId. Supply the projectId of the availableProjects entry the human chose.",
+        { missingParam: "projectId" },
+      );
+    }
+    if (input.projectChoiceReason === undefined) {
+      return invalidRecovery(
+        `The recovery selection is missing projectChoiceReason. Supply it verbatim as '${PROJECT_CHOICE_REASON}'.`,
+        { missingParam: "projectChoiceReason" },
+      );
+    }
+    if (input.projectChoiceReason !== PROJECT_CHOICE_REASON) {
+      return invalidRecovery(
+        `projectChoiceReason must be exactly '${PROJECT_CHOICE_REASON}'; received '${String(input.projectChoiceReason)}'.`,
+        { rejectedFlag: "projectChoiceReason" },
+      );
+    }
+    if (typeof input.recoveryToken !== "string" || input.recoveryToken.length === 0) {
+      return invalidRecovery(
+        "The recovery selection is missing recoveryToken. Supply the token the ambiguous resolve_project result returned.",
+        { missingParam: "recoveryToken" },
       );
     }
     if (pending === null || pending.token !== input.recoveryToken) {
-      return invalidRecovery("The recovery token is unknown or has already been consumed.");
+      return invalidRecovery("The recovery token is unknown or has already been consumed.", {
+        rejectedFlag: "recoveryToken",
+      });
     }
     if (now() >= pending.expiresAt) {
       clear();
-      return invalidRecovery("The recovery token has expired.");
+      return invalidRecovery("The recovery token has expired.", { rejectedFlag: "recoveryToken" });
     }
     if (fingerprint(pending.configPaths, pending.projectRoots) !== pending.fingerprint) {
       clear();
       return invalidRecovery(
         "The visible project configuration changed after the token was issued.",
+        { rejectedFlag: "recoveryToken" },
       );
     }
     const idMatches = pending.projects.filter((project) => project.projectId === input.projectId);
@@ -155,11 +183,14 @@ export function createProjectResolutionRecovery(
     }
     const project = matches[0];
     if (project === undefined) {
-      return invalidRecovery(
-        idMatches.length > 1
-          ? "The selected cwd is not part of the recovery envelope for that projectId."
-          : "The selected project is not part of the recovery envelope.",
-      );
+      return idMatches.length > 1
+        ? invalidRecovery(
+            "The selected cwd is not part of the recovery envelope for that projectId.",
+            { rejectedFlag: "cwd" },
+          )
+        : invalidRecovery("The selected project is not part of the recovery envelope.", {
+            rejectedFlag: "projectId",
+          });
     }
     cached = {
       project,
@@ -187,7 +218,13 @@ export function createProjectResolutionRecovery(
   return { clear, consume, getCached, issue, ttlMs };
 }
 
-function sameProjectRoot(left: string, right: string): boolean {
+/**
+ * Canonical worktree-root identity. Two paths name the same worktree when
+ * their real paths match (case-insensitively on Windows). Exported because
+ * `resolve_project` anchors an ambiguous fleet to the requested cwd with the
+ * exact same rule the recovery envelope uses (issue #1668).
+ */
+export function sameProjectRoot(left: string, right: string): boolean {
   const canonical = (value: string): string => {
     const absolute = resolve(value);
     let result = absolute;
@@ -201,13 +238,17 @@ function sameProjectRoot(left: string, right: string): boolean {
   return canonical(left) === canonical(right);
 }
 
-function invalidRecovery(message: string): RecoveryFailure {
+function invalidRecovery(
+  message: string,
+  field: { missingParam?: string; rejectedFlag?: string } = {},
+): RecoveryFailure {
   return {
     ok: false,
     code: "MCP_INPUT_INVALID",
     message,
     remediation:
       "Call resolve_project again, ask the user to choose one availableProjects entry, and retry once with its projectId plus the fresh recoveryToken and exact projectChoiceReason.",
+    ...field,
   };
 }
 

@@ -555,14 +555,28 @@ describe("MCP tool registration over core services", () => {
       writes: true,
     });
 
+    // Issue #1668 — the caller passed a key the schema does not declare AND
+    // omitted a required one. The unknown key is the actionable cause, so the
+    // rejection names it (with the "Did you mean" hint) instead of sending the
+    // caller looking for a second parameter to add.
     await expect(
       tools.find((tool) => tool.name === "run_vba")?.handler({ moduleName: "Automation" }),
     ).resolves.toMatchObject({
-      content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
       isError: true,
       ok: false,
-      error: { code: "MCP_INPUT_INVALID", message: "procedureName is required." },
+      error: {
+        code: "MCP_INPUT_INVALID",
+        message: expect.stringContaining("moduleName is not allowed."),
+      },
     });
+    await expect(tools.find((tool) => tool.name === "run_vba")?.handler({})).resolves.toMatchObject(
+      {
+        content: [{ type: "text", text: "MCP_INPUT_INVALID: procedureName is required." }],
+        isError: true,
+        ok: false,
+        error: { code: "MCP_INPUT_INVALID", message: "procedureName is required." },
+      },
+    );
     await expect(
       tools.find((tool) => tool.name === "query_sql")?.handler({ sql: 42 }),
     ).resolves.toMatchObject({

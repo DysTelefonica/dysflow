@@ -819,6 +819,8 @@ function projectRecoveryFailure(failure: {
   code: "MCP_INPUT_INVALID" | "PROJECT_ID_COLLISION";
   message: string;
   remediation: string;
+  missingParam?: string;
+  rejectedFlag?: string;
 }) {
   const error = {
     code: failure.code,
@@ -826,6 +828,10 @@ function projectRecoveryFailure(failure: {
     errorCode: failure.code,
     errorMessage: failure.message,
     remediation: failure.remediation,
+    // #1668 — carry the field-level diagnosis so a consumer can fix the one
+    // trio member at fault instead of re-deriving the whole envelope.
+    ...(failure.missingParam === undefined ? {} : { missingParam: failure.missingParam }),
+    ...(failure.rejectedFlag === undefined ? {} : { rejectedFlag: failure.rejectedFlag }),
   };
   return {
     content: [{ type: "text" as const, text: JSON.stringify({ ok: false, error }) }],

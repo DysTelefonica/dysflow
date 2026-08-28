@@ -48,6 +48,14 @@ export type BootstrapSnapshot = {
   toolSurfaceGuidance?: string;
   preferredAgentWorkflows: BootstrapWorkflowMap;
   humanCompilePending: boolean;
+  /**
+   * Issue #1668 — `bootstrap` deliberately never resolves a project, so its
+   * `humanCompilePending` is scoped to the frontend the MCP process started
+   * with. A consumer reading `false` on a worktree the resolver cannot target
+   * would otherwise conclude the workflow was unblocked. This field names the
+   * scope the flag was evaluated in; it is never a project-resolution result.
+   */
+  humanCompilePendingScope: "project-in-scope" | "no-project-in-scope";
 };
 
 export type BootstrapToolOptions = Pick<
@@ -68,7 +76,7 @@ export type BootstrapToolOptions = Pick<
 };
 
 export function formatCoreSurfaceGuidance(advertisedCount: number): string {
-  return `Active surface is "core" (${advertisedCount} tools). Pass \`toolSurface: "full"\` to the dysflow mcp CLI (\`--tool-surface full\`) or set \`mcp.toolSurface: "full"\` in \`.dysflow/project.json\` to advertise every tool. Non-advertised tools remain callable by name; discover them with \`schema({ view: "index" })\`.`;
+  return `Active surface is "core" (${advertisedCount} tools). Use \`--tool-surface full\` or set \`mcp.toolSurface: "full"\` in \`.dysflow/project.json\` to advertise all tools. Others remain callable by name; discover them with \`schema({ view: "index" })\`.`;
 }
 
 export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool {
@@ -77,7 +85,7 @@ export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool 
   return {
     name: "bootstrap",
     resultContract: bootstrapResultContract,
-    description: `Return the minimal first-call Dysflow MCP bootstrap snapshot: adapter version, write gates, workflow routing, surface, and human-compile reminder. Read-only — does not resolve projects, open Access, spawn PowerShell, or mutate state. ${MCP_TOOL_CONTRACTS.bootstrap.summary}`,
+    description: `Return the minimal first-call Dysflow MCP bootstrap snapshot: adapter version, write gates, workflow routing, surface, and human-compile reminder. Read-only — does not resolve projects, open Access, spawn PowerShell, or mutate state. Because it never resolves a project, humanCompilePending is scoped to the MCP startup frontend and humanCompilePendingScope says whether it was evaluated at all; call resolve_project to learn whether a cwd is targetable. ${MCP_TOOL_CONTRACTS.bootstrap.summary}`,
     inputSchema: BOOTSTRAP_INPUT_SCHEMA,
     handler: async (input) => {
       const validation = validateInput(input, BOOTSTRAP_INPUT_SCHEMA);
@@ -121,6 +129,7 @@ export function projectBootstrapSnapshot(
       : {}),
     preferredAgentWorkflows: buildBootstrapWorkflowMap(advertisedCount, phase),
     humanCompilePending: snapshot.humanCompilePending,
+    humanCompilePendingScope: snapshot.humanCompilePendingScope,
   };
 }
 

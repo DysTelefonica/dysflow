@@ -6,6 +6,28 @@ The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteab
 
 [Back to README](../../README.md)
 
+## Rejected input
+
+Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error`
+block naming the field at fault:
+
+- `missingParam` — a required parameter the caller omitted.
+- `rejectedFlag` — one the caller supplied that the schema does not accept.
+
+**An unknown parameter is reported before a missing required one (#1668).**
+
+When a call both omits a required parameter and passes a key the schema does
+not declare, the unknown key is almost always the cause.
+
+`lint_module({ moduleName })` is `module` misspelled, not a forgotten second
+parameter.
+
+The rejection therefore names the unknown key, lists the schema's valid
+parameters, and appends a `Did you mean '<param>'?` hint.
+
+Calls that omit a required parameter without passing anything unknown are
+unaffected and still report `missingParam`.
+
 ## Common Input Parameters
 
 Many MCP tools share common context and override parameters:
@@ -117,6 +139,7 @@ This is the recommended first call. Route next through
 
 Pure read-only; never opens Access, never spawns PowerShell, never mutates state. Reuses the capabilities snapshot pipeline but omits per-tool metadata.
 * **Parameters**: optional `cwd`; omit to use the MCP startup worktree. Optional `phase` filter for `preferredAgentWorkflows`.
+* **Compile-pending state is startup-scoped, not a readiness verdict (#1668)**: `bootstrap` never resolves a project, so `humanCompilePending` is evaluated against the frontend the MCP process started with. `humanCompilePendingScope` says which of the two very different `false` values you received — `"project-in-scope"` means a project was evaluated and nothing is pending, `"no-project-in-scope"` means the flag was never evaluated at all. A `false` alone does not imply that `resolve_project` can target your `cwd`; call `resolve_project` for that.
 
 ### `get_capabilities`
 Return the aggregated capabilities snapshot for the live Dysflow MCP adapter. Read-only — does not open Access, does not spawn PowerShell, does not mutate state.
@@ -280,6 +303,23 @@ On a cache miss it retains sibling-worktree discovery and the recovery-token
 flow below.
 
 On ambiguity it creates a short-lived, process-local recovery token, so an exact human choice can be cached without editing project config.
+
+**Sibling worktrees that share a project id (#1668).**
+
+In a `worktree-per-change` fleet every sibling commits the same `id`, so the id
+cannot discriminate and a recovery envelope built from it would offer N
+identical choices.
+
+When exactly one discovered project is rooted AT the requested `cwd`,
+`resolve_project` resolves it directly instead of reporting ambiguity.
+
+That is the same `sameProjectRoot` rule the envelope already applies when it
+consumes a trio.
+
+A `cwd` that owns no `.dysflow/project.json` is still genuinely ambiguous and
+still returns the full envelope.
+
+See [worktree-fleet project resolution](../architecture/worktree-fleet-project-resolution.md).
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
@@ -287,6 +327,8 @@ On ambiguity it creates a short-lived, process-local recovery token, so an exact
   - `recoveryToken` (string, optional): Opaque one-shot token returned by the ambiguous call. Supply it only with `projectId` and `projectChoiceReason`.
   - `clearResolution` (boolean, optional): Drop cached choice and outstanding tokens before resolving again.
 * **Returns**: `{ projectId, outcome, reason, accessPath, projectRoot, sourceRoot }`. `outcome` is `resolved`, `unresolved`, or `ambiguous`. The ambiguous branch additionally returns `{ availableProjects, recoveryToken, recoveryInstruction }`. A valid trio passed to `resolve_project` commits the in-memory choice even though the tool remains filesystem-read-only; every write-class dispatcher accepts the same trio. See [`assets/examples/resolve-project-recovery.md`](../../assets/examples/resolve-project-recovery.md).
+* **Rejected trio diagnostics (#1668)**: a rejection names the one field at fault instead of restating the whole contract. A trio member the caller omitted arrives as `error.missingParam` (`projectId`, `projectChoiceReason`, or `recoveryToken`); a member supplied with an unusable value arrives as `error.rejectedFlag` (a `projectChoiceReason` that is not the exact literal, a `recoveryToken` this process never issued or already consumed, a `cwd` outside the envelope, or a `projectId` that is not in it).
+* **Token lifetime (#1668)**: the token is consumed by a *successful* resolution, not by a rejected attempt. A malformed or mis-targeted selection leaves the outstanding token usable, so a consumer can correct one field and retry without re-entering the whole recovery flow. Expiry and a change to the visible project configuration still invalidate it, and a replay after a successful selection is still refused.
 
 ### `clean_stale_markers`
 Sweep `<projectRoot>/.dysflow/runtime/markers/` and either plan or apply marker transitions to `status: "abandoned"`.
@@ -315,6 +357,8 @@ Read `.dysflow/project.json` and, optionally with `apply:true`, rewrite it in pl
   - `cwd` (string, optional): Per-call cwd override (#1057 F10). Must be an existing directory containing `.dysflow/project.json`. Omit to use the MCP factory cwd.
   - `apply` (boolean, optional, default `false`): When `true`, atomically rewrites `.dysflow/project.json` with the proposed migration. Refuses with `MCP_WRITES_DISABLED` when writes are disabled. When omitted (or `false`), returns the proposed diff without writing — pure introspection.
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
+* **The `diff` field is a unified-diff string, never an object (#1668)**: every `outcome:"ok"` response carries all six fields, and `diff` is `""` — not absent, not `null` — when the config needs no migration. Read `remediation[]` for the per-field rationale and `applied` for whether anything was written; do not test `diff` for truthiness to decide whether the call succeeded.
+* **The plan path has no resolver side effects (#1668)**: `apply:false` reads the config and returns the proposal. It does not warm, commit, or clear a project resolution, so a `resolve_project` outcome observed before the call is the same one observed after it.
 
 ### `schema`
 Return static tool contracts in progressive views. Read-only — never opens Access, never spawns PowerShell, never mutates state.
