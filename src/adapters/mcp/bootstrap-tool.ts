@@ -76,7 +76,7 @@ export type BootstrapToolOptions = Pick<
 };
 
 export function formatCoreSurfaceGuidance(advertisedCount: number): string {
-  return `Active surface is "core" (${advertisedCount} tools). Pass \`toolSurface: "full"\` to the dysflow mcp CLI (\`--tool-surface full\`) or set \`mcp.toolSurface: "full"\` in \`.dysflow/project.json\` to advertise every tool. Non-advertised tools remain callable by name; discover them with \`schema({ view: "index" })\`.`;
+  return `Active surface is "core" (${advertisedCount} tools). Use \`--tool-surface full\` or set \`mcp.toolSurface: "full"\` in \`.dysflow/project.json\` to advertise all tools. Others remain callable by name; discover them with \`schema({ view: "index" })\`.`;
 }
 
 export function createBootstrapTool(opts: BootstrapToolOptions): DysflowMcpTool {
