@@ -490,7 +490,10 @@ async function recordRecoveryTokenTrioJourney() {
   const area = "v2.34-regressions";
   const tool = "recovery-token-trio-persistent-session";
   const startedAt = Date.now();
-  const fixtureRoot = join(tempRoot, "recovery-token-trio");
+  const fixtureRoot = join(
+    dirname(tempRoot),
+    `${basename(tempRoot)}-recovery-token-trio`,
+  );
   const chosenRoot = join(fixtureRoot, "chosen");
   const competingRoot = join(fixtureRoot, "competing");
   const observerRoot = join(fixtureRoot, "observer");
@@ -531,6 +534,7 @@ async function recordRecoveryTokenTrioJourney() {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
+        INIT_CWD: observerRoot,
         ACCESS_VBA_PASSWORD: password,
         DYSFLOW_ACCESS_PASSWORD: password,
         DYSFLOW_BACKEND_PASSWORD: password,
@@ -546,7 +550,7 @@ async function recordRecoveryTokenTrioJourney() {
       child,
       timeoutMs,
       run: async ({ callTool }) => {
-        const ambiguous = await callTool("resolve_project", { cwd: observerRoot });
+        const ambiguous = await callTool("resolve_project", {});
         const ambiguousPayload = payloadOf(ambiguous);
         const recoveryToken = ambiguousPayload?.recoveryToken;
         if (
@@ -618,6 +622,9 @@ async function recordRecoveryTokenTrioJourney() {
     if (childPid && !isOwnPidAlive(childPid)) {
       suiteOwnPids.delete(childPid);
       await resumeController.clearOwnedPid(childPid);
+    }
+    if (!childPid || !isOwnPidAlive(childPid)) {
+      await rm(fixtureRoot, { recursive: true, force: true });
     }
   }
 }
