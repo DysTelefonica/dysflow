@@ -493,6 +493,7 @@ async function recordRecoveryTokenTrioJourney() {
   const fixtureRoot = join(tempRoot, "recovery-token-trio");
   const chosenRoot = join(fixtureRoot, "chosen");
   const competingRoot = join(fixtureRoot, "competing");
+  const observerRoot = join(fixtureRoot, "observer");
   const sharedProjectId = "recovery-token-trio-e2e";
   let childPid;
 
@@ -521,9 +522,11 @@ async function recordRecoveryTokenTrioJourney() {
     runCheckedGit(chosenRoot, ["add", "."]);
     runCheckedGit(chosenRoot, ["commit", "-m", "test: recovery trio fixture"]);
     runCheckedGit(chosenRoot, ["worktree", "add", "-b", "competing", competingRoot]);
+    runCheckedGit(chosenRoot, ["worktree", "add", "-b", "observer", observerRoot]);
+    await rm(join(observerRoot, ".dysflow"), { recursive: true, force: true });
 
     const child = spawn(cliCommand, mcpCliArgs, {
-      cwd: chosenRoot,
+      cwd: observerRoot,
       shell: true,
       stdio: ["pipe", "pipe", "pipe"],
       env: {
@@ -543,7 +546,7 @@ async function recordRecoveryTokenTrioJourney() {
       child,
       timeoutMs,
       run: async ({ callTool }) => {
-        const ambiguous = await callTool("resolve_project", { cwd: chosenRoot });
+        const ambiguous = await callTool("resolve_project", { cwd: observerRoot });
         const ambiguousPayload = payloadOf(ambiguous);
         const recoveryToken = ambiguousPayload?.recoveryToken;
         if (
