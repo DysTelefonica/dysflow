@@ -4546,8 +4546,8 @@ Describe "Build-ExportResultSummary — issue #745 trust contract" {
 # Asserts the NEW (post-GREEN) call shapes that the Slice 1 fix installs:
 #   * Remove-AccessObjectOrComponent :2205  → RunCommand(280) on $AccessApplication
 #   * Remove-AccessObjectOrComponent :2247  → RunCommand(280) on $AccessApplication
-#   * Save-VbaProjectModules         :2662  → (the 126 attempt is gone)
-#     the canonical save path is now :2668's `DoCmd.RunCommand(280)`.
+#   * Save-VbaProjectModules         → named `DoCmd.Save(5, name)` first;
+#     `DoCmd.RunCommand(280)` remains the fallback when named save is unavailable.
 #
 # The atoms assert OUTCOME (which RunCommand value was passed to which COM
 # object) — they survive any behaviour-preserving refactor of the
@@ -4650,23 +4650,27 @@ Describe "Remove-AccessObjectOrComponent — slice-1 persistence path (#759 PR-1
     }
 }
 
-Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
+Describe "Save-VbaProjectModules — headless persistence (#1667)" {
     BeforeAll {
         $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
         $ast = [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
         )
-        $fnAst = $ast.FindAll(
-            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-              $args[0].Name -eq 'Save-VbaProjectModules' },
-            $true
-        ) | Select-Object -First 1
-        if (-not $fnAst) { throw "Save-VbaProjectModules not found" }
-        Invoke-Expression $fnAst.Extent.Text
+        foreach ($functionName in @('Resolve-ExistingComponentName', 'Save-VbaProjectModules')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $functionName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$functionName not found" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
     }
 
     BeforeEach {
         $script:RunCommandCalls = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $script:SaveCalls = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $script:NamedSaveFails = $false
 
         $fakeAccessApp = [PSCustomObject]@{ }
         $fakeAccessApp | Add-Member -MemberType ScriptMethod -Name "RunCommand" -Value {
@@ -4688,23 +4692,65 @@ Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
                 Object = "DoCmd"; Value = [int]$value
             })
         }
+        $fakeDoCmd | Add-Member -MemberType ScriptMethod -Name "Save" -Value {
+            param($objectType, $moduleName)
+            $script:SaveCalls.Add([PSCustomObject]@{
+                ObjectType = [int]$objectType; ModuleName = [string]$moduleName
+            })
+            if ($script:NamedSaveFails) {
+                throw "mock: named module save is unavailable"
+            }
+        }
         $fakeAccessApp | Add-Member -MemberType ScriptProperty -Name "DoCmd" -Value { $fakeDoCmd }
+
+        $script:ComponentType = 1
+        $fakeComponents = [PSCustomObject]@{}
+        $fakeComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($moduleName)
+            [PSCustomObject]@{ Name = [string]$moduleName; Type = [int]$script:ComponentType }
+        }
+        $fakeVbProject = [PSCustomObject]@{ VBComponents = $fakeComponents }
     }
 
-    It "persists via DoCmd.RunCommand(280) and never invokes the dropped 126 attempt" {
-        # Slice-1 GREEN step: Save-VbaProjectModules no longer tries
-        # `RunCommand(126)` at all — the 126 first-attempt is dropped. The
-        # function now uses `DoCmd.RunCommand(280)` as its sole save path.
-        $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -ModuleNames @("Form_X")
+    It "persists a new module by name without invoking the interactive Save All Modules command" {
+        $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleNames @("TestIssue1667")
         $res | Should -BeNullOrEmpty `
             -Because "Save-VbaProjectModules must return without throwing"
 
-        # The 280 call must appear on DoCmd (the canonical save path).
+        $script:SaveCalls.Count | Should -Be 1
+        $script:SaveCalls[0].ObjectType | Should -Be 5
+        $script:SaveCalls[0].ModuleName | Should -Be "TestIssue1667"
         $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
-        $doCmdCalls.Count | Should -BeGreaterOrEqual 1 `
-            -Because "DoCmd.RunCommand(280) is the canonical save path"
-        $doCmdCalls[0].Value | Should -Be 280 `
-            -Because "the save path persists modules without compiling (acCmdSaveAllModules = 280)"
+        $doCmdCalls | Should -BeNullOrEmpty `
+            -Because "RunCommand(280) opens Access's Save As modal for a newly created module"
+    }
+
+    It "fails closed when a named save fails for a newly created module" {
+        $script:NamedSaveFails = $true
+
+        { Save-VbaProjectModules -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleNames @("TestIssue1667") } |
+            Should -Throw "VBA_CREATED_MODULE_SAVE_FAILED:*TestIssue1667*"
+
+        $script:SaveCalls.Count | Should -Be 1
+        $script:SaveCalls[0].ModuleName | Should -Be "TestIssue1667"
+        $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
+        $doCmdCalls | Should -BeNullOrEmpty `
+            -Because "the interactive fallback must never run after a created-module named save fails"
+
+        $appCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "AccessApplication" })
+        $appCalls | Should -BeNullOrEmpty
+    }
+
+    It "uses Save All Modules only for a known document module" {
+        $script:ComponentType = 100
+
+        $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -VbProject $fakeVbProject -ModuleNames @("Form_X")
+        $res | Should -BeNullOrEmpty
+
+        $script:SaveCalls | Should -BeNullOrEmpty
+        $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
+        $doCmdCalls.Count | Should -Be 1
+        $doCmdCalls[0].Value | Should -Be 280
 
         # The dropped 126 first-attempt must NEVER fire — even when the
         # project is healthy. AccessApplication.RunCommand is captured
@@ -4712,6 +4758,24 @@ Describe "Save-VbaProjectModules — slice-1 call shape (#759 PR-1)" {
         $appCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "AccessApplication" })
         $appCalls | Should -BeNullOrEmpty `
             -Because "Save-VbaProjectModules must NEVER call RunCommand(126); the compile-and-save-all attempt is gone"
+    }
+
+    It "resolves a bare document alias before classifying its canonical component" {
+        $aliasComponents = [PSCustomObject]@{}
+        $aliasComponents | Add-Member -MemberType ScriptMethod -Name "Item" -Value {
+            param($moduleName)
+            if ([string]$moduleName -ne "Form_frmSplash") { throw "component not found: $moduleName" }
+            [PSCustomObject]@{ Name = "Form_frmSplash"; Type = 100 }
+        }
+        $aliasVbProject = [PSCustomObject]@{ VBComponents = $aliasComponents }
+
+        $res = Save-VbaProjectModules -AccessApplication $fakeAccessApp -VbProject $aliasVbProject -ModuleNames @("frmSplash")
+        $res | Should -BeNullOrEmpty
+
+        $script:SaveCalls | Should -BeNullOrEmpty
+        $doCmdCalls = @($script:RunCommandCalls | Where-Object { $_.Object -eq "DoCmd" })
+        $doCmdCalls.Count | Should -Be 1
+        $doCmdCalls[0].Value | Should -Be 280
     }
 }
 
@@ -4976,7 +5040,7 @@ Describe "export_modules_succeeds_against_form_with_anomalous_module_name" {
 #           the source.
 #
 # The test mocks COM via PSCustomObject + ScriptMethod — same pattern used by
-# the existing `Save-VbaProjectModules — slice-1 call shape` and
+# the existing `Save-VbaProjectModules — headless persistence` and
 # `Remove-AccessObjectOrComponent` Pester suites. No real Access instance is
 # required, so this stays green in CI even without Access installed.
 # ===========================================================================

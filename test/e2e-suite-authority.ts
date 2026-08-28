@@ -34,6 +34,7 @@ export const NIGHTLY_ACCESS_TESTS = [
   "test/integration/access-relink-apply.test.ts",
   "test/integration/dysflow-access-runner-password.test.ts",
   "test/integration/form-ir-loadfromtext.test.ts",
+  "test/integration/import-modules-headless.integration.test.ts",
   "test/integration/vba-manager-export-import.test.ts",
   "test/integration/vba-modules-import-grow-in-place.e2e.test.ts",
   "test/integration/vba-modules-import-verbose-truncation.e2e.test.ts",
