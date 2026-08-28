@@ -527,11 +527,11 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   This applies to every branch type — `feat/*`, `fix/*`, `chore/*`, `docs/*`, `refactor/*` —
   including branches whose PR was already merged into `main`.
 - **Do delete the local worktree once its PR has merged.** If the work happened in a git worktree,
-  run `git worktree remove <path>` and then `git worktree prune`. This is not optional tidiness:
-  a stale worktree keeps an obsolete branch checked out on disk, and a later session that lands in
-  it will happily commit to the wrong place. The local branch may go with it (`git branch -d
-  <local>`); the remote ref stays. "Clean up the branch" after a merge means the worktree, never
-  the remote ref.
+  run `git worktree remove <path>` and then `git worktree prune`.
+  - This is not optional tidiness: a stale worktree keeps an obsolete branch checked out on disk,
+    and a later session that lands in it will happily commit to the wrong place.
+  - The local branch may go with it (`git branch -d <local>`); the remote ref stays.
+  - "Clean up the branch" after a merge means the worktree, never the remote ref.
 
 ## MCP workflow recipes
 
