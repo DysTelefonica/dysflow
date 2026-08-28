@@ -2,6 +2,17 @@
 
 `vba_inline_execution` was removed in v4.0.0.
 
+While it existed it capped `code` at 1024 characters and rejected a longer snippet with
+`INVALID_INPUT`. That cap went out with the tool.
+
+Nothing in the current runtime rejects VBA on length.
+
+A consumer still seeing `Inline VBA code exceeds the 1024-character cap` is on a pre-v4.0.0
+build — check `bootstrap({}).adapterVersion` and update.
+
+The `_Temp_*.bas` workflow below has no character cap. It is the replacement for exactly the
+snippets that used to hit the removed one.
+
 Put one-shot code in a reviewable `_Temp_*.bas` module. Import it, compile it manually in Access,
 run its allowlisted public procedure, and remove both the binary module and source file.
 

@@ -38,6 +38,9 @@
 
 ### Changes
 
+- fix(verify_code): classify a leading-indentation-only difference as `whitespaceOnly` instead of `caseOnly` (#1669). Indentation in a code module (`.bas`/`.cls`/`.frm`) is now folded with line endings and trailing whitespace, before the case-folding step, so `reason` no longer reports a casing difference the two sides do not have. Actionability is unchanged — both categories were already non-actionable — and form/report serialization keeps its indentation. `classifierRules` moves to `2026-08-28.r7-indentation-is-whitespace`.
+- feat(verify_code): add `nonActionableByCategory` to the compact MCP response (#1669), the symmetric projection of the existing `summaryByCategory`. It reports `{ caseOnly, whitespaceOnly, attributeOnly, formSerializationOnly, encodingOnly }` so a consumer seeing `ok:false` with `actionableOk:true` learns which noise caused it without paying for `diagnostic:true`. Absent in strict mode, which carries no classification.
+- docs(vba-execution): record that the 1024-character `code` cap left with `vba_inline_execution` in v4.0.0 (#1669); the message is now diagnostic of a pre-v4 runtime, and the `_Temp_*.bas` workflow has no cap.
 - fix(vba): transport large import orchestration payloads over stdin while preserving rollback; direct oversized argv payloads now fail before mutation with `PAYLOAD_TOO_LARGE_FOR_ARGV` (#1661).
 - sync_binary preference now respects explicit moduleNames
 - feat(install): add `--channel {stable|beta|main}` to `dysflow install`, `dysflow update`, and `dysflow doctor` (#1521). Resolution order is `--channel` -> `DYSFLOW_CHANNEL` -> the channel persisted in `<runtimeDir>/.dysflow-install-state.json` -> `stable`; omitting the flag keeps every existing call shape on the signed stable path, unchanged.

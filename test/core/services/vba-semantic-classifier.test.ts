@@ -157,7 +157,10 @@ End Sub`;
     const result = classifyVbaPair({ sourceText, binaryText, fileType: "cls", mode: "semantic" });
 
     expect(result.actionable).toBe(false);
-    expect(result.classification).toBe("caseOnly");
+    // #1669 — indentation drift is whitespace. It used to reach the
+    // case-folding step and come back labelled `caseOnly`, which named a
+    // difference this pair does not have.
+    expect(result.classification).toBe("whitespaceOnly");
   });
 
   it("#671 — classifies omitted form toggle lines as ACTIONABLE (presence vs absence)", () => {
