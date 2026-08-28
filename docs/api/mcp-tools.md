@@ -8,16 +8,25 @@ The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteab
 
 ## Rejected input
 
-Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error` block that names the
-field at fault: `missingParam` for a required parameter the caller omitted, `rejectedFlag` for one the
-caller supplied that the schema does not accept or cannot use.
+Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error`
+block naming the field at fault:
 
-**An unknown parameter is reported before a missing required one (#1668).** When a call both omits a
-required parameter and passes a key the schema does not declare, the unknown key is almost always the
-cause — `lint_module({ moduleName })` is `module` misspelled, not a forgotten second parameter. The
-rejection therefore names the unknown key, lists the schema's valid parameters, and appends a
-`Did you mean '<param>'?` hint when a near match exists. Calls that omit a required parameter without
-passing anything unknown are unaffected and still report `missingParam`.
+- `missingParam` — a required parameter the caller omitted.
+- `rejectedFlag` — one the caller supplied that the schema does not accept.
+
+**An unknown parameter is reported before a missing required one (#1668).**
+
+When a call both omits a required parameter and passes a key the schema does
+not declare, the unknown key is almost always the cause.
+
+`lint_module({ moduleName })` is `module` misspelled, not a forgotten second
+parameter.
+
+The rejection therefore names the unknown key, lists the schema's valid
+parameters, and appends a `Did you mean '<param>'?` hint.
+
+Calls that omit a required parameter without passing anything unknown are
+unaffected and still report `missingParam`.
 
 ## Common Input Parameters
 
@@ -295,7 +304,22 @@ flow below.
 
 On ambiguity it creates a short-lived, process-local recovery token, so an exact human choice can be cached without editing project config.
 
-**Sibling worktrees that share a project id (#1668).** In a `worktree-per-change` fleet every sibling commits the same `id`, so the id cannot discriminate and a recovery envelope built from it would offer N identical choices. When exactly one discovered project is rooted AT the requested `cwd`, `resolve_project` resolves that project directly instead of reporting ambiguity — the same `sameProjectRoot` rule the recovery envelope already applies when it consumes a trio. A `cwd` that owns no `.dysflow/project.json` is still genuinely ambiguous and still returns the full envelope. See [worktree-fleet project resolution](../architecture/worktree-fleet-project-resolution.md).
+**Sibling worktrees that share a project id (#1668).**
+
+In a `worktree-per-change` fleet every sibling commits the same `id`, so the id
+cannot discriminate and a recovery envelope built from it would offer N
+identical choices.
+
+When exactly one discovered project is rooted AT the requested `cwd`,
+`resolve_project` resolves it directly instead of reporting ambiguity.
+
+That is the same `sameProjectRoot` rule the envelope already applies when it
+consumes a trio.
+
+A `cwd` that owns no `.dysflow/project.json` is still genuinely ambiguous and
+still returns the full envelope.
+
+See [worktree-fleet project resolution](../architecture/worktree-fleet-project-resolution.md).
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
