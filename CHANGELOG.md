@@ -1,5 +1,16 @@
 # Changelog
 
+## [v4.2.1] - 2026-08-28
+
+### Changes
+
+- fix(resolver): round 18 consumer frictions (#1668) (#1672)
+- fix(vba-sync): save new modules without Access modal (#1671)
+- docs: keep changed markdown under the paragraph-length gate (#1669)
+- docs(vba-execution): record the removed inline 1024-character cap (#1669)
+- fix(verify_code): name the diff noise it folded (#1669)
+
+
 ## [v4.2.0] - 2026-08-27
 
 ### Changes
