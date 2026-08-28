@@ -23,11 +23,11 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-07-16.r6-order-safe-lcs-cap";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-08-28.r7-indentation-is-whitespace";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
-  | "whitespaceOnly" // differ only by CRLF/LF/trailing-ws/blank lines
+  | "whitespaceOnly" // differ only by CRLF/LF/indentation/trailing-ws/blank lines
   | "attributeOnly" // differ only by Attribute VB_* header lines (not VB_Name)
   | "caseOnly" // differ only by identifier/keyword casing (VBA is case-insensitive)
   | "formSerializationOnly" // differ only by stripped form/report noise sections
@@ -850,7 +850,7 @@ function fromFunctionalDiff(
  * Classification precedence (§3.3 design):
  *   0. strict mode: raw equality -> matched; else functional diff (no normalization).
  *   1. raw equal -> matched
- *   2. equal after lineEndings + trailingWs -> whitespaceOnly
+ *   2. equal after lineEndings + trailingWs + leading indentation -> whitespaceOnly
  *   3. equal after (2) + stripAttributeLines -> attributeOnly  (code types only)
  *   4. equal after (2) + stripFormSerializationNoise -> formSerializationOnly (form/report only)
  *   5. equal after (2..4) + repairMojibake -> encodingOnly (with safety guards)
@@ -892,9 +892,19 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   }
 
   // -------------------------------------------------------------------------
-  // Step 2: whitespaceOnly — normalize line endings and trailing whitespace
+  // Step 2: whitespaceOnly — normalize line endings, indentation, and trailing
+  // whitespace.
+  //
+  // Leading indentation in a VBA code module is not executable semantics; the
+  // later steps already folded it, but only after the case-folding step had
+  // claimed the pair as `caseOnly`. Folding it here keeps the taxonomy honest:
+  // an indentation-only difference is reported as whitespace, not as casing
+  // (#1669). Form/report serialization is untouched — `normalizeLeadingWhitespace`
+  // is a no-op outside code file types, so structural indentation in a
+  // `.form.txt` still reaches the functional diff.
   // -------------------------------------------------------------------------
-  const normalizeWs = (t: string) => normalizeTrailingWhitespace(normalizeLineEndings(t));
+  const normalizeWs = (t: string) =>
+    normalizeLeadingWhitespace(normalizeTrailingWhitespace(normalizeLineEndings(t)), fileType);
 
   const srcNormWs = normalizeWs(srcText);
   const binNormWs = normalizeWs(binText);
@@ -902,7 +912,7 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   if (srcNormWs === binNormWs) {
     return nonActionable(
       "whitespaceOnly",
-      "texts differ only in line endings or trailing whitespace",
+      "texts differ only in line endings, indentation, or trailing whitespace",
     );
   }
 

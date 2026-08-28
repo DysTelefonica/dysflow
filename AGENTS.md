@@ -376,7 +376,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Eleven anchors do the second kind today:
+Twelve anchors do the second kind today:
 
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `agent-friction-examples-1614.test.ts` derives the callable MCP surface from the runtime and checks that each friction family links concrete live tools and complete examples.
@@ -388,6 +388,7 @@ Eleven anchors do the second kind today:
 - `readme-release-doc.test.ts` reads the installer source for the insecure-update gate variable and requires the README and the trust model to name the one the installer actually enforces, so renaming it in code fails until both documents follow.
 - `resolve-project-recovery-example.test.ts` validates a documented payload against the live input schema.
 - `verify-code-diagnostic-contract-1535.test.ts` compares the documented compact/diagnostic response split against the live `verify_code` schema and MCP response shaper.
+- `verify-code-noise-categories-1669.test.ts` derives the non-actionable category keys from the live MCP response shaper and requires the tool reference and the skill example to name every one, then proves the documented indentation verdict against the live classifier.
 - `write-tool-preflight.test.ts` reads the MCP schema source.
 
 Every other anchor pins a literal string. Asserting that a doc merely *contains* a source path is a string anchor, not a runtime anchor.
@@ -408,6 +409,12 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   identifiers/keywords and the VBE re-cases them on import (`caseOnly`). Folding is **string-aware**:
   string-literal and comment bodies are compared case-sensitively, because their content is
   runtime-visible. Never fold the whole line blindly.
+- **A category must name the difference it folded.** Actionability is not the whole contract: an
+  agent reads `classification`/`reason` to decide whether the drift is worth a human's attention, so
+  a bucket that mislabels the noise is a defect even when `actionable` is already `false`. Leading
+  indentation is folded as `whitespaceOnly` for code modules (`.bas`/`.cls`/`.frm`) BEFORE the
+  case-folding step, never as `caseOnly` (#1669). Form/report serialization keeps its indentation —
+  `normalizeLeadingWhitespace` is a no-op outside code file types.
 - **Lossy encoding (`►` → `?`) is `encodingOnly` outside string literals only.** A glyph change
   inside a quoted string stays functional.
 - **A leading BOM / mojibake-BOM (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is stripped**
@@ -520,11 +527,11 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   This applies to every branch type — `feat/*`, `fix/*`, `chore/*`, `docs/*`, `refactor/*` —
   including branches whose PR was already merged into `main`.
 - **Do delete the local worktree once its PR has merged.** If the work happened in a git worktree,
-  run `git worktree remove <path>` and then `git worktree prune`. This is not optional tidiness:
-  a stale worktree keeps an obsolete branch checked out on disk, and a later session that lands in
-  it will happily commit to the wrong place. The local branch may go with it (`git branch -d
-  <local>`); the remote ref stays. "Clean up the branch" after a merge means the worktree, never
-  the remote ref.
+  run `git worktree remove <path>` and then `git worktree prune`.
+  - This is not optional tidiness: a stale worktree keeps an obsolete branch checked out on disk,
+    and a later session that lands in it will happily commit to the wrong place.
+  - The local branch may go with it (`git branch -d <local>`); the remote ref stays.
+  - "Clean up the branch" after a merge means the worktree, never the remote ref.
 
 ## MCP workflow recipes
 

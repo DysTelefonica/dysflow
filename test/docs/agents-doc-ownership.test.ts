@@ -26,6 +26,7 @@ const RUNTIME_ANCHORS = [
   "readme-release-doc.test.ts",
   "resolve-project-recovery-example.test.ts",
   "verify-code-diagnostic-contract-1535.test.ts",
+  "verify-code-noise-categories-1669.test.ts",
   "write-tool-preflight.test.ts",
 ] as const;
 

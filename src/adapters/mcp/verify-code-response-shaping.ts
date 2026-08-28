@@ -68,6 +68,21 @@ export function shapeVerifyCodeResponse<T>(raw: T, options: VerifyCodeDiagnostic
       binaryNewer: numberOrZero(actionable.binaryNewer ?? semanticSummary.binaryNewer),
       bothChanged: numberOrZero(actionable.bothChanged ?? semanticSummary.bothChanged),
     };
+    // Issue #1669 — `ok` is raw parity, so it stays false for noise the
+    // classifier already ruled non-actionable. Without the per-category
+    // breakdown the compact response says "three modules differ" and never
+    // says why, which pushed consumers to distrust the verdict or pay for
+    // diagnostic mode. The core comparison already computes these counts;
+    // this is the symmetric projection of `summaryByCategory`.
+    compact.nonActionableByCategory = {
+      caseOnly: numberOrZero(nonActionable.caseOnly ?? semanticSummary.caseOnly),
+      whitespaceOnly: numberOrZero(nonActionable.whitespaceOnly ?? semanticSummary.whitespaceOnly),
+      attributeOnly: numberOrZero(nonActionable.attributeOnly ?? semanticSummary.attributeOnly),
+      formSerializationOnly: numberOrZero(
+        nonActionable.formSerializationOnly ?? semanticSummary.formSerializationOnly,
+      ),
+      encodingOnly: numberOrZero(nonActionable.encodingOnly ?? semanticSummary.encodingOnly),
+    };
     compact.bulkImportable = bulkImportable;
     compact.bulkImportableCount = numberOrZero(raw.bulkImportableCount ?? bulkImportable.length);
     compact.bulkExportable = bulkExportable;
