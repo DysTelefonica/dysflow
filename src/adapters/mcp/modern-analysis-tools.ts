@@ -37,7 +37,7 @@ import {
   listProceduresResultContract,
   validateManifestResultContract,
 } from "./contracts/remaining-result-contracts.js";
-import { invalidInput } from "./dispatch-common.js";
+import { enrichmentForValidationMessage, invalidInput } from "./dispatch-common.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
 import {
   type DysflowMcpServices,
@@ -50,6 +50,7 @@ import {
   DETECT_DEAD_CODE_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
+  type JsonObjectSchema,
   LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
   VALIDATE_MANIFEST_SCHEMA,
@@ -739,6 +740,20 @@ function moduleMismatch(module: string, sourceModule: string): McpToolResult {
 }
 
 /** Build the cohesive read-only VBA source-analysis tool family. */
+/**
+ * Issue #1668 — a schema rejection in this family used to reach the consumer
+ * as a bare `MCP_INPUT_INVALID` string, so `lint_module({ moduleName })` said
+ * only "module is required." with no structured `missingParam` / `rejectedFlag`
+ * to act on. Route every rejection through the shared enrichment so the
+ * envelope names the field at fault, exactly as the dispatch-gated tools do.
+ */
+function rejectInvalidInput(validation: string, toolName: string, schema: JsonObjectSchema) {
+  const enrichment = enrichmentForValidationMessage(validation, toolName, schema);
+  return enrichment === undefined
+    ? invalidInput(validation)
+    : invalidInput(validation, undefined, enrichment);
+}
+
 export function createModernAnalysisTools(
   options: CreateModernAnalysisToolsOptions,
 ): DysflowMcpTool[] {
@@ -759,7 +774,8 @@ export function createModernAnalysisTools(
       resultContract: listProceduresResultContract,
       handler: async (input) => {
         const validation = validateInput(input, LIST_PROCEDURES_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "list_procedures", LIST_PROCEDURES_SCHEMA);
         const { module, filter, kind, source, destinationRoot } = input as {
           module: string;
           filter?: string;
@@ -809,7 +825,8 @@ export function createModernAnalysisTools(
       resultContract: getProcedureResultContract,
       handler: async (input) => {
         const validation = validateInput(input, GET_PROCEDURE_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "get_procedure", GET_PROCEDURE_SCHEMA);
         const { module, procedure, source, destinationRoot } = input as {
           module: string;
           procedure: string;
@@ -892,7 +909,8 @@ export function createModernAnalysisTools(
       resultContract: findReferencesResultContract,
       handler: async (input) => {
         const validation = validateInput(input, FIND_REFERENCES_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "find_references", FIND_REFERENCES_SCHEMA);
 
         const params = input as Record<string, unknown>;
         const symbol = params.symbol as string;
@@ -1113,7 +1131,8 @@ export function createModernAnalysisTools(
       resultContract: detectDeadCodeResultContract,
       handler: async (input) => {
         const validation = validateInput(input, DETECT_DEAD_CODE_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "detect_dead_code", DETECT_DEAD_CODE_SCHEMA);
 
         const params = input as Record<string, unknown>;
         const scope = (params.scope ?? "binary") as "binary" | "source" | "module";
@@ -1221,7 +1240,8 @@ export function createModernAnalysisTools(
       resultContract: validateManifestResultContract,
       handler: async (input) => {
         const validation = validateInput(input, VALIDATE_MANIFEST_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "validate_manifest", VALIDATE_MANIFEST_SCHEMA);
 
         const params = input as Record<string, unknown>;
         const manifestResult = await resolveManifest(params, accessContextResolver);
@@ -1275,7 +1295,8 @@ export function createModernAnalysisTools(
       resultContract: lintModuleResultContract,
       handler: async (input) => {
         const validation = validateInput(input, LINT_MODULE_SCHEMA);
-        if (validation !== undefined) return invalidInput(validation);
+        if (validation !== undefined)
+          return rejectInvalidInput(validation, "lint_module", LINT_MODULE_SCHEMA);
 
         const params = input as Record<string, unknown>;
         const module = params.module as string;

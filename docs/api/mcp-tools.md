@@ -6,6 +6,19 @@ The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteab
 
 [Back to README](../../README.md)
 
+## Rejected input
+
+Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error` block that names the
+field at fault: `missingParam` for a required parameter the caller omitted, `rejectedFlag` for one the
+caller supplied that the schema does not accept or cannot use.
+
+**An unknown parameter is reported before a missing required one (#1668).** When a call both omits a
+required parameter and passes a key the schema does not declare, the unknown key is almost always the
+cause — `lint_module({ moduleName })` is `module` misspelled, not a forgotten second parameter. The
+rejection therefore names the unknown key, lists the schema's valid parameters, and appends a
+`Did you mean '<param>'?` hint when a near match exists. Calls that omit a required parameter without
+passing anything unknown are unaffected and still report `missingParam`.
+
 ## Common Input Parameters
 
 Many MCP tools share common context and override parameters:
