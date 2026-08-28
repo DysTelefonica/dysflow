@@ -280,6 +280,8 @@ On a cache miss it retains sibling-worktree discovery and the recovery-token
 flow below.
 
 On ambiguity it creates a short-lived, process-local recovery token, so an exact human choice can be cached without editing project config.
+
+**Sibling worktrees that share a project id (#1668).** In a `worktree-per-change` fleet every sibling commits the same `id`, so the id cannot discriminate and a recovery envelope built from it would offer N identical choices. When exactly one discovered project is rooted AT the requested `cwd`, `resolve_project` resolves that project directly instead of reporting ambiguity — the same `sameProjectRoot` rule the recovery envelope already applies when it consumes a trio. A `cwd` that owns no `.dysflow/project.json` is still genuinely ambiguous and still returns the full envelope. See [worktree-fleet project resolution](../architecture/worktree-fleet-project-resolution.md).
 * **Parameters**:
   - `projectId` (string, optional): The projectId to test for an explicit match.
   - `cwd` (string, optional): Working directory to resolve from. Defaults to the current working directory.
@@ -315,6 +317,8 @@ Read `.dysflow/project.json` and, optionally with `apply:true`, rewrite it in pl
   - `cwd` (string, optional): Per-call cwd override (#1057 F10). Must be an existing directory containing `.dysflow/project.json`. Omit to use the MCP factory cwd.
   - `apply` (boolean, optional, default `false`): When `true`, atomically rewrites `.dysflow/project.json` with the proposed migration. Refuses with `MCP_WRITES_DISABLED` when writes are disabled. When omitted (or `false`), returns the proposed diff without writing — pure introspection.
 * **Returns**: `{ outcome, configPath, current, proposed, diff, remediation[], applied }`. `applied` is `true` only when an `apply:true` call produced a non-empty diff; idempotent re-runs return `applied:false` and an empty `diff`.
+* **The `diff` field is a unified-diff string, never an object (#1668)**: every `outcome:"ok"` response carries all six fields, and `diff` is `""` — not absent, not `null` — when the config needs no migration. Read `remediation[]` for the per-field rationale and `applied` for whether anything was written; do not test `diff` for truthiness to decide whether the call succeeded.
+* **The plan path has no resolver side effects (#1668)**: `apply:false` reads the config and returns the proposal. It does not warm, commit, or clear a project resolution, so a `resolve_project` outcome observed before the call is the same one observed after it.
 
 ### `schema`
 Return static tool contracts in progressive views. Read-only — never opens Access, never spawns PowerShell, never mutates state.

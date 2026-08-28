@@ -169,7 +169,13 @@ function createRealSiblingWorktrees(options: { duplicateIds?: boolean } = {}) {
       JSON.stringify({ id: projectId, frontendFile: frontend, destinationRoot: "src" }),
     );
   }
-  return { container, main, sibling, mainId, siblingId };
+  // Issue #1668 — `resolve_project` now anchors an ambiguous fleet to the
+  // worktree the cwd names, so a cwd that IS a candidate resolves directly.
+  // The observer is a sibling directory owning no project config; it is the
+  // only vantage point from which the fleet is still genuinely ambiguous.
+  const observer = join(container, "observer");
+  mkdirSync(observer);
+  return { container, main, observer, sibling, mainId, siblingId };
 }
 
 async function removeRealSiblingWorktrees(
@@ -224,7 +230,7 @@ describe("issue #1313 project recovery token", () => {
   it("discovers real sibling worktrees and resolves the human-selected candidate", async () => {
     const fixture = createRealSiblingWorktrees();
     try {
-      const resolveProject = createResolveProjectTool({ cwd: fixture.main });
+      const resolveProject = createResolveProjectTool({ cwd: fixture.observer });
       const ambiguous = payload(await resolveProject.handler({}));
       expect(ambiguous).toMatchObject({
         outcome: "ambiguous",
@@ -236,6 +242,7 @@ describe("issue #1313 project recovery token", () => {
 
       const selected = payload(
         await resolveProject.handler({
+          cwd: fixture.sibling,
           projectId: fixture.siblingId,
           projectChoiceReason: "user_selected_after_ambiguous_project",
           recoveryToken: String(ambiguous.recoveryToken),
@@ -303,15 +310,11 @@ describe("issue #1313 project recovery token", () => {
   it("uses cwd to disambiguate duplicate IDs in real sibling worktrees", async () => {
     const fixture = createRealSiblingWorktrees({ duplicateIds: true });
     try {
+      // Issue #1668 — the cwd names one worktree of the duplicate-id fleet, so
+      // the resolver commits to it without routing through a recovery envelope
+      // whose N identical choices could not discriminate anyway.
       const resolveProject = createResolveProjectTool({ cwd: fixture.main });
-      const ambiguous = payload(await resolveProject.handler({}));
-      const selected = payload(
-        await resolveProject.handler({
-          projectId: "duplicate",
-          projectChoiceReason: "user_selected_after_ambiguous_project",
-          recoveryToken: String(ambiguous.recoveryToken),
-        }),
-      );
+      const selected = payload(await resolveProject.handler({}));
       expect(selected).toMatchObject({
         outcome: "resolved",
         projectId: "duplicate",

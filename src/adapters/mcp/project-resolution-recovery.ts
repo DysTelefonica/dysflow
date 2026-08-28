@@ -187,7 +187,13 @@ export function createProjectResolutionRecovery(
   return { clear, consume, getCached, issue, ttlMs };
 }
 
-function sameProjectRoot(left: string, right: string): boolean {
+/**
+ * Canonical worktree-root identity. Two paths name the same worktree when
+ * their real paths match (case-insensitively on Windows). Exported because
+ * `resolve_project` anchors an ambiguous fleet to the requested cwd with the
+ * exact same rule the recovery envelope uses (issue #1668).
+ */
+export function sameProjectRoot(left: string, right: string): boolean {
   const canonical = (value: string): string => {
     const absolute = resolve(value);
     let result = absolute;

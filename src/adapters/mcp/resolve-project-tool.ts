@@ -36,6 +36,7 @@ import {
   createProjectResolutionRecovery,
   PROJECT_RECOVERY_SCHEMA_BLOCK,
   type ProjectResolutionRecovery,
+  sameProjectRoot,
 } from "./project-resolution-recovery.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
@@ -345,20 +346,36 @@ export function createResolveProjectTool(opts: {
       if (selectedRoot === undefined) {
         const visibleProjects = discoverWorktreeProjectConfigs(effectiveCwd, nodeConfigFileSystem);
         if (projectId === undefined && visibleProjects.length > 1) {
-          const projectConfig = ambiguousDiagnostic(effectiveCwd, visibleProjects);
-          const envelope = recovery.issue(projectConfig);
-          const ambiguous: ResolvedProjectResult = {
-            projectId: null,
-            outcome: "ambiguous",
-            reason: "ambiguous project",
-            accessPath: null,
-            projectRoot: null,
-            sourceRoot: null,
-            ...envelope,
-          };
-          return translateCoreResultToMcpContent(successResult({ ...ambiguous, projectConfig }));
+          // #1668 — a `worktree-per-change` fleet gives every sibling the same
+          // project id, so the id alone cannot discriminate and the recovery
+          // envelope degenerates into N identical choices. The cwd is already
+          // an unambiguous designation of one worktree, and the recovery
+          // envelope consumes it as the tie-breaker (`consume` filters
+          // `idMatches` by `sameProjectRoot`). Apply that same rule here, one
+          // step earlier: when exactly one visible project is rooted AT the
+          // requested cwd, that project is the answer. Ambiguity is reserved
+          // for a cwd that genuinely does not name one of the candidates.
+          const anchored = visibleProjects.filter((project) =>
+            sameProjectRoot(project.projectRoot, effectiveCwd),
+          );
+          selectedRoot = anchored.length === 1 ? anchored[0]?.projectRoot : undefined;
+          if (selectedRoot === undefined) {
+            const projectConfig = ambiguousDiagnostic(effectiveCwd, visibleProjects);
+            const envelope = recovery.issue(projectConfig);
+            const ambiguous: ResolvedProjectResult = {
+              projectId: null,
+              outcome: "ambiguous",
+              reason: "ambiguous project",
+              accessPath: null,
+              projectRoot: null,
+              sourceRoot: null,
+              ...envelope,
+            };
+            return translateCoreResultToMcpContent(successResult({ ...ambiguous, projectConfig }));
+          }
         }
-        if (projectId !== undefined) {
+        // The cwd anchor above may already have picked the worktree.
+        if (selectedRoot === undefined && projectId !== undefined) {
           const matches = visibleProjects.filter((project) => project.id === projectId);
           if (matches.length > 1) {
             const message = `Project id '${projectId}' identifies more than one visible project.`;
@@ -378,7 +395,7 @@ export function createResolveProjectTool(opts: {
             };
           }
           selectedRoot = matches[0]?.projectRoot;
-        } else if (visibleProjects.length === 1) {
+        } else if (selectedRoot === undefined && visibleProjects.length === 1) {
           selectedRoot = visibleProjects[0]?.projectRoot;
         }
       }
