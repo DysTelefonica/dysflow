@@ -3290,6 +3290,7 @@ function Save-VbaProjectModules {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)]$AccessApplication,
+        [Parameter(Mandatory = $true)]$VbProject,
         [Parameter(Mandatory = $true)][string[]]$ModuleNames
     )
 
@@ -3299,6 +3300,46 @@ function Save-VbaProjectModules {
     # 126 attempt is dropped entirely: 280 saves modules without
     # compiling, so it cannot fail because of pre-existing project
     # compile state. The human compiles in Access.
+    # Save each newly-created component by its final name first. Access can
+    # surface an interactive "Save As" dialog when acCmdSaveAllModules (280)
+    # encounters an unsaved module, even while Application.Visible is false.
+    # DoCmd.Save(acModule, name) persists that component without opening UI.
+    $createdComponentNames = New-Object System.Collections.Generic.List[string]
+    $documentModuleNames = New-Object System.Collections.Generic.List[string]
+    foreach ($moduleName in @($ModuleNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
+        try {
+            $resolvedComponentName = Resolve-ExistingComponentName -VbProject $VbProject -ModuleName $moduleName
+            if ([string]::IsNullOrWhiteSpace($resolvedComponentName)) {
+                throw "component identity could not be resolved"
+            }
+            $component = $VbProject.VBComponents.Item($resolvedComponentName)
+            if ([int]$component.Type -eq 100) {
+                $documentModuleNames.Add($resolvedComponentName) | Out-Null
+            } else {
+                $createdComponentNames.Add($resolvedComponentName) | Out-Null
+            }
+        } catch {
+            throw ("VBA_SAVE_CANDIDATE_CLASSIFICATION_FAILED: Cannot classify import save candidate '{0}'; refusing the interactive Save All Modules fallback: {1}" -f $moduleName, $_.Exception.Message)
+        }
+    }
+
+    $namedSaveFailures = New-Object System.Collections.Generic.List[string]
+    foreach ($moduleName in $createdComponentNames) {
+        try {
+            # acModule = 5
+            $AccessApplication.DoCmd.Save(5, $moduleName)
+        } catch {
+            $namedSaveFailures.Add(("{0}: {1}" -f $moduleName, $_.Exception.Message)) | Out-Null
+        }
+    }
+    if ($namedSaveFailures.Count -gt 0) {
+        throw ("VBA_CREATED_MODULE_SAVE_FAILED: Named non-interactive save failed for newly created module(s): {0}" -f ([string]::Join("; ", $namedSaveFailures)))
+    }
+    if ($documentModuleNames.Count -eq 0) { return }
+
+    # Re-imported document modules may not be addressable through acModule.
+    # Preserve the established save-all behavior for those cases, but only
+    # after the non-interactive named save has been attempted.
     try {
         # acCmdSaveAllModules = 280
         $AccessApplication.DoCmd.RunCommand(280)
@@ -3306,7 +3347,7 @@ function Save-VbaProjectModules {
     } catch { Write-Debug "Diagnostics: $_" }
 
     $failures = New-Object System.Collections.Generic.List[string]
-    foreach ($moduleName in @($ModuleNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
+    foreach ($moduleName in $documentModuleNames) {
         try {
             $AccessApplication.DoCmd.OpenModule($moduleName)
             # acModule = 5 (Access.AcObjectType)
@@ -3338,9 +3379,9 @@ function Save-VbaProjectModules {
 #                                  dispatcher that called
 #                                  Invoke-CompileVbaProject
 #
-# The remaining persistence path (import_modules, import_all, delete_module)
-# uses RunCommand(280) = acCmdSaveAllModules (save WITHOUT compile). The
-# human compiles in Access (Debug > Compile). See
+# The remaining persistence path never compiles: new modules use named
+# DoCmd.Save, while document-module and delete fallbacks retain RunCommand(280)
+# = acCmdSaveAllModules. The human compiles in Access (Debug > Compile). See
 # openspec/specs/vba-manager-actions/spec.md "Save-only persistence".
 # ========================================================================
 
@@ -5551,10 +5592,14 @@ function Invoke-ImportAction {
     $save = {
         param($moduleNames)
         try {
-            Save-VbaProjectModules -AccessApplication $Session.AccessApplication -ModuleNames @($moduleNames | Select-Object -Unique)
+            Save-VbaProjectModules -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ModuleNames @($moduleNames | Select-Object -Unique)
             return $null
         } catch {
-            return [string]$_.Exception.Message
+            $saveError = [string]$_.Exception.Message
+            if ($saveError.StartsWith('VBA_CREATED_MODULE_SAVE_FAILED:') -or $saveError.StartsWith('VBA_SAVE_CANDIDATE_CLASSIFICATION_FAILED:')) {
+                throw
+            }
+            return $saveError
         }
     }
     $writeResult = {
