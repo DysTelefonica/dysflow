@@ -308,9 +308,23 @@ export function createResolveProjectTool(opts: {
               error,
             };
           }
-          return invalidInput(selection.message, selection.remediation, {
-            rejectedFlag: "recoveryToken",
-          });
+          // #1668 — forward the field the recovery envelope named instead of
+          // always blaming `recoveryToken`.
+          return invalidInput(
+            selection.message,
+            selection.remediation,
+            selection.missingParam === undefined
+              ? {
+                  kind: "unknown-param",
+                  rejectedFlag: selection.rejectedFlag ?? "recoveryToken",
+                  toolName: "resolve_project",
+                }
+              : {
+                  kind: "missing-required",
+                  missingParam: selection.missingParam,
+                  toolName: "resolve_project",
+                },
+          );
         }
         projectId = selection.project.projectId;
         selectedRoot = selection.project.projectRoot;
