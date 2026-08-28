@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.2.2] - 2026-08-28
+
+### Changes
+
+- test(e2e): use observer cwd for recovery trio (#1673) (#1674)
+
+
 ## [v4.2.1] - 2026-08-28
 
 ### Changes
