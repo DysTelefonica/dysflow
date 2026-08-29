@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.2.3] - 2026-08-29
+
+### Changes
+
+- fix(e2e): preserve observer startup cwd (#1675)
+
+
 ## [v4.2.2] - 2026-08-28
 
 ### Changes
