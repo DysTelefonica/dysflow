@@ -142,6 +142,29 @@ describe("mcp-e2e.mjs — advertised-tool-count sequence", () => {
   });
 });
 
+describe("mcp-e2e.mjs — recovery-token observer vantage point (#1673)", () => {
+  const src = readSource(MCP_E2E_PATH);
+
+  it("starts from the config-less observer without presenting it as an explicit cwd override", () => {
+    const journey = src.match(
+      /async function recordRecoveryTokenTrioJourney\(\) \{([\s\S]*?)\n\}/,
+    )?.[1];
+
+    expect(journey, "recovery-token trio journey not found").toBeDefined();
+    expect(journey).toMatch(
+      /fixtureRoot = join\(\s*dirname\(tempRoot\),\s*`\$\{basename\(tempRoot\)\}-recovery-token-trio`,?\s*\)/,
+    );
+    expect(journey).toMatch(/spawn\(cliCommand, mcpCliArgs, \{[\s\S]*?cwd: observerRoot/);
+    expect(journey).toMatch(/env: \{[\s\S]*?\.\.\.process\.env,[\s\S]*?INIT_CWD: observerRoot/);
+    expect(journey).toContain('callTool("resolve_project", {})');
+    expect(journey).not.toContain('callTool("resolve_project", { cwd: observerRoot })');
+    expect(journey).toMatch(/const trio = \{\s*cwd: chosenRoot,/);
+    expect(journey).toMatch(
+      /finally \{[\s\S]*?await rm\(fixtureRoot, \{ recursive: true, force: true \}\)/,
+    );
+  });
+});
+
 describe("mcp-e2e.mjs — sandbox isolation", () => {
   const src = readSource(MCP_E2E_PATH);
 
