@@ -89,6 +89,7 @@
 |---|---|
 | Adding test names to `.dysflow/project.json` allowlist on each fix | Remove; test definitions live in `tests/*.json` only. HR-6 of `dysflow-arnes`. AP-6. |
 | Treating a successful plan as agreement with apply for the same input | Verify plan succeeds with `moduleName` / `procedureName` populated before `apply:true`. If plan OK but apply returns `PROCEDURE_NOT_FOUND` or `PROCEDURE_NOT_CALLABLE`, force a manual VBE recompile and retry (HR-7 of `dysflow-arnes`). |
+| Recompiling again after a `Debug → Compile` that reported no errors did not change the outcome | Stop. A recompile that changed nothing is evidence the p-code is already current. On a runtime with #1681, expect `VBA_RUNTIME_ERROR` and read `error.details.vbaMessage` — the procedure ran and raised. On an older runtime this arrives as `PROCEDURE_NOT_CALLABLE`; inspect `error.details.runnerMessage` for the real VBA error instead of recompiling a third time. |
 | Calling `run_vba` with bare `procedureName` and expecting plan/apply to agree | `procedureName` is parsed as `<module>.<procedure>` once and threaded through both paths. AP of `dysflow-usage` §6 row "Calling `run_vba` expecting plan/apply to agree". |
 | Use the canonical `apply:false -> review -> apply:true` flow, then call the `apply` path with `dryRunWithPreflight:true` if your tool supports it | The `dryRunWithPreflight` flag in `sharedBlockSupport` is a tool-level capability. Honor it where present. |
 

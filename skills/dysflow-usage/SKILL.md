@@ -432,10 +432,11 @@ Run these in your head before every call. One fail = stop and resolve.
 
 8. **`run_vba` plan/apply agreement (#1174)** — `run_vba` parses `procedureName` into `<module>.<procedure>` once and threads the parsed `moduleName` + `procName` through both the `apply:false` plan and the `apply:true` preflight. The two paths therefore MUST agree on procedure resolution for the same input. If you observe a divergence:
    - `apply: false` succeeds with `moduleName` / `procedureName` populated, but `apply: true` fails with `PROCEDURE_NOT_FOUND` for the same input → the adapter forwarded a stale `moduleName` OR the binary's compiled p-code is out of sync with the on-disk source. Force a re-compile in Access VBE (Debug → Compile) and retry. Do NOT chase a phantom import issue.
-   - `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is present in the binary's `VBComponents` but Access COM cannot invoke it (stale p-code). The typed envelope's `error.remediation` says "Recompile in Access VBE then retry"; follow it.
+   - `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is present in the binary's `VBComponents` but Access refused to invoke it (stale p-code). The typed envelope's `error.remediation` says "Recompile in Access VBE then retry"; follow it. Follow it ONCE: if a `Debug → Compile` that reported no errors does not change the outcome, stop recompiling and report it — that loop cannot terminate.
+   - `apply: true` fails with `VBA_RUNTIME_ERROR` (#1681) → the procedure was invoked, ran, and raised. Read `error.details.vbaMessage` for the VBA error it emitted. Do NOT recompile: `apply` reached the procedure, so its p-code is current. Fix the procedure or the state it depends on.
    - `apply: true` fails with `RUNNER_FAILED` whose message matches `Excepción al llamar a "Run"` → the reclassifier should have caught it. If you see the raw `RUNNER_FAILED`, file an issue against the reclassifier at `src/core/services/vba-service.ts::reclassifyRunnerFailure`.
 
-   See `assets/examples/run-vba.md` for the canonical procedureName parsing contract and the three typed error envelopes (`MCP_PROCEDURE_NOT_ALLOWED` / `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE`).
+   See `assets/examples/run-vba.md` for the canonical procedureName parsing contract and the typed error envelopes (`MCP_PROCEDURE_NOT_ALLOWED` / `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE` / `VBA_RUNTIME_ERROR`).
 
 9. **Project-config plan/apply agreement (#1324)** — for identical explicit
    project arguments, `apply:false` and `apply:true` MUST resolve the same

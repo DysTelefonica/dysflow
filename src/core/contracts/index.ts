@@ -410,6 +410,13 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   // chase a phantom import issue when the real fix is a VBE recompile.
   PROCEDURE_NOT_CALLABLE:
     "Recompile in Access VBE (Debug → Compile) so the binary's compiled p-code matches the on-disk source, then retry.",
+  // #1681 — the opposite case to PROCEDURE_NOT_CALLABLE: the procedure was
+  // invoked and ran, then raised. Recompiling cannot change the outcome, so
+  // the remediation points at the raised message instead. Before this code
+  // existed, these failures were reported as PROCEDURE_NOT_CALLABLE and the
+  // caller recompiled forever without ever seeing the real error.
+  VBA_RUNTIME_ERROR:
+    "The procedure executed and raised. Read details.vbaMessage for the error VBA emitted, then fix the procedure or the data it depends on. Recompiling does not apply.",
 };
 const DEFAULT_ERROR_REMEDIATION =
   "Review the error message and correct the reported condition before retrying.";
