@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.2.7] - 2026-08-31
+
+### Changes
+
+- perf(e2e): share one process-table snapshot across a poll burst (#1693)
+
+
 ## [v4.2.6] - 2026-08-31
 
 ### Changes
