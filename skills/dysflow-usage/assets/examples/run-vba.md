@@ -92,19 +92,21 @@ production backend writes.
 - Don't use `apply:false` as a substitute for maintaining `allowedProcedures` when execution is intended. Declare the procedure in `.dysflow/project.json` so the runtime can enforce the gate across every call.
 - Don't call `run_vba` without compiling first — `get_capabilities.humanCompilePending:true` ⇒ the runtime will refuse or surface stale code.
 - Don't use the unqualified `<procedure>` shape as a habit — the apply path's all-modules fallback is more expensive than the targeted `<module>.<procedure>` lookup and obscures which module actually owns the symbol.
-- Don't conflate `PROCEDURE_NOT_FOUND` (procedure absent from source/binary) with `PROCEDURE_NOT_CALLABLE` (procedure present in binary but Access COM cannot invoke it). The remediation differs — the former needs an import, the latter needs a VBE recompile.
+- Don't conflate `PROCEDURE_NOT_FOUND` (procedure absent from source/binary) with `PROCEDURE_NOT_CALLABLE` (procedure present in binary but Access refused to invoke it). The remediation differs — the former needs an import, the latter needs a VBE recompile.
+- Don't treat `VBA_RUNTIME_ERROR` as a compile problem. The procedure ran; recompiling cannot change what it raised. Read `error.details.vbaMessage` and fix the procedure or the data it depends on.
 
 ## Result shape (what the agent reads back)
 
 - `ok` — `true` on success.
 - `result` — return value serialized to JSON.
-- `error.code` — typed envelope on failure. The three "procedure-resolution" codes are mutually exclusive and a consumer MUST branch on the exact one returned:
+- `error.code` — typed envelope on failure. The "procedure-resolution" codes are mutually exclusive and a consumer MUST branch on the exact one returned:
   - `MCP_PROCEDURE_NOT_ALLOWED` — allowlist gate rejected the procedure. Surface `error.allowedProcedures` to the user.
   - `MCP_ALLOWLIST_NOT_CONFIGURED` — no allowlist AND the non-executing `apply:false` plan was NOT used.
   - `PROCEDURE_NOT_FOUND` — procedure not declared in the project's VBA source. Remediation: import or fix the procedure name.
-  - `PROCEDURE_NOT_CALLABLE` — procedure is in the binary's `VBComponents` but Access COM cannot invoke it (stale p-code). Remediation: recompile in Access VBE (Debug → Compile) and retry.
+  - `PROCEDURE_NOT_CALLABLE` — procedure is in the binary's `VBComponents` but Access refused to invoke it (stale p-code). Remediation: recompile in Access VBE (Debug → Compile) and retry.
+  - `VBA_RUNTIME_ERROR` — the procedure WAS invoked, ran, and raised. Remediation: read `error.details.vbaMessage` for the VBA error and fix the procedure or its state. Do NOT recompile.
   - `VBA_MANAGER_TIMEOUT`, `VBA_MANAGER_FAILED` — generic runner-side failures.
-- `error.details` — structured (for timeouts: `phase`, `wasApply`, `operationTimeoutMs`, `reapedProcessPids`, `cleanupWarnings`, `expectedLockFile`; for `PROCEDURE_NOT_CALLABLE`: `procedure`, `moduleName`, `runnerCode`, `runnerMessage`).
+- `error.details` — structured (for timeouts: `phase`, `wasApply`, `operationTimeoutMs`, `reapedProcessPids`, `cleanupWarnings`, `expectedLockFile`; for `PROCEDURE_NOT_CALLABLE`: `procedure`, `moduleName`, `runnerCode`, `runnerMessage`; for `VBA_RUNTIME_ERROR`: the same four plus `vbaMessage`).
 
 ## Live verification
 
@@ -112,8 +114,16 @@ production backend writes.
 get_capabilities  # confirm humanCompilePending before invoking
 ```
 
+A recompile that does not change the outcome is diagnostic information,
+not a reason to recompile again. If `apply:true` keeps failing after a
+`Debug → Compile` that reported no errors, the procedure is callable and
+the failure is coming from inside it: expect `VBA_RUNTIME_ERROR` and read
+`error.details.vbaMessage`. Before #1681 this case was reported as
+`PROCEDURE_NOT_CALLABLE`, which sent callers into an endless
+recompile loop; a runtime older than that release still does.
+
 ## Cross-reference
 
 - Anti-patterns: `assets/anti-patterns.md#2-critical-dont-call-compile_vba` (compile_vba is removed; no compile path on the agent side), `assets/anti-patterns.md#16-critical-dont-reuse-a-compiled-binary-that-had-import_modules-since-the-last-compile` (compile gate)
-- Error codes: `references/error-codes.md#MCP_PROCEDURE_NOT_ALLOWED`, `references/error-codes.md#MCP_ALLOWLIST_NOT_CONFIGURED`, `references/error-codes.md#PROCEDURE_NOT_FOUND`, `references/error-codes.md#PROCEDURE_NOT_CALLABLE`, `references/error-codes.md#VBA_MANAGER_TIMEOUT`, `references/error-codes.md#VBA_MANAGER_FAILED`
+- Error codes: `references/error-codes.md#MCP_PROCEDURE_NOT_ALLOWED`, `references/error-codes.md#MCP_ALLOWLIST_NOT_CONFIGURED`, `references/error-codes.md#PROCEDURE_NOT_FOUND`, `references/error-codes.md#PROCEDURE_NOT_CALLABLE`, `references/error-codes.md#VBA_RUNTIME_ERROR`, `references/error-codes.md#VBA_MANAGER_TIMEOUT`, `references/error-codes.md#VBA_MANAGER_FAILED`
 - Skill § Self-check: `SKILL.md#self-check-before-any-dysflow-call` (item 8 — plan/apply agreement)

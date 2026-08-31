@@ -344,22 +344,30 @@ export class AccessVbaService {
 }
 
 /**
- * #1174 — reclassify a generic `RUNNER_FAILED` into the typed
- * `PROCEDURE_NOT_CALLABLE` envelope when the underlying Access COM error
- * pattern indicates the procedure is present in the binary but cannot be
- * invoked (typical cause: stale p-code after source edits without a VBE
- * recompile).
+ * #1174 / #1681 — reclassify a generic `RUNNER_FAILED` into the typed
+ * envelope that names what actually went wrong on the Access side.
  *
- * Patterns detected:
- *   - Spanish-localized: `Excepci[oó]n al llamar a "Run"` (Access VBA manager
- *     emits this when `$AccessApplication.Run($ProcedureName)` throws — the
- *     procedure exists in the project's VBComponents but the compiled
- *     token is missing or stale).
- *   - English fallback: `Cannot run the macro` / `The expression you
- *     entered refers to an object that is closed or doesn't exist` (rare,
- *     but the same root cause when the VBE is in a non-compiled state).
+ * Two outcomes are possible once the runner has handed Access the
+ * procedure, and they need opposite remediations:
  *
- * Returns the original `OperationResult` unchanged when no pattern matches
+ *   - `PROCEDURE_NOT_CALLABLE` — Access refused to invoke the procedure at
+ *     all (stale p-code after source edits without a VBE recompile, or a
+ *     name Access cannot resolve). Remediation: recompile and retry.
+ *   - `VBA_RUNTIME_ERROR` (#1681) — the procedure was invoked, it ran, and
+ *     it raised. Remediation: fix the procedure or the state it depends on.
+ *     Recompiling is useless here, and telling the caller to recompile sends
+ *     them into a loop that cannot terminate.
+ *
+ * The discriminator is the INNER Access message, never the PowerShell
+ * wrapper around it. #1174 matched the wrapper —
+ * `Excepci[oó]n al llamar a "Run"` — which the VBA dispatch in
+ * `scripts/dysflow-access-runner.ps1` produces for EVERY exception the
+ * invoked procedure can throw, because it calls `$access.Run.Invoke(...)`
+ * without a `try`/`catch` and lets the script's global catch stringify the
+ * method-invocation exception. Matching it made every `Err.Raise` inside a
+ * consumer's procedure look like stale p-code (#1681).
+ *
+ * Returns the original `OperationResult` unchanged when no pattern matches,
  * so genuine runner failures (`RUNNER_FAILED`, `VBA_MANAGER_TIMEOUT`,
  * `VBA_MANAGER_FAILED`, etc.) propagate verbatim.
  */
@@ -369,31 +377,82 @@ function reclassifyRunnerFailure<T>(
 ): OperationResult<T> {
   if (result.ok) return result;
   const message = result.error.message;
-  if (!isCallableFailureMessage(message)) return result;
+  const sharedDetails = {
+    procedure: request.procedureName,
+    moduleName: request.moduleName,
+    runnerCode: result.error.code,
+    runnerMessage: message,
+  };
+
+  if (isNotCallableMessage(message)) {
+    return failureResult(
+      createDysflowError(
+        "PROCEDURE_NOT_CALLABLE",
+        `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
+          "The binary's compiled p-code is likely stale — recompile in Access VBE (Debug → Compile) and retry.",
+        { retryable: true, details: sharedDetails },
+      ),
+    ) as OperationResult<T>;
+  }
+
+  // The procedure was reached and raised. Hand the caller the VBA error the
+  // procedure itself emitted — that text is the only actionable thing here.
+  const vbaMessage = extractInvocationInnerMessage(message);
+  if (vbaMessage === undefined) return result;
+
   return failureResult(
     createDysflowError(
-      "PROCEDURE_NOT_CALLABLE",
-      `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
-        "The binary's compiled p-code is likely stale — recompile in Access VBE (Debug → Compile) and retry.",
+      "VBA_RUNTIME_ERROR",
+      `Procedure '${request.procedureName}' was invoked and raised an error in VBA: ${vbaMessage}`,
       {
-        retryable: true,
-        details: {
-          procedure: request.procedureName,
-          moduleName: request.moduleName,
-          runnerCode: result.error.code,
-          runnerMessage: message,
-        },
+        retryable: false,
+        details: { ...sharedDetails, vbaMessage },
       },
     ),
   ) as OperationResult<T>;
 }
 
-const CALLABLE_FAILURE_PATTERNS: readonly RegExp[] = [
-  /Excepci[oó]n al llamar a\s+["']Run["']/i,
+/**
+ * Access's own "I cannot invoke this" messages, in both localizations the
+ * runner has been observed to emit. These are inner messages: they appear
+ * inside the PowerShell invocation wrapper, or on their own when the VBA
+ * manager surfaces the COM error directly.
+ */
+const NOT_CALLABLE_PATTERNS: readonly RegExp[] = [
   /Cannot run (?:the )?macro/i,
+  /No se puede ejecutar la macro/i,
   /object that is closed or doesn't exist/i,
+  /se refiere a un objeto que est[áa] cerrado o que no existe/i,
+  /can'?t find the procedure/i,
+  /no encuentra el procedimiento/i,
 ];
 
-function isCallableFailureMessage(message: string): boolean {
-  return CALLABLE_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
+function isNotCallableMessage(message: string): boolean {
+  return NOT_CALLABLE_PATTERNS.some((pattern) => pattern.test(message));
 }
+
+/**
+ * PowerShell wraps a throwing COM call as
+ * `Excepci[oó]n al llamar a "Run" con "N" argumento(s): "<inner>"` (or the
+ * English `Exception calling "Run" with "N" argument(s): "<inner>"`). Pull
+ * out `<inner>` — the message VBA actually raised.
+ *
+ * Returns the untouched runner message when the wrapper is present but
+ * carries no quoted inner text (truncated stderr), and `undefined` when the
+ * failure is not an Access invocation at all, which leaves the caller's
+ * original envelope alone.
+ */
+function extractInvocationInnerMessage(message: string): string | undefined {
+  const wrapper = RUN_INVOCATION_WRAPPER.exec(message);
+  if (wrapper === null) return undefined;
+
+  const tail = message.slice(wrapper.index + wrapper[0].length);
+  const open = tail.indexOf(': "');
+  const close = tail.lastIndexOf('"');
+  if (open === -1 || close <= open + 2) return message;
+
+  const inner = tail.slice(open + 3, close).trim();
+  return inner.length > 0 ? inner : message;
+}
+
+const RUN_INVOCATION_WRAPPER = /(?:Excepci[oó]n al llamar a|Exception calling)\s+["']Run["']/i;
