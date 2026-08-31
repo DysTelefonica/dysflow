@@ -212,14 +212,26 @@ export function stripModuleHeader(text: string): string {
  * Strips known form/report serialization noise sections from form.txt and report.txt files.
  *
  * Strips:
- * - Scalar assignments: `Checksum = <value>` (single-line)
- * - Begin..End blocks for: PrtDevMode, PrtDevModeW, PrtDevNames, PrtDevNamesW, PrtMip, RecSrcDt
+ * - Every key in `FORM_NOISE_KEYS` — owned by `form-noise-keys.ts`, which is the
+ *   single source of truth and carries the rationale for each entry. Do NOT
+ *   restate the list here: the partial hand-maintained copy this docstring used
+ *   to carry is what produced issue #1686.
+ * - Each such key in BOTH shapes: the scalar assignment (`Checksum =<value>`)
+ *   and the `Key = Begin .. End` block.
  *
  * Retains:
- * - NameMap (functional — LOCKED decision)
  * - GUID (functional)
  * - Everything else
  * - Any unknown Begin..End key (bias-to-functional)
+ *
+ * `NameMap` is STRIPPED, not retained. Access omits and recreates that binary
+ * name table between exports without changing behavior, so a NameMap-only delta
+ * is `formSerializationOnly`; real control/name changes still survive through
+ * the property/control lines themselves (commit eb056c5b). Consumers reading
+ * this function sometimes conclude dysflow deletes NameMap from the `.form.txt`
+ * on disk — it does not. The export writes `Access.SaveAsText` output verbatim;
+ * this normalizer only ever runs inside `classifyVbaPair` (see
+ * `applyStructuralStrips`) and never touches a file. See issue #1685.
  *
  * This normalizer is a no-op for bas, cls, frm files.
  */
