@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.2.6] - 2026-08-31
+
+### Changes
+
+- fix(e2e): read the process table without wmic for descendant zombie detection (#1691)
+
+
 ## [v4.2.5] - 2026-08-31
 
 ### Changes
