@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.2.5] - 2026-08-31
+
+### Changes
+
+- docs(core): correct the stripFormSerializationNoise noise-floor docstring (#1689)
+- docs(skills): align update workflow ownership (#1688)
+
+
 ## [v4.2.4] - 2026-08-31
 
 ### Changes
