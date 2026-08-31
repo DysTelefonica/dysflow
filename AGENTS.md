@@ -704,6 +704,28 @@ Available custom agent skills in `codegraph-vba`:
 
 ## Repo-local skills
 
-Skills defined in this repo (`skills/`) are scoped to the Dysflow codebase. They are NOT part of the global personal skill catalog and should not be copied to `~/.opencode/skills/`, `~/.config/opencode/skills/`, or `~/.agents/skills/`.
+Skills definidas en este repo (`skills/`) son scope-local de Dysflow. No forman parte del catálogo personal global; no las copie a `~/.opencode/skills/`, `~/.config/opencode/skills/` ni `~/.agents/skills/`.
 
-- **`autonomous-issue-release-loop`** (`skills/autonomous-issue-release-loop/SKILL.md`): load when the user asks to exhaust a Dysflow issue queue and finish with a release. Handles the full issue → worktree → CI → merge → close → cleanup loop with parallel batching as the default. Stays here because the queue exhaustion pattern + Dysflow E2E gate are specifically tuned for this repo.
+### Inventario
+
+| Skill | Ruta | Carga cuando |
+|---|---|---|
+| `autonomous-issue-release-loop` | `skills/autonomous-issue-release-loop/SKILL.md` | El usuario pide agotar la cola de issues de Dysflow o cerrar un release |
+
+`autonomous-issue-release-loop` ejecuta el ciclo completo `issue → worktree → CI → merge → close → cleanup` con paralelización por defecto y el `pnpm test:e2e:mcp:release` propio de Dysflow como gate previo al release. Permanece aquí porque el patrón de agotamiento de cola y el gate de E2E están ajustados específicamente para este repo.
+
+## Flujo de trabajo (sobrescribe el ciclo estándar)
+
+Este repo **no** usa el ciclo estándar `issue → worktree → CI → PR → merge`. Aplique este flujo en su lugar.
+
+### Procedimiento
+
+1. **Todo cambio se commitea directo contra `main`.** No abra feature branches para ediciones rutinarias. No use el ciclo de PR salvo que el usuario lo pida explícitamente.
+2. **Empuje a `origin/main` inmediatamente después del commit.** Local y remoto deben converger lo antes posible. Este repo es consumido aguas abajo; un commit solo en local es una regresión esperando a ocurrir.
+3. **Sin preflight de CodeGraph aquí.** Los artefactos binarios que el indexador maneja no son la superficie de edición de este repo.
+4. **Sin flujo de `gh issue`.** Los defectos en vivo se trian como commits de un solo tiro contra `main` cuando el usuario lo pide; no se crean issues previas.
+5. **Aplica desde local Windows y desde el VPS de Oracle Linux.** La verificación del path del clon en el VPS queda pendiente de una pasada concreta.
+
+### Por qué
+
+Dysflow es un consumible acoplado hacia abajo: los ficheros fuente aquí alimentan pipelines de tooling, servidores MCP y artefactos de release en `~/.dysflow/`. El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin mejorar la corrección aquí, y retrasa que el consumidor observe el cambio. El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
