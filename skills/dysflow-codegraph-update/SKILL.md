@@ -5,13 +5,13 @@ description: >
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "3.0.0"
+  version: "3.1.0"
   status: active
-  last_verified: "2026-08-26"
+  last_verified: "2026-08-31"
   last_dysflow_version: "4.2.4"
   last_codegraph_vba_version: "1.15.0"
   requires: "dysflow MCP >= 3.0, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
-  managed_by: "`dysflow install` (one-shot), `dysflow update` (release-driven refresh), `dysflow doctor` (runtime contract audit). This user-owned skill fires only when those commands cannot resolve the drift on their own."
+  managed_by: "The Dysflow release bundle owns this skill; `dysflow install` and `dysflow update` propagate it, while `dysflow doctor` audits installed runtime copies. The skill also audits user-owned consumer skills at their separate canonical source."
   trigger_patterns:
     - "dysflow release ships and the canonical mirror needs review"
     - "codegraph-vba release ships"
@@ -20,7 +20,7 @@ metadata:
     - "skill's requires: floor is older than live adapterVersion"
     - "`dysflow install` / `dysflow update` did not refresh the inlined pointer block on an agent's AGENTS.md / CLAUDE.md"
   scope:
-    in_scope: "release-owned skills under this bundle + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (when the install pipeline can't reach an agent) + dysflow-examples-sync invocation (when the example gap detector flags a drift) + AGENTS.md core / rules/*.md dysflow/codegraph sections + Access/VBA skills index table"
+    in_scope: "release-owned skills under this bundle + dysflow-arnes regeneration + dysflow-pointer-rollout invocation (when the install pipeline can't reach an agent) + dysflow-examples-sync invocation (when the example gap detector flags a drift) + user-owned Dysflow/codegraph consumer skills under the resolved personal-skills canonical source + AGENTS.md core / rules/*.md dysflow/codegraph sections + Access/VBA skills index table"
     out_of_scope: "internal VBA module changes (sdd-apply), single-skill doc fixes unrelated to runtime (skill-improver), gentle-ai-owned skills (sdd-*, issue-creation, branch-pr, chained-pr, comment-writer, cognitive-doc-design, work-unit-commits, go-testing, hermes-ephemeral-delegation, judgment-day, skill-creator, skill-improver, skill-registry, _shared), routine install/update work owned by `dysflow install` / `dysflow update` / `dysflow doctor`"
   changelog: "CHANGELOG.md (in this skill directory)"
   pointer_marker: "<!-- user-supplement:dysflow:pointer --><!-- /user-supplement:dysflow:pointer --> is the canonical injection seam for the AGENTS.md / CLAUDE.md block rewritten by `dysflow install` / `dysflow update`."
@@ -46,7 +46,7 @@ behaves RIGHT NOW.
    short (optimal for retention) and every line useful now; grow `rules/*.md`, not the core. The
    Access/VBA skills index table and the dysflow/codegraph sections are the friction-reducers —
    keep them current, runtime-accurate, and history-free. Same standard applies to every
-   **user-owned** `SKILL.md`: a lean contract, detail in its bundled `assets/` / `references/` directories (never to
+   **user-owned** `SKILL.md`: a lean contract, detail in its canonical `assets/` / `references/` directories (never to
    gentle-ai-owned skills — see Hard Rule 13).
 
 ## Activation
@@ -61,11 +61,14 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
 
 ## Hard Rules
 
-1. **Canonical source = the `skills/` bytes in a DysTelefonica/dysflow release.** Edit the
-   repository bundle, validate it, and publish it with the release. Installed SkillsDir copies
-   are downstream mirrors and never upstream input. The former external team-skills checkout is a deprecated mirror
-   tracked by issue #9; do not read its dirty working tree as authority or write it during release
-   preparation. The installer owns propagation to supported agent SkillsDir targets.
+1. **Resolve ownership before editing.** The Dysflow release bundle is canonical for exactly six Dysflow-owned runtime skills:
+   `access-form-ui-builder`, `dysflow-arnes`, `dysflow-usage`,
+   `dysflow-codegraph-update`, `dysflow-examples-sync`, and `dysflow-pointer-rollout`. Personal
+   consumer skills are a separate lane whose canonical source is
+   `$PERSONAL_SKILLS_DIR/skills` when that variable is set, otherwise
+   `~/personal-skills/skills`. Never copy the six release-owned skills into the personal catalog.
+   Installed mirrors are read-only evidence and never upstream input; only each owner's installer
+   or reconciler may propagate canonical bytes to them.
 2. **Trust the candidate runtime, not memory.** The authoritative chain is
    `bootstrap({})`, explicit compact/full capabilities,
    `schema({view:"index"})`, compact/full schema, and `describe_tool` for every
@@ -81,21 +84,25 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
 7. **`apply:false` is the valid non-executing plan** for `run_vba` / `test_vba` when `allowedProcedures`
    is empty — a documented opt-out, not a bug workaround.
 8. **AGENTS.md core + `rules/*.md` dysflow/codegraph sections are in scope.** Keep the core lean;
-   detail grows in `rules/*.md`, not the core. These live outside the workflow repo — document
-   their edits in the commit body.
+   detail grows in `rules/*.md`, not the core. Resolve the owning repository before editing and
+   document cross-repository edits in the corresponding commit body.
 9. **One authoritative place per runtime rule:** `dysflow-usage` skill for names/flags/errors,
    `rules/dysflow-codegraph.md` for operation, the AGENTS.md core as the short pointer — never
    duplicated with drift.
 10. **When runtime drift forces a `dysflow-usage` change**, run its
     `../dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1` and confirm it exits 0 before finishing.
-11. **After editing skills, verify the destination sees the change** (`Get-FileHash` on both
-    copies); if opencode still shows the old text, restart the MCP client.
+11. **After editing skills, use ownership-aware verification.** Verify release-owned destinations
+    after `dysflow install` / `dysflow update`; verify personal consumers through the
+    personal-skills repository's reconciler and hook. Compare recursive paths and hashes, never
+    hand-edit an installed destination. If a client still shows old text after owner-controlled
+    propagation, restart that client.
 12. **Deprecate, don't rewrite live surface** — for a skill whose surface moved to dysflow,
     follow `references/deprecated-skills.md` (banner + migration table; git keeps the old body).
-13. **Never edit, compact, or restructure a skill you do not own.** Establish ownership from the
-    release bundle provenance, then apply the explicit gentle-ai denylist below and verify against
-    the gentle-ai registry. `metadata.author` is supporting evidence only; its absence never
-    transfers ownership. The authoritative gentle-ai set (NEVER touch) is: the **SDD
+13. **Never edit, compact, or restructure a skill you do not own.** Establish Dysflow ownership
+    from release-bundle provenance and personal ownership from the resolved personal-skills
+    source, then apply the explicit gentle-ai denylist below and verify against the gentle-ai
+    registry. `metadata.author` is supporting evidence only; its absence never transfers
+    ownership. The authoritative gentle-ai set (NEVER touch) is: the **SDD
     family (`sdd-*`)**, `issue-creation`, `branch-pr`, `chained-pr`, `comment-writer`,
     `cognitive-doc-design`, `work-unit-commits`, `go-testing`, `hermes-ephemeral-delegation`,
     `judgment-day`, `skill-creator`, `skill-improver`, `skill-registry`, `_shared` — verify
@@ -146,11 +153,10 @@ must be present in the release archive and recursive installer:
 ## Procedure
 
 Full pre-flight, execution steps, and agent limitations: **`references/procedure.md`**. In short:
-run Step 0 pre-flight (write access + read-only version checks + candidate `bootstrap`/introspection captures + `codegraph upgrade --check` + source↔dest
-hashes; stop and report on any failure) → read the release notes → enumerate the skills and the
-AGENTS.md dysflow/codegraph sections + `rules/*.md` + the Access/VBA skills index table → diff
-text vs runtime and fix or delete → update `dysflow-usage` and run its verify script → lint each
-touched skill → verify hashes → smoke-test → save the runtime snapshot → commit in dysflow.
+resolve the release-bundle and personal-consumer ownership lanes → capture candidate
+`bootstrap`/introspection evidence → update only canonical sources → run each owner's validation
+and propagation workflow → compare installed mirrors as evidence → smoke-test → save the runtime
+snapshot. Stop rather than guessing when an owning source cannot be resolved.
 
 Deprecating a skill: **`references/deprecated-skills.md`**.
 
@@ -158,13 +164,15 @@ Deprecating a skill: **`references/deprecated-skills.md`**.
 
 Return, in order: (1) live runtime state — literal `adapterVersion`, `dryRunDefault`,
 `writesProcess.enabled`, `writesProject.allowWrites`, `toolInventory` counts, codegraph-vba
-version; (2) files modified (release-bundled `skills/`, plus the repository AGENTS.md marker block
-/ `rules/*.md`), each with SHA256 before/after and line delta; (3) diff summary per changed
-line (deleted-bitácora / rewrote / renamed); (4) hash verification for each touched skill;
-(5) AGENTS.md sections / `rules/*.md` touched, with the AGENTS.md core line count (must stay
-lean); (6) semantic audit result — `Invoke-DysflowSemanticAudit.ps1` must report 0 DRIFT
-findings; report RUNTIME GAP findings distinctly without failing the run; (7) open decisions
-needing the user; (8) smoke-test result; (9) runtime snapshot saved to engram.
+version; (2) ownership lanes resolved, including canonical roots and unavailable lanes; (3) files
+modified in the Dysflow bundle and personal consumer source, each with SHA256 before/after and
+line delta; (4) diff summary per changed line (deleted-bitácora / rewrote / renamed); (5)
+owner-controlled propagation and recursive hash
+verification for each touched skill; (6) AGENTS.md sections / `rules/*.md` touched, with the
+AGENTS.md core line count (must stay lean); (7) semantic audit result —
+`Invoke-DysflowSemanticAudit.ps1` must report 0 DRIFT findings; report RUNTIME GAP findings
+distinctly without failing the run; (8) open decisions needing the user; (9) smoke-test result;
+(10) runtime snapshot saved to engram.
 
 ## References
 
@@ -173,8 +181,10 @@ needing the user; (8) smoke-test result; (9) runtime snapshot saved to engram.
 - `../dysflow-pointer-rollout/SKILL.md` — pointer rollout contract.
 - `../dysflow-examples-sync/SKILL.md` — example synchronization contract.
 - Repository `AGENTS.md` — the byte-equal arnés embed and project rules.
-- Installed user mirrors — read-only recursive hash comparison after the bundled
-  source is complete; never mutate them during development.
+- The resolved personal-skills repository — canonical source for user-owned consumer skills; its
+  own hook and reconciler own propagation.
+- Installed user mirrors — read-only recursive hash evidence after owner-controlled propagation;
+  never edit them directly.
 - `dysflow-usage` skill — canonical tool names/flags/defaults/error codes (runtime-verified).
 - `skill-improver` skill — audit a skill's compaction after multiple updates.
 - Engram topics: `orchestrator/discipline/dysflow-runtime-snapshot`,
