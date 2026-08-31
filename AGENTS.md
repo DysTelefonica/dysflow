@@ -701,3 +701,9 @@ Available custom agent skills in `codegraph-vba`:
 - **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
 - **`vba-handler-backtrace`**: Traces form control event handlers, dynamic calls, circular references, UDT parameters, and reconstructs multiline SQL statements.
 - **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.
+
+## Repo-local skills
+
+Skills defined in this repo (`skills/`) are scoped to the Dysflow codebase. They are NOT part of the global personal skill catalog and should not be copied to `~/.opencode/skills/`, `~/.config/opencode/skills/`, or `~/.agents/skills/`.
+
+- **`autonomous-issue-release-loop`** (`skills/autonomous-issue-release-loop/SKILL.md`): load when the user asks to exhaust a Dysflow issue queue and finish with a release. Handles the full issue → worktree → CI → merge → close → cleanup loop with parallel batching as the default. Stays here because the queue exhaustion pattern + Dysflow E2E gate are specifically tuned for this repo.
