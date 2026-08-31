@@ -29,9 +29,13 @@ jobs:
         # from the self-hosted runner, never fetched from production storage.
         shell: pwsh
         env:
-          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE || 'C:\00repos\codigo\dysflow\E2E_testing' }}
+          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE }}
         run: |
           $source = $env:FIXTURES_SOURCE
+          if ([string]::IsNullOrWhiteSpace($source)) {
+            Write-Error "::error::DYSFLOW_FIXTURES_SOURCE is required and must point to the runner-owned test fixture directory."
+            exit 1
+          }
           $db1 = Join-Path $source 'NoConformidades.accdb'
           $db2 = Join-Path $source 'NoConformidades_Datos.accdb'
           if (-not (Test-Path -LiteralPath $db1)) {

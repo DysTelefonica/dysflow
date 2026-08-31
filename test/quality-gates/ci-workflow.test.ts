@@ -438,6 +438,25 @@ describe("repository quality gates", () => {
     );
   });
 
+  it("requires an explicit external fixture source for every self-hosted Access gate (#1676)", async () => {
+    const workflowPaths = [
+      ".github/workflows/release.yml",
+      ".github/workflows/nightly-access-e2e.yml",
+    ];
+
+    for (const workflowPath of workflowPaths) {
+      const workflow = await readText(workflowPath);
+      const fixtureSource = workflow.match(/^\s*FIXTURES_SOURCE:\s*(.+)$/m)?.[1]?.trim();
+
+      expect(fixtureSource, `${workflowPath} must configure DYSFLOW_FIXTURES_SOURCE`).toBe(
+        `\${{ vars.DYSFLOW_FIXTURES_SOURCE }}`,
+      );
+      expect(fixtureSource).not.toContain("||");
+      expect(workflow).not.toContain("C:\\00repos\\codigo\\dysflow");
+      expect(workflow).toMatch(/Write-Error[^\n]*DYSFLOW_FIXTURES_SOURCE/);
+    }
+  });
+
   it("runs exactly the audited Access-independent integration files on hosted Windows (#1503)", async () => {
     const workflow = await readText(".github/workflows/ci.yml");
     const hosted = workflowJobBlock(workflow, "windows-integration-smoke");

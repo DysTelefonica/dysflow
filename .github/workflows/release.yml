@@ -186,19 +186,18 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Pre-stage E2E fixtures
-        # The Access fixtures (NoConformidades.accdb, NoConformidades_Datos.accdb)
-        # are .gitignored at .gitignore line 26, so a clean checkout never
-        # includes them. They live on the self-hosted runner machine
-        # (typically the same dev box the maintainer built them on) and
-        # must be copied into the workspace before the harness runs. Set
-        # the `DYSFLOW_FIXTURES_SOURCE` variable on the runner (or via
-        # `vars.DYSFLOW_FIXTURES_SOURCE` in the GitHub UI) to override
-        # the default `C:\00repos\codigo\dysflow\E2E_testing` lookup.
+        # The gitignored Access fixtures must be copied from the runner-owned
+        # directory configured through DYSFLOW_FIXTURES_SOURCE before the
+        # harness runs. A checkout or worktree is never fixture storage.
         shell: pwsh
         env:
-          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE || 'C:\00repos\codigo\dysflow\E2E_testing' }}
+          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE }}
         run: |
           $source = $env:FIXTURES_SOURCE
+          if ([string]::IsNullOrWhiteSpace($source)) {
+            Write-Error "::error::DYSFLOW_FIXTURES_SOURCE is required and must point to the runner-owned test fixture directory."
+            exit 1
+          }
           $db1 = Join-Path $source 'NoConformidades.accdb'
           $db2 = Join-Path $source 'NoConformidades_Datos.accdb'
           if (-not (Test-Path -LiteralPath $db1)) {

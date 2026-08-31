@@ -64,6 +64,15 @@ Both workflows use the self-hosted Access runner, pre-staged fixture copies,
 `ACCESS_VBA_PASSWORD`, and a repository-local `test-runtime`. Neither workflow
 may fall back to the production runtime.
 
+The runner owns the test-only fixture directory outside every Git checkout and
+worktree.
+
+Configure `DYSFLOW_FIXTURES_SOURCE` with that location. The current runner uses
+`C:\actions-runner\_fixtures\dysflow`.
+
+Both Access workflows reject an unset source or missing fixture before product
+tests start.
+
 The issue #1503 audit classified the 30 previously unselected files as follows:
 
 | Classification | Count | Evidence boundary |
