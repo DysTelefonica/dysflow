@@ -210,6 +210,28 @@ const DESCENDANT_PROBE_COMMAND =
   "powershell -NoProfile -NonInteractive -Command " +
   '"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation"';
 
+/**
+ * How long one process-table snapshot may serve consecutive walks.
+ *
+ * #1692: `isPidOrDescendantAlive` reaches the walker on the HEALTHY branch —
+ * the tool's child exited, so `process.kill` throws — and `waitForNoOwnPids`
+ * polls that check every 100ms, twice per tool, across the whole advertised
+ * surface. At ~0.55s per PowerShell/CIM probe that added ~17 minutes and blew
+ * the E2E job's 30-minute cap. The volume was always there; the broken `wmic`
+ * probe merely answered in milliseconds because "command not found" is cheap.
+ *
+ * 750ms covers a full 100ms poll burst with one probe. Staleness is bounded and
+ * safe in the direction that matters: the snapshot supplies CANDIDATE pids and
+ * `isPidOrDescendantAlive` still confirms each one with a live
+ * `process.kill(d, 0)`, so a stale row can never manufacture a zombie. The only
+ * exposure is a descendant spawned inside the window — a far smaller gap than
+ * the pre-#1690 state, where no descendant was ever detected at all.
+ */
+const PROCESS_TABLE_SNAPSHOT_TTL_MS = 750;
+
+/** @type {{ table: string, takenAt: number } | null} */
+let processTableSnapshot = null;
+
 /** @type {string | null} First reason the probe was unavailable this run. */
 let descendantWalkUnavailableReason = null;
 
@@ -227,9 +249,14 @@ export function getDescendantWalkDiagnostics() {
   };
 }
 
-/** Clears the recorded unavailability. Exposed for tests and per-run resets. */
+/**
+ * Clears the recorded unavailability AND the cached snapshot. Exposed for tests
+ * and per-run resets: a reset must not leave a stale table behind, or the next
+ * assertion would answer from the previous scenario's process world.
+ */
 export function resetDescendantWalkDiagnostics() {
   descendantWalkUnavailableReason = null;
+  processTableSnapshot = null;
 }
 
 /** Default probe: returns the raw CSV process table, or throws. */
@@ -260,8 +287,16 @@ function parseCsvRow(line) {
 export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
   if (!rootPid || rootPid <= 0) return [];
   let stdout;
+  const now = Date.now();
+  if (
+    processTableSnapshot !== null &&
+    now - processTableSnapshot.takenAt < PROCESS_TABLE_SNAPSHOT_TTL_MS
+  ) {
+    return descendantsFromTable(processTableSnapshot.table, rootPid);
+  }
   try {
     stdout = probeFn();
+    processTableSnapshot = { table: String(stdout), takenAt: now };
   } catch (error) {
     // Record the FIRST reason only: the suite reports the degradation once per
     // run, and a later identical failure must not churn the message.
@@ -271,12 +306,25 @@ export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
     }
     return [];
   }
+  return descendantsFromTable(stdout, rootPid);
+}
+
+/**
+ * BFS the descendants of `rootPid` out of one raw process-table snapshot.
+ * Pure: the same table always yields the same answer, which is what makes the
+ * snapshot shareable across a poll burst.
+ *
+ * @param {string} table - raw `ConvertTo-Csv` output.
+ * @param {number} rootPid
+ * @returns {number[]}
+ */
+function descendantsFromTable(table, rootPid) {
   // `ConvertTo-Csv -NoTypeInformation` emits a quoted header row followed by
   // one row per process. Resolve the columns BY NAME: the previous wmic parser
   // hard-coded positional indexes and would have inverted parent and child if
   // the projection ever changed.
   const childrenOf = new Map();
-  const lines = String(stdout).trim().split(/\r?\n/).filter(Boolean);
+  const lines = String(table).trim().split(/\r?\n/).filter(Boolean);
   const header = lines.length > 0 ? parseCsvRow(lines[0]) : [];
   const pidColumn = header.indexOf("ProcessId");
   const parentColumn = header.indexOf("ParentProcessId");
@@ -307,12 +355,12 @@ export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
 
 /**
  * Return true if `pid` itself OR any of its descendants is alive.
- * Fast path: `process.kill(pid, 0)` succeeds → return true (no wmic call).
+ * Fast path: `process.kill(pid, 0)` succeeds → return true (no probe at all).
  * Slow path: parent is gone → walk descendants and `process.kill` each.
  *
  * @param {number} pid
  * @param {(rootPid: number) => number[]} [walkDescendantsFn] - injection
- *   point so tests can replace the wmic-backed walk with a fake.
+ *   point so tests can replace the process-table walk with a fake.
  * @returns {boolean}
  */
 export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsPids) {
