@@ -12,20 +12,21 @@
 //   - `isPidOrDescendantAlive(outerPid)` returns TRUE when only the
 //     grandchild is alive (parent is gone) — the injected walker path
 //     MUST pick up the leaked grandchild even though the parent is ESRCH
-//   - On Windows hosts (where `wmic` is available), the production
-//     `walkDescendantsPids` walker also finds the grandchild. On non-
-//     Windows hosts the production walker is intentionally fail-open
-//     (returns [] when `wmic` is missing); that platform-aware branch
-//     is asserted by a separate test below, gated on `process.platform`
+//   - On Windows hosts the production `walkDescendantsPids` walker also
+//     finds the grandchild. On non-Windows hosts the production walker is
+//     intentionally fail-open (returns [] when the probe is unavailable);
+//     that platform-aware branch is asserted by a separate test below,
+//     gated on `process.platform`
 //   - When no descendant is alive (injected fake walker), the helper
 //     returns false without raising
 //   - `walkDescendantsPids(0)` and `walkDescendantsPids(-1)` return [] as
-//     defensive guards (no wmic call attempted)
+//     defensive guards (no process-table probe attempted)
 //   - The injected walker path (fast-path miss → walker → kill(0)) is
-//     wired correctly so the helper is reachable without spawning wmic
+//     wired correctly so the helper is reachable without probing the OS
 //
 // Cross-platform note: `walkDescendantsPids` is Windows-only because it
-// shells out to `wmic process get ProcessId,ParentProcessId`. On Linux /
+// reads the process table through PowerShell/CIM (#1690 — it used to shell
+// out to `wmic`, which Windows 11 24H2 removed). On Linux /
 // macOS hosts the walker is a no-op (fail-open `[]`) — the production
 // fail-open design is correct, but it makes the contract that "the real
 // walker finds the grandchild" host-dependent. The `isPidOrDescendantAlive`
@@ -121,7 +122,7 @@ describe("mcp-e2e record() — H5 grandchild zombie detection via descendant wal
     // still report the suite-owned tree as "alive". This is exactly the
     // regression that the WU-F walker is supposed to prevent. Inject the
     // walker so the assertion is cross-platform — the production
-    // `walkDescendantsPids` is Windows-only (uses `wmic`), and the helper
+    // `walkDescendantsPids` is Windows-only (PowerShell/CIM), and the helper
     // is platform-agnostic as long as the caller supplies the descendants.
     expect(isPidOrDescendantAlive(outerPid, () => [grandchildPid])).toBe(true);
   });
@@ -134,7 +135,7 @@ describe("mcp-e2e record() — H5 grandchild zombie detection via descendant wal
   });
 
   it("H5 — walkDescendantsPids guards against bogus inputs (0, negative)", () => {
-    // The walker must short-circuit on bogus roots and never invoke wmic.
+    // The walker must short-circuit on bogus roots and never probe the OS.
     expect(walkDescendantsPids(0)).toEqual([]);
     expect(walkDescendantsPids(-1)).toEqual([]);
   });
