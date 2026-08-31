@@ -29,6 +29,7 @@ import { resolveMcpE2eToolName } from "./_helpers/mcp-e2e-tool-aliases.mjs";
 import { runMcpHarness, runMcpSession } from "./_helpers/mcp-harness.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { validateMcpResultAgainstDescription } from "./_helpers/result-contract-validator.mjs";
+import { removeRecoveryTokenTrioFixtureWithRetry } from "./_helpers/suite-owned-cleanup.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -501,7 +502,7 @@ async function recordRecoveryTokenTrioJourney() {
   let childPid;
 
   try {
-    await rm(fixtureRoot, { recursive: true, force: true });
+    await removeRecoveryTokenTrioFixtureWithRetry(fixtureRoot);
     await mkdir(join(chosenRoot, ".dysflow"), { recursive: true });
     await mkdir(join(chosenRoot, "src"), { recursive: true });
     await writeFile(join(chosenRoot, "chosen.accdb"), "", "utf8");
@@ -624,7 +625,7 @@ async function recordRecoveryTokenTrioJourney() {
       await resumeController.clearOwnedPid(childPid);
     }
     if (!childPid || !isOwnPidAlive(childPid)) {
-      await rm(fixtureRoot, { recursive: true, force: true });
+      await removeRecoveryTokenTrioFixtureWithRetry(fixtureRoot);
     }
   }
 }

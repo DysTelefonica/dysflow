@@ -160,8 +160,12 @@ describe("mcp-e2e.mjs — recovery-token observer vantage point (#1673)", () => 
     expect(journey).not.toContain('callTool("resolve_project", { cwd: observerRoot })');
     expect(journey).toMatch(/const trio = \{\s*cwd: chosenRoot,/);
     expect(journey).toMatch(
-      /finally \{[\s\S]*?await rm\(fixtureRoot, \{ recursive: true, force: true \}\)/,
+      /finally \{[\s\S]*?await removeRecoveryTokenTrioFixtureWithRetry\(fixtureRoot\)/,
     );
+    expect(
+      journey.match(/await removeRecoveryTokenTrioFixtureWithRetry\(fixtureRoot\)/g),
+    ).toHaveLength(2);
+    expect(journey).not.toContain("await rm(fixtureRoot, { recursive: true, force: true })");
   });
 });
 
