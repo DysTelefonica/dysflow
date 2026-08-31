@@ -729,3 +729,14 @@ Este repo **no** usa el ciclo estándar `issue → worktree → CI → PR → me
 ### Por qué
 
 Dysflow es un consumible acoplado hacia abajo: los ficheros fuente aquí alimentan pipelines de tooling, servidores MCP y artefactos de release en `~/.dysflow/`. El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin mejorar la corrección aquí, y retrasa que el consumidor observe el cambio. El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
+
+## Hard rules del flujo de trabajo
+
+Estas reglas son obligatorias en cada cambio que llega al push. Su incumplimiento deja documentación desalineada en el commit y, por extensión, en `origin/main` y en cualquier máquina que replique este repo.
+
+- **Alinear documentación antes del commit, no después.** Cualquier cambio que afecte a un path, un nombre de skill, una categoría, una sección del `AGENTS.md` o un activador declarado debe arrastrar consigo los updates de documentación correspondientes en el mismo commit. Nunca publique un cambio con refs huérfanas al nombre o ruta anteriores. El procedimiento canónico vive en la skill global `~/.config/opencode/skills/skill-propagation-sync/SKILL.md`; esta regla local existe como recordatorio y como contrato verificable a la hora del push.
+- **Documentar cambios estructurales en el `CHANGELOG.md`.** Entradas en `### Changed` con el SHA, paths tocados, refs huérfanas purgadas y documentos actualizados. El CHANGELOG es append-only: nunca se borra ni se reescribe una entrada ya publicada.
+- **Verificación previa al push.** Antes de `git push origin main`, ejecutar `grep -rn "<nombre-anterior>" --include="*.md" --include="*.json" --include="*.ts" --include="*.mjs"` en el árbol del repo. Cero hits esperados para el nombre o ruta que el cambio acaba de reemplazar. Si quedan hits, el push se retrasa hasta que la búsqueda regrese vacío.
+- **Local y remoto reconciliados ASAP.** Tras un commit exitoso, ejecutar el push en la misma sesión antes de cerrar. Si la sesión termina con divergencia entre local y remoto, dejar nota explícita en el siguiente turno y reanudar desde el último estado confirmado.
+
+Las HRs anteriores (`Hard Rules` del bloque `<!-- dysflow:arnés -->`, secciones sobre paralelización, gates de release, disk hygiene y preservación de rama remota) siguen plenamente vigentes. Esta sección las complementa con disciplina documental; no las sustituye.

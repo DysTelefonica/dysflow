@@ -79,7 +79,7 @@ Return issue-to-PR mappings, RED/GREEN and CI evidence, merge and cleanup eviden
 
 ## Procedimientos meta (viven globalmente, no aquí)
 
-Cuando cambie de scope, nombre o forma esta u otra skill, consulte `skill-propagation-sync` (catálogo personal global). El procedimiento completo de sincronización de documentos vive allí y aplica a cualquier skill, no solo a las Dysflow-local. Esta skill deja de mantener esa sección; el renombrado `autonomous-issue-release-loop` → `dysflow-issue-release-loop` (v1.5 → v1.6) la sacó de aquí porque el scope se deduce del nombre y el meta-procedimiento es transversal.
+Cuando cambie de scope, nombre o forma esta u otra skill, consulte `skill-propagation-sync` (catálogo personal global). El procedimiento completo de sincronización de documentos vive allí y aplica a cualquier skill, no solo a las Dysflow-local. Esta skill deja de mantener esa sección: la v1.6 externalizó el meta-procedimiento porque el scope se deduce del nombre y la responsabilidad transversal no le corresponde. El detalle del cambio histórico queda en el `CHANGELOG.md` del repo.
 
 ---
 
