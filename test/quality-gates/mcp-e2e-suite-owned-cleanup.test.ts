@@ -6,9 +6,11 @@ function ioError(code: string): NodeJS.ErrnoException {
 }
 
 describe("recovery-token-trio suite-owned cleanup (#1683)", () => {
-  it.each(["EBUSY", "EPERM", "ENOTEMPTY"])(
-    "retries transient Windows %s from the competing worktree before succeeding",
-    async (code) => {
+  it.each([
+    "EBUSY",
+    "EPERM",
+    "ENOTEMPTY",
+  ])("retries transient Windows %s from the competing worktree before succeeding", async (code) => {
     const remove = vi
       .fn()
       .mockRejectedValueOnce(
@@ -29,14 +31,11 @@ describe("recovery-token-trio suite-owned cleanup (#1683)", () => {
 
     expect(remove).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(10);
-    },
-  );
+  });
 
   it("fails actionably after the bounded retry budget is exhausted", async () => {
     const lockedPath = "C:/temp/dysflow-e2e-recovery-token-trio/competing";
-    const remove = vi
-      .fn()
-      .mockRejectedValue(Object.assign(ioError("EBUSY"), { path: lockedPath }));
+    const remove = vi.fn().mockRejectedValue(Object.assign(ioError("EBUSY"), { path: lockedPath }));
     const sleep = vi.fn().mockResolvedValue(undefined);
 
     await expect(

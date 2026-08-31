@@ -43,9 +43,7 @@ export async function removeRecoveryTokenTrioFixtureWithRetry(fixtureRoot, optio
           ? String(error.path)
           : fixtureRoot;
       const retryable =
-        platform === "win32" &&
-        code !== undefined &&
-        WINDOWS_TRANSIENT_REMOVE_CODES.has(code);
+        platform === "win32" && code !== undefined && WINDOWS_TRANSIENT_REMOVE_CODES.has(code);
       if (!retryable || attempt === maxAttempts) {
         throw new Error(
           `recovery-token-trio cleanup failed after ${attempt} ${attempt === 1 ? "attempt" : "attempts"} ` +
