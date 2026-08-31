@@ -185,42 +185,107 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
 
 // ---------------------------------------------------------------------------
 // H5 descendant walk (WU-F). Windows-only: enumerates descendant PIDs of a
-// given root via `wmic process get ProcessId,ParentProcessId /format:csv`.
-// BFS over the parent → children map. Returns an empty array on any error
-// (timeout, missing wmic, malformed output) — fail-open so the suite's
-// preflight/post-tool checks degrade to "parent-only" detection rather
-// than crash. Exports here are public so the test suite (`vitest`) and
-// `mcp-e2e.mjs` share the same walker implementation.
+// given root from the live process table, then BFS over the parent → children
+// map. Returns an empty array on any error (timeout, missing probe, malformed
+// output) — fail-open so the suite's preflight/post-tool checks degrade to
+// "parent-only" detection rather than crash. Exports here are public so the
+// test suite (`vitest`) and `mcp-e2e.mjs` share the same walker.
+//
+// #1690: the probe used to be `wmic`, which Microsoft removed from Windows 11
+// 24H2 onward. On a 24H2+ runner every call threw, fail-open returned [], and
+// the suite reported `clean` for grandchild zombies it could no longer see —
+// while `execSync` forwarded the probe's stderr to the parent, burying real
+// failures under hundreds of "wmic is not recognized" lines. Two consequences
+// are load-bearing here: the probe is PowerShell/CIM (which exists on every
+// supported build), and an unavailable probe is RECORDED rather than swallowed,
+// so a `clean` verdict can be distinguished from a verdict nobody could take.
 // ---------------------------------------------------------------------------
 
 /**
- * Collect all descendant PIDs of `rootPid` via the Windows `wmic` tool.
- * Returns an empty array if `wmic` is unavailable or returns no parseable
- * data. The returned list does NOT include `rootPid` itself.
+ * PowerShell/CIM replacement for `wmic process get ...`. `-NonInteractive`
+ * keeps it from ever blocking on a prompt; stderr is piped rather than
+ * inherited so a failing probe cannot pollute the suite log.
+ */
+const DESCENDANT_PROBE_COMMAND =
+  "powershell -NoProfile -NonInteractive -Command " +
+  '"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation"';
+
+/** @type {string | null} First reason the probe was unavailable this run. */
+let descendantWalkUnavailableReason = null;
+
+/**
+ * Report whether the descendant walk could actually inspect the process table.
+ * A caller that sees `available: false` must not read an empty descendant list
+ * as proof that nothing leaked — nobody looked.
+ *
+ * @returns {{ available: boolean, reason: string | null }}
+ */
+export function getDescendantWalkDiagnostics() {
+  return {
+    available: descendantWalkUnavailableReason === null,
+    reason: descendantWalkUnavailableReason,
+  };
+}
+
+/** Clears the recorded unavailability. Exposed for tests and per-run resets. */
+export function resetDescendantWalkDiagnostics() {
+  descendantWalkUnavailableReason = null;
+}
+
+/** Default probe: returns the raw CSV process table, or throws. */
+function probeProcessTable() {
+  return execSync(DESCENDANT_PROBE_COMMAND, {
+    encoding: "utf8",
+    timeout: 15000,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+/** Splits one `ConvertTo-Csv` row, stripping the surrounding quotes. */
+function parseCsvRow(line) {
+  return line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""));
+}
+
+/**
+ * Collect all descendant PIDs of `rootPid` from the live process table.
+ * Returns an empty array if the probe is unavailable or returns no parseable
+ * data; the reason is recorded in `getDescendantWalkDiagnostics()`. The
+ * returned list does NOT include `rootPid` itself.
  *
  * @param {number} rootPid
+ * @param {() => string} [probeFn] - injection point so tests can supply a
+ *   fixed process table or force the unavailable path.
  * @returns {number[]}
  */
-export function walkDescendantsPids(rootPid) {
+export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
   if (!rootPid || rootPid <= 0) return [];
   let stdout;
   try {
-    stdout = execSync("wmic process get ProcessId,ParentProcessId /format:csv", {
-      encoding: "utf8",
-      timeout: 5000,
-    });
-  } catch {
+    stdout = probeFn();
+  } catch (error) {
+    // Record the FIRST reason only: the suite reports the degradation once per
+    // run, and a later identical failure must not churn the message.
+    if (descendantWalkUnavailableReason === null) {
+      descendantWalkUnavailableReason =
+        error instanceof Error ? error.message : String(error ?? "unknown probe failure");
+    }
     return [];
   }
-  // CSV format: "Node,<ParentProcessId>,<ProcessId>" - one header line first.
-  // Build a parent → [children] map, then BFS from rootPid.
+  // `ConvertTo-Csv -NoTypeInformation` emits a quoted header row followed by
+  // one row per process. Resolve the columns BY NAME: the previous wmic parser
+  // hard-coded positional indexes and would have inverted parent and child if
+  // the projection ever changed.
   const childrenOf = new Map();
-  for (const line of stdout.trim().split(/\r?\n/).filter(Boolean)) {
-    const parts = line.split(",");
-    if (parts.length < 3) continue;
-    if (parts[0] === "Node") continue;
-    const parent = Number.parseInt(parts[1], 10);
-    const pid = Number.parseInt(parts[2], 10);
+  const lines = String(stdout).trim().split(/\r?\n/).filter(Boolean);
+  const header = lines.length > 0 ? parseCsvRow(lines[0]) : [];
+  const pidColumn = header.indexOf("ProcessId");
+  const parentColumn = header.indexOf("ParentProcessId");
+  if (pidColumn === -1 || parentColumn === -1) return [];
+
+  for (const line of lines.slice(1)) {
+    const cells = parseCsvRow(line);
+    const pid = Number.parseInt(cells[pidColumn] ?? "", 10);
+    const parent = Number.parseInt(cells[parentColumn] ?? "", 10);
     if (!Number.isFinite(parent) || !Number.isFinite(pid)) continue;
     if (!childrenOf.has(parent)) childrenOf.set(parent, []);
     childrenOf.get(parent).push(pid);

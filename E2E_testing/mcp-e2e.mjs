@@ -8,6 +8,7 @@ import {
   ISSUE_713_REQUIRED_TOOLS,
 } from "./_helpers/advertised-tool-count.mjs";
 import {
+  getDescendantWalkDiagnostics,
   isPidOrDescendantAlive,
   record as recordImpl,
 } from "./_helpers/mcp-e2e-record.mjs";
@@ -3085,8 +3086,9 @@ addResult({
 }
 
 // isOwnPidAlive checks a specific child PID with `process.kill(pid, 0)`,
-// and if the parent is gone, walks its descendant tree via wmic to detect
-// grandchildren (e.g. an MSACCESS.EXE spawned by a PowerShell that the
+// and if the parent is gone, walks its descendant tree through the live
+// process table to detect grandchildren (e.g. an MSACCESS.EXE spawned by a
+// PowerShell that the
 // harness itself spawned). The OS rejects the signal (ESRCH) when the
 // process is gone. We never scan global MSACCESS.EXE — only the PIDs this
 // E2E itself spawned. The descendant walk is delegated to the helper so
@@ -3160,6 +3162,25 @@ const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCES
       `leakDelta=${globalMsAccessLeak}`,
   );
 }
+// #1690 — an empty descendant list means "nothing leaked" ONLY when the walk
+// could actually read the process table. Say so once, right where the zombie
+// verdict is recorded, so a degraded run is never mistaken for a clean one.
+const descendantWalk = getDescendantWalkDiagnostics();
+if (!descendantWalk.available) {
+  console.error(
+    `descendantWalk: UNAVAILABLE — grandchild zombie detection degraded to parent-only for this run (${descendantWalk.reason})`,
+  );
+}
+appendUnchecked({
+  area: "zombies",
+  tool: "descendant-walk-availability",
+  pass: descendantWalk.available,
+  expected: "the descendant walk can read the live process table",
+  ms: 0,
+  summary: descendantWalk.available
+    ? "Descendant walk available; grandchild zombie verdicts are proven."
+    : `Descendant walk UNAVAILABLE (${descendantWalk.reason}); grandchild zombie verdicts are unproven for this run.`,
+});
 appendUnchecked({
   area: "zombies",
   tool: "lingering-access-check",
