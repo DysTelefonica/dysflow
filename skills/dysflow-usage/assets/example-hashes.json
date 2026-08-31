@@ -1,0 +1,303 @@
+{
+  "access_force_cleanup_orphaned": {
+    "path": "assets/examples/access-force-cleanup-orphaned.md",
+    "sha256": "fd3a234f922f728c26eba7fbf12b6eae55343258df663def0ab67ff6e66d8329",
+    "needs_human_content": false
+  },
+  "analyze_form_layout": {
+    "path": "assets/examples/analyze-form-layout.md",
+    "sha256": "d9d987d91304bbbee050d07568f7aa668e5718e7decc568875bf2eb439600495",
+    "needs_human_content": false
+  },
+  "analyze_form_ui": {
+    "path": "assets/examples/analyze-form-ui.md",
+    "sha256": "4bf59ac7e4bf8b23e515185aefde413335386a98dbf8c4e83989e036f11d05a0",
+    "needs_human_content": false
+  },
+  "apply_form_design_plan": {
+    "path": "assets/examples/apply-form-design-plan.md",
+    "sha256": "7e942e82029405011a7f55f3b08905bbe5735d9f01ce08857a524522064a30c8",
+    "needs_human_content": false
+  },
+  "bootstrap": {
+    "path": "assets/examples/bootstrap.md",
+    "sha256": "ffd8c5898344c7acdf08e34bc9b82e5d1d248d67f50ba14eea5de01a311bdb3a",
+    "needs_human_content": false
+  },
+  "cleanup_access_operation": {
+    "path": "assets/examples/cleanup-access-operation.md",
+    "sha256": "a87d17a54226302bc118babcf5f2da0667a07cd99a75161a315d6b01805d81df",
+    "needs_human_content": false
+  },
+  "clear_worktree_cache": {
+    "path": "assets/examples/clear-worktree-cache.md",
+    "sha256": "8e82ad4a8971c05a606dc05b59523577ceeaf895adcb7128bb506dd8f31427a6",
+    "needs_human_content": false
+  },
+  "compact_repair": {
+    "path": "assets/examples/compact-repair.md",
+    "sha256": "a2641c835440b15381f719b7cac025de6394e3fb992c1f4da069059832e58daf",
+    "needs_human_content": false
+  },
+  "composition_patterns": {
+    "path": "assets/examples/composition-patterns.md",
+    "sha256": "310ce0a9e3f01299d8446a4660af4ace35d9d7b32d9a1ff1e82485131e7f81fc",
+    "needs_human_content": false
+  },
+  "copy_form_ui_pattern": {
+    "path": "assets/examples/copy-form-ui-pattern.md",
+    "sha256": "4aeabc48dfb1ff090694010ad214a0c2338025362ed2ac38447a4f9992d67104",
+    "needs_human_content": false
+  },
+  "create_form_from_template": {
+    "path": "assets/examples/create-form-from-template.md",
+    "sha256": "187b87663e3366c56124923d38a888b67ce7f36a09761768d924e69a98427efb",
+    "needs_human_content": false
+  },
+  "describe_tool": {
+    "path": "assets/examples/describe-tool.md",
+    "sha256": "8613d3851bd4bb08dabe77ac6a830551fd1f1896586ef1686cfa6317aba10817",
+    "needs_human_content": false
+  },
+  "detect_dead_code": {
+    "path": "assets/examples/detect-dead-code.md",
+    "sha256": "647b56afdaf2fb5beb571dca2d19a1746688d01fd672007ffdc86e86f97abb7d",
+    "needs_human_content": false
+  },
+  "diagnose": {
+    "path": "assets/examples/diagnose.md",
+    "sha256": "ddba694e709502c0a17803523641b1159f7c26a544c3c236b209f26571c8bdfa",
+    "needs_human_content": false
+  },
+  "diff_form_preview": {
+    "path": "assets/examples/diff-form-preview.md",
+    "sha256": "e1566f57bdd47e462a66c24ad7a248255b2743996f1b67b27c351218068ae862",
+    "needs_human_content": false
+  },
+  "doctor": {
+    "path": "assets/examples/doctor.md",
+    "sha256": "81492fa8ad6c471fb179e1a418dd3a698da09afee2c8faf792bb634c18ffb935",
+    "needs_human_content": false
+  },
+  "export_all": {
+    "path": "assets/examples/export-all.md",
+    "sha256": "a79d4c789bc8d1fd71628a401faa8c1216a0771fedb310be38d6f2c91c9c897c",
+    "needs_human_content": false
+  },
+  "export_modules": {
+    "path": "assets/examples/export-modules.md",
+    "sha256": "7a0ab3233c0471197a84a67ae1ed8531de9d8f0e05b7b6ca04cd8460ee5d646b",
+    "needs_human_content": false
+  },
+  "find_references": {
+    "path": "assets/examples/find-references.md",
+    "sha256": "eb41fbae778275095f777e49a9794176cae16add1a05dadf0b4a63e43312d8c2",
+    "needs_human_content": false
+  },
+  "form_align_controls": {
+    "path": "assets/examples/form-align-controls.md",
+    "sha256": "6c6fd8a1fe0819427f310ee82c52a66651452129e75bfbd1d44a2712f6b50e0a",
+    "needs_human_content": false
+  },
+  "form_distribute_controls": {
+    "path": "assets/examples/form-distribute-controls.md",
+    "sha256": "a4d3562b3ed9259d7c180d8c646336fc1a1d0ca73132d5a3660fa8ffeccd893c",
+    "needs_human_content": false
+  },
+  "form_set_properties": {
+    "path": "assets/examples/form-set-properties.md",
+    "sha256": "2363fd5243a6f79b692ca746cf1ecd37030da60b915e28957cf55b91b504957d",
+    "needs_human_content": false
+  },
+  "form_set_property": {
+    "path": "assets/examples/form-set-property.md",
+    "sha256": "f16c9e3fae64719b41c90cafd1d1111f66e0ba00133ece99c2c8fbeeaa599bc9",
+    "needs_human_content": false
+  },
+  "generate_form_design_plan": {
+    "path": "assets/examples/generate-form-design-plan.md",
+    "sha256": "f6e8b9e9c7740ad78d86274866172770889eaf5fe91d365c882c9c0ab4e20986",
+    "needs_human_content": false
+  },
+  "get_capabilities": {
+    "path": "assets/examples/get-capabilities.md",
+    "sha256": "14480aca3e11b5b942936cabc9b423a8f83855b698a2e8a7d6174cdaa4a3439c",
+    "needs_human_content": false
+  },
+  "get_procedure": {
+    "path": "assets/examples/get-procedure.md",
+    "sha256": "a340640f71ec4606ee4bc57f3242e90181ab08d4e1ade23870a7c01d2b38eddb",
+    "needs_human_content": false
+  },
+  "import_modules": {
+    "path": "assets/examples/import-modules.md",
+    "sha256": "dc95412aed6d4122c675119304874da966ec69c6ad61466ec226662dcd5c891d",
+    "needs_human_content": false
+  },
+  "link_tables": {
+    "path": "assets/examples/link-tables.md",
+    "sha256": "4f6c4f6db91e96bcc075f4f08377ee5488f34aa2b5d2c857696f815a54e09d64",
+    "needs_human_content": false
+  },
+  "lint_module": {
+    "path": "assets/examples/lint-module.md",
+    "sha256": "8562a1aab9597f65d5c6d048c20a1a029c8cb6f1ca7ddce6b2eb0fe8c567797f",
+    "needs_human_content": false
+  },
+  "list_objects": {
+    "path": "assets/examples/list-objects.md",
+    "sha256": "952200185e5118c0c2f59b965d4ac4c62e5a88e3de72662f1ad009f07d480473",
+    "needs_human_content": false
+  },
+  "list_procedures": {
+    "path": "assets/examples/list-procedures.md",
+    "sha256": "915b9241a97c9b864013a582185f775d28e17718ecedc3c3413aa332cd8ace2e",
+    "needs_human_content": false
+  },
+  "logs": {
+    "path": "assets/examples/logs.md",
+    "sha256": "24881c3d49b1458b1147aff2ed1e0c9ef3d5513415899bc97bda0a36997a3ad9",
+    "needs_human_content": false
+  },
+  "map_form_behavior": {
+    "path": "assets/examples/map-form-behavior.md",
+    "sha256": "26c7fa948b41fa1d44e8fc1436656cd044565ef77ee5740e6852f8f8f50d675a",
+    "needs_human_content": false
+  },
+  "migrate_project_config": {
+    "path": "assets/examples/migrate-project-config.md",
+    "sha256": "75302fdb3f76dc851e2a5f33e3c21e506ed1f0eafe655598b9c6cbb202d24c53",
+    "needs_human_content": false
+  },
+  "preflight_checklist": {
+    "path": "assets/examples/preflight-checklist.md",
+    "sha256": "832fd21bbebf38cee8293c49124cd06b8307978c3266ce37dc78482814f1c667",
+    "needs_human_content": false
+  },
+  "query_execute": {
+    "path": "assets/examples/query-execute.md",
+    "sha256": "d08f25faa6da71e34d155171746738b209356e23615d2e13453b1e972518a79d",
+    "needs_human_content": false
+  },
+  "register_worktree": {
+    "path": "assets/examples/register-worktree.md",
+    "sha256": "5d33140882d5c6b14c4fed55ebce97b43eeb9719e82ee2ca08ee71467ed0f9fd",
+    "needs_human_content": false
+  },
+  "render_form_preview": {
+    "path": "assets/examples/render-form-preview.md",
+    "sha256": "1cb1e2cdd83cdb3d4dcbce2dff9cf48f4718ae2cdc33ed12ba13a9e486a14dd1",
+    "needs_human_content": false
+  },
+  "resolve_project_recovery": {
+    "path": "assets/examples/resolve-project-recovery.md",
+    "sha256": "3cf9443d807da11aa0e9d8e6c44258c7930ce1fd42b2e7381fc784ef2f8badc0",
+    "needs_human_content": false
+  },
+  "resolve_project": {
+    "path": "assets/examples/resolve-project.md",
+    "sha256": "bba41c42e5853b2c6e8f5261f14719eb9c2ef39101d65776d21e30d81f3c626b",
+    "needs_human_content": false
+  },
+  "run_vba": {
+    "path": "assets/examples/run-vba.md",
+    "sha256": "edbc61b1da1b5e9ba1859eaa9969911c577cdb204f573eff4e3ca4bbb367c335",
+    "needs_human_content": false
+  },
+  "schema": {
+    "path": "assets/examples/schema.md",
+    "sha256": "ff86a16a5086b3f948cf7ff3248cd8b32c0427b912b553bd8a1600cb6d9fb8e2",
+    "needs_human_content": false
+  },
+  "setup_project": {
+    "path": "assets/examples/setup-project.md",
+    "sha256": "bd5d35757e5b224eeb23fa40c4bdd85f4b9aec31a80b4e9d71516111672a8891",
+    "needs_human_content": false
+  },
+  "state": {
+    "path": "assets/examples/state.md",
+    "sha256": "e4d61b5ad005033bb17c5cb369baf0bef6af2a05c5ef424a8b006d1848a0231f",
+    "needs_human_content": false
+  },
+  "sync_binary": {
+    "path": "assets/examples/sync-binary.md",
+    "sha256": "027f2ecfcb378fee0307123293ed06bdaab97eafb624a561b0989a67742c16f0",
+    "needs_human_content": false
+  },
+  "test_vba": {
+    "path": "assets/examples/test-vba.md",
+    "sha256": "d29578ffef4fba0e377d99865ae3f110f17662b8e2a8305734112977840809c1",
+    "needs_human_content": false
+  },
+  "validate_manifest": {
+    "path": "assets/examples/validate-manifest.md",
+    "sha256": "1e14a3a7645ea7556cf6f90d42fd1dad24c8fe07ed7fe68fe9fd14e8a3adb1da",
+    "needs_human_content": false
+  },
+  "vba_orphan_audit": {
+    "path": "assets/examples/vba-orphan-audit.md",
+    "sha256": "3b10c56f6c01c3e2a0e2dc4e039b4495a6650f99705d9c0cfb439b970b5d93df",
+    "needs_human_content": false
+  },
+  "verify_code": {
+    "path": "assets/examples/verify-code.md",
+    "sha256": "14073221dcacc63855cd05a7b2ed3c937e5db45d40f54a96255973e000e4063e",
+    "needs_human_content": false
+  },
+  "verify_form_bindings": {
+    "path": "assets/examples/verify-form-bindings.md",
+    "sha256": "14cc4c752c1ff864e65ca79353636c4433b453185bb25328fecc829a765f457b",
+    "needs_human_content": false
+  },
+  "verify_form_ui": {
+    "path": "assets/examples/verify-form-ui.md",
+    "sha256": "e7b699f749c05852af1a1efdf338d217c296a8405f6fcc90521d1d279cdd80a4",
+    "needs_human_content": false
+  },
+  "catalog_add_control": { "path": "assets/examples/catalog-add-control.md", "sha256": "c387ffac087a3d91b40fb87be8293f1e79188de0d2d5763e38b4afd268de4511", "needs_human_content": true },
+  "clean_stale_markers": { "path": "assets/examples/clean-stale-markers.md", "sha256": "e2635c2bf0d5576aea2a2703713ecdd4eb7ca1b15dc095c35157bc10beb6f42b", "needs_human_content": true },
+  "compare_backends": { "path": "assets/examples/compare-backends.md", "sha256": "f718b627924a554f5c8d3458c21b7f6f96a09ce0479331e77c82f025f6f74881", "needs_human_content": true },
+  "compare_form": { "path": "assets/examples/compare-form.md", "sha256": "fa0de5795d4fe8e42eeae31864b33b08b7d7d01c7ccc703555bdc2a71230b477", "needs_human_content": true },
+  "count_rows": { "path": "assets/examples/count-rows.md", "sha256": "a1ea34a9f740e6ec1e47daafdfbad6e3c835bbaf065465beb66289a19042fcf3", "needs_human_content": false },
+  "create_table": { "path": "assets/examples/create-table.md", "sha256": "48d7c24b6205e9199c5d8c964bcbcd921be06102aa5fedca3b933a7be43db7ab", "needs_human_content": true },
+  "delete_module": { "path": "assets/examples/delete-module.md", "sha256": "c9f7c9623d74d8ce4eb15e53c7c14868604737be737c86ee4457841cdd9c535c", "needs_human_content": true },
+  "distinct_values": { "path": "assets/examples/distinct-values.md", "sha256": "ae576fd1dcada0d52da3e7ad2d8380ae5880e7140f4c83379083f375b103c39a", "needs_human_content": false },
+  "drop_table": { "path": "assets/examples/drop-table.md", "sha256": "0b6f8653555b7543640ff01250b1d066efcf9b2fad7740da21eea9d03b19f5e6", "needs_human_content": true },
+  "exec_sql": { "path": "assets/examples/exec-sql.md", "sha256": "61da7957520f9a536a8806511ea52c6fff02774179e1a82e8403aefe46884752", "needs_human_content": true },
+  "exists": { "path": "assets/examples/exists.md", "sha256": "717cfd4e6e5113ba4e5e85fce87627f635129af53b32146828997d5de6a6fe97", "needs_human_content": false },
+  "export_queries": { "path": "assets/examples/export-queries.md", "sha256": "8c94b11ef04a9f23de65a5e26e44b9aff88b5ade2a4eaa568d316db339fd81b7", "needs_human_content": true },
+  "fix_encoding": { "path": "assets/examples/fix-encoding.md", "sha256": "e08d361fe50c01cd6dfc42635e11c85f40e1cc11fb010b1777afc92415983233", "needs_human_content": true },
+  "form_add_control": { "path": "assets/examples/form-add-control.md", "sha256": "fd68081cb374bfe5a8eb18a8a35132fbb1b010fc0e88cadbf0bcd06424cdad6a", "needs_human_content": true },
+  "form_delete_control": { "path": "assets/examples/form-delete-control.md", "sha256": "f6c054edcffab5623ab309957d551f6079f78a947136c96600201e7efe05cb8a", "needs_human_content": true },
+  "form_deserialize": { "path": "assets/examples/form-deserialize.md", "sha256": "e99465e369deb683d9f68bb1269b0ba6a7765a0c2d3c4416325527e2a9c99de0", "needs_human_content": true },
+  "form_duplicate_control": { "path": "assets/examples/form-duplicate-control.md", "sha256": "f3a5ae55ac6d9bd42267743198e613916da2f527a16bf85f94dc14fce30a4341", "needs_human_content": true },
+  "form_get_geometry": { "path": "assets/examples/form-get-geometry.md", "sha256": "5e6343b7f804dd89e90c6f465537e6f239cf4272376cce129ef0d943065e6e94", "needs_human_content": true },
+  "form_list_controls": { "path": "assets/examples/form-list-controls.md", "sha256": "f88b5fb6df244a33cba32b855affb8060eaded7fa035299d99bce14649123df9", "needs_human_content": true },
+  "form_move_control": { "path": "assets/examples/form-move-control.md", "sha256": "e4e6bd3d4ab2d1ab8a2f4b28cab73fc3156b1af6f4ed9752a43cf63dad8bfe2c", "needs_human_content": true },
+  "form_rename_control": { "path": "assets/examples/form-rename-control.md", "sha256": "59eec16a755c7053e72954d28bb436e6ba930efc32f7266b6c9f3680d4b4b928", "needs_human_content": true },
+  "form_serialize": { "path": "assets/examples/form-serialize.md", "sha256": "81d8e0ea30781b51be5631a3ea8b67c6460f0a4ac0c3c93e2fb21d299417fac9", "needs_human_content": true },
+  "generate_erd": { "path": "assets/examples/generate-erd.md", "sha256": "a0fb29cb5e644958f1762332afeb915e7258b0ff675a6165910b0dad7014f328", "needs_human_content": true },
+  "generate_form": { "path": "assets/examples/generate-form.md", "sha256": "dd67b9e8c0e1a7545f6733c95aacec7cd730ba4d9baadb60f1051c77ce3c8df4", "needs_human_content": true },
+  "get_relationships": { "path": "assets/examples/get-relationships.md", "sha256": "683d14507f11e7dc41da55a3c67c5265cd7d188196d1c4bb457c24c74db73721", "needs_human_content": true },
+  "get_schema": { "path": "assets/examples/get-schema.md", "sha256": "e672da66e87b10eabd0daaf574cbcd167367c62a38fe7a9c63df50a51499003f", "needs_human_content": true },
+  "harvest_form_catalog": { "path": "assets/examples/harvest-form-catalog.md", "sha256": "5785fc22e45c8a0076031d807495bd057b02e23a8ce99049c26d59b5d145347c", "needs_human_content": true },
+  "import_all": { "path": "assets/examples/import-all.md", "sha256": "dd619d942b11ebcefbd5c3af3e073a0f9507ef3fdc48598130136af001ce326c", "needs_human_content": true },
+  "import_queries": { "path": "assets/examples/import-queries.md", "sha256": "7cb805893daf17a87453f0e496d5223e0ec62c0128e2d19ed25338f29a933074", "needs_human_content": true },
+  "inspect_form": { "path": "assets/examples/inspect-form.md", "sha256": "ab661727c709acf77d01eb6d268bed6378bf9b5297888f908a441eb5020ad28c", "needs_human_content": true },
+  "lint_form_code": { "path": "assets/examples/lint-form-code.md", "sha256": "3903b2a65b4fb7d5b9b96ffec55494a098e196e00b964b34a65062e79144f577", "needs_human_content": true },
+  "list_access_files": { "path": "assets/examples/list-access-files.md", "sha256": "92f72dca99ec3b825988106d51c1a290317ffb8fe97a3de024bf55020352a24c", "needs_human_content": true },
+  "list_access_operations": { "path": "assets/examples/list-access-operations.md", "sha256": "65399073fbf93b9236c4bbfad95078399c1ce359f1b13833e7caa3c69beb6c2b", "needs_human_content": true },
+  "list_linked_tables": { "path": "assets/examples/list-linked-tables.md", "sha256": "06270c0dc9fd69fe9751e5423c9d6ac0a19789418b77fcfed57501a6cb9ed138", "needs_human_content": true },
+  "list_links": { "path": "assets/examples/list-links.md", "sha256": "a769b11293950d95df6c19176d80b4f813d50934fdefb2bee3b05db57fd7086e", "needs_human_content": true },
+  "list_tables": { "path": "assets/examples/list-tables.md", "sha256": "8e660d04f1dacd4487c526ab5f105ff359a48077632c54c154b96da7c12b8c7a", "needs_human_content": true },
+  "list_vba_modules": { "path": "assets/examples/list-vba-modules.md", "sha256": "236c442987d89349de5a9c7be31939e63513f9a1f3f8e55a690e90f2fe3ed0bf", "needs_human_content": true },
+  "localize_backend_links": { "path": "assets/examples/localize-backend-links.md", "sha256": "f7312d549c166ce78acfa5eadab685e73ac64bf7ec58a4006222b21a8da0d05d", "needs_human_content": true },
+  "query_sql": { "path": "assets/examples/query-sql.md", "sha256": "b2d6b62698465c94db24ebd4ff4691c67fab8c9349d86b4bd06fde1c65891182", "needs_human_content": true },
+  "relink_directory": { "path": "assets/examples/relink-directory.md", "sha256": "dc541d4ac4a1d790e19d6e3d34a2fb2ce288bf8f18345110d7e6831539e224c8", "needs_human_content": true },
+  "relink_tables": { "path": "assets/examples/relink-tables.md", "sha256": "6a230f220433fce3fd7c2411091200074017a31ea1498d12db32577c99e76138", "needs_human_content": true },
+  "run_script": { "path": "assets/examples/run-script.md", "sha256": "4e14337cab85c05ce220b8af44767a03d87c6c7d5234ab07f2133c645f2ff7f4", "needs_human_content": true },
+  "seed_fixture": { "path": "assets/examples/seed-fixture.md", "sha256": "2016c088df43086577f2a1fc1f6bf5f01d13ae6669dcdcbd1ab22ba2d5bd4c8e", "needs_human_content": true },
+  "teardown_fixture": { "path": "assets/examples/teardown-fixture.md", "sha256": "31525cff5e8df9abab95e790babbf15437d4ed79e5bd60161dc1491b98567441", "needs_human_content": true },
+  "unlink_table": { "path": "assets/examples/unlink-table.md", "sha256": "b9e74dfb8f9cb4427c48af89a65a90b32249437d0a2b20f86220a02e2e2edfa0", "needs_human_content": true },
+  "validate_form_spec": { "path": "assets/examples/validate-form-spec.md", "sha256": "6fc28ef850d3b3ab71e7bd5c5df9f2d491d90d16962f19b24aefcf997e9a2d4b", "needs_human_content": true }
+}
