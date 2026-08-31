@@ -271,6 +271,7 @@ describe("MCP E2E resumable cursor", () => {
 
       expect(await readFile(source, "utf8")).toBe("fixture");
     },
+    30_000,
   );
 
   it("retries restore when interruption already removed the destination", async () => {

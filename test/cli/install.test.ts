@@ -53,6 +53,7 @@ import {
   applyIntegrationSelection,
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
+  DYSSKILL_NAMES,
   formatAgentsLine,
   handleInstallCommand,
   handleUpdateCommand,
@@ -389,7 +390,11 @@ describe("Dysflow MCP config state", () => {
         '{"name":"dysflow","version":"0.2.0"}\n',
         "utf8",
       );
-      await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
+      for (const skillName of DYSSKILL_NAMES) {
+        const skillRoot = join(packageRoot, "skills", skillName);
+        await mkdir(skillRoot, { recursive: true });
+        await writeFile(join(skillRoot, "SKILL.md"), `# ${skillName}\n`, "utf8");
+      }
       await mkdir(join(home, ".codex"), { recursive: true });
       await writeFile(
         codexConfig,
