@@ -367,6 +367,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 | A write gate, cleanup path, or the update mechanism | [Update trust model](./docs/security/update-trust-model.md) | `test/docs/security-doc-anchors.test.ts` |
 | An install channel, its gate, or its verification | [Installation channels](./docs/installation-channels.md) | `test/docs/readme-release-doc.test.ts` |
 | A write-tool pre-flight schema | Skill examples under `skills/dysflow-usage/` | `test/docs/write-tool-preflight.test.ts` |
+| The form/report serialization noise floor | `src/core/services/form-noise-keys.ts` and the `stripFormSerializationNoise` docstring | `test/docs/form-noise-keys-docstring-1686.test.ts` |
 | Install, project config, or an environment variable | [Setup](./docs/SETUP.md) | not anchored — review by hand |
 | A capability that stops existing | [Absent by design](./docs/architecture/absent-by-design.md) | not anchored — review by hand |
 
@@ -376,13 +377,14 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Twelve anchors do the second kind today:
+Thirteen anchors do the second kind today:
 
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `agent-friction-examples-1614.test.ts` derives the callable MCP surface from the runtime and checks that each friction family links concrete live tools and complete examples.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `dysflow-usage-examples-1611.test.ts` derives the advertised MCP tool set from the runtime and proves each tool has a canonical example file.
 - `example-input-properties-contract.test.ts` derives advertised tool schemas from the runtime and checks exact scaffold input-property parity.
+- `form-noise-keys-docstring-1686.test.ts` iterates the live `FORM_NOISE_KEYS` set and requires the `stripFormSerializationNoise` docstring to strip every member and retain none of them, so a key added to the set without revising the prose fails here.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
 - `project-config-removed-fields-contract-1580.test.ts` invokes the project-config loader and checks that operator docs describe its typed rejection and canonical replacements.
 - `readme-release-doc.test.ts` reads the installer source for the insecure-update gate variable and requires the README and the trust model to name the one the installer actually enforces, so renaming it in code fails until both documents follow.
