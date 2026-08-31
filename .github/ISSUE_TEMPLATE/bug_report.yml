@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible defect with evidence, TDD coverage, and acceptance criteria.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Verified symptom
+      description: State the observed behavior as verified facts.
+      placeholder: What happens, where, and under which conditions?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction evidence
+      description: Provide the smallest reproducible steps, exact command or input, and bounded relevant output. Do not include secrets.
+      placeholder: |
+        1. ...
+        2. ...
+        Actual output: ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the observable behavior that should occur instead.
+      placeholder: "Expected output or result: ..."
+    validations:
+      required: true
+  - type: textarea
+    id: tdd_plan
+    attributes:
+      label: RED test plan
+      description: Identify one or more tests that fail before the fix and pass after it.
+      placeholder: Test file or location, scenario, and expected assertion.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List measurable completion conditions, including affected regression checks.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: duplicates_privacy
+    attributes:
+      label: Pre-submission checks
+      description: Confirm the evidence is safe to publish and that duplicate search was completed.
+      options:
+        - label: I searched open and closed issues for an equivalent report.
+          required: true
+        - label: I removed secrets and private environment details from this report.
+          required: true
