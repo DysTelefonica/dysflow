@@ -1,17 +1,41 @@
 # dysflow-codegraph-update — full procedure
 
-This procedure audits and updates the release-bundled Dysflow consumer skills. The live
-candidate runtime is authoritative; installed user mirrors are read-only comparison targets.
+This procedure audits two independent ownership lanes against the live candidate runtime:
 
-## Step 0 — Resolve only repository-local inputs
+1. The Dysflow release bundle owns exactly six runtime skills.
+2. The resolved personal-skills repository owns user-authored consumer skills that may describe
+   Dysflow or codegraph behavior.
 
-1. Resolve the repository root and bundled `skills/` directory from the current checkout.
-2. Build Dysflow into repository-local `test-runtime/` and set `DYSFLOW_SHIM` to that
+Installed mirrors are read-only evidence. Edit canonical sources only; propagation belongs to
+the owner-specific workflow described below.
+
+## Step 0 — Resolve both canonical sources
+
+1. Resolve the Dysflow repository root and bundled `skills/` directory from the current checkout.
+2. Resolve the personal repository from `$PERSONAL_SKILLS_DIR` when set, otherwise
+   `~/personal-skills`; its canonical consumer source is `<personal-root>/skills`. Do not infer a
+   different checkout from installed links. If the repository is unavailable, report that lane as
+   unavailable and do not edit personal consumer skills.
+3. Build Dysflow into repository-local `test-runtime/` and set `DYSFLOW_SHIM` to that
    candidate launcher. Never fall back to the production installation.
-3. Confirm the target skill files are writable. Do not change user agent configuration or
-   installed skill mirrors during development.
-4. Run `codegraph status` for code intelligence. Do not install, upgrade, or uninitialize
+4. Confirm canonical target files are writable and record each repository's initial Git status.
+   Preserve unrelated changes. Do not change user agent configuration or edit installed mirrors.
+5. Run `codegraph status` for code intelligence. Do not install, upgrade, or uninitialize
    CodeGraph from this procedure.
+
+The six release-owned runtime skills are `access-form-ui-builder`, `dysflow-arnes`,
+`dysflow-usage`, `dysflow-codegraph-update`, `dysflow-examples-sync`, and
+`dysflow-pointer-rollout`. `dysflow install` and `dysflow update` write real recursive copies to
+exactly five runtime adapter SkillsDirs when those adapters are discovered or explicitly selected:
+
+- OpenCode: `~/.config/opencode/skills/`
+- Claude: `~/.claude/skills/`
+- Codex: `~/.codex/skills/`
+- Cursor: `~/.cursor/skills/`
+- Pi: `~/.pi/agent/skills/`
+
+The following are not Dysflow targets: `~/.agents/skills/` and `~/.opencode/skills/`. They may be
+managed by another repository, but Dysflow must neither claim nor mutate them.
 
 ## Step 1 — Capture progressive runtime discovery
 
@@ -49,7 +73,9 @@ pwsh -NoProfile -File skills/dysflow-codegraph-update/assets/scripts/Invoke-Dysf
 
 Do not hide one class inside the other. The release gate requires both arrays to be empty.
 
-## Step 3 — Update the bundle
+## Step 3 — Update canonical sources
+
+### Lane A — Dysflow release bundle
 
 1. Update `dysflow-usage`, its write matrix, error reference, and affected examples.
 2. Keep all call examples machine-readable and schema-derived. Every write-capable example
@@ -62,7 +88,35 @@ Do not hide one class inside the other. The release gate requires both arrays to
 6. Keep every referenced helper and asset inside the release bundle with relative paths.
 7. Never edit gentle-ai-owned skills.
 
-## Step 4 — Validate examples and bytes
+### Lane B — Personal consumer skills
+
+1. Search the resolved `<personal-root>/skills` tree for current Dysflow or codegraph runtime
+   claims. Do not hardcode or assert a personal-skill count; the catalog changes independently.
+2. Establish personal ownership from that canonical tree. Ignore installed copies and never copy
+   the six release-owned runtime skills into the personal catalog.
+3. Update only consumer claims contradicted by candidate runtime evidence. Preserve each skill's
+   activation contract, language, bundled references, and unrelated dirty changes.
+4. Validate the personal repository's post-commit hook delegates to
+   `testing/suites/refresh-personal-symlinks/refresh-personal-symlinks.sh sync`. Do not rewrite a
+   valid hook or duplicate its reconciliation logic.
+5. Run the repository-owned checks from `<personal-root>`:
+
+   ```bash
+   bash -n testing/suites/refresh-personal-symlinks/refresh-personal-symlinks.sh
+   bash testing/suites/refresh-personal-symlinks/test-refresh-personal-symlinks.sh
+   ```
+
+6. Preview the supplementary destination reconciliation without mutation:
+
+   ```powershell
+   pwsh -File bin/link-personal-skills.ps1 -DryRun
+   ```
+
+7. Let the personal repository's normal delivery policy create any commit. Its post-commit hook
+   runs `sync`; when delivery is not part of the task, leave canonical changes uncommitted and
+   report that propagation is pending. Never bypass this boundary by editing a mirror.
+
+## Step 4 — Validate examples, ownership, and bytes
 
 ```powershell
 pwsh -NoProfile -File skills/dysflow-usage/assets/scripts/verify-examples-vs-runtime.ps1 `
@@ -80,12 +134,21 @@ Then validate:
 - the release archive contains the complete recursive skill trees;
 - the recursive installer copies, diagnoses, prunes, and rolls back nested assets.
 
-Compare installed mirrors under the active user's supported skill directories by recursive
-path+hash manifests. Report drift only; the release/install workflow owns propagation.
+After `dysflow install` or `dysflow update`, compare the six release-owned trees in the five
+runtime adapter SkillsDirs by recursive path+hash manifests. A discovered or explicitly selected
+target must contain real copied directories, not links into the personal repository. Report drift
+only; the release installer owns repair.
+
+For personal consumer skills, compare canonical files with destinations only after the personal
+repository's reconciler or post-commit hook runs. Treat destination bytes as read-only evidence;
+the personal workflow owns repair. Keep Dysflow target evidence separate from personal-catalog
+evidence so `.agents` or OpenCode-alt state cannot be mistaken for Dysflow installation state.
 
 ## Step 5 — Release evidence
 
 Record candidate version, callable/advertised counts, compact/full/describe parity,
-classification counts, composition-constraint count, DRIFT count, runtime-gap count,
-example verifier result, arnés/pointer hashes, archive tree hashes, tests, and rollback
-boundary. Commit coherent work units and let normal repository policy own PR/release gates.
+classification counts, composition-constraint count, DRIFT count, runtime-gap count, both
+canonical roots, unavailable lanes, files changed per owner, example verifier result,
+arnés/pointer hashes, archive tree hashes, owner-controlled propagation evidence, tests, and
+rollback boundary. Commit coherent work units in their owning repositories and let each
+repository's normal policy own PR/release gates.
