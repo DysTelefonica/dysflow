@@ -306,7 +306,7 @@ runtime, **runtime wins**; surface the drift and update via
 
 - `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
 - `Variables Globales.bas` path — TODO: locate in this worktree's `src/` before any test.
-- Drift window: any update to the marker-delimited block in `dysflow-arnes/SKILL.md` must propagate here via `dysflow-codegraph-update` ARN-1 → ARN-2 → re-embed.
+- Drift window: any update to the marker-delimited block in the canonical dysflow-arnés source (lives in the team's skills catalog, not this repo) must propagate here via `dysflow-codegraph-update` ARN-1 → ARN-2 → re-embed.
 
 ## What this is
 
@@ -366,7 +366,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 | A core/adapter boundary or dependency rule | [Core and adapters](./docs/architecture/dysflow-core-and-adapters.md) | `test/docs/architecture-doc.test.ts` |
 | A write gate, cleanup path, or the update mechanism | [Update trust model](./docs/security/update-trust-model.md) | `test/docs/security-doc-anchors.test.ts` |
 | An install channel, its gate, or its verification | [Installation channels](./docs/installation-channels.md) | `test/docs/readme-release-doc.test.ts` |
-| A write-tool pre-flight schema | Skill examples under `skills/dysflow-usage/` | `test/docs/write-tool-preflight.test.ts` |
+| A write-tool pre-flight schema | Skill examples under the canonical dysflow-usage (lives in the team's skills catalog, not this repo) | `test/docs/write-tool-preflight.test.ts` |
 | Install, project config, or an environment variable | [Setup](./docs/SETUP.md) | not anchored — review by hand |
 | A capability that stops existing | [Absent by design](./docs/architecture/absent-by-design.md) | not anchored — review by hand |
 
@@ -381,7 +381,7 @@ Twelve anchors do the second kind today:
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `agent-friction-examples-1614.test.ts` derives the callable MCP surface from the runtime and checks that each friction family links concrete live tools and complete examples.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
-- `dysflow-usage-examples-1611.test.ts` derives the advertised MCP tool set from the runtime and proves each tool has a canonical example file.
+- `dysflow-usage-examples-1611.test.ts` derives the advertised MCP tool set from the runtime and proves each tool has a canonical example file. Test source lives in this repo; canonical examples live in the team's skills catalog alongside the dysflow-usage skill.
 - `example-input-properties-contract.test.ts` derives advertised tool schemas from the runtime and checks exact scaffold input-property parity.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.
 - `project-config-removed-fields-contract-1580.test.ts` invokes the project-config loader and checks that operator docs describe its typed rejection and canonical replacements.
@@ -653,7 +653,7 @@ Golden path:
    guarded writes.
 5. `verify_form_ui({ sourceContract, appliedContract })` reports actionable drift.
 
-For reusable instructions, load `skills/access-form-ui-builder/SKILL.md`.
+For reusable instructions, load the canonical access-form-ui-builder from the team's skills catalog (not from this repo).
 
 ### validate_form_spec / generate_form — design and write a new form
 
