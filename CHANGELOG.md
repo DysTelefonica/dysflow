@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.2.4] - 2026-08-31
+
+### Changes
+
+- fix(ci): require durable Access fixtures (#1676) (#1677)
+
+
 ## [v4.2.3] - 2026-08-29
 
 ### Changes
