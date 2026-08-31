@@ -1,10 +1,10 @@
 ---
-name: autonomous-issue-release-loop
-description: "Trigger: cerrar todas las issues, issue queue, release final. Ejecuta issues con worktrees aislados, TDD, CI, merge, limpieza y gates de release."
+name: dysflow-issue-release-loop
+description: "Trigger: cerrar todas las issues, issue queue, release final. Ejecuta issues con worktrees aislados, TDD, CI, merge, limpieza y gates de release. Repo-local de Dysflow (no parte del catálogo personal global)."
 license: Apache-2.0
 metadata:
   author: "ardelperal"
-  version: "1.5"
+  version: "1.6"
 ---
 
 # Autonomous Issue Release Loop
@@ -77,65 +77,9 @@ Return issue-to-PR mappings, RED/GREEN and CI evidence, merge and cleanup eviden
 - `../work-unit-commits/SKILL.md`
 - `../issue-creation/SKILL.md`
 
-## Cross-Document Synchronization After Skill Changes
+## Procedimientos meta (viven globalmente, no aquí)
 
-Cuando una skill se mueve entre los límites `personal / repo-local / repo-scope`, se renombra, se divide, se fusiona o se elimina, el cambio debe propagarse a **todos** los documentos que apuntaban a la forma anterior.
-
-### Por qué esta sección existe
-
-Los punteros desactualizados son una clase de bug que sobrevive a compilación y runtime. Decaen en silencio y desvían a futuros agentes hacia ficheros equivocados. Perder este sincronizado es perder trazabilidad sin error visible.
-
-### Cuándo aplica
-
-Active este procedimiento ante cualquiera de:
-
-- La ubicación de la skill cambió (catálogo personal → repo-local, o repo-local → catálogo personal).
-- La skill se renombró o se dividió en varias con nombres nuevos.
-- La skill desapareció y su funcionalidad se movió a otro lugar.
-- El contrato de activación cambió (ahora dispara con una señal distinta).
-- Las dependencias de la skill cambiaron (ya no apunta a los mismos ficheros).
-
-### Procedimiento (MANDATORY, ejecute todos los pasos)
-
-1. **Levante el inventario de documentos afectados antes de editar.** Ejecute `grep -r "<skill-name>" --include="*.md" --include="AGENTS.md" --include="CLAUDE.md"` en el repo afectado **y** en `~/.opencode/skills/`, `~/.config/opencode/skills/` y `~/.agents/skills/`. Registre cada hit. No omita ninguno; un solo puntero perdido basta para que el siguiente agente cargue la skill equivocada.
-2. **Determine el repo canónico.** Dónde vive ahora el `SKILL.md` autoritativo:
-   - ¿Catálogo personal? Actualice el canónico en `~/.opencode/skills/<skill>/SKILL.md` y sus symlinks/mirrors.
-   - ¿Repo-local? Actualice solo dentro del repo dueño, en `skills/<skill>/SKILL.md`.
-   - ¿Mixto? Elija un canónico. El otro pasa a ser un puntero `Repo-scope pointer` (ver paso 4).
-3. **Actualice el `SKILL.md` mismo.** Si cambió el scope o la ubicación, el frontmatter `description` y cualquier nota "Where this lives" deben reflejar la realidad nueva. No deje comentarios rancios como `# moved to <old location>`.
-4. **Actualice el `AGENTS.md` / `CLAUDE.md` del repo dueño.** Agregue la skill a la sección apropiada:
-
-   | Ubicación de la skill | Sección del AGENTS.md |
-   |---|---|
-   | Catálogo personal | Sin cambios en AGENTS.md |
-   | Repo-local | Sección "Repo-local skills" con scope de activación |
-   | Repo-scope pointer (la skill vive en otro sitio) | Sección "Repo-scoped skills (not part of personal catalog)" con la ruta canónica |
-
-   Estas secciones **no** deben duplicarse entre sí. Si una skill está en el catálogo personal, no la liste también en "Repo-local skills" de un `AGENTS.md`; eso es drift.
-5. **Espeje en punteros cross-repo.** Si una skill se usa entre repos (por ejemplo, el bloque global `dysflow-arnes` está embebido en varios `AGENTS.md` de repos distintos), cada copia embebida debe apuntar al mismo canónico. Las copias desalineadas son la fuente más común de drift cross-repo.
-6. **Verifique re-buscando.** Ejecute el mismo `grep` del paso 1 contra el **nombre / ruta nuevo**. Todos los hits deben apuntar a la ubicación correcta. Ejecútelo contra el **nombre / ruta antiguo**. Cero hits esperados. Si quedan hits antiguos, la propagación está incompleta: vuelva al paso 1.
-7. **Forma del commit**: un commit por grupo de ficheros (el cambio del `SKILL.md` puede commitearse con el cambio del `AGENTS.md`), pero nunca envíe el cambio del `SKILL.md` sin los updates de documentación, ni envíe updates de documentación sin el cambio del `SKILL.md`. Viajan juntos.
-8. **Después del commit**: empuje conforme a `git-push-policy`. La reconciliación debe estar completa antes de reportar terminado; véase `git-reconciliation-policy`: "Local and remote deben reconciliarse ASAP".
-
-### Derivas habituales a vigilar
-
-- `AGENTS.md` del repo A sigue listando la skill como catálogo personal cuando ya pasó a repo-local.
-- `AGENTS-shared.md` sigue afirmando "todas las skills son catálogo personal" después de mover una a repo-local.
-- Un symlink en `~/.opencode/skills/<old-name>` queda tras la mudanza y rompe `codegraph` u otras herramientas que siguen enlaces.
-- Un puntero dentro de un bloque markdown usa rutas estilo `link-personal-skills.ps1` apuntando a un path que ya no existe.
-- El frontmatter `description:` sigue disparando con keywords del scope antiguo (por ejemplo, "Trigger: team-skills" cuando la skill es ahora solo de Dysflow).
-
-### Lo que esta sección no hace
-
-- No sustituye las Hard Rules de arriba. Disk hygiene, paralelización y TDD no se ven afectadas.
-- No prescribe **qué** hacer con el contenido de la skill. Eso lo gobierna el cambio mismo.
-- No cubre refactors dentro de una sola skill: es un cambio de código normal gobernado por el flujo usual.
-
-### Core invariants
-
-- **El `SKILL.md` canónico y los punteros viajan juntos.** Nunca se envía uno sin los otros.
-- **Toda afirmación sobre la ubicación de la skill se ancla en la ruta del fichero.** Si no la puede probar con ruta, bórrela.
-- **La verificación por `grep` es obligatoria.** Sin verificación, el procedimiento está incompleto.
+Cuando cambie de scope, nombre o forma esta u otra skill, consulte `skill-propagation-sync` (catálogo personal global). El procedimiento completo de sincronización de documentos vive allí y aplica a cualquier skill, no solo a las Dysflow-local. Esta skill deja de mantener esa sección; el renombrado `autonomous-issue-release-loop` → `dysflow-issue-release-loop` (v1.5 → v1.6) la sacó de aquí porque el scope se deduce del nombre y el meta-procedimiento es transversal.
 
 ---
 

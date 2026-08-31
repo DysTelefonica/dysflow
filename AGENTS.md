@@ -710,9 +710,9 @@ Skills definidas en este repo (`skills/`) son scope-local de Dysflow. No forman 
 
 | Skill | Ruta | Carga cuando |
 |---|---|---|
-| `autonomous-issue-release-loop` | `skills/autonomous-issue-release-loop/SKILL.md` | El usuario pide agotar la cola de issues de Dysflow o cerrar un release |
+| `dysflow-issue-release-loop` | `skills/dysflow-issue-release-loop/SKILL.md` | El usuario pide agotar la cola de issues de Dysflow o cerrar un release |
 
-`autonomous-issue-release-loop` ejecuta el ciclo completo `issue → worktree → CI → merge → close → cleanup` con paralelización por defecto y el `pnpm test:e2e:mcp:release` propio de Dysflow como gate previo al release. Permanece aquí porque el patrón de agotamiento de cola y el gate de E2E están ajustados específicamente para este repo.
+El nombre lleva prefijo `dysflow-`: el scope es este repo. `dysflow-issue-release-loop` ejecuta el ciclo completo `issue → worktree → CI → merge → close → cleanup` con paralelización por defecto y el `pnpm test:e2e:mcp:release` propio de Dysflow como gate previo al release. Permanece aquí porque el patrón de agotamiento de cola y el gate de E2E están ajustados específicamente para este repo.
 
 ## Flujo de trabajo (sobrescribe el ciclo estándar)
 
