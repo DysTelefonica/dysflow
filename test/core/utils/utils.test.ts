@@ -226,6 +226,20 @@ describe("readJsonFileSync", () => {
     const missingPath = join(tmpDir, "does-not-exist-sync.json");
     expect(() => readJsonFileSync(missingPath)).toThrow();
   });
+
+  it("rejects duplicate object keys at the top level", () => {
+    const filePath = join(tmpDir, "sync-duplicate-top-level.json");
+    writeFileSync(filePath, '{"id":"first","id":"second"}', "utf8");
+
+    expect(() => readJsonFileSync(filePath)).toThrow("Invalid JSON file");
+  });
+
+  it("allows the same decoded key name in separate sibling objects", () => {
+    const filePath = join(tmpDir, "sync-sibling-keys.json");
+    writeFileSync(filePath, '{"left":{"name":1},"right":{"na\\u006de":2}}', "utf8");
+
+    expect(readJsonFileSync(filePath)).toEqual({ left: { name: 1 }, right: { name: 2 } });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -242,6 +256,17 @@ describe("readJsonFileAsync", () => {
   it("rejects when the file does not exist", async () => {
     const missingPath = join(tmpDir, "does-not-exist-async.json");
     await expect(readJsonFileAsync(missingPath)).rejects.toThrow();
+  });
+
+  it("rejects decoded duplicate keys nested inside arrays and objects", async () => {
+    const filePath = join(tmpDir, "async-duplicate-nested.json");
+    writeFileSync(
+      filePath,
+      '{"items":[{"name":"first","na\\u006de":"second"}],"text":"escaped \\"name\\""}',
+      "utf8",
+    );
+
+    await expect(readJsonFileAsync(filePath)).rejects.toThrow("Invalid JSON file");
   });
 });
 

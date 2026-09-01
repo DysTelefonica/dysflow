@@ -1,6 +1,7 @@
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { isRecord } from "../../core/utils/index.js";
+import { parseJsonRejectingDuplicateKeys } from "../../core/utils/parse-json-strict.js";
 import { PROJECT_IDENTITY_BLOCK, WRITE_INTENT_BLOCK } from "../../shared/validation/index.js";
 import type { ProjectConfigMutationObserver } from "../config/project-config-bootstrap-service.js";
 import { migrateProjectConfigResultContract } from "./contracts/bootstrap-result-contracts.js";
@@ -167,7 +168,7 @@ export async function tryMigrateProjectConfig(
 
   let parsed: Record<string, unknown>;
   try {
-    const value: unknown = JSON.parse(raw);
+    const value: unknown = parseJsonRejectingDuplicateKeys(raw);
     if (!isPlainObject(value)) throw new Error("not an object");
     parsed = value;
   } catch (err) {

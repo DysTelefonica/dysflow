@@ -14,6 +14,7 @@ import {
   remediationText,
 } from "../../core/contracts/remediation.js";
 import { DEFAULT_STALE_MARKER_THRESHOLD_MS } from "../../core/operations/stale-marker-cleanup.js";
+import { parseJsonRejectingDuplicateKeys } from "../../core/utils/parse-json-strict.js";
 import { resolveActiveWorktreeRoot } from "../runtime/worktree-resolver.js";
 import { nodeConfigFileSystem } from "./dysflow-config-node.js";
 import { buildMissingProjectConfigRemediation } from "./missing-project-guidance.js";
@@ -189,7 +190,9 @@ export function diagnoseProjectConfig(
     const configCandidate = join(cwdNative, ".dysflow", "project.json");
     if (existsSync(configCandidate)) {
       try {
-        const raw = JSON.parse(readFileSync(configCandidate, "utf8")) as Record<string, unknown>;
+        const raw = parseJsonRejectingDuplicateKeys<Record<string, unknown>>(
+          readFileSync(configCandidate, "utf8"),
+        );
         const configuredId = typeof raw.id === "string" && raw.id ? raw.id : null;
         const normAccess = requestedAccessPath
           ? normalize(resolve(effectiveCwdInput, requestedAccessPath))
@@ -375,7 +378,8 @@ export function diagnoseProjectConfig(
   }
   let parsed: Record<string, unknown>;
   try {
-    const value: unknown = candidateConfig ?? JSON.parse(readFileSync(selectedConfig, "utf8"));
+    const value: unknown =
+      candidateConfig ?? parseJsonRejectingDuplicateKeys(readFileSync(selectedConfig, "utf8"));
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error();
     parsed = value as Record<string, unknown>;
   } catch {
