@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { parseJsonRejectingDuplicateKeys } from "./parse-json-strict.js";
 
 export const REDACTED_SECRET = "[REDACTED]";
 
@@ -35,7 +36,7 @@ export function sanitizeConnectStrings(value: string): string {
 export function readJsonFileSync<T>(path: string): T {
   const raw = readFileSync(path, "utf8");
   try {
-    return JSON.parse(raw) as T;
+    return parseJsonRejectingDuplicateKeys<T>(raw);
   } catch {
     throw new Error(`Invalid JSON file: ${path}`);
   }
@@ -44,7 +45,7 @@ export function readJsonFileSync<T>(path: string): T {
 export async function readJsonFileAsync<T>(path: string): Promise<T> {
   const raw = await readFile(path, "utf8");
   try {
-    return JSON.parse(raw) as T;
+    return parseJsonRejectingDuplicateKeys<T>(raw);
   } catch {
     throw new Error(`Invalid JSON file: ${path}`);
   }

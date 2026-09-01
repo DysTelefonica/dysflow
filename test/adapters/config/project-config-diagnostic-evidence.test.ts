@@ -68,6 +68,28 @@ describe("project config diagnostic surfaces recovery-path failure evidence (#13
     );
   });
 
+  it("rejects nested duplicate keys with the existing unreadable-config diagnostic", () => {
+    const configPath = join(fixture.root, ".dysflow", "project.json");
+    writeFileSync(
+      configPath,
+      '{"id":"app","accessPath":"app.accdb","destinationRoot":"src","capabilities":{"allowWrites":true,"allowWrites":false}}',
+      "utf8",
+    );
+
+    const result = diagnoseProjectConfig(fixture.root);
+
+    expect(result.status).toBe("ambiguous");
+    expect(result.writeReady).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "PROJECT_CONFIG_CANDIDATE_UNREADABLE",
+        severity: "warning",
+        path: posix(configPath),
+        message: expect.stringContaining("Duplicate JSON object key"),
+      }),
+    );
+  });
+
   it("names operations.json when the running-operations registry cannot be parsed", () => {
     writeValidProjectJson(fixture);
     const runtimeDir = join(fixture.root, ".dysflow", "runtime");

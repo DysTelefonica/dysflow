@@ -86,6 +86,21 @@ describe("tryMigrateProjectConfig() — pure helper", () => {
     expect(result.error.code).toBe("PROJECT_CONFIG_INVALID");
   });
 
+  it("rejects top-level duplicate keys during preview without changing the raw bytes", async () => {
+    const configPath = writeProjectConfig(
+      '{"id":"first","id":"second","frontendFile":"frontend.accdb"}',
+    );
+    const before = readFileSync(configPath);
+
+    const result = await tryMigrateProjectConfig({}, workdir);
+
+    expect(result.outcome).toBe("error");
+    if (result.outcome !== "error") return;
+    expect(result.error.code).toBe("PROJECT_CONFIG_INVALID");
+    expect(result.error.message).toContain("Duplicate JSON object key");
+    expect(readFileSync(configPath)).toEqual(before);
+  });
+
   it("rewrites an absolute legacy accessPath as a basename frontendFile", async () => {
     writeProjectConfig(LEGACY_WITH_ABSOLUTE_ACCESS_PATH);
     const result = await tryMigrateProjectConfig({}, workdir);
@@ -226,6 +241,21 @@ describe("createMigrateProjectConfigTool() — tool factory", () => {
     const migrated = readProjectConfig();
     expect(migrated.accessPath).toBeUndefined();
     expect(migrated.frontendFile).toBe("frontend.accdb");
+  });
+
+  it("apply:true rejects nested duplicate keys and preserves the exact file bytes", async () => {
+    const configPath = writeProjectConfig(
+      '{\r\n  "id": "duplicate-nested",\r\n  "frontendFile": "frontend.accdb",\r\n  "capabilities": {"allowWrites": true, "allowWrites": false}\r\n}',
+    );
+    const before = readFileSync(configPath);
+    const tool = createMigrateProjectConfigTool({ cwd: workdir, writesEnabled: true });
+
+    const result = await tool.handler({ apply: true });
+
+    expect(result.isError).toBe(true);
+    expect(result.error?.code).toBe("PROJECT_CONFIG_INVALID");
+    expect(result.error?.message).toContain("Duplicate JSON object key");
+    expect(readFileSync(configPath)).toEqual(before);
   });
 
   it("apply:true is idempotent on a re-run (no-op second pass)", async () => {
