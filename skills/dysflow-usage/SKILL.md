@@ -7,7 +7,7 @@ metadata:
   version: "2.0.0"
   status: active
   last_verified: "2026-08-26"
-  last_dysflow_version: "4.2.7"
+  last_dysflow_version: "4.2.8"
   requires: "dysflow MCP >= 3.0"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:

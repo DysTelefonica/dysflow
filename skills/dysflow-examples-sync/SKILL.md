@@ -8,7 +8,7 @@ metadata:
   version: "1.0.0"
   status: active
   last_verified: "2026-08-26"
-  last_dysflow_version: "4.2.7"
+  last_dysflow_version: "4.2.8"
   parent: "dysflow-codegraph-update"
   requires: "dysflow-usage skill, dysflow-codegraph-update (ARN-1 upstream), `dysflow install` for routine example refresh, `dysflow doctor` for the gap audit"
   managed_by: "`dysflow install` ships bundled per-tool examples; `dysflow doctor` audits the gap; this skill is the manual scaffolding fallback when the installer path is unavailable or a user wants a per-tool example added offline."

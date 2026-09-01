@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.2.8] - 2026-09-01
+
+### Changes
+
+- fix(config): reject duplicate project JSON keys (#1697)
+- fix(release): move the stamp date with the version, not just the version (#1695)
+
+
 ## [v4.2.7] - 2026-08-31
 
 ### Changes
