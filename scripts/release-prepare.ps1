@@ -170,13 +170,23 @@ function Update-ReleaseVersionStamp {
     }
 
     $text = $encoding.GetString($bytes, $preambleLength, $bytes.Length - $preambleLength)
-    $pattern = '(?i)verified for the v(?<version>[^\s]+) release'
+    # #1694: the version and the date are ONE claim — "verified for vX on DATE".
+    # Bumping the version alone leaves the stamp asserting a verification that
+    # predates the release it names, and nothing downstream checks the date.
+    $pattern = '(?i)verified for the v(?<version>[^\s]+) release on (?<date>\d{4}-\d{2}-\d{2})'
     $matches = [regex]::Matches($text, $pattern)
     if ($matches.Count -ne 1) {
         throw "Expected exactly one release version stamp in $Path; found $($matches.Count)."
     }
+    $stampDate = [DateTime]::UtcNow.ToString('yyyy-MM-dd')
+    $dateToken = $matches[0].Groups['date']
     $versionToken = $matches[0].Groups['version']
-    $updated = $text.Remove($versionToken.Index, $versionToken.Length).Insert(
+    # Replace the LATER token first so the earlier token's index stays valid.
+    $updated = $text.Remove($dateToken.Index, $dateToken.Length).Insert(
+        $dateToken.Index,
+        $stampDate
+    )
+    $updated = $updated.Remove($versionToken.Index, $versionToken.Length).Insert(
         $versionToken.Index,
         [string]$Version
     )
@@ -419,7 +429,7 @@ if ($Resume) {
         throw "Cannot resume $tag because CHANGELOG.md has no prepared release section."
     }
     foreach ($stampPath in $stampPaths) {
-        if ((Get-Content $stampPath -Raw) -notmatch "(?i)verified for the v$([regex]::Escape([string]$next)) release") {
+        if ((Get-Content $stampPath -Raw) -notmatch "(?i)verified for the v$([regex]::Escape([string]$next)) release on \d{4}-\d{2}-\d{2}") {
             throw "Cannot resume $tag because $stampPath does not carry the prepared version stamp."
         }
     }

@@ -77,8 +77,8 @@ BeforeAll {
         New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/assets") -Force | Out-Null
         Set-Content (Join-Path $root "package.json") '{"version":"4.0.5"}' -NoNewline
         Set-Content (Join-Path $root "CHANGELOG.md") $script:baseChangelog -NoNewline
-        Set-Content (Join-Path $root "skills/dysflow-usage/references/error-codes.md") "Verified for the v4.0.5 release.`nKeep this content." -NoNewline
-        Set-Content (Join-Path $root "skills/dysflow-usage/assets/write-flags-matrix.md") "Verified for the v4.0.5 release.`nKeep this matrix." -NoNewline
+        Set-Content (Join-Path $root "skills/dysflow-usage/references/error-codes.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this content." -NoNewline
+        Set-Content (Join-Path $root "skills/dysflow-usage/assets/write-flags-matrix.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this matrix." -NoNewline
         foreach ($index in 0..($script:skillNames.Count - 1)) {
             $name = $script:skillNames[$index]
             $skillRoot = Join-Path $root "skills/$name"
@@ -261,12 +261,16 @@ Describe "release version stamps" {
     It "preserves UTF-8 BOM, line endings, and unrelated bytes" {
         $path = Join-Path $TestDrive "stamped.md"
         $encoding = [Text.UTF8Encoding]::new($true)
-        $beforeText = "# Header`r`n`r`nVerified for the v2.26.0 release.`r`nKeep café unchanged.`r`n"
+        $beforeText = "# Header`r`n`r`nVerified for the v2.26.0 release on 2026-01-02.`r`nKeep café unchanged.`r`n"
         [IO.File]::WriteAllBytes($path, $encoding.GetPreamble() + $encoding.GetBytes($beforeText))
 
         Update-ReleaseVersionStamp -Path $path -Version ([Version]"2.26.1")
 
-        $expectedText = $beforeText.Replace("v2.26.0", "v2.26.1")
+        # #1694 — the date is part of the stamp now, not an unrelated byte: the
+        # rewrite must move it to today while leaving every other byte alone.
+        $expectedText = $beforeText.
+            Replace("v2.26.0", "v2.26.1").
+            Replace("2026-01-02", [DateTime]::UtcNow.ToString("yyyy-MM-dd"))
         [Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) | Should -Be (
             [Convert]::ToBase64String($encoding.GetPreamble() + $encoding.GetBytes($expectedText))
         )
