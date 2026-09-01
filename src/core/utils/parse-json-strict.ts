@@ -58,15 +58,27 @@ export function parseJsonRejectingDuplicateKeys<T>(raw: string): T {
     cursor += number.length;
   };
 
-  const parseValue = (): void => {
+  type ContainerFrame =
+    | {
+        kind: "object";
+        keys: Set<string>;
+        state: "key-or-end" | "colon" | "value" | "comma-or-end";
+      }
+    | { kind: "array"; state: "value-or-end" | "comma-or-end" };
+
+  const stack: ContainerFrame[] = [];
+
+  const startValue = (): void => {
     skipWhitespace();
     const character = raw[cursor];
     if (character === "{") {
-      parseObject();
+      cursor += 1;
+      stack.push({ kind: "object", keys: new Set<string>(), state: "key-or-end" });
       return;
     }
     if (character === "[") {
-      parseArray();
+      cursor += 1;
+      stack.push({ kind: "array", state: "value-or-end" });
       return;
     }
     if (character === '"') {
@@ -88,55 +100,62 @@ export function parseJsonRejectingDuplicateKeys<T>(raw: string): T {
     parseNumber();
   };
 
-  const parseObject = (): void => {
-    consume("{");
+  let rootComplete = false;
+  while (!rootComplete || stack.length > 0) {
     skipWhitespace();
-    if (raw[cursor] === "}") {
-      cursor += 1;
-      return;
+    const frame = stack.at(-1);
+    if (frame === undefined) {
+      startValue();
+      rootComplete = true;
+      continue;
     }
 
-    const keys = new Set<string>();
-    while (cursor < raw.length) {
-      skipWhitespace();
-      if (raw[cursor] !== '"') fail("Expected an object key");
-      const key = parseString();
-      if (keys.has(key)) throw new SyntaxError(`Duplicate JSON object key ${JSON.stringify(key)}.`);
-      keys.add(key);
-      skipWhitespace();
-      consume(":");
-      parseValue();
-      skipWhitespace();
+    if (frame.kind === "array") {
+      if (frame.state === "value-or-end") {
+        if (raw[cursor] === "]") {
+          cursor += 1;
+          stack.pop();
+        } else {
+          frame.state = "comma-or-end";
+          startValue();
+        }
+      } else if (raw[cursor] === "]") {
+        cursor += 1;
+        stack.pop();
+      } else {
+        consume(",");
+        frame.state = "value-or-end";
+      }
+      continue;
+    }
+
+    if (frame.state === "key-or-end") {
       if (raw[cursor] === "}") {
         cursor += 1;
-        return;
+        stack.pop();
+        continue;
       }
-      consume(",");
-    }
-    fail("Unterminated JSON object");
-  };
-
-  const parseArray = (): void => {
-    consume("[");
-    skipWhitespace();
-    if (raw[cursor] === "]") {
+      if (raw[cursor] !== '"') fail("Expected an object key");
+      const key = parseString();
+      if (frame.keys.has(key))
+        throw new SyntaxError(`Duplicate JSON object key ${JSON.stringify(key)}.`);
+      frame.keys.add(key);
+      frame.state = "colon";
+    } else if (frame.state === "colon") {
+      consume(":");
+      frame.state = "value";
+    } else if (frame.state === "value") {
+      frame.state = "comma-or-end";
+      startValue();
+    } else if (raw[cursor] === "}") {
       cursor += 1;
-      return;
-    }
-
-    while (cursor < raw.length) {
-      parseValue();
-      skipWhitespace();
-      if (raw[cursor] === "]") {
-        cursor += 1;
-        return;
-      }
+      stack.pop();
+    } else {
       consume(",");
+      frame.state = "key-or-end";
     }
-    fail("Unterminated JSON array");
-  };
+  }
 
-  parseValue();
   skipWhitespace();
   if (cursor !== raw.length) fail("Unexpected JSON token");
   return JSON.parse(raw) as T;

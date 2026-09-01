@@ -240,6 +240,21 @@ describe("readJsonFileSync", () => {
 
     expect(readJsonFileSync(filePath)).toEqual({ left: { name: 1 }, right: { name: 2 } });
   });
+
+  it("preserves deeply nested valid JSON accepted by the native parser", () => {
+    const filePath = join(tmpDir, "sync-deeply-nested-valid.json");
+    const depth = 10_000;
+    const raw = `${"[".repeat(depth)}null${"]".repeat(depth)}`;
+    expect(() => JSON.parse(raw)).not.toThrow();
+    writeFileSync(filePath, raw, "utf8");
+
+    let value: unknown = readJsonFileSync(filePath);
+    for (let level = 0; level < depth; level += 1) {
+      expect(Array.isArray(value)).toBe(true);
+      value = (value as unknown[])[0];
+    }
+    expect(value).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
