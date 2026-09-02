@@ -290,7 +290,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     access: "conditional-write",
     writeGate: "conditional",
     dryRunDefault: true,
-    summary: "Create/import config; apply:false plans, apply:true writes.",
+    summary: "MCP contract for worktree config creation/import.",
   },
   register_worktree: {
     access: "read-only",

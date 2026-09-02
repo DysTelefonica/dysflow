@@ -33,6 +33,7 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
     destinationRoot: MANAGED_SOURCE_TARGET_BLOCK.destinationRoot,
     capabilities: {
       type: "object",
+      description: "Initial capabilities.",
       additionalProperties: false,
       properties: {
         allowWrites: {
@@ -57,6 +58,7 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
     },
     timeoutMs: {
       type: "number",
+      description: "Positive operation timeout (ms).",
       minimum: 1,
     },
     ...WRITE_INTENT_BLOCK,

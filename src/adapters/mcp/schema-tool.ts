@@ -987,12 +987,12 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
     codes.push(
       {
         code: "FROMCWD_NOT_FOUND",
-        description: "Source config missing/unreadable.",
+        description: "Source config unavailable.",
         recoverable: true,
       },
       {
         code: "FROMCWD_CONFIG_INVALID",
-        description: "Source config malformed/not write-ready.",
+        description: "Source config invalid.",
         recoverable: true,
       },
     );
