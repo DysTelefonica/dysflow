@@ -15,6 +15,7 @@ import { isRecord } from "../../core/utils/index.js";
  *
  * Recognized failure shapes:
  *   - the failure envelope `{ok:false, error, modules}`,
+ *   - an `{ok:true, modules}` transport envelope containing a failed module,
  *   - a bare per-module record whose `status` is not `"ok"` (PowerShell
  *     unwraps a single-element array on ConvertTo-Json),
  *   - an array containing at least one record entry whose `status` is not
@@ -29,6 +30,9 @@ export function importOutputReportsModuleFailure(parsedOutput: unknown): boolean
   }
   if (isRecord(parsedOutput)) {
     if (parsedOutput.ok === false) return true;
+    if (parsedOutput.ok === true && Array.isArray(parsedOutput.modules)) {
+      return parsedOutput.modules.some(moduleReportsFailure);
+    }
     return moduleReportsFailure(parsedOutput);
   }
   return false;

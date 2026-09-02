@@ -62,7 +62,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
       });
       return {
         exitCode: 0,
-        stdout: 'DYSFLOW_RESULT [{"module":"ListMod1","status":"ok"}]',
+        stdout: 'DYSFLOW_RESULT {"ok":true,"modules":[{"module":"ListMod1","status":"ok"}]}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -89,7 +89,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
     // is pinned with all-ok entries. The partial-failure contract lives in
     // vba-sync-adapter-import-exit0-951.test.ts.
     const adapter = buildAdapter(async () => {
-      const payload = [
+      const modules = [
         {
           module: "ModA",
           status: "ok",
@@ -109,7 +109,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
       ];
       return {
         exitCode: 0,
-        stdout: `DYSFLOW_RESULT ${JSON.stringify(payload)}`,
+        stdout: `DYSFLOW_RESULT ${JSON.stringify({ ok: true, modules })}`,
         stderr: "",
         durationMs: 19,
         timedOut: false,
@@ -123,11 +123,11 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
-    // For import_* tools the adapter wraps the DYSFLOW_RESULT payload under
-    // .data.result so the .data object can carry diagnostics (projectRoot,
-    // accessPath, etc.). The per-module array lives at .data.result.
-    const data = result.data as { result: unknown };
-    const modules = data.result as Array<{
+    // The PowerShell payload is an object envelope, so top-level arrays never
+    // cross the host transport boundary. The adapter retains it under .data.result.
+    const data = result.data as { result: { ok: true; modules: unknown } };
+    expect(data.result.ok).toBe(true);
+    const modules = data.result.modules as Array<{
       module: string;
       status: string;
       phase: string | null;
@@ -166,7 +166,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
       // explicit empty list (no Get-ChildItem fallback, no import-all expansion).
       return {
         exitCode: 0,
-        stdout: "DYSFLOW_RESULT []",
+        stdout: 'DYSFLOW_RESULT {"ok":true,"modules":[]}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -243,7 +243,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
       received = request.moduleNames?.length ?? 0;
       return {
         exitCode: 0,
-        stdout: "DYSFLOW_RESULT []",
+        stdout: 'DYSFLOW_RESULT {"ok":true,"modules":[]}',
         stderr: "",
         durationMs: 1,
         timedOut: false,
@@ -280,7 +280,7 @@ describe("VbaSyncAdapter — import_modules long-list contract (consumer request
       cwd: root,
       executor: async () => ({
         exitCode: 0,
-        stdout: "DYSFLOW_RESULT []",
+        stdout: 'DYSFLOW_RESULT {"ok":true,"modules":[]}',
         stderr: "",
         durationMs: 1,
         timedOut: false,

@@ -205,13 +205,7 @@ afterAll(async () => {
 
 describeE2e("import_modules long-list (E2E)", () => {
   it("R6.a — 30 modules imported with per-module status=ok in the structured report", async () => {
-    if (!serverStarted) {
-      // Server failed to start in this environment — skip the live invocation.
-      // Pester + Node adapter suites already pin the same contract; this E2E
-      // is a defense-in-depth check that only runs when the full harness is
-      // healthy.
-      return;
-    }
+    expect(serverStarted).toBe(true);
     const names = Array.from(
       { length: 30 },
       (_, i) => `ListMod${(i + 1).toString().padStart(2, "0")}`,
@@ -225,33 +219,20 @@ describeE2e("import_modules long-list (E2E)", () => {
       apply: true,
     });
 
-    // MCP server may still surface structured-failure envelopes for input
-    // validation. We assert on a successful round-trip ONLY when the
-    // response is well-formed JSON; non-JSON responses are reported via
-    // isError and skipped silently — the harness is unstable on this host
-    // and the lower-level tests already pin the contract.
-    if (res.error || res.result?.isError) {
-      console.warn(
-        "[import-modules-long-list.e2e] MCP server returned an error envelope; " +
-          "the live invocation path is not stable in this environment. " +
-          "Skipping detailed assertions.",
-      );
-      return;
-    }
+    expect(res.error).toBeUndefined();
+    expect(res.result?.isError).not.toBe(true);
     const payload = parsePayload(res.result?.content?.[0]?.text ?? "{}") as {
-      ok?: boolean;
-      modules?: Array<{ module: string; status: string; phase: string | null }>;
+      result?: {
+        ok?: boolean;
+        modules?: Array<{ module: string; status: string; phase: string | null }>;
+      };
       raw?: string;
       parseError?: boolean;
     };
-    if (payload.parseError) {
-      console.warn(
-        "[import-modules-long-list.e2e] MCP response was not valid JSON; " +
-          "skipping live assertions. Pester + Node adapter tests cover this contract.",
-      );
-      return;
-    }
-    const modules = Array.isArray(payload) ? payload : (payload.modules ?? []);
+    expect(payload.parseError).not.toBe(true);
+    expect(payload.result?.ok).toBe(true);
+    expect(Array.isArray(payload.result)).toBe(false);
+    const modules = payload.result?.modules ?? [];
     expect(modules.length).toBe(30);
     expect(modules.every((m) => m.status === "ok")).toBe(true);
   }, 120_000);

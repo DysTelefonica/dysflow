@@ -951,6 +951,38 @@ describe("VbaExecutionAdapter", () => {
     });
   });
 
+  it("preserves PROCEDURE_NOT_CALLABLE cause and remediation inside VBA_TESTS_FAILED", async () => {
+    const executeMappedTool = vi.fn().mockResolvedValue(
+      successResult([
+        {
+          ok: false,
+          procedure: "Test_Compile",
+          error: "Cannot run the macro 'Test_Compile'. The macro may not be available.",
+        },
+      ]),
+    );
+    const orchestrator: VbaSyncOrchestrator = { executeMappedTool, cwd: "C:/repo" };
+    const adapter = new VbaExecutionAdapter(orchestrator, TEST_ALLOWED_PROCEDURES);
+
+    const result = await adapter.execute("test_vba", { procedureName: "Test_Compile" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("VBA_TESTS_FAILED");
+    expect(result.error.details).toMatchObject({
+      failures: [
+        {
+          procedure: "Test_Compile",
+          cause: {
+            code: "PROCEDURE_NOT_CALLABLE",
+            retryable: true,
+            remediation: expect.stringMatching(/recompile/i),
+          },
+        },
+      ],
+    });
+  });
+
   it("preserves structured failure detail when one procedure fails among passing ones", async () => {
     const results = [
       { ok: true, procedure: "Test_A", durationMs: 5 },

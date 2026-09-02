@@ -21,6 +21,15 @@ describe("importOutputReportsModuleFailure (#951)", () => {
     ).toBe(true);
   });
 
+  it("reports failure for an ok:true success envelope that contains an errored module", () => {
+    expect(
+      importOutputReportsModuleFailure({
+        ok: true,
+        modules: [{ module: "Form_X", status: "error", phase: "remove-existing" }],
+      }),
+    ).toBe(true);
+  });
+
   it("reports failure for an array containing an error entry", () => {
     expect(
       importOutputReportsModuleFailure([

@@ -120,10 +120,11 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
 
             $script:DysflowResults.Count | Should -Be 1
             $payload = $script:DysflowResults[0]
-            # Payload is the modules array directly on the happy path (no ok:true wrapper).
-            @($payload).Count | Should -Be 2
+            $payload.ok | Should -Be $true
+            $modules = @($payload.modules)
+            $modules.Count | Should -Be 2
 
-            $modA = @($payload | Where-Object { $_.module -eq "ModA" })[0]
+            $modA = @($modules | Where-Object { $_.module -eq "ModA" })[0]
             $modA | Should -Not -BeNullOrEmpty
             $modA.status | Should -Be "ok"
             $modA.phase | Should -Be $null
@@ -194,9 +195,11 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             @($script:ImportCalls).Count | Should -Be 30 `
                 -Because "every module in a 30-module list must be dispatched to Import-VbaModule"
             $payload = $script:DysflowResults[0]
-            @($payload).Count | Should -Be 30 `
+            $payload.ok | Should -Be $true
+            $modules = @($payload.modules)
+            $modules.Count | Should -Be 30 `
                 -Because "the structured per-module report must carry one entry per requested module"
-            @($payload | Where-Object { $_.status -eq "ok" }).Count | Should -Be 30
+            @($modules | Where-Object { $_.status -eq "ok" }).Count | Should -Be 30
         }
     }
 
@@ -218,13 +221,8 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             # as a discovery fallback for an explicitly empty list.
             @($script:ImportCalls).Count | Should -Be 0
             $payload = $script:DysflowResults[0]
-            # Payload is the modules array; on empty plan it must be empty (or the wrapper
-            # ok:true, modules:[]). Either is acceptable as long as the list is empty.
-            if ($payload.ok -eq $true) {
-                @($payload.modules).Count | Should -Be 0
-            } else {
-                @($payload).Count | Should -Be 0
-            }
+            $payload.ok | Should -Be $true
+            @($payload.modules).Count | Should -Be 0
         }
     }
 
@@ -234,7 +232,9 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             $names = 1..30 | ForEach-Object { "AllOk_$_" }
             $null = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules $names -ModulesPath "C:\fake" -ImportMode "Auto"
             @($script:ImportCalls).Count | Should -Be 30
-            @($script:DysflowResults[0] | Where-Object { $_.status -eq "ok" }).Count | Should -Be 30
+            $payload = $script:DysflowResults[0]
+            $payload.ok | Should -Be $true
+            @($payload.modules | Where-Object { $_.status -eq "ok" }).Count | Should -Be 30
         }
 
         It "R6.b — module #3 missing source (locate-source phase) leaves #1, #2, #4, #5 ok" {
@@ -271,10 +271,12 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             $null = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules $names -ModulesPath "C:\fake" -ImportMode "Auto"
 
             $payload = $script:DysflowResults[0]
-            @($payload).Count | Should -Be 2
-            @($payload | Where-Object { $_.module -eq $unicodeName1 }).Count | Should -Be 1 `
+            $payload.ok | Should -Be $true
+            $modules = @($payload.modules)
+            $modules.Count | Should -Be 2
+            @($modules | Where-Object { $_.module -eq $unicodeName1 }).Count | Should -Be 1 `
                 -Because "the Unicode module name '$unicodeName1' must round-trip cleanly through the per-module report"
-            @($payload | Where-Object { $_.module -eq $unicodeName2 }).Count | Should -Be 1 `
+            @($modules | Where-Object { $_.module -eq $unicodeName2 }).Count | Should -Be 1 `
                 -Because "the Unicode module name '$unicodeName2' must round-trip cleanly through the per-module report"
         }
     }

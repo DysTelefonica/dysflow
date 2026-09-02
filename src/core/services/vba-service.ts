@@ -351,8 +351,7 @@ export class AccessVbaService {
  * procedure, and they need opposite remediations:
  *
  *   - `PROCEDURE_NOT_CALLABLE` — Access refused to invoke the procedure at
- *     all (stale p-code after source edits without a VBE recompile, or a
- *     name Access cannot resolve). Remediation: recompile and retry.
+ *     all. Remediation: recompile and retry before further diagnosis.
  *   - `VBA_RUNTIME_ERROR` (#1681) — the procedure was invoked, it ran, and
  *     it raised. Remediation: fix the procedure or the state it depends on.
  *     Recompiling is useless here, and telling the caller to recompile sends
@@ -384,29 +383,33 @@ function reclassifyRunnerFailure<T>(
     runnerMessage: message,
   };
 
-  if (isNotCallableMessage(message)) {
+  const classification = classifyVbaRunnerFailure(message);
+  if (classification?.code === "PROCEDURE_NOT_CALLABLE") {
     return failureResult(
       createDysflowError(
         "PROCEDURE_NOT_CALLABLE",
         `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
-          "The binary's compiled p-code is likely stale — recompile in Access VBE (Debug → Compile) and retry.",
-        { retryable: true, details: sharedDetails },
+          "recompile in Access VBE (Debug → Compile) and retry.",
+        {
+          retryable: true,
+          details: sharedDetails,
+          remediation: classification.remediation,
+        },
       ),
     ) as OperationResult<T>;
   }
 
   // The procedure was reached and raised. Hand the caller the VBA error the
   // procedure itself emitted — that text is the only actionable thing here.
-  const vbaMessage = extractInvocationInnerMessage(message);
-  if (vbaMessage === undefined) return result;
+  if (classification?.code !== "VBA_RUNTIME_ERROR") return result;
 
   return failureResult(
     createDysflowError(
       "VBA_RUNTIME_ERROR",
-      `Procedure '${request.procedureName}' was invoked and raised an error in VBA: ${vbaMessage}`,
+      `Procedure '${request.procedureName}' was invoked and raised an error in VBA: ${classification.vbaMessage}`,
       {
         retryable: false,
-        details: { ...sharedDetails, vbaMessage },
+        details: { ...sharedDetails, vbaMessage: classification.vbaMessage },
       },
     ),
   ) as OperationResult<T>;
@@ -427,8 +430,30 @@ const NOT_CALLABLE_PATTERNS: readonly RegExp[] = [
   /no encuentra el procedimiento/i,
 ];
 
-function isNotCallableMessage(message: string): boolean {
-  return NOT_CALLABLE_PATTERNS.some((pattern) => pattern.test(message));
+export type VbaRunnerFailureClassification =
+  | { code: "PROCEDURE_NOT_CALLABLE"; retryable: true; remediation: string }
+  | { code: "VBA_RUNTIME_ERROR"; retryable: false; vbaMessage: string };
+
+/**
+ * Classifies runner-visible Access invocation failures for both `run_vba` and
+ * `test_vba`. The callers retain their own outer result contracts; this seam
+ * only centralizes the Access-message recognition and prevents phrase-table
+ * drift between the two tools.
+ */
+export function classifyVbaRunnerFailure(
+  message: string,
+): VbaRunnerFailureClassification | undefined {
+  if (NOT_CALLABLE_PATTERNS.some((pattern) => pattern.test(message))) {
+    return {
+      code: "PROCEDURE_NOT_CALLABLE",
+      retryable: true,
+      remediation: "Recompile in Access VBE (Debug → Compile) and retry.",
+    };
+  }
+  const vbaMessage = extractInvocationInnerMessage(message);
+  return vbaMessage === undefined
+    ? undefined
+    : { code: "VBA_RUNTIME_ERROR", retryable: false, vbaMessage };
 }
 
 /**

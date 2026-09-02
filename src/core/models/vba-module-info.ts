@@ -83,6 +83,11 @@ export type VbaModuleInfo = {
  */
 export type ListVbaModulesResult = {
   modules: readonly VbaModuleInfo[];
+  /**
+   * Read-only inventory caveats discovered while enumerating the active VBA
+   * project. Absence means the enumeration completed without a caveat.
+   */
+  warnings?: readonly string[];
   summary: {
     total: number;
     inBinaryOnly: number;

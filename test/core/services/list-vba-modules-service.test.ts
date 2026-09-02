@@ -53,6 +53,13 @@ function buildServiceHarness(input: {
     fileType: "bas" | "cls" | "frm" | "form.txt";
     binarySource?: string;
   }[];
+  /** Per-call binary enumeration rows; supports retry behavior tests. */
+  binaryRowsByCall?: readonly (readonly {
+    name: string;
+    type: 1 | 2 | 3 | 100;
+    fileType: "bas" | "cls" | "frm" | "form.txt";
+    binarySource?: string;
+  }[])[];
   sourceFiles?: FakeEntry[];
   emptyDirs?: string[];
   /** Optional hook to assert the runner was called with specific args. */
@@ -119,9 +126,10 @@ function buildServiceHarness(input: {
           timedOut: true,
         };
       }
+      const binaryRows = input.binaryRowsByCall?.[calls.length - 1] ?? input.binaryRows;
       const runnerPayload: ListVbaModulesRunnerResult = {
         ok: true,
-        components: input.binaryRows.map((row) => ({
+        components: binaryRows.map((row) => ({
           name: row.name,
           type: row.type,
           fileType: row.fileType,
@@ -191,8 +199,8 @@ describe("runListVbaModules (#807 Feature 1)", () => {
     expect(publicResult.data.modules[0]).not.toHaveProperty("binarySource");
   });
 
-  it("empty VBProject → empty modules + summary { total: 0 }", async () => {
-    const { ctx, fs } = buildServiceHarness({
+  it("keeps a persistent empty active VBA project at totalModules: 0 and warns after one retry", async () => {
+    const { ctx, fs, calls } = buildServiceHarness({
       binaryRows: [],
       // Treat destinationRoot as missing so source-walk does not emit
       // source-only rows. The cross-reference pass ONLY runs when the
@@ -203,7 +211,13 @@ describe("runListVbaModules (#807 Feature 1)", () => {
     const result = await runListVbaModules({}, ctx, fs);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
+    expect(calls).toHaveLength(2);
     expect(result.data.modules).toEqual([]);
+    expect(result.data).toMatchObject({
+      warnings: [
+        "Access returned an empty active VBA project after a retry; the module inventory may require refresh.",
+      ],
+    });
     expect(result.data.summary).toEqual({
       total: 0,
       inBinaryOnly: 0,
@@ -215,6 +229,37 @@ describe("runListVbaModules (#807 Feature 1)", () => {
       modulesInSourceOnly: 0,
       modulesInBoth: 0,
     });
+  });
+
+  it("retries one transiently empty unfiltered enumeration and returns the recovered module without warning", async () => {
+    const { ctx, fs, calls } = buildServiceHarness({
+      binaryRows: [],
+      binaryRowsByCall: [[], [{ name: "RecoveredModule", type: 1, fileType: "bas" }]],
+      sourceFiles: [{ name: "RecoveredModule.bas", kind: "file" }],
+    });
+
+    const result = await runListVbaModules({}, ctx, fs);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(calls).toHaveLength(2);
+    expect(result.data.modules).toMatchObject([{ name: "RecoveredModule", binaryExists: true }]);
+    expect(result.data).not.toHaveProperty("warnings");
+  });
+
+  it("does not retry or warn for an explicitly filtered empty enumeration", async () => {
+    const { ctx, fs, calls } = buildServiceHarness({
+      binaryRows: [],
+      emptyDirs: ["c:/src"],
+    });
+
+    const result = await runListVbaModules({ namePattern: "NoMatch*" }, ctx, fs);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    expect(calls).toHaveLength(1);
+    expect(result.data.summary.totalModules).toBe(0);
+    expect(result.data).not.toHaveProperty("warnings");
   });
 
   it("mixed project surfaces standards + classes + forms with correct types", async () => {

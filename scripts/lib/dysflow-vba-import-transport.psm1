@@ -195,7 +195,14 @@ function Invoke-VbaImportTransport {
     if ($decision.PSObject.Properties['saveWarning'] -and -not [string]::IsNullOrWhiteSpace([string]$decision.saveWarning)) {
         & $WriteStatus ("ADVERTENCIA: guardado explícito post-import no completó ({0}). El import se aplicó; compilá en Access (Debug > Compile) para persistir/verificar." -f $decision.saveWarning)
     }
-    & $WriteResult -result $decision.result
+    $result = $decision.result
+    # Success used to be a bare module array. PowerShell/MCP transports can
+    # concatenate top-level arrays, so keep the public per-module list under a
+    # named object property before serializing it.
+    if ($decision.exitCode -eq 0 -and $result -is [array]) {
+        $result = [ordered]@{ ok = $true; modules = @($result) }
+    }
+    & $WriteResult -result $result
     return $decision.summary
 }
 

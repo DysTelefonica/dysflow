@@ -4157,9 +4157,10 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             }
             $captured.ParseError | Should -BeNullOrEmpty `
                 -Because "happy-path payload must be valid JSON; a parse error here is a serialization failure"
-            $captured.Payload.Count | Should -Be 2
-            ($captured.Payload | Where-Object { $_.module -eq "ModA" }).status | Should -Be "ok"
-            ($captured.Payload | Where-Object { $_.module -eq "ModB" }).status | Should -Be "ok"
+            $captured.Payload.ok | Should -Be $true
+            $captured.Payload.modules.Count | Should -Be 2
+            ($captured.Payload.modules | Where-Object { $_.module -eq "ModA" }).status | Should -Be "ok"
+            ($captured.Payload.modules | Where-Object { $_.module -eq "ModB" }).status | Should -Be "ok"
         }
     }
 
@@ -4275,7 +4276,8 @@ Describe "Invoke-ImportAction — serialization contract (issue #496, regression
             }
             $captured.ParseError | Should -BeNullOrEmpty `
                 -Because "a 100-module import must serialize cleanly; this is the load test for the happy-path fix"
-            $captured.Payload.Count | Should -Be 100
+            $captured.Payload.ok | Should -Be $true
+            $captured.Payload.modules.Count | Should -Be 100
         }
     }
 
