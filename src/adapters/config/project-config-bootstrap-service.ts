@@ -20,6 +20,9 @@ export type SetupProjectConfigInput = {
   capabilities?: {
     allowWrites?: boolean;
     writeExecutionPolicy?: "safe-by-default" | "developer";
+    procedures?: {
+      allow?: readonly string[];
+    };
   };
 };
 
@@ -49,6 +52,9 @@ export function buildSetupProjectConfig(
     ...(input.capabilities?.writeExecutionPolicy === undefined
       ? {}
       : { writeExecutionPolicy: input.capabilities.writeExecutionPolicy }),
+    ...(input.capabilities?.procedures?.allow === undefined
+      ? {}
+      : { procedures: { allow: [...input.capabilities.procedures.allow] } }),
   };
   return {
     id: projectId,

@@ -983,6 +983,21 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
       recoverable: true,
     });
   }
+  if (name === "setup_project") {
+    codes.push(
+      {
+        code: "FROMCWD_NOT_FOUND",
+        description:
+          "fromCwd does not contain a readable .dysflow/project.json source configuration.",
+        recoverable: true,
+      },
+      {
+        code: "FROMCWD_CONFIG_INVALID",
+        description: "The fromCwd project configuration is malformed or not write-ready.",
+        recoverable: true,
+      },
+    );
+  }
   if (name === "teardown_fixture") {
     codes.push(
       {

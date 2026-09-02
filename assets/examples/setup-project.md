@@ -52,3 +52,44 @@ the shared worktree cache; an MCP restart is neither required nor recommended.
 Never bootstrap outside a Git worktree, and never pass
 an absolute path as `frontendFile`; it must be the frontend basename at the
 worktree root.
+
+## Allowlist at create
+
+Pass the procedure allowlist inside the canonical capabilities block. The plan
+returns the same allowlist in `resolvedConfig`, and `apply:true` writes it
+atomically with the rest of the project config.
+
+```js
+await tools.dysflow.setup_project({
+  cwd: "C:/worktrees/my-project",
+  projectId: "my-project",
+  frontendFile: "Frontend.accdb",
+  capabilities: {
+    procedures: { allow: ["Test_Create", "Test_Update"] },
+  },
+  apply: false,
+});
+```
+
+If setup rewrites an existing config and `capabilities.procedures.allow` is
+omitted, the existing allowlist is preserved.
+
+## Cross-WT import
+
+Use `fromCwd` to seed a new worktree from a sibling config. Pair it with
+`overrideProjectRoot` naming the target worktree so Dysflow cannot retain the
+source root accidentally.
+
+```js
+await tools.dysflow.setup_project({
+  cwd: "C:/worktrees/feature-b",
+  projectId: "my-project",
+  fromCwd: "C:/worktrees/feature-a",
+  overrideProjectRoot: "C:/worktrees/feature-b",
+  apply: false,
+});
+```
+
+`FROMCWD_NOT_FOUND` means the source config is absent.
+`FROMCWD_CONFIG_INVALID` means it exists but cannot be safely imported. Repair
+the source config before retrying; the target remains unchanged.

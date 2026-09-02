@@ -15,6 +15,15 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
       type: "string",
       description: "Git worktree root to bootstrap. Defaults to the MCP process cwd.",
     },
+    fromCwd: {
+      type: "string",
+      description:
+        "Existing Git worktree whose .dysflow/project.json should seed the new worktree config.",
+    },
+    overrideProjectRoot: {
+      type: "string",
+      description: "Explicit projectRoot for a fromCwd import. It must resolve to the target cwd.",
+    },
     frontendFile: {
       type: "string",
       description: "Access frontend basename located at the worktree root.",
@@ -37,6 +46,18 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
           enum: ["safe-by-default", "developer"],
           description: "Initial project write-execution policy.",
         },
+        procedures: {
+          type: "object",
+          description: "Initial project procedure policy.",
+          additionalProperties: false,
+          properties: {
+            allow: {
+              type: "array",
+              items: { type: "string" },
+              description: "Procedure names allowed for test_vba and run_vba.",
+            },
+          },
+        },
       },
     },
     timeoutMs: {
@@ -48,6 +69,7 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
   },
   anyOf: [
     { required: ["frontendFile"] },
+    { required: ["fromCwd", "overrideProjectRoot"] },
     { required: ["projectId", "projectChoiceReason", "recoveryToken"] },
   ],
 };

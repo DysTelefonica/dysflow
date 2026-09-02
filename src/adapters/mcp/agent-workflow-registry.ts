@@ -275,7 +275,7 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
   ],
   describe_tool: ["Inspect one selected tool's complete contract after compact discovery."],
   setup_project: [
-    "Bootstrap a missing per-worktree project config through MCP when shell access is unavailable.",
+    "Bootstrap a missing per-worktree project config, including a procedure allowlist or a sibling worktree import, through MCP.",
   ],
   register_worktree: ["Pre-warm a sibling worktree context and inspect cache hit/miss telemetry."],
   clear_worktree_cache: [

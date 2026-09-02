@@ -137,4 +137,160 @@ describe("setup_project MCP tool (#1312)", () => {
     expect(result.error?.code).toBe("OUTSIDE_PROJECT_ROOT");
     expect(existsSync(join(workdir, ".dysflow", "project.json"))).toBe(false);
   });
+
+  it("accepts capabilities.procedures.allow in plan and apply modes", async () => {
+    const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
+    const capabilities = {
+      procedures: { allow: ["Test_A", "Test_B"] },
+    };
+
+    const preview = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      capabilities,
+      apply: false,
+    });
+
+    expect(preview.isError).toBe(false);
+    expect(payload(preview)).toMatchObject({
+      resolvedConfig: { capabilities: { allowWrites: true, ...capabilities } },
+    });
+
+    const applied = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      capabilities,
+      apply: true,
+    });
+
+    expect(applied.isError).toBe(false);
+    expect(
+      JSON.parse(readFileSync(join(workdir, ".dysflow", "project.json"), "utf8")),
+    ).toMatchObject({ capabilities: { allowWrites: true, ...capabilities } });
+  });
+
+  it("preserves an existing procedures allowlist when setup omits it", async () => {
+    mkdirSync(join(workdir, ".dysflow"));
+    writeFileSync(
+      join(workdir, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "fixture",
+        frontendFile: "Frontend.accdb",
+        destinationRoot: "src",
+        capabilities: {
+          allowWrites: true,
+          procedures: { allow: ["Test_Existing"] },
+        },
+      }),
+      "utf8",
+    );
+    const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
+
+    const result = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      apply: true,
+    });
+
+    expect(result.isError).toBe(false);
+    expect(
+      JSON.parse(readFileSync(join(workdir, ".dysflow", "project.json"), "utf8")),
+    ).toMatchObject({
+      capabilities: {
+        allowWrites: true,
+        procedures: { allow: ["Test_Existing"] },
+      },
+    });
+  });
+
+  it("imports a sibling worktree config and retargets its project root", async () => {
+    const source = mkdtempSync(join(tmpdir(), "dysflow-setup-project-source-"));
+    try {
+      writeFileSync(join(source, ".git"), "gitdir: fixture", "utf8");
+      mkdirSync(join(source, ".dysflow"));
+      mkdirSync(join(source, "src"));
+      writeFileSync(join(source, "Frontend.accdb"), "", "utf8");
+      writeFileSync(
+        join(source, ".dysflow", "project.json"),
+        JSON.stringify({
+          id: "fixture",
+          frontendFile: "Frontend.accdb",
+          projectRoot: source,
+          destinationRoot: "src",
+          capabilities: {
+            allowWrites: true,
+            writeExecutionPolicy: "developer",
+            procedures: { allow: ["Test_A", "Test_B"] },
+          },
+        }),
+        "utf8",
+      );
+      const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
+      const input = {
+        cwd: workdir,
+        projectId: "fixture",
+        fromCwd: source,
+        overrideProjectRoot: workdir,
+      };
+
+      const preview = await tool.handler({ ...input, apply: false });
+
+      expect(preview.isError).toBe(false);
+      expect(payload(preview)).toMatchObject({
+        mode: "plan",
+        resolvedConfig: {
+          projectRoot: workdir,
+          capabilities: { procedures: { allow: ["Test_A", "Test_B"] } },
+        },
+      });
+      expect(existsSync(join(workdir, ".dysflow", "project.json"))).toBe(false);
+
+      const result = await tool.handler({ ...input, apply: true });
+
+      expect(result.isError).toBe(false);
+      expect(
+        JSON.parse(readFileSync(join(workdir, ".dysflow", "project.json"), "utf8")),
+      ).toMatchObject({
+        id: "fixture",
+        frontendFile: "Frontend.accdb",
+        projectRoot: workdir,
+        capabilities: {
+          writeExecutionPolicy: "developer",
+          procedures: { allow: ["Test_A", "Test_B"] },
+        },
+      });
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+    }
+  });
+
+  it("returns typed errors for missing and invalid cross-worktree source configs", async () => {
+    const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
+    const missing = await tool.handler({
+      cwd: workdir,
+      projectId: "fixture",
+      fromCwd: join(workdir, "missing"),
+      overrideProjectRoot: workdir,
+      apply: false,
+    });
+    expect(missing.error?.code).toBe("FROMCWD_NOT_FOUND");
+
+    const source = mkdtempSync(join(tmpdir(), "dysflow-setup-project-invalid-source-"));
+    try {
+      writeFileSync(join(source, ".git"), "gitdir: fixture", "utf8");
+      mkdirSync(join(source, ".dysflow"));
+      writeFileSync(join(source, ".dysflow", "project.json"), "{ invalid", "utf8");
+
+      const invalid = await tool.handler({
+        cwd: workdir,
+        projectId: "fixture",
+        fromCwd: source,
+        overrideProjectRoot: workdir,
+        apply: false,
+      });
+      expect(invalid.error?.code).toBe("FROMCWD_CONFIG_INVALID");
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+    }
+  });
 });

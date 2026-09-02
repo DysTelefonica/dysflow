@@ -4,6 +4,12 @@ const publicCapabilitiesSchema = z
   .object({
     allowWrites: z.boolean().optional(),
     writeExecutionPolicy: z.enum(["safe-by-default", "developer"]).optional(),
+    procedures: z
+      .object({
+        allow: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -17,6 +23,7 @@ export const publicResolvedProjectConfigSchema = z
   .object({
     id: z.string().optional(),
     frontendFile: z.string().optional(),
+    projectRoot: z.string().optional(),
     backendPath: z.string().optional(),
     destinationRoot: z.string().optional(),
     timeoutMs: z.number().optional(),
@@ -49,6 +56,16 @@ export function projectPublicResolvedConfig(
     capabilities?.writeExecutionPolicy === "developer"
       ? { writeExecutionPolicy: capabilities.writeExecutionPolicy }
       : {}),
+    ...(typeof capabilities?.procedures === "object" &&
+    capabilities.procedures !== null &&
+    !Array.isArray(capabilities.procedures) &&
+    Array.isArray((capabilities.procedures as Record<string, unknown>).allow)
+      ? {
+          procedures: {
+            allow: (capabilities.procedures as Record<string, unknown>).allow,
+          },
+        }
+      : {}),
   };
 
   const mcpConfig =
@@ -64,6 +81,7 @@ export function projectPublicResolvedConfig(
   return publicResolvedProjectConfigSchema.parse({
     ...(typeof config.id === "string" ? { id: config.id } : {}),
     ...(typeof config.frontendFile === "string" ? { frontendFile: config.frontendFile } : {}),
+    ...(typeof config.projectRoot === "string" ? { projectRoot: config.projectRoot } : {}),
     ...(typeof config.backendPath === "string" ? { backendPath: config.backendPath } : {}),
     ...(typeof config.destinationRoot === "string"
       ? { destinationRoot: config.destinationRoot }

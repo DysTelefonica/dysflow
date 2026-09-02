@@ -20,6 +20,8 @@ Bootstrap a missing per-worktree project config through MCP when shell access is
 ## All input properties (live ``inputSchema.properties`` keys)
 
     - ``cwd``
+    - ``fromCwd``
+    - ``overrideProjectRoot``
     - ``frontendFile``
     - ``backendPath``
     - ``projectId``
@@ -39,6 +41,7 @@ Bootstrap a missing per-worktree project config through MCP when shell access is
 This tool's schema uses a ``anyOf`` constraint:
 
 - alternative: {frontendFile}
+- alternative: {fromCwd, overrideProjectRoot}
 - alternative: {projectId, projectChoiceReason, recoveryToken}
 
 Pick exactly one alternative per call.
@@ -81,6 +84,40 @@ On failure, ``env.error.code`` is one of the codes below; ``error.remediation`` 
 | ``PROJECT_ID_MISMATCH`` | Caller-supplied projectId does not match the configured id. | see ``references/error-codes.md`` |
 | ``MCP_WRITES_DISABLED`` | Process-level writes are disabled. | see ``references/error-codes.md`` |
 | ``MCP_INPUT_INVALID`` | Input does not satisfy the tool's schema. | see ``references/error-codes.md`` |
+| ``FROMCWD_NOT_FOUND`` | The source worktree config is absent. | see ``references/error-codes.md`` |
+| ``FROMCWD_CONFIG_INVALID`` | The source worktree config is malformed or unsafe to import. | see ``references/error-codes.md`` |
+
+## Allowlist at create
+
+```json
+{
+  "tool": "setup_project",
+  "arguments": {
+    "cwd": "<target-worktree>",
+    "projectId": "<project-id>",
+    "frontendFile": "frontend.accdb",
+    "capabilities": {
+      "procedures": { "allow": ["Test_Create", "Test_Update"] }
+    },
+    "apply": false
+  }
+}
+```
+
+## Cross-WT import
+
+```json
+{
+  "tool": "setup_project",
+  "arguments": {
+    "cwd": "<target-worktree>",
+    "projectId": "<project-id>",
+    "fromCwd": "<source-worktree>",
+    "overrideProjectRoot": "<target-worktree>",
+    "apply": false
+  }
+}
+```
 
 ## Cross-reference
 
