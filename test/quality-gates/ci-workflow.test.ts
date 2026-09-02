@@ -178,6 +178,7 @@ describe("repository quality gates", () => {
     expect(integrity).toContain("head.sha");
     expect(integrity).toContain("actions/workflows/ci.yml/runs");
     expect(integrity).toContain("node scripts/dependency-audit-evidence.mjs");
+    expect(integrity).not.toContain("cache: pnpm");
     expect(integrity).not.toContain("pnpm coverage");
     expect(integrity).not.toContain("pnpm test:public");
     expect(integrity).not.toContain("pnpm mcp:context-budget");
