@@ -305,6 +305,7 @@ const mutatingAssertionSteps = new Set([
   "release-telemetry/invocation-sink:opt-out-config-restore",
   "vba-sync/export_all:prune-report",
   "vba-sync/verify_code:bulkImportable:import_modules",
+  "vba-sync/import_modules:long-module-list-envelope",
   "form-ui/apply_form_design_plan:contract",
   "forms/form_add_control:round-trip",
   "forms/form_move_control:round-trip",
@@ -3055,6 +3056,53 @@ assertPlanApplyResolverPair("import_modules", importPlan, importApply, (plan, ap
     apply?.result !== undefined,
   summary: `resolvedProjectId=${apply?.resolvedProjectId}; apply result captured`,
 }));
+
+// Issue #1701 — a real multi-module import used to emit a bare top-level
+// PowerShell array. Host transport could concatenate that array into invalid
+// JSON once the batch grew beyond four entries. Exercise the production MCP
+// boundary with nine existing fixture modules and require the success envelope
+// to retain every per-module result.
+const longImportModuleNames = [
+  "ACRepository",
+  "Anexo",
+  "ARRepository",
+  "BackendResolver",
+  "CacheNCProyecto",
+  "constantes",
+  "constructor",
+  "E2EHashService",
+  "E2EManagementService",
+];
+const longImportResult = await record("vba-sync", "import_modules:long-module-list", {
+  ...ctx,
+  moduleNames: longImportModuleNames,
+  apply: true,
+  timeoutMs: 180000,
+}, { expected: "ok", timeoutMs: 180000 });
+const longImportPayload = payloadOf(longImportResult) ?? {};
+const longImportEnvelope = longImportPayload.result ?? longImportPayload;
+const longImportModules = Array.isArray(longImportEnvelope?.modules)
+  ? longImportEnvelope.modules
+  : [];
+const importedNames = new Set(longImportModules.map((entry) => entry?.module));
+const longImportPass =
+  longImportEnvelope?.ok === true &&
+  longImportModules.length === longImportModuleNames.length &&
+  longImportModules.every((entry) => entry?.status === "ok") &&
+  longImportModuleNames.every((name) => importedNames.has(name));
+addResult({
+  area: "vba-sync",
+  tool: "import_modules:long-module-list-envelope",
+  pass: longImportPass,
+  expected: "ok:true envelope with nine successful module results",
+  ms: 0,
+  summary: longImportPass
+    ? `preserved ${longImportModules.length} module results in the success envelope`
+    : `unexpected import envelope: ${JSON.stringify(longImportEnvelope)}`,
+});
+console.log(
+  `${longImportPass ? "PASS" : "FAIL"}\timport_modules:long-module-list-envelope\t0ms\t${rows.at(-1).summary}`,
+);
 
 const requiredContractCoverage = [
   "bootstrap",
