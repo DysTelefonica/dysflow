@@ -73,6 +73,41 @@ pwsh -NoProfile -File skills/dysflow-codegraph-update/assets/scripts/Invoke-Dysf
 
 Do not hide one class inside the other. The release gate requires both arrays to be empty.
 
+### Consumer-skill semantic audit
+
+Run this audit on the canonical personal-skills source whenever that lane is available. It uses
+the candidate captures from Step 1; installed mirrors and production-runtime output are forbidden
+as evidence.
+
+1. Enumerate every `skills/**/*.md` file containing a Dysflow or CodeGraph runtime reference.
+   Record the discovered file set; do not hardcode a skill count.
+2. Extract active tool invocations and compare each tool name with the `schema index`. Report an
+   unknown tool before interpreting any arguments.
+3. Compare top-level invocation keys and literal enum values with each tool's `inputSchema` from
+   full schema or `describe_tool`. Emit separate `unknown parameter` and `invalid enum` findings.
+4. Compare claimed response fields with the tool's `resultContract`. A permissive
+   `additionalProperties` does not prove an undocumented field exists; require candidate output or
+   an explicit result-contract property before teaching consumers to branch on it.
+5. Validate cross-tool semantic claims against the correct owner block: bootstrap fields against
+   the bootstrap contract, capability blocks such as `projectConfig` against `get_capabilities`,
+   write aliases against `migrationNotes`, and persistent config guidance against `setup_project`
+   / `migrate_project_config`. In particular, reject invented schema views and fields moved from
+   bootstrap into an explicit capability view.
+6. Search obsolete write and recovery aliases (`dryRun`, `confirmPid`, automated compile flags)
+   only as candidates. Confirm removal or compatibility from the current parameter metadata before
+   classifying DRIFT.
+7. Audit historical examples separately from active instructions. Historical prose may describe
+   an old incident, but any copy-pasteable call must be visibly historical or accompanied by its
+   current canonical equivalent so an agent cannot execute a removed contract.
+8. Capture the personal repository status before auditing. If it is dirty, do not edit, stage,
+   commit, reconcile, or push that lane. Return the exact dirty paths beside the findings so the
+   owner can separate prior work from the alignment change.
+
+The consumer report must keep these arrays distinct: `activeDrift`, `historicalOnly`,
+`runtimeGaps`, `dirtyLaneBlockers`, and `filesScanned`. A successful release alignment has zero
+active DRIFT and zero runtime gaps; historical-only findings remain non-blocking only when they
+cannot be mistaken for current executable guidance.
+
 ## Step 3 — Update canonical sources
 
 ### Lane A — Dysflow release bundle
@@ -90,8 +125,8 @@ Do not hide one class inside the other. The release gate requires both arrays to
 
 ### Lane B — Personal consumer skills
 
-1. Search the resolved `<personal-root>/skills` tree for current Dysflow or codegraph runtime
-   claims. Do not hardcode or assert a personal-skill count; the catalog changes independently.
+1. Run the consumer-skill semantic audit above across the resolved `<personal-root>/skills` tree.
+   Do not hardcode or assert a personal-skill count; the catalog changes independently.
 2. Establish personal ownership from that canonical tree. Ignore installed copies and never copy
    the six release-owned runtime skills into the personal catalog.
 3. Update only consumer claims contradicted by candidate runtime evidence. Preserve each skill's

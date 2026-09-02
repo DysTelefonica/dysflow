@@ -55,4 +55,17 @@ describe("dysflow-codegraph-update ownership contract", () => {
     expect(procedure).toMatch(/post-commit hook/i);
     expect(procedure).not.toMatch(/\b\d+ personal skills\b/i);
   });
+
+  it("requires a schema-derived audit of personal Dysflow consumer skills", async () => {
+    const skill = await text("skills/dysflow-codegraph-update/SKILL.md");
+    const procedure = await text("skills/dysflow-codegraph-update/references/procedure.md");
+
+    expect(skill).toMatch(/consumer-skill semantic audit/i);
+    for (const evidence of ["schema index", "inputSchema", "resultContract", "migrationNotes"]) {
+      expect(procedure).toContain(`\`${evidence}\``);
+    }
+    expect(procedure).toMatch(/historical examples.*separately/is);
+    expect(procedure).toMatch(/dirty.*do not edit/is);
+    expect(procedure).toMatch(/unknown tool.*unknown parameter.*invalid enum/is);
+  });
 });
