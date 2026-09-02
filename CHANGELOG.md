@@ -1,5 +1,16 @@
 # Changelog
 
+## [v4.3.2] - 2026-09-02
+
+### Changes
+
+- fix(verify-code): prevent compact count misattribution
+- fix(ci): disable automatic package cache
+- fix(ci): avoid empty pnpm cache failure
+- fix(deps): patch fast-uri advisories
+- docs(dysflow): document import success envelope
+
+
 ## [v4.3.1] - 2026-09-02
 
 ### Changes
