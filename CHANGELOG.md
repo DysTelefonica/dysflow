@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.3.0] - 2026-09-02
+
+### Changes
+
+- feat(setup-project): import sibling worktree configuration (#1699)
+
+
 ## [v4.2.8] - 2026-09-01
 
 ### Changes
