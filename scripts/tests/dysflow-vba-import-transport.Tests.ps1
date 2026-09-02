@@ -147,7 +147,7 @@ Describe "dysflow VBA import transport module (#1463)" {
         @($passRequests[1]) | Should -Be @('NeedsDependency')
         @($saveRequests[0]) | Should -Be @('Dependency')
         $results.Count | Should -Be 1
-        @($results[0].status) | Should -Be @('ok', 'ok')
+        @($results[0].modules.status) | Should -Be @('ok', 'ok')
         $summary.HasErrors | Should -Be $false
     }
 
@@ -181,8 +181,9 @@ Describe "dysflow VBA import transport module (#1463)" {
 
         @($script:rollbacks) | Should -Be @()
         $results.Count | Should -Be 1
-        $results[0].status | Should -Be 'ok'
-        $results[0].verbose.source.Length | Should -Be 40000
+        $results[0].ok | Should -Be $true
+        $results[0].modules[0].status | Should -Be 'ok'
+        $results[0].modules[0].verbose.source.Length | Should -Be 40000
         $summary.HasErrors | Should -Be $false
     }
 

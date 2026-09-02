@@ -169,6 +169,33 @@ describe("setup_project MCP tool (#1312)", () => {
     ).toMatchObject({ capabilities: { allowWrites: true, ...capabilities } });
   });
 
+  it("preserves all 22 configured procedure allowlist entries in plan and apply", async () => {
+    const tool = createSetupProjectTool({ cwd: workdir, writesEnabled: true });
+    const allow = Array.from({ length: 22 }, (_, index) => `Test_Procedure_${index + 1}`);
+    const capabilities = { procedures: { allow } };
+
+    const preview = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      capabilities,
+      apply: false,
+    });
+    expect(preview.isError).toBe(false);
+    expect(payload(preview)).toMatchObject({
+      resolvedConfig: { capabilities: { procedures: { allow } } },
+    });
+
+    const applied = await tool.handler({
+      frontendFile: "Frontend.accdb",
+      projectId: "fixture",
+      capabilities,
+      apply: true,
+    });
+    expect(applied.isError).toBe(false);
+    const persisted = JSON.parse(readFileSync(join(workdir, ".dysflow", "project.json"), "utf8"));
+    expect(persisted.capabilities.procedures.allow).toEqual(allow);
+  });
+
   it("preserves an existing procedures allowlist when setup omits it", async () => {
     mkdirSync(join(workdir, ".dysflow"));
     writeFileSync(
