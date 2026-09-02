@@ -58,7 +58,7 @@ const SAFETY_PARAMETER_DESCRIPTIONS: Record<string, string> = {
   allowWrites: "Writes require both process and project write gates.",
   allowedProcedures:
     "Execution is limited to the configured procedure allowlist and fails closed when unavailable.",
-  apply: "Set apply:true to commit mutations; omitted or false plans only.",
+  apply: "apply:true writes; false or omitted plans.",
   compile: "Compilation is human-owned; this flag never bypasses the manual compile gate.",
   confirm: "Required confirmation for a destructive filesystem transition.",
   confirmedRequiresConfirmation:

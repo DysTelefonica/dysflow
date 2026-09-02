@@ -983,6 +983,20 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
       recoverable: true,
     });
   }
+  if (name === "setup_project") {
+    codes.push(
+      {
+        code: "FROMCWD_NOT_FOUND",
+        description: "Source config unavailable.",
+        recoverable: true,
+      },
+      {
+        code: "FROMCWD_CONFIG_INVALID",
+        description: "Source config invalid.",
+        recoverable: true,
+      },
+    );
+  }
   if (name === "teardown_fixture") {
     codes.push(
       {

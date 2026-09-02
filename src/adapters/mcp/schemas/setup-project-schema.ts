@@ -13,11 +13,19 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
   properties: {
     cwd: {
       type: "string",
-      description: "Git worktree root to bootstrap. Defaults to the MCP process cwd.",
+      description: "Target worktree; default: process cwd.",
+    },
+    fromCwd: {
+      type: "string",
+      description: "Source worktree with .dysflow/project.json.",
+    },
+    overrideProjectRoot: {
+      type: "string",
+      description: "New root; must equal target cwd.",
     },
     frontendFile: {
       type: "string",
-      description: "Access frontend basename located at the worktree root.",
+      description: "Frontend basename at worktree root.",
     },
     backendPath: ACCESS_TARGET_BLOCK.backendPath,
     projectId: PROJECT_IDENTITY_BLOCK.projectId,
@@ -25,29 +33,39 @@ export const SETUP_PROJECT_SCHEMA: JsonObjectSchema = {
     destinationRoot: MANAGED_SOURCE_TARGET_BLOCK.destinationRoot,
     capabilities: {
       type: "object",
-      description: "Initial project write capabilities.",
+      description: "Initial capabilities.",
       additionalProperties: false,
       properties: {
         allowWrites: {
           type: "boolean",
-          description: "Permit project-scoped writes. Defaults to true.",
+          description: "Default: true.",
         },
         writeExecutionPolicy: {
           type: "string",
           enum: ["safe-by-default", "developer"],
-          description: "Initial project write-execution policy.",
+        },
+        procedures: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            allow: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
         },
       },
     },
     timeoutMs: {
       type: "number",
-      description: "Optional positive per-project operation timeout in milliseconds.",
+      description: "Positive operation timeout (ms).",
       minimum: 1,
     },
     ...WRITE_INTENT_BLOCK,
   },
   anyOf: [
     { required: ["frontendFile"] },
+    { required: ["fromCwd", "overrideProjectRoot"] },
     { required: ["projectId", "projectChoiceReason", "recoveryToken"] },
   ],
 };

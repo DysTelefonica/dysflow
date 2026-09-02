@@ -51,6 +51,7 @@ when it differs from this map.
 
 | Friction | Use | Read before acting |
 |---|---|---|
+| Need to create a config with a procedure allowlist or inherit one from a sibling worktree | [`setup_project`](../assets/examples/setup-project.md) | Preview `resolvedConfig`; use `capabilities.procedures.allow` for a fresh allowlist or `fromCwd` + `overrideProjectRoot` for a sibling import |
 | Need to remove obsolete project fields safely | [`migrate_project_config`](../assets/examples/migrate-project-config.md) | Preview with `apply:false`; commit only after reviewing the plan |
 | Need environment or project health checks | [`doctor`](../assets/examples/doctor.md) | Critical findings block; warnings remain diagnostic evidence |
 | Need bounded invocation evidence | [`logs`](../assets/examples/logs.md) | Filter by exact tool or group by tool; telemetry does not contain argument values |
