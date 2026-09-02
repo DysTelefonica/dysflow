@@ -2,11 +2,12 @@
 //
 // Topology:
 //   1. PowerShell runner (`Invoke-ListVbaModulesAction`) walks the live
-//      VBProject.VBComponents ONCE, releases every component COM reference
+//      VBProject.VBComponents, releases every component COM reference
 //      in `finally { FinalReleaseComObject }`, applies the optional
 //      `typeFilter` and `namePattern` filters, and writes a structured
 //      payload. The runner does NOT touch the source tree (no Access call
-//      elsewhere; the cross-reference pass is filesystem-only).
+//      elsewhere; an unfiltered empty result is retried once before the
+//      cross-reference pass, which is filesystem-only).
 //
 //   2. This service consumes the runner output, normalizes it, pairs every
 //      binary-side row with its source-side counterpart (filesystem walk of
@@ -106,6 +107,8 @@ export type ListVbaModulesContext = {
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const EMPTY_ACTIVE_VBA_PROJECT_WARNING =
+  "Access returned an empty active VBA project after a retry; the module inventory may require refresh.";
 const SUPPORTED_TYPE_FILTERS: ReadonlySet<VbaTypeFilterName> = new Set([
   "standard",
   "class",
@@ -186,70 +189,91 @@ export async function runListVbaModules(
   const runnerTypeFilter =
     typeFilter === undefined ? null : (typeFilter as VbaTypeFilterName | null);
   const runnerNamePattern = namePattern === undefined ? null : translateNamePattern(namePattern);
-  const result = await ctx.runVbaManager({
-    scriptPath: ctx.scriptPath,
-    action: "List-VbaModules",
-    accessPath: target.data.accessPath,
-    destinationRoot: target.data.destinationRoot,
-    moduleNames: [],
-    json: true,
-    extra: {
-      typeFilter: runnerTypeFilter ?? undefined,
-      namePattern: runnerNamePattern ?? undefined,
-      applyTypeFilter: runnerTypeFilter !== null,
-      applyNamePattern: runnerNamePattern !== null,
-      includeSource: params.includeSource === true,
-    },
-    password: ctx.accessPassword,
-    timeoutMs: effectiveTimeoutMs,
-  });
+  const enumerateActiveProject = async (): Promise<OperationResult<ListVbaModulesRunnerResult>> => {
+    const result = await ctx.runVbaManager({
+      scriptPath: ctx.scriptPath,
+      action: "List-VbaModules",
+      accessPath: target.data.accessPath,
+      destinationRoot: target.data.destinationRoot,
+      moduleNames: [],
+      json: true,
+      extra: {
+        typeFilter: runnerTypeFilter ?? undefined,
+        namePattern: runnerNamePattern ?? undefined,
+        applyTypeFilter: runnerTypeFilter !== null,
+        applyNamePattern: runnerNamePattern !== null,
+        includeSource: params.includeSource === true,
+      },
+      password: ctx.accessPassword,
+      timeoutMs: effectiveTimeoutMs,
+    });
 
-  if (result.timedOut) {
-    return failureResult(
-      createDysflowError(
-        "VBA_MANAGER_TIMEOUT",
-        `list_vba_modules timed out after ${result.durationMs}ms.`,
-        {
-          retryable: true,
-          details: { toolName: "list_vba_modules", durationMs: result.durationMs },
-        },
-      ),
-    );
-  }
+    if (result.timedOut) {
+      return failureResult(
+        createDysflowError(
+          "VBA_MANAGER_TIMEOUT",
+          `list_vba_modules timed out after ${result.durationMs}ms.`,
+          {
+            retryable: true,
+            details: { toolName: "list_vba_modules", durationMs: result.durationMs },
+          },
+        ),
+      );
+    }
 
-  let parsed: ListVbaModulesRunnerResult | { ok: false; error: { code: string; message: string } };
-  try {
-    parsed = JSON.parse(extractFirstJson(result.stdout));
-  } catch (error) {
-    return failureResult(
-      createDysflowError(
-        "VBA_MANAGER_INVALID_OUTPUT",
-        `list_vba_modules runner output was not parseable: ${String(error)}`,
-        { details: { stderrTail: result.stderr.slice(-2000) } },
-      ),
-    );
-  }
+    let parsed:
+      | ListVbaModulesRunnerResult
+      | { ok: false; error: { code: string; message: string } };
+    try {
+      parsed = JSON.parse(extractFirstJson(result.stdout));
+    } catch (error) {
+      return failureResult(
+        createDysflowError(
+          "VBA_MANAGER_INVALID_OUTPUT",
+          `list_vba_modules runner output was not parseable: ${String(error)}`,
+          { details: { stderrTail: result.stderr.slice(-2000) } },
+        ),
+      );
+    }
 
-  if (parsed.ok === false) {
-    const err = parsed.error;
-    return failureResult(
-      createDysflowError(
-        err.code ?? "VBA_MANAGER_FAILED",
-        err.message ?? "list_vba_modules failed",
-        {
-          details: { toolName: "list_vba_modules" },
-        },
-      ),
-    );
+    if (parsed.ok === false) {
+      const err = parsed.error;
+      return failureResult(
+        createDysflowError(
+          err.code ?? "VBA_MANAGER_FAILED",
+          err.message ?? "list_vba_modules failed",
+          {
+            details: { toolName: "list_vba_modules" },
+          },
+        ),
+      );
+    }
+    if (!Array.isArray(parsed.components)) {
+      return failureResult(
+        createDysflowError(
+          "VBA_MANAGER_INVALID_OUTPUT",
+          "list_vba_modules payload missing `components` array.",
+        ),
+      );
+    }
+    return successResult(parsed);
+  };
+
+  let enumeration = await enumerateActiveProject();
+  if (!enumeration.ok) return enumeration;
+  let warnings: readonly string[] | undefined;
+  if (
+    runnerTypeFilter === null &&
+    runnerNamePattern === null &&
+    enumeration.data.components.length === 0
+  ) {
+    enumeration = await enumerateActiveProject();
+    if (!enumeration.ok) return enumeration;
+    if (enumeration.data.components.length === 0) {
+      warnings = [EMPTY_ACTIVE_VBA_PROJECT_WARNING];
+    }
   }
-  if (!Array.isArray(parsed.components)) {
-    return failureResult(
-      createDysflowError(
-        "VBA_MANAGER_INVALID_OUTPUT",
-        "list_vba_modules payload missing `components` array.",
-      ),
-    );
-  }
+  const parsed = enumeration.data;
 
   // Cross-reference: walk the source tree ONCE and pair every binary row
   // with its (case-insensitive) on-disk counterpart. We do NOT call Access
@@ -329,6 +353,7 @@ export async function runListVbaModules(
   });
   return successResult({
     modules,
+    ...(warnings === undefined ? {} : { warnings }),
     summary: {
       total: modules.length,
       inBinaryOnly,

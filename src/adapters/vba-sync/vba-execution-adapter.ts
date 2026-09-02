@@ -6,6 +6,7 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
+import { classifyVbaRunnerFailure } from "../../core/services/vba-service.js";
 import {
   isAbsolutePath,
   isRecord,
@@ -665,18 +666,37 @@ type VbaTestFailureDetail = {
   logs: unknown[];
   durationMs: number | undefined;
   payload: unknown;
+  cause?: {
+    code: "PROCEDURE_NOT_CALLABLE" | "VBA_RUNTIME_ERROR";
+    retryable: boolean;
+    remediation: string;
+  };
 };
 
 /** How many failing procedures to name in the human-readable error message. */
 const TESTS_FAILED_SUMMARY_LIMIT = 5;
 
 function toTestFailureDetail(test: Record<string, unknown>): VbaTestFailureDetail {
+  const error = stringValue(test.error);
+  const classification = error === undefined ? undefined : classifyVbaRunnerFailure(error);
   return {
     procedure: stringValue(test.procedure),
-    error: stringValue(test.error),
+    error,
     logs: Array.isArray(test.logs) ? test.logs : [],
     durationMs: typeof test.durationMs === "number" ? test.durationMs : undefined,
     payload: test.payload,
+    ...(classification === undefined
+      ? {}
+      : {
+          cause: {
+            code: classification.code,
+            retryable: classification.retryable,
+            remediation:
+              classification.code === "PROCEDURE_NOT_CALLABLE"
+                ? classification.remediation
+                : (createDysflowError(classification.code, "").remediation ?? ""),
+          },
+        }),
   };
 }
 
