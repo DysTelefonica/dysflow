@@ -131,7 +131,7 @@
   },
   "import_modules": {
     "path": "assets/examples/import-modules.md",
-    "sha256": "dc95412aed6d4122c675119304874da966ec69c6ad61466ec226662dcd5c891d",
+    "sha256": "23db3547321ff58a5f3654096be8117b1d3e819aea6625cfd1b504d47a187be6",
     "needs_human_content": false
   },
   "link_tables": {

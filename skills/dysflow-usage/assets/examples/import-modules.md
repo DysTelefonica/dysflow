@@ -38,7 +38,35 @@ silently choosing another destination.
 
 ## Result shape
 
-Verbose entries include source/destination snapshots, `truncated`, `mismatchReason`, `classification`, `actionable`, and `recommendation`. `IMPORT_TRUNCATED` is fatal and rolls back.
+A successful committed import returns its PowerShell payload as an object, never
+as a bare top-level array.
+
+Inside the public result data, read the nested `modules[]` member from the
+payload stored under `result`:
+
+```json
+{
+  "result": {
+    "ok": true,
+    "modules": [
+      {
+        "module": "Module1",
+        "status": "ok"
+      }
+    ]
+  }
+}
+```
+
+Do not branch on a top-level array: the `{ "ok": true, "modules": [...] }`
+transport envelope preserves multi-module batches across MCP hosts.
+
+Every module entry must report `status:"ok"`; a failed entry makes the import
+fail even if the outer transport marker says `ok:true`.
+
+Verbose module entries also include source/destination snapshots, `truncated`,
+`mismatchReason`, `classification`, `actionable`, and `recommendation`.
+`IMPORT_TRUNCATED` is fatal and rolls back.
 
 ## Common errors
 
