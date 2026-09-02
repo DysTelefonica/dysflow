@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.3.1] - 2026-09-02
+
+### Changes
+
+- fix(vba): harden multi-module import flows (#1702)
+- test(e2e): track verified Access fixtures
+
+
 ## [v4.3.0] - 2026-09-02
 
 ### Changes
