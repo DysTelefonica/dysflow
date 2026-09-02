@@ -75,6 +75,17 @@ switch.
 - `actionableDifferent[]` and `nonActionableDifferent[]` — diagnostic-only classified evidence. `bothChanged` means conflict/manual merge; non-actionable entries explain noise and must not trigger a sync.
 - `dysflowVersion` — runtime version. Cross-check via `get_capabilities`.
 
+`summaryByCategory` and `nonActionableByCategory` are aggregate counts. They do
+not identify which module belongs to a category, so never align those totals
+with module names from another array or report. Use one whole-scope
+`diagnostic:true` call and read `actionableDifferent[]` and
+`nonActionableDifferent[]` when membership matters.
+
+An Access form or report can produce separate `.cls` and `.form.txt` entries
+for code-behind and layout. Dysflow classifies those artifacts independently,
+and both can contribute to the aggregate counts even though they share one
+logical module name.
+
 ## Live verification
 
 ```bash

@@ -238,6 +238,24 @@ silently picking one intent — always read
 See `assets/examples/` for the canonical per-tool index. Every advertised MCP
 tool has a kebab-case `.md` example file there.
 
+## `verify_code` decision contract
+
+Use `actionableOk` and `recommendedAction` as the sync gate. Raw `ok` means
+byte/source parity and can be false for non-actionable `caseOnly`,
+`whitespaceOnly`, `attributeOnly`, `formSerializationOnly`, or `encodingOnly`
+noise.
+
+`summaryByCategory` and `nonActionableByCategory` are aggregate counts. They do
+not identify module membership. Never align those totals with names from a
+different array or report. When membership matters, make one whole-scope
+`verify_code({diagnostic:true})` call and read `actionableDifferent[]` and
+`nonActionableDifferent[]`.
+
+One logical Access form or report can emit separate `.cls` and `.form.txt`
+entries for code-behind and layout. Dysflow classifies the two artifacts
+independently, so both may contribute to aggregate counts under the same module
+name. See `assets/examples/verify-code.md` for the complete result contract.
+
 ## Form UI tools — perceive → act → verify
 
 The form-UI builder surface treats an Access form like a web page: perceive it, act with rich verbs, re-verify. All operate on `FormIR` (parsed `.form.txt`); the write tools go through the same guarded write + import gate. Full workflow in the **`access-form-ui-builder`** skill; canonical flags/errors stay here.

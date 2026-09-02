@@ -5,6 +5,8 @@
 ### Changed
 
 - Document external `query_execute` reads and their write-mode rejection boundary.
+- Clarify that compact `verify_code` category maps are aggregate artifact counts,
+  not module membership, and require `diagnostic:true` for classified entries.
 
 ## 2.0.0 (2026-08-23)
 

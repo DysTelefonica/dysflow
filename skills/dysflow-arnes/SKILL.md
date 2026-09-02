@@ -170,6 +170,16 @@ authoritative.
   path, or `verify_form_bindings` for typed schema validation. See AP-12 and the
   `access-form-ui-builder` skill §"Forms desatendidos".
 
+- **HR-15 — Gate `verify_code` on actionability, never compact-count
+  guesswork.** Read `actionableOk` and `recommendedAction`; raw `ok` can be
+  false for non-actionable noise. `summaryByCategory` and
+  `nonActionableByCategory` are aggregate counts and do not identify module
+  membership. Use one whole-scope `diagnostic:true` call and read
+  `actionableDifferent[]` / `nonActionableDifferent[]` when names matter.
+  One logical Access form/report may emit separate `.cls` and `.form.txt`
+  entries, classified independently. Identifier-only `caseOnly` drift is
+  non-actionable; strings and comments remain case-sensitive.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -265,6 +275,12 @@ load `access-vba-e2e-methodology`.
   `Form_Load`. Hand-parsing the `.form.txt` for `ControlSource =` is the wrong
   shape for this form style and leads to false "missing binding" reports. See
   the `access-form-ui-builder` skill §"Forms desatendidos".
+
+- **AP-13 — Assigning compact `verify_code` category totals to named
+  modules.** Compact category maps are aggregate counts, not membership lists.
+  Do not correlate them with log order, requested names, or another array. Use
+  `diagnostic:true` once for the full scope and read the classified
+  `actionableDifferent[]` / `nonActionableDifferent[]` entries.
 
 ## 6. Companion depth layer (where detail lives)
 
