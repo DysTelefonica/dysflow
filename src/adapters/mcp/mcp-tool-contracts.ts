@@ -290,8 +290,7 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     access: "conditional-write",
     writeGate: "conditional",
     dryRunDefault: true,
-    summary:
-      "Conditional-write MCP contract; creates a fresh config, preserves an existing procedure allowlist, or imports a sibling worktree config with fromCwd plus overrideProjectRoot. Omitted apply plans, and apply:true atomically publishes behind the process and candidate project write gates.",
+    summary: "Create/import config; apply:false plans, apply:true writes.",
   },
   register_worktree: {
     access: "read-only",

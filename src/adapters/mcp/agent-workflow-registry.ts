@@ -274,9 +274,7 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
     "Discover all tools with view:'compact'; request view:'full' only for catalog-wide contract analysis.",
   ],
   describe_tool: ["Inspect one selected tool's complete contract after compact discovery."],
-  setup_project: [
-    "Bootstrap a missing per-worktree project config, including a procedure allowlist or a sibling worktree import, through MCP.",
-  ],
+  setup_project: ["Create/import a worktree config."],
   register_worktree: ["Pre-warm a sibling worktree context and inspect cache hit/miss telemetry."],
   clear_worktree_cache: [
     "Force one worktree or the complete process-local cache to rescan on the next call.",

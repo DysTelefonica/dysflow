@@ -987,13 +987,12 @@ function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSc
     codes.push(
       {
         code: "FROMCWD_NOT_FOUND",
-        description:
-          "fromCwd does not contain a readable .dysflow/project.json source configuration.",
+        description: "Source config missing/unreadable.",
         recoverable: true,
       },
       {
         code: "FROMCWD_CONFIG_INVALID",
-        description: "The fromCwd project configuration is malformed or not write-ready.",
+        description: "Source config malformed/not write-ready.",
         recoverable: true,
       },
     );
