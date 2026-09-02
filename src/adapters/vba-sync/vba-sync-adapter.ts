@@ -1443,6 +1443,7 @@ function parseOutput(stdout: string, secrets: readonly string[]): unknown {
  *   - a bare per-module object `{module, status:"ok", ...}` (PowerShell unwraps a
  *     single-element array on ConvertTo-Json), or
  *   - an array of per-module objects, or
+ *   - an `{ok:true, modules}` transport envelope, or
  *   - a failure envelope `{ok:false, error, modules}` when any module failed.
  *
  * A payload is "fully successful" only when every per-module entry reports
@@ -1458,6 +1459,9 @@ function importOutputIsFullySuccessful(parsedOutput: unknown): boolean {
   }
   if (isRecord(parsedOutput)) {
     if (parsedOutput.ok === false) return false;
+    if (parsedOutput.ok === true && Array.isArray(parsedOutput.modules)) {
+      return parsedOutput.modules.length > 0 && parsedOutput.modules.every(moduleIsOk);
+    }
     return moduleIsOk(parsedOutput);
   }
   return false;

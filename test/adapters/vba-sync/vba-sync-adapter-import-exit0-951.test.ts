@@ -78,6 +78,24 @@ describe("import exit-0 per-module failure detection (#951)", () => {
     expect(result.error.message).not.toContain("exit code 0");
   });
 
+  it("import_modules with exit 0 and an ok:true envelope containing an error entry is a failure", async () => {
+    const adapter = buildAdapter(
+      executorEmitting({
+        ok: true,
+        modules: [{ module: "ModBroken", status: "error", phase: "remove-existing" }],
+      }),
+    );
+
+    const result = await adapter.execute("import_modules", {
+      moduleNames: ["ModBroken"],
+      apply: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("VBA_MANAGER_FAILED");
+  });
+
   it("import_all with an explicit empty moduleNames plan and an empty-array payload stays a success (no-op contract)", async () => {
     const adapter = buildAdapter(executorEmitting([]));
 

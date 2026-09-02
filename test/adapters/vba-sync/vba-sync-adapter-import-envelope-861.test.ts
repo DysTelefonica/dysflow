@@ -87,6 +87,30 @@ describe("import_modules envelope consistency (#861)", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("treats an ok:true envelope with all-ok modules and a non-zero exit as success", async () => {
+    const envelope = {
+      ok: true,
+      modules: [OK_MODULE, { ...OK_MODULE, module: "Form_Other" }],
+    };
+    const executor: VbaManagerExecutor = async () => ({
+      exitCode: 1,
+      stdout: `DYSFLOW_RESULT ${JSON.stringify(envelope)}`,
+      stderr: "",
+      durationMs: 20,
+      timedOut: false,
+    });
+    const adapter = buildAdapter(executor);
+
+    const result = await adapter.execute("import_modules", {
+      moduleNames: ["Form_FormRiesgoBiblioteca", "Form_Other"],
+      apply: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((result.data as { result: unknown }).result).toEqual(envelope);
+  });
+
   it("keeps a genuine per-module failure as a failure envelope", async () => {
     const executor: VbaManagerExecutor = async () => ({
       exitCode: 1,
