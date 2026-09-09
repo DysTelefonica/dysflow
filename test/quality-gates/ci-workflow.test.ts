@@ -464,6 +464,19 @@ describe("repository quality gates", () => {
     );
   });
 
+  it("scopes the e2e-validation job to the minimum GITHUB_TOKEN permissions (#1707)", async () => {
+    // Every other job in release.yml declares an explicit permissions block;
+    // e2e-validation only checks out the repo and downloads a build artifact,
+    // so it needs nothing beyond read access to both.
+    const workflow = await readText(".github/workflows/release.yml");
+    const e2e = workflowJobBlock(workflow, "e2e-validation");
+
+    expect(e2e).toMatch(/^\s*permissions:\s*$/m);
+    expect(e2e).toMatch(/^\s*contents: read\s*$/m);
+    expect(e2e).toMatch(/^\s*actions: read\s*$/m);
+    expect(e2e).not.toContain("contents: write");
+  });
+
   it("requires an explicit external fixture source for every self-hosted Access gate (#1676)", async () => {
     const workflowPaths = [
       ".github/workflows/release.yml",
