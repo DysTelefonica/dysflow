@@ -14,21 +14,23 @@ function readText(path: string): string {
 }
 
 /**
- * Extract the inline `run:` block scalar from the workflow. The workflow uses
- * `run: |` (block scalar) so the body is the indented text under the `run:`
- * line. We capture the LAST `run: |` block (the new assert-release-name step)
- * because it is the one that runs the assertion; earlier `run: |` blocks
- * (build, sign) are not what this test cares about.
+ * Extract the inline `run:` block scalar for the "Assert release name == tag"
+ * step. The workflow uses `run: |` (block scalar) so the body is the indented
+ * text under the `run:` line. This step is no longer the last one in the job
+ * (#1710 added a failure-cleanup step after it), so the block is anchored to
+ * the step's own name rather than "the last `run:` block in the file".
  */
 function extractLastRunBlock(workflow: string): string {
-  const matches = [
-    ...workflow.matchAll(/run:\s*\|\s*\n([\s\S]+?)(?=\n {10}[a-z-]+:\s|\n[a-z-]+:\s|$)/g),
-  ];
-  const last = matches[matches.length - 1];
-  if (!last || last[1] === undefined) {
-    throw new Error("could not extract last `run:` block from workflow");
+  const stepStart = workflow.indexOf("Assert release name == tag");
+  if (stepStart < 0) {
+    throw new Error('could not find the "Assert release name == tag" step in the workflow');
   }
-  const lines = last[1].split("\n");
+  const fromStep = workflow.slice(stepStart);
+  const match = /run:\s*\|\s*\n([\s\S]+?)(?=\n {6}- name:|\n {4}[a-z-]+:\s|$)/.exec(fromStep);
+  if (!match || match[1] === undefined) {
+    throw new Error("could not extract the assert step's `run:` block from workflow");
+  }
+  const lines = match[1].split("\n");
   const indents = lines
     .filter((l) => l.trim().length > 0)
     .map((l) => l.match(/^ */)?.[0].length ?? 0);
@@ -57,7 +59,8 @@ describe("release name == tag_name CI guard (#668)", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions template syntax in test name
     it("passes name: ${{ github.ref_name }} to softprops/action-gh-release@v3", () => {
       const workflow = readText(RELEASE_YML);
-      expect(workflow).toContain("uses: softprops/action-gh-release@v3");
+      // #1705 pinned this to a commit SHA with a trailing `# v3.x.x` comment.
+      expect(workflow).toMatch(/uses: softprops\/action-gh-release@[0-9a-f]{40} # v3\.\d+\.\d+/);
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions template syntax, not a JS template literal
       expect(workflow).toContain("name: ${{ github.ref_name }}");
     });
