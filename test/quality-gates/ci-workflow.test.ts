@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { PR_SMOKE_TESTS } from "../e2e-suite-authority.js";
 
@@ -272,12 +272,36 @@ describe("repository quality gates", () => {
     // The floor moved to 26 in #1506, and restating any literal here would make
     // this test a second source of truth for the supported range. The matrix
     // test below owns that, derived from engines.node; this one owns the
-    // actions.
+    // actions. #1705 moved every action reference from a floating tag to a
+    // pinned commit SHA, so this now checks the SHA-pinned form instead of
+    // the tag.
     const workflow = await readText(".github/workflows/ci.yml");
 
-    expect(workflow).toContain("uses: actions/checkout@v5");
-    expect(workflow).toContain("uses: actions/setup-node@v5");
-    expect(workflow).toContain("uses: pnpm/action-setup@v6");
+    expect(workflow).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v5\.\d+\.\d+/);
+    expect(workflow).toMatch(/uses: actions\/setup-node@[0-9a-f]{40} # v5\.\d+\.\d+/);
+    expect(workflow).toMatch(/uses: pnpm\/action-setup@[0-9a-f]{40} # v6\.\d+\.\d+/);
+  });
+
+  it("pins every GitHub Action reference to a full commit SHA (#1705)", async () => {
+    // A floating major-version tag (e.g. `@v5`) is a mutable ref: the action
+    // owner can repoint it to different code without the workflow file
+    // changing, which is a supply-chain risk for anything that runs with
+    // repository secrets. Pinning to the resolved commit SHA makes the
+    // workflow reproducible and auditable; the trailing `# vX.Y.Z` comment
+    // keeps the human-readable version next to the SHA it resolves to.
+    const workflowFiles = await readdir(".github/workflows");
+    for (const file of workflowFiles.filter((name) => name.endsWith(".yml"))) {
+      const workflow = await readText(`.github/workflows/${file}`);
+      const usesLines = [...workflow.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)].map(
+        (match) => match[1] ?? "",
+      );
+      for (const usesLine of usesLines) {
+        expect(
+          usesLine,
+          `${file} references "${usesLine}" without a pinned 40-character commit SHA`,
+        ).toMatch(/@[0-9a-f]{40}$/);
+      }
+    }
   });
 
   it("runs the quality gates on every Node major the package claims to support (#1153)", async () => {
