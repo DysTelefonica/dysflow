@@ -436,3 +436,21 @@ jobs:
             exit 1
           fi
           echo "Release name matches tag: ${TAG}"
+
+      # A step failing after "Create GitHub Release" (e.g. the title assertion
+      # above) would otherwise leave a broken, published GitHub Release behind
+      # with a red job. Delete it so a failed run never ships a partial
+      # release; the tag itself is untouched and the run can be retried.
+      - name: Clean up partial release on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release delete "${TAG}" --yes
+            echo "Deleted partial release ${TAG}"
+          else
+            echo "No release exists for ${TAG}; nothing to clean up"
+          fi

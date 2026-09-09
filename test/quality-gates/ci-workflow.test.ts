@@ -477,6 +477,26 @@ describe("repository quality gates", () => {
     expect(e2e).not.toContain("contents: write");
   });
 
+  it("cleans up a partial GitHub Release when a later release step fails (#1710)", async () => {
+    // The release step ("Create GitHub Release") can succeed and still be
+    // followed by a failing step (e.g. the title assertion). Without cleanup
+    // that leaves a broken, published release behind with nothing to signal
+    // it should not be trusted beyond the red job.
+    const workflow = await readText(".github/workflows/release.yml");
+    const release = workflowJobBlock(workflow, "release");
+    const steps = release.split(/^ {6}- name: /m).slice(1);
+
+    const createIndex = steps.findIndex((step) => step.startsWith("Create GitHub Release"));
+    const cleanupIndex = steps.findIndex((step) =>
+      step.startsWith("Clean up partial release on failure"),
+    );
+
+    expect(createIndex, "release job has no Create GitHub Release step").toBeGreaterThanOrEqual(0);
+    expect(cleanupIndex, "release job has no failure-cleanup step").toBeGreaterThan(createIndex);
+    expect(steps[cleanupIndex]).toMatch(/^\s*if: failure\(\)\s*$/m);
+    expect(steps[cleanupIndex]).toContain("gh release delete");
+  });
+
   it("requires an explicit external fixture source for every self-hosted Access gate (#1676)", async () => {
     const workflowPaths = [
       ".github/workflows/release.yml",
