@@ -1,0 +1,6 @@
+# CI/CD and release-trust surfaces require review from a repo owner before
+# merge. See docs/security/update-trust-model.md for why the signing/update
+# path is sensitive.
+/.github/workflows/ @ardelperal
+/.github/scripts/ @ardelperal
+/src/cli/commands/install/ @ardelperal
