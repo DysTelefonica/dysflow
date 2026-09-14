@@ -2,13 +2,7 @@
 
 **Status:** Production-ready MCP/CLI runtime for safe Microsoft Access automation on Windows.
 
-<p align="center">
-  <a href="https://github.com/DysTelefonica/dysflow/releases">
-    <img src="https://img.shields.io/github/v/release/DysTelefonica/dysflow" alt="Release" />
-  </a>
-  <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform: Windows" />
-  <img src="https://img.shields.io/badge/Node-26-339933?logo=node.js&logoColor=white" alt="Node 26" />
-</p>
+<p align="center"> <a href="https://github.com/DysTelefonica/dysflow/releases"> <img src="https://img.shields.io/github/v/release/DysTelefonica/dysflow" alt="Release" /> </a> <img src="https://img.shields.io/badge/Platform-Windows-lightgrey" alt="Platform: Windows" /> <img src="https://img.shields.io/badge/Node-26-339933?logo=node.js&logoColor=white" alt="Node 26" /> </p>
 
 Dysflow gives agents and scripts a **controlled, auditable execution surface** for Access/VBA tasks: query execution, procedure calls, diagnostics, operation tracking, and safe cleanup.
 
@@ -36,22 +30,17 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 ## Releases
 
-Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`, which wraps
-the full workflow (bump version, update CHANGELOG, push, **wait for CI green on
-the release commit's SHA**, tag, push tag) and refuses to tag unless CI concludes
-`success`. The release workflow then builds the tarball, signs `SHA256SUMS` with
-Ed25519, and publishes the GitHub Release.
+Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`, which wraps the full workflow (bump version, update CHANGELOG, push, **wait for CI green on the release commit's SHA**, tag, push tag) and refuses to tag unless CI concludes `success`.
 
-The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md).
-Heavy MCP E2E (`pnpm test:e2e:mcp:release`) runs only in the tag-triggered release
-workflow. Its structural contracts are pinned by cheap vitest tests in
-`test/quality-gates/mcp-e2e-*`.
+The release workflow then builds the tarball, signs `SHA256SUMS` with Ed25519, and publishes the GitHub Release.
 
-MCP invocation telemetry is local to the selected project at
-`.dysflow/runtime/invocations.jsonl`. It records only tool and parameter names;
-argument values are never persisted. Set `capabilities.telemetry.invocations` to
-`false` in `.dysflow/project.json` to opt out, and use the read-only `logs` tool
-for exact `tool` or coarse `action` filters and `groupBy: "tool"` aggregation.
+The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md). Heavy MCP E2E (`pnpm test:e2e:mcp:release`) runs only in the tag-triggered release workflow.
+
+Its structural contracts are pinned by cheap vitest tests in `test/quality-gates/mcp-e2e-*`.
+
+MCP invocation telemetry is local to the selected project at `.dysflow/runtime/invocations.jsonl`. It records only tool and parameter names; argument values are never persisted.
+
+Set `capabilities.telemetry.invocations` to `false` in `.dysflow/project.json` to opt out, and use the read-only `logs` tool for exact `tool` or coarse `action` filters and `groupBy: "tool"` aggregation.
 
 The same opt-out covers `.dysflow/runtime/schema-advertisements.jsonl`, which counts
 what each `tools/list` costs the client.
@@ -140,7 +129,10 @@ Every `dysflow` invocation that starts Access records an operation with:
 ### 2) Cleanup is explicit, owned, and validated
 
 `cleanup_access_operation`/`cleanup_access_operation` only succeeds when all safety checks pass.
-Cleanup targets **only Dysflow-owned Access processes** with attribution through an operation id, marker file, PID record, and process start time. Matching by process name, database path, or command line alone is diagnostic only; it is not ownership and must report/block instead of terminating Access.
+
+Cleanup targets **only Dysflow-owned Access processes** with attribution through an operation id, marker file, PID record, and process start time.
+
+Matching by process name, database path, or command line alone is diagnostic only; it is not ownership and must report/block instead of terminating Access.
 
 Refusal examples include:
 
@@ -152,7 +144,9 @@ Refusal examples include:
 - `CLEANUP_PROCESS_START_TIME_MISMATCH`
 - `CLEANUP_STATUS_NOT_ELIGIBLE`
 
-**Interrupted `starting` operations.** An operation is registered as `starting` (with `accessPid: null`) *before* the Access process is spawned. If the runtime is interrupted in that window (client abort, hard kill), the record is orphaned in `starting` with no PID because the finalizing transition never runs. Such records are handled safely:
+**Interrupted `starting` operations.** An operation is registered as `starting` (with `accessPid: null`) *before* the Access process is spawned.
+
+If the runtime is interrupted in that window (client abort, hard kill), the record is orphaned in `starting` with no PID because the finalizing transition never runs. Such records are handled safely:
 
 - The pre-flight cleanup that runs before every Access operation transitions a *stale* `starting` record (no PID, idle past the in-flight grace window) to `failed` and stamps `metadata.interruptedReason`. This is **registry-only bookkeeping — it inspects and kills nothing**, because no PID was ever owned.
 - `cleanup_access_operation` may retire a stale `starting`/no-PID record **without `force`**, since there is no owned process to kill. It still refuses (never kills) if a live `MSACCESS.EXE` bound to *that record's* `accessPath` is found, and the scan is scoped to that `accessPath` — Access processes of other projects (different `.accdb`) are never matched or touched.
@@ -167,7 +161,9 @@ Refusal examples include:
 
 #### 3a) Risk-based write execution policy (v2.1.0, issue #779)
 
-For routine local development, the blanket `dryRun: true` default on every write-class tool is friction in the wrong place: the `import_modules → test_vba → verify_code` loop should not require `dryRun:false` boilerplate. Operators can opt into a developer mode that flips the dry-run default for routine dev tools, while **keeping hard protection** on destructive, arbitrary, and process-control operations.
+For routine local development, the blanket `dryRun: true` default on every write-class tool is friction in the wrong place: the `import_modules → test_vba → verify_code` loop should not require `dryRun:false` boilerplate.
+
+Operators can opt into a developer mode that flips the dry-run default for routine dev tools, while **keeping hard protection** on destructive, arbitrary, and process-control operations.
 
 Configure the policy in `.dysflow/project.json`:
 
@@ -198,12 +194,11 @@ effectiveDryRunDefault: {
 }
 ```
 
-MCP invocations are recorded locally in the owning project's
-`.dysflow/runtime/invocations.jsonl`. The sink contains tool/parameter names
-and typed outcomes. The sole argument-value exception is the canonical
-`projectId`, retained so multi-project calls can be attributed; SQL, passwords,
-paths, and every other value are never recorded. Appends and rotation share a
-cross-process lock, and the sink rotates automatically. To opt out for a project:
+MCP invocations are recorded locally in the owning project's `.dysflow/runtime/invocations.jsonl`. The sink contains tool/parameter names and typed outcomes.
+
+The sole argument-value exception is the canonical `projectId`, retained so multi-project calls can be attributed; SQL, passwords, paths, and every other value are never recorded.
+
+Appends and rotation share a cross-process lock, and the sink rotates automatically. To opt out for a project:
 
 ```json
 {
@@ -231,7 +226,9 @@ The write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `allowedPr
 
 #### 3b) Export-source guard (v2.1.0, issue #779)
 
-Exporting the binary source tree (`export_modules`, `export_all`) is destructive — if the destination overlaps the active source root, the export silently overwrites the developer's working tree. The export-source guard replaces the blanket `dryRun: true` posture with a context-specific confirmation:
+Exporting the binary source tree (`export_modules`, `export_all`) is destructive — if the destination overlaps the active source root, the export silently overwrites the developer's working tree.
+
+The export-source guard replaces the blanket `dryRun: true` posture with a context-specific confirmation:
 
 - If the export destination is **outside** the active source root / managed source tree, developer mode may execute directly (subject to the existing write-gate).
 - If the export destination **overlaps** the active source root or any managed subfolder (`modules/`, `classes/`, `forms/`, `reports/`), the operator must pass `confirmOverwriteSource: true` explicitly. Case-insensitive on Windows; nested paths count as overlap.
@@ -251,7 +248,15 @@ EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION
 
 The check is implemented in `src/core/utils/path-overlap.ts` (`pathOverlapsSourceRoot`); see `test/core/utils/path-overlap.test.ts` for the truth table (exact match, nested managed folder, external path, Windows case-insensitive).
 
-**Runtime enforcement live in v2.1.1** (issue #785). v2.1.0 shipped the surface — `get_capabilities.effectiveDryRunDefault` and the `(mode, risk)` truth table — but the dispatch layer did not yet consult the resolved policy. v2.1.1 wires `writeExecutionPolicy` from `createDysflowMcpTools` through `registerMcpTools` and `createDispatchTool`, and the new helper `resolveEffectiveDryRunInput(name, mode, input)` runs at the dispatch boundary. With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and `test_vba` now reach the runner without explicit flags; `safe-by-default` projects keep the historical `dryRun: true` default byte-for-byte. The v2.1.0 promise of `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is finally live: in developer mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with the structured envelope shown above; `confirmOverwriteSource: true` bypasses the guard. The hard gates (`allowWrites`, `allowedProcedures`, explicit `dryRun`/`apply`) continue to win — explicit caller intent always wins over the policy default. See `openspec/changes/wire-write-policy-runtime-785/` for the full SDD change.
+**Runtime enforcement live in v2.1.1** (issue #785). v2.1.0 shipped the surface — `get_capabilities.effectiveDryRunDefault` and the `(mode, risk)` truth table — but the dispatch layer did not yet consult the resolved policy. v2.1.1 wires `writeExecutionPolicy` from `createDysflowMcpTools` through `registerMcpTools` and `createDispatchTool`, and the new helper `resolveEffectiveDryRunInput(name, mode, input)` runs at the dispatch boundary.
+
+With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and `test_vba` now reach the runner without explicit flags; `safe-by-default` projects keep the historical `dryRun: true` default byte-for-byte.
+
+The v2.1.0 promise of `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is finally live: in developer mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with the structured envelope shown above; `confirmOverwriteSource: true` bypasses the guard.
+
+The hard gates (`allowWrites`, `allowedProcedures`, explicit `dryRun`/`apply`) continue to win — explicit caller intent always wins over the policy default.
+
+See `openspec/changes/wire-write-policy-runtime-785/` for the full SDD change.
 
 ### 4) VBA procedure allowlist
 
@@ -281,7 +286,9 @@ A call to a procedure not in the list is rejected before any COM automation is s
 
 ### Install from the current GitHub Release (recommended)
 
-Use the current release asset from <https://github.com/DysTelefonica/dysflow/releases/latest> for production/runtime installs. The release page carries the versioned `dysflow-<tag>.tar.gz` asset and `SHA256SUMS`; avoid README-pinned "latest" tags because they drift after every release.
+Use the current release asset from <https://github.com/DysTelefonica/dysflow/releases/latest> for production/runtime installs.
+
+The release page carries the versioned `dysflow-<tag>.tar.gz` asset and `SHA256SUMS`; avoid README-pinned "latest" tags because they drift after every release.
 
 After installing or updating the runtime, verify:
 
@@ -304,7 +311,9 @@ pnpm install -g .
 
 Recommended production/runtime install remains profile-local on Windows (`%LOCALAPPDATA%\\dysflow`) for MCP tooling.
 
-If you use different Windows profiles and want updates to keep targeting a fixed runtime location, install with an explicit runtime directory. For true cross-user use on the same machine, choose a shared path that all intended users can read/write, such as `C:\Dysflow` or an ACL-managed `C:\ProgramData\dysflow\runtime`:
+If you use different Windows profiles and want updates to keep targeting a fixed runtime location, install with an explicit runtime directory.
+
+For true cross-user use on the same machine, choose a shared path that all intended users can read/write, such as `C:\Dysflow` or an ACL-managed `C:\ProgramData\dysflow\runtime`:
 
 ```powershell
 dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
@@ -323,13 +332,11 @@ configuration, update, uninstall, and troubleshooting.
 
 `dysflow install` persists the resolved runtime directory in a machine-level marker so future `dysflow update` calls can reuse the same installed runtime instead of falling back to the current user's `%LOCALAPPDATA%` path.
 
-The release also owns five Dysflow agent skills under `skills/`. Install and
-update copy only to detected adapter `SkillsDir` locations and publish all five
-skills as one transaction. Use `--only=opencode,codex` to opt in explicit
-adapters (and create their canonical skill directories), or
-`--exclude=claude,pi` to leave selected detected adapters untouched. `dysflow
-doctor` compares each detected adapter's installed hashes and harness version
-against the running product release.
+The release also owns five Dysflow agent skills under `skills/`. Install and update copy only to detected adapter `SkillsDir` locations and publish all five skills as one transaction.
+
+Use `--only=opencode,codex` to opt in explicit adapters (and create their canonical skill directories), or `--exclude=claude,pi` to leave selected detected adapters untouched.
+
+`dysflow doctor` compares each detected adapter's installed hashes and harness version against the running product release.
 
 ### Channels
 
@@ -394,7 +401,11 @@ C:\Users\<user>\AppData\Local\dysflow\bin
 
 ### After install: verify the MCP wiring
 
-This is the part most teammates miss. `dysflow install` writes the runtime to `%LOCALAPPDATA%\dysflow`, but **opencode's MCP wiring is a separate file** and it can silently keep pointing at a stale in-tree binary, a `test-runtime`, or a path that no longer exists. Run these three checks the first time you set up a new machine, and re-run them if a Dysflow tool starts returning `RUNNER_INVALID_JSON`, `CONFIG_TARGET_NOT_FOUND`, or a single-tenant result that looks like the wrong database.
+This is the part most teammates miss.
+
+`dysflow install` writes the runtime to `%LOCALAPPDATA%\dysflow`, but **opencode's MCP wiring is a separate file** and it can silently keep pointing at a stale in-tree binary, a `test-runtime`, or a path that no longer exists.
+
+Run these three checks the first time you set up a new machine, and re-run them if a Dysflow tool starts returning `RUNNER_INVALID_JSON`, `CONFIG_TARGET_NOT_FOUND`, or a single-tenant result that looks like the wrong database.
 
 ```powershell
 # 1. Confirm the installed runtime is the one opencode is actually calling.
@@ -419,7 +430,9 @@ if ($cmd -like "*\test-runtime\*" -or $cmd -like "*\Proyectos\dysflow\bin\*") {
 #    You should see the full backend table list, NOT a 2-table frontend stub.
 ```
 
-If step 2 reports a warning, run `dysflow install --agents opencode --no-tui` once and re-run the three checks. The `--no-tui` flag is the same installer used by `dysflow update` for OpenCode wiring, so it is safe to re-run on a working install; it only rewrites the `opencode.json` `mcp.dysflow.command` entry and the `C:\Users\<user>\AppData\Local\dysflow` install path.
+If step 2 reports a warning, run `dysflow install --agents opencode --no-tui` once and re-run the three checks.
+
+The `--no-tui` flag is the same installer used by `dysflow update` for OpenCode wiring, so it is safe to re-run on a working install; it only rewrites the `opencode.json` `mcp.dysflow.command` entry and the `C:\Users\<user>\AppData\Local\dysflow` install path.
 
 > Common failure mode: a teammate keeps the dev repo at `C:\Proyectos\dysflow` open in another tab, runs `pnpm install -g .` from there "to test a fix", and the global dysflow command on `PATH` starts pointing at a binary inside the dev worktree. After committing the fix, run `dysflow update` (or reinstall from the release tarball) and re-verify step 2.
 
@@ -461,7 +474,9 @@ After that, normal MCP calls should be short and traceable:
 { "projectId": "my-access-project" }
 ```
 
-Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` on every tool call when they already live in `.dysflow/project.json`. Repeated path overrides are for deliberate one-off exceptions only.
+Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` on every tool call when they already live in `.dysflow/project.json`.
+
+Repeated path overrides are for deliberate one-off exceptions only.
 
 #### What the AI should create
 
@@ -478,23 +493,25 @@ Do not repeat `accessPath`, `backendPath`, `destinationRoot`, or `projectRoot` o
 }
 ```
 
-Use a filename-only `frontendFile`; Dysflow joins it to the worktree that physically owns the
-config. `destinationRoot` must remain relative/local. An absolute shared `backendPath` is supported
-and is never rebased. Git creates worktrees; Dysflow resolves targets safely: the current worktree
-is the default, and another worktree requires an explicit per-call `projectId`, absolute
-`accessPath`, `backendPath`, or supported `cwd`. Explicit target provenance is call-local and never
-persisted.
+Use a filename-only `frontendFile`; Dysflow joins it to the worktree that physically owns the config. `destinationRoot` must remain relative/local.
 
-A basename-only legacy `accessPath` migrates losslessly. Absolute or separator-containing legacy
-values fail with `FRONTEND_PATH_NOT_BASENAME`; zero/multiple root frontends fail with
-`FRONTEND_TARGET_MISSING` / `FRONTEND_TARGET_AMBIGUOUS`; duplicate sibling ids fail with
-`PROJECT_ID_COLLISION`.
+An absolute shared `backendPath` is supported and is never rebased.
+
+Git creates worktrees; Dysflow resolves targets safely: the current worktree is the default, and another worktree requires an explicit per-call `projectId`, absolute `accessPath`, `backendPath`, or supported `cwd`.
+
+Explicit target provenance is call-local and never persisted.
+
+A basename-only legacy `accessPath` migrates losslessly.
+
+Absolute or separator-containing legacy values fail with `FRONTEND_PATH_NOT_BASENAME`; zero/multiple root frontends fail with `FRONTEND_TARGET_MISSING` / `FRONTEND_TARGET_AMBIGUOUS`; duplicate sibling ids fail with `PROJECT_ID_COLLISION`.
 
 Use portable paths whenever possible so the same config works for `adm`, `adm.DEFENSA`, and teammates with different Windows profile names.
 
 #### Cleanup before retrying
 
-Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json`. If a command times out, fails, or leaves Access open, the AI may clean **only its own tracked operation** before launching the next command.
+Dysflow tracks Access processes it opens under `.dysflow/runtime/operations.json`.
+
+If a command times out, fails, or leaves Access open, the AI may clean **only its own tracked operation** before launching the next command.
 
 1. List operations:
 
@@ -546,9 +563,13 @@ Dysflow resolves functional project configuration from the current repository:
 
 The runtime installation directory is only for executable code (`DYSFLOW_HOME`). It must not contain the active `.dysflow` project configuration.
 
-Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state. Only secrets may come from environment variables.
+Environment variables do not select projects, Access database paths, backend paths, destination roots, or timeouts. This keeps parallel AI sessions from accidentally sharing global state.
 
-Secrets can also be supplied through a local `.secrets.json` for VBA manager workflows. Keep that file outside git, restrict its ACL to the current user, and prefer environment variables (`DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`) for automated runs so passwords do not appear in command-line process listings.
+Only secrets may come from environment variables.
+
+Secrets can also be supplied through a local `.secrets.json` for VBA manager workflows.
+
+Keep that file outside git, restrict its ACL to the current user, and prefer environment variables (`DYSFLOW_ACCESS_PASSWORD` / `ACCESS_VBA_PASSWORD`) for automated runs so passwords do not appear in command-line process listings.
 
 ### Local project setup
 
@@ -572,7 +593,9 @@ This writes `.dysflow/project.json` with a filename-only frontend and default `d
 }
 ```
 
-Normal calls should stay short and use the active repo/worktree config. `projectId` is the canonical trace identity and should match the Engram project name when Engram is available. `contextId` is only for a distinct run/context id; do not duplicate `projectId` and `contextId` with the same value.
+Normal calls should stay short and use the active repo/worktree config. `projectId` is the canonical trace identity and should match the Engram project name when Engram is available.
+
+`contextId` is only for a distinct run/context id; do not duplicate `projectId` and `contextId` with the same value.
 
 ```text
 doctor { "projectId": "00-no-conformidades-staging-clean" }
@@ -596,7 +619,9 @@ Do not inject these on every call when they are already in `.dysflow/project.jso
 | `contextId`               | call-level run/context id only; omit it when it would duplicate `projectId`                         |
 | password                  | environment secret named by `passwordEnv`, or `DYSFLOW_ACCESS_PASSWORD`                             |
 
-Call-level path/root fields are still supported as explicit one-off overrides, and when provided they take precedence over `.dysflow/project.json`. Use them only for deliberate cross-project or exceptional operations.
+Call-level path/root fields are still supported as explicit one-off overrides, and when provided they take precedence over `.dysflow/project.json`.
+
+Use them only for deliberate cross-project or exceptional operations.
 
 ### Environment variables
 
@@ -640,11 +665,15 @@ Runtime directory resolution order:
 }
 ```
 
-HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
+HTTP auth is env-first: set `DYSFLOW_HTTP_TOKEN` in the runtime environment and keep `.dysflow/project.json` free of secrets.
+
+The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
 
 #### `capabilities` consolidated block
 
-The `capabilities` block is the **only accepted home** for the write gate and the procedure allowlist/denylist. Top-level `allowWrites` and `allowedProcedures` were removed in v1.15.0. A config containing either field is rejected at load time with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; preview `migrate_project_config` to move them to `capabilities.allowWrites` and `capabilities.procedures.allow`.
+The `capabilities` block is the **only accepted home** for the write gate and the procedure allowlist/denylist. Top-level `allowWrites` and `allowedProcedures` were removed in v1.15.0.
+
+A config containing either field is rejected at load time with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; preview `migrate_project_config` to move them to `capabilities.allowWrites` and `capabilities.procedures.allow`.
 
 ```json
 {
@@ -667,7 +696,9 @@ Runtime behavior:
 | absent                   | present               | Values resolve from `capabilities.allowWrites` and `capabilities.procedures.allow` |
 | present                  | absent or present     | `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
-`procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only. See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
+`procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only.
+
+See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
 
 Bootstrap a repo-local config explicitly:
 
@@ -686,7 +717,9 @@ Dysflow keeps Access PID ownership state separate from stable project configurat
    └─ operations.json            # volatile Access operation registry, git-ignored
 ```
 
-`operations.json` is created when MCP launches Access operations. Completed and cleaned operations are purged; failed or timed-out operations remain so `cleanup_access_operation` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
+`operations.json` is created when MCP launches Access operations.
+
+Completed and cleaned operations are purged; failed or timed-out operations remain so `cleanup_access_operation` can validate `operationId`, `accessPath`, PID, process start time, and command line before killing a stuck `MSACCESS.EXE` process.
 
 ---
 
@@ -714,11 +747,15 @@ dysflow resolve_project
 dysflow list_vba_modules
 ```
 
-If step 2 returns `unresolved`, you are not inside a project worktree — run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>` and retry. The `Primer proyecto` recipe below shows the canonical copy-paste-ready command.
+If step 2 returns `unresolved`, you are not inside a project worktree — run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>` and retry.
+
+The `Primer proyecto` recipe below shows the canonical copy-paste-ready command.
 
 ### Primer proyecto (copy-paste-ready recipe)
 
-Run once per Access project/worktree. Replace `<project-id>`, `<frontend.accdb>`, and `<backend.accdb>` with your project's values. Use the **same `projectId`** as your memory/Engram project so traces line up:
+Run once per Access project/worktree. Replace `<project-id>`, `<frontend.accdb>`, and `<backend.accdb>` with your project's values.
+
+Use the **same `projectId`** as your memory/Engram project so traces line up:
 
 ```powershell
 cd C:\Projects\<your-access-project>
@@ -771,7 +808,9 @@ Onboarding companion: see [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboar
 
 ## Common pitfalls cheat-sheet
 
-When a Dysflow call returns an error envelope, the first 30 seconds should be spent on this table, not on reading stack traces. Every entry maps an error code to the fastest path back to a green build, and cross-references the Round-11/12 issue that introduced or hardened the behavior.
+When a Dysflow call returns an error envelope, the first 30 seconds should be spent on this table, not on reading stack traces.
+
+Every entry maps an error code to the fastest path back to a green build, and cross-references the Round-11/12 issue that introduced or hardened the behavior.
 
 | Symptom (error code) | What it really means | Fastest fix | See |
 | --- | --- | --- | --- |
@@ -794,7 +833,9 @@ See [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboarding.md) for the 5-min
 
 ### Read tools and the `.accdb` LSN (round-trip noise) — #1057 F2
 
-Read-class tools that open the binary through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, `list_objects`, …) may update the Jet/ACE internal LSN when Access closes the file. The observable effect: `git status` reports the `.accdb` as modified after every dysflow run even when zero project content changed (`git diff --stat` shows `Bin N -> N bytes` — identical size).
+Read-class tools that open the binary through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, `list_objects`, …) may update the Jet/ACE internal LSN when Access closes the file.
+
+The observable effect: `git status` reports the `.accdb` as modified after every dysflow run even when zero project content changed (`git diff --stat` shows `Bin N -> N bytes` — identical size).
 
 Rules of thumb for a consumer:
 
@@ -814,7 +855,11 @@ The main production entrypoint is:
 dysflow mcp
 ```
 
-**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface. This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, and so on. Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
+**Write tools are enabled by default on MCP stdio.** The stdio adapter is process-ownership-trusted (the parent process is the operator), so bare `dysflow mcp` starts with writes on — unlike `dysflow serve` (HTTP), which stays writes-disabled by default because it is a network surface.
+
+This covers every write-capable tool — `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with `force: true`, and so on.
+
+Calling one while writes are off returns `MCP_WRITES_DISABLED`. There are two ways to run read-only or to scope writes per repo:
 
 **Option 1 — per-repo.** Set `capabilities.allowWrites` to `false` in the repo's `.dysflow/project.json` to keep a specific project read-only even when the MCP process default is enabled:
 
@@ -870,11 +915,15 @@ Defaults:
 }
 ```
 
-Keeping the token in the environment avoids committing secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed. Requests without a valid token return `401`. When neither `httpTokenEnv` nor a local-only inline token resolves a token, all requests pass through (default).
+Keeping the token in the environment avoids committing secrets. The inline `httpToken` is local-only for uncommitted scratch configs and must not be committed.
+
+Requests without a valid token return `401`. When neither `httpTokenEnv` nor a local-only inline token resolves a token, all requests pass through (default).
 
 **Procedure allowlist**: `capabilities.procedures.allow` is enforced on `POST /vba/execute`. Calls to unlisted procedures return `403 HTTP_PROCEDURE_NOT_ALLOWED`.
 
-**Cleanup write gate**: `POST /access/cleanup` matches MCP behavior. Only `force: true` requires `--enable-writes`; non-force cleanup is still allowed to reach core eligibility checks while writes are disabled.
+**Cleanup write gate**: `POST /access/cleanup` matches MCP behavior.
+
+Only `force: true` requires `--enable-writes`; non-force cleanup is still allowed to reach core eligibility checks while writes are disabled.
 
 See the complete contract in [`docs/api/http-api.md`](docs/api/http-api.md).
 
@@ -914,13 +963,11 @@ Use the installed CLI to update itself from the latest published GitHub release:
 dysflow update
 ```
 
-`dysflow update` checks the latest GitHub release, skips reinstall when the
-installed runtime is current, and installs the newer release when available.
-It refreshes bundled Dysflow skills even when the runtime version is already
-current, so repaired or newly discovered adapter targets converge without a
-manual file copy. The same `--only` and `--exclude` filters accepted by install
-are available on update.
-Use `--force` to reinstall the latest release even when versions match:
+`dysflow update` checks the latest GitHub release, skips reinstall when the installed runtime is current, and installs the newer release when available.
+
+It refreshes bundled Dysflow skills even when the runtime version is already current, so repaired or newly discovered adapter targets converge without a manual file copy.
+
+The same `--only` and `--exclude` filters accepted by install are available on update. Use `--force` to reinstall the latest release even when versions match:
 
 ```powershell
 dysflow update --force
@@ -934,7 +981,9 @@ The `main` channel is the one deliberate exception. It builds from a downloaded 
 
 See [installation channels](./docs/installation-channels.md) for what that costs the operator.
 
-If the release asset is missing, the signature is missing/invalid, or the SHA-256 checksum does not match, the update aborts. Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
+If the release asset is missing, the signature is missing/invalid, or the SHA-256 checksum does not match, the update aborts.
+
+Retry later or report the release asset/checksum problem; do not build from source as an update fallback.
 
 `dysflow update` uses the same runtime directory resolution as install:
 
@@ -1026,7 +1075,7 @@ For MCP, errors are returned as standard MCP content or JSON-RPC errors dependin
 
 Development workflow:
 
-```powershell
+```bash
 pnpm test
 pnpm build
 ```

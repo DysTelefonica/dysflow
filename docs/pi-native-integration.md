@@ -2,13 +2,15 @@
 
 [Back to setup](./SETUP.md)
 
-This guide is the source of truth for the Dysflow package for Pi. It covers installation, ownership, release, verification, and failure recovery. The [MCP tool reference](./api/mcp-tools.md) owns the operation contract.
+This guide is the source of truth for the Dysflow package for Pi. It covers installation, ownership, release, verification, and failure recovery.
+
+The [MCP tool reference](./api/mcp-tools.md) owns the operation contract.
 
 ## Quick Path
 
 Install Dysflow and the matching Pi package:
 
-```powershell
+```bash
 dysflow install --agents pi --no-tui
 ```
 
@@ -38,7 +40,9 @@ Pi native facade → MCP SDK client → absolute Dysflow launcher → dysflow mc
 
 The package does not copy MCP schemas. Runtime discovery remains `bootstrap({})`, `schema({ view: "index" })`, and the relevant capability views.
 
-Dysflow separately owns the global Pi MCP entry in `~/.pi/agent/mcp.json`. It uses the absolute installer-managed launcher and `directTools: false`. The npm package has no `pi.mcp` field and ships no `mcp.json`, so it cannot add a duplicate MCP or override `mcp`, `mcp__dysflow`, or pi-mcp-adapter tools.
+Dysflow separately owns the global Pi MCP entry in `~/.pi/agent/mcp.json`. It uses the absolute installer-managed launcher and `directTools: false`.
+
+The npm package has no `pi.mcp` field and ships no `mcp.json`, so it cannot add a duplicate MCP or override `mcp`, `mcp__dysflow`, or pi-mcp-adapter tools.
 
 ## Ownership and Reconciliation
 
@@ -54,15 +58,19 @@ Dysflow stores its ownership record at `<runtime>/.dysflow-pi-package.json`. The
 | Dysflow-owned older version | Pi replaces it with the exact version matching the new Dysflow release. |
 | Ownership record and Pi settings disagree | Dysflow treats the package as user-managed and does not overwrite or remove it. |
 
-Repeated reconciliation of an already-current installation is a byte-identical no-op. Unrelated packages, Pi settings, and MCP servers remain unchanged. A foreign MCP entry named `dysflow` is a conflict; it is never overwritten.
+Repeated reconciliation of an already-current installation is a byte-identical no-op. Unrelated packages, Pi settings, and MCP servers remain unchanged.
 
-If package installation fails after MCP reconciliation, Dysflow restores the exact prior MCP bytes or removes the file when reconciliation created it. A package is not marked as owned until Pi reports the exact pinned source in settings and the ownership record is written atomically.
+A foreign MCP entry named `dysflow` is a conflict; it is never overwritten.
+
+If package installation fails after MCP reconciliation, Dysflow restores the exact prior MCP bytes or removes the file when reconciliation created it.
+
+A package is not marked as owned until Pi reports the exact pinned source in settings and the ownership record is written atomically.
 
 ## Update and Uninstall
 
 Refresh the runtime and every Dysflow-owned Pi entry:
 
-```powershell
+```bash
 dysflow update
 ```
 
@@ -70,11 +78,13 @@ The updater reads the version that actually landed in the runtime and asks Pi to
 
 Remove Dysflow:
 
-```powershell
+```bash
 dysflow uninstall
 ```
 
-Uninstall calls `pi remove npm:@aroman22/dysflow-pi` only when the current Pi setting exactly matches Dysflow's ownership record. A pre-existing package, a package changed later by the user, `pi-mcp-adapter`, and foreign MCP entries are preserved.
+Uninstall calls `pi remove npm:@aroman22/dysflow-pi` only when the current Pi setting exactly matches Dysflow's ownership record.
+
+A pre-existing package, a package changed later by the user, `pi-mcp-adapter`, and foreign MCP entries are preserved.
 
 ## Rendering Contract
 
@@ -85,7 +95,11 @@ Collapsed calls show one bounded status line. They never include arguments, secr
 ↳ ✓ imported 3 modules
 ```
 
-Successful structured MCP content appears only when the result is expanded. MCP failures use Pi's public thrown-error path with a bounded `Dysflow operation failed.` message, so arbitrary backend error text never enters Pi's tool result. The package uses Pi's public extension and TUI APIs; it does not use private Pi APIs.
+Successful structured MCP content appears only when the result is expanded.
+
+MCP failures use Pi's public thrown-error path with a bounded `Dysflow operation failed.` message, so arbitrary backend error text never enters Pi's tool result.
+
+The package uses Pi's public extension and TUI APIs; it does not use private Pi APIs.
 
 ## Troubleshooting
 
@@ -116,7 +130,11 @@ The tag workflow performs this order:
 6. Verify both the exact version and registry `dist.integrity` through `npm view`.
 7. Create and verify the GitHub release.
 
-A retry first checks whether the immutable npm version already exists. It continues only when the registry `dist.integrity` equals the freshly packed candidate; a same-version artifact with different bytes fails closed before the GitHub release. The workflow never unpublishes automatically. If verification fails after publication, stop the GitHub release and fix forward with a new version; do not reuse or replace published bytes.
+A retry first checks whether the immutable npm version already exists.
+
+It continues only when the registry `dist.integrity` equals the freshly packed candidate; a same-version artifact with different bytes fails closed before the GitHub release.
+
+The workflow never unpublishes automatically. If verification fails after publication, stop the GitHub release and fix forward with a new version; do not reuse or replace published bytes.
 
 ### One-time npm bootstrap
 
@@ -129,7 +147,9 @@ npm requires the scoped package to exist before its Trusted Publisher can be con
 5. Remove the local npm session when finished. Do not create an `NPM_TOKEN` repository secret.
 6. Trigger later releases only after the trusted-publisher identity matches the repository and workflow.
 
-The manual bootstrap is a one-time package-creation exception, not the recurring release path. It requires explicit operator approval after repository gates are green. No package is published during implementation, review, or testing.
+The manual bootstrap is a one-time package-creation exception, not the recurring release path. It requires explicit operator approval after repository gates are green.
+
+No package is published during implementation, review, or testing.
 
 ## Sandboxed Contributor Checks
 
@@ -145,7 +165,7 @@ Use temporary paths for every mutable boundary:
 
 Run the package and focused integration checks:
 
-```powershell
+```bash
 pnpm --dir plugin/pi typecheck
 pnpm vitest run test/quality-gates/pi-native-package-1723.test.ts
 pnpm vitest run test/cli/commands/install/pi-integration-1723.test.ts
@@ -157,7 +177,9 @@ The pack test supplies temporary HOME, USERPROFILE, npm cache, and npm prefix pa
 
 ## Clean-Pi Visual Acceptance
 
-Automated tests do not certify the final TUI appearance. After the implementation is green and uploaded to the Dysflow remote, stop the implementation session. Do not reuse it or treat `/reload` in that session as acceptance evidence.
+Automated tests do not certify the final TUI appearance. After the implementation is green and uploaded to the Dysflow remote, stop the implementation session.
+
+Do not reuse it or treat `/reload` in that session as acceptance evidence.
 
 After the authorized tag workflow has published the matching npm version:
 
@@ -168,7 +190,9 @@ After the authorized tag workflow has published the matching npm version:
 5. Verify visually that the collapsed call and result use the package-owned `⚡ Dysflow` chrome, comparable to Engram's native execution chrome, and that expanding the result exposes the structured Dysflow payload.
 6. Record the installed Dysflow/package version and the visual result before closing issue #1723.
 
-If the npm version is not yet published, stop rather than substituting a local path, editing Pi settings, or copying package files. This acceptance belongs to the fresh consumer session, not to the implementation session.
+If the npm version is not yet published, stop rather than substituting a local path, editing Pi settings, or copying package files.
+
+This acceptance belongs to the fresh consumer session, not to the implementation session.
 
 ## Contributor Checklist
 

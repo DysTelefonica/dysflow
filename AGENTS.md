@@ -1,26 +1,23 @@
 # AGENTS.md — dysflow
 
-Canonical guide for **any** agent working in this repo — Claude Code, OpenCode/Codex, or otherwise.
-This file is authoritative. Claude Code loads it via `CLAUDE.md` (which imports this file). Read it
-before working, and do not silently override it.
+Canonical guide for **any** agent working in this repo — Claude Code, OpenCode/Codex, or otherwise. This file is authoritative. Claude Code loads it via `CLAUDE.md` (which imports this file).
+
+Read it before working, and do not silently override it.
 
 ## Dysflow & VBA Skill Catalog
 
-This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` so any agent with read access to this repo can operate dysflow without an extra skill load. The block between `<!-- dysflow:arnés --> ... <!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
+This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` so any agent with read access to this repo can operate dysflow without an extra skill load.
+
+The block between `<!-- dysflow:arnés --> ... <!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
 
 <!-- dysflow:arnés -->
 # dysflow — Operating Harness
 
-You are an AI agent operating in a Microsoft Access / VBA project that uses the
-dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
-execution, test execution, and form UI operations on Access projects.
+You are an AI agent operating in a Microsoft Access / VBA project that uses the dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL execution, test execution, and form UI operations on Access projects.
 
-**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call
-`bootstrap({})` before reading static project files, forming a diagnosis, or
-modifying `.dysflow/project.json`. Route with
-`schema({view:"index"})`; expand through an explicit compact/full capability
-view or selective `describe_tool` only when needed. The live runtime is
-authoritative.
+**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call `bootstrap({})` before reading static project files, forming a diagnosis, or modifying `.dysflow/project.json`.
+
+Route with `schema({view:"index"})`; expand through an explicit compact/full capability view or selective `describe_tool` only when needed. The live runtime is authoritative.
 
 ## 1. When this arnés applies (load it when...)
 
@@ -34,156 +31,130 @@ authoritative.
 ## 2. Hard rules (NEVER violate)
 
 - **HR-1 — The HUMAN compiles.** You NEVER call `compile_vba`, NEVER pass
-  `compile:true`. Required loop for any slice ending in `test_vba`:
-  (1) write source → (2) `import_modules({moduleNames:[...], apply:false})` →
-  (3) ASK the user to compile manually (Debug → Compile VBA Project) →
-  (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`. Failures from
-  `test_vba` are test failures, never compile errors.
+`compile:true`.
+
+Required loop for any slice ending in `test_vba`: (1) write source → (2) `import_modules({moduleNames:[...], apply:false})` → (3) ASK the user to compile manually (Debug → Compile VBA Project) → (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`.
+
+Failures from `test_vba` are test failures, never compile errors.
 
 - **HR-2 — Confirm destructive operations; NEVER kill MSACCESS.EXE generically.**
-  Every public destructive `apply:true` call requires the exact schema-advertised
-  `implements_check` token AND `confirmedRequiresConfirmation:true` after the
-  human approves the risk. The enforced tokens are:
-  `delete_module_precheck`, `compact_repair_precheck`,
-  `relink_directory_precheck`, `localize_backend_precheck`,
-  `drop_table_precheck`, and `teardown_fixture_precheck`. `apply:false` remains
-  the safe planning path. The Access-kill escape hatch keeps its stricter
-  PID-bound `orphans_msaccess` contract. Forbidden generic kill operations
-  (verbatim):
-  (verbatim):
-  `Stop-Process -Name MSACCESS`,
-  `taskkill /F /IM MSACCESS.EXE`,
-  `pkill MSACCESS`,
-  `Get-Process | Stop-Process -Force`,
-  `kill -9` on `Get-Process` results.
-  Use ONLY dysflow-owned cleanup: `list_access_operations` →
-  `access_force_cleanup_orphaned({pid:null})` →
-  `access_force_cleanup_orphaned({pid:<real pid>,implements_check:"orphans_msaccess",confirmedRequiresConfirmation:true})` → OR
-  `cleanup_access_operation({operationId:<real id>})`.
+Every public destructive `apply:true` call requires the exact schema-advertised `implements_check` token AND `confirmedRequiresConfirmation:true` after the human approves the risk.
+
+The enforced tokens are: `delete_module_precheck`, `compact_repair_precheck`, `relink_directory_precheck`, `localize_backend_precheck`, `drop_table_precheck`, and `teardown_fixture_precheck`.
+
+`apply:false` remains the safe planning path. The Access-kill escape hatch keeps its stricter PID-bound `orphans_msaccess` contract.
+
+Forbidden generic kill operations (verbatim): (verbatim): `Stop-Process -Name MSACCESS`, `taskkill /F /IM MSACCESS.EXE`, `pkill MSACCESS`, `Get-Process | Stop-Process -Force`, `kill -9` on `Get-Process` results.
+
+Use ONLY dysflow-owned cleanup: `list_access_operations` → `access_force_cleanup_orphaned({pid:null})` → `access_force_cleanup_orphaned({pid:<real pid>,implements_check:"orphans_msaccess",confirmedRequiresConfirmation:true})` → OR `cleanup_access_operation({operationId:<real id>})`.
 
 - **HR-3 — NEVER write to production backend.** `m_TestingMode=True` is the
   ONLY path for test data. If sandbox unreachable → surface "TESTS BLOCKED",
   do NOT touch data. Production writes = silent corruption.
 
 - **HR-4 — Pre-flight BEFORE every dysflow write call.** Start from
-  `bootstrap({})`, then fetch the bounded capability blocks needed by the
-  selected tool. Self-check (5 points): (1) `adapterVersion` is current,
-  (2) `effectiveDryRunDefault[toolName]` matches your intent,
-  (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
-  (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
-  (5) `toolInventory.advertised` or `.callable` matches the claim you cite;
-  legacy `toolsVisible` has context-dependent meaning.
-  If any check fails, STOP and surface the gap.
+`bootstrap({})`, then fetch the bounded capability blocks needed by the selected tool.
+
+Self-check (5 points): (1) `adapterVersion` is current, (2) `effectiveDryRunDefault[toolName]` matches your intent, (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`, (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`, (5) `toolInventory.advertised` or `.callable` matches the claim you cite; legacy `toolsVisible` has context-dependent meaning.
+
+If any check fails, STOP and surface the gap.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
-  defaults, or error codes from any doc. Re-fetch `bootstrap`, route through
-  `schema({view:"index"})`, and expand the relevant capability/schema blocks
-  before any non-trivial call sequence. If runtime value disagrees with
-  this arnés or any skill, trust runtime and surface drift to the user.
+defaults, or error codes from any doc. Re-fetch `bootstrap`, route through `schema({view:"index"})`, and expand the relevant capability/schema blocks before any non-trivial call sequence.
+
+If runtime value disagrees with this arnés or any skill, trust runtime and surface drift to the user.
 
 - **HR-6 — Test definitions live in `tests/*.json` manifests, NOT in
   `.dysflow/project.json` allowlist.** The allowlist is a runtime gate, not a
   test registry. Adding test names to allowlist on each fix is an anti-pattern.
 
 - **HR-7 — Verify process liveness BEFORE asserting or blocking.** Never
-  assert a process exists from cached / registry / prior-turn state.
-  Read-only checks: `list_access_operations`,
-  `cleanup_access_operation({force:false})`,
-  `access_force_cleanup_orphaned({pid:null})`. Never fabricate
-  process details a tool did not return.
+assert a process exists from cached / registry / prior-turn state. Read-only checks: `list_access_operations`, `cleanup_access_operation({force:false})`, `access_force_cleanup_orphaned({pid:null})`.
+
+Never fabricate process details a tool did not return.
 
 - **HR-8 — Writes are serialized per process.** Never batch dysflow write
   calls in parallel from one agent context. One call → wait → audit → next.
   To batch related ops, use List-shape arguments in ONE call.
 
 - **HR-9 — Select worktrees per call, never by restarting the MCP.** Each worktree
-  owns a unique `.dysflow/project.json`. Every project-config-consuming tool
-  accepts optional `cwd`; omit it for the startup worktree or pass the intended
-  worktree root. Use `register_worktree({cwd})` to pre-warm a sibling,
-  `resolve_project({cwd,projectId})` to verify it, and
-  `clear_worktree_cache({cwd})` only when a forced rescan is needed. Never
-  weaken the guard or edit configs to switch worktrees.
+owns a unique `.dysflow/project.json`. Every project-config-consuming tool accepts optional `cwd`; omit it for the startup worktree or pass the intended worktree root.
+
+Use `register_worktree({cwd})` to pre-warm a sibling, `resolve_project({cwd,projectId})` to verify it, and `clear_worktree_cache({cwd})` only when a forced rescan is needed.
+
+Never weaken the guard or edit configs to switch worktrees.
 
 - **HR-10 — Bootstrap missing project config before any other write.** When
-  `get_capabilities({view:"full"}).projectConfig.status === "missing"`, call
-  `setup_project({cwd,projectId,frontendFile,apply:false})`, review
-  `resolvedConfig`, then repeat with `apply:true`. A fresh worktree MUST provide
-  an explicit `projectId`; `setup_project` may reuse an existing
-  `WorktreeContext` id, but never invent one from the `cwd` basename. The
-  bootstrap apply enforces the process write gate and candidate
-  `capabilities.allowWrites`; the same `cwd` is immediately usable without an
-  MCP restart. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
+`get_capabilities({view:"full"}).projectConfig.status === "missing"`, call `setup_project({cwd,projectId,frontendFile,apply:false})`, review `resolvedConfig`, then repeat with `apply:true`.
+
+A fresh worktree MUST provide an explicit `projectId`; `setup_project` may reuse an existing `WorktreeContext` id, but never invent one from the `cwd` basename.
+
+The bootstrap apply enforces the process write gate and candidate `capabilities.allowWrites`; the same `cwd` is immediately usable without an MCP restart.
+
+Shell-enabled clients may use the equivalent `dysflow setup` CLI.
 
 - **HR-11 — Recover ambiguity without overwriting config.** When
-  `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose
-  exactly one entry from `availableProjects`; never guess. Retry
-  `resolve_project` or the intended project-config-consuming tool with that
-  entry's `projectId`,
-  `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque
-  `recoveryToken`. The dispatch seam consumes this complete trio BEFORE any
-  fresh collision check and routes through the cached chosen project root.
-  Tokens are one-shot, process-local, and invalidated by config/worktree
-  changes; a consumed or missing token MUST fail closed. Use
-  `resolve_project({clearResolution:true})` to drop a pending choice.
-  `setup_project` may consume the trio only to return `mode:"resolution"` for
-  the selected existing project; that route never writes config.
+`resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose exactly one entry from `availableProjects`; never guess.
+
+Retry `resolve_project` or the intended project-config-consuming tool with that entry's `projectId`, `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque `recoveryToken`.
+
+The dispatch seam consumes this complete trio BEFORE any fresh collision check and routes through the cached chosen project root.
+
+Tokens are one-shot, process-local, and invalidated by config/worktree changes; a consumed or missing token MUST fail closed. Use `resolve_project({clearResolution:true})` to drop a pending choice.
+
+`setup_project` may consume the trio only to return `mode:"resolution"` for the selected existing project; that route never writes config.
 
 - **HR-12 — Let runtime metadata route discovery.** `tools/list` contains the
-  advertised surface, while schema index contains every callable tool and an
-  `advertised` marker. Read standard Tool
-  `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]`
-  for `phases`, `preferredFor`, and `status`. Use
-  `bootstrap({phase:"<phase>"}).preferredAgentWorkflows` to select the phase,
-  then call `describe_tool({name})` only for the tools about to run. Metadata
-  guides selection; the full schema and `describe_tool` remain authoritative
-  for parameters, composition constraints, result contracts, and errors.
+advertised surface, while schema index contains every callable tool and an `advertised` marker.
+
+Read standard Tool `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]` for `phases`, `preferredFor`, and `status`.
+
+Use `bootstrap({phase:"<phase>"}).preferredAgentWorkflows` to select the phase, then call `describe_tool({name})` only for the tools about to run.
+
+Metadata guides selection; the full schema and `describe_tool` remain authoritative for parameters, composition constraints, result contracts, and errors.
 
 - **HR-13 — Parse MCP envelopes defensively.** Every dysflow response carries
-  top-level `schemaVersion:"dysflow.result/v1"`. A host wrapper may return the
-  entire envelope as a JSON string, so parse once when `typeof raw === "string"`
-  and then require the discriminator. Missing or different `schemaVersion`
-  fails closed; never continue by guessing a payload shape.
+top-level `schemaVersion:"dysflow.result/v1"`. A host wrapper may return the entire envelope as a JSON string, so parse once when `typeof raw === "string"` and then require the discriminator.
+
+Missing or different `schemaVersion` fails closed; never continue by guessing a payload shape.
 
 - **HR-13.1 — Prefer structured payloads over summaries.** Hosts may place a
-  bounded summary in `content[0].text` while preserving the complete result in
-  `structuredContent`. For semantic audits and schema-derived verification,
-  consume `structuredContent` first; use text only when it is the complete
-  payload. Never audit the truncation summary as though it were the contract.
+bounded summary in `content[0].text` while preserving the complete result in `structuredContent`.
+
+For semantic audits and schema-derived verification, consume `structuredContent` first; use text only when it is the complete payload.
+
+Never audit the truncation summary as though it were the contract.
 
 - **HR-14 — Bindings vacíos en `.form.txt` no son bug; son formularios desatendidos.**
-  When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the
-  IR is telling the truth: the `ControlSource` / `RowSource` are not declared as
-  properties on the controls, they are assigned in runtime code (typically inside
-  `Form_Open` / `Form_Load` of the sibling `.cls`). Before opening the `.form.txt`
-  with `Read` to "find" missing bindings, verify the form is not an unattended form
-  — the source of truth is the `.cls`, not the `.form.txt`. Route through
-  `map_form_behavior` (with `autoFetchCodeGraph:true`) for the real handler call
-  path, or `verify_form_bindings` for typed schema validation. See AP-12 and the
-  `access-form-ui-builder` skill §"Forms desatendidos".
+When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the IR is telling the truth: the `ControlSource` / `RowSource` are not declared as properties on the controls, they are assigned in runtime code (typically inside `Form_Open` / `Form_Load` of the sibling `.cls`).
+
+Before opening the `.form.txt` with `Read` to "find" missing bindings, verify the form is not an unattended form — the source of truth is the `.cls`, not the `.form.txt`.
+
+Route through `map_form_behavior` (with `autoFetchCodeGraph:true`) for the real handler call path, or `verify_form_bindings` for typed schema validation.
+
+See AP-12 and the `access-form-ui-builder` skill §"Forms desatendidos".
 
 - **HR-15 — Gate `verify_code` on actionability, never compact-count
-  guesswork.** Read `actionableOk` and `recommendedAction`; raw `ok` can be
-  false for non-actionable noise. `summaryByCategory` and
-  `nonActionableByCategory` are aggregate counts and do not identify module
-  membership. Use one whole-scope `diagnostic:true` call and read
-  `actionableDifferent[]` / `nonActionableDifferent[]` when names matter.
-  One logical Access form/report may emit separate `.cls` and `.form.txt`
-  entries, classified independently. Identifier-only `caseOnly` drift is
-  non-actionable; strings and comments remain case-sensitive.
+guesswork.** Read `actionableOk` and `recommendedAction`; raw `ok` can be false for non-actionable noise.
+
+`summaryByCategory` and `nonActionableByCategory` are aggregate counts and do not identify module membership.
+
+Use one whole-scope `diagnostic:true` call and read `actionableDifferent[]` / `nonActionableDifferent[]` when names matter.
+
+One logical Access form/report may emit separate `.cls` and `.form.txt` entries, classified independently.
+
+Identifier-only `caseOnly` drift is non-actionable; strings and comments remain case-sensitive.
 
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
 
 - **Step 0** — `bootstrap({})`. Capture `adapterVersion`, the write gates,
-  `writeExecutionPolicy`, `toolInventory`, `humanCompilePending`, and the
-  preferred workflow. Route through `schema({view:"index"})`; then call
-  `get_capabilities({view:"compact",include:[...]})` or `{view:"full"}` only
-  for the exact deeper fields needed (`effectiveDryRunDefault`,
-  `projectConfig.status`, `projectConfig.writeReady`, and so on).
-  If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and
-  `frontendFile` through `setup_project` before any other write-class tool,
-  then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
+`writeExecutionPolicy`, `toolInventory`, `humanCompilePending`, and the preferred workflow.
+
+Route through `schema({view:"index"})`; then call `get_capabilities({view:"compact",include:[...]})` or `{view:"full"}` only for the exact deeper fields needed (`effectiveDryRunDefault`, `projectConfig.status`, `projectConfig.writeReady`, and so on).
+
+If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and `frontendFile` through `setup_project` before any other write-class tool, then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
 - **Step 0.25** — Read the bootstrap `preferredAgentWorkflows`, choose the
   active phase, and inspect only relevant callable tools through
   `describe_tool` (HR-12).
@@ -230,15 +201,13 @@ load `access-vba-e2e-methodology`.
 - **AP-1** — `Stop-Process -Name MSACCESS` (any variant). See HR-2.
 - **AP-2** — `compile_vba` or `compile:true` on `import_modules` / `import_all`. See HR-1.
 - **AP-3** — Using a legacy flag as the primary commit contract. The live
-  registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool —
-  `test_vba` included, which was the last holdout. Use `apply:true` to commit
-  and `apply:false` to preview. `diff` is the only live compatibility alias,
-  and only for export tools when `legacyAliases[]` reports it; never hard-code an alias
-  as canonical, and never assume a tool is the exception — read the registry.
+registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool — `test_vba` included, which was the last holdout. Use `apply:true` to commit and `apply:false` to preview.
+
+`diff` is the only live compatibility alias, and only for export tools when `legacyAliases[]` reports it; never hard-code an alias as canonical, and never assume a tool is the exception — read the registry.
 - **AP-4** — Omitting explicit export intent. The live registry reports
-  `defaultBehavior:"plan"`; still pass `apply:true` or `apply:false` explicitly in agent-authored calls.
-  `export_modules` uses a disposable binary copy by default;
-  `mutateBinary:true` is legacy opt-in only.
+`defaultBehavior:"plan"`; still pass `apply:true` or `apply:false` explicitly in agent-authored calls.
+
+`export_modules` uses a disposable binary copy by default; `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
 - **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
 - **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
@@ -253,25 +222,16 @@ load `access-vba-e2e-methodology`.
   all-green `test_vba` result.
 
 - **AP-12 — Reading `.form.txt` with `Read` to extract bindings that
-  `analyze_form_ui` reported empty.** The IR is not lying: empty `bindings[]`
-  on an unattended form means the `ControlSource` / `RowSource` are assigned at
-  runtime inside `Form_Open` / `Form_Load` of the sibling `.cls`. The canonical
-  recipe is: (1) `map_form_behavior({sourcePath, autoFetchCodeGraph:true,
-  outputMode:"full"})` to trace the real handler call path through codegraph-vba;
-  (2) `verify_form_bindings({sourcePath, schema, outputMode:"full"})` to
-  validate the runtime-assigned bindings against the real schema with typed
-  findings (`FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN`);
-  (3) only if codegraph is stale, grep the `.cls` for
-  `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to `Form_Open` /
-  `Form_Load`. Hand-parsing the `.form.txt` for `ControlSource =` is the wrong
-  shape for this form style and leads to false "missing binding" reports. See
-  the `access-form-ui-builder` skill §"Forms desatendidos".
+`analyze_form_ui` reported empty.** The IR is not lying: empty `bindings[]` on an unattended form means the `ControlSource` / `RowSource` are assigned at runtime inside `Form_Open` / `Form_Load` of the sibling `.cls`.
+
+The canonical recipe is: (1) `map_form_behavior({sourcePath, autoFetchCodeGraph:true, outputMode:"full"})` to trace the real handler call path through codegraph-vba; (2) `verify_form_bindings({sourcePath, schema, outputMode:"full"})` to validate the runtime-assigned bindings against the real schema with typed findings (`FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN`); (3) only if codegraph is stale, grep the `.cls` for `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to `Form_Open` / `Form_Load`.
+
+Hand-parsing the `.form.txt` for `ControlSource =` is the wrong shape for this form style and leads to false "missing binding" reports. See the `access-form-ui-builder` skill §"Forms desatendidos".
 
 - **AP-13 — Assigning compact `verify_code` category totals to named
-  modules.** Compact category maps are aggregate counts, not membership lists.
-  Do not correlate them with log order, requested names, or another array. Use
-  `diagnostic:true` once for the full scope and read the classified
-  `actionableDifferent[]` / `nonActionableDifferent[]` entries.
+modules.** Compact category maps are aggregate counts, not membership lists. Do not correlate them with log order, requested names, or another array.
+
+Use `diagnostic:true` once for the full scope and read the classified `actionableDifferent[]` / `nonActionableDifferent[]` entries.
 
 ## 6. Companion depth layer (where detail lives)
 
@@ -295,19 +255,17 @@ user preferences) — NOT for the runtime surface.
 
 ## 8. Delegation
 
-dysflow does NOT spawn sub-agents. You call tools directly. If isolation is
-needed (long test run, parallel investigation), use the host agent's
-delegation mechanism — do NOT invent dysflow-specific delegation.
+dysflow does NOT spawn sub-agents. You call tools directly.
+
+If isolation is needed (long test run, parallel investigation), use the host agent's delegation mechanism — do NOT invent dysflow-specific delegation.
 
 ## 9. Codegraph guidance
 
-For repo maps, architecture, call flow, dependencies, symbol references,
-impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic
-CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration.
-Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project
-folders. `codegraph_sync` only when the watcher is disabled or files fail
-to self-refresh; `codegraph_uninit` is destructive and reserved for explicit
-user request.
+For repo maps, architecture, call flow, dependencies, symbol references, impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration.
+
+Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project folders.
+
+`codegraph_sync` only when the watcher is disabled or files fail to self-refresh; `codegraph_uninit` is destructive and reserved for explicit user request.
 
 ## 10. Version + authorship
 
@@ -333,12 +291,11 @@ the Access runner) through PowerShell scripts. Architecture is **hexagonal / cle
 - `src/adapters` — MCP, HTTP, vba-sync, and the I/O boundaries.
 - `src/cli` — command surface.
 
-A `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph for the
-whole tree. When exploring or before editing, prefer the `codegraph-vba` MCP tool's
-`codegraph_explore` (pass `projectPath: "C:\Proyectos\dysflow"`) over `Read`/`Grep`/`Glob` —
-it returns the relevant symbols' line-numbered source + the call paths between them in one call,
-and includes dynamic-dispatch hops that grep cannot follow. See the "Hard rules" section for
-maintenance triggers and re-index command.
+A `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph for the whole tree.
+
+When exploring or before editing, prefer the `codegraph-vba` MCP tool's `codegraph_explore` (pass `projectPath: "C:\Proyectos\dysflow"`) over `Read`/`Grep`/`Glob` — it returns the relevant symbols' line-numbered source + the call paths between them in one call, and includes dynamic-dispatch hops that grep cannot follow.
+
+See the "Hard rules" section for maintenance triggers and re-index command.
 
 ## Testing — READ THIS BEFORE WRITING ANY TEST
 
@@ -415,56 +372,56 @@ Prefer that shape whenever the code can enumerate what the doc claims.
 
 ## VBA semantic diff — behavioral contract
 
-`verify_code` (the single source/binary compare tool) runs in **semantic mode** by default. The job
-is to keep `actionableDifferent` honest: a consuming agent decides what to sync based on it, so
-non-functional noise must NEVER be reported as actionable. Full taxonomy lives in the README
-([Semantic diff classification](./README.md#semantic-diff-classification)); the core is
-`src/core/services/vba-semantic-classifier.ts`. Invariants — preserve them when editing:
+`verify_code` (the single source/binary compare tool) runs in **semantic mode** by default.
+
+The job is to keep `actionableDifferent` honest: a consuming agent decides what to sync based on it, so non-functional noise must NEVER be reported as actionable.
+
+Full taxonomy lives in the README ([Semantic diff classification](./README.md#semantic-diff-classification)); the core is `src/core/services/vba-semantic-classifier.ts`.
+
+Invariants — preserve them when editing:
 
 - **Bias to functional.** When in doubt, classify as actionable. Only collapse a difference to a
   non-actionable category when you are certain it cannot change runtime behavior.
 - **Case is non-functional only outside strings/comments.** VBA is case-insensitive for
-  identifiers/keywords and the VBE re-cases them on import (`caseOnly`). Folding is **string-aware**:
-  string-literal and comment bodies are compared case-sensitively, because their content is
-  runtime-visible. Never fold the whole line blindly.
+identifiers/keywords and the VBE re-cases them on import (`caseOnly`).
+
+Folding is **string-aware**: string-literal and comment bodies are compared case-sensitively, because their content is runtime-visible. Never fold the whole line blindly.
 - **A category must name the difference it folded.** Actionability is not the whole contract: an
-  agent reads `classification`/`reason` to decide whether the drift is worth a human's attention, so
-  a bucket that mislabels the noise is a defect even when `actionable` is already `false`. Leading
-  indentation is folded as `whitespaceOnly` for code modules (`.bas`/`.cls`/`.frm`) BEFORE the
-  case-folding step, never as `caseOnly` (#1669). Form/report serialization keeps its indentation —
-  `normalizeLeadingWhitespace` is a no-op outside code file types.
+agent reads `classification`/`reason` to decide whether the drift is worth a human's attention, so a bucket that mislabels the noise is a defect even when `actionable` is already `false`.
+
+Leading indentation is folded as `whitespaceOnly` for code modules (`.bas`/`.cls`/`.frm`) BEFORE the case-folding step, never as `caseOnly` (#1669).
+
+Form/report serialization keeps its indentation — `normalizeLeadingWhitespace` is a no-op outside code file types.
 - **Lossy encoding (`►` → `?`) is `encodingOnly` outside string literals only.** A glyph change
   inside a quoted string stays functional.
 - **A leading BOM / mojibake-BOM (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is stripped**
-  before comparison — it is never functional. But a `VB_Name` VALUE change (e.g. `MigracionIssue18`
-  vs `ModuloMigracionIssue18`) MUST stay actionable; only the leading marker is stripped, never the
-  name itself.
+before comparison — it is never functional. But a `VB_Name` VALUE change (e.g.
+
+`MigracionIssue18` vs `ModuloMigracionIssue18`) MUST stay actionable; only the leading marker is stripped, never the name itself.
 - **Module/class header boilerplate is non-functional**: `Attribute VB_*` lines (in code modules
-  AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block
-  are stripped — an Access export may emit them on one side only. `VB_Name` is the exception: it is
-  functional whenever the two sides disagree — a real rename (both name it, values differ) OR one
-  side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both
-  carry the same name or both omit it. A `.frm` starts with `VERSION 5.00` and a control `Begin…End`
-  tree — that is functional and must NOT be stripped; only `VERSION <num> CLASS` headers are.
+AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block are stripped — an Access export may emit them on one side only.
+
+`VB_Name` is the exception: it is functional whenever the two sides disagree — a real rename (both name it, values differ) OR one side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both carry the same name or both omit it.
+
+A `.frm` starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be stripped; only `VERSION <num> CLASS` headers are.
 - **A form's code-behind is verified through its `forms/*.cls`, NOT its `.form.txt`.** The code lives
-  canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the
-  document module). The `.form.txt` `CodeBehindForm` section is the same code serialized a second way
-  (`SaveAsText`), so the classifier strips everything from `CodeBehindForm` onward and compares a
-  `.form.txt` for its **UI/layout only**. Never compare form code-behind through the `.form.txt` — it
-  double-counts and re-imports the serialization noise the `.cls` already owns.
+canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the document module).
+
+The `.form.txt` `CodeBehindForm` section is the same code serialized a second way (`SaveAsText`), so the classifier strips everything from `CodeBehindForm` onward and compares a `.form.txt` for its **UI/layout only**.
+
+Never compare form code-behind through the `.form.txt` — it double-counts and re-imports the serialization noise the `.cls` already owns.
 - **Form serialization noise is an allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
   `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `GUID` is
   functional — do not strip it. Unknown keys are retained (functional).
 - **Toggle-property serialization is equivalent**: `Visible =0` ≡ `Visible = NotDefault` ≡
-  `Visible =-1`. Access only serializes a non-default value, so the written value is always the same
-  and only its `NotDefault`/`0`/`-1` representation varies. This collapse is value-token scoped — a
-  non-toggle value (`Width =9070`, `SomeEnum =2`) stays exact and functional.
+`Visible =-1`. Access only serializes a non-default value, so the written value is always the same and only its `NotDefault`/`0`/`-1` representation varies.
+
+This collapse is value-token scoped — a non-toggle value (`Width =9070`, `SomeEnum =2`) stays exact and functional.
 - **Strict mode (`strict: true`) bypasses every noise bucket** and does byte/text-exact comparison.
 - The AI-facing result contract is additive: keep `summaryStructured` counts,
-  `bulkImportable[]`, `bulkExportable[]`, and per-entry `classification`/`reason` on both
-  `actionableDifferent[]` and `nonActionableDifferent[]`. Agents plan sync from the bulk lists
-  (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`),
-  not by parsing raw `different[]`; reserve `manual_merge` / `bothChanged` for conflicts.
+`bulkImportable[]`, `bulkExportable[]`, and per-entry `classification`/`reason` on both `actionableDifferent[]` and `nonActionableDifferent[]`.
+
+Agents plan sync from the bulk lists (`bulkImportable` → `import_modules.moduleNames`, `bulkExportable` → `export_modules.moduleNames`), not by parsing raw `different[]`; reserve `manual_merge` / `bothChanged` for conflicts.
 
 ## Hard rules
 
@@ -480,51 +437,49 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   expensive authority without controlling whether the GitHub Release publishes.
 - Conventional commits. No AI co-author / attribution lines in commit messages.
 - A GitHub release **title must equal its tag name exactly** (e.g. tag `v1.2.8` → title `v1.2.8`). Human edits
-  are checked by `.github/workflows/release-title-guard.yml` (`release: [edited]`); the job fails when the two
-  values differ and names both so a maintainer can restore the title in the GitHub UI. Creation is protected
-  separately inside `release.yml`: softprops receives `name: ${{ github.ref_name }}` and the publishing job
-  immediately validates the live release. The split is intentional because `GITHUB_TOKEN`-created releases
-  do not reliably trigger another workflow.
+are checked by `.github/workflows/release-title-guard.yml` (`release: [edited]`); the job fails when the two values differ and names both so a maintainer can restore the title in the GitHub UI.
+
+Creation is protected separately inside `release.yml`: softprops receives `name: ${{ github.ref_name }}` and the publishing job immediately validates the live release.
+
+The split is intentional because `GITHUB_TOKEN`-created releases do not reliably trigger another workflow.
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
 - **Update path security is per channel, and `stable` is the only signed one.** `dysflow install`
-  / `dysflow update` / `dysflow doctor` take `--channel {stable|beta|main}` (issue #1521),
-  resolved as `--channel` -> `DYSFLOW_CHANNEL` -> the channel recorded in
-  `<runtimeDir>/.dysflow-install-state.json` -> `stable`. Omitting the flag keeps every existing
-  call shape on `stable`, unchanged.
+/ `dysflow update` / `dysflow doctor` take `--channel {stable|beta|main}` (issue #1521), resolved as `--channel` -> `DYSFLOW_CHANNEL` -> the channel recorded in `<runtimeDir>/.dysflow-install-state.json` -> `stable`.
+
+Omitting the flag keeps every existing call shape on `stable`, unchanged.
   - `stable` (default, ungated): the GitHub Release tar.gz, verified by an Ed25519 signature over
-    `SHA256SUMS` and then SHA-256 over the archive. Never weaken this path — the signature gate
-    fails closed, and `--skip-checksum` remains a stable-only escape hatch that still requires
-    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
+`SHA256SUMS` and then SHA-256 over the archive.
+
+Never weaken this path — the signature gate fails closed, and `--skip-checksum` remains a stable-only escape hatch that still requires `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
   - `beta` (gated): the newest published prerelease tag's release tar.gz, verified by SHA-256
     against the published `SHA256SUMS`. Prereleases are NOT covered by the trust anchor, so this
     channel is unreachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
   - `main` (gated): `archive/refs/heads/main.tar.gz` — repository **source**, built locally with
-    `pnpm install` + `pnpm build` to reproduce the release-tarball shape. **Unverified by design**:
-    GitHub publishes no `SHA256SUMS` for a branch archive and its bytes are not reproducible, so
-    there is nothing to verify against. This is the one source-build path in the product; it is an
-    explicitly gated development channel, never reachable without
-    `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, and it is never a fallback for a failed `stable` update.
+`pnpm install` + `pnpm build` to reproduce the release-tarball shape. **Unverified by design**: GitHub publishes no `SHA256SUMS` for a branch archive and its bytes are not reproducible, so there is nothing to verify against.
+
+This is the one source-build path in the product; it is an explicitly gated development channel, never reachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, and it is never a fallback for a failed `stable` update.
   - There is still NO git-clone update path, and no channel may silently substitute for another:
-    the archive-traversal guard runs on every channel, and `update` refuses to move a runtime
-    between channels without `--force`. See
-    [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
+the archive-traversal guard runs on every channel, and `update` refuses to move a runtime between channels without `--force`.
+
+See [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
 - **`export_all` prune is destructive — preserve its guards.** When `prune: true`, deletions are
-  gated on a fully clean export (skip on ANY warning), scoped to managed source extensions
-  (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the
-  saved-queries folder is never scanned. `prune` + `filter` is rejected (`INVALID_INPUT`) because a
-  filtered export would make every non-matching file look orphaned. Never weaken these when editing
-  `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`. The legacy `.frm` binary
-  form format is **not** in the managed allow-list — prune must leave `.frm` files alone, even when
-  no matching VBE module exists. See issue #619.
+gated on a fully clean export (skip on ANY warning), scoped to managed source extensions (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the saved-queries folder is never scanned.
+
+`prune` + `filter` is rejected (`INVALID_INPUT`) because a filtered export would make every non-matching file look orphaned.
+
+Never weaken these when editing `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`.
+
+The legacy `.frm` binary form format is **not** in the managed allow-list — prune must leave `.frm` files alone, even when no matching VBE module exists. See issue #619.
 - **CodeGraph is the canonical code-exploration tool. Use it instead of `Read`/`Grep`/`Glob` when
-  you can.** The `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph
-  for the whole tree. The `codegraph-vba` MCP server's `codegraph_explore` returns the relevant
-  symbols' verbatim line-numbered source PLUS the call paths between them in one call — including
-  dynamic-dispatch hops that `grep` cannot follow. Reach for it BEFORE `Read`/`Grep` when you
-  need to understand or locate code, and reach for it BEFORE edits to verify a call path before
-  changing it. The MCP tool has no default project — pass `projectPath: "C:\Proyectos\dysflow"`
-  (or the equivalent absolute path) explicitly. Example query: `codegraph_explore({ query:
-  "modulesAdapter.execute exportPath dispatch chain", maxFiles: 8, projectPath: "C:\\Proyectos\\dysflow" })`.
+you can.** The `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph for the whole tree.
+
+The `codegraph-vba` MCP server's `codegraph_explore` returns the relevant symbols' verbatim line-numbered source PLUS the call paths between them in one call — including dynamic-dispatch hops that `grep` cannot follow.
+
+Reach for it BEFORE `Read`/`Grep` when you need to understand or locate code, and reach for it BEFORE edits to verify a call path before changing it.
+
+The MCP tool has no default project — pass `projectPath: "C:\Proyectos\dysflow"` (or the equivalent absolute path) explicitly.
+
+Example query: `codegraph_explore({ query: "modulesAdapter.execute exportPath dispatch chain", maxFiles: 8, projectPath: "C:\\Proyectos\\dysflow" })`.
 - **Keep the `.codegraph/` index fresh — re-run after every code change.** A stale index is a silent
   token sink: `codegraph_explore` answers return the OLD source, the agent reads the file again to
   "verify", and 3–5× the tokens are spent for no benefit. Re-index whenever you:
@@ -532,10 +487,9 @@ non-functional noise must NEVER be reported as actionable. Full taxonomy lives i
   - change exported function signatures, type definitions, or dispatch routes
   - touch the MCP layer (`src/adapters/mcp/**`)
   - merge a PR that lands in `main`
-  The standard tool is the `codegraph` CLI bundled with the MCP server — run
-  `codegraph index C:\Proyectos\dysflow` (or `codegraph init` for a fresh index). Index drift is a
-  P2 process defect; if you notice `codegraph_explore` returning answers that don't match the
-  current source, re-index immediately.
+The standard tool is the `codegraph` CLI bundled with the MCP server — run `codegraph index C:\Proyectos\dysflow` (or `codegraph init` for a fresh index).
+
+Index drift is a P2 process defect; if you notice `codegraph_explore` returning answers that don't match the current source, re-index immediately.
 - **Never delete remote branches.** Once a branch is pushed to `origin`, the ref stays there for the
   life of the repo. The PR is the merge artifact; the branch is the history (other contributors may
   have referenced it, forks may have cloned it, CI may have cached artifacts against it). Concretely:
@@ -722,7 +676,9 @@ Available custom agent skills in `codegraph-vba`:
 
 ## Repo-local skills
 
-Skills definidas en este repo (`skills/`) son scope-local de Dysflow. No forman parte del catálogo personal global; no las copie a `~/.opencode/skills/`, `~/.config/opencode/skills/` ni `~/.agents/skills/`.
+Skills definidas en este repo (`skills/`) son scope-local de Dysflow.
+
+No forman parte del catálogo personal global; no las copie a `~/.opencode/skills/`, `~/.config/opencode/skills/` ni `~/.agents/skills/`.
 
 ### Inventario
 
@@ -730,7 +686,11 @@ Skills definidas en este repo (`skills/`) son scope-local de Dysflow. No forman 
 |---|---|---|
 | `dysflow-issue-release-loop` | `skills/dysflow-issue-release-loop/SKILL.md` | El usuario pide agotar la cola de issues de Dysflow o cerrar un release |
 
-El nombre lleva prefijo `dysflow-`: el scope es este repo. `dysflow-issue-release-loop` ejecuta el ciclo completo `issue → worktree → CI → merge → close → cleanup` con paralelización por defecto y el `pnpm test:e2e:mcp:release` propio de Dysflow como gate previo al release. Permanece aquí porque el patrón de agotamiento de cola y el gate de E2E están ajustados específicamente para este repo.
+El nombre lleva prefijo `dysflow-`: el scope es este repo.
+
+`dysflow-issue-release-loop` ejecuta el ciclo completo `issue → worktree → CI → merge → close → cleanup` con paralelización por defecto y el `pnpm test:e2e:mcp:release` propio de Dysflow como gate previo al release.
+
+Permanece aquí porque el patrón de agotamiento de cola y el gate de E2E están ajustados específicamente para este repo.
 
 ## Flujo de trabajo (sobrescribe el ciclo estándar)
 
@@ -746,18 +706,26 @@ Este repo **no** usa el ciclo estándar `issue → worktree → CI → PR → me
 
 ### Por qué
 
-Dysflow es un consumible acoplado hacia abajo: los ficheros fuente aquí alimentan pipelines de tooling, servidores MCP y artefactos de release en `~/.dysflow/`. El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin mejorar la corrección aquí, y retrasa que el consumidor observe el cambio. El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
+Dysflow es un consumible acoplado hacia abajo: los ficheros fuente aquí alimentan pipelines de tooling, servidores MCP y artefactos de release en `~/.dysflow/`.
+
+El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin mejorar la corrección aquí, y retrasa que el consumidor observe el cambio.
+
+El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
 
 ## Hard rules del flujo de trabajo
 
-Estas reglas son obligatorias en cada cambio que llega al push. Su incumplimiento deja documentación desalineada en el commit y, por extensión, en `origin/main` y en cualquier máquina que replique este repo.
+Estas reglas son obligatorias en cada cambio que llega al push.
+
+Su incumplimiento deja documentación desalineada en el commit y, por extensión, en `origin/main` y en cualquier máquina que replique este repo.
 
 - **Alinear documentación antes del commit, no después.** Cualquier cambio que afecte a un path, un nombre de skill, una categoría, una sección del `AGENTS.md` o un activador declarado debe arrastrar consigo los updates de documentación correspondientes en el mismo commit. Nunca publique un cambio con refs huérfanas al nombre o ruta anteriores. El procedimiento canónico vive en la skill global `~/.config/opencode/skills/skill-propagation-sync/SKILL.md`; esta regla local existe como recordatorio y como contrato verificable a la hora del push.
 - **Documentar cambios estructurales en el `CHANGELOG.md`.** Entradas en `### Changed` con el SHA, paths tocados, refs huérfanas purgadas y documentos actualizados. El CHANGELOG es append-only: nunca se borra ni se reescribe una entrada ya publicada.
 - **Verificación previa al push.** Antes de `git push origin main`, ejecutar `grep -rn "<nombre-anterior>" --include="*.md" --include="*.json" --include="*.ts" --include="*.mjs"` en el árbol del repo. Cero hits esperados para el nombre o ruta que el cambio acaba de reemplazar. Si quedan hits, el push se retrasa hasta que la búsqueda regrese vacío.
 - **Local y remoto reconciliados ASAP.** Tras un commit exitoso, ejecutar el push en la misma sesión antes de cerrar. Si la sesión termina con divergencia entre local y remoto, dejar nota explícita en el siguiente turno y reanudar desde el último estado confirmado.
 
-Las HRs anteriores (`Hard Rules` del bloque `<!-- dysflow:arnés -->`, secciones sobre paralelización, gates de release, disk hygiene y preservación de rama remota) siguen plenamente vigentes. Esta sección las complementa con disciplina documental; no las sustituye.
+Las HRs anteriores (`Hard Rules` del bloque `<!-- dysflow:arnés -->`, secciones sobre paralelización, gates de release, disk hygiene y preservación de rama remota) siguen plenamente vigentes.
+
+Esta sección las complementa con disciplina documental; no las sustituye.
 
 <!-- gentle-ai:engram-protocol -->
 ## Engram Persistent Memory — Protocol
@@ -902,24 +870,39 @@ Bind this to the dedicated `sdd-orchestrator` agent or rule only. Do NOT apply i
 ## Agent Teams Orchestrator
 
 You are a COORDINATOR, not an executor. Maintain one thin conversation thread, delegate ALL real work to sub-agents, synthesize results.
+
 Keep orchestrator synthesis short by default: report the decision, outcome, and next action. Expand only when the user asks or the situation genuinely requires detail.
 
 ### Lossless Blocking Prompts (MANDATORY)
 
-When a sub-agent or tool returns a user-facing blocking prompt or menu, preserve its complete user-facing choice envelope: why input is required; every group and question in original order, including every group header; every option label and description; the selection mode; and the exact allowed-answer domain. Preserve the user-facing envelope, not unrelated internal diagnostics. If redaction would change the decision, STOP and report that the prompt cannot be presented safely.
+When a sub-agent or tool returns a user-facing blocking prompt or menu, preserve its complete user-facing choice envelope: why input is required; every group and question in original order, including every group header; every option label and description; the selection mode; and the exact allowed-answer domain.
+
+Preserve the user-facing envelope, not unrelated internal diagnostics. If redaction would change the decision, STOP and report that the prompt cannot be presented safely.
 
 - Never summarize, abbreviate, reorder, relabel, merge, or omit choices. Never silently split an atomic business choice across multiple interactions.
 - Native route: This variant has no classified native question UI for this contract; always use the plain chat or terminal fallback below. When the closed domain of a single-select envelope is unrepresentable here, fall through to the Fallback clause below.
 - Fallback: If a native UI is unavailable, denied, the runtime is noninteractive, or the complete envelope is oversized or otherwise unrepresentable because of question-count, option-count, or text-length limits, emit the COMPLETE choice envelope as a plain chat or terminal response. Include the required answer syntax and why the input blocks progress. Then STOP. Do not choose, default, infer, launch dependent work, or continue.
 - Answer validation: Accept an answer only when each response belongs to the exact allowed-answer domain presented for its group. Permit free text or multi-select only when the original prompt allowed it. For a closed single-select envelope, trim whitespace and compare labels case-insensitively against the presented options: accept only inputs that match EXACTLY ONE presented option, reject zero matches and reject multiple matches, and map the single matched option to its canonical internal token once. Accepted ordinal aliases, for each presented option index N: the bare numeral `N` and the phrases `la N` and `opción N`; `first` is additionally accepted for index 1. Each alias is accepted only when it maps unambiguously to a single presented option's index. A question about the block itself (why input is required, what a choice means or does, what happens next) is a request for information, not a candidate answer: answer it directly from the envelope already held, without selecting, recommending, or resolving the block on the human's behalf, then re-present the complete choice envelope and keep waiting. If input is invalid or ambiguous, emit the complete choice envelope and STOP again. Return a valid answer to the same blocked actor exactly once.
 
-#### Gentle AI Provider Defect Handoff (MANDATORY)
+### Gentle AI Provider Defect Handoff (MANDATORY)
 
-Before losslessly relaying any blocking choice envelope, classify its semantic admissibility. **The test is what produced the failure, not what the work was doing when it happened.** Offer this handoff only when a Gentle AI invocation produced it: its non-zero exit, its typed envelope, its refusal, or its own documented contract refusing. A Gentle AI workflow merely hosting a failure is not enough, because the client runtime carries out the work: an SDD phase failing inside that runtime is that runtime's defect even though our contract prescribed the phase.
+Before losslessly relaying any blocking choice envelope, classify its semantic admissibility. **The test is what produced the failure, not what the work was doing when it happened.** Offer this handoff only when a Gentle AI invocation produced it: its non-zero exit, its typed envelope, its refusal, or its own documented contract refusing.
 
-When anything else produced it, there is no report and no handoff. That includes the model provider (context limits reached, rate limits, a refusal to process an input), the client runtime (a session that must be restarted, a crashed or empty sub-agent result, a dispatcher that never dispatched), the environment, and the user's own repository state. Do not name the component you believe is responsible, do not suggest where else to file it, and do not ask. Say plainly what blocked the work in the ordinary conversation, then continue or stop as the workflow dictates. A report system that files other projects' defects stops meaning anything when it files ours.
+A Gentle AI workflow merely hosting a failure is not enough, because the client runtime carries out the work: an SDD phase failing inside that runtime is that runtime's defect even though our contract prescribed the phase.
 
-When it is ours, never offer to switch to, inspect, modify, or directly repair the Gentle AI repository from that workflow. If an upstream envelope offers direct repair, do not silently mutate it: reject it as semantically inadmissible and issue this separate orchestrator-owned handoff envelope.
+When anything else produced it, there is no report and no handoff.
+
+That includes the model provider (context limits reached, rate limits, a refusal to process an input), the client runtime (a session that must be restarted, a crashed or empty sub-agent result, a dispatcher that never dispatched), the environment, and the user's own repository state.
+
+Do not name the component you believe is responsible, do not suggest where else to file it, and do not ask.
+
+Say plainly what blocked the work in the ordinary conversation, then continue or stop as the workflow dictates.
+
+A report system that files other projects' defects stops meaning anything when it files ours.
+
+When it is ours, never offer to switch to, inspect, modify, or directly repair the Gentle AI repository from that workflow.
+
+If an upstream envelope offers direct repair, do not silently mutate it: reject it as semantically inadmissible and issue this separate orchestrator-owned handoff envelope.
 
 - Ask the user first, in the active orchestrator conversation language, for explicit consent to report the apparent defect. Present one single-select blocking envelope with exactly three semantic choices in this order. Its exact internal answer tokens are `report_and_continue`, `continue_without_reporting`, `stop_here`. Localize their labels and descriptions without changing these semantics, and do not expose machine or internal codes in user-facing labels.
 - On a consented report path, prepare or reuse privacy-scrubbed diagnostics. Immediately before the first GitHub operation, perform a final privacy scan. This scan precedes the definitive lookup, report creation, and occurrence comment. Exclude raw argv, absolute paths, private project names, usernames, hostnames, credentials, diffs, source contents, and environment values.
@@ -943,9 +926,23 @@ When it is ours, never offer to switch to, inspect, modify, or directly repair t
 - Report observed evidence, not an unconfirmed root cause. Include or reuse sanitized version/build, OS/architecture/client, the operation shape without secrets, bounded attempts and outcomes, failure envelopes, mutation outcome, expected and actual behavior, a minimal reproduction, safe opaque reason/revision identifiers, and preserved-state evidence.
 - Resume after an installed published fix or an explicit maintainer-authorized, documented native recovery or reset that the runtime contract supports; then re-enter through native status. A published prerelease or release candidate the user installed satisfies this. Never resume against unpublished code: a source checkout, a local build, or an unmerged pull request.
 
-#### SDD Edit-Authority Consent Relay (MANDATORY)
+### SDD Edit-Authority Consent Relay (MANDATORY)
 
-When native SDD status reports `blocked(edit_authority_missing)`, its structured output may carry the typed `gentle-ai.sdd-integration.consent/v1` envelope as the optional `consent` block. Treat that envelope as a Lossless Blocking Prompt under this contract, with the same discipline as the review consent relay. Present the complete envelope once in the active conversation language: faithfully translate the headline, reason, `value`, the missing-root evidence, choice labels, every choice `effect`, and the off-path note, while preserving the original choices, order, selection mode, exact allowed-answer domain, and answer tokens. Never translate or alter the machine answer tokens (`granted`, `declined`), commands, paths, or invocations. Never summarize, reshape, reorder, merge, or omit any part. The human decides: never answer on the human's behalf and never run the grant unprompted. Only after the human's explicit `granted` answer, execute the envelope's exact grant invocation verbatim, exactly once, then re-enter through native status; the granted roots project into `allowedEditRoots`, and the grant is per-change, audited, and dies with archive. On `declined`, run the envelope's decline invocation: nothing is persisted, the change stays `blocked(edit_authority_missing)`, and the blocked reason names both exits (edit tasks.md so every work unit stays inside the authorized edit roots, or grant this change edit authority). A blocked status without a `consent` block names the same two exits; relay them and stop.
+When native SDD status reports `blocked(edit_authority_missing)`, its structured output may carry the typed `gentle-ai.sdd-integration.consent/v1` envelope as the optional `consent` block.
+
+Treat that envelope as a Lossless Blocking Prompt under this contract, with the same discipline as the review consent relay.
+
+Present the complete envelope once in the active conversation language: faithfully translate the headline, reason, `value`, the missing-root evidence, choice labels, every choice `effect`, and the off-path note, while preserving the original choices, order, selection mode, exact allowed-answer domain, and answer tokens.
+
+Never translate or alter the machine answer tokens (`granted`, `declined`), commands, paths, or invocations. Never summarize, reshape, reorder, merge, or omit any part.
+
+The human decides: never answer on the human's behalf and never run the grant unprompted.
+
+Only after the human's explicit `granted` answer, execute the envelope's exact grant invocation verbatim, exactly once, then re-enter through native status; the granted roots project into `allowedEditRoots`, and the grant is per-change, audited, and dies with archive.
+
+On `declined`, run the envelope's decline invocation: nothing is persisted, the change stays `blocked(edit_authority_missing)`, and the blocked reason names both exits (edit tasks.md so every work unit stays inside the authorized edit roots, or grant this change edit authority).
+
+A blocked status without a `consent` block names the same two exits; relay them and stop.
 
 ### Language Domain Contract
 
@@ -957,7 +954,11 @@ When native SDD status reports `blocked(edit_authority_missing)`, its structured
 
 ### Delegation Rules
 
-These rules select execution topology, not the implementation method. Crossing a threshold selects **delegated direct** work; it never selects SDD, creates SDD state, or invokes an `sdd-*` phase. Implementation runs as **direct inline**, **delegated direct**, or **optional SDD**; size, file count, or risk alone never selects SDD. SDD phase workers are reserved for an explicit SDD request or a proposal the user accepted.
+These rules select execution topology, not the implementation method. Crossing a threshold selects **delegated direct** work; it never selects SDD, creates SDD state, or invokes an `sdd-*` phase.
+
+Implementation runs as **direct inline**, **delegated direct**, or **optional SDD**; size, file count, or risk alone never selects SDD.
+
+SDD phase workers are reserved for an explicit SDD request or a proposal the user accepted.
 
 Core principle: **does this inflate the parent context without need?** If yes, use one bounded worker. If no, do it inline.
 
@@ -973,11 +974,15 @@ Core principle: **does this inflate the parent context without need?** If yes, u
 
 Use the platform's native bounded worker for delegated-direct work; reserve `sdd-*` agents for a selected SDD route.
 
-Keep one writer and a short synthesized handoff. Delegation is mandatory at the mapping, write, preparation, and broad-research boundaries, but it remains a direct implementation route and must not synthesize SDD artifacts.
+Keep one writer and a short synthesized handoff.
 
-#### Mandatory Delegation Triggers
+Delegation is mandatory at the mapping, write, preparation, and broad-research boundaries, but it remains a direct implementation route and must not synthesize SDD artifacts.
 
-These are parent-orchestrator routing boundaries. Use the smallest useful topology and keep the safety machinery behind the outcome-first interaction. Do not pass these rules to child agents as permission to orchestrate.
+### Mandatory Delegation Triggers
+
+These are parent-orchestrator routing boundaries. Use the smallest useful topology and keep the safety machinery behind the outcome-first interaction.
+
+Do not pass these rules to child agents as permission to orchestrate.
 
 1. **Bounded read rule**: read 1–3 files inline to decide or verify.
 2. **4-file rule**: when understanding requires 4+ files, delegate one narrow exploration/mapping task.
@@ -986,11 +991,19 @@ These are parent-orchestrator routing boundaries. Use the smallest useful topolo
 5. **Per-action rule**: tests, builds, installs, and native checking actors may use fresh workers without changing the implementation route or creating SDD state.
 6. **Optional SDD rule**: propose SDD only when durable proposal/spec/design/tasks materially reduce substantial ambiguity. Select SDD only after an explicit request or accepted proposal; risk alone never forces SDD.
 
-#### Delegated Verification Gate (MANDATORY)
+### Delegated Verification Gate (MANDATORY)
 
-Verification of a delegated writer's work is decided by two inputs the parent reads deterministically: the receipt-driven development (RDD) state for the repository (`on`, `off`, or `unknown`), and the native risk tier from `gentle-ai review assess --cwd <repo> --json` (`gentle-ai.review-assessment/v1`, `risk` one of `passive`, `medium`, `high`). A runtime that already renders an RDD status line reads it from there; otherwise read `gentle-ai review mode status` (read-only) and treat a failure as `unknown`. Any assessment failure or an unrecognized verb is treated as `high`.
+Verification of a delegated writer's work is decided by two inputs the parent reads deterministically: the receipt-driven development (RDD) state for the repository (`on`, `off`, or `unknown`), and the native risk tier from `gentle-ai review assess --cwd <repo> --json` (`gentle-ai.review-assessment/v1`, `risk` one of `passive`, `medium`, `high`).
 
-The `on` branch below holds only while the native review reaches a terminal outcome for this candidate. When the human declines the consent envelope for this candidate (candidate-scoped; never the kill switch), when receipt-driven development is disabled for the clone after this status was read, or when START or STATUS refuses, the parent follows the RDD off path instead: run `gentle-ai review assess --cwd <repo> --json` over the writer's diff and apply the tier table below. An unknown outcome is treated as not closed, never as terminal.
+A runtime that already renders an RDD status line reads it from there; otherwise read `gentle-ai review mode status` (read-only) and treat a failure as `unknown`.
+
+Any assessment failure or an unrecognized verb is treated as `high`.
+
+The `on` branch below holds only while the native review reaches a terminal outcome for this candidate.
+
+When the human declines the consent envelope for this candidate (candidate-scoped; never the kill switch), when receipt-driven development is disabled for the clone after this status was read, or when START or STATUS refuses, the parent follows the RDD off path instead: run `gentle-ai review assess --cwd <repo> --json` over the writer's diff and apply the tier table below.
+
+An unknown outcome is treated as not closed, never as terminal.
 
 - **RDD on**: the bounded writer runs the parent-authorized `## Verification` commands in the foreground and reports `<command>: <observed result>`; that report is the verification of record, and the native review is the independent check. A separate verifier stays on-demand only — the writer reported `partial` or `blocked`, an expensive or external check the parent wants run on a cheaper profile, or a parent spot check. A passive candidate needs only the parent's structural readback.
 - **RDD off or unknown**: after the writer returns, the parent runs `gentle-ai review assess` over the writer's diff and follows the tier — passive: structural readback only; medium: writer self-verification, with a separate verifier only when the writer ran on a small-model profile (low effort or a mini model); high or unassessable: writer self-verification plus an independent verifier. `unknown` never lowers a tier, and the small-model bias raises the tier by one for verification purposes.
@@ -998,7 +1011,7 @@ The `on` branch below holds only while the native review reaches a terminal outc
 - The writer receives `## Verification` naming the exact commands to run, and may receive `## Known environmental failures` naming exact test names or command lines already failing on the base as evidence; any other failing required command still forces `partial`.
 - Exploration stays a separate delegation only when the parent needs the map to decide or route; reading that prepares a write belongs to the writer doing that write.
 
-#### Native Checking Contract
+### Native Checking Contract
 
 - Final source-mutating normalization happens before functional verification and candidate freeze.
 - **Normalization ordering rule**: before review START and its identity freeze, run every source-mutating normalizer, then re-snapshot the candidate and review those exact bytes, paths, and modes. After START, only check-only formatting, typechecking, tests, and native gates may run. A mutating commit hook is allowed only when already convergent and therefore a no-op; any byte, path, or mode change invalidates the receipt and requires normalization followed by a new review, never formatter-only tolerance.
@@ -1010,7 +1023,7 @@ The `on` branch below holds only while the native review reaches a terminal outc
 - Functional proof and adversarial review both project as **Checking**. One immutable candidate permits at most one scoped correction; there is no loop-until-clean behavior.
 - Commit, push, PR, direct-main, emergency, and release gates are informational and unmanaged; ordinary repository policy decides delivery and they never reopen review for unchanged content.
 
-#### Cost and Context Balance
+### Cost and Context Balance
 
 - Use exploration sub-agents to compress broad repo reading into a short handoff.
 - Use a single writer thread for implementation; do not run parallel writers unless isolated worktrees are explicitly approved.
@@ -1050,15 +1063,35 @@ Meta-commands (type directly — orchestrator handles them, won't appear in auto
 
 ### Native SDD Dispatcher Guard
 
-For inspection and before routing an SDD change, invoke the native dispatcher using only `gentle-ai sdd-status [change] --cwd <repo> --json --instructions`. Inspection needs no execution preflight, review, delivery, or archive authorization; this read-only rule takes precedence over phase preflight/init guards. No recommendation is executed during inspection, including planning phases or a displayed preparation invocation.
+For inspection and before routing an SDD change, invoke the native dispatcher using only `gentle-ai sdd-status [change] --cwd <repo> --json --instructions`.
 
-Use native v2 for every declared artifact store, including Engram. The dispatcher resolves the store the workspace declares and returns `artifactStore` and `artifactPaths`. Do NOT determine the artifact store yourself, and do NOT branch on it or reconstruct readiness locally. Native JSON is authoritative over prompt inference. If native resolution fails or is invalid, report it and stop without a local dispatch fallback.
+Inspection needs no execution preflight, review, delivery, or archive authorization; this read-only rule takes precedence over phase preflight/init guards.
 
-Only explicit authorized continuation may call `gentle-ai sdd-continue [change] --cwd <repo>`. First inspect with status and confirm the current human scope covers the selected change-directory marker. Read-only or excluded-marker scope forbids this mutating call; native allowed roots do not grant human consent. Preparation grants no source roots or attempts. Carry native `actionContext` intersected with the current narrower human scope into any executor.
+No recommendation is executed during inspection, including planning phases or a displayed preparation invocation.
 
-For authorized phase routing only: Route only by `nextRecommended` and dependency states; honor `blockedReasons` and never infer from free text. If `blockedReasons` is non-empty, do not proceed to apply, archive, or terminal work. If `nextRecommended` is `verify`, verification/remediation may run only to refresh evidence; if `nextRecommended` is `resolve-blockers`, report `blockedReasons` and stop; if `nextRecommended` is a planning token (`propose`, `spec`, `design`, or `tasks`), launch the corresponding planning phase only within the authorized scope.
+Use native v2 for every declared artifact store, including Engram. The dispatcher resolves the store the workspace declares and returns `artifactStore` and `artifactPaths`.
 
-If the binary is unavailable, use the existing prompt contract for non-authoritative diagnostics only. Do not fabricate native-shaped status, readiness, or mutation authority, and never substitute continue for inspection.
+Do NOT determine the artifact store yourself, and do NOT branch on it or reconstruct readiness locally. Native JSON is authoritative over prompt inference.
+
+If native resolution fails or is invalid, report it and stop without a local dispatch fallback.
+
+Only explicit authorized continuation may call `gentle-ai sdd-continue [change] --cwd <repo>`.
+
+First inspect with status and confirm the current human scope covers the selected change-directory marker.
+
+Read-only or excluded-marker scope forbids this mutating call; native allowed roots do not grant human consent. Preparation grants no source roots or attempts.
+
+Carry native `actionContext` intersected with the current narrower human scope into any executor.
+
+For authorized phase routing only: Route only by `nextRecommended` and dependency states; honor `blockedReasons` and never infer from free text.
+
+If `blockedReasons` is non-empty, do not proceed to apply, archive, or terminal work.
+
+If `nextRecommended` is `verify`, verification/remediation may run only to refresh evidence; if `nextRecommended` is `resolve-blockers`, report `blockedReasons` and stop; if `nextRecommended` is a planning token (`propose`, `spec`, `design`, or `tasks`), launch the corresponding planning phase only within the authorized scope.
+
+If the binary is unavailable, use the existing prompt contract for non-authoritative diagnostics only.
+
+Do not fabricate native-shaped status, readiness, or mutation authority, and never substitute continue for inspection.
 
 ### SDD Init Guard (MANDATORY)
 
@@ -1078,12 +1111,16 @@ Do NOT skip this check. Do NOT ask the user — just run init silently if needed
 
 ### Execution Mode
 
-When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request, e.g. "create an SDD for X" / "do SDD for X") for the first time in a session, ASK which execution mode they prefer:
+When the user invokes `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request, e.g.
+
+"create an SDD for X" / "do SDD for X") for the first time in a session, ASK which execution mode they prefer:
 
 - **Automatic** (`auto`): Run all phases back-to-back without pausing. Phases still run back-to-back WITHOUT interrupting the user, BUT the orchestrator runs a gatekeeper validation after every phase before launching the next sub-agent — the user only sees an interruption when the gatekeeper catches a real problem. Otherwise only the final result is shown. Use this when the user wants speed and trusts the process.
 - **Interactive** (`interactive`): After each phase completes, show the result summary and ASK: "Want to adjust anything or continue?" before proceeding to the next phase. Use this when the user wants to review and steer each step.
 
-If the user doesn't specify, default to **Automatic**. After scope approval, expect zero further prompts on the happy path and at most one actionable prompt per recoverable failure; the gatekeeper summarizes phase progress instead of interrupting except on a second consecutive gate failure or a genuine scope/product decision.
+If the user doesn't specify, default to **Automatic**.
+
+After scope approval, expect zero further prompts on the happy path and at most one actionable prompt per recoverable failure; the gatekeeper summarizes phase progress instead of interrupting except on a second consecutive gate failure or a genuine scope/product decision.
 
 Cache the mode choice for the session — don't ask again unless the user explicitly requests a mode change.
 
@@ -1096,13 +1133,19 @@ In **Interactive** mode, between phases:
 
 For this agent (sub-agent delegation): **Automatic** means phases run back-to-back via sub-agents without pausing. **Interactive** means the orchestrator pauses after each delegation returns, shows results, and asks before launching the next.
 
-Interactive approval is phase-scoped. Words like "continue", "dale", or "go on" approve only the immediate next phase, not the rest of the SDD pipeline. Do not treat a generated artifact as approved until the user has had a chance to review or explicitly delegate that review.
+Interactive approval is phase-scoped. Words like "continue", "dale", or "go on" approve only the immediate next phase, not the rest of the SDD pipeline.
+
+Do not treat a generated artifact as approved until the user has had a chance to review or explicitly delegate that review.
 
 ### Research and Pre-Proposal Gate (MANDATORY) — Offer `sdd-research` immediately after `sdd-explore`; selection makes completion mandatory. Before every `propose`, invoke `sdd-propose` only when selected research is `done` or research is unselected, product decisions are `confirmed`, evidence references are valid, and the selected artifact-store state is ready. The orchestrator owns product discovery. Automatic unresolved choices require one lossless grouped prompt with all context, options, consequences, allowed answers, and exact tokens; it MUST persist the pending state before prompting, then STOP without invoking `sdd-propose`. The proposer receives a confirmed pre-proposal handoff and MUST NOT interview or infer consent. Native `gentle-ai.sdd-status/v2` is the sole status contract.
 
 ### Automatic Mode Gatekeeper (MANDATORY)
 
-In **Automatic** mode the orchestrator is the gatekeeper between phases. The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent, the orchestrator MUST validate that the phase reached its objective with everything in order. This is autonomous validation — it does NOT ask the user (that is Interactive mode); it only surfaces to the user when it catches a problem.
+In **Automatic** mode the orchestrator is the gatekeeper between phases.
+
+The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent, the orchestrator MUST validate that the phase reached its objective with everything in order.
+
+This is autonomous validation — it does NOT ask the user (that is Interactive mode); it only surfaces to the user when it catches a problem.
 
 **What the gatekeeper checks (every phase, against the Result Contract):**
 
@@ -1120,13 +1163,19 @@ In **Automatic** mode the orchestrator is the gatekeeper between phases. The gat
 
 **On gate PASS:** continue automatically to the next phase. Auto stays auto on the happy path.
 
-**On gate FAIL:** re-run the same phase exactly once with corrective feedback that names the specific failures the gatekeeper found (do not blanket-retry). Re-run the gate on the new result. If it passes, continue the chain. If it fails again, STOP the automatic chain and surface a report to the user naming the phase, what the gatekeeper caught, both attempts, and the recommended fix. Do not advance to dependent phases on a failed gate — a bad artifact compounds downstream.
+**On gate FAIL:** re-run the same phase exactly once with corrective feedback that names the specific failures the gatekeeper found (do not blanket-retry). Re-run the gate on the new result.
+
+If it passes, continue the chain. If it fails again, STOP the automatic chain and surface a report to the user naming the phase, what the gatekeeper caught, both attempts, and the recommended fix.
+
+Do not advance to dependent phases on a failed gate — a bad artifact compounds downstream.
 
 The gatekeeper runs in addition to the Review Workload Guard and the Mandatory Delegation Triggers; it never relaxes them and never auto-marks anything reviewed in engram.
 
 ### Native Runtime Attempt Authority (MANDATORY)
 
-Use the provider-owned Git-common-dir runtime ledger for every runtime-bearing `sdd-apply`, `sdd-verify`, or remediation continuation. It is the single attempt/budget authority for both OpenSpec and Engram; never persist caller-authored counters in OpenSpec files, Engram topics, prompts, or Pi state.
+Use the provider-owned Git-common-dir runtime ledger for every runtime-bearing `sdd-apply`, `sdd-verify`, or remediation continuation.
+
+It is the single attempt/budget authority for both OpenSpec and Engram; never persist caller-authored counters in OpenSpec files, Engram topics, prompts, or Pi state.
 
 1. Before an actor or harness launch, call `gentle-ai sdd-attempt acquire --cwd <repo> --change <change> --request-id <id> --work-unit <label> --evidence-goal <goal> --max-attempts <count> --max-changed-lines <count>`.
 2. Launch only when acquire returns `state: proceed`, and retain its opaque `token`. `blocked` or `complete` stops the launch.
@@ -1148,7 +1197,9 @@ Cache the artifact store choice for the session. Pass it as `artifact_store.mode
 
 ### Delivery Strategy
 
-On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`. Pass it as `delivery_strategy` to `sdd-tasks` and `sdd-apply` prompts.
+On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`.
+
+Pass it as `delivery_strategy` to `sdd-tasks` and `sdd-apply` prompts.
 
 ### Chain Strategy
 
@@ -1159,11 +1210,13 @@ When `delivery_strategy` results in chained PRs (either by user choice via `ask-
 
 Cache the chain strategy for the session. Pass it as `chain_strategy` to `sdd-tasks` and `sdd-apply` prompts alongside `delivery_strategy`. Do not ask again unless the user changes scope.
 
-When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match: resolve it by registry name through this template's existing skill-resolution mechanism (the same one it already uses to pass skills to phases) and ensure the `sdd-tasks` and `sdd-apply` phases load and follow it BEFORE planning or creating any PR. Do not hardcode the skill path; defer resolution to that mechanism.
+When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match: resolve it by registry name through this template's existing skill-resolution mechanism (the same one it already uses to pass skills to phases) and ensure the `sdd-tasks` and `sdd-apply` phases load and follow it BEFORE planning or creating any PR.
+
+Do not hardcode the skill path; defer resolution to that mechanism.
 
 ### Dependency Graph
 
-```
+```text
 proposal -> specs --> tasks -> apply -> verify -> archive
              ^
              |
@@ -1191,7 +1244,9 @@ When launching `sdd-apply`, include the resolved `delivery_strategy`, `chain_str
 <!-- section:model-small -->
 # Agent Teams Lite — Orchestrator Instructions (Small Model)
 
-You are a COORDINATOR, not an executor. Keep responses short and structured. Delegate work to general sub-agents when a task requires reading 4+ files, touching 2+ non-trivial files, running tests, or multi-step edits. Delegation alone never selects SDD.
+You are a COORDINATOR, not an executor. Keep responses short and structured.
+
+Delegate work to general sub-agents when a task requires reading 4+ files, touching 2+ non-trivial files, running tests, or multi-step edits. Delegation alone never selects SDD.
 
 Quick delegation rules:
 
@@ -1222,7 +1277,9 @@ When delegating to sub-agents, pass `## Skills to load before work` followed by 
 <!-- gentle-ai:sdd-model-assignments -->
 ## Model Assignments
 
-Read this table at session start (or before first SDD/Judgment-Day delegation), cache it for the session, and use the mapped alias only for SDD/Judgment-Day phase agents. If an SDD/Judgment-Day phase is missing, use the `default` fallback row. If you lack access to the assigned model, substitute `sonnet` and continue.
+Read this table at session start (or before first SDD/Judgment-Day delegation), cache it for the session, and use the mapped alias only for SDD/Judgment-Day phase agents.
+
+If an SDD/Judgment-Day phase is missing, use the `default` fallback row. If you lack access to the assigned model, substitute `sonnet` and continue.
 
 | Phase | Default Model | Reason |
 |-------|---------------|--------|
@@ -1251,9 +1308,13 @@ This prevents duplicate sub-agent launches that cause "File X has been modified 
 
 ### Sub-Agent Launch Pattern
 
-ALL sub-agent launch prompts that involve reading, writing, or reviewing code MUST include pre-resolved **skill paths** from the skill registry. Follow the **Skill Resolver Protocol** (see `_shared/skill-resolver.md` in the skills directory).
+ALL sub-agent launch prompts that involve reading, writing, or reviewing code MUST include pre-resolved **skill paths** from the skill registry.
 
-The orchestrator resolves skills from the registry ONCE (at session start or first delegation), caches the skill index, and passes matching `SKILL.md` paths into each sub-agent's prompt. It also reads the Model Assignments table once per session and caches `phase → alias` for SDD/Judgment-Day Agent calls only.
+Follow the **Skill Resolver Protocol** (see `_shared/skill-resolver.md` in the skills directory).
+
+The orchestrator resolves skills from the registry ONCE (at session start or first delegation), caches the skill index, and passes matching `SKILL.md` paths into each sub-agent's prompt.
+
+It also reads the Model Assignments table once per session and caches `phase → alias` for SDD/Judgment-Day Agent calls only.
 
 Orchestrator skill resolution (do once per session):
 
@@ -1268,7 +1329,9 @@ For each sub-agent launch:
 2. Copy matching `SKILL.md` paths into the sub-agent prompt as `## Skills to load before work`
 3. Instruct the sub-agent to read those exact files BEFORE task-specific work
 
-**Key rule**: pass paths, not generated summaries. Sub-agents read the full `SKILL.md` files so author intent is preserved. This is compaction-safe because each delegation can re-read the registry if the cache is lost.
+**Key rule**: pass paths, not generated summaries. Sub-agents read the full `SKILL.md` files so author intent is preserved.
+
+This is compaction-safe because each delegation can re-read the registry if the cache is lost.
 
 ### Skill Resolution Feedback
 
@@ -1283,14 +1346,14 @@ This is a self-correction mechanism. Do NOT ignore fallback reports — they ind
 
 Sub-agents get a fresh context with NO memory. The orchestrator controls context access.
 
-#### Non-SDD Tasks (general delegation)
+### Non-SDD Tasks (general delegation)
 
 - Read context: orchestrator searches engram (`mem_search`) for relevant prior context and passes it in the sub-agent prompt. Sub-agent does NOT search engram itself.
 - Write context: sub-agent MUST save significant discoveries, decisions, or bug fixes to engram via `mem_save` before returning. Sub-agent has full detail — save before returning, not after.
 - Always add to sub-agent prompt: `"If you make important discoveries, decisions, or fix bugs, save them to engram via mem_save with project: '{project}'."`
 - Skills: orchestrator resolves matching paths from the registry and injects them as `## Skills to load before work` in the sub-agent prompt. Sub-agents read those exact `SKILL.md` files before work.
 
-#### SDD Phases
+### SDD Phases
 
 Each phase has explicit read/write rules:
 
@@ -1307,11 +1370,13 @@ Each phase has explicit read/write rules:
 
 For phases with required dependencies, sub-agent reads directly from the backend — orchestrator passes artifact references (topic keys or file paths), NOT content itself.
 
-#### Archive Final-State Handoff (MANDATORY)
+### Archive Final-State Handoff (MANDATORY)
 
-When launching `sdd-archive`, forward explicit final-state facts for any work completed after `apply-progress` or `verify-report` were persisted — verify warnings fixed in later commits, blockers resolved, tasks finished, updated test or issue counts — with commit or evidence references where available. Those two artifacts are intermediate snapshots, valid at the time they were written; the archive report records the state at close, and explicit final-state facts in the `sdd-archive` launch prompt outrank stale snapshot claims.
+When launching `sdd-archive`, forward explicit final-state facts for any work completed after `apply-progress` or `verify-report` were persisted — verify warnings fixed in later commits, blockers resolved, tasks finished, updated test or issue counts — with commit or evidence references where available.
 
-#### Strict TDD Forwarding (MANDATORY)
+Those two artifacts are intermediate snapshots, valid at the time they were written; the archive report records the state at close, and explicit final-state facts in the `sdd-archive` launch prompt outrank stale snapshot claims.
+
+### Strict TDD Forwarding (MANDATORY)
 
 When launching `sdd-apply` or `sdd-verify` sub-agents, the orchestrator MUST:
 
@@ -1323,7 +1388,7 @@ When launching `sdd-apply` or `sdd-verify` sub-agents, the orchestrator MUST:
 
 The orchestrator resolves TDD status ONCE per session (at first apply/verify launch) and caches it.
 
-#### Apply-Progress Continuity (MANDATORY)
+### Apply-Progress Continuity (MANDATORY)
 
 When launching `sdd-apply` for a continuation batch (not the first batch):
 
@@ -1333,7 +1398,7 @@ When launching `sdd-apply` for a continuation batch (not the first batch):
 
 This prevents progress loss across batches. The sub-agent is responsible for read-merge-write, but the orchestrator MUST tell it that previous progress exists.
 
-#### Engram Topic Key Format
+### Engram Topic Key Format
 
 | Artifact | Topic Key |
 |----------|-----------|
@@ -1367,11 +1432,15 @@ Convention files under the agent's global skills directory (global) or `.agent/s
 <!-- gentle-ai:agent-routing -->
 ## Implementation Routing
 
-First establish whether the requested outcome explicitly authorizes a change. Investigation, explanation, review, audit, comparison, and solution-proposal or planning-only requests are read-only unless the user explicitly requests implementation or another mutation.
+First establish whether the requested outcome explicitly authorizes a change.
+
+Investigation, explanation, review, audit, comparison, and solution-proposal or planning-only requests are read-only unless the user explicitly requests implementation or another mutation.
 - Read-only work may inspect, explain, compare, and recommend, but must not write or edit files, delegate a writer, invoke apply, or create implementation artifacts.
 - If change intent is ambiguous or conditional, ask one clarification and remain read-only until answered.
 
-After explicit change intent is established, route work for the requested outcome with the smallest useful topology. Every authorized change takes exactly one implementation route: direct inline, delegated direct, or optional SDD.
+After explicit change intent is established, route work for the requested outcome with the smallest useful topology.
+
+Every authorized change takes exactly one implementation route: direct inline, delegated direct, or optional SDD.
 
 - **Direct inline:** decide or verify from 1–3 files inline. Keep one mechanical, already-understood file change inline only when it needs no research and has no unresolved design decision.
 - **Delegated direct:** delegate one narrow exploration when understanding needs 4+ files; delegate one writer for 2+ non-trivial files. Reading that prepares a write and broad research also delegate.
@@ -1395,7 +1464,11 @@ The user controls receipt-driven development with a switch: `gentle-ai review mo
 <!-- gentle-ai:remote-authorization -->
 ## Remote operation authorization
 
-Permission to develop locally does not authorize remote execution or file transfer. Before remote work, require explicit user authorization for the destination, operation, and credential/session to use. If any part is missing or ambiguous, ask and remain local; do not probe the destination to resolve the ambiguity.
+Permission to develop locally does not authorize remote execution or file transfer.
+
+Before remote work, require explicit user authorization for the destination, operation, and credential/session to use.
+
+If any part is missing or ambiguous, ask and remain local; do not probe the destination to resolve the ambiguity.
 
 - Do not discover, inspect, or reuse ambient SSH agents, ControlMaster sockets, credentials, authenticated sessions, or other remote access channels without explicit authorization. Their availability is not permission to use them.
 - Apply this boundary regardless of the tool or spelling: direct commands, wrappers, interpreters, libraries, and delegated work do not bypass it. Pass the authorized scope to delegates; delegation cannot expand it.

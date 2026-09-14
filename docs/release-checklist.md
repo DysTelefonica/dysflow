@@ -30,42 +30,35 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
   9. The GitHub Release is published only after npm verification. The publication
      job declares `build`, `quality-authority`, and `e2e-validation` in `needs`.
 
-Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this
-contract, including a generated entry that passes the real Vitest quality gate
-and a deliberately collapsed entry that aborts before release Git writes. Run
-them with:
+Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
+
+Run them with:
 
     pwsh -NoProfile -Command "Invoke-Pester -Path scripts/tests/release-prepare.Tests.ps1"
 
 **Operator workflow**:
 
-    pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4
-    pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0
-    pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4 pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0 pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
-If a release commit was already prepared but exact-SHA CI prevented the tag,
-fix the blocker through the normal issue/PR path. After that PR is merged and
-`main` is clean and synchronized, resume the prepared version without another
-bump or release commit:
+If a release commit was already prepared but exact-SHA CI prevented the tag, fix the blocker through the normal issue/PR path.
+
+After that PR is merged and `main` is clean and synchronized, resume the prepared version without another bump or release commit:
 
     git fetch origin --tags
     git switch main
     git pull --ff-only origin main
     pwsh -File scripts/release-prepare.ps1 -Resume -Version 4.0.5
 
-Recovery fails closed unless the explicit version equals `package.json`, HEAD
-equals `origin/main`, the changelog and both stamps already name that version,
-the tag and GitHub Release are absent, and exact-SHA CI is green. It does not
-modify or stage release files and does not push `main`; it only creates and
-pushes the annotated tag after those checks pass.
+Recovery fails closed unless the explicit version equals `package.json`, HEAD equals `origin/main`, the changelog and both stamps already name that version, the tag and GitHub Release are absent, and exact-SHA CI is green.
+
+It does not modify or stage release files and does not push `main`; it only creates and pushes the annotated tag after those checks pass.
 
 The script exits with a non-zero status if any step fails, including the CI
 gate. Watch progress with `gh run watch <id>`.
 
-Review the non-merge commit subjects since the previous tag as consumer-facing
-release text before running the script. The script turns them into `### Changes`
-notes and preserves one physical bullet per commit, but the operator still owns
-wording and grouping.
+Review the non-merge commit subjects since the previous tag as consumer-facing release text before running the script.
+
+The script turns them into `### Changes` notes and preserves one physical bullet per commit, but the operator still owns wording and grouping.
 
 ## Pi package publication
 
@@ -81,17 +74,17 @@ Before pushing a tag:
 - [ ] The one-time local login + 2FA bootstrap, if still required, is explicitly
       authorized and runs only after the exact source commit is green.
 
-The workflow uses a short-lived OIDC credential, publishes to npmjs, and verifies
-with `npm view` before creating the GitHub Release. A failed post-publication run
-is retried forward; it never unpublishes or replaces immutable package bytes. The
-first package creation is the sole manual exception: local `npm login` plus 2FA,
-followed immediately by Trusted Publisher configuration.
+The workflow uses a short-lived OIDC credential, publishes to npmjs, and verifies with `npm view` before creating the GitHub Release.
+
+A failed post-publication run is retried forward; it never unpublishes or replaces immutable package bytes.
+
+The first package creation is the sole manual exception: local `npm login` plus 2FA, followed immediately by Trusted Publisher configuration.
 
 ### Fresh-Pi visual acceptance
 
 After the implementation is green and uploaded, the implementation session stops.
-Once the authorized tag workflow has published the matching npm package, complete
-final acceptance from a completely new Pi process and session:
+
+Once the authorized tag workflow has published the matching npm package, complete final acceptance from a completely new Pi process and session:
 
 - [ ] Run `dysflow install --agents pi --no-tui`; do not install from a local path.
 - [ ] Start another fresh Pi session after installation.

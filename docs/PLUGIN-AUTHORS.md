@@ -1,13 +1,12 @@
 # Dysflow plugin author guide
 
-Dysflow plugins are thin agent-specific adapters around one shared MCP runtime
-and one shared operating skill. Keep the runtime contract in Dysflow; use
-plugin manifests and hooks only for host integration.
+Dysflow plugins are thin agent-specific adapters around one shared MCP runtime and one shared operating skill.
 
-Start with the [setup guide](./SETUP.md) for installation and verification.
-See the [skill authoring guide](./skills-authoring.md) for skill metadata conventions.
-The [Dysflow README](../README.md) remains the canonical CLI and MCP tool
-reference.
+Keep the runtime contract in Dysflow; use plugin manifests and hooks only for host integration.
+
+Start with the [setup guide](./SETUP.md) for installation and verification. See the [skill authoring guide](./skills-authoring.md) for skill metadata conventions.
+
+The [Dysflow README](../README.md) remains the canonical CLI and MCP tool reference.
 
 ## Repository layout
 
@@ -37,9 +36,9 @@ skills/
     └── SKILL.md
 ```
 
-Claude Code and Codex use JSON manifests plus shell hooks. OpenCode uses a
-TypeScript adapter. Pi uses a native package. Every integration connects to the
-public `dysflow mcp` stdio boundary and shares the bundled operating skills.
+Claude Code and Codex use JSON manifests plus shell hooks. OpenCode uses a TypeScript adapter. Pi uses a native package.
+
+Every integration connects to the public `dysflow mcp` stdio boundary and shares the bundled operating skills.
 
 ## Manifest and namespace conventions
 
@@ -78,21 +77,21 @@ Bundled plugins launch the agent-facing tool profile through npm:
 }
 ```
 
-Keep the server key stable so clients do not create duplicate Dysflow
-connections. The CLI installer may instead write the managed `dysflow.cmd`
-launcher with `args = ["mcp"]`; both forms target the same runtime. Use the
-installer-owned form for machine setup and the bundled `npx` form inside a
-portable plugin.
+Keep the server key stable so clients do not create duplicate Dysflow connections.
+
+The CLI installer may instead write the managed `dysflow.cmd` launcher with `args = ["mcp"]`; both forms target the same runtime.
+
+Use the installer-owned form for machine setup and the bundled `npx` form inside a portable plugin.
 
 ## Pi Package Ownership
 
-`plugin/pi` is the source for public package `@aroman22/dysflow-pi`. It owns one
-native facade, the public MCP SDK client, and compact rendering. It does not own
-runtime schemas, Pi package settings, or an MCP manifest.
+`plugin/pi` is the source for public package `@aroman22/dysflow-pi`. It owns one native facade, the public MCP SDK client, and compact rendering.
 
-`src/cli/commands/install/pi-package-manager.ts` owns package-manager delegation
-and ownership records. `mcp-configurator.ts` owns the separate global absolute-
-launcher MCP entry. The package is not copied into the Dysflow runtime.
+It does not own runtime schemas, Pi package settings, or an MCP manifest.
+
+`src/cli/commands/install/pi-package-manager.ts` owns package-manager delegation and ownership records. `mcp-configurator.ts` owns the separate global absolute- launcher MCP entry.
+
+The package is not copied into the Dysflow runtime.
 
 Use the [Pi-native integration guide](./pi-native-integration.md) for the complete
 operator, release, sandbox, versioning, and troubleshooting contract.
@@ -152,9 +151,9 @@ triggers:
 Instructions begin here.
 ```
 
-Keep tool names, flags, defaults, and error codes discoverable from the live
-runtime. The skill should require `get_capabilities({})` before a non-trivial
-tool sequence rather than copying a registry that can become stale.
+Keep tool names, flags, defaults, and error codes discoverable from the live runtime.
+
+The skill should require `get_capabilities({})` before a non-trivial tool sequence rather than copying a registry that can become stale.
 
 ## Installation and updates
 
