@@ -1,0 +1,772 @@
+{
+  "generatedAt": "2026-09-14T10:44:41.790Z",
+  "runtime": "lexical source-classifier probes only; snippets are not compiled, imported, or runtime-equivalence evidence",
+  "totals": {
+    "cases": 44,
+    "goalPassed": 43,
+    "goalFailed": 1,
+    "categoryPassed": 44,
+    "categoryFailed": 0,
+    "recommendationPassed": 44,
+    "recommendationFailed": 0
+  },
+  "observations": [
+    {
+      "id": "baseline-identical",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "matched"
+      ],
+      "observedActionable": false,
+      "observedClassification": "matched",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Unchanged source and binary."
+    },
+    {
+      "id": "keyword-case-only",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "caseOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "caseOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "VBA keywords are case-insensitive."
+    },
+    {
+      "id": "identifier-case-only",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "caseOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "caseOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "VBA identifiers are case-insensitive."
+    },
+    {
+      "id": "string-case",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "String contents are runtime-visible and case-sensitive."
+    },
+    {
+      "id": "string-whitespace",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Whitespace inside a string is data."
+    },
+    {
+      "id": "string-value",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Changed literal value is functional."
+    },
+    {
+      "id": "string-escaped-quotes-case",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Case inside an escaped-quote VBA string remains runtime-visible."
+    },
+    {
+      "id": "string-apostrophe-case",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "An apostrophe inside a quoted string is data, not a comment marker."
+    },
+    {
+      "id": "comment-case-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "commentOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "commentOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): a case-only difference inside a comment body is non-functional. Classified as `commentOnly`."
+    },
+    {
+      "id": "combined-case-indent-comment-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "nonActionableMixed"
+      ],
+      "observedActionable": false,
+      "observedClassification": "nonActionableMixed",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): identifier case + indentation + comment case combined is non-functional. Classified as `nonActionableMixed` because two or more non-actionable families contributed."
+    },
+    {
+      "id": "rem-comment-case",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "caseOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "caseOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "REM keyword and comment casing are non-functional."
+    },
+    {
+      "id": "rem-comment-content-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "commentOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "commentOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): whole-line REM comment text differences are non-functional. Classified as `commentOnly`."
+    },
+    {
+      "id": "leading-indentation",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "whitespaceOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "whitespaceOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Leading VBA indentation is formatting."
+    },
+    {
+      "id": "line-endings-and-trailing-space",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "whitespaceOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "whitespaceOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "CRLF/LF and trailing whitespace are formatting."
+    },
+    {
+      "id": "internal-blank-line",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "matched",
+        "whitespaceOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "matched",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "A blank line does not alter execution."
+    },
+    {
+      "id": "operator-spacing-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "whitespaceOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "whitespaceOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): operator/operand whitespace is a presentation reflow. Classified as `whitespaceOnly` (interTokenWhitespace reason)."
+    },
+    {
+      "id": "continuation-reflow-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "continuationOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "continuationOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): equivalent `_<EOL>` reflow between physical lines is non-functional. Classified as `continuationOnly`."
+    },
+    {
+      "id": "statement-order-swapped",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Statement order can change observable behavior."
+    },
+    {
+      "id": "duplicate-statement-count",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "sourceNewer"
+      ],
+      "observedActionable": true,
+      "observedClassification": "sourceNewer",
+      "observedRecommendation": "import_to_binary",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Duplicate executable statement cardinality is functional."
+    },
+    {
+      "id": "colon-to-newline-goal",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "statementBoundaryOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "statementBoundaryOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): equivalent colon-separated vs newline-separated statement boundaries. Classified as `statementBoundaryOnly`."
+    },
+    {
+      "id": "dangerous-merged-tokens",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Removing a statement boundary and merging tokens is functional."
+    },
+    {
+      "id": "numeric-value",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Numeric value change is functional."
+    },
+    {
+      "id": "operator-change",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Operator change is functional."
+    },
+    {
+      "id": "parameter-type-change",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Parameter type change is functional."
+    },
+    {
+      "id": "signature-byval-byref",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Calling convention change is functional."
+    },
+    {
+      "id": "option-explicit-removed",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "binaryNewer"
+      ],
+      "observedActionable": true,
+      "observedClassification": "binaryNewer",
+      "observedRecommendation": "export_to_src",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Lexical policy probe keeps Option Explicit significant where the body uses an undeclared name; snippets are not compiled by this battery."
+    },
+    {
+      "id": "option-compare-change",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Lexical policy probe keeps Option Compare significant where the body compares differently-cased strings."
+    },
+    {
+      "id": "option-base-change",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Lexical policy probe keeps Option Base significant where an implicit lower-bound array is inspected."
+    },
+    {
+      "id": "conditional-constant-change",
+      "scope": "bas",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Lexical policy probe keeps #Const significant where #If selects a branch."
+    },
+    {
+      "id": "attribute-description",
+      "scope": "cls",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "attributeOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "attributeOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Description metadata is cosmetic."
+    },
+    {
+      "id": "attribute-vb-name",
+      "scope": "cls",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Module identity is meaningful."
+    },
+    {
+      "id": "attribute-vb-name-missing",
+      "scope": "cls",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "binaryNewer"
+      ],
+      "observedActionable": true,
+      "observedClassification": "binaryNewer",
+      "observedRecommendation": "export_to_src",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "One-sided missing module identity is functional under the current contract."
+    },
+    {
+      "id": "attribute-vb-name-case-goal",
+      "scope": "cls",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "attributeOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "attributeOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "WU-3 v2-categories (Refs #1724): VBA is case-insensitive for identifiers, including the module name. A case-only VB_Name difference is treated as attribute metadata drift; classified as `attributeOnly`."
+    },
+    {
+      "id": "attribute-member-user-mem-id-goal",
+      "scope": "cls",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "VB_UserMemId remains actionable because the broad Attribute VB_* pattern does not match member-qualified attributes; this is pattern retention, not semantic understanding or Access runtime proof."
+    },
+    {
+      "id": "attribute-predeclared-id-goal",
+      "scope": "cls",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "attributeOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "attributeOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": false,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "This proves only that broad module-level Attribute VB_* stripping removes VB_PredeclaredId. The significant-code policy expectation is not proof of default-instance runtime impact."
+    },
+    {
+      "id": "form-checksum",
+      "scope": "form.txt",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "formSerializationOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "formSerializationOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Synthetic SaveAsText-shaped text characterizes Checksum stripping; the snippet is not proven to be a valid Access export."
+    },
+    {
+      "id": "form-codebehind-only",
+      "scope": "form.txt",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "matched",
+        "formSerializationOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "formSerializationOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Synthetic SaveAsText-shaped text characterizes embedded-code stripping only; safety additionally requires a successfully read and compared sibling .cls."
+    },
+    {
+      "id": "form-layout-width",
+      "scope": "form.txt",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Synthetic SaveAsText-shaped text keeps Width significant; the snippet is not validated or imported as an Access form."
+    },
+    {
+      "id": "form-cls-code",
+      "scope": "cls",
+      "expectedFunctional": true,
+      "expectedCategories": [
+        "bothChanged"
+      ],
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "The sibling .cls is authoritative for form behavior."
+    },
+    {
+      "id": "v2-comment-case-only-positive",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "commentOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "commentOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Positive probe for the commentOnly bucket: only a case-only difference inside a whole-line comment."
+    },
+    {
+      "id": "v2-inter-token-whitespace-positive",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "whitespaceOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "whitespaceOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Positive probe for the inter-token-whitespace sub-bucket of whitespaceOnly."
+    },
+    {
+      "id": "v2-continuation-only-positive",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "continuationOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "continuationOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Positive probe for the continuationOnly bucket: same expression, one side uses `_<EOL>` reflow."
+    },
+    {
+      "id": "v2-statement-boundary-only-positive",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "statementBoundaryOnly"
+      ],
+      "observedActionable": false,
+      "observedClassification": "statementBoundaryOnly",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Positive probe for the statementBoundaryOnly bucket: same statements, one side uses `: ` separator."
+    },
+    {
+      "id": "v2-non-actionable-mixed-positive",
+      "scope": "bas",
+      "expectedFunctional": false,
+      "expectedCategories": [
+        "nonActionableMixed"
+      ],
+      "observedActionable": false,
+      "observedClassification": "nonActionableMixed",
+      "observedRecommendation": "no_action",
+      "srcUniqueFunctionalLines": 0,
+      "binaryUniqueFunctionalLines": 0,
+      "goalPass": true,
+      "categoryPass": true,
+      "recommendationPass": true,
+      "note": "Positive probe for the nonActionableMixed bucket: identifier case + comment case together equalize only under two normalizers."
+    }
+  ],
+  "unexecutedRealAccessCases": [
+    "missing/extra module directionality",
+    "duplicate module identity",
+    "incomplete binary export fail-closed behavior",
+    "whole-project repeat/cache freshness",
+    "form .cls plus .form.txt paired result"
+  ]
+}

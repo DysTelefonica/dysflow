@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "verify-research.import-diagnostic/v1",
+  "generatedAt": "2026-09-13T09:32:25.517Z",
+  "startedAt": "2026-09-13T09:31:58.578Z",
+  "sourceVersion": "4.3.2",
+  "operation": "import_modules",
+  "elapsedMs": 26939,
+  "passwordPresent": true,
+  "passwordLogged": false,
+  "goldenHashes": {
+    "before": {
+      "frontend": "15cf61b24457a5f4f55f2ebc8efea41a8ad0de77cc8e28c347a4908baaa9c770",
+      "backend": "25b216d24635b13f6c2d5eadfbfe49d0eb7931e5bfbef3071b89e0561cd18a58"
+    },
+    "after": {
+      "frontend": "15cf61b24457a5f4f55f2ebc8efea41a8ad0de77cc8e28c347a4908baaa9c770",
+      "backend": "25b216d24635b13f6c2d5eadfbfe49d0eb7931e5bfbef3071b89e0561cd18a58"
+    }
+  },
+  "goldenUnchanged": true,
+  "tempCleanup": "removed",
+  "accessOperations": {
+    "before": [],
+    "after": [],
+    "registryHealthBefore": "ok",
+    "registryHealthAfter": "ok"
+  },
+  "applicationDataOperationRequested": false,
+  "backendRelinkVerified": false,
+  "topologyIsolationClaimed": false,
+  "startupOrVbaExecutionRequested": false,
+  "retryCount": 0,
+  "result": {
+    "ok": true,
+    "data": {
+      "result": {
+        "ok": true,
+        "modules": [
+          {
+            "module": "TempVerifyClass",
+            "status": "ok",
+            "phase": null,
+            "error": null,
+            "durationMs": 459,
+            "rollbackApplied": false,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      },
+      "operation": "import_modules",
+      "dryRun": false,
+      "willModifyAccess": true,
+      "configSource": "runtime-default",
+      "projectRoot": "<temp-workspace>\\src",
+      "accessPath": "<temp-workspace>\\NoConformidades.accdb",
+      "destinationRoot": "<temp-workspace>\\src",
+      "resolvedDestinationRoot": "<temp-workspace>\\src",
+      "destinationRootSource": "config"
+    },
+    "diagnostics": [],
+    "durationMs": 13065
+  }
+}
