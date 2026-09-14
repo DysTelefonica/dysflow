@@ -263,6 +263,12 @@ export interface ComparisonFileSystemEntry {
   isFile(): boolean;
 }
 
+/**
+ * Refs #1724 — WU-1 declared the next three optional methods. Implementations
+ * land in WU-5 (frozen snapshot seam). They are optional so the existing
+ * single-flight call path is unchanged; WU-5 wires the call sites that
+ * actually use them.
+ */
 export interface ComparisonFileSystemPort {
   mkdtemp(prefix: string): Promise<string>;
   readdir(path: string): Promise<readonly ComparisonFileSystemEntry[]>;
@@ -273,6 +279,12 @@ export interface ComparisonFileSystemPort {
   tmpdir(): string;
   /** Optional. When present, lets callers check path existence without throwing. */
   exists?(path: string): Promise<boolean>;
+  /** Optional. Declared by WU-1, implemented by WU-5. */
+  copyFile?(src: string, dest: string): Promise<void>;
+  /** Optional. Declared by WU-1, implemented by WU-5. Returns lowercase 64-char hex SHA-256. */
+  hashSha256?(path: string): Promise<string>;
+  /** Optional. Declared by WU-1, implemented by WU-5. */
+  writeFile?(path: string, data: string | Uint8Array): Promise<void>;
 }
 
 export async function compareSourceAgainstBinary(
