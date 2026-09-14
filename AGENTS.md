@@ -13,11 +13,16 @@ The block between `<!-- dysflow:arnés --> ... <!-- /dysflow:arnés -->` is verb
 <!-- dysflow:arnés -->
 # dysflow — Operating Harness
 
-You are an AI agent operating in a Microsoft Access / VBA project that uses the dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL execution, test execution, and form UI operations on Access projects.
+You are an AI agent operating in a Microsoft Access / VBA project that uses the
+dysflow MCP. dysflow is the only canonical path for source↔binary sync, SQL
+execution, test execution, and form UI operations on Access projects.
 
-**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call `bootstrap({})` before reading static project files, forming a diagnosis, or modifying `.dysflow/project.json`.
-
-Route with `schema({view:"index"})`; expand through an explicit compact/full capability view or selective `describe_tool` only when needed. The live runtime is authoritative.
+**MUST-LOAD ORDER:** load `dysflow-usage` first, then this harness. Call
+`bootstrap({})` before reading static project files, forming a diagnosis, or
+modifying `.dysflow/project.json`. Route with
+`schema({view:"index"})`; expand through an explicit compact/full capability
+view or selective `describe_tool` only when needed. The live runtime is
+authoritative.
 
 ## 1. When this arnés applies (load it when...)
 
@@ -31,130 +36,156 @@ Route with `schema({view:"index"})`; expand through an explicit compact/full cap
 ## 2. Hard rules (NEVER violate)
 
 - **HR-1 — The HUMAN compiles.** You NEVER call `compile_vba`, NEVER pass
-`compile:true`.
-
-Required loop for any slice ending in `test_vba`: (1) write source → (2) `import_modules({moduleNames:[...], apply:false})` → (3) ASK the user to compile manually (Debug → Compile VBA Project) → (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`.
-
-Failures from `test_vba` are test failures, never compile errors.
+  `compile:true`. Required loop for any slice ending in `test_vba`:
+  (1) write source → (2) `import_modules({moduleNames:[...], apply:false})` →
+  (3) ASK the user to compile manually (Debug → Compile VBA Project) →
+  (4) WAIT for "ya está" confirmation → (5) THEN `test_vba`. Failures from
+  `test_vba` are test failures, never compile errors.
 
 - **HR-2 — Confirm destructive operations; NEVER kill MSACCESS.EXE generically.**
-Every public destructive `apply:true` call requires the exact schema-advertised `implements_check` token AND `confirmedRequiresConfirmation:true` after the human approves the risk.
-
-The enforced tokens are: `delete_module_precheck`, `compact_repair_precheck`, `relink_directory_precheck`, `localize_backend_precheck`, `drop_table_precheck`, and `teardown_fixture_precheck`.
-
-`apply:false` remains the safe planning path. The Access-kill escape hatch keeps its stricter PID-bound `orphans_msaccess` contract.
-
-Forbidden generic kill operations (verbatim): (verbatim): `Stop-Process -Name MSACCESS`, `taskkill /F /IM MSACCESS.EXE`, `pkill MSACCESS`, `Get-Process | Stop-Process -Force`, `kill -9` on `Get-Process` results.
-
-Use ONLY dysflow-owned cleanup: `list_access_operations` → `access_force_cleanup_orphaned({pid:null})` → `access_force_cleanup_orphaned({pid:<real pid>,implements_check:"orphans_msaccess",confirmedRequiresConfirmation:true})` → OR `cleanup_access_operation({operationId:<real id>})`.
+  Every public destructive `apply:true` call requires the exact schema-advertised
+  `implements_check` token AND `confirmedRequiresConfirmation:true` after the
+  human approves the risk. The enforced tokens are:
+  `delete_module_precheck`, `compact_repair_precheck`,
+  `relink_directory_precheck`, `localize_backend_precheck`,
+  `drop_table_precheck`, and `teardown_fixture_precheck`. `apply:false` remains
+  the safe planning path. The Access-kill escape hatch keeps its stricter
+  PID-bound `orphans_msaccess` contract. Forbidden generic kill operations
+  (verbatim):
+  (verbatim):
+  `Stop-Process -Name MSACCESS`,
+  `taskkill /F /IM MSACCESS.EXE`,
+  `pkill MSACCESS`,
+  `Get-Process | Stop-Process -Force`,
+  `kill -9` on `Get-Process` results.
+  Use ONLY dysflow-owned cleanup: `list_access_operations` →
+  `access_force_cleanup_orphaned({pid:null})` →
+  `access_force_cleanup_orphaned({pid:<real pid>,implements_check:"orphans_msaccess",confirmedRequiresConfirmation:true})` → OR
+  `cleanup_access_operation({operationId:<real id>})`.
 
 - **HR-3 — NEVER write to production backend.** `m_TestingMode=True` is the
   ONLY path for test data. If sandbox unreachable → surface "TESTS BLOCKED",
   do NOT touch data. Production writes = silent corruption.
 
 - **HR-4 — Pre-flight BEFORE every dysflow write call.** Start from
-`bootstrap({})`, then fetch the bounded capability blocks needed by the selected tool.
-
-Self-check (5 points): (1) `adapterVersion` is current, (2) `effectiveDryRunDefault[toolName]` matches your intent, (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`, (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`, (5) `toolInventory.advertised` or `.callable` matches the claim you cite; legacy `toolsVisible` has context-dependent meaning.
-
-If any check fails, STOP and surface the gap.
+  `bootstrap({})`, then fetch the bounded capability blocks needed by the
+  selected tool. Self-check (5 points): (1) `adapterVersion` is current,
+  (2) `effectiveDryRunDefault[toolName]` matches your intent,
+  (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
+  (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
+  (5) `toolInventory.advertised` or `.callable` matches the claim you cite;
+  legacy `toolsVisible` has context-dependent meaning.
+  If any check fails, STOP and surface the gap.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
-defaults, or error codes from any doc. Re-fetch `bootstrap`, route through `schema({view:"index"})`, and expand the relevant capability/schema blocks before any non-trivial call sequence.
-
-If runtime value disagrees with this arnés or any skill, trust runtime and surface drift to the user.
+  defaults, or error codes from any doc. Re-fetch `bootstrap`, route through
+  `schema({view:"index"})`, and expand the relevant capability/schema blocks
+  before any non-trivial call sequence. If runtime value disagrees with
+  this arnés or any skill, trust runtime and surface drift to the user.
 
 - **HR-6 — Test definitions live in `tests/*.json` manifests, NOT in
   `.dysflow/project.json` allowlist.** The allowlist is a runtime gate, not a
   test registry. Adding test names to allowlist on each fix is an anti-pattern.
 
 - **HR-7 — Verify process liveness BEFORE asserting or blocking.** Never
-assert a process exists from cached / registry / prior-turn state. Read-only checks: `list_access_operations`, `cleanup_access_operation({force:false})`, `access_force_cleanup_orphaned({pid:null})`.
-
-Never fabricate process details a tool did not return.
+  assert a process exists from cached / registry / prior-turn state.
+  Read-only checks: `list_access_operations`,
+  `cleanup_access_operation({force:false})`,
+  `access_force_cleanup_orphaned({pid:null})`. Never fabricate
+  process details a tool did not return.
 
 - **HR-8 — Writes are serialized per process.** Never batch dysflow write
   calls in parallel from one agent context. One call → wait → audit → next.
   To batch related ops, use List-shape arguments in ONE call.
 
 - **HR-9 — Select worktrees per call, never by restarting the MCP.** Each worktree
-owns a unique `.dysflow/project.json`. Every project-config-consuming tool accepts optional `cwd`; omit it for the startup worktree or pass the intended worktree root.
-
-Use `register_worktree({cwd})` to pre-warm a sibling, `resolve_project({cwd,projectId})` to verify it, and `clear_worktree_cache({cwd})` only when a forced rescan is needed.
-
-Never weaken the guard or edit configs to switch worktrees.
+  owns a unique `.dysflow/project.json`. Every project-config-consuming tool
+  accepts optional `cwd`; omit it for the startup worktree or pass the intended
+  worktree root. Use `register_worktree({cwd})` to pre-warm a sibling,
+  `resolve_project({cwd,projectId})` to verify it, and
+  `clear_worktree_cache({cwd})` only when a forced rescan is needed. Never
+  weaken the guard or edit configs to switch worktrees.
 
 - **HR-10 — Bootstrap missing project config before any other write.** When
-`get_capabilities({view:"full"}).projectConfig.status === "missing"`, call `setup_project({cwd,projectId,frontendFile,apply:false})`, review `resolvedConfig`, then repeat with `apply:true`.
-
-A fresh worktree MUST provide an explicit `projectId`; `setup_project` may reuse an existing `WorktreeContext` id, but never invent one from the `cwd` basename.
-
-The bootstrap apply enforces the process write gate and candidate `capabilities.allowWrites`; the same `cwd` is immediately usable without an MCP restart.
-
-Shell-enabled clients may use the equivalent `dysflow setup` CLI.
+  `get_capabilities({view:"full"}).projectConfig.status === "missing"`, call
+  `setup_project({cwd,projectId,frontendFile,apply:false})`, review
+  `resolvedConfig`, then repeat with `apply:true`. A fresh worktree MUST provide
+  an explicit `projectId`; `setup_project` may reuse an existing
+  `WorktreeContext` id, but never invent one from the `cwd` basename. The
+  bootstrap apply enforces the process write gate and candidate
+  `capabilities.allowWrites`; the same `cwd` is immediately usable without an
+  MCP restart. Shell-enabled clients may use the equivalent `dysflow setup` CLI.
 
 - **HR-11 — Recover ambiguity without overwriting config.** When
-`resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose exactly one entry from `availableProjects`; never guess.
-
-Retry `resolve_project` or the intended project-config-consuming tool with that entry's `projectId`, `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque `recoveryToken`.
-
-The dispatch seam consumes this complete trio BEFORE any fresh collision check and routes through the cached chosen project root.
-
-Tokens are one-shot, process-local, and invalidated by config/worktree changes; a consumed or missing token MUST fail closed. Use `resolve_project({clearResolution:true})` to drop a pending choice.
-
-`setup_project` may consume the trio only to return `mode:"resolution"` for the selected existing project; that route never writes config.
+  `resolve_project({})` returns `outcome:"ambiguous"`, ask the human to choose
+  exactly one entry from `availableProjects`; never guess. Retry
+  `resolve_project` or the intended project-config-consuming tool with that
+  entry's `projectId`,
+  `projectChoiceReason:"user_selected_after_ambiguous_project"`, and the opaque
+  `recoveryToken`. The dispatch seam consumes this complete trio BEFORE any
+  fresh collision check and routes through the cached chosen project root.
+  Tokens are one-shot, process-local, and invalidated by config/worktree
+  changes; a consumed or missing token MUST fail closed. Use
+  `resolve_project({clearResolution:true})` to drop a pending choice.
+  `setup_project` may consume the trio only to return `mode:"resolution"` for
+  the selected existing project; that route never writes config.
 
 - **HR-12 — Let runtime metadata route discovery.** `tools/list` contains the
-advertised surface, while schema index contains every callable tool and an `advertised` marker.
-
-Read standard Tool `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]` for `phases`, `preferredFor`, and `status`.
-
-Use `bootstrap({phase:"<phase>"}).preferredAgentWorkflows` to select the phase, then call `describe_tool({name})` only for the tools about to run.
-
-Metadata guides selection; the full schema and `describe_tool` remain authoritative for parameters, composition constraints, result contracts, and errors.
+  advertised surface, while schema index contains every callable tool and an
+  `advertised` marker. Read standard Tool
+  `annotations` for behavior hints and namespaced `_meta["dysflow/workflow"]`
+  for `phases`, `preferredFor`, and `status`. Use
+  `bootstrap({phase:"<phase>"}).preferredAgentWorkflows` to select the phase,
+  then call `describe_tool({name})` only for the tools about to run. Metadata
+  guides selection; the full schema and `describe_tool` remain authoritative
+  for parameters, composition constraints, result contracts, and errors.
 
 - **HR-13 — Parse MCP envelopes defensively.** Every dysflow response carries
-top-level `schemaVersion:"dysflow.result/v1"`. A host wrapper may return the entire envelope as a JSON string, so parse once when `typeof raw === "string"` and then require the discriminator.
-
-Missing or different `schemaVersion` fails closed; never continue by guessing a payload shape.
+  top-level `schemaVersion:"dysflow.result/v1"`. A host wrapper may return the
+  entire envelope as a JSON string, so parse once when `typeof raw === "string"`
+  and then require the discriminator. Missing or different `schemaVersion`
+  fails closed; never continue by guessing a payload shape.
 
 - **HR-13.1 — Prefer structured payloads over summaries.** Hosts may place a
-bounded summary in `content[0].text` while preserving the complete result in `structuredContent`.
-
-For semantic audits and schema-derived verification, consume `structuredContent` first; use text only when it is the complete payload.
-
-Never audit the truncation summary as though it were the contract.
+  bounded summary in `content[0].text` while preserving the complete result in
+  `structuredContent`. For semantic audits and schema-derived verification,
+  consume `structuredContent` first; use text only when it is the complete
+  payload. Never audit the truncation summary as though it were the contract.
 
 - **HR-14 — Bindings vacíos en `.form.txt` no son bug; son formularios desatendidos.**
-When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the IR is telling the truth: the `ControlSource` / `RowSource` are not declared as properties on the controls, they are assigned in runtime code (typically inside `Form_Open` / `Form_Load` of the sibling `.cls`).
-
-Before opening the `.form.txt` with `Read` to "find" missing bindings, verify the form is not an unattended form — the source of truth is the `.cls`, not the `.form.txt`.
-
-Route through `map_form_behavior` (with `autoFetchCodeGraph:true`) for the real handler call path, or `verify_form_bindings` for typed schema validation.
-
-See AP-12 and the `access-form-ui-builder` skill §"Forms desatendidos".
+  When `analyze_form_ui({sourcePath})` returns empty `bindings[]` for a form, the
+  IR is telling the truth: the `ControlSource` / `RowSource` are not declared as
+  properties on the controls, they are assigned in runtime code (typically inside
+  `Form_Open` / `Form_Load` of the sibling `.cls`). Before opening the `.form.txt`
+  with `Read` to "find" missing bindings, verify the form is not an unattended form
+  — the source of truth is the `.cls`, not the `.form.txt`. Route through
+  `map_form_behavior` (with `autoFetchCodeGraph:true`) for the real handler call
+  path, or `verify_form_bindings` for typed schema validation. See AP-12 and the
+  `access-form-ui-builder` skill §"Forms desatendidos".
 
 - **HR-15 — Gate `verify_code` on actionability, never compact-count
-guesswork.** Read `actionableOk` and `recommendedAction`; raw `ok` can be false for non-actionable noise.
-
-`summaryByCategory` and `nonActionableByCategory` are aggregate counts and do not identify module membership.
-
-Use one whole-scope `diagnostic:true` call and read `actionableDifferent[]` / `nonActionableDifferent[]` when names matter.
-
-One logical Access form/report may emit separate `.cls` and `.form.txt` entries, classified independently.
-
-Identifier-only `caseOnly` drift is non-actionable; strings and comments remain case-sensitive.
+  guesswork.** Read `actionableOk` and `recommendedAction`; raw `ok` can be
+  false for non-actionable noise. `summaryByCategory` and
+  `nonActionableByCategory` are aggregate counts and do not identify module
+  membership. Use one whole-scope `diagnostic:true` call and read
+  `actionableDifferent[]` / `nonActionableDifferent[]` when names matter.
+  One logical Access form/report may emit separate `.cls` and `.form.txt`
+  entries, classified independently. Identifier-only `caseOnly` drift is
+  non-actionable; strings and comments remain case-sensitive.
 
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
 
 - **Step 0** — `bootstrap({})`. Capture `adapterVersion`, the write gates,
-`writeExecutionPolicy`, `toolInventory`, `humanCompilePending`, and the preferred workflow.
-
-Route through `schema({view:"index"})`; then call `get_capabilities({view:"compact",include:[...]})` or `{view:"full"}` only for the exact deeper fields needed (`effectiveDryRunDefault`, `projectConfig.status`, `projectConfig.writeReady`, and so on).
-
-If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and `frontendFile` through `setup_project` before any other write-class tool, then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
+  `writeExecutionPolicy`, `toolInventory`, `humanCompilePending`, and the
+  preferred workflow. Route through `schema({view:"index"})`; then call
+  `get_capabilities({view:"compact",include:[...]})` or `{view:"full"}` only
+  for the exact deeper fields needed (`effectiveDryRunDefault`,
+  `projectConfig.status`, `projectConfig.writeReady`, and so on).
+  If status is `missing`, bootstrap with explicit `cwd`, `projectId`, and
+  `frontendFile` through `setup_project` before any other write-class tool,
+  then re-run `resolve_project` and `get_capabilities` with the same `cwd`.
 - **Step 0.25** — Read the bootstrap `preferredAgentWorkflows`, choose the
   active phase, and inspect only relevant callable tools through
   `describe_tool` (HR-12).
@@ -201,13 +232,15 @@ load `access-vba-e2e-methodology`.
 - **AP-1** — `Stop-Process -Name MSACCESS` (any variant). See HR-2.
 - **AP-2** — `compile_vba` or `compile:true` on `import_modules` / `import_all`. See HR-1.
 - **AP-3** — Using a legacy flag as the primary commit contract. The live
-registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool — `test_vba` included, which was the last holdout. Use `apply:true` to commit and `apply:false` to preview.
-
-`diff` is the only live compatibility alias, and only for export tools when `legacyAliases[]` reports it; never hard-code an alias as canonical, and never assume a tool is the exception — read the registry.
+  registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool —
+  `test_vba` included, which was the last holdout. Use `apply:true` to commit
+  and `apply:false` to preview. `diff` is the only live compatibility alias,
+  and only for export tools when `legacyAliases[]` reports it; never hard-code an alias
+  as canonical, and never assume a tool is the exception — read the registry.
 - **AP-4** — Omitting explicit export intent. The live registry reports
-`defaultBehavior:"plan"`; still pass `apply:true` or `apply:false` explicitly in agent-authored calls.
-
-`export_modules` uses a disposable binary copy by default; `mutateBinary:true` is legacy opt-in only.
+  `defaultBehavior:"plan"`; still pass `apply:true` or `apply:false` explicitly in agent-authored calls.
+  `export_modules` uses a disposable binary copy by default;
+  `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
 - **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
 - **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
@@ -222,16 +255,25 @@ registry reports `canonicalCommitFlag:"apply"` for EVERY advertised tool — `te
   all-green `test_vba` result.
 
 - **AP-12 — Reading `.form.txt` with `Read` to extract bindings that
-`analyze_form_ui` reported empty.** The IR is not lying: empty `bindings[]` on an unattended form means the `ControlSource` / `RowSource` are assigned at runtime inside `Form_Open` / `Form_Load` of the sibling `.cls`.
-
-The canonical recipe is: (1) `map_form_behavior({sourcePath, autoFetchCodeGraph:true, outputMode:"full"})` to trace the real handler call path through codegraph-vba; (2) `verify_form_bindings({sourcePath, schema, outputMode:"full"})` to validate the runtime-assigned bindings against the real schema with typed findings (`FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN`); (3) only if codegraph is stale, grep the `.cls` for `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to `Form_Open` / `Form_Load`.
-
-Hand-parsing the `.form.txt` for `ControlSource =` is the wrong shape for this form style and leads to false "missing binding" reports. See the `access-form-ui-builder` skill §"Forms desatendidos".
+  `analyze_form_ui` reported empty.** The IR is not lying: empty `bindings[]`
+  on an unattended form means the `ControlSource` / `RowSource` are assigned at
+  runtime inside `Form_Open` / `Form_Load` of the sibling `.cls`. The canonical
+  recipe is: (1) `map_form_behavior({sourcePath, autoFetchCodeGraph:true,
+  outputMode:"full"})` to trace the real handler call path through codegraph-vba;
+  (2) `verify_form_bindings({sourcePath, schema, outputMode:"full"})` to
+  validate the runtime-assigned bindings against the real schema with typed
+  findings (`FORM_BINDING_MISSING_TABLE` / `FORM_BINDING_MISSING_COLUMN`);
+  (3) only if codegraph is stale, grep the `.cls` for
+  `Me\.\w+\.(RowSource|ControlSource)\s*=` scoped to `Form_Open` /
+  `Form_Load`. Hand-parsing the `.form.txt` for `ControlSource =` is the wrong
+  shape for this form style and leads to false "missing binding" reports. See
+  the `access-form-ui-builder` skill §"Forms desatendidos".
 
 - **AP-13 — Assigning compact `verify_code` category totals to named
-modules.** Compact category maps are aggregate counts, not membership lists. Do not correlate them with log order, requested names, or another array.
-
-Use `diagnostic:true` once for the full scope and read the classified `actionableDifferent[]` / `nonActionableDifferent[]` entries.
+  modules.** Compact category maps are aggregate counts, not membership lists.
+  Do not correlate them with log order, requested names, or another array. Use
+  `diagnostic:true` once for the full scope and read the classified
+  `actionableDifferent[]` / `nonActionableDifferent[]` entries.
 
 ## 6. Companion depth layer (where detail lives)
 
@@ -255,17 +297,19 @@ user preferences) — NOT for the runtime surface.
 
 ## 8. Delegation
 
-dysflow does NOT spawn sub-agents. You call tools directly.
-
-If isolation is needed (long test run, parallel investigation), use the host agent's delegation mechanism — do NOT invent dysflow-specific delegation.
+dysflow does NOT spawn sub-agents. You call tools directly. If isolation is
+needed (long test run, parallel investigation), use the host agent's
+delegation mechanism — do NOT invent dysflow-specific delegation.
 
 ## 9. Codegraph guidance
 
-For repo maps, architecture, call flow, dependencies, symbol references, impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration.
-
-Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project folders.
-
-`codegraph_sync` only when the watcher is disabled or files fail to self-refresh; `codegraph_uninit` is destructive and reserved for explicit user request.
+For repo maps, architecture, call flow, dependencies, symbol references,
+impact analysis, "how does X work" — use codegraph-vba MCP (and/or generic
+CodeGraph tooling) BEFORE broad Read/Glob/Grep filesystem exploration.
+Initialize on real project roots; never in `$HOME`, `/tmp`, or non-project
+folders. `codegraph_sync` only when the watcher is disabled or files fail
+to self-refresh; `codegraph_uninit` is destructive and reserved for explicit
+user request.
 
 ## 10. Version + authorship
 

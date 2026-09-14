@@ -81,12 +81,12 @@
   },
   "export_all": {
     "path": "assets/examples/export-all.md",
-    "sha256": "a79d4c789bc8d1fd71628a401faa8c1216a0771fedb310be38d6f2c91c9c897c",
+    "sha256": "9c5027d1cf8d3f2921fd74aaf43f5d1886a6fcadf726826096845c16b75929e1",
     "needs_human_content": false
   },
   "export_modules": {
     "path": "assets/examples/export-modules.md",
-    "sha256": "7a0ab3233c0471197a84a67ae1ed8531de9d8f0e05b7b6ca04cd8460ee5d646b",
+    "sha256": "6f6f3a73b59fd25112cff9a67507e39f52c3c333536985534a826bb103a83f42",
     "needs_human_content": false
   },
   "find_references": {
@@ -241,7 +241,7 @@
   },
   "verify_code": {
     "path": "assets/examples/verify-code.md",
-    "sha256": "838b6d8aa2760c3ca34a4d69411aac2449ccdb235e2a356a429c9047cd124789",
+    "sha256": "79c7f7e30c5e45753e5dd751dc8a772b815c51eb3e9191a0a7f25f35f0168db5",
     "needs_human_content": false
   },
   "verify_form_bindings": {
