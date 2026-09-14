@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T10:44:41.790Z",
+  "generatedAt": "2026-09-14T17:41:40.691Z",
   "runtime": "lexical source-classifier probes only; snippets are not compiled, imported, or runtime-equivalence evidence",
   "totals": {
     "cases": 44,
@@ -150,36 +150,36 @@
     {
       "id": "comment-case-goal",
       "scope": "bas",
-      "expectedFunctional": false,
+      "expectedFunctional": true,
       "expectedCategories": [
-        "commentOnly"
+        "bothChanged"
       ],
-      "observedActionable": false,
-      "observedClassification": "commentOnly",
-      "observedRecommendation": "no_action",
-      "srcUniqueFunctionalLines": 0,
-      "binaryUniqueFunctionalLines": 0,
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
       "goalPass": true,
       "categoryPass": true,
       "recommendationPass": true,
-      "note": "WU-3 v2-categories (Refs #1724): a case-only difference inside a comment body is non-functional. Classified as `commentOnly`."
+      "note": "Refs #1443 (AGENTS.md string-aware folding): the comment-body content itself is runtime-visible, so a case-only difference inside a `' ...` comment body no longer collapses to `commentOnly`. Both sides carry unique functional lines (the two distinct comment lines) with no LCS match — verdict is `bothChanged`, recommendation `manual_merge`."
     },
     {
       "id": "combined-case-indent-comment-goal",
       "scope": "bas",
-      "expectedFunctional": false,
+      "expectedFunctional": true,
       "expectedCategories": [
-        "nonActionableMixed"
+        "bothChanged"
       ],
-      "observedActionable": false,
-      "observedClassification": "nonActionableMixed",
-      "observedRecommendation": "no_action",
-      "srcUniqueFunctionalLines": 0,
-      "binaryUniqueFunctionalLines": 0,
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
       "goalPass": true,
       "categoryPass": true,
       "recommendationPass": true,
-      "note": "WU-3 v2-categories (Refs #1724): identifier case + indentation + comment case combined is non-functional. Classified as `nonActionableMixed` because two or more non-actionable families contributed."
+      "note": "Refs #1443 (AGENTS.md string-aware folding): identifier case + indentation would each be non-actionable on their own, but the comment-body content drift is runtime-visible and refuses to fold. Verdict is `bothChanged`, recommendation `manual_merge`."
     },
     {
       "id": "rem-comment-case",
@@ -201,19 +201,19 @@
     {
       "id": "rem-comment-content-goal",
       "scope": "bas",
-      "expectedFunctional": false,
+      "expectedFunctional": true,
       "expectedCategories": [
-        "commentOnly"
+        "bothChanged"
       ],
-      "observedActionable": false,
-      "observedClassification": "commentOnly",
-      "observedRecommendation": "no_action",
-      "srcUniqueFunctionalLines": 0,
-      "binaryUniqueFunctionalLines": 0,
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
       "goalPass": true,
       "categoryPass": true,
       "recommendationPass": true,
-      "note": "WU-3 v2-categories (Refs #1724): whole-line REM comment text differences are non-functional. Classified as `commentOnly`."
+      "note": "Refs #1443 (AGENTS.md string-aware folding): whole-line `Rem ...` comment body text differences are runtime-visible. Classified as `bothChanged`, recommendation `manual_merge`."
     },
     {
       "id": "leading-indentation",
@@ -679,19 +679,19 @@
     {
       "id": "v2-comment-case-only-positive",
       "scope": "bas",
-      "expectedFunctional": false,
+      "expectedFunctional": true,
       "expectedCategories": [
-        "commentOnly"
+        "bothChanged"
       ],
-      "observedActionable": false,
-      "observedClassification": "commentOnly",
-      "observedRecommendation": "no_action",
-      "srcUniqueFunctionalLines": 0,
-      "binaryUniqueFunctionalLines": 0,
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
       "goalPass": true,
       "categoryPass": true,
       "recommendationPass": true,
-      "note": "Positive probe for the commentOnly bucket: only a case-only difference inside a whole-line comment."
+      "note": "Refs #1443 (AGENTS.md string-aware folding): a case-only difference inside a whole-line `' ...` comment body is runtime-visible, so this probe classifies as `bothChanged` and recommends `manual_merge`. The previous `commentOnly` expectation (Refs #1724) is no longer reachable through any synthetic probe."
     },
     {
       "id": "v2-inter-token-whitespace-positive",
@@ -747,19 +747,19 @@
     {
       "id": "v2-non-actionable-mixed-positive",
       "scope": "bas",
-      "expectedFunctional": false,
+      "expectedFunctional": true,
       "expectedCategories": [
-        "nonActionableMixed"
+        "bothChanged"
       ],
-      "observedActionable": false,
-      "observedClassification": "nonActionableMixed",
-      "observedRecommendation": "no_action",
-      "srcUniqueFunctionalLines": 0,
-      "binaryUniqueFunctionalLines": 0,
+      "observedActionable": true,
+      "observedClassification": "bothChanged",
+      "observedRecommendation": "manual_merge",
+      "srcUniqueFunctionalLines": 1,
+      "binaryUniqueFunctionalLines": 1,
       "goalPass": true,
       "categoryPass": true,
       "recommendationPass": true,
-      "note": "Positive probe for the nonActionableMixed bucket: identifier case + comment case together equalize only under two normalizers."
+      "note": "Refs #1443 (AGENTS.md string-aware folding): identifier case + comment-body case together equalize only under one normalizer (the case fold), but the comment-body content drift is runtime-visible and refuses to fold — verdict is `bothChanged`, recommendation `manual_merge`."
     }
   ],
   "unexecutedRealAccessCases": [

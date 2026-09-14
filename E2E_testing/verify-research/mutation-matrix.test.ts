@@ -7,6 +7,28 @@ import {
   type VbaSemanticCategory,
 } from "../../src/core/services/vba-semantic-classifier.js";
 
+// ---------------------------------------------------------------------------
+// Refs #1443 (AGENTS.md "string-aware folding"):
+//
+// Comment bodies (whole-line `' ...` and `Rem ...` comments) are runtime-
+// visible content per AGENTS.md. A case-only difference inside a comment body
+// is a real content drift, not a formatting/cosmetic change, so the classifier
+// must NOT collapse it to the `commentOnly` non-actionable bucket (and must
+// not absorb it via `nonActionableMixed` either). The fix introduces an
+// `extractCommentLines` helper that captures comment bodies verbatim and
+// refuses the comment-strip step when those bodies differ on the two sides.
+//
+// Several probes below were originally pinned to non-actionable categories
+// under the old contract (Refs #1724, WU-3 v2-categories). They are now
+// pinned to `bothChanged` with `manual_merge` recommendation. Each affected
+// probe carries a Refs #1443 annotation pointing back to the AGENTS.md rule.
+//
+// Rows whose diff touches ONLY a comment body's text content (e.g. case
+// inside the body) are in scope. Rows whose diff touches ONLY an identifier
+// or keyword case (e.g. `Rem` vs `rem` with identical body text) are still
+// collapsed to `caseOnly` and remain unchanged.
+// ---------------------------------------------------------------------------
+
 type MutationCase = {
   id: string;
   scope: "bas" | "cls" | "form.txt";
@@ -140,22 +162,35 @@ const cases: MutationCase[] = [
     note: "An apostrophe inside a quoted string is data, not a comment marker.",
   },
   {
+    // Refs #1443 (AGENTS.md "string-aware folding"): comment bodies are
+    // runtime-visible, so a case-only difference inside a `' ...` comment
+    // body cannot collapse to `commentOnly`. Both sides have unique
+    // functional lines (the two distinct comment lines) with no LCS match,
+    // so the verdict is `bothChanged` and the diff is actionable. See the
+    // top-level comment on the `commentOnly` bucket below for the full
+    // rationale.
     id: "comment-case-goal",
     scope: "bas",
     sourceText: `${moduleBody}' Business Note\n`,
     binaryText: `${moduleBody}' business note\n`,
-    expectedFunctional: false,
-    expectedCategories: ["commentOnly"],
-    note: "WU-3 v2-categories (Refs #1724): a case-only difference inside a comment body is non-functional. Classified as `commentOnly`.",
+    expectedFunctional: true,
+    expectedCategories: ["bothChanged"],
+    note: "Refs #1443 (AGENTS.md string-aware folding): the comment-body content itself is runtime-visible, so a case-only difference inside a `' ...` comment body no longer collapses to `commentOnly`. Both sides carry unique functional lines (the two distinct comment lines) with no LCS match — verdict is `bothChanged`, recommendation `manual_merge`.",
   },
   {
+    // Refs #1443: the identifier case is still non-actionable (`caseOnly`)
+    // and the indentation is still non-actionable (`whitespaceOnly`), but
+    // the comment-body content drift keeps the pair from collapsing to
+    // `nonActionableMixed` (the case-only check refuses to absorb the
+    // comment-body diff, and the comment-strip guard refuses too). Both
+    // sides have unique functional lines.
     id: "combined-case-indent-comment-goal",
     scope: "bas",
     sourceText: `${moduleBody.replaceAll("Calculate", "calculate").replace("    calculate =", "\tcalculate =")}' Business Note\n`,
     binaryText: `${moduleBody}' business note\n`,
-    expectedFunctional: false,
-    expectedCategories: ["nonActionableMixed"],
-    note: "WU-3 v2-categories (Refs #1724): identifier case + indentation + comment case combined is non-functional. Classified as `nonActionableMixed` because two or more non-actionable families contributed.",
+    expectedFunctional: true,
+    expectedCategories: ["bothChanged"],
+    note: "Refs #1443 (AGENTS.md string-aware folding): identifier case + indentation would each be non-actionable on their own, but the comment-body content drift is runtime-visible and refuses to fold. Verdict is `bothChanged`, recommendation `manual_merge`.",
   },
   {
     id: "rem-comment-case",
@@ -167,13 +202,17 @@ const cases: MutationCase[] = [
     note: "REM keyword and comment casing are non-functional.",
   },
   {
+    // Refs #1443 (AGENTS.md string-aware folding): `Rem ...` comment bodies
+    // are runtime-visible too. The body text differs, so the diff cannot
+    // collapse to `commentOnly`; the classifier surfaces it as
+    // `bothChanged`.
     id: "rem-comment-content-goal",
     scope: "bas",
     sourceText: `${moduleBody}Rem Old note\n`,
     binaryText: `${moduleBody}Rem New note\n`,
-    expectedFunctional: false,
-    expectedCategories: ["commentOnly"],
-    note: "WU-3 v2-categories (Refs #1724): whole-line REM comment text differences are non-functional. Classified as `commentOnly`.",
+    expectedFunctional: true,
+    expectedCategories: ["bothChanged"],
+    note: "Refs #1443 (AGENTS.md string-aware folding): whole-line `Rem ...` comment body text differences are runtime-visible. Classified as `bothChanged`, recommendation `manual_merge`.",
   },
   {
     id: "leading-indentation",
@@ -426,13 +465,18 @@ const cases: MutationCase[] = [
       // more non-actionable families and collapse to `nonActionableMixed`).
       // -------------------------------------------------------------------------
       {
+        // Refs #1443 (AGENTS.md "string-aware folding"): a case-only
+        // difference inside a `' ...` comment body is no longer reachable
+        // through this probe — comment-body content is runtime-visible per
+        // AGENTS.md, so this pair classifies as `bothChanged` with
+        // `manual_merge`. Reclassified per the live classifier output.
         id: "v2-comment-case-only-positive",
         scope: "bas",
         sourceText: `${moduleBody}' NOTE\n`,
         binaryText: `${moduleBody}' note\n`,
-        expectedFunctional: false,
-        expectedCategories: ["commentOnly"],
-        note: "Positive probe for the commentOnly bucket: only a case-only difference inside a whole-line comment.",
+        expectedFunctional: true,
+        expectedCategories: ["bothChanged"],
+        note: "Refs #1443 (AGENTS.md string-aware folding): a case-only difference inside a whole-line `' ...` comment body is runtime-visible, so this probe classifies as `bothChanged` and recommends `manual_merge`. The previous `commentOnly` expectation (Refs #1724) is no longer reachable through any synthetic probe.",
       },
       {
         id: "v2-inter-token-whitespace-positive",
@@ -465,13 +509,19 @@ const cases: MutationCase[] = [
         note: "Positive probe for the statementBoundaryOnly bucket: same statements, one side uses `: ` separator.",
       },
       {
+        // Refs #1443 (AGENTS.md "string-aware folding"): identifier case +
+        // comment-body case together can no longer equalize to
+        // `nonActionableMixed`. The identifier case still collapses to
+        // `caseOnly`, but the comment-body content drift is runtime-visible
+        // and refuses to fold; both sides carry unique functional lines,
+        // so the verdict is `bothChanged`.
         id: "v2-non-actionable-mixed-positive",
         scope: "bas",
         sourceText: `${moduleBody.replaceAll("Calculate", "calculate")}' Business Note\n`,
         binaryText: `${moduleBody}' business note\n`,
-        expectedFunctional: false,
-        expectedCategories: ["nonActionableMixed"],
-        note: "Positive probe for the nonActionableMixed bucket: identifier case + comment case together equalize only under two normalizers.",
+        expectedFunctional: true,
+        expectedCategories: ["bothChanged"],
+        note: "Refs #1443 (AGENTS.md string-aware folding): identifier case + comment-body case together equalize only under one normalizer (the case fold), but the comment-body content drift is runtime-visible and refuses to fold — verdict is `bothChanged`, recommendation `manual_merge`.",
       },
     ];
 
