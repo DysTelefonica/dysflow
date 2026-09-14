@@ -238,8 +238,8 @@ describe("release CI receipt", () => {
     expect(publication).toContain("needs.quality-authority.outputs.run_id");
     expect(publication).toContain("needs.quality-authority.outputs.job_id");
     expect(release).toContain("git rev-parse HEAD");
-    // #1705 pinned these to a commit SHA with a trailing `# v4.x.x` comment.
-    expect(release).toMatch(/actions\/upload-artifact@[0-9a-f]{40} # v4\.\d+\.\d+/);
+    // #1705 pins this to a commit SHA with a trailing current-major version comment.
+    expect(release).toMatch(/actions\/upload-artifact@[0-9a-f]{40} # v7\.\d+\.\d+/);
     expect(release).toMatch(/actions\/download-artifact@[0-9a-f]{40} # v4\.\d+\.\d+/);
     expect(release).toContain("EXPECTED_DIST_SHA256");
     expect(release).toContain("sha256sum --check -");
