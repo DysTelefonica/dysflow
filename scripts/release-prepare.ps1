@@ -3,10 +3,10 @@
 # Safe release preparation workflow for dysflow. Closes the CI/tag race gap
 # documented in the Engram topic "dysflow/release/process-gap-2026-06-29":
 #
-#   1. Bump package.json version (interactive: patch | minor | major | explicit).
+#   1. Bump root and Pi package versions (interactive: patch | minor | major | explicit).
 #   2. Generate one CHANGELOG bullet per non-merge commit and run the
 #      changelog format quality gate locally.
-#   3. Stage CHANGELOG.md + package.json and commit "chore(release): prepare vX.Y.Z".
+#   3. Stage release-owned files and commit "chore(release): prepare vX.Y.Z".
 #   4. Push to origin/main.
 #   5. Wait for the CI workflow on the release commit to reach
 #      `conclusion: success` (or fail loudly if it stays red).
@@ -398,6 +398,7 @@ if ($Resume) {
 }
 
 $packagePath = (Resolve-Path "package.json").Path
+$piPackagePath = (Resolve-Path "plugin/pi/package.json").Path
 $changelogPath = Join-Path (Get-Location).Path "CHANGELOG.md"
 $stampPaths = @(
     (Join-Path (Get-Location).Path "skills/dysflow-usage/references/error-codes.md"),
@@ -428,6 +429,10 @@ if ($Resume) {
     if ((Get-Content $changelogPath -Raw) -notmatch "(?m)^## \[$([regex]::Escape($tag))\] - ") {
         throw "Cannot resume $tag because CHANGELOG.md has no prepared release section."
     }
+    $preparedPiPackage = Get-Content $piPackagePath -Raw | ConvertFrom-Json
+    if ([Version]$preparedPiPackage.version -ne $next) {
+        throw "Cannot resume $tag because plugin/pi/package.json does not match the prepared version."
+    }
     foreach ($stampPath in $stampPaths) {
         if ((Get-Content $stampPath -Raw) -notmatch "(?i)verified for the v$([regex]::Escape([string]$next)) release on \d{4}-\d{2}-\d{2}") {
             throw "Cannot resume $tag because $stampPath does not carry the prepared version stamp."
@@ -440,6 +445,7 @@ if ($Resume) {
     }
 } else {
 $packageBefore = [IO.File]::ReadAllBytes($packagePath)
+$piPackageBefore = [IO.File]::ReadAllBytes($piPackagePath)
 $changelogExisted = Test-Path $changelogPath
 $changelogBefore = if ($changelogExisted) { [IO.File]::ReadAllBytes($changelogPath) } else { $null }
 $stampBytesBefore = @{}
@@ -454,10 +460,12 @@ foreach ($skillPath in $skillPaths) {
 }
 $preCommitSucceeded = $false
 try {
-# Update package.json (preserve formatting: parse, modify, emit).
-$pkgRaw = Get-Content $packagePath -Raw
+# Update both package manifests while preserving their formatting.
+foreach ($manifestPath in @($packagePath, $piPackagePath)) {
+$pkgRaw = Get-Content $manifestPath -Raw
 $pkgRaw = $pkgRaw -replace '"version"\s*:\s*"[^"]+"', ('"version": "{0}"' -f $next)
-Set-Content $packagePath -Value $pkgRaw -NoNewline
+Set-Content $manifestPath -Value $pkgRaw -NoNewline
+}
 
 # Update CHANGELOG.md (prepend one physical note per non-merge commit since the last tag).
 $lastTag = git describe --tags --abbrev=0 2>$null
@@ -502,6 +510,7 @@ if (Test-Path $changelogPath) {
 Assert-ReleaseChangelogQuality -ChangelogPath $changelogPath -TimeoutSeconds $GateTimeoutSeconds
 $releasePaths = @(
     "package.json",
+    "plugin/pi/package.json",
     "CHANGELOG.md",
     "skills/dysflow-usage/references/error-codes.md",
     "skills/dysflow-usage/assets/write-flags-matrix.md"
@@ -511,6 +520,7 @@ $preCommitSucceeded = $true
 } finally {
     if (-not $preCommitSucceeded) {
         [IO.File]::WriteAllBytes($packagePath, $packageBefore)
+        [IO.File]::WriteAllBytes($piPackagePath, $piPackageBefore)
         if ($changelogExisted) {
             [IO.File]::WriteAllBytes($changelogPath, $changelogBefore)
         } elseif (Test-Path $changelogPath) {
@@ -576,6 +586,7 @@ Write-Host ""
 Write-Host "Release $tag dispatched. The release.yml workflow will:" -ForegroundColor Green
 Write-Host "  - Build the tarball"
 Write-Host "  - Sign SHA256SUMS with Ed25519"
+Write-Host "  - Publish and verify the matching Pi package on npmjs"
 Write-Host "  - Publish the GitHub Release with the assets"
 Write-Host ""
 Write-Host "Watch progress: gh run watch --workflow release.yml"

@@ -89,6 +89,38 @@ describe("release bundled skills (#1349)", () => {
     }
   });
 
+  it("excludes generated Pi dependencies and package archives", async () => {
+    const fixture = path.join(root, "generated-pi-artifacts-package");
+    const generatedArchive = path.join(root, "generated-pi-artifacts.tar.gz");
+    const requiredFiles = [
+      "dist/cli/index.js",
+      "scripts/placeholder.txt",
+      "plugin/pi/index.ts",
+      "plugin/pi/node_modules/example/index.js",
+      "plugin/pi/dysflow-pi-sentinel.tgz",
+      "references/error-codes.md",
+      "docs/diagnostics/hresult-guide.md",
+      "docs/diagnostics/form-import-gate-failures.md",
+      "package.json",
+      "pnpm-lock.yaml",
+      "README.md",
+      "CHANGELOG.md",
+      ...RELEASE_SKILL_NAMES.map((name) => `skills/${name}/SKILL.md`),
+    ];
+    for (const relativePath of requiredFiles) {
+      const destination = path.join(fixture, ...relativePath.split("/"));
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, `${relativePath}\n`, "utf8");
+    }
+
+    await createReleaseArchive({ packageRoot: fixture, outputPath: generatedArchive });
+    const listing = (await tar(["-tzf", generatedArchive])).replaceAll("\\", "/");
+
+    expect(listing).toContain("plugin/pi/index.ts");
+    expect(listing).not.toContain("plugin/pi/node_modules/");
+    expect(listing).not.toContain("plugin/pi/dysflow-pi-sentinel.tgz");
+  });
+
   it("rejects a real tar manifest missing any canonical skill", async () => {
     const fixture = path.join(root, "missing-skill-package");
     const missingArchive = path.join(root, "missing-skill.tar.gz");

@@ -1,0 +1,55 @@
+{
+  "name": "@aroman22/dysflow-pi",
+  "version": "4.3.2",
+  "description": "Pi-native Dysflow facade with compact tool rendering",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Andrés Román",
+  "homepage": "https://github.com/DysTelefonica/dysflow",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DysTelefonica/dysflow.git",
+    "directory": "plugin/pi"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "dysflow",
+    "mcp",
+    "microsoft-access",
+    "vba"
+  ],
+  "pi": {
+    "image": "https://raw.githubusercontent.com/DysTelefonica/dysflow/main/plugin/pi/assets/dysflow-pi.png",
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "assets/",
+    "index.ts",
+    "native-tool.ts",
+    "dysflow-mcp-client.ts",
+    "dysflow-tool-chrome.ts",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "@types/node": "~26.2.0",
+    "typebox": "1.3.30",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}

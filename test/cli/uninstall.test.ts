@@ -182,6 +182,18 @@ describe("uninstall execution side-effects", () => {
       ),
       "utf8",
     );
+    await writeFile(
+      join(home, ".pi", "agent", "settings.json"),
+      `${JSON.stringify(
+        {
+          packages: ["npm:other", join(runtimeDir, "app", "plugin", "pi")],
+          theme: "dark",
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
 
     const env = {
       USERPROFILE: home,
@@ -195,7 +207,7 @@ describe("uninstall execution side-effects", () => {
   it("surgically removes dysflow configurations from all agents while keeping other configurations", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-uninstall-"));
     try {
-      const { home, env } = await setupMockEnvironment(root);
+      const { home, runtimeDir, env } = await setupMockEnvironment(root);
       const context = { env };
 
       const result = await handleUninstallCommand([], context);
@@ -234,6 +246,50 @@ describe("uninstall execution side-effects", () => {
       const pi = JSON.parse(await readFile(join(home, ".pi", "agent", "mcp.json"), "utf8"));
       expect(pi.mcpServers.other).toBeDefined();
       expect(pi.mcpServers.dysflow).toBeUndefined();
+      const piSettings = JSON.parse(
+        await readFile(join(home, ".pi", "agent", "settings.json"), "utf8"),
+      );
+      expect(piSettings).toEqual({
+        packages: ["npm:other", join(runtimeDir, "app", "plugin", "pi")],
+        theme: "dark",
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("restores Pi MCP bytes and keeps the runtime when owned package removal fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-uninstall-pi-rollback-"));
+    try {
+      const { home, runtimeDir, env } = await setupMockEnvironment(root);
+      const piMcpPath = join(home, ".pi", "agent", "mcp.json");
+      const packageSpec = "npm:@aroman22/dysflow-pi@4.3.2";
+      const mcpBefore = `\r\n{ "mcpServers": { "dysflow": { "command": "dysflow", "args": ["mcp"] } } }\r\n`;
+      await writeFile(piMcpPath, mcpBefore);
+      await writeFile(
+        join(home, ".pi", "agent", "settings.json"),
+        `${JSON.stringify({ packages: [packageSpec] }, null, 2)}\n`,
+      );
+      await writeFile(
+        join(runtimeDir, ".dysflow-pi-package.json"),
+        `${JSON.stringify({
+          packageName: "@aroman22/dysflow-pi",
+          spec: packageSpec,
+          version: "4.3.2",
+          owned: true,
+        })}\n`,
+      );
+
+      const result = await handleUninstallCommand([], {
+        env,
+        piPackageCommandRunner: async () => {
+          throw new Error("injected Pi remove failure");
+        },
+      });
+
+      expect(result).toMatchObject({ exitCode: 1, stderr: "injected Pi remove failure" });
+      expect(await readFile(piMcpPath, "utf8")).toBe(mcpBefore);
+      expect(await fileExists(runtimeDir)).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -72,7 +72,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 ### It is
 
 | It is | Evidence in this repo |
-|---|---|
+| --- | --- |
 | A local automation runtime for Microsoft Access (`.accdb`/`.mdb`) focused on safety and ownership | `src/adapters/vba-sync/`, `src/core/runtime/` |
 | A core-first platform with thin protocol adapters | `src/core/`, with `src/adapters/mcp/` and `src/adapters/http/` |
 | A platform with 94 callable MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
@@ -81,7 +81,7 @@ pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 ### It is not
 
 | It is not | Use this boundary |
-|---|---|
+| --- | --- |
 | A full Access UI replacement | Access stays the editor and the compiler. |
 | A compiler | `compile_vba` was removed in v1.19.0; the human compiles. See [Absent by design](./docs/architecture/absent-by-design.md). |
 | A tool for arbitrary system-level process management | Only PID-verified Access orphans are reaped, and only after an explicit `confirmPid`. |
@@ -281,7 +281,7 @@ A call to a procedure not in the list is rejected before any COM automation is s
 
 ### Install from the current GitHub Release (recommended)
 
-Use the current release asset from https://github.com/DysTelefonica/dysflow/releases/latest for production/runtime installs. The release page carries the versioned `dysflow-<tag>.tar.gz` asset and `SHA256SUMS`; avoid README-pinned "latest" tags because they drift after every release.
+Use the current release asset from <https://github.com/DysTelefonica/dysflow/releases/latest> for production/runtime installs. The release page carries the versioned `dysflow-<tag>.tar.gz` asset and `SHA256SUMS`; avoid README-pinned "latest" tags because they drift after every release.
 
 After installing or updating the runtime, verify:
 
@@ -310,6 +310,17 @@ If you use different Windows profiles and want updates to keep targeting a fixed
 dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
 ```
 
+Install the public `@aroman22/dysflow-pi` package through the same installer.
+Dysflow delegates to Pi's package manager and records ownership safely:
+
+```powershell
+dysflow install --agents pi --no-tui
+```
+
+Reload Pi, then verify the compact `⚡ Dysflow` facade. The
+[Pi-native integration guide](./docs/pi-native-integration.md) owns setup,
+configuration, update, uninstall, and troubleshooting.
+
 `dysflow install` persists the resolved runtime directory in a machine-level marker so future `dysflow update` calls can reuse the same installed runtime instead of falling back to the current user's `%LOCALAPPDATA%` path.
 
 The release also owns five Dysflow agent skills under `skills/`. Install and
@@ -325,7 +336,7 @@ against the running product release.
 `dysflow install` and `dysflow update` accept `--channel {stable|beta|main}`. The default is `stable`, and omitting the flag keeps the existing behaviour.
 
 | Channel | Purpose | Verification | Prerequisite gate |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `stable` | Production and everyday installs. | Ed25519 signature over `SHA256SUMS`, then SHA-256. | None |
 | `beta` | Validating a release candidate. | SHA-256 against the published `SHA256SUMS`. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
 | `main` | Testing changes that have not shipped. | None. Unverified by design. | `DYSFLOW_ALLOW_INSECURE_UPDATE=1` |
@@ -831,7 +842,7 @@ dysflow mcp --disable-writes
 The complete tool inventory lives in [MCP tool reference](./docs/api/mcp-tools.md): every visible tool, its parameters, and its result contract.
 
 | If you need to... | Read |
-|---|---|
+| --- | --- |
 | Look up a tool's parameters or result shape | [MCP tool reference](./docs/api/mcp-tools.md) |
 | Copy a working request payload | [MCP examples](./docs/mcp-examples.md) |
 | Understand the transport and SDK strategy | [MCP protocol](./docs/mcp-protocol.md) |
@@ -994,7 +1005,9 @@ Add the following to your OpenCode MCP config:
 ```
 
 ### Available Custom Agent Skills
+
 `codegraph-vba` comes with custom agent skills designed to support agents working in this repository:
+
 - **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
 - **`vba-handler-backtrace`**: Traces control click/change event handlers back to the control, parses custom UDT parameter types, and reconstructs multiline SQL queries.
 - **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.

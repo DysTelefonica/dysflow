@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 name: Release
 
 on:
@@ -49,7 +50,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Stamp release version
-        run: node .github/scripts/set-release-package-version.mjs "${{ github.ref_name }}"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node .github/scripts/set-release-package-version.mjs "$RELEASE_TAG"
 
       - name: Build
         run: pnpm build
@@ -308,16 +311,35 @@ jobs:
     permissions:
       actions: read
       contents: write
+      # npm Trusted Publishing exchanges this job identity for a short-lived token.
+      id-token: write
 
-    # Safe to expose: this is the boolean "is a signing key configured?", not the key
-    # itself. Used to gate the signing step. The actual secret is only injected into the
-    # signing step's own env, never into archive preparation.
+    # Safe to expose: this boolean reports only whether the signing secret exists.
+    # The actual secret value enters only its owning step.
     env:
       HAS_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node.js for npmjs publication
+        # actions/setup-node v5.0.0
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify npm trusted-publishing client
+        run: |
+          NPM_VERSION="$(npm --version)"
+          node - "$NPM_VERSION" <<'NODE'
+          const version = process.argv[2];
+          const [major, minor] = version.split(".").map(Number);
+          if (major < 11 || (major === 11 && minor < 5)) {
+            throw new Error(`npm >= 11.5.1 is required for Trusted Publishing; found ${version}`);
+          }
+          NODE
 
       - name: Verify checkout matches build input
         env:
@@ -351,7 +373,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stamp release version
-        run: node .github/scripts/set-release-package-version.mjs "${{ github.ref_name }}"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node .github/scripts/set-release-package-version.mjs "$RELEASE_TAG"
+
+      - name: Verify synchronized Pi package version
+        run: |
+          PI_VERSION="$(node -p 'require("./plugin/pi/package.json").version')"
+          ROOT_VERSION="$(node -p 'require("./package.json").version')"
+          test "$PI_VERSION" = "${GITHUB_REF_NAME#v}"
+          test "$PI_VERSION" = "$ROOT_VERSION"
 
       - name: Download exact-SHA build artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -371,10 +402,13 @@ jobs:
       - name: Create release tarball
         # pnpm-lock.yaml is required so the self-updater can verify the
         # transitive dep graph with --frozen-lockfile (#666). The downloaded
-        # dist tree is bound to this run and verified before entering the archive.
-        # The archive helper fails closed before and after tar creation unless
-        # all canonical bundled skills are present (#1349).
-        run: node .github/scripts/create-release-archive.mjs "dysflow-${{ github.ref_name }}.tar.gz"
+        # The dist tree is verified before entering the archive. The helper
+        # fails closed unless all canonical bundled skills are present (#1349).
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node .github/scripts/create-release-archive.mjs \
+            "dysflow-${RELEASE_TAG}.tar.gz"
 
       - name: Generate checksums
         run: sha256sum dysflow-*.tar.gz > SHA256SUMS
@@ -404,6 +438,59 @@ jobs:
           openssl pkeyutl -verify -pubin -inkey "$PUBFILE" -rawin -in SHA256SUMS -sigfile "$RAWSIG"
           rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
           echo "Signed SHA256SUMS -> SHA256SUMS.sig"
+
+      - name: Verify Pi package contents without publishing
+        working-directory: plugin/pi
+        run: npm pack --dry-run --json
+
+      - name: Pack exact Pi package artifact
+        id: pi-package
+        working-directory: plugin/pi
+        run: |
+          set -euo pipefail
+          npm pack --json --pack-destination "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/pi-pack.json"
+          node <<'NODE'
+          const { appendFileSync, readFileSync } = require("node:fs");
+          const [pack] = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/pi-pack.json`, "utf8"));
+          if (!pack?.filename || !pack?.integrity) {
+            throw new Error("npm pack did not report filename and integrity");
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `tarball=${process.env.RUNNER_TEMP}/${pack.filename}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `integrity=${pack.integrity}\n`);
+          NODE
+
+      - name: Publish Pi package to npmjs
+        working-directory: plugin/pi
+        env:
+          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
+          if PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
+            --registry=https://registry.npmjs.org 2>/dev/null)"
+          then
+            test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
+            echo "${PACKAGE} already has the candidate integrity; preserving it."
+          else
+            npm publish "${{ steps.pi-package.outputs.tarball }}" \
+              --access public --registry=https://registry.npmjs.org
+          fi
+
+      - name: Verify Pi package publication
+        env:
+          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
+          PUBLISHED="$(npm view "${PACKAGE}" version \
+            --registry=https://registry.npmjs.org)"
+          PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
+            --registry=https://registry.npmjs.org)"
+          test "${PUBLISHED}" = "${VERSION}"
+          test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { logSwallowedIoError } from "../../../core/utils/log-swallowed-io-error.js";
 import type { AgentConfigPaths, AgentName } from "./agent-config.js";
@@ -9,6 +9,137 @@ import {
   writeFileAtomically,
   writeJson,
 } from "./file-utils.js";
+
+type PiIntegrationInput = {
+  mcpConfigPath: string;
+  commandPath: string;
+  mode?: "install" | "remove";
+};
+
+type PiIntegrationResult = {
+  status: "added" | "changed" | "unchanged";
+  active: boolean;
+};
+
+export type PiIntegrationSnapshot = { existed: false } | { existed: true; content: string };
+
+export async function capturePiIntegration(mcpConfigPath: string): Promise<PiIntegrationSnapshot> {
+  try {
+    return { existed: true, content: await readFile(mcpConfigPath, "utf8") };
+  } catch (error) {
+    if (isMissingPathError(error)) return { existed: false };
+    throw error;
+  }
+}
+
+export async function restorePiIntegration(
+  mcpConfigPath: string,
+  snapshot: PiIntegrationSnapshot,
+): Promise<void> {
+  if (snapshot.existed) {
+    await writeFileAtomically(mcpConfigPath, snapshot.content);
+    return;
+  }
+  await rm(mcpConfigPath, { force: true });
+}
+
+function normalizedLocalSource(source: string): string {
+  const normalized = path.resolve(source).replaceAll("\\", "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isManagedPiMcpEntry(entry: Record<string, unknown>, commandPath: string): boolean {
+  const isLegacyBareEntry = entry.command === "dysflow" && entry.args === undefined;
+  const hasManagedArgs =
+    Array.isArray(entry.args) && entry.args.length === 1 && entry.args[0] === "mcp";
+  if (!isLegacyBareEntry && !hasManagedArgs) return false;
+  if (entry.command === "dysflow") return true;
+  if (typeof entry.command !== "string") return false;
+  return normalizedLocalSource(entry.command) === normalizedLocalSource(commandPath);
+}
+
+function requireObject(value: unknown, description: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${description} must be a JSON object.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+export async function reconcilePiIntegration(
+  input: PiIntegrationInput,
+): Promise<PiIntegrationResult> {
+  const mode = input.mode ?? "install";
+  const root = await readJson(input.mcpConfigPath);
+  const servers =
+    root.mcpServers === undefined ? {} : requireObject(root.mcpServers, "Pi mcpServers");
+  const existing = servers.dysflow;
+
+  if (mode === "remove") {
+    if (
+      typeof existing !== "object" ||
+      existing === null ||
+      Array.isArray(existing) ||
+      !isManagedPiMcpEntry(existing as Record<string, unknown>, input.commandPath)
+    ) {
+      return { status: "unchanged", active: existing !== undefined };
+    }
+    delete servers.dysflow;
+    root.mcpServers = servers;
+    await writeJson(input.mcpConfigPath, root);
+    return { status: "changed", active: false };
+  }
+
+  if (existing !== undefined) {
+    const entry = requireObject(existing, "Pi Dysflow MCP entry");
+    if (!isManagedPiMcpEntry(entry, input.commandPath)) {
+      throw new Error(
+        "Pi already has a foreign MCP entry named dysflow; Dysflow left Pi configuration unchanged.",
+      );
+    }
+    let changed = false;
+    if (entry.command !== input.commandPath) {
+      entry.command = input.commandPath;
+      changed = true;
+    }
+    if (entry.directTools !== false) {
+      entry.directTools = false;
+      changed = true;
+    }
+    if (changed) await writeJson(input.mcpConfigPath, root);
+    return { status: changed ? "changed" : "unchanged", active: true };
+  }
+
+  servers.dysflow = {
+    command: input.commandPath,
+    args: ["mcp"],
+    directTools: false,
+    type: "local",
+    lifecycle: "lazy",
+  };
+  root.mcpServers = servers;
+  await writeJson(input.mcpConfigPath, root);
+  return { status: "added", active: true };
+}
+
+export async function hasPiIntegration(
+  mcpConfigPath: string,
+  commandPath: string,
+): Promise<boolean> {
+  const root = await readJson(mcpConfigPath);
+  const servers =
+    typeof root.mcpServers === "object" &&
+    root.mcpServers !== null &&
+    !Array.isArray(root.mcpServers)
+      ? (root.mcpServers as Record<string, unknown>)
+      : {};
+  const entry = servers.dysflow;
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    !Array.isArray(entry) &&
+    isManagedPiMcpEntry(entry as Record<string, unknown>, commandPath)
+  );
+}
 
 export async function hasDysflowMcpConfig(agent: AgentName, filePath: string): Promise<boolean> {
   if (agent === "codex") {
@@ -98,20 +229,6 @@ async function configureClaude(filePath: string, commandPath: string): Promise<v
   await writeJson(filePath, root);
 }
 
-async function configurePi(filePath: string, commandPath: string): Promise<void> {
-  const root = await readJson(filePath);
-  const mcpServers = ensureObject(root.mcpServers);
-  mcpServers.dysflow = {
-    command: commandPath,
-    args: ["mcp"],
-    directTools: true,
-    type: "local",
-    lifecycle: "lazy",
-  };
-  root.mcpServers = mcpServers;
-  await writeJson(filePath, root);
-}
-
 export async function resolveClaudeConfigPath(
   paths: Pick<AgentConfigPaths, "claudeDesktop" | "claudeSettings">,
 ): Promise<string> {
@@ -165,6 +282,15 @@ export async function configureAgent(
         : agent === "claude"
           ? await resolveClaudeConfigPath(agentConfigPaths)
           : agentConfigPaths.pi;
+
+  if (agent === "pi") {
+    const result = await reconcilePiIntegration({
+      mcpConfigPath: configPath,
+      commandPath,
+    });
+    return { agent, configPath, ...result };
+  }
+
   const wasActive = await hasDysflowMcpConfig(agent, configPath);
   const before = await readFile(configPath, "utf8").catch(() => undefined);
 
@@ -173,7 +299,6 @@ export async function configureAgent(
     await configureOpencode(configPath, await opencodeCommandForConfig(runtimeDir));
   }
   if (agent === "claude") await configureClaude(configPath, commandPath);
-  if (agent === "pi") await configurePi(configPath, commandPath);
 
   const after = await readFile(configPath, "utf8");
   return {

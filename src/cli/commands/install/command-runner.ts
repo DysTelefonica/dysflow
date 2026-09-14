@@ -32,6 +32,7 @@ function runCommandWithTimeout(
         reject(error);
       } else {
         if (stdout && typeof stdout === "object" && "stdout" in stdout) {
+          // SAFETY: test adapters may return the documented { stdout, stderr } result object.
           resolve(stdout as unknown as { stdout: string; stderr: string });
         } else {
           resolve({ stdout: stdout as string, stderr: stderr as string });
@@ -67,10 +68,11 @@ export async function runCommand(
   command: string,
   args: readonly string[],
   cwd: string,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
 ): Promise<void> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS } = options;
-  const isCmd = process.platform === "win32" && (command === "pnpm" || command === "npm");
+  const isCmd =
+    process.platform === "win32" && (command === "pnpm" || command === "npm" || command === "pi");
   const execCmd = isCmd ? process.env.ComSpec || "cmd.exe" : command;
   const execArgs = isCmd ? ["/d", "/s", "/c", `${command}.cmd`, ...args] : [...args];
   try {
@@ -81,6 +83,7 @@ export async function runCommand(
       execArgs,
       {
         cwd,
+        env: options.env,
         windowsHide: true,
         maxBuffer: MAX_SUBPROCESS_BUFFER_BYTES,
         shell: false,

@@ -14,8 +14,14 @@ import {
 } from "./install/downloader.js";
 import { createInstallReport, installRuntime, resolveRuntimePaths } from "./install/extractor.js";
 import { readInstallState, writeInstallState } from "./install/install-state.js";
-import { configureAgent } from "./install/mcp-configurator.js";
+import {
+  capturePiIntegration,
+  configureAgent,
+  reconcilePiIntegration,
+  restorePiIntegration,
+} from "./install/mcp-configurator.js";
 import { resolvePackageRoot } from "./install/package-root.js";
+import { type PiPackageCommandRunner, reconcilePiPackage } from "./install/pi-package-manager.js";
 import {
   createPluginRefreshReport,
   refreshBundledAgentPlugins,
@@ -105,6 +111,7 @@ export async function applyIntegrationSelection(
     env?: NodeJS.ProcessEnv;
     runtimeDir?: string;
     packageRoot?: string;
+    piPackageCommandRunner?: PiPackageCommandRunner;
   } = {},
 ): Promise<CliResult> {
   const env = options.env ?? process.env;
@@ -117,18 +124,77 @@ export async function applyIntegrationSelection(
 
   try {
     const runtimeInstall = await installRuntime(runtimePaths, packageRoot, env);
+    const packageVersion = (await readInstalledVersion(runtimePaths.packageJsonDest)) ?? "unknown";
     const mcpConfigurations = [];
     for (const agent of ALL_AGENTS) {
       if (selected.has(agent)) {
-        mcpConfigurations.push(
-          await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir),
+        const piSnapshot =
+          agent === "pi" ? await capturePiIntegration(agentConfigPaths.pi) : undefined;
+        const configuration = await configureAgent(
+          agent,
+          agentConfigPaths,
+          commandPath,
+          runtimeDir,
         );
+        if (agent === "pi") {
+          if (piSnapshot === undefined) {
+            throw new Error("Pi configuration snapshot was not captured.");
+          }
+          try {
+            await reconcilePiPackage({
+              settingsPath: agentConfigPaths.piSettings,
+              runtimeDir,
+              packageVersion,
+              env,
+              runPiCommand: options.piPackageCommandRunner,
+            });
+          } catch (error) {
+            try {
+              await restorePiIntegration(agentConfigPaths.pi, piSnapshot);
+            } catch {
+              throw new Error(
+                "Pi package installation failed and Pi configuration rollback was incomplete.",
+              );
+            }
+            throw error;
+          }
+        }
+        mcpConfigurations.push(configuration);
         continue;
       }
       try {
-        await removeAgentConfig(agent, agentConfigPaths);
-      } catch {
-        // Ignore cleanup failures for unselected agents
+        if (agent === "pi") {
+          const piSnapshot = await capturePiIntegration(agentConfigPaths.pi);
+          await reconcilePiIntegration({
+            mcpConfigPath: agentConfigPaths.pi,
+            commandPath,
+            mode: "remove",
+          });
+          try {
+            await reconcilePiPackage({
+              settingsPath: agentConfigPaths.piSettings,
+              runtimeDir,
+              packageVersion,
+              env,
+              mode: "remove",
+              runPiCommand: options.piPackageCommandRunner,
+            });
+          } catch (error) {
+            try {
+              await restorePiIntegration(agentConfigPaths.pi, piSnapshot);
+            } catch {
+              throw new Error(
+                "Pi package removal failed and Pi configuration rollback was incomplete.",
+              );
+            }
+            throw error;
+          }
+        } else {
+          await removeAgentConfig(agent, agentConfigPaths);
+        }
+      } catch (error) {
+        if (agent === "pi") throw error;
+        // Other agent cleanup remains best-effort for backward compatibility.
       }
     }
     const skillInstall = await installBundledSkills({
@@ -195,6 +261,7 @@ export async function handleInstallCommand(
     env?: NodeJS.ProcessEnv;
     packageRoot?: string;
     createReleaseUpdateProvider?: (channel: InstallChannel) => ReleaseUpdateProvider;
+    piPackageCommandRunner?: PiPackageCommandRunner;
   } = {},
 ): Promise<CliResult> {
   const env = context.env ?? process.env;
@@ -253,12 +320,37 @@ export async function handleInstallCommand(
     }
 
     const runtimeInstall = await installRuntime(runtimePaths, packageRoot, env);
+    const packageVersion = (await readInstalledVersion(runtimePaths.packageJsonDest)) ?? "unknown";
 
     const mcpConfigurations = [];
     for (const agent of agents) {
-      mcpConfigurations.push(
-        await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir),
-      );
+      const piSnapshot =
+        agent === "pi" ? await capturePiIntegration(agentConfigPaths.pi) : undefined;
+      const configuration = await configureAgent(agent, agentConfigPaths, commandPath, runtimeDir);
+      if (agent === "pi") {
+        if (piSnapshot === undefined) {
+          throw new Error("Pi configuration snapshot was not captured.");
+        }
+        try {
+          await reconcilePiPackage({
+            settingsPath: agentConfigPaths.piSettings,
+            runtimeDir,
+            packageVersion,
+            env,
+            runPiCommand: context.piPackageCommandRunner,
+          });
+        } catch (error) {
+          try {
+            await restorePiIntegration(agentConfigPaths.pi, piSnapshot);
+          } catch {
+            throw new Error(
+              "Pi package installation failed and Pi configuration rollback was incomplete.",
+            );
+          }
+          throw error;
+        }
+      }
+      mcpConfigurations.push(configuration);
     }
     const skillInstall = await installBundledSkills({
       bundleRoot: packageRoot,

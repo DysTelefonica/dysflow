@@ -75,7 +75,9 @@ BeforeAll {
         New-Item -ItemType Directory -Path $root | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/references") -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/assets") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root "plugin/pi") -Force | Out-Null
         Set-Content (Join-Path $root "package.json") '{"version":"4.0.5"}' -NoNewline
+        Set-Content (Join-Path $root "plugin/pi/package.json") '{"name":"@aroman22/dysflow-pi","version":"4.0.5"}' -NoNewline
         Set-Content (Join-Path $root "CHANGELOG.md") $script:baseChangelog -NoNewline
         Set-Content (Join-Path $root "skills/dysflow-usage/references/error-codes.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this content." -NoNewline
         Set-Content (Join-Path $root "skills/dysflow-usage/assets/write-flags-matrix.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this matrix." -NoNewline
@@ -187,6 +189,7 @@ Describe "release changelog fail-fast gate" {
     It "restores exact bytes and remains retryable when changelog validation fails" {
         $fixtureRoot = New-ReleaseRepoFixture
         $packageBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json")))
+        $piPackageBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "plugin/pi/package.json")))
         $changelogBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md")))
         $errorCodesPath = Join-Path $fixtureRoot "skills/dysflow-usage/references/error-codes.md"
         $writeFlagsPath = Join-Path $fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md"
@@ -235,6 +238,7 @@ Describe "release changelog fail-fast gate" {
 
         $script:gitCalls | Where-Object { $_ -match "^(add|commit|push)\b" } | Should -BeNullOrEmpty
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json"))) | Should -Be $packageBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "plugin/pi/package.json"))) | Should -Be $piPackageBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md"))) | Should -Be $changelogBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes($errorCodesPath)) | Should -Be $errorCodesBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes($writeFlagsPath)) | Should -Be $writeFlagsBefore
@@ -248,6 +252,7 @@ Describe "release changelog fail-fast gate" {
         } finally { Pop-Location }
         $script:gitCalls | Where-Object { $_ -match "^add " } | Should -HaveCount 1
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "package.json"))) | Should -Be $packageBefore
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "plugin/pi/package.json"))) | Should -Be $piPackageBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $fixtureRoot "CHANGELOG.md"))) | Should -Be $changelogBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes($errorCodesPath)) | Should -Be $errorCodesBefore
         [Convert]::ToBase64String([IO.File]::ReadAllBytes($writeFlagsPath)) | Should -Be $writeFlagsBefore
@@ -363,7 +368,7 @@ Describe "release safety behavior" {
             [Convert]::ToBase64String([IO.File]::ReadAllBytes($skillPath)) | Should -Be ([Convert]::ToBase64String($expected))
         }
         $script:gitCalls | Where-Object { $_ -match "^add " } | Should -Be @(
-            "add package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md skills/access-form-ui-builder/SKILL.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
+            "add package.json plugin/pi/package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md skills/access-form-ui-builder/SKILL.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
         )
     }
 
@@ -405,6 +410,7 @@ Describe "release safety behavior" {
         }
         $releaseFiles = @(
             "package.json",
+            "plugin/pi/package.json",
             "CHANGELOG.md",
             "skills/dysflow-usage/references/error-codes.md",
             "skills/dysflow-usage/assets/write-flags-matrix.md"
@@ -428,12 +434,14 @@ Describe "release safety behavior" {
 
     It "resumes an already prepared release without another bump or release commit" {
         Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"4.0.6"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "plugin/pi/package.json") '{"name":"@aroman22/dysflow-pi","version":"4.0.6"}' -NoNewline
         Set-Content (Join-Path $script:fixtureRoot "CHANGELOG.md") ($script:baseChangelog -replace "# Changelog", "# Changelog`n`n## [v4.0.6] - 2026-08-26") -NoNewline
         Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Version ([Version]"4.0.6")
         Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Version ([Version]"4.0.6")
         Set-FixtureSkillVersion -Root $script:fixtureRoot -Version "4.0.6"
         $releaseFiles = @(
             "package.json",
+            "plugin/pi/package.json",
             "CHANGELOG.md",
             "skills/dysflow-usage/references/error-codes.md",
             "skills/dysflow-usage/assets/write-flags-matrix.md"
@@ -467,6 +475,7 @@ Describe "release safety behavior" {
         @{ Name = "existing release"; Params = @{ Resume = $true; Version = "4.0.6" }; Package = "4.0.6"; Head = "release-sha"; Origin = "release-sha"; TagExists = $false; ReleaseExists = $true }
     ) {
         Set-Content (Join-Path $script:fixtureRoot "package.json") "{`"version`":`"$Package`"}" -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "plugin/pi/package.json") "{`"name`":`"@aroman22/dysflow-pi`",`"version`":`"$Package`"}" -NoNewline
         $script:resumeHead = $Head
         $script:resumeOrigin = $Origin
         $script:resumeTagExists = $TagExists
@@ -494,6 +503,7 @@ Describe "release safety behavior" {
 
         $paths = @(
             "package.json",
+            "plugin/pi/package.json",
             "CHANGELOG.md",
             "skills/dysflow-usage/references/error-codes.md",
             "skills/dysflow-usage/assets/write-flags-matrix.md"
@@ -527,6 +537,7 @@ Describe "release safety behavior" {
     It "refuses a resumed tag when exact-SHA CI is red" {
         $script:ciResult = "failure"
         Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"4.0.6"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "plugin/pi/package.json") '{"name":"@aroman22/dysflow-pi","version":"4.0.6"}' -NoNewline
         Set-Content (Join-Path $script:fixtureRoot "CHANGELOG.md") ($script:baseChangelog -replace "# Changelog", "# Changelog`n`n## [v4.0.6] - 2026-08-26") -NoNewline
         Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Version ([Version]"4.0.6")
         Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Version ([Version]"4.0.6")
@@ -589,7 +600,7 @@ Describe "owned changelog gate process" {
     It "selects a Windows-launchable pnpm command when the quality gate process starts" `
         -Skip:([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         $process = [pscustomobject]@{ ExitCode = 0 }
-        $process | Add-Member ScriptMethod WaitForExit { param($Milliseconds); return $true }
+        $process | Add-Member ScriptMethod WaitForExit { param($Milliseconds); $null = $Milliseconds; return $true }
         Mock Start-Process { $process }
         $fixturePath = Join-Path $TestDrive "launcher-CHANGELOG.md"
         Set-Content $fixturePath $script:baseChangelog

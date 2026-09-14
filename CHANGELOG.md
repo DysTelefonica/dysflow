@@ -10,7 +10,6 @@
 - fix(deps): patch fast-uri advisories
 - docs(dysflow): document import success envelope
 
-
 ## [v4.3.1] - 2026-09-02
 
 ### Changes
@@ -18,13 +17,11 @@
 - fix(vba): harden multi-module import flows (#1702)
 - test(e2e): track verified Access fixtures
 
-
 ## [v4.3.0] - 2026-09-02
 
 ### Changes
 
 - feat(setup-project): import sibling worktree configuration (#1699)
-
 
 ## [v4.2.8] - 2026-09-01
 
@@ -33,20 +30,17 @@
 - fix(config): reject duplicate project JSON keys (#1697)
 - fix(release): move the stamp date with the version, not just the version (#1695)
 
-
 ## [v4.2.7] - 2026-08-31
 
 ### Changes
 
 - perf(e2e): share one process-table snapshot across a poll burst (#1693)
 
-
 ## [v4.2.6] - 2026-08-31
 
 ### Changes
 
 - fix(e2e): read the process table without wmic for descendant zombie detection (#1691)
-
 
 ## [v4.2.5] - 2026-08-31
 
@@ -55,13 +49,11 @@
 - docs(core): correct the stripFormSerializationNoise noise-floor docstring (#1689)
 - docs(skills): align update workflow ownership (#1688)
 
-
 ## [v4.2.4] - 2026-08-31
 
 ### Changes
 
 - fix(ci): require durable Access fixtures (#1676) (#1677)
-
 
 ## [v4.2.3] - 2026-08-29
 
@@ -69,13 +61,11 @@
 
 - fix(e2e): preserve observer startup cwd (#1675)
 
-
 ## [v4.2.2] - 2026-08-28
 
 ### Changes
 
 - test(e2e): use observer cwd for recovery trio (#1673) (#1674)
-
 
 ## [v4.2.1] - 2026-08-28
 
@@ -87,7 +77,6 @@
 - docs(vba-execution): record the removed inline 1024-character cap (#1669)
 - fix(verify_code): name the diff noise it folded (#1669)
 
-
 ## [v4.2.0] - 2026-08-27
 
 ### Changes
@@ -95,14 +84,12 @@
 - fix(vba-sync): respect explicit module scope
 - fix(vba): transport large import payloads safely
 
-
 ## [v4.1.1] - 2026-08-27
 
 ### Changes
 
 - fix(vba): envelope batched test results
 - fix(skills): release-manage access form builder
-
 
 ## [v4.1.0] - 2026-08-27
 
@@ -121,11 +108,11 @@
 - docs(skills): prefer structured MCP results
 - fix(mcp): preserve cwd through query dispatch
 
-
 ## [Unreleased]
 
 ### Changes
 
+- feat(pi): add public `@aroman22/dysflow-pi` with compact redacted rendering, Pi-managed pinned installation, ownership-safe update/uninstall, and release publication gates (#1723)
 - fix(setup-project): accept and preserve capabilities.procedures.allow in input (#1698)
 - feat(setup-project): add fromCwd parameter for cross-worktree config import (#1698)
 - fix(verify_code): classify a leading-indentation-only difference as `whitespaceOnly` instead of `caseOnly` (#1669). Indentation in a code module (`.bas`/`.cls`/`.frm`) is now folded with line endings and trailing whitespace, before the case-folding step, so `reason` no longer reports a casing difference the two sides do not have. Actionability is unchanged — both categories were already non-actionable — and form/report serialization keeps its indentation. `classifierRules` moves to `2026-08-28.r7-indentation-is-whitespace`.
@@ -150,14 +137,12 @@
 
 - fix(forms): recover transient LoadFromText cancellation
 
-
 ## [v4.0.6] - 2026-08-27
 
 ### Changes
 
 - fix(release): advance skill verification metadata
 - docs(skills): align verified runtime metadata
-
 
 ## [v4.0.5] - 2026-08-26
 
@@ -182,13 +167,11 @@
 - fix(config): surface removed-field migration path
 - fix(mcp): accept preferred warnings in stale cleanup
 
-
 ## [v4.0.4] - 2026-08-26
 
 ### Changes
 
 - fix(skills): make protocol frontmatter valid yaml
-
 
 ## [v4.0.3] - 2026-08-26
 
@@ -209,7 +192,6 @@
 - refactor(vba-sync): centralize orphan managed-source rules
 - chore(git): ignore generated tooling artifacts
 - fix(vba-sync): keep the export_all prune deletion record when an rm fails (#1573) (#1575)
-
 
 ## [v4.0.2] - 2026-08-25
 
@@ -277,7 +259,6 @@
 - fix(paths): preserve POSIX form source paths
 - fix(release): restore exact-SHA quality authority
 
-
 ## [v3.0.0] - 2026-08-24
 
 ### Changes
@@ -305,7 +286,6 @@
 - refactor(mcp): require explicit view in schema tool to prevent full-by-default (#1485) (#1489)
 - docs(skill): teach compact progressive path as the default first call (#1482) (#1488)
 
-
 ## [v2.38.2] - 2026-08-22
 
 ### Changes
@@ -318,14 +298,12 @@
 - fix(e2e): import resolveMcpE2eToolName and lint the battery
 - fix(e2e): read payloads from structuredContent and bound fixture teardown
 
-
 ## [v2.38.1] - 2026-08-22
 
 ### Changes
 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(e2e): stop passing rejected table policies to arbitrary SQL (#1452)
-
 
 ## [v2.38.0] - 2026-08-22
 
@@ -354,7 +332,6 @@
 - test(ci): align with post-v2.37.5 release.yml (release-validation dropped)
 - ci(release): drop Windows release-validation job; only E2E + build + release remain
 - ci(release): disable pnpm cache upload on self-hosted E2E runner
-
 
 ## [Unreleased]
 
@@ -409,14 +386,12 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - ci(release): gate publish on E2E battery via self-hosted Windows runner
 - docs(api): document the destinationRoot override contract for v2.37.2
 
-
 ## [v2.37.2] - 2026-08-17
 
 ### Changes
 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(adapter): honor explicit destinationRoot override in pre-flight gate (#1438)
-
 
 ## [v2.37.1] - 2026-08-17
 
@@ -428,7 +403,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - chore(docs): archive superseded documents and drop the closed epic handoff (#1435)
 - fix(docs-quality): resolve relative links against the compared Git tree (#1434)
 - fix(deps): patch nanoid, hono, postcss and @hono/node-server advisories surfaced after v2.37.0 (audit gate)
-
 
 ## [v2.37.0] - 2026-08-09
 
@@ -443,7 +417,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - fix(deps): patch nanoid transitive advisories
 - feat(ci): route docs-only prs to documentation checks
 
-
 ## [v2.36.0] - 2026-08-05
 
 ### Changes
@@ -452,7 +425,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - Improve: dysflow-usage and dysflow-arnes skills surface as MUST-LOAD when .dysflow/ artifacts are in cwd. (#1403)
 - Improve: typed error envelopes include additive remediationHint.skill / remediationHint.tool hints pointing to the canonical skill. (#1403)
 - docs(prompts): record the round 1 maintainer evidence and repository-owned scope for skill discoverability (#1403)
-
 
 ## [v2.35.3] - 2026-08-04
 
@@ -468,7 +440,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - refactor: remove a no-op ternary and a permanently empty exception set (#1397)
 - test(release): guard tar calls against GNU tar on Windows (#1391)
 
-
 ## [v2.35.2] - 2026-08-04
 
 ### Changes
@@ -481,14 +452,12 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - test(cleanup): cover stale marker cleanup failure and recovery paths (#1378)
 - fix(deps): patch high-severity `fast-uri` and `ip-address` advisories (#1384)
 
-
 ## [v2.35.1] - 2026-08-03
 
 ### Changes
 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(installer): target Pi global skills directory (#1373)
-
 
 ## [v2.35.0] - 2026-08-03
 
@@ -504,7 +473,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - fix(mcp): retain setup validation evidence (#1363)
 - fix(mcp): derive write intent from route metadata (#1362)
 - chore(repo): document git history migration plan (#1361)
-
 
 ## Unreleased
 
@@ -536,7 +504,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(release): bundle skills in release archive
 
-
 ## [v2.34.1] - 2026-08-03
 
 ### Changes
@@ -556,7 +523,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - fix(mcp): add schemaVersion:'dysflow.result/v1' discriminator to response envelopes (#1332)
 - feat(cli): bundle and install dysflow skills (#1331)
 
-
 ## [v2.34.0] - 2026-08-02
 
 ### Changes
@@ -564,7 +530,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - feat(mcp): add cwd-aware worktree cache (#1322)
 - docs(agents): align v2.33.0 runtime harness (#1320)
-
 
 ## [v2.33.0] - 2026-08-01
 
@@ -576,7 +541,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - feat(mcp): add project resolution recovery tokens (#1316)
 - feat(mcp): expose setup_project bootstrap (#1315)
 - docs(agents): align embedded dysflow harness (#1311)
-
 
 ## [v2.32.0] - 2026-08-01
 
@@ -605,13 +569,13 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - fix(dispatch): `dryRun`, `confirm`, `confirmOverwriteSource`, and `confirmPid` are now preserved as `@deprecated` accept-and-ignore fields on the affected schemas. They continue to validate and reach the handler unchanged, so the legacy escape hatches keep working without forcing the migration. Hard-removal deferred to v3.0 — the v2.31.0 release ships the deprecation warning in the schema description so consumers can discover the replacement before the v3.0 sweep.
 - docs(contracts): `CHECK_REQUIRED_CONFIRMATION` and `CHECK_NOT_REQUIRE_CONFIRMATION` are exposed on every mutating tool's input schema. The `confirmedRequiresConfirmation` boolean is treated as a one-shot override per call; the dispatch seam does not memoize across invocations.
 - docs(openspec): retroactive SDD entry at `openspec/changes/feat-check-envelope-unification/{proposal,tasks,design}.md`. The unified envelope is the primitives-plane contract that the runtime-autonomy épica (`docs/work/epic-runtime-autonomy-rollout.md`) builds on. Originating design context: `docs/prompts/prompt-ia-mantenedora-dysflow-round-17-2026-07-29.md`.
+
 ## [v2.30.1] - 2026-07-30
 
 ### Changes
 
 - feat(vba): make `test_vba` execute without a configured allowlist while preserving configured non-empty allowlists, `run_vba` default-deny, and HTTP default-deny (#1556)
 - fix(vba-sync): harden PowerShell startup and temp cleanup (#1234)
-
 
 ## [v2.30.0] - 2026-07-30
 
@@ -665,7 +629,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - docs(agents): re-embed the arn├®s block after the v2.26.0 alignment (#1201)
 - refactor(schema): adopt shared write intent block (#1200)
 - perf(ci): stop running the test suite twice per Node leg (#1196)
-
 
 ## [Unreleased]
 
@@ -776,7 +739,6 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 - fix(vba-sync): prevent export_all preview intent from running prune or postprocess side effects (#1138), with regression tests
 
-
 ## [v2.24.1] - 2026-07-25
 
 ### Closed issues
@@ -800,11 +762,9 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - Consumers that used `timedOut: true` to mean “the run did not complete” must also check `aborted === true` to handle explicit cancellation.
 - `PowerShellExecutionResult` and `VbaManagerExecutionResult` now expose the optional field `aborted?: boolean`. These boundary types remain optional so existing injected `PowerShellExecutor` implementations, adapters, and test doubles do not become source-incompatible. The concrete producer type, `PowerShellProcessResult`, requires `aborted: boolean` because `spawnPowerShellProcess` always sets it. For boundary implementations that do not provide the field, `undefined` means “not aborted.”
 
-
 ## [v2.24.0] - 2026-07-25
 
 - fix(vba-sync): strip document metadata from code-behind (#1113) - test(mcp): prove result contracts end to end (#1112) - chore(main): merge fix/1092 anchor frontend to active worktree + release prep (#1111) - refactor(schema): remove manual result contract registry (#1110) - refactor(mcp): add remaining executable result contracts (#1104) - fix(deps): patch PostCSS advisory (#1109) - refactor(mcp): derive dispatch result contracts by family (#1105) - refactor(mcp): migrate bootstrap result contracts (#1106) - fix(config): anchor frontend/source to active worktree (#1092) (#1093) - feat(mcp): validate handler results before serialization (#1103) - refactor(mcp): add executable result contract primitives (#1102)
-
 
 ## Unreleased
 
@@ -930,7 +890,6 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 - docs: read-class tools that open the `.accdb` through Access COM (`list_vba_modules`, `validate_manifest`, `verify_code`, …) may update the Jet/ACE LSN on close — `git status` will report the binary modified with 0 content change. Export tools now avoid that side effect by opening a disposable copy unless `mutateBinary:true`; for other read tools, verify real changes with `git diff --stat` or `verify_code` before staging (#1057 F2, #1065)
 
-
 ## [v2.21.1] - 2026-07-21
 
 ### Fixed
@@ -1007,23 +966,19 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 - fix(vba-sync): avoid false IMPORT_TRUNCATED for WithEvents member-level `Attribute <var>.VB_VarHelpID` lines — `Convert-VbaTextForCodeModuleString` now strips member-level metadata (matching what VBE strips from `CodeModule.AddFromString`), so the post-import truncation guard compares apples to apples and the WithEvents re-import path returns `status:"ok"` (#1010, follow-up to #1007/#1008)
 
-
 ## [v2.18.0] - 2026-07-20
 
 ### Fixed
 
 - fix(vba-sync): preserve WithEvents member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the existing post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
 
-
 ## [v2.17.1] - 2026-07-19
 
 - chore(quality): apply review round 2 fixes (#1005)
 
-
 ## [v2.17.0] - 2026-07-19
 
 - feat(codegraph-drift): auto-rewrite stale supplement runtime refs (#961) (#1004) - docs(harness): embed canonical dysflow arn├®s v0.1.4 in project AGENTS.md - docs(testing): update MCP e2e spec to also reject C:\Proyectos\skills path leak
-
 
 ## [v2.16.0] - 2026-07-19
 
@@ -1046,7 +1001,6 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.15.0] - 2026-07-18
 
 - chore(changelog): fold Unreleased into the upcoming release section - fix(forms): close form/report before SaveAsText (#957) (#960) - fix(forms): self-heal legacy .form.txt metadata and fail closed on structural damage before LoadFromText (#959, closes #958)
-
 
 ## [v2.14.2] - 2026-07-17
 
@@ -1123,7 +1077,6 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 - docs(changelog): document env-isolated harness risk dismissal in v2.12.0 (#879) - docs(changelog): regenerate v2.12.0 entry to match released commits
 
-
 ## [v2.12.0] - 2026-07-15
 
 - fix(mcp): explicit role-based target contracts for DAO/query tools (#871)
@@ -1193,7 +1146,6 @@ tools (`list_objects`, `verify_code`, `export_modules`, …) all go through
 
 - Merge pull request #868 from DysTelefonica/fix/811-e2e-harness-full - fix(e2e): restore Claude's FormCPV-derived harness + apply-mode + inspect_form fix - Merge pull request #867 from DysTelefonica/fix/e2e-harness-fixture-count - fix(e2e): self-contained Form_DysflowMcpE2E fixture + count=5
 
-
 ## [v2.11.0] - 2026-07-14
 
 - **feat(tools): add `lint_missing_callees` -- missing-callees detector for VBA callee resolution (#862).**
@@ -1243,47 +1195,38 @@ Patch release fixing three v2.10.0 regressions surfaced by a consumer smoke sess
 
 - Merge pull request #860 from DysTelefonica/feat/858-resumable-e2e - fix(e2e): harden resumable sandbox recovery (#858) - fix(e2e): preserve resumable suite quality gates (#858) - feat(e2e): resume MCP battery from safe checkpoints (#858) - Merge pull request #859 from DysTelefonica/fix/857-complete-form-controls - fix(e2e): complete synthetic form behavior controls (#857) - Merge pull request #856 from DysTelefonica/fix/850-inline-execution-contract - fix(vba): clarify inline result and cleanup contract (#850) - Merge pull request #855 from DysTelefonica/fix/851-link-tables-create-missing - feat(link_tables): create missing linked TableDefs in the runner (#851) - feat(link_tables): add opt-in create-or-relink API surface (#851) - fix(vba-sync): preserve form .cls linkage on form re-import (#849) (#854) - Merge pull request #853 from DysTelefonica/fix/852-non-canonical-form-name-resolver - fix(delete_module): delete non-canonical form document modules via DoCmd.DeleteObject (#852) - fix(forms): make Form_/Report_ source-path resolution idempotent (#852)
 
-
 ## [v2.9.3] - 2026-07-13
 
 - Merge pull request #848 from DysTelefonica/fix/847-query-maintenance-developer-mode-dryrun - fix(dispatch): forward normalizedInput in query-maintenance branch (#847)
 - **vba_inline_execution (#850):** Document the explicit `result = "OK"` return contract (`data.returnValue`), reject trailing bare string literals before any import with caller-relative remediation, and surface temporary-module/file cleanup failures without hiding the primary execution error.
 
-
 ## [v2.9.2] - 2026-07-13
 
 - Merge pull request #846 from DysTelefonica/fix/dysflow-config-snapshot-drift - fix(test): isolate 3 dysflow-config tests from repo's project.json
-
 
 ## [v2.9.1] - 2026-07-13
 
 - Merge pull request #845 from DysTelefonica/fix/stale-laccdb-should-not-block-import - docs(open-spec): add #844 SDD artifacts (proposal, design, tasks, explore, verify, pr-body) - fix(import): stale .laccdb no longer blocks import when no live process holds the binary (#844)
 
-
 ## [v2.9.0] - 2026-07-12
 
 - Merge pull request #843 from DysTelefonica/feat/783-wire-write-execution-policy - feat(mcp): wire write-execution-policy through dispatch + add export-source guard (#783) - Merge pull request #842 from DysTelefonica/feat/757-unify-commit-flags - feat(mcp): unify write-side commit flags + enrich error envelopes (#757)
-
 
 ## [v2.8.0] - 2026-07-12
 
 - Merge pull request #841 from DysTelefonica/feat/809-sync-binary-workflow - feat(vba-sync): sync_binary workflow tool - verify -> plan -> import/export -> re-verify (#809) - fix(forms): keep apply mode label out of the pure plan core (#840)
 
-
 ## [v2.7.0] - 2026-07-12
 
 - Merge pull request #839 from DysTelefonica/feat/818-verify-form-bindings - feat(forms): verify_form_bindings ÔÇö validate ControlSource/RowSource against schema (#818) - Merge pull request #838 from DysTelefonica/feat/817-diff-form-preview - feat(forms): diff_form_preview - before/after visual diff (#817) - Merge pull request #837 from DysTelefonica/feat/816-align-distribute-controls - feat(forms): form_align_controls + form_distribute_controls ÔÇö batch geometry ergonomics - Merge pull request #836 from DysTelefonica/feat/815-analyze-form-layout - feat(forms): analyze_form_layout - geometry lint (overlap, alignment, tab-order) - Merge pull request #835 from DysTelefonica/feat/814-render-form-preview - feat(forms): render_form_preview ÔÇö geometric SVG/ASCII render from FormIR twips (#814) - Merge pull request #834 from DysTelefonica/feat/831-extend-verify-form-ui - feat(verify): extend verify_form_ui with geometry/tab-order/property checks (#831) - Merge pull request #833 from DysTelefonica/feat/830-internal-codegraph-invoker - feat(forms): internal codegraph-vba invoker for map_form_behavior (#830) - Merge pull request #832 from DysTelefonica/refactor/829-derived-applied-contract - refactor(forms): derive appliedContract from mutated FormIR - Merge pull request #828 from DysTelefonica/docs/819-skill-alignment - docs(skills): align access-form-ui-builder with v2.6.0 + Phase 6 apply semantics
-
 
 ## [v2.6.0] - 2026-07-11
 
 - Merge pull request #827 from DysTelefonica/feat/813-phase6-atomic-exposure - feat(813): atomic MCP exposure for apply_form_design_plan family - Merge pull request #826 from DysTelefonica/feat/813-phase5-execution-internals - feat(813): execution internals for apply_form_design_plan (PR 5)
 
-
 ## [v2.5.4] - 2026-07-11
 
 - Merge pull request #825 from DysTelefonica/feat/813-phase4-guarded-seam - style(vba-sync): apply biome lint to Phase 4.1 seam files - docs(sdd): mark Phase 4.1 task 4.1 complete in tasks.md - refactor(vba-sync): extract applyGuardedFormWrite seam (PR 4 / #813) - Merge pull request #824 from DysTelefonica/feat/813-apply-form-design-plan - feat(813): pure six-kind form UI planning + vocabulary reconciliation
-
 
 ## [v2.5.3] - 2026-07-10
 
@@ -1332,11 +1275,9 @@ Patch release. Closes the four-PR chain for #718 (`projectId Form Source Resolut
 - **Strict TDD** — every change RED-then-GREEN in `pnpm test` before commit.
 - Backward compatibility: every public MCP tool response shape is unchanged. New fields are additive only.
 
-
 ## [v2.5.1] - 2026-07-10
 
 - docs: align verify_code contract with v2.5.0
-
 
 ## [v2.5.0] - 2026-07-09
 
@@ -1396,7 +1337,6 @@ Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `exp
 
 - Merge branch 'feat/ai-form-ui-builder' - feat(forms): finalize AI-first form UI builder workflow
 
-
 ## [v2.2.0] - 2026-07-09
 
 Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })` are now rejected at the dispatch seam with the typed error `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). The previous behavior silently wrote to the source tree — the diff flag was documented as read-only but the adapter never honored it (the PowerShell runner has no `$Diff` parameter and the `MODULE_MAPPINGS.export_all.extra` mapping only forwards `verbose`), causing partial writes on `VBA_MANAGER_TIMEOUT`. Callers that want a real read-only compare should use `verify_code({ strict, moduleNames })`.
@@ -1409,16 +1349,13 @@ Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })`
 
 - feat(forms): unified AI-friendly outputMode (summary|file|full) across form tools (#794)
 
-
 ## [v2.1.6] - 2026-07-09
 
 - test(vba-sync): add comprehensive unit/behavior tests for vba-forms-lint-adapter (closes #652) - chore(release): prepare v2.1.5 - feat(lint): add logical-short-circuit, implicit-variant, missing-exit-handler, and invalid-static-class-call rules
 
-
 ## [v2.1.5] - 2026-07-09
 
 - feat(lint): add logical-short-circuit, implicit-variant, missing-exit-handler, and invalid-static-class-call rules
-
 
 ## [v2.1.4] - 2026-07-08
 
@@ -1584,6 +1521,7 @@ alias-override rows that had a duplicate registration in both
 renames, 1-for-1 with the legacy).
 
 Notes:
+
 - The canonical `run_vba` was already registered by `alias-tools.ts`
   (preexisting alias). The bespoke registration that lived alongside
   it was removed; the alias handler is now the sole source.
@@ -1663,12 +1601,12 @@ commits in the order they were ported onto `fricciones-port-2026-07-07`.
   Without the strip those briefs receive `MCP_INPUT_INVALID: compile is
   not allowed` from the schema layer. The dispatch factory now silently
   strips the deprecated keys BEFORE schema validation, so:
-  * The schema layer (`validateInput`) keeps rejecting `compile` via
+  - The schema layer (`validateInput`) keeps rejecting `compile` via
     `additionalProperties: false`. The v1.19.0 contract pinned by
     `test/adapters/mcp/schemas/vba-sync-schemas.test.ts` is unchanged.
-  * A legacy brief passing `compile: true` or `rollbackOnCompileFail`
+  - A legacy brief passing `compile: true` or `rollbackOnCompileFail`
     does NOT receive the rejection. The call succeeds.
-  * The forwarded payload to `vbaSyncToolService.execute` does NOT
+  - The forwarded payload to `vbaSyncToolService.execute` does NOT
     carry `compile` / `rollbackOnCompileFail` — the strip is real, not a
     bypass that leaves the deprecated keys downstream.
   A `console.warn` surfaces the `compile: true` case (the one that used
@@ -1689,14 +1627,14 @@ commits in the order they were ported onto `fricciones-port-2026-07-07`.
   serializer and guarantees that `content[0].text` is ALWAYS a JSON
   document that `JSON.parse` and a second `JSON.stringify` will accept
   (the F14 contract). The helper:
-  * top-level primitives (null/string/number/boolean) → fast path
-  * `Symbol` / `function` / `BigInt` / `undefined` top-level → envelope
+  - top-level primitives (null/string/number/boolean) → fast path
+  - `Symbol` / `function` / `BigInt` / `undefined` top-level → envelope
     `{ raw: <serializable string>, type: <kind> }`
-  * `Error` instance → envelope exposing `.message`, `.stack`, `.name`,
+  - `Error` instance → envelope exposing `.message`, `.stack`, `.name`,
     `.code`, and any extra fields
-  * Object/array with circular refs → encoded with `__circular__`
+  - Object/array with circular refs → encoded with `__circular__`
     placeholders for back-edges (via `normalizeForJsonStringify`)
-  * Nested `function` / `Symbol` / `BigInt` / `Error` are deep-walked
+  - Nested `function` / `Symbol` / `BigInt` / `Error` are deep-walked
     before the fast path so they are never silently dropped (F14
     nested — commit `9f6ddcbe` adds the `requiresDeepNormalization`
     guard).
@@ -1935,7 +1873,7 @@ pass `projectId` plus `target` without `databasePath` / `backendPath` /
 role returns a typed `CONFIG_MISSING_TARGET_PATH` error before the
 PowerShell executor runs. Closes #716 for the frontend-local + backend
 lookup + explicit precedence + typed-error acceptance subset; `auto` mode
-+ cross-DB ambiguity detection remain acknowledged follow-ups (see
+- cross-DB ambiguity detection remain acknowledged follow-ups (see
 `openspec/changes/feat-716-target-frontend-backend/verify-report.md`).
 
 - **Semantic `target` role on read-only MCP schema/query tools** (#716). All
@@ -1972,8 +1910,7 @@ Implementation commits (PR #755): `f97810d`, `64018ea`. Merge commit: `c3f4f7a`.
 
 ## [v1.15.0] - 2026-07-05
 
-- Merge pull request #722 from DysTelefonica/feat/704-lint-module - fix(mcp): guard merged vba runtime tools - docs(mcp): fix containment comment - fix(mcp): contain VBA source resolution - refactor(vba-sync): split forms adapter - feat(mcp): add VBA module lint tool - Merge pull request #712 from DysTelefonica/feat/703-validate-manifest - feat(mcp): add VBA test manifest validation - feat(mcp): add dead code detection tool - docs(openspec): archive 2026-07-01 audit records - fix(ci): repair release workflow indentation - Merge pull request #707 from DysTelefonica/feat/701-procedure-read-tools - docs: document dysflow_find_references tool in README - feat(mcp): implement dysflow_find_references tool (closes #702) - test(mcp): RED for find_references no-such-symbol typed error - test(mcp): RED for find_references call sites - feat(mcp): implement dysflow_get_procedure and dysflow_list_procedures (closes #701) - test(mcp): RED for list_procedures typing filter - test(mcp): RED for get_procedure non-existent module - test(mcp): RED for get_procedure default empty - docs(testing): refresh coverage gates (#706) - fix(forms): report rollback outcomes (#700) - fix(mcp): reject relink inline passwords (#699) - fix(http): gate test_vba route by allowlist (#698) - fix(vba-sync): guard prune export inventory (#697) - fix(verify-code): surface export warnings (#696) - fix(test): serialize unit vitest workers (#695) - refactor(core): inject filesystem ports from adapters - fix(vba-sync): transition registry record to running - chore(lint): wire script helper coverage into CI gate (#687) - fix(forms): add path-containment guard to generate_form / catalog_add_control / create_form_from_template (#675) (#685) - fix(mcp): resolve allowedProcedures per-input, not per-startup (#674) (#684) - feat(mcp): expose import_queries.importPath in the MCP schema (#672) (#681) - ci(release): inline the release-name == tag assert, drop dead guard workflow (#668) (#680) - fix(dispatch-routes): correct mutates* declarations for export_* / generate_erd / fix_encoding (#665) (#678) - fix(vba-execution-adapter): gate allowlist BEFORE compile when compile:true (#667) (#679) - fix(classifier): normalize toggle values to TOGGLE token, surface presence-vs-absence (#671) (#683) - fix(serve): fail-closed on non-loopback host without --token (#669) (#682) - fix(update): include pnpm-lock.yaml in tarball + --frozen-lockfile in extractor (#666) (#677) - feat(errors): split MCP_INPUT_INVALID into MCP_PROCEDURE_NOT_ALLOWED (#659) (#676)
-
+- Merge pull request #722 from DysTelefonica/feat/704-lint-module - fix(mcp): guard merged vba runtime tools - docs(mcp): fix containment comment - fix(mcp): contain VBA source resolution - refactor(vba-sync): split forms adapter - feat(mcp): add VBA module lint tool - Merge pull request #712 from DysTelefonica/feat/703-validate-manifest - feat(mcp): add VBA test manifest validation - feat(mcp): add dead code detection tool - docs(openspec): archive 2026-07-01 audit records - fix(ci): repair release workflow indentation - Merge pull request #707 from DysTelefonica/feat/701-procedure-read-tools - docs: document dysflow_find_references tool in README - feat(mcp): implement dysflow_find_references tool (closes #702) - test(mcp): RED for find_references no-such-symbol typed error - test(mcp): RED for find_references call sites - feat(mcp): implement dysflow_get_procedure and dysflow_list_procedures (closes #701) - test(mcp): RED for list_procedures typing filter - test(mcp): RED for get_procedure non-existent module - test(mcp): RED for get_procedure default empty - docs(testing): refresh coverage gates (#706) - fix(forms): report rollback outcomes (#700) - fix(mcp): reject relink inline passwords (#699) - fix(http): gate test_vba route by allowlist (#698) - fix(vba-sync): guard prune export inventory (#697) - fix(verify-code): surface export warnings (#696) - fix(test): serialize unit vitest workers (#695) - refactor(core): inject filesystem ports from adapters - fix(vba-sync): transition registry record to running - chore(lint): wire script helper coverage into CI gate (#687) - fix(forms): add path-containment guard to generate_form / catalog_add_control / create_form_from_template (#675) (#685) - fix(mcp): resolve allowedProcedures per-input, not per-startup (#674) (#684) - feat(mcp): expose import_queries.importPath in the MCP schema (#672) (#681) - ci(release): inline the release-name == tag assert, drop dead guard workflow (#668) (#680) - fix(dispatch-routes): correct mutates*declarations for export_* / generate_erd / fix_encoding (#665) (#678) - fix(vba-execution-adapter): gate allowlist BEFORE compile when compile:true (#667) (#679) - fix(classifier): normalize toggle values to TOGGLE token, surface presence-vs-absence (#671) (#683) - fix(serve): fail-closed on non-loopback host without --token (#669) (#682) - fix(update): include pnpm-lock.yaml in tarball + --frozen-lockfile in extractor (#666) (#677) - feat(errors): split MCP_INPUT_INVALID into MCP_PROCEDURE_NOT_ALLOWED (#659) (#676)
 
 ## [Unreleased]
 
@@ -2070,6 +2007,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - **`resolve_project` tool** (round-3 Item 1): new read-only MCP tool that resolves a project identity to its Access/backend paths via the `ProjectRegistry`. Pure helper `tryResolveProject()` — never opens Access, never mutates state. Registered in `MODERN_TOOL_NAMES` and `MCP_TOOL_CONTRACTS`. 8 dedicated tests. Tool count now 68.
 
 ## [v1.15.6] - 2026-07-06
+
 - Fix every write-class MCP tool contract (`MCP_TOOL_CONTRACTS`) to declare `dryRunDefault: true`, aligning the `get_capabilities` snapshot with the AGENTS.md + CHANGELOG v1.14 promise of "standardized dryRun defaults". Previously `contractFromGeneratedRoute` set `dryRunDefault: route.kind !== "vba-sync"`, which silently returned `false` for every vba-sync route (`import_modules`, `import_all`, `compile_vba`, `delete_module`, `fix_encoding`, `vba_inline_execution`, `dysflow_form_*`, `create_form_from_template`) and made the global `dryRunDefault` aggregate return `false` whenever any of those tools existed — directly contradicting the documented "plan first by default" stance. The dispatcher path already honors `dryRun: true` for these tools (`resolveIsDryRun` for query aliases, `buildMaintenanceRequest` for query-maintenance, `VbaModulesAdapter.execute`'s `params.dryRun !== false` rule for vba-sync), so the contract surface now reflects reality. RED test covers the per-tool contracts and the global snapshot field; 504/504 MCP suite tests pass (#746).
 - Fix `form_serialize` (`src/adapters/vba-sync/vba-forms-serialization-tools.ts:serializeForm`) to honor the round-trip guarantee documented on `serializeFormTxt` (`serializeFormTxt(parseFormTxt(x)) === normalizeLineEndings(x)`). Previously `byteEqual = serialized === originalText` compared against the RAW original so any CRLF fixture (the realistic Access SaveAsText encoding on Windows) reported `byteEqual: false` and `byteDiff > 0` even on a clean round-trip — the existing RED test `byteEqual is true for a clean round-trip fixture` had been failing on every CI run since the test landed in PR #741. `byteEqual` and `byteDiff` now both compare against `normalizeLineEndings(originalText)`: a clean round-trip reports `byteEqual:true, byteDiff:0` for either CRLF or LF originals, and real content mutations (BOM, whitespace, etc.) still flip them. 2347/2347 unit tests pass, including the previously-blank RED (#747).
 
@@ -2094,7 +2032,9 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - Fix `lint_form_code` nested-control resolution so form-code lint reuses the same recursive FormIR control collection as form inspection. This prevents false `controls: <none>` missing-control diagnostics for nested controls such as `FormDetalle` in real Access forms (#714, #723).
 
 ## [v1.14.2] - 2026-07-03
+
 ### e2e-suite-contracts-pin-sync (#666)
+
 - **Repo-side CI fix — `test/quality-gates/mcp-e2e-suite-contracts.test.ts`
   advertised-tool-count string pin bumped `"54 tools" → "61 tools"`.** The
   meta-test reads the harness source and asserts a literal substring; it was
@@ -2108,7 +2048,9 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - **No user-facing product changes.** Pure test-infrastructure patch.
 
 ## [v1.14.1] - 2026-07-03
+
 ### e2e-harness-sync (#665)
+
 - **Release-gate fix — `E2E_testing/mcp-e2e.mjs` advertised count bumped `54 → 61`.**
   The harness hardcoded `advertised.length === 54` while
   `test/adapters/mcp/advertised-tool-count.test.ts:25` already pinned **61** (the count
@@ -2131,7 +2073,9 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   feature/bug work in the same PR.
 
 ## [v1.14.0] - 2026-07-03
+
 ### get-capabilities-mcp (#656)
+
 - **New `get_capabilities` MCP tool exposes a single introspectable source-of-truth
   for the MCP write gate, per-project `allowWrites` resolution, the `allowedProcedures`
   allowlist gate, and the implicit `dryRun:true` default.** A new IA consumer calls this
@@ -2147,6 +2091,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   `test/adapters/mcp/release-matrix-gate.test.ts:7`.
 
 ### project-capabilities-config (#657)
+
 - **New `.dysflow/project.json` `capabilities` consolidated block** lets operators
   declare per-project capability hints in a single, version-controlled location
   (`src/core/config/dysflow-config.ts:197` — `capabilities.*` with `tools`,
@@ -2159,6 +2104,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   `test/adapters/config/dysflow-config-discovery-fallback.test.ts:267`.
 
 ### allowed-procedures-discovery (#658)
+
 - **`allowedProcedures` discovery scans `src/` by default and emits the union of
   declared procedure prefixes.** The discovery service
   (`src/core/services/allowed-procedures-discovery.ts:341`) walks the project source
@@ -2174,7 +2120,9 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   prefix-collision rules.
 
 ## [v1.13.1] - 2026-07-02
+
 ### compile-vba-exit-code (#543)
+
 - **`compile_vba` now exits non-zero when VBA compilation fails.** The top-level PowerShell `Compile`
   action previously called `Invoke-CompileAction -Json`, which emits the structured `DYSFLOW_RESULT`
   sentinel but returns `$null`; the subsequent `$compileActionResult` check therefore never detected a
@@ -2184,11 +2132,13 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
   `ok = false`, so failed compilations travel through the adapter's structured-error path.
 
 ### runtime-guard-exportpath (#644)
+
 - **Fix runtime-guard regression on `export_modules` / `export_all` (#644).** The F1 destinationRoot guard (#619, `src/adapters/vba-sync/vba-modules-adapter.ts:223-241`) fired against the orchestrator's resolved `destinationRoot` even when the user had explicitly supplied a safe `exportPath`. When the user passes `exportPath`, the runner writes to that path (the guard above already validated the user's intent) — the orchestrator's resolution is irrelevant for the safety check. The fix narrows the F1 guard to fire ONLY when the user did NOT provide an `exportPath` (`exportPath === undefined && isWithinRuntime(target.data.destinationRoot, env)`). The no-exportPath safety net (#619 F1) is preserved for callers who rely on the orchestrator's project-config resolution. Three new unit tests in `test/adapters/vba-sync/runtime-guard-filesystem-writes.test.ts` and `test/adapters/mcp/runtime-guard-dispatch-exportpath.test.ts` pin the contract at the unit layer (mirror the E2E test at `test/e2e/runtime-guard-mcp-integration.e2e.test.ts:309-331`, which now passes); both fail RED against the pre-fix code and pass GREEN after the conditional. The MCP-dispatch-path test goes through `createDispatchTool` → `validateInput` → `services.vbaSyncToolService.execute` → `VbaModulesAdapter.execute`, so future regressions in the schema validator, the dispatch handler, or the orchestrator wiring surface at the cheap unit layer instead of waiting for the expensive E2E.
 
 ### vba-import-vbname-preserve (#646)
 
 #### Bugfix — `Attribute VB_Name` was dropped on every VBA import, silently corrupting module identity
+
 - **`Normalize-VbaImportText` no longer strips `Attribute VB_Name`.** `Test-IsVbaImportMetadataLine`'s
   broad `^Attribute\s+VB_` match caused the import-normalization path to strip `Attribute VB_Name`
   along with every other `Attribute VB_*` line before every `AddFromFile` write, so `VB_Name` never
@@ -2208,6 +2158,7 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 ### mcp-writes-enabled-default (#645)
 
 #### Trust-posture change — `dysflow mcp` now starts with writes enabled by default
+
 - **`dysflow mcp` (stdio) enables write-capable tools by default.** Previously, bare
   `dysflow mcp` started read-only and required `--enable-writes` to unlock
   `delete_module`, `import_modules`/`import_all`, write-mode SQL, cleanup with
@@ -2231,62 +2182,72 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 ### hexagonal-tech-debt (#624)
 
 #### #B.2 ELIGIBLE_STATUSES unification (PR 1 of 5)
+
 - **Fix latent cleanup-eligibility divergence for `pid_unknown` records.** `ELIGIBLE_STATUSES` was historically declared in two places with different membership: `src/core/operations/access-operation-preflight.ts` (4 statuses, includes `pid_unknown`) and `src/core/operations/access-operation-cleanup.ts` (3 statuses, missing `pid_unknown`). The new canonical module `src/core/operations/access-operation-status.ts` exports the single source of truth (`ReadonlySet<AccessOperationStatus>` with `{timed_out, failed, cleanup_pending, pid_unknown}`); both preflight and cleanup now import (and re-export) the same `Set` reference. Net runtime behavior change: **none** — preflight already treated `pid_unknown` as eligible, and cleanup's `pid_unknown` refusal is governed by an independent `CLEANUP_PID_UNKNOWN` guard at `access-operation-cleanup.ts:124` that runs BEFORE the `ELIGIBLE_STATUSES.has(...)` check. The fix closes the latent divergence that would have surfaced as a 4-vs-3 mismatch on any future membership edit.
 
 #### #A FS port injection (PR 4 of 5)
-- **Extract Node FS ports for `FileAccessOperationRegistry` and `VbaFormService` (hexagonal split).** Both files no longer import `node:fs/promises` directly — every filesystem call now routes through an injected port. `FileAccessOperationRegistry` accepts a `fileSystem: RegistryFileSystemPort` option (default = `nodeRegistryFileSystem` at `src/adapters/operations/node-registry-file-system.ts`); the port surface explicitly supports the `wx` flag on `writeFile` for the atomic lock creation in `acquireRegistryMutationLock` (the flag is the primitive that gives registry acquisition its mutual-exclusion guarantee — removing it would silently break the lock). `VbaFormService` keeps its existing `VbaFormServiceOptions.fileSystem` injection seam; the default `nodeFileSystem` constant was moved out of `src/core/services/` to `src/adapters/services/node-form-file-system.ts`. Production behavior is byte-equivalent (defaults wire the Node impl). Both new test files pin the post-refactor contract: `test/core/operations/access-operation-registry-file-system-port.test.ts` (4 tests: port injection, `wx`-flag regression pin, default Node adapter, failing-fake adversarial) and `test/core/services/vba-form-service-file-system-port.test.ts` (4 tests: port injection, default Node adapter, failing-fake adversarial, structural pin that the source no longer imports `node:fs/promises` and no longer declares a local `const nodeFileSystem`). The `core-boundary.test.ts` ratchet gains a parallel `KNOWN_ADAPTER_IMPORT_DEBT` set for these two files; the cleaner pattern (port REQUIRED in core, default wired from the composition root, per the `cross-process-lock.ts` precedent) is deferred to a follow-up that does not require touching the 37 existing test sites that construct the registry without a port.
 
+- **Extract Node FS ports for `FileAccessOperationRegistry` and `VbaFormService` (hexagonal split).** Both files no longer import `node:fs/promises` directly — every filesystem call now routes through an injected port. `FileAccessOperationRegistry` accepts a `fileSystem: RegistryFileSystemPort` option (default = `nodeRegistryFileSystem` at `src/adapters/operations/node-registry-file-system.ts`); the port surface explicitly supports the `wx` flag on `writeFile` for the atomic lock creation in `acquireRegistryMutationLock` (the flag is the primitive that gives registry acquisition its mutual-exclusion guarantee — removing it would silently break the lock). `VbaFormService` keeps its existing `VbaFormServiceOptions.fileSystem` injection seam; the default `nodeFileSystem` constant was moved out of `src/core/services/` to `src/adapters/services/node-form-file-system.ts`. Production behavior is byte-equivalent (defaults wire the Node impl). Both new test files pin the post-refactor contract: `test/core/operations/access-operation-registry-file-system-port.test.ts` (4 tests: port injection, `wx`-flag regression pin, default Node adapter, failing-fake adversarial) and `test/core/services/vba-form-service-file-system-port.test.ts` (4 tests: port injection, default Node adapter, failing-fake adversarial, structural pin that the source no longer imports `node:fs/promises` and no longer declares a local `const nodeFileSystem`). The `core-boundary.test.ts` ratchet gains a parallel `KNOWN_ADAPTER_IMPORT_DEBT` set for these two files; the cleaner pattern (port REQUIRED in core, default wired from the composition root, per the `cross-process-lock.ts` precedent) is deferred to a follow-up that does not require touching the 37 existing test sites that construct the registry without a port.
 
 ### form-ir-bugs (#622)
 
 #### F2 (PR 2 of 3 — this PR)
+
 - **Preserved-metadata key predicate is now exact-match** in `applyTokenMap` (`src/core/services/form-ir-service.ts`). Keys that share a prefix with a preserved key (e.g. `FormatConditions`, `FormatHeader`) are no longer mis-classified as preserved; they flow through token replacement like ordinary layout keys. **Behavior change** for any template whose `{{Token}}` lives inside a `Format*` (or `PrtDevMode*` / `Checksum`) key — that token now gets replaced.
 - **`appliedTokens` now reflects actual replacement**, derived from a post-IR serialization diff (`serializeFormTxt(next)` vs source tokens). Previously `appliedTokens` was `Object.hasOwn(tokenMap, sourceToken)`, which lied when a token's only occurrence lived inside a preserved metadata key — the result reported `applied` while the serialized IR still contained `{{Token}}`. **Behavior change — strict policy**: a source token whose only `{{...}}` occurrence lives inside a preserved metadata key now triggers `FORM_MUTATION_INVALID` under `missingTokenPolicy: "strict"`. Previously the operation reported success. `warn-pass-through` (default) is unchanged for the IR text — preserved keys still keep their tokens verbatim — only the truth of `appliedTokens`/`missingTokens` changes.
 - **Action required for strict-policy users**: if your source forms contain tokens inside `Checksum`, `Format`, or `PrtDevMode` scalars, either widen the token map to cover them or remove the tokens from the preserved-key scalars before re-running under strict policy.
 
 #### F3 (PR 3 of 3 — this PR)
+
 - **`catalogAddControl` now refuses a corrupt catalog with `VBA_CATALOG_CORRUPT`** instead of silently overwriting it with a one-control stub. The catalog read happens BEFORE the `dryRun` short-circuit, so corruption is visible in both `apply` and `dryRun`. **Behavior change**: any caller that previously got silent overwrites on a corrupt catalog now receives `{ ok: false, error: { code: "VBA_CATALOG_CORRUPT" } }` and the on-disk catalog is NOT modified. **Recovery**: inspect the catalog file at the path in the error message, restore from backup, or delete it to let the tool rebuild it on the next run. ENOENT (genuinely missing catalog) keeps existing behavior — the operation proceeds with an empty catalog.
 
 ### mcp-contract-safety (#621)
 
 #### F1 (PR 1a of 4 — this PR)
+
 - **`run_vba` / `dysflow_vba_execute` now default-deny** when no `allowedProcedures` is configured and `dryRun: true` is not passed. The MCP contract (`MCP_TOOL_CONTRACTS`) reclassifies both as `conditional-write` / `writeGate: "conditional"` with summaries that mention the allowlist and `dryRun`. The handler at `canonical-handlers.ts:ensureProcedureAllowed` refuses with `MCP_INPUT_INVALID` (text matching `/allowedProcedures|dryRun/`) when the call would otherwise run arbitrary compiled VBA. `dryRun: true` is the explicit escape hatch for unconfigured projects. `test_vba` contract metadata is also reclassified; runtime gate for `test_vba` lands in PR 1b.
 - **`AccessVbaRequest` gains `dryRun?: boolean`** (`src/core/contracts/index.ts`) — projects through `buildRunVbaRequest` (`alias-tools.ts`) and the modern handler. Schema exposes `dryRun: boolean` on both `VBA_EXECUTE_SCHEMA` (`dysflow-schemas.ts`) and the legacy `run_vba` schema (`vba-sync-schemas.ts`). Migration: agents that relied on implicit ad-hoc `run_vba` with no allowlist must either set `allowedProcedures` in `.dysflow/project.json` or pass `dryRun: true`. See `docs/mcp-examples.md` (updated separately) for the new pattern.
 
 #### F2 (PR 2 of 4)
+
 - **`dysflow_query_execute` write mode now accepts `allowTables` / `denyTables`** — same semantics as `exec_sql`. The `QUERY_EXECUTE_SCHEMA` advertises the fields (`src/adapters/mcp/schemas/dysflow-schemas.ts`) and the modern handler passes them through to `AccessQueryService.execute()` via the existing `...request` spread. The PowerShell layer (`scripts/dysflow-access-runner.ps1:1062-1072`) already enforces them for the legacy path; modern was just missing the schema declaration.
 - **`dysflow_access_cleanup` now passes through the full `CLEANUP_SCHEMA` surface** (`operationId` + `accessPath` + `force` + `projectId` + `contextId` + `backendPath` + `destinationRoot` + `projectRoot` + `timeoutMs` + `strictContext` + `expectedAccessPath` + `expectedProjectRoot` + `expectedDestinationRoot`). The previous bare cast at `tools.ts` silently dropped every field except the three required ones. Both `CLEANUP_SCHEMA` (modern) and the legacy `cleanup_access_operation` schema now declare the same optional surface; both handlers route through `buildCleanupRequest`, producing identical field sets. The core cleanup service does not yet enforce `strictContext` (forward-compat only — that ripples through `AccessOperationCleanupService.cleanup()` signature + `stdio.ts:243-255` + `access-operation-preflight.ts`; tracked as a follow-up). Additive — non-breaking.
 
 #### CI (PR 3 of 4)
+
 - **Release CI now fails when `title !== tag_name`** on `release: [created, edited]`. The new `.github/workflows/release-title-guard.yml` workflow asserts the invariant and reports both values on mismatch so a maintainer can re-set the release title in the GitHub UI without re-running the workflow. `release.yml` also passes `name: ${{ github.ref_name }}` to the `softprops/action-gh-release@v3` step so the published release's name field equals the tag by construction (defense-in-depth — the guard catches post-creation edits). Pinned by `test/quality-gates/release-title-guard.test.ts`.
 
 ### process-lifecycle-safety (#620)
 
 #### F2
+
 - **`dysflow_access_cleanup(force: true)` now refuses to kill a `running` operation whose owned PID is still alive (`CLEANUP_RUNNING_FORCE_REFUSED`).** Previously, `force: true` bypassed the running gate entirely, which violated the "this tier must not kill anything" rule for an operation that is still legitimately in flight (and can take minutes). Callers that relied on the old bypass must wait for natural completion or update the registry record to a terminal status first. Dead-PID running records (process already gone) remain cleanable.
 
 #### F3a
+
 - **Orphan kill at preflight sites (`scanAndCleanOrphans`, `retireUnownedRecord`) now revalidates the PID immediately before calling `processKiller.kill`.** Closes the TOCTOU race where a PID is recycled (killing an unrelated process) or the original process exits between scan and kill. If `processInspector.getProcess(pid)` returns `undefined`, the kill is suppressed and a warning diagnostic is recorded naming the PID. If the revalidation shows a different process (`name` mismatch or `startTime` mismatch), the kill is refused with a `CLEANUP_RACE_PID_REUSED` diagnostic embedded in `result.errors[].message`. Mirrors the pattern already used by `AccessOrphanCleanupService.cleanupOrphan` (`src/core/operations/access-orphan-cleanup.ts:124-141`).
 
 #### F3b
+
 - **`runWithAccessExecutionLock` now accepts an optional 6th parameter `onHeartbeatError`.** Production wiring (`AccessPowerShellRunner.run`) supplies an explicit sink that collects non-ENOENT heartbeat failures (e.g. `EPERM`, `EIO`) and surfaces them as warning `access.heartbeat` diagnostics on the returned `OperationResult`. ENOENT (lock already released) remains suppressed — that is the normal teardown race, not a failure. The default `onHeartbeatError` callback when the caller omits it is now a silent no-op; previously the default was a `console.debug` sink via `logSwallowedIoError` that nobody read. Callers that already pass an explicit callback are unaffected.
 
 ### runtime-path-safety (#619)
 
 #### F2
+
 - **`resolveExecutionTarget` branch 2 now propagates caller-supplied `backendPath`** instead of silently dropping it (#13228 family, #619).
 
 #### F3
+
 - **Empty-string caller overrides for `accessDbPath`/`backendPath`/`destinationRoot`/`projectRoot` are now treated as no override.** Previously `""` silently won the `??` precedence test, overwriting repo-config defaults. Callers relying on `""` as a fallback marker must now omit the field instead (#619).
 
 #### F4
-- **`export_all prune` no longer deletes legacy `.frm` orphan files.** The allow-list now exactly matches AGENTS.md: `.bas`/`.cls`/`.form.txt`/`.report.txt`. `.frm` (the legacy binary form format) is not in the managed allow-list and survives prune even when no matching VBE module exists (#619).
 
+- **`export_all prune` no longer deletes legacy `.frm` orphan files.** The allow-list now exactly matches AGENTS.md: `.bas`/`.cls`/`.form.txt`/`.report.txt`. `.frm` (the legacy binary form format) is not in the managed allow-list and survives prune even when no matching VBE module exists (#619).
 
 ## [v1.13.0] - 2026-07-01
 
 - chore(openspec): archive forms-ui-factory-slice-5-create-from-template - chore(sdd): apply-progress + tasks.md for slice 5 PR 3 ÔÇö 18/18 complete - feat(mcp): align parity registry + contract tests with new tool - docs(mcp): document create_form_from_template in README - chore(sdd): apply-progress + tasks.md for slice 5 PR 2 - test(integration): bench round-trip with injected {{FormName}} and {{TitleCaption}} tokens - feat(adapter): bench-cache-first path resolution and restore-on-failure for create-from-template - feat(mcp): register create_form_from_template with write gate - chore(sdd): apply-progress + tasks.md for slice 5 PR 1 - refactor(core): share preserved-metadata-key predicate with applyTokenMap - feat(core): add cloneFormFromTemplate + applyTokenMap (issue #618, slice 5 PR 1) - chore(openspec): scaffold slice 5 create-from-template change - feat(mcp-tools): expose serialize/deserialize for Forms IR (slice 3) - chore(openspec): archive forms-ui-factory-slice-4-mutation-primitives
-
 
 ## [v1.12.0] - 2026-06-30
 
@@ -2295,21 +2256,17 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 - chore: ignore generated form mutation artifact.
 - docs: add MCP real-world examples reference.
 
-
 ## [v1.11.3] - 2026-06-30
 
 - fix(vba-sync): place orphan CodeBehind marker after root End via Begin/End nesting
-
 
 ## [v1.11.2] - 2026-06-29
 
 - fix(e2e): detect unowned MSACCESS.EXE leaks via global count delta - chore(release): prepare v1.11.1 - chore(openspec): archive 23 stale SDD changes - docs(sdd): retroactive SDD for release-process-automation - chore: ignore .codegraph/ (codegraph MCP cache, not source) - test(quality-gates): pin every mcp-e2e suite contract the heavy battery would otherwise catch 30 minutes in - test(e2e): pin compile_vba expectation to the documented mojibake state - docs(sdd): close the loop on tdd-coverage-holes verify-report - feat(scripts): release-prepare.ps1 with CI-gating
 
-
 ## [v1.11.1] - 2026-06-29
 
 - chore(openspec): archive 23 stale SDD changes - docs(sdd): retroactive SDD for release-process-automation - chore: ignore .codegraph/ (codegraph MCP cache, not source) - test(quality-gates): pin every mcp-e2e suite contract the heavy battery would otherwise catch 30 minutes in - test(e2e): pin compile_vba expectation to the documented mojibake state - docs(sdd): close the loop on tdd-coverage-holes verify-report - feat(scripts): release-prepare.ps1 with CI-gating
-
 
 ## [v1.11.0] - 2026-06-29
 

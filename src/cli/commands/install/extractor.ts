@@ -198,8 +198,13 @@ async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promis
     path.join("docs", "diagnostics", "form-import-gate-failures.md"),
     path.join(runtimePaths.runtimeDir, "docs", "diagnostics", "form-import-gate-failures.md"),
   );
+  const piNativeGuide = await copyDocIfPresent(
+    packageRoot,
+    path.join("docs", "pi-native-integration.md"),
+    path.join(runtimePaths.runtimeDir, "docs", "pi-native-integration.md"),
+  );
   copiedFiles.push(
-    ...[errorCodes, hresultGuide, formImportGuide].filter(
+    ...[errorCodes, hresultGuide, formImportGuide, piNativeGuide].filter(
       (file): file is string => file !== undefined,
     ),
   );
@@ -262,7 +267,8 @@ export function createInstallReport(
     "Note:",
     "- Runtime docs were copied to INSTALL_DIR: README.md, CHANGELOG.md,",
     "  references/error-codes.md, docs/diagnostics/hresult-guide.md,",
-    "  and docs/diagnostics/form-import-gate-failures.md.",
+    "  docs/diagnostics/form-import-gate-failures.md, and",
+    "  docs/pi-native-integration.md.",
     `- MCP server command used in integrations: ${path.join(runtimeDir, "bin", "dysflow.cmd")}`,
     "- Re-run `dysflow install` to refresh runtime + integrations.",
     "- Reload your selected agents to activate the refreshed integration.",

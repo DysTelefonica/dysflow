@@ -1,6 +1,12 @@
 import { rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import {
+  capturePiIntegration,
+  reconcilePiIntegration,
+  restorePiIntegration,
+} from "./install/mcp-configurator.js";
+import { reconcilePiPackage } from "./install/pi-package-manager.js";
+import {
   ALL_AGENTS,
   fileExists,
   getHome,
@@ -59,10 +65,54 @@ export async function handleUninstallCommand(
 
   const env = context?.env ?? process.env;
   const home = getHome(env);
+  const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
+  if ((await fileExists(runtimeDir)) && !isSafeToDelete(runtimeDir, env)) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: `Aborted: Unsafe runtime directory path: ${runtimeDir}`,
+    };
+  }
 
-  // Revert agent configurations
+  // Reconcile Pi's MCP entry and owned package as one transaction. MCP goes
+  // first so a configuration failure cannot remove the package prematurely;
+  // package failure restores the exact previous MCP bytes.
   const agentConfigPaths = resolveAgentConfigPaths(home);
+  const piSnapshot = await capturePiIntegration(agentConfigPaths.pi);
+  try {
+    await reconcilePiIntegration({
+      mcpConfigPath: agentConfigPaths.pi,
+      commandPath: path.join(runtimeDir, "bin", "dysflow.cmd"),
+      mode: "remove",
+    });
+    await reconcilePiPackage({
+      settingsPath: agentConfigPaths.piSettings,
+      runtimeDir,
+      env,
+      mode: "remove",
+      runPiCommand: context?.piPackageCommandRunner,
+    });
+  } catch (error) {
+    try {
+      await restorePiIntegration(agentConfigPaths.pi, piSnapshot);
+    } catch {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "Pi uninstall failed and Pi configuration rollback was incomplete.",
+      };
+    }
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  // Revert other agent configurations. Their historical best-effort cleanup
+  // behavior remains unchanged.
   for (const agent of ALL_AGENTS) {
+    if (agent === "pi") continue;
     try {
       await removeAgentConfig(agent, agentConfigPaths);
     } catch {
@@ -71,15 +121,7 @@ export async function handleUninstallCommand(
   }
 
   // Delete resolved runtime directory recursively if it exists
-  const runtimeDir = resolveRuntimeDir(parsed.options.runtimeDir, env);
   if (await fileExists(runtimeDir)) {
-    if (!isSafeToDelete(runtimeDir, env)) {
-      return {
-        exitCode: 1,
-        stdout: "",
-        stderr: `Aborted: Unsafe runtime directory path: ${runtimeDir}`,
-      };
-    }
     await rm(runtimeDir, { recursive: true, force: true });
   }
 

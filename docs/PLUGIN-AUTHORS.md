@@ -23,17 +23,23 @@ plugin/
 │   ├── .mcp.json
 │   ├── hooks/hooks.json
 │   └── scripts/
-└── opencode/
-    ├── dysflow.ts
-    └── .mcp.json
+├── opencode/
+│   ├── dysflow.ts
+│   └── .mcp.json
+└── pi/
+    ├── index.ts
+    ├── native-tool.ts
+    ├── dysflow-mcp-client.ts
+    ├── dysflow-tool-chrome.ts
+    └── package.json
 skills/
 └── dysflow-protocol/
     └── SKILL.md
 ```
 
 Claude Code and Codex use JSON manifests plus shell hooks. OpenCode uses a
-TypeScript adapter. All three connect to the same `dysflow` MCP server and
-share `skills/dysflow-protocol/SKILL.md`.
+TypeScript adapter. Pi uses a native package. Every integration connects to the
+public `dysflow mcp` stdio boundary and shares the bundled operating skills.
 
 ## Manifest and namespace conventions
 
@@ -77,6 +83,26 @@ connections. The CLI installer may instead write the managed `dysflow.cmd`
 launcher with `args = ["mcp"]`; both forms target the same runtime. Use the
 installer-owned form for machine setup and the bundled `npx` form inside a
 portable plugin.
+
+## Pi Package Ownership
+
+`plugin/pi` is the source for public package `@aroman22/dysflow-pi`. It owns one
+native facade, the public MCP SDK client, and compact rendering. It does not own
+runtime schemas, Pi package settings, or an MCP manifest.
+
+`src/cli/commands/install/pi-package-manager.ts` owns package-manager delegation
+and ownership records. `mcp-configurator.ts` owns the separate global absolute-
+launcher MCP entry. The package is not copied into the Dysflow runtime.
+
+Use the [Pi-native integration guide](./pi-native-integration.md) for the complete
+operator, release, sandbox, versioning, and troubleshooting contract.
+
+## Contributor Checklist
+
+- [ ] Preserve the single native tool name and public MCP boundary.
+- [ ] Keep `pi.mcp` and `mcp.json` absent from the package.
+- [ ] Keep package, root release, installer, and documentation versions aligned.
+- [ ] Verify package commands through an injected runner and temporary roots.
 
 ## Hook events
 
