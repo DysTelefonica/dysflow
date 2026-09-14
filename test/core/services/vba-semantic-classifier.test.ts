@@ -1294,6 +1294,14 @@ describe("encodingOnly — lossy out-of-codepage replacement", () => {
     // reads comment bodies at runtime. Marked with an explicit testing-
     // philosophy NORTH comment per the contract that v1→v2 changes must be
     // honest about the new verdict, not silently rewritten.
+    //
+    // FURTHER REVISION (Refs #1443, AGENTS.md "string-aware folding"): the
+    // comment-body content itself is runtime-visible per the AGENTS.md
+    // contract — `' Version 1` vs `' Version 2` is a real content drift,
+    // not a comment-only decoration. The classifier therefore surfaces this
+    // as `bothChanged` and recommends `manual_merge`. The classifier still
+    // does NOT classify it as `encodingOnly` (the original assertion of this
+    // test), which is the invariant this test is here to protect.
     const src = "Option Explicit\n' Version 1\nPublic Sub DoThing()\nEnd Sub";
     const bin = "Option Explicit\n' Version 2\nPublic Sub DoThing()\nEnd Sub";
 
@@ -1305,9 +1313,12 @@ describe("encodingOnly — lossy out-of-codepage replacement", () => {
     });
 
     expect(result.classification).not.toBe("encodingOnly");
-    // WU-3 v2 verdict: pure comment diffs are now `commentOnly` (non-actionable).
-    expect(result.classification).toBe("commentOnly");
-    expect(result.actionable).toBe(false);
+    // AGENTS.md string-aware folding: comment bodies are runtime-visible, so
+    // a body content diff is actionable — both sides have unique functional
+    // lines (the two distinct comment lines) with no LCS match.
+    expect(result.classification).toBe("bothChanged");
+    expect(result.actionable).toBe(true);
+    expect(result.recommendation).toBe("manual_merge");
   });
 });
 
@@ -2062,7 +2073,12 @@ describe("neutralizeLossyEncoding (string-aware, only neutralizer in src/)", () 
 // ---------------------------------------------------------------------------
 
 describe("commentOnly — whole-line ' or Rem comment content (#1724 WU-3)", () => {
-  it("classifies a case-only difference inside a ' comment as commentOnly", () => {
+  it("classifies a case-only difference inside a ' comment as bothChanged (AGENTS.md string-aware folding, Refs #1443)", () => {
+    // AGENTS.md "string-aware folding" rule: comment bodies are runtime-
+    // visible, so a case-only difference inside a `' ...` comment must NOT
+    // collapse to `commentOnly`. Both sides have unique functional lines
+    // (the two distinct comment lines) with no LCS match, so the verdict is
+    // `bothChanged` with a `manual_merge` recommendation.
     const src =
       'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\n\' Business Note\n';
     const bin =
@@ -2073,12 +2089,15 @@ describe("commentOnly — whole-line ' or Rem comment content (#1724 WU-3)", () 
       fileType: "bas",
       mode: "semantic",
     });
-    expect(result.classification).toBe("commentOnly");
-    expect(result.actionable).toBe(false);
-    expect(result.recommendation).toBe("no_action");
+    expect(result.classification).toBe("bothChanged");
+    expect(result.actionable).toBe(true);
+    expect(result.recommendation).toBe("manual_merge");
   });
 
-  it("classifies a Rem-content difference as commentOnly", () => {
+  it("classifies a Rem-content difference as bothChanged (AGENTS.md string-aware folding, Refs #1443)", () => {
+    // AGENTS.md "string-aware folding" rule: `Rem ...` comment bodies are
+    // runtime-visible too. The body text differs, so the diff cannot collapse
+    // to `commentOnly`; the classifier surfaces it as `bothChanged`.
     const src =
       'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\nRem Old note\n';
     const bin =
@@ -2089,11 +2108,15 @@ describe("commentOnly — whole-line ' or Rem comment content (#1724 WU-3)", () 
       fileType: "bas",
       mode: "semantic",
     });
-    expect(result.classification).toBe("commentOnly");
-    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("bothChanged");
+    expect(result.actionable).toBe(true);
+    expect(result.recommendation).toBe("manual_merge");
   });
 
-  it("classifies a multi-line comment-only diff as commentOnly", () => {
+  it("classifies a multi-line comment-only diff as bothChanged (AGENTS.md string-aware folding, Refs #1443)", () => {
+    // AGENTS.md "string-aware folding" rule: comment bodies are runtime-
+    // visible, so `' Body` vs `' Different Body` is a real content drift,
+    // not a formatting/cosmetic change. The diff is actionable.
     const src = "Attribute VB_Name = \"M\"\n' Header\n' Body\nPublic Sub Run()\nEnd Sub\n";
     const bin =
       "Attribute VB_Name = \"M\"\n' Header\n' Different Body\nPublic Sub Run()\nEnd Sub\n";
@@ -2103,8 +2126,9 @@ describe("commentOnly — whole-line ' or Rem comment content (#1724 WU-3)", () 
       fileType: "bas",
       mode: "semantic",
     });
-    expect(result.classification).toBe("commentOnly");
-    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("bothChanged");
+    expect(result.actionable).toBe(true);
+    expect(result.recommendation).toBe("manual_merge");
   });
 });
 
@@ -2158,7 +2182,16 @@ describe("statementBoundaryOnly — colon vs newline (#1724 WU-3)", () => {
 });
 
 describe("nonActionableMixed — multi-family (#1724 WU-3)", () => {
-  it("classifies case + comment combined as nonActionableMixed", () => {
+  it("classifies identifier case + comment-body content drift as bothChanged (Refs #1443)", () => {
+    // Original v2 contract (Refs #1724 WU-3): identifier case + comment
+    // case together equalize only under two normalizers and collapse to
+    // `nonActionableMixed`. AGENTS.md "string-aware folding" rule (Refs
+    // #1443): comment-body content is runtime-visible, so the comment-body
+    // part of the diff is now actionable. The identifier case is still
+    // non-actionable (`caseOnly`), but the comment-body drift keeps the
+    // pair from collapsing to `nonActionableMixed`; both sides have unique
+    // functional lines (the distinct comment lines + the distinct identifier
+    // names), so the verdict is `bothChanged` with `manual_merge`.
     const src =
       'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub calculate()\nEnd Sub\n\' NOTE\n';
     const bin =
@@ -2169,7 +2202,8 @@ describe("nonActionableMixed — multi-family (#1724 WU-3)", () => {
       fileType: "bas",
       mode: "semantic",
     });
-    expect(result.classification).toBe("nonActionableMixed");
-    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("bothChanged");
+    expect(result.actionable).toBe(true);
+    expect(result.recommendation).toBe("manual_merge");
   });
 });
