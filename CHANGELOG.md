@@ -9,6 +9,7 @@
 ### Added
 
 - `feat(vba-verify)`: scaffold pure snapshot/canonicalize/normalize-reasons types (Refs #1724, WU-3). Adds `src/core/services/vba-source-snapshot.ts`, `src/core/services/canonicalize-vba.ts`, and `src/core/services/normalize-reasons.ts`, implementing the 13-step canonicalization order. No runtime behavior change for the existing single-flight `verify_code`.
+- `feat(vba-sync)`: emit per-artifact `export-manifest.json` sidecar after every non-readOnly export (Refs #1724, WU-4). After each `export_modules` / `export_all` apply run, Dysflow writes `<destinationRoot>/export-manifest.json` with one record per emitted artifact: `{ moduleName, fileType, relativePath, codec, sha256, byteLength }`. `codec` is BOM-driven (`utf-8` / `utf-16le` / `utf-16be` / `unsupported` for UTF-32 BOMs); `sha256` covers the raw bytes including the BOM. ReadOnly / plan mode skips emission (TODO noted for planned-manifest parity). Pester behavioral tests at `scripts/tests/dysflow-vba-manager-export-manifest.Tests.ps1` cover UTF-8 BOM (existing fixture), UTF-16LE, and UTF-32 BOM rejection with AST-loaded helpers and test-owned temp dirs (no live COM).
 
 ## [v4.3.2] - 2026-09-02
 

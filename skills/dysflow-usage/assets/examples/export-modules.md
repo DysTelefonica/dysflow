@@ -60,6 +60,10 @@ reparse-point destinations that canonicalize elsewhere also fail closed.
 
 Read `resolvedDestinationRoot`. With `verbose:true`, each entry includes binary/file snapshots and the semantic actionability verdict.
 
+## Sidecar manifest (WU-4, Refs #1724)
+
+Every non-readOnly apply run writes `<destinationRoot>/export-manifest.json` with one record per emitted artifact: `{ moduleName, fileType, relativePath, codec, sha256, byteLength }`. `codec` is BOM-driven (`utf-8` / `utf-16le` / `utf-16be` / `unsupported`); `sha256` covers the raw bytes including the BOM. The sidecar persists before the final `Write-DysflowResult` so any caller reading the action envelope can also expect the file on disk. ReadOnly / plan mode skips emission (planned-manifest parity is a TODO in the script).
+
 ## Common errors
 
 | Code | Description | Fix |

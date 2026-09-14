@@ -831,6 +831,144 @@ function Convert-Utf8ToAnsiTempFile {
     [System.IO.File]::WriteAllText($TempPath, $text, $ansi)
 }
 
+# ========================================================================
+# WU-4 export-manifest (Refs #1724) — per-artifact record + manifest writer
+# ========================================================================
+#
+# These helpers are PURE-ADDITIVE. They do not modify any existing export
+# logic; they only observe artifacts that Export-VbaModule has already
+# written to disk. The companion `Invoke-ExportAction` path emits a single
+# `$ModulesPath/export-manifest.json` file alongside the per-module artifacts
+# after the export loop completes.
+#
+# Codec detection order matches the canonicalizer contract used by
+# vba-source-snapshot.ts (BOM-driven, not heuristic):
+#   - EF BB BF               → utf-8
+#   - FF FE (not 00 00 ...)  → utf-16le
+#   - FE FF                  → utf-16be
+#   - FF FE 00 00 / 00 00 FE FF → "unsupported" (UTF-32 BOMs)
+#   - no BOM                 → "utf-8" (source-default fallback)
+
+function Get-ExportArtifactRecord {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    $fileInfo = Get-Item -LiteralPath $Path
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $byteLength = $bytes.LongLength
+
+    # BOM-driven codec detection.
+    $codec = "utf-8"
+    if ($byteLength -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $codec = "utf-8"
+    } elseif ($byteLength -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+        if ($byteLength -ge 4 -and $bytes[2] -eq 0x00 -and $bytes[3] -eq 0x00) {
+$codec = "unsupported"
+        } else {
+$codec = "utf-16le"
+        }
+    } elseif ($byteLength -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+        if ($byteLength -ge 4 -and $bytes[2] -eq 0x00 -and $bytes[3] -eq 0x00) {
+$codec = "unsupported"
+        } else {
+$codec = "utf-16be"
+        }
+    }
+
+    $sha256 = ""
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+$hashBytes = $sha.ComputeHash($bytes)
+$sb = New-Object System.Text.StringBuilder(64)
+foreach ($b in $hashBytes) { [void]$sb.AppendFormat("{0:x2}", $b) }
+$sha256 = $sb.ToString()
+        } finally {
+$sha.Dispose()
+        }
+    } catch {
+        # SHA-256 failure must not break the manifest writer — leave the hash
+        # empty and let downstream consumers detect it via `codec == "unsupported"`
+        # or a length-0 sha256 field. Real Access exports never hit this branch.
+        $sha256 = ""
+    }
+
+    $fileName = Split-Path -Leaf -Path $Path
+    $lower = $fileName.ToLowerInvariant()
+    $fileType = $null
+    $moduleName = $null
+    if ($lower.EndsWith(".form.txt")) {
+        $fileType = "form.txt"
+        $moduleName = $fileName.Substring(0, $fileName.Length - ".form.txt".Length)
+    } elseif ($lower.EndsWith(".report.txt")) {
+        $fileType = "report.txt"
+        $moduleName = $fileName.Substring(0, $fileName.Length - ".report.txt".Length)
+    } else {
+        $ext = [System.IO.Path]::GetExtension($lower)
+        if ($ext -eq ".bas") {
+$fileType = "bas"
+        } elseif ($ext -eq ".cls") {
+$fileType = "cls"
+        } elseif ($ext -eq ".frm") {
+$fileType = "frm"
+        }
+        if ($null -ne $fileType) {
+$moduleName = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+        }
+    }
+
+    if ($null -eq $fileType -or $null -eq $moduleName) {
+        return $null
+    }
+
+    # relativePath is computed against $Root, normalized to forward slashes
+    # so cross-platform manifest consumers (TS snapshot parsers) see a single
+    # separator regardless of the host OS.
+    $relativePath = $null
+    try {
+        $resolvedRoot = (Resolve-Path -LiteralPath $Root -ErrorAction SilentlyContinue).Path
+        if (-not $resolvedRoot) { $resolvedRoot = $Root }
+        $resolvedFile = (Resolve-Path -LiteralPath $Path).Path
+        $rel = [System.IO.Path]::GetRelativePath($resolvedRoot, $resolvedFile)
+        $relativePath = ($rel -replace '\\', '/')
+    } catch {
+        $relativePath = $fileName
+    }
+
+    return [ordered]@{
+        moduleName   = $moduleName
+        fileType     = $fileType
+        relativePath = $relativePath
+        codec        = $codec
+        sha256       = $sha256
+        byteLength   = $byteLength
+    }
+}
+
+function Write-ExportManifest {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Records,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
+
+    $manifestPath = Join-Path -Path $Root -ChildPath "export-manifest.json"
+    $payload = [ordered]@{
+        generatedAt = (Get-Date).ToUniversalTime().ToString("o")
+        root        = $Root
+        artifacts   = @($Records | ForEach-Object { $_ })
+    }
+    $json = $payload | ConvertTo-Json -Depth 6
+    Write-Utf8NoBom -Path $manifestPath -Text $json
+}
+
 # issue #743: ensure that form `.cls` code-behind files emitted by Export-VbaModule
 # always carry `Attribute VB_Name = "<FormName>"` as their first non-blank line.
 # Without it, Access interprets the module as a placeholder and produces
@@ -2389,6 +2527,7 @@ function Export-VbaModule {
     $component = $null
     $tmp = $null
     $finalPath = $null
+    $clsPath = $null
     $binaryText = $null
     $verboseCodeModule = $null
 
@@ -2509,6 +2648,26 @@ function Export-VbaModule {
                 # re-importable as the canonical form (not a Form_TempSccObjN).
                 $codeLines = Ensure-VbNameAttributeAtTop -Text $codeLines -ModuleName $actualName
                 Write-Utf8NoBom -Path $clsPath -Text $codeLines
+            }
+        }
+
+        # WU-4 export-manifest (Refs #1724) — record the primary artifact.
+        # Hoisted AFTER every write path so it observes the file the exporter
+        # actually persisted to disk. Verbose-mode `return` below intentionally
+        # skips this hook because verbose callers already record the bytes they
+        # care about; production exports always reach this point.
+        if (-not $script:ExportVerbose -and $finalPath -and (Test-Path -LiteralPath -Path $finalPath)) {
+            $record = Get-ExportArtifactRecord -Path $finalPath -Root $ModulesPath
+            if ($null -ne $record) {
+                if ($null -eq $script:ExportManifest) { $script:ExportManifest = New-Object System.Collections.Generic.List[object] }
+                [void]$script:ExportManifest.Add($record)
+            }
+        }
+        if (-not $script:ExportVerbose -and $clsPath -and (Test-Path -LiteralPath -Path $clsPath)) {
+            $record = Get-ExportArtifactRecord -Path $clsPath -Root $ModulesPath
+            if ($null -ne $record) {
+                if ($null -eq $script:ExportManifest) { $script:ExportManifest = New-Object System.Collections.Generic.List[object] }
+                [void]$script:ExportManifest.Add($record)
             }
         }
 
@@ -4880,6 +5039,11 @@ function Invoke-ExportAction {
     $vbProject  = $Session.VbProject
     $components = $vbProject.VBComponents
 
+    # WU-4 export-manifest (Refs #1724) — reset the in-memory accumulator so a
+    # second Invoke-ExportAction call in the same Pester Runspace / MCP session
+    # does not inherit stale entries from a previous export.
+    $script:ExportManifest = New-Object System.Collections.Generic.List[object]
+
     $targets = @()
     $warnings = @()
     if ($NormalizedModules.Count -gt 0) {
@@ -5090,6 +5254,21 @@ function Invoke-ExportAction {
     }
     if ($warnings.Count -gt 0) {
         $exportResult["warnings"] = $warnings
+    }
+    # WU-4 export-manifest (Refs #1724) — persist the per-artifact manifest
+    # BEFORE the final Write-DysflowResult so any caller that reads the
+    # action envelope can also expect the sidecar file to exist on disk.
+    # TODO(WU-4): the -ReadOnly / plan-mode branch currently skips manifest
+    # emission because Export-VbaModule never writes the underlying artifact
+    # files when readOnly is true, so the manifest would be empty. A future
+    # pass could emit a planned-manifest with the targets we WOULD write so
+    # the TS-side snapshot reader has the same shape under plan mode.
+    if (-not $ReadOnly -and $null -ne $script:ExportManifest -and $script:ExportManifest.Count -gt 0) {
+        try {
+        Write-ExportManifest -Records $script:ExportManifest -Root $ModulesPath
+        } catch {
+        Write-Status -Message ("WARN: No se pudo escribir export-manifest.json en '{0}': {1}" -f $ModulesPath, $_.Exception.Message) -Color Yellow
+        }
     }
     Write-DysflowResult -Result $exportResult -Depth 4
     if ($ReadOnly) {
