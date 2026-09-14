@@ -2656,14 +2656,14 @@ function Export-VbaModule {
         # actually persisted to disk. Verbose-mode `return` below intentionally
         # skips this hook because verbose callers already record the bytes they
         # care about; production exports always reach this point.
-        if (-not $script:ExportVerbose -and $finalPath -and (Test-Path -LiteralPath -Path $finalPath)) {
+        if (-not $script:ExportVerbose -and $finalPath -and (Test-Path -LiteralPath $finalPath)) {
             $record = Get-ExportArtifactRecord -Path $finalPath -Root $ModulesPath
             if ($null -ne $record) {
                 if ($null -eq $script:ExportManifest) { $script:ExportManifest = New-Object System.Collections.Generic.List[object] }
                 [void]$script:ExportManifest.Add($record)
             }
         }
-        if (-not $script:ExportVerbose -and $clsPath -and (Test-Path -LiteralPath -Path $clsPath)) {
+        if (-not $script:ExportVerbose -and $clsPath -and (Test-Path -LiteralPath $clsPath)) {
             $record = Get-ExportArtifactRecord -Path $clsPath -Root $ModulesPath
             if ($null -ne $record) {
                 if ($null -eq $script:ExportManifest) { $script:ExportManifest = New-Object System.Collections.Generic.List[object] }

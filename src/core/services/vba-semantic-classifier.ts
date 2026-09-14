@@ -248,6 +248,37 @@ export function stripCommentLines(text: string): string {
 }
 
 /**
+ * Mirror image of `stripCommentLines`: keep ONLY whole-line `'` and `Rem`
+ * comment lines verbatim (case-sensitive) and replace every other line —
+ * including blank lines — with `""`. Used by the `commentOnly` gate to
+ * compare the verbatim content of comment bodies on both sides.
+ *
+ * Per the AGENTS.md "string-aware folding" rule, comment bodies are
+ * runtime-visible, so any case drift or other content drift inside them
+ * MUST stay actionable and prevent a collapse to `commentOnly`. Pair
+ * with `stripCommentLines`: the latter equalizes the non-comment
+ * portions, this one equalizes the comment portions; both must match
+ * before the diff can collapse to the non-actionable `commentOnly`
+ * bucket.
+ */
+export function extractCommentLines(text: string): string {
+  const lines = text.split("\n");
+  let changed = false;
+  const out: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("'") || /^Rem\b/i.test(trimmed)) {
+      out.push(raw);
+      changed = true;
+      continue;
+    }
+    if (raw !== "") changed = true;
+    out.push("");
+  }
+  return changed ? out.join("\n") : text;
+}
+
+/**
  * Join VBA line continuations (`<spaces>_` at the end of a line) into the
  * next line, replacing the underscore + line break with a single space.
  * Used to detect "same code via continuation reflow" cases where source
@@ -1422,15 +1453,27 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // When the comment strip does NOT equalize pre-attribute / pre-case but the
   // FULL pipeline (case + comment + …) does, the existing Step 6.5
   // `nonActionableMixed` check catches it.
+  //
+  // String-aware folding (AGENTS.md "VBA semantic diff" section): comment
+  // bodies are runtime-visible, so a case-only or other content drift inside
+  // them MUST stay actionable. We equalize the comment bodies themselves
+  // through `extractCommentLines` and refuse to collapse when their verbatim
+  // content differs — the diff falls through to the functional pipeline and
+  // is reported as `sourceNewer` / `binaryNewer` / `bothChanged`.
   // -------------------------------------------------------------------------
   {
     const srcComments = stripCommentLines(srcNormWs);
     const binComments = stripCommentLines(binNormWs);
     if (srcComments === binComments) {
-      return nonActionable(
-        "commentOnly",
-        "texts differ only in comment body content (whole-line ' or Rem comments)",
-      );
+      if (extractCommentLines(srcNormWs) === extractCommentLines(binNormWs)) {
+        return nonActionable(
+          "commentOnly",
+          "texts differ only in comment body content (whole-line ' or Rem comments)",
+        );
+      }
+      // Comment-body content drifts (e.g. `' Important` vs `' IMPORTANT`):
+      // runtime-visible per AGENTS.md, do NOT collapse — fall through to
+      // the functional diff so the change is reported as actionable.
     }
   }
 
@@ -1500,13 +1543,30 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   srcFull = normalizeKnownOptionalDefaultArguments(srcFull);
   binFull = normalizeKnownOptionalDefaultArguments(binFull);
 
+  // Capture verbatim comment-body content BEFORE the comment strip so the
+  // pipeline can refuse to absorb a runtime-visible comment-body drift.
+  // AGENTS.md "string-aware folding" rule: comment bodies are runtime-visible,
+  // so a case-only or other content drift inside them must NOT be silently
+  // absorbed by the comment-strip step (or by the encodingOnly guard below).
+  const srcCommentsVerbatim = extractCommentLines(srcFull);
+  const binCommentsVerbatim = extractCommentLines(binFull);
+  const commentBodiesDiffer = srcCommentsVerbatim !== binCommentsVerbatim;
+
   // Strip whole-line `'` and `Rem` comments so a comment-body diff that only
   // surfaces after case-fold can still collapse to `nonActionableMixed` here.
   // The earlier comment-strip gate (Step 4.6) catches single-family diffs;
   // this catch-all ensures mixed diffs (case + comment, etc.) that needed
   // case-fold to make the comment difference observable also equalize.
-  srcFull = stripCommentLines(srcFull);
-  binFull = stripCommentLines(binFull);
+  //
+  // Skip the strip when verbatim comment bodies actually differ: applying
+  // it would absorb a runtime-visible content change into the equalization
+  // (both `nonActionableMixed` below and the encodingOnly guard downstream
+  // would then misclassify the diff as non-actionable). The diff falls
+  // through to the functional pipeline and is reported as actionable.
+  if (!commentBodiesDiffer) {
+    srcFull = stripCommentLines(srcFull);
+    binFull = stripCommentLines(binFull);
+  }
 
   srcFull = foldInterTokenWhitespace(srcFull);
   binFull = foldInterTokenWhitespace(binFull);
@@ -1522,6 +1582,10 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   // mixed bucket per the DESIGN "non-actionable category and reason
   // contract" table. The single-category detectors above remain the
   // preferred path so the common cases stay atomic and grep-friendly.
+  //
+  // The string-aware guard above skipped the comment-strip when comment
+  // bodies differ, so a comment-body drift cannot reach this check and be
+  // misclassified as `nonActionableMixed`.
   //
   // This check MUST run before the encodingOnly guard below — once the
   // pipeline has equalized the texts, the lossy-neutralize check would also
