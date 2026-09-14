@@ -4980,6 +4980,10 @@ Describe "export_modules_succeeds_against_form_with_anomalous_module_name" {
         function script:Ensure-CodeBehindFormVbName { param($Text, $ModuleName) $Text }
         function script:Ensure-VbNameAttributeAtTop { param($Text, $ModuleName) "Attribute VB_Name = `"$ModuleName`"`r`n$Text" }
         function script:Write-Utf8NoBom { param($Path, $Text) [System.IO.File]::WriteAllText($Path, $Text) }
+        # The AST harness extracts only the two functions under test. Keep the
+        # manifest side effect out of this identity-focused fixture while
+        # satisfying Export-VbaModule's post-write helper dependency.
+        function script:Get-ExportArtifactRecord { param($Path, $Root) return $null }
     }
 
     BeforeEach {
