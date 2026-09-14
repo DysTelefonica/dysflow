@@ -10,6 +10,7 @@
  */
 
 import { FORM_NOISE_KEYS } from "./form-noise-keys.js";
+import type { NormalizationReason } from "./normalize-reasons.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -23,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-08-28.r7-indentation-is-whitespace";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-09-14.r8-verify-code-v2-categories";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -32,6 +33,10 @@ export type VbaSemanticCategory =
   | "caseOnly" // differ only by identifier/keyword casing (VBA is case-insensitive)
   | "formSerializationOnly" // differ only by stripped form/report noise sections
   | "encodingOnly" // differ only by encoding mojibake or lossy out-of-codepage replacement
+  | "commentOnly" // differ only by comment body content (incl. Rem + case-only inside comments)
+  | "continuationOnly" // differ only by line-continuation reflow (`_` + EOL)
+  | "statementBoundaryOnly" // differ only by colon-separated vs newline-separated statements
+  | "nonActionableMixed" // differ in 2+ distinct non-actionable families (e.g. case + whitespace)
   | "sourceNewer" // functional change, only source has unique functional lines
   | "binaryNewer" // functional change, only binary has unique functional lines
   | "bothChanged"; // functional change on both sides
@@ -51,6 +56,15 @@ export interface SemanticClassification {
   recommendation: VbaRecommendation;
   /** true only for sourceNewer, binaryNewer, bothChanged */
   actionable: boolean;
+  /**
+   * Ordered list of `NormalizationReason` entries the classifier attributed
+   * to this verdict. Empty for actionable categories and for `matched`;
+   * a non-empty list is the canonicalizer-side paper trail explaining
+   * WHY the pair was classified non-actionable. Populated by
+   * `selectNormalizationReasons` for the hand-tuned static map; the
+   * canonicalizer may extend it later without changing the surface.
+   */
+  normalizationReasons?: readonly NormalizationReason[];
 }
 
 export interface ClassifyVbaPairInput {
@@ -172,6 +186,261 @@ export function stripAttributeLines(text: string, fileType: string, keepVbName =
 export function extractVbName(text: string): string | null {
   const match = text.match(/^\s*Attribute VB_Name\s*=\s*"([^"]*)"/m);
   return match ? (match[1] ?? null) : null;
+}
+
+/**
+ * Case-fold whole-line `'` and `Rem` comments in a VBA source text, leaving
+ * the executable content untouched. Used by the classifier to detect
+ * "comment text differs only in case" diffs and emit `commentOnly` — the
+ * VBE preserves comment bodies verbatim, and a case-only difference inside
+ * a comment never reaches runtime, so it is non-functional.
+ *
+ * Pure: no I/O. The no-op case (no comment lines) is the fast path.
+ * Comment text is replaced with its lower-cased form; executable content
+ * is unchanged. Pair this with `stripCommentLines` to detect any
+ * comment-body diff; this helper exists for the case-only subset so the
+ * existing "real ASCII change in a comment is functional" contract still
+ * holds.
+ */
+export function caseFoldCommentLines(text: string): string {
+  const lines = text.split("\n");
+  let changed = false;
+  const out: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (trimmed === "" || trimmed.startsWith("'") || /^Rem\b/i.test(trimmed)) {
+      const folded = raw.toLowerCase();
+      if (folded !== raw) changed = true;
+      out.push(folded);
+      continue;
+    }
+    out.push(raw);
+  }
+  return changed ? out.join("\n") : text;
+}
+
+/**
+ * Strip comment-only physical lines from a VBA source text, leaving the
+ * executable content untouched. Covers both the `'` single-quote line
+ * comment and the `Rem` line comment (case-insensitive). Block comments
+ * don't exist in VBA. Trailing in-line comments after code are NOT
+ * stripped — only whole comment lines are.
+ *
+ * Used internally to detect "comment is the SOLE difference" — the
+ * classifier tracks whether this strip equalized the texts and, if so,
+ * whether other non-actionable normalizers also contributed before
+ * collapsing to `commentOnly` or `nonActionableMixed`.
+ */
+export function stripCommentLines(text: string): string {
+  const lines = text.split("\n");
+  let changed = false;
+  const out: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (trimmed === "" || trimmed.startsWith("'") || /^Rem\b/i.test(trimmed)) {
+      if (raw !== "") changed = true;
+      out.push("");
+      continue;
+    }
+    out.push(raw);
+  }
+  return changed ? out.join("\n") : text;
+}
+
+/**
+ * Join VBA line continuations (`<spaces>_` at the end of a line) into the
+ * next line, replacing the underscore + line break with a single space.
+ * Used to detect "same code via continuation reflow" cases where source
+ * splits an expression across physical lines and binary keeps it on one.
+ *
+ * Per VBA grammar, a line continuation is zero or more spaces followed by
+ * a single underscore at the very end of the physical line. We only fold
+ * continuations between non-blank lines; a continuation that lands on a
+ * blank line is reported as `INVALID_CONTINUATION` elsewhere and never
+ * reaches this normalizer.
+ */
+export function joinLineContinuations(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let changed = false;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (/[ \t]+_$/.test(line) && i + 1 < lines.length) {
+      const before = line.replace(/[ \t]+_$/, "");
+      const next = lines[i + 1] ?? "";
+      out.push(`${before} ${next}`);
+      i += 2;
+      changed = true;
+      continue;
+    }
+    out.push(line);
+    i += 1;
+  }
+  return changed ? out.join("\n") : text;
+}
+
+/**
+ * Normalize colon-separated statement boundaries to newline-separated
+ * boundaries (and vice versa). Used to absorb presentation-only reflow
+ * where source puts `Dim a: Dim b: a = 1: b = 2` on one logical line and
+ * binary writes four physical lines. Safe for VBA code modules only —
+ * form/report serialization and strings/comment bodies are untouched.
+ *
+ * Safety guards: a `:=` (named-argument separator, used in `Call Foo(a:=1)`)
+ * must NEVER be split; a date literal `12:34:56` must NEVER be split. The
+ * rule is conservative: we only split a top-level `:` that is OUTSIDE
+ * string literals and OUTSIDE `:=` sequences. The implementation walks
+ * each character with a tiny parser state machine.
+ */
+export function normalizeStatementBoundaries(text: string, fileType: string): string {
+  if (!CODE_FILE_TYPES.has(fileType)) return text;
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let changed = false;
+  for (const line of lines) {
+    const normalized = splitStatementBoundaryColons(line);
+    if (normalized.length > 1) {
+      changed = true;
+      out.push(...normalized);
+      continue;
+    }
+    out.push(line);
+  }
+  return changed ? out.join("\n") : text;
+}
+
+/**
+ * Split a single physical line on top-level `:` characters, returning
+ * the resulting fragments. A `:` preceded by `=` (i.e. `:=`) is preserved.
+ * A `:` inside a double-quoted string is preserved. Returns `[line]` when
+ * no split was possible so callers can fast-path.
+ */
+function splitStatementBoundaryColons(line: string): string[] {
+  // Capture the leading whitespace so every emitted fragment starts with
+  // the SAME indent as the original line. Without this, `Dim a: Dim b` splits
+  // to `Dim a` and ` Dim b` — the leading space of the second fragment leaks
+  // from the `:` position, not the original indent. When the comparison is
+  // a binary line written on its own (`    Dim b`) the two leading-whitespace
+  // counts differ and the equalization fails for no semantic reason.
+  const leadingWsMatch = /^[ \t]*/.exec(line);
+  const leadingWs = leadingWsMatch ? leadingWsMatch[0] : "";
+  const body = line.slice(leadingWs.length);
+  const result: string[] = [];
+  let current = leadingWs;
+  let inString = false;
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i] ?? "";
+    if (inString) {
+      current += ch;
+      if (ch === '"') {
+        // (VBA escapes "" inside a string by doubling it.)
+        if (body[i + 1] === '"') {
+          current += '"';
+          i += 1;
+          continue;
+        }
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      current += ch;
+      continue;
+    }
+    if (ch === ":" && body[i + 1] !== "=") {
+      if (current.trim() === "" && result.length === 0) {
+        // Leading colon (label) — don't split it.
+        current += ch;
+        continue;
+      }
+      result.push(current);
+      // Restart the next fragment with the original line indent. Skip any
+      // whitespace immediately after the colon — the colon is the OLD
+      // line's separator, not a prefix on the NEW fragment. The whitespace
+      // step has already collapsed trailing/leading whitespace across the
+      // whole tree, so emitting the leadingWs + any post-colon spaces would
+      // over-indent the new fragment when the source uses `: ` separator
+      // and the binary uses a bare newline.
+      current = leadingWs;
+      if (body[i + 1] === " " || body[i + 1] === "\t") i += 1;
+      continue;
+    }
+    current += ch;
+  }
+  if (current.length > leadingWs.length || result.length === 0) result.push(current);
+  return result.length > 1 ? result : [line];
+}
+
+/**
+ * Collapse runs of whitespace BETWEEN tokens to a single space. Pairs
+ * like `ItemCount+1` and `ItemCount + 1` compare equal under this fold.
+ * VBA does not require whitespace between operators and operands, so a
+ * presentation-only reflow is non-functional. Whitespace inside string
+ * literals and comments is preserved.
+ *
+ * Pure: no I/O. No-op when the input already has minimal inter-token
+ * whitespace (the fast path).
+ */
+export function foldInterTokenWhitespace(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => foldLineInterTokenWhitespace(line))
+    .join("\n");
+}
+
+function foldLineInterTokenWhitespace(line: string): string {
+  let out = "";
+  let inString = false;
+  let i = 0;
+  let prevNonSpace: string | null = null;
+  while (i < line.length) {
+    const ch = line[i] ?? "";
+    if (inString) {
+      out += ch;
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          out += '"';
+          i += 1;
+        } else {
+          inString = false;
+          prevNonSpace = '"';
+        }
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      prevNonSpace = '"';
+      i += 1;
+      continue;
+    }
+    if (ch === "'") {
+      // Rest of the line is a comment — preserve verbatim.
+      out += line.slice(i);
+      return out;
+    }
+    if (ch === " " || ch === "\t") {
+      // Collapse run of whitespace; emit a single space ONLY between two
+      // token characters (not after/before punctuation that the VBA
+      // parser doesn't need whitespace around).
+      const next = line[i + 1] ?? "";
+      const isTokenBefore = prevNonSpace !== null && /[\w)\]]/.test(prevNonSpace);
+      const isTokenAfter = next !== "" && /[\w$(]/.test(next);
+      if (isTokenBefore && isTokenAfter) {
+        out += " ";
+      }
+      i += 1;
+      continue;
+    }
+    out += ch;
+    prevNonSpace = ch;
+    i += 1;
+  }
+  return out;
 }
 
 /**
@@ -784,7 +1053,9 @@ function computeFunctionalDiff(
 function nonActionable(
   classification: VbaSemanticCategory,
   reason: string,
+  fileType?: string,
 ): SemanticClassification {
+  const normalizationReasons = selectNormalizationReasons(classification, fileType ?? "");
   return {
     classification,
     reason,
@@ -792,7 +1063,71 @@ function nonActionable(
     binaryUniqueFunctionalLines: 0,
     recommendation: "no_action",
     actionable: false,
+    normalizationReasons,
   };
+}
+
+/**
+ * Static mapping from a classification to the ordered list of
+ * `NormalizationReason` entries the canonicalizer would emit for that
+ * category. Used to populate `SemanticClassification.normalizationReasons`
+ * and, downstream, the `normalizationReasons` field on diff entries.
+ *
+ * The mapping is HAND-TUNED — not driven by runtime canonicalizer output
+ * — so it stays deterministic across runs even when the canonicalizer
+ * itself changes. For categories that don't map cleanly today
+ * (e.g. `formSerializationOnly`, `nonActionableMixed`) we either pick the
+ * most relevant reason or return an empty array; the call sites can
+ * always supply a longer list via a dedicated helper if the canonicalizer
+ * later attaches reason metadata.
+ */
+export function selectNormalizationReasons(
+  classification: VbaSemanticCategory,
+  _fileType: string,
+): readonly NormalizationReason[] {
+  switch (classification) {
+    case "matched":
+    case "sourceNewer":
+    case "binaryNewer":
+    case "bothChanged":
+      return [];
+    case "encodingOnly":
+      return ["bomPrefix"];
+    case "caseOnly":
+      return ["identifierCase"];
+    case "whitespaceOnly":
+      return [
+        "lineEnding",
+        "leadingIndentation",
+        "trailingWhitespace",
+        "blankLogicalStatement",
+        "interTokenWhitespace",
+      ];
+    case "attributeOnly":
+      return ["cosmeticAttribute"];
+    case "formSerializationOnly":
+      return ["formSerialization"];
+    case "commentOnly":
+      return ["commentText"];
+    case "continuationOnly":
+      return ["lineContinuationLayout"];
+    case "statementBoundaryOnly":
+      return ["statementBoundaryLayout"];
+    case "nonActionableMixed":
+      // Mixed categories carry 2+ distinct non-actionable reasons; the
+      // static map cannot enumerate them generically. Callers that need
+      // the precise list should derive it from the diff context instead of
+      // reading this return value.
+      return [];
+    default: {
+      // Exhaustiveness guard — TypeScript narrows `classification` to
+      // `never` here when the union is fully covered. The runtime check
+      // is belt-and-braces for callers that pass a string that bypasses
+      // the type.
+      const _exhaustive: never = classification;
+      return _exhaustive;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -928,13 +1263,75 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     );
   }
 
-  // VB_Name is functional whenever the two sides disagree — a real rename (both
-  // name it, values differ) OR one side omitting it entirely (a dropped-identity
-  // import defect, #646). Non-functional only when both carry the same name or
-  // both omit it.
+  // -------------------------------------------------------------------------
+  // Step 2.1 — inter-token whitespace fold (e.g. `ItemCount+1` vs `ItemCount + 1`).
+  // VBA does not require whitespace between operators and operands, so a
+  // presentation-only reflow is non-functional. Pairs that equalize under
+  // this fold alone are classified as `whitespaceOnly` with `interTokenWhitespace`
+  // attributed as the reason; pairs that need MORE than inter-token whitespace
+  // fall through to the next steps so the richer taxonomy can claim them.
+  // -------------------------------------------------------------------------
+  {
+    const srcInter = foldInterTokenWhitespace(srcNormWs);
+    const binInter = foldInterTokenWhitespace(binNormWs);
+    if (srcInter === binInter) {
+      return nonActionable(
+        "whitespaceOnly",
+        "texts differ only in inter-token whitespace (operator/operand spacing)",
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 2.2 — continuationOnly: fold VBA line-continuation reflows (`_<EOL>`)
+  // and re-check. Source splitting an expression across two physical lines
+  // while binary keeps it on one is non-functional under the VBA grammar;
+  // both forms execute identically.
+  // -------------------------------------------------------------------------
+  {
+    const srcCont = joinLineContinuations(srcNormWs);
+    const binCont = joinLineContinuations(binNormWs);
+    if (srcCont === binCont) {
+      return nonActionable(
+        "continuationOnly",
+        "texts differ only in line-continuation reflow (` _` + EOL)",
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 2.3 — statementBoundaryOnly: normalize colon-separated statements
+  // to newline-separated (and vice versa) for code modules. A pair that
+  // differs only in how statement separators are written collapses here.
+  // Safety guards inside the normalizer preserve `:=`, string-literal
+  // colons, and date literals — we never silently rewrite these.
+  // -------------------------------------------------------------------------
+  {
+    const srcBoundaries = normalizeStatementBoundaries(srcNormWs, fileType);
+    const binBoundaries = normalizeStatementBoundaries(binNormWs, fileType);
+    if (srcBoundaries === binBoundaries) {
+      return nonActionable(
+        "statementBoundaryOnly",
+        "texts differ only in colon-separated vs newline-separated statement boundaries",
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // VB_Name is functional whenever the two sides disagree:
+  //  - both name it with different values (real rename)
+  //  - one side omits it entirely (the #646 dropped-identity import defect)
+  // VBA identifiers are case-insensitive so a case-only difference
+  // (`Probe` vs `probe`) is treated like any other identifier-case drift —
+  // VB_Name gets stripped together with the rest of the cosmetic attribute
+  // boilerplate, and the diff falls through to the next check.
   const srcVbName = extractVbName(srcText);
   const binVbName = extractVbName(binText);
-  const keepVbName = srcVbName !== binVbName;
+  const oneSidedMissing = srcVbName === null || binVbName === null;
+  const srcVbNameCaseFolded = srcVbName === null ? null : srcVbName.toLowerCase();
+  const binVbNameCaseFolded = binVbName === null ? null : binVbName.toLowerCase();
+  const valueDifferent = srcVbNameCaseFolded !== binVbNameCaseFolded;
+  const keepVbName = oneSidedMissing || valueDifferent;
 
   // -------------------------------------------------------------------------
   // Step 3: attributeOnly — strip module/class header + Attribute VB_* lines
@@ -1011,6 +1408,33 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
   }
 
   // -------------------------------------------------------------------------
+  // Step 4.6 — commentOnly: strip whole-line `'` and `Rem` comments and re-check.
+  // The classifier's identifier case-fold step (Step 4.5) preserved comment
+  // bodies verbatim, so a case-only difference inside a comment body still
+  // falls through here. The strict equalization gate is: the comment strip
+  // must equalize the texts AS THEY WERE BEFORE attribute / case / form /
+  // encoding normalizers — otherwise the equalization is the joint work of
+  // comment AND another normalizer (e.g. case + comment), and `nonActionableMixed`
+  // is the right verdict. Apply the strip to `srcNormWs`/`binNormWs`
+  // (whitespace-normalized, pre-attribute / pre-case) so the gate compares
+  // against the same inputs the comment strip would have if it ran first.
+  //
+  // When the comment strip does NOT equalize pre-attribute / pre-case but the
+  // FULL pipeline (case + comment + …) does, the existing Step 6.5
+  // `nonActionableMixed` check catches it.
+  // -------------------------------------------------------------------------
+  {
+    const srcComments = stripCommentLines(srcNormWs);
+    const binComments = stripCommentLines(binNormWs);
+    if (srcComments === binComments) {
+      return nonActionable(
+        "commentOnly",
+        "texts differ only in comment body content (whole-line ' or Rem comments)",
+      );
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Step 5: encodingOnly — mojibake normalization with safety guards
   // -------------------------------------------------------------------------
   // Only attempt if neither side contains U+FFFD (replacement char)
@@ -1075,6 +1499,41 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
 
   srcFull = normalizeKnownOptionalDefaultArguments(srcFull);
   binFull = normalizeKnownOptionalDefaultArguments(binFull);
+
+  // Strip whole-line `'` and `Rem` comments so a comment-body diff that only
+  // surfaces after case-fold can still collapse to `nonActionableMixed` here.
+  // The earlier comment-strip gate (Step 4.6) catches single-family diffs;
+  // this catch-all ensures mixed diffs (case + comment, etc.) that needed
+  // case-fold to make the comment difference observable also equalize.
+  srcFull = stripCommentLines(srcFull);
+  binFull = stripCommentLines(binFull);
+
+  srcFull = foldInterTokenWhitespace(srcFull);
+  binFull = foldInterTokenWhitespace(binFull);
+
+  srcFull = joinLineContinuations(srcFull);
+  binFull = joinLineContinuations(binFull);
+
+  // -------------------------------------------------------------------------
+  // Step 6.5 — nonActionableMixed: full pipeline equalized the texts but no
+  // single normalization step (whitespace, comment, continuation, statement
+  // boundary, attribute, case, form, encoding) did so on its own. Two or
+  // more distinct non-actionable families contributed; collapse to the
+  // mixed bucket per the DESIGN "non-actionable category and reason
+  // contract" table. The single-category detectors above remain the
+  // preferred path so the common cases stay atomic and grep-friendly.
+  //
+  // This check MUST run before the encodingOnly guard below — once the
+  // pipeline has equalized the texts, the lossy-neutralize check would also
+  // be true (equal ⊂ neutralized-equal) and would misclassify a mixed
+  // (e.g. case + comment) diff as encodingOnly.
+  // -------------------------------------------------------------------------
+  if (srcFull === binFull) {
+    return nonActionable(
+      "nonActionableMixed",
+      "texts equalize only under a combination of non-actionable normalizers (mixed case + whitespace + comment, etc.)",
+    );
+  }
 
   if (
     !srcText.includes("�") &&

@@ -2151,6 +2151,10 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
               attributeOnly?: number;
               formSerializationOnly?: number;
               encodingOnly?: number;
+              commentOnly?: number;
+              continuationOnly?: number;
+              statementBoundaryOnly?: number;
+              nonActionableMixed?: number;
               total?: number;
             };
           };
@@ -2161,14 +2165,18 @@ describe("compareVbaSourceTrees — semantic wiring (PR2)", () => {
       // Invariant 1: actionable.total === sourceNewer + binaryNewer + bothChanged
       const a = structured?.actionable;
       expect(a?.total).toBe((a?.sourceNewer ?? 0) + (a?.binaryNewer ?? 0) + (a?.bothChanged ?? 0));
-      // Invariant 2: nonActionable.total === sum of five buckets
+      // Invariant 2: nonActionable.total === sum of nine buckets (Refs #1724 WU-3 v2-categories)
       const n = structured?.nonActionable;
       expect(n?.total).toBe(
         (n?.caseOnly ?? 0) +
           (n?.whitespaceOnly ?? 0) +
           (n?.attributeOnly ?? 0) +
           (n?.formSerializationOnly ?? 0) +
-          (n?.encodingOnly ?? 0),
+          (n?.encodingOnly ?? 0) +
+          (n?.commentOnly ?? 0) +
+          (n?.continuationOnly ?? 0) +
+          (n?.statementBoundaryOnly ?? 0) +
+          (n?.nonActionableMixed ?? 0),
       );
     });
 

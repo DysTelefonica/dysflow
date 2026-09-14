@@ -79,6 +79,16 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
   isActionable?: boolean;
   /** Human-facing action key, mirrors recommendation (e.g. "no_action", "import_to_binary"). */
   recommendedAction?: string;
+  /**
+   * WU-3 v2-categories (Refs #1724): ordered list of `NormalizationReason`
+   * entries the canonicalizer attributed to this diff. Mirrors the
+   * `SemanticClassification.normalizationReasons` field; populated by the
+   * classifier for every diff entry. Empty for actionable categories
+   * and for `matched`. Use it to render a human-readable "why this is
+   * non-actionable" line in dashboards without re-parsing the reason
+   * string.
+   */
+  normalizationReasons?: readonly string[];
 };
 
 /** Per-category count map present in semantic mode results. */
@@ -110,6 +120,10 @@ export type SummaryStructured = {
     attributeOnly: number;
     formSerializationOnly: number;
     encodingOnly: number;
+    commentOnly: number;
+    continuationOnly: number;
+    statementBoundaryOnly: number;
+    nonActionableMixed: number;
     total: number;
   };
 };
@@ -172,7 +186,8 @@ export type VbaVerifyResult = {
    * Nested companion to {@link summary} (semantic mode only). Same vocabulary
    * as the flat summary but shaped for direct consumption: top-level counts
    * plus `actionable.{sourceNewer,binaryNewer,bothChanged,total}` and
-   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,total}`.
+   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,commentOnly,continuationOnly,statementBoundaryOnly,nonActionableMixed,total}`
+   * (9 named buckets; WU-3 v2-categories).
    * `total`s are sum-of-named-buckets; `different` is the count of semantic
    * diffs (NOT including `missingIn*`). Strict mode leaves this undefined.
    */
@@ -887,6 +902,12 @@ export async function compareVbaSourceTrees(
         recommendation: classification.recommendation,
         isActionable: classification.actionable,
         recommendedAction: classification.recommendation,
+        // WU-3 v2-categories: surface the canonicalizer-side reason list on
+        // every diff entry so consumers can render "why this is non-actionable"
+        // without re-parsing the reason string. Empty for actionable and
+        // `matched`; populated by `selectNormalizationReasons` for every
+        // non-actionable category (single-family and mixed).
+        normalizationReasons: classification.normalizationReasons,
       });
     }
   }
@@ -929,12 +950,20 @@ export async function compareVbaSourceTrees(
             attributeOnly: semanticSummary.attributeOnly ?? 0,
             formSerializationOnly: semanticSummary.formSerializationOnly ?? 0,
             encodingOnly: semanticSummary.encodingOnly ?? 0,
+            commentOnly: semanticSummary.commentOnly ?? 0,
+            continuationOnly: semanticSummary.continuationOnly ?? 0,
+            statementBoundaryOnly: semanticSummary.statementBoundaryOnly ?? 0,
+            nonActionableMixed: semanticSummary.nonActionableMixed ?? 0,
             total:
               (semanticSummary.caseOnly ?? 0) +
               (semanticSummary.whitespaceOnly ?? 0) +
               (semanticSummary.attributeOnly ?? 0) +
               (semanticSummary.formSerializationOnly ?? 0) +
-              (semanticSummary.encodingOnly ?? 0),
+              (semanticSummary.encodingOnly ?? 0) +
+              (semanticSummary.commentOnly ?? 0) +
+              (semanticSummary.continuationOnly ?? 0) +
+              (semanticSummary.statementBoundaryOnly ?? 0) +
+              (semanticSummary.nonActionableMixed ?? 0),
           },
         }
       : undefined;

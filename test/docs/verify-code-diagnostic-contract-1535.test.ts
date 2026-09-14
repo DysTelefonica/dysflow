@@ -13,7 +13,18 @@ const rawComparison = {
   summaryStructured: {
     matched: 1,
     actionable: { sourceNewer: 0, binaryNewer: 0, bothChanged: 0, total: 0 },
-    nonActionable: { total: 1 },
+    nonActionable: {
+      caseOnly: 0,
+      whitespaceOnly: 0,
+      attributeOnly: 0,
+      formSerializationOnly: 0,
+      encodingOnly: 1,
+      commentOnly: 0,
+      continuationOnly: 0,
+      statementBoundaryOnly: 0,
+      nonActionableMixed: 0,
+      total: 1,
+    },
   },
   different: [{ moduleName: "Noise" }],
   nonActionableDifferent: [{ moduleName: "Noise", classification: "caseOnly" }],
@@ -108,5 +119,57 @@ describe("verify_code diagnostic documentation contract (#1535)", () => {
     expect(payload.summaryStructured.nonActionableTotal).toBe(
       Object.values(payload.nonActionableByCategory).reduce((total, count) => total + count, 0),
     );
+  });
+
+  it("keeps the compact nonActionableByCategory shape at 9 named keys + total (Refs #1724 WU-3)", () => {
+    // WU-3 v2-categories: 9 named non-actionable buckets. The compact shape
+    // carries the named buckets here and the aggregate `total` separately via
+    // `summaryStructured.nonActionableTotal` (mirroring how `summaryByCategory`
+    // is split from `actionableTotal`). Missing or extra keys fail this anchor
+    // so adding a v3 bucket without updating the docs and the shaper fails here.
+    const EXPECTED_KEYS = [
+      "caseOnly",
+      "whitespaceOnly",
+      "attributeOnly",
+      "formSerializationOnly",
+      "encodingOnly",
+      "commentOnly",
+      "continuationOnly",
+      "statementBoundaryOnly",
+      "nonActionableMixed",
+    ] as const;
+
+    const compact = shapeVerifyCodeResponse(rawComparison, { diagnostic: false }) as Record<
+      string,
+      unknown
+    >;
+    const emitted = compact.nonActionableByCategory as Record<string, number>;
+    for (const category of EXPECTED_KEYS) {
+      expect(emitted, `compact is missing ${category}`).toHaveProperty(category);
+      expect(typeof emitted[category]).toBe("number");
+    }
+    // Aggregate lives on summaryStructured.nonActionableTotal in compact mode.
+    const compactStructured = compact.summaryStructured as { nonActionableTotal: number };
+    expect(typeof compactStructured.nonActionableTotal).toBe("number");
+    expect(compactStructured.nonActionableTotal).toBe(
+      Object.values(emitted).reduce((total, count) => total + count, 0),
+    );
+
+    // diagnostic:true must surface the new keys too so MCP consumers running
+    // in diagnostic mode see the full breakdown, not a 5-key legacy view.
+    const diagnostic = shapeVerifyCodeResponse(rawComparison, { diagnostic: true }) as Record<
+      string,
+      unknown
+    >;
+    const diagnosticStructured = diagnostic.summaryStructured as
+      | { nonActionable?: Record<string, number> }
+      | undefined;
+    expect(diagnosticStructured?.nonActionable).toBeDefined();
+    for (const category of EXPECTED_KEYS) {
+      expect(diagnosticStructured?.nonActionable, `diagnostic missing ${category}`).toHaveProperty(
+        category,
+      );
+    }
+    expect(diagnosticStructured?.nonActionable).toHaveProperty("total");
   });
 });

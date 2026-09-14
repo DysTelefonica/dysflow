@@ -68,7 +68,7 @@ switch.
 - `recommendedAction` — one of `no_action | import_to_binary | export_to_src | manual_merge`. The whole-comparison machine key.
 - `summaryStructured` — compact counts: `matched`, `actionableTotal`, and `nonActionableTotal`.
 - `summaryByCategory` — actionable `sourceNewer`, `binaryNewer`, and `bothChanged` counts.
-- `nonActionableByCategory` — `caseOnly`, `whitespaceOnly`, `attributeOnly`, `formSerializationOnly`, and `encodingOnly` counts. This is why `ok` is `false` while `actionableOk` is `true`; `whitespaceOnly` covers line endings, indentation, and trailing whitespace. Do not sync anything counted here.
+- `nonActionableByCategory` — `caseOnly`, `whitespaceOnly`, `attributeOnly`, `formSerializationOnly`, `encodingOnly`, `commentOnly`, `continuationOnly`, `statementBoundaryOnly`, `nonActionableMixed` counts (9 named buckets; WU-3 v2-categories). This is why `ok` is `false` while `actionableOk` is `true`; `whitespaceOnly` covers line endings, indentation, and trailing whitespace. `nonActionableMixed` catches diffs that equalize only under a combination of non-actionable normalizers. Do not sync anything counted here.
 - `bulkImportable[]` — module names ready for `import_modules.moduleNames` when disk/source is newer.
 - `bulkExportable[]` — module names ready for `export_modules.moduleNames` when the Access binary is newer.
 - `moduleCounts` and `summaryUnits` — diagnostic-only unit breakdowns.
