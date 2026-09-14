@@ -1,9 +1,8 @@
 # Install and verify Dysflow
 
-Dysflow runs locally on Windows and exposes Microsoft Access automation through
-an MCP server. Install the CLI, wire one or more supported agents, restart the
-client, and verify the live adapter with the read-only `get_capabilities` MCP
-tool.
+Dysflow runs locally on Windows and exposes Microsoft Access automation through an MCP server.
+
+Install the CLI, wire one or more supported agents, restart the client, and verify the live adapter with the read-only `get_capabilities` MCP tool.
 
 For the complete command and tool reference, see the
 [Dysflow README](../README.md). To extend an agent integration, see the
@@ -20,11 +19,15 @@ For the complete command and tool reference, see the
 
 ## Install a published release
 
-Install the CLI from npm, then let Dysflow install its managed runtime and MCP
-integration:
+Install the CLI from the signed asset on the [current GitHub release](https://github.com/DysTelefonica/dysflow/releases/latest).
+
+The root package is private and is not a public npm installation channel.
+
+The separate public `@aroman22/dysflow-pi` package is installed only through the Dysflow command below so ownership remains explicit.
+
+Then let Dysflow install its managed runtime and MCP integration:
 
 ```powershell
-npm install --global dysflow
 dysflow install --agents claude --no-tui
 ```
 
@@ -68,10 +71,11 @@ server to the selected clients.
 | `codex` | `~/.codex/config.toml` |
 | `opencode` | `~/.config/opencode/opencode.json` |
 | `claude` | `~/.claude/settings.json`, or the Claude Desktop config when that file is absent |
-| `pi` | `~/.pi/agent/mcp.json` |
+| `pi` | `~/.pi/agent/mcp.json` and `~/.pi/agent/settings.json` |
 
-Restart the selected client after installation so it reloads the MCP
-configuration.
+Restart the selected client after installation so it reloads the MCP configuration.
+
+Pi users should follow the [Pi-native integration guide](./pi-native-integration.md); that page is the single source for Pi reconciliation, rendering, update, and uninstall behavior.
 
 ## Verify the installation
 

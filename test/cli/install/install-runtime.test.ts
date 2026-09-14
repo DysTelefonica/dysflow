@@ -7,7 +7,7 @@
  * and the install report must surface them by name.
  */
 
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +32,17 @@ async function seedPackageRoot(packageRoot: string): Promise<void> {
   await writeFile(join(packageRoot, "dist", "index.js"), "// stub", "utf8");
   await mkdir(join(packageRoot, "scripts"), { recursive: true });
   await writeFile(join(packageRoot, "scripts", "noop.mjs"), "// stub", "utf8");
+  await mkdir(join(packageRoot, "plugin", "pi"), { recursive: true });
+  await writeFile(
+    join(packageRoot, "plugin", "pi", "index.ts"),
+    "export default () => {};\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "plugin", "pi", "package.json"),
+    JSON.stringify({ name: "@aroman22/dysflow-pi", pi: { extensions: ["./index.ts"] } }),
+    "utf8",
+  );
   await writeFile(
     join(packageRoot, "package.json"),
     JSON.stringify({ name: "dysflow", version: "0.0.0" }),
@@ -53,6 +64,11 @@ async function seedPackageRoot(packageRoot: string): Promise<void> {
   await writeFile(
     join(packageRoot, "docs", "diagnostics", "form-import-gate-failures.md"),
     "# form import gate failures\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "docs", "pi-native-integration.md"),
+    "# Pi-native integration\n",
     "utf8",
   );
 }
@@ -125,6 +141,16 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     expect(s.isFile()).toBe(true);
   });
 
+  it("copies the canonical Pi-native guide into the managed runtime", async () => {
+    const packageRoot = join(root, "pkg");
+
+    const { installRuntime } = await importExtractor();
+    await installRuntime(runtimePaths, packageRoot);
+
+    const dest = join(runtimePaths.runtimeDir, "docs", "pi-native-integration.md");
+    expect(await readFile(dest, "utf8")).toBe("# Pi-native integration\n");
+  });
+
   it("creates the diagnostics parent directory before copying into it", async () => {
     const packageRoot = join(root, "pkg");
 
@@ -149,6 +175,25 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
       join(runtimeDir, "docs", "diagnostics", "hresult-guide.md"),
     );
     expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
+  });
+
+  it("does not copy the independently distributed Pi package into the runtime", async () => {
+    const packageRoot = join(root, "pkg");
+    await mkdir(join(packageRoot, "plugin", "pi", "node_modules", "nested"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(packageRoot, "plugin", "pi", "node_modules", "nested", "dependency.js"),
+      "must not copy",
+      "utf8",
+    );
+
+    const { installRuntime } = await importExtractor();
+    const report = await installRuntime(runtimePaths, packageRoot);
+
+    const destination = join(runtimePaths.appDir, "plugin", "pi");
+    await expect(access(destination)).rejects.toThrow();
+    expect(report.copiedFiles.every((file) => !file.includes(join("plugin", "pi")))).toBe(true);
   });
 
   it("retains every bundled skill byte-exactly in the installed runtime for update and doctor", async () => {
@@ -187,5 +232,6 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     expect(report).toContain("error-codes.md");
     expect(report).toContain("hresult-guide.md");
     expect(report).toContain("form-import-gate-failures.md");
+    expect(report).toContain("pi-native-integration.md");
   });
 });

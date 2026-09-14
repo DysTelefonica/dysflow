@@ -76,6 +76,30 @@ const readJson = async (path: string): Promise<Record<string, unknown>> => {
   return JSON.parse(raw) as Record<string, unknown>;
 };
 
+const simulatedPiPackageRunner = async (
+  args: readonly string[],
+  context: { env: NodeJS.ProcessEnv },
+): Promise<void> => {
+  const home = context.env.USERPROFILE ?? context.env.HOME;
+  if (!home) throw new Error("sandboxed Pi runner requires a home directory");
+  const settingsPath = join(home, ".pi", "agent", "settings.json");
+  const settings = await readJson(settingsPath).catch(() => ({ packages: [] }));
+  const packages = Array.isArray(settings.packages) ? settings.packages : [];
+  settings.packages =
+    args[0] === "install"
+      ? [
+          ...packages.filter(
+            (entry) => typeof entry !== "string" || !entry.startsWith("npm:@aroman22/dysflow-pi"),
+          ),
+          args[1],
+        ]
+      : packages.filter(
+          (entry) => typeof entry !== "string" || !entry.startsWith("npm:@aroman22/dysflow-pi"),
+        );
+  await mkdir(join(home, ".pi", "agent"), { recursive: true });
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+};
+
 const expectedOpenCodeCommand = (runtimeDir: string): string[] => [
   join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/"),
   "mcp",
@@ -107,6 +131,10 @@ async function createPackageRoot(root: string, version: string, marker: string):
     "utf8",
   );
   await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
+  await cp(join(process.cwd(), "plugin"), join(packageRoot, "plugin"), {
+    recursive: true,
+    filter: (source) => !source.split(/[\\/]/).includes("node_modules"),
+  });
   return packageRoot;
 }
 
@@ -295,7 +323,7 @@ describe("Dysflow MCP config state", () => {
           "[mcp_servers.other]",
           "command = 'other-tool'",
           "[mcp_servers.dysflow]",
-          "command = 'C:/foreign-tool/bin/foreign.cmd'",
+          "command = 'C:/work/dysflow/foreign-tool.exe'",
           "args = ['mcp']",
         ].join("\n"),
         "utf8",
@@ -304,7 +332,7 @@ describe("Dysflow MCP config state", () => {
       const jsonConfig = join(root, "opencode.json");
       await writeFile(
         jsonConfig,
-        `${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" }, dysflow: { enabled: true, type: "local", command: ["C:/foreign-tool/bin/foreign.cmd", "mcp"] } } }, null, 2)}\n`,
+        `${JSON.stringify({ mcp: { other: { type: "remote", url: "https://example.test" }, dysflow: { enabled: true, type: "local", command: ["C:/work/dysflow/foreign-tool.exe", "mcp"] } } }, null, 2)}\n`,
         "utf8",
       );
 
@@ -416,10 +444,11 @@ describe("Dysflow MCP config state", () => {
         "utf8",
       );
 
-      const result = await applyIntegrationSelection(["opencode"], {
+      const result = await applyIntegrationSelection(["opencode", "pi"], {
         env: { USERPROFILE: home },
         runtimeDir,
         packageRoot,
+        piPackageCommandRunner: simulatedPiPackageRunner,
       });
 
       expect(result.exitCode).toBe(0);
@@ -430,6 +459,38 @@ describe("Dysflow MCP config state", () => {
       expect(await hasDysflowMcpConfig("codex", codexConfig)).toBe(false);
       expect(await hasDysflowMcpConfig("opencode", opencodeConfig)).toBe(true);
       expect(await hasDysflowMcpConfig("claude", claudeDesktopConfig)).toBe(false);
+      expect((await readJson(join(home, ".pi", "agent", "settings.json"))).packages).toEqual([
+        "npm:@aroman22/dysflow-pi@0.2.0",
+      ]);
+
+      const piMcpPath = join(home, ".pi", "agent", "mcp.json");
+      const piMcpBeforeFailedRemoval = await readFile(piMcpPath);
+      const failedDeselection = await applyIntegrationSelection(["opencode"], {
+        env: { USERPROFILE: home },
+        runtimeDir,
+        packageRoot,
+        piPackageCommandRunner: async () => {
+          throw new Error("injected Pi remove failure");
+        },
+      });
+      expect(failedDeselection).toMatchObject({
+        exitCode: 1,
+        stderr: "injected Pi remove failure",
+      });
+      expect(await readFile(piMcpPath)).toEqual(piMcpBeforeFailedRemoval);
+      expect((await readJson(join(home, ".pi", "agent", "settings.json"))).packages).toEqual([
+        "npm:@aroman22/dysflow-pi@0.2.0",
+      ]);
+
+      const deselected = await applyIntegrationSelection(["opencode"], {
+        env: { USERPROFILE: home },
+        runtimeDir,
+        packageRoot,
+        piPackageCommandRunner: simulatedPiPackageRunner,
+      });
+      expect(deselected.exitCode).toBe(0);
+      expect((await readJson(join(home, ".pi", "agent", "settings.json"))).packages).toEqual([]);
+
       const updatedClaude = await readJson(claudeDesktopConfig);
       expect((updatedClaude.mcpServers as Record<string, unknown>).other).toEqual({
         command: "other",
@@ -562,10 +623,11 @@ describe("handleInstallCommand end-to-end", () => {
             ProgramData: join(root, "ProgramData"),
           },
           packageRoot,
+          piPackageCommandRunner: simulatedPiPackageRunner,
         },
       );
 
-      expect(result.exitCode).toBe(0);
+      expect(result.exitCode, result.stderr).toBe(0);
       expect(result.stdout).toContain(`Dysflow runtime installed at: ${runtimeDir}`);
       expect(result.stdout).toContain("Configured agents: codex, opencode, claude, pi");
       expect(result.stdout).toMatch(/Copied files: \d+/);
@@ -612,6 +674,10 @@ describe("handleInstallCommand end-to-end", () => {
       const piDysflow = piMcpServers.dysflow as Record<string, unknown>;
       expect(piDysflow.command).toBe(expectedCmd);
       expect(piDysflow.args).toEqual(["mcp"]);
+      expect(piDysflow.directTools).toBe(false);
+      const piSettings = await readJson(join(home, ".pi", "agent", "settings.json"));
+      expect(piSettings.packages).toEqual(["npm:@aroman22/dysflow-pi@0.1.0"]);
+      await expect(access(join(runtimeDir, "app", "plugin", "pi", "index.ts"))).rejects.toThrow();
 
       const installedSkillDirs = [
         join(home, ".codex", "skills"),
@@ -643,6 +709,37 @@ describe("handleInstallCommand end-to-end", () => {
     }
   });
 
+  it("keeps Pi configuration byte-identical on a second canonical install", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-pi-repeat-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "PI_REPEAT_RUNTIME");
+    const args = ["--runtime-dir", runtimeDir, "--agents", "pi", "--no-tui"];
+    const context = {
+      env: { USERPROFILE: home },
+      packageRoot,
+      piPackageCommandRunner: simulatedPiPackageRunner,
+    };
+
+    try {
+      const first = await handleInstallCommand(args, context);
+      expect(first.exitCode, first.stderr).toBe(0);
+      const mcpPath = join(home, ".pi", "agent", "mcp.json");
+      const settingsPath = join(home, ".pi", "agent", "settings.json");
+      const mcpBefore = await readFile(mcpPath);
+      const settingsBefore = await readFile(settingsPath);
+
+      const second = await handleInstallCommand(args, context);
+
+      expect(second.exitCode, second.stderr).toBe(0);
+      expect(second.stdout).toContain("- pi: active (unchanged)");
+      expect(await readFile(mcpPath)).toEqual(mcpBefore);
+      expect(await readFile(settingsPath)).toEqual(settingsBefore);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("prints copied destination paths only for verbose non-interactive installs", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-install-verbose-"));
     const home = join(root, "home");
@@ -652,7 +749,11 @@ describe("handleInstallCommand end-to-end", () => {
     try {
       const result = await handleInstallCommand(
         ["--runtime-dir", runtimeDir, "--agents", "pi", "--no-tui", "--verbose"],
-        { env: { USERPROFILE: home }, packageRoot },
+        {
+          env: { USERPROFILE: home },
+          packageRoot,
+          piPackageCommandRunner: simulatedPiPackageRunner,
+        },
       );
 
       expect(result.exitCode).toBe(0);
@@ -687,7 +788,11 @@ describe("handleInstallCommand end-to-end", () => {
 
       const result = await handleInstallCommand(
         ["--runtime-dir", runtimeDir, "--agents", "opencode,pi", "--no-tui"],
-        { env: { USERPROFILE: home }, packageRoot },
+        {
+          env: { USERPROFILE: home },
+          packageRoot,
+          piPackageCommandRunner: simulatedPiPackageRunner,
+        },
       );
 
       expect(result.exitCode).toBe(0);
@@ -817,8 +922,10 @@ describe("handleUpdateCommand end-to-end", () => {
     const claudeDestination = join(home, ".claude", "plugins", "dysflow");
 
     try {
+      await rm(claudeSource, { recursive: true, force: true });
       await mkdir(claudeSource, { recursive: true });
       await writeFile(join(claudeSource, ".mcp.json"), "new config\n", "utf8");
+      await rm(join(releasePackageRoot, "plugin", "codex"), { recursive: true, force: true });
       await mkdir(claudeDestination, { recursive: true });
       await writeFile(join(claudeDestination, ".mcp.json"), "existing config\n", "utf8");
 

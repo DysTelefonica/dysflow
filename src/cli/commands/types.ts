@@ -4,6 +4,7 @@ import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-se
 import type { AccessQueryService } from "../../core/services/query-service.js";
 import type { SupplementDriftDiagnostic } from "./codegraph-supplement-drift-check.js";
 import type { DoctorCategoryCheck } from "./doctor/checks/types.js";
+import type { PiPackageCommandRunner } from "./install/pi-package-manager.js";
 import type { SkillDoctorStatus } from "./install/skills-installer.js";
 import type { AgentName } from "./install-utils.js";
 import type { McpWiringCheck } from "./opencode-mcp-wiring.js";
@@ -53,6 +54,8 @@ export type CliCommandContext = {
     options: { env?: Record<string, string | undefined> },
   ) => Promise<CliResult> | CliResult;
   tuiInteractive?: boolean;
+  /** Injectable canonical Pi package command runner for sandboxed install tests. */
+  piPackageCommandRunner?: PiPackageCommandRunner;
   readTuiKey?: () => Promise<TuiKey>;
   writeTuiFrame?: (frame: string) => void;
 };

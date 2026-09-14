@@ -11,11 +11,10 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
      bundle unrelated work).
   2. Refuses if local `main` is ahead of `origin/main` (so no un-CI'd commits
      land in the release).
-  3. Bumps `package.json`, updates the release stamps in
-     `skills/dysflow-usage/references/error-codes.md` and
-     `skills/dysflow-usage/assets/write-flags-matrix.md`, and prepends a
-     `## [vX.Y.Z] - YYYY-MM-DD` block to `CHANGELOG.md`. All four files are
-     staged together, and pre-commit failure restores their original bytes.
+  3. Bumps `package.json` and `plugin/pi/package.json`, updates the release
+     stamps, and prepends a `## [vX.Y.Z] - YYYY-MM-DD` block to `CHANGELOG.md`.
+     Release-owned files are staged together, and pre-commit failure restores
+     their original bytes.
   4. Runs `test/quality-gates/changelog-release-entry-format.test.ts` locally
      against the generated file. A malformed entry aborts before `git add`,
      commit, or push.
@@ -26,46 +25,77 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
   7. On CI green, creates and pushes an annotated `vX.Y.Z` tag. That tag starts
      `.github/workflows/release.yml`, whose `e2e-validation` job runs
      `pnpm test:e2e:mcp:release` on the self-hosted Access runner.
-  8. The GitHub Release is published only after `build`, `quality-authority`,
-     and `e2e-validation` succeed. The publication job declares all three in
-     its `needs` dependency.
+  8. The release job stamps the root and Pi package to the tag version, then
+     publishes `@aroman22/dysflow-pi` through npm Trusted Publishing (OIDC).
+  9. The GitHub Release is published only after npm verification. The publication
+     job declares `build`, `quality-authority`, and `e2e-validation` in `needs`.
 
-Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this
-contract, including a generated entry that passes the real Vitest quality gate
-and a deliberately collapsed entry that aborts before release Git writes. Run
-them with:
+Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
+
+Run them with:
 
     pwsh -NoProfile -Command "Invoke-Pester -Path scripts/tests/release-prepare.Tests.ps1"
 
 **Operator workflow**:
 
-    pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4
-    pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0
-    pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4 pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0 pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 
-If a release commit was already prepared but exact-SHA CI prevented the tag,
-fix the blocker through the normal issue/PR path. After that PR is merged and
-`main` is clean and synchronized, resume the prepared version without another
-bump or release commit:
+If a release commit was already prepared but exact-SHA CI prevented the tag, fix the blocker through the normal issue/PR path.
+
+After that PR is merged and `main` is clean and synchronized, resume the prepared version without another bump or release commit:
 
     git fetch origin --tags
     git switch main
     git pull --ff-only origin main
     pwsh -File scripts/release-prepare.ps1 -Resume -Version 4.0.5
 
-Recovery fails closed unless the explicit version equals `package.json`, HEAD
-equals `origin/main`, the changelog and both stamps already name that version,
-the tag and GitHub Release are absent, and exact-SHA CI is green. It does not
-modify or stage release files and does not push `main`; it only creates and
-pushes the annotated tag after those checks pass.
+Recovery fails closed unless the explicit version equals `package.json`, HEAD equals `origin/main`, the changelog and both stamps already name that version, the tag and GitHub Release are absent, and exact-SHA CI is green.
+
+It does not modify or stage release files and does not push `main`; it only creates and pushes the annotated tag after those checks pass.
 
 The script exits with a non-zero status if any step fails, including the CI
 gate. Watch progress with `gh run watch <id>`.
 
-Review the non-merge commit subjects since the previous tag as consumer-facing
-release text before running the script. The script turns them into `### Changes`
-notes and preserves one physical bullet per commit, but the operator still owns
-wording and grouping.
+Review the non-merge commit subjects since the previous tag as consumer-facing release text before running the script.
+
+The script turns them into `### Changes` notes and preserves one physical bullet per commit, but the operator still owns wording and grouping.
+
+## Pi package publication
+
+The full ownership, npm secret, publication-order, retry, and rollback contract
+lives in the [Pi-native integration guide](./pi-native-integration.md#release-contract).
+Before pushing a tag:
+
+- [ ] npm Trusted Publishing names repository `DysTelefonica/dysflow` and workflow
+      `.github/workflows/release.yml`.
+- [ ] No persistent `NPM_TOKEN` repository secret exists.
+- [ ] `package.json` and `plugin/pi/package.json` have matching versions.
+- [ ] The package dry-run and focused Pi tests pass in sandbox paths.
+- [ ] The one-time local login + 2FA bootstrap, if still required, is explicitly
+      authorized and runs only after the exact source commit is green.
+
+The workflow uses a short-lived OIDC credential, publishes to npmjs, and verifies with `npm view` before creating the GitHub Release.
+
+A failed post-publication run is retried forward; it never unpublishes or replaces immutable package bytes.
+
+The first package creation is the sole manual exception: local `npm login` plus 2FA, followed immediately by Trusted Publisher configuration.
+
+### Fresh-Pi visual acceptance
+
+After the implementation is green and uploaded, the implementation session stops.
+
+Once the authorized tag workflow has published the matching npm package, complete final acceptance from a completely new Pi process and session:
+
+- [ ] Run `dysflow install --agents pi --no-tui`; do not install from a local path.
+- [ ] Start another fresh Pi session after installation.
+- [ ] Call `dysflow({ tool: "bootstrap", args: {} })`.
+- [ ] Verify the collapsed call/result visibly use package-owned `⚡ Dysflow` chrome
+      comparable to Engram, and the expanded result exposes structured payload.
+- [ ] Record the installed runtime/package version and visual verdict on issue #1723.
+
+A `/reload` inside the implementation session is not final acceptance evidence. If
+the matching npm version is unavailable, stop; do not bypass the canonical owner-
+aware installer.
 
 ## MCP protocol compatibility
 

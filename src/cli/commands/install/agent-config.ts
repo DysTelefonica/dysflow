@@ -17,6 +17,7 @@ export type AgentConfigPaths = {
   claudeDesktop: string;
   claudeSettings: string;
   pi: string;
+  piSettings: string;
 };
 
 export function getHome(env: NodeJS.ProcessEnv): string {
@@ -30,6 +31,7 @@ export function resolveAgentConfigPaths(home: string): AgentConfigPaths {
     claudeDesktop: path.join(home, "AppData", "Roaming", "Claude", "claude_desktop_config.json"),
     claudeSettings: path.join(home, ".claude", "settings.json"),
     pi: path.join(home, ".pi", "agent", "mcp.json"),
+    piSettings: path.join(home, ".pi", "agent", "settings.json"),
   };
 }
 
@@ -40,9 +42,7 @@ export function isDysflowOwned(command: unknown): boolean {
       normalized.endsWith("/dysflow.cmd") ||
       normalized.endsWith("/dysflow") ||
       normalized.endsWith("/dysflow.exe") ||
-      normalized === "dysflow" ||
-      normalized.includes("/dysflow/") ||
-      normalized.includes("/.gemini/antigravity-cli/")
+      normalized === "dysflow"
     );
   }
   if (Array.isArray(command)) {

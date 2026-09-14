@@ -29,6 +29,8 @@ export const RELEASE_ARCHIVE_ENTRIES = [
   "CHANGELOG.md",
 ];
 
+const RELEASE_ARCHIVE_EXCLUDES = ["plugin/pi/node_modules", "plugin/pi/*.tgz"];
+
 function requiredSkillPath(name) {
   return `skills/${name}/SKILL.md`;
 }
@@ -86,7 +88,11 @@ export async function createReleaseArchive({ packageRoot, outputPath }) {
 
   try {
     const forceLocal = tarForceLocalArgs(resolvedRoot);
-    runTar([...forceLocal, "-czf", resolvedOutput, ...RELEASE_ARCHIVE_ENTRIES], resolvedRoot);
+    const excludes = RELEASE_ARCHIVE_EXCLUDES.map((entry) => `--exclude=${entry}`);
+    runTar(
+      [...forceLocal, ...excludes, "-czf", resolvedOutput, ...RELEASE_ARCHIVE_ENTRIES],
+      resolvedRoot,
+    );
     const listing = runTar([...forceLocal, "-tzf", resolvedOutput], resolvedRoot);
     assertReleaseArchiveManifest(listing);
   } catch (error) {

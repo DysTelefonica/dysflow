@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { compareVersions } from "../../../core/utils/version.js";
 import { parseNamedArgs } from "../arg-parser.js";
 import type { CliResult } from "../types.js";
-import { type AgentName, ALL_AGENTS, getHome } from "./agent-config.js";
+import { type AgentName, ALL_AGENTS, getHome, resolveAgentConfigPaths } from "./agent-config.js";
 import {
   checkChannelGates,
   checkChannelPin,
@@ -26,7 +27,18 @@ import {
   writeRuntimeMarker,
 } from "./extractor.js";
 import { readInstallState, writeInstallState } from "./install-state.js";
+import {
+  capturePiIntegration,
+  hasPiIntegration,
+  reconcilePiIntegration,
+  restorePiIntegration,
+} from "./mcp-configurator.js";
 import { resolvePackageRoot } from "./package-root.js";
+import {
+  hasOwnedPiPackage,
+  type PiPackageCommandRunner,
+  reconcilePiPackage,
+} from "./pi-package-manager.js";
 import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
 import {
   discoverPointerRolloutTargets,
@@ -43,6 +55,48 @@ import {
 } from "./skills-installer.js";
 
 const CHANNEL_USAGE = `[--channel <${INSTALL_CHANNELS.join("|")}>]`;
+
+async function refreshInstalledPiIntegration(
+  runtimeDir: string,
+  packageVersion: string,
+  env: NodeJS.ProcessEnv,
+  runPiCommand?: PiPackageCommandRunner,
+): Promise<
+  {
+    agent: "pi";
+    configPath: string;
+    status: "added" | "changed" | "unchanged";
+    active: boolean;
+  }[]
+> {
+  const paths = resolveAgentConfigPaths(getHome(env));
+  const commandPath = path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
+  const hasMcp = await hasPiIntegration(paths.pi, commandPath);
+  const hasPackage = await hasOwnedPiPackage(paths.piSettings, runtimeDir);
+  if (!hasMcp && !hasPackage) return [];
+
+  const piSnapshot = await capturePiIntegration(paths.pi);
+  const result = await reconcilePiIntegration({ mcpConfigPath: paths.pi, commandPath });
+  try {
+    await reconcilePiPackage({
+      settingsPath: paths.piSettings,
+      runtimeDir,
+      packageVersion,
+      env,
+      runPiCommand,
+    });
+  } catch (error) {
+    try {
+      await restorePiIntegration(paths.pi, piSnapshot);
+    } catch {
+      throw new Error(
+        "Pi package installation failed and Pi configuration rollback was incomplete.",
+      );
+    }
+    throw error;
+  }
+  return [{ agent: "pi", configPath: paths.pi, ...result }];
+}
 
 export const INSTALL_USAGE = `Usage: dysflow install [--runtime-dir <dir>] [--agents <codex,opencode,claude,pi>] [--agent-all] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] ${CHANNEL_USAGE} [--no-tui] [--verbose]`;
 const UPDATE_USAGE = `Usage: dysflow update [--runtime-dir <dir>] [--force] [--only <opencode,claude,codex,cursor,pi>] [--exclude <...>] ${CHANNEL_USAGE}`;
@@ -297,6 +351,7 @@ export async function handleUpdateCommand(
     releaseUpdateProvider?: ReleaseUpdateProvider;
     createReleaseUpdateProvider?: (channel: InstallChannel) => ReleaseUpdateProvider;
     packageRoot?: string;
+    piPackageCommandRunner?: PiPackageCommandRunner;
   } = {},
 ): Promise<CliResult> {
   const env = context.env ?? process.env;
@@ -420,6 +475,12 @@ export async function handleUpdateCommand(
           exclude: parsed.options.excludeSkills,
         }),
       });
+      await refreshInstalledPiIntegration(
+        runtimeDir,
+        installedVersion ?? latestRelease.version,
+        env,
+        context.piPackageCommandRunner,
+      );
       // Refresh the pin even when nothing was downloaded, so a runtime installed
       // before install state existed still records the channel it is tracking.
       await persistInstallState({
@@ -475,14 +536,20 @@ export async function handleUpdateCommand(
       preparedPackage.packageRoot,
       getHome(env),
     );
-    const pluginRefreshReport = createPluginRefreshReport(pluginRefresh);
-    const previousVersionStr =
-      installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
-    const latestVersionStr = `v${latestRelease.version}`;
     // A rolling channel installs whatever HEAD builds to; the authoritative
     // version is what actually landed on disk, not the moniker we asked for.
     const landedVersion =
       (await readPackageJsonVersion(releaseRuntimePaths.packageJsonDest)) ?? latestRelease.version;
+    const piConfigurations = await refreshInstalledPiIntegration(
+      runtimeDir,
+      landedVersion,
+      env,
+      context.piPackageCommandRunner,
+    );
+    const pluginRefreshReport = createPluginRefreshReport(pluginRefresh);
+    const previousVersionStr =
+      installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
+    const latestVersionStr = `v${latestRelease.version}`;
     await persistInstallState({
       runtimeDir,
       channel: resolvedChannel.channel,
@@ -500,7 +567,14 @@ export async function handleUpdateCommand(
         (preparedPackage.commitSha === undefined
           ? ""
           : `Installed release commit: ${preparedPackage.commitSha}\n`) +
-        createInstallReport(runtimeDir, [], { copiedFiles: runtimeInstall.copiedFiles }) +
+        createInstallReport(
+          runtimeDir,
+          piConfigurations.map(({ agent }) => agent),
+          {
+            copiedFiles: runtimeInstall.copiedFiles,
+            mcpConfigurations: piConfigurations,
+          },
+        ) +
         `\n${formatSkillInstallReport(skillInstall)}` +
         `\n${formatPointerRolloutReport(pointerRollout)}` +
         (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
