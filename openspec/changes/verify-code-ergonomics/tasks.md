@@ -48,7 +48,7 @@ Chain strategy: pending
 **TDD step**: RED (:1916, :1940) already written → GREEN when spread pattern applied
 **Spec requirement**: C (REQ-2)
 
-- [ ] 2.2 **Compute `summaryStructured`** — after the main diff loop, project `semanticSummary` + array lengths into the `SummaryStructured` shape. `actionable.total = sourceNewer + binaryNewer + bothChanged`; `nonActionable.total = sum of five buckets`. Include in the semantic-mode return spread.
+- [ ] 2.2 **Compute `summaryStructured`** — after the main diff loop, project `semanticSummary` + array lengths into the `SummaryStructured` shape. `actionable.total = sourceNewer + binaryNewer + bothChanged`; `nonActionable.total = sum of nine buckets`. Include in the semantic-mode return spread.
 
 **Work-unit**: `feat(vba-verify): emit summaryStructured alongside flat summary in semantic mode`
 **Files**: `src/core/services/vba-source-comparison.ts`

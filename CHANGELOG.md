@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking Changes
+
+- `feat(vba-semantic)`: extend `VbaSemanticCategory` to v2 13-token taxonomy (Refs #1724, WU-3). The union adds `commentOnly`, `continuationOnly`, `statementBoundaryOnly`, `nonActionableMixed` (9 → 13 tokens). `SummaryStructured.nonActionable` and the compact `nonActionableByCategory` now report 9 named keys + total instead of 5. Old consumers must extend their category maps to handle the 4 new tokens; `nonActionableMixed` is the catch-all when two or more non-actionable families combine. Doc anchors `verify-code-noise-categories-1669` and `verify-code-diagnostic-contract-1535` pin the live 9-key set.
+
+### Added
+
+- `feat(vba-verify)`: scaffold pure snapshot/canonicalize/normalize-reasons types (Refs #1724, WU-3). Adds `src/core/services/vba-source-snapshot.ts`, `src/core/services/canonicalize-vba.ts`, and `src/core/services/normalize-reasons.ts`, implementing the 13-step canonicalization order. No runtime behavior change for the existing single-flight `verify_code`.
+
 ## [v4.3.2] - 2026-09-02
 
 ### Changes
