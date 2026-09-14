@@ -25,6 +25,11 @@ import {
   type VbaRecommendation,
   type VbaSemanticCategory,
 } from "./vba-semantic-classifier.js";
+import {
+  buildArtifactIdentityKey,
+  type SnapshotArtifactFamily,
+  type SnapshotRepresentation,
+} from "./vba-source-snapshot.js";
 
 /** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
 // DYSFLOW_VERSION is now embedded in RuntimeDiagnostics via buildRuntimeDiagnostics()
@@ -35,6 +40,13 @@ export type VbaSourceComparisonFile = {
   fileType: string;
   path: string;
   relativePath: string;
+  /**
+   * Canonical identity key: `${family}\0${casefold(moduleName)}\0${representation}`.
+   Built by `buildArtifactIdentityKey` from the file's snapshot family + representation
+   so two files that share `(family, casefold(moduleName), representation)` collide
+   in the collector map and surface a `DUPLICATE_IDENTITY_KEY` completeness reason.
+   */
+  identityKey: string;
 };
 
 export type VbaSourceComparisonEntry = {
@@ -67,6 +79,16 @@ export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
   isActionable?: boolean;
   /** Human-facing action key, mirrors recommendation (e.g. "no_action", "import_to_binary"). */
   recommendedAction?: string;
+  /**
+   * WU-3 v2-categories (Refs #1724): ordered list of `NormalizationReason`
+   * entries the canonicalizer attributed to this diff. Mirrors the
+   * `SemanticClassification.normalizationReasons` field; populated by the
+   * classifier for every diff entry. Empty for actionable categories
+   * and for `matched`. Use it to render a human-readable "why this is
+   * non-actionable" line in dashboards without re-parsing the reason
+   * string.
+   */
+  normalizationReasons?: readonly string[];
 };
 
 /** Per-category count map present in semantic mode results. */
@@ -98,6 +120,10 @@ export type SummaryStructured = {
     attributeOnly: number;
     formSerializationOnly: number;
     encodingOnly: number;
+    commentOnly: number;
+    continuationOnly: number;
+    statementBoundaryOnly: number;
+    nonActionableMixed: number;
     total: number;
   };
 };
@@ -160,7 +186,8 @@ export type VbaVerifyResult = {
    * Nested companion to {@link summary} (semantic mode only). Same vocabulary
    * as the flat summary but shaped for direct consumption: top-level counts
    * plus `actionable.{sourceNewer,binaryNewer,bothChanged,total}` and
-   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,total}`.
+   * `nonActionable.{caseOnly,whitespaceOnly,attributeOnly,formSerializationOnly,encodingOnly,commentOnly,continuationOnly,statementBoundaryOnly,nonActionableMixed,total}`
+   * (9 named buckets; WU-3 v2-categories).
    * `total`s are sum-of-named-buckets; `different` is the count of semantic
    * diffs (NOT including `missingIn*`). Strict mode leaves this undefined.
    */
@@ -263,6 +290,12 @@ export interface ComparisonFileSystemEntry {
   isFile(): boolean;
 }
 
+/**
+ * Refs #1724 — WU-1 declared the next three optional methods. Implementations
+ * land in WU-5 (frozen snapshot seam). They are optional so the existing
+ * single-flight call path is unchanged; WU-5 wires the call sites that
+ * actually use them.
+ */
 export interface ComparisonFileSystemPort {
   mkdtemp(prefix: string): Promise<string>;
   readdir(path: string): Promise<readonly ComparisonFileSystemEntry[]>;
@@ -273,6 +306,12 @@ export interface ComparisonFileSystemPort {
   tmpdir(): string;
   /** Optional. When present, lets callers check path existence without throwing. */
   exists?(path: string): Promise<boolean>;
+  /** Optional. Declared by WU-1, implemented by WU-5. */
+  copyFile?(src: string, dest: string): Promise<void>;
+  /** Optional. Declared by WU-1, implemented by WU-5. Returns lowercase 64-char hex SHA-256. */
+  hashSha256?(path: string): Promise<string>;
+  /** Optional. Declared by WU-1, implemented by WU-5. */
+  writeFile?(path: string, data: string | Uint8Array): Promise<void>;
 }
 
 export async function compareSourceAgainstBinary(
@@ -513,7 +552,14 @@ export async function compareSourceAgainstBinary(
     }
     return finalize(
       successResult(
-        { operation: "verify_code", ...comparison.data, warnings: exportWarnings },
+        {
+          operation: "verify_code",
+          ...comparison.data,
+          // Merge collector-level completeness reasons (DUPLICATE_IDENTITY_KEY, …)
+          // from `compareVbaSourceTrees` together with the export-phase warnings
+          // so neither side's evidence is silently overwritten by the other.
+          warnings: [...(comparison.data.warnings ?? []), ...exportWarnings],
+        },
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
       ),
     );
@@ -528,7 +574,6 @@ export async function compareSourceAgainstBinary(
   }
 }
 
-import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import {
   type ChunkedVerifyOptions,
   resolveChunkOptions,
@@ -727,8 +772,12 @@ export async function compareVbaSourceTrees(
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
   const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
   const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter, fileSystem);
-  const sourceByKey = new Map(sourceFiles.map((file) => [comparisonKey(file), file]));
-  const binaryByKey = new Map(binaryFiles.map((file) => [comparisonKey(file), file]));
+  // Completeness reasons raised by the collector (e.g. DUPLICATE_IDENTITY_KEY).
+  // Merged into the returned `warnings[]` so callers see them alongside any
+  // export-phase warnings from the runner.
+  const collectorWarnings: ExportWarning[] = [];
+  const sourceByKey = buildFileIndex(sourceFiles, collectorWarnings);
+  const binaryByKey = buildFileIndex(binaryFiles, collectorWarnings);
   const matched: VbaSourceComparisonEntry[] = [];
   const different: VbaSourceComparisonEntry[] = [];
   const missingInSource: VbaSourceComparisonEntry[] = [];
@@ -853,6 +902,12 @@ export async function compareVbaSourceTrees(
         recommendation: classification.recommendation,
         isActionable: classification.actionable,
         recommendedAction: classification.recommendation,
+        // WU-3 v2-categories: surface the canonicalizer-side reason list on
+        // every diff entry so consumers can render "why this is non-actionable"
+        // without re-parsing the reason string. Empty for actionable and
+        // `matched`; populated by `selectNormalizationReasons` for every
+        // non-actionable category (single-family and mixed).
+        normalizationReasons: classification.normalizationReasons,
       });
     }
   }
@@ -895,12 +950,20 @@ export async function compareVbaSourceTrees(
             attributeOnly: semanticSummary.attributeOnly ?? 0,
             formSerializationOnly: semanticSummary.formSerializationOnly ?? 0,
             encodingOnly: semanticSummary.encodingOnly ?? 0,
+            commentOnly: semanticSummary.commentOnly ?? 0,
+            continuationOnly: semanticSummary.continuationOnly ?? 0,
+            statementBoundaryOnly: semanticSummary.statementBoundaryOnly ?? 0,
+            nonActionableMixed: semanticSummary.nonActionableMixed ?? 0,
             total:
               (semanticSummary.caseOnly ?? 0) +
               (semanticSummary.whitespaceOnly ?? 0) +
               (semanticSummary.attributeOnly ?? 0) +
               (semanticSummary.formSerializationOnly ?? 0) +
-              (semanticSummary.encodingOnly ?? 0),
+              (semanticSummary.encodingOnly ?? 0) +
+              (semanticSummary.commentOnly ?? 0) +
+              (semanticSummary.continuationOnly ?? 0) +
+              (semanticSummary.statementBoundaryOnly ?? 0) +
+              (semanticSummary.nonActionableMixed ?? 0),
           },
         }
       : undefined;
@@ -918,6 +981,12 @@ export async function compareVbaSourceTrees(
     different: sortComparisonEntries(different),
     missingInSource: sortComparisonEntries(missingInSource),
     missingInBinary: sortComparisonEntries(missingInBinary),
+    // Collector-level completeness reasons (DUPLICATE_IDENTITY_KEY, …). The
+    // export-phase caller merges these into the final `warnings[]` so the
+    // chunked driver (`vba-source-comparison-chunking.ts`) and the
+    // single-flight caller (`compareSourceAgainstBinary`) both surface
+    // them without losing evidence.
+    warnings: collectorWarnings,
     ...(includeDiffs ? { diffs: sortDiffEntries(diffs) } : {}),
     // Additive semantic fields (only in semantic mode)
     ...(mode === "semantic"
@@ -1072,8 +1141,19 @@ export async function collectVbaSourceFiles(
       if (isMissingPathError(err)) {
         entries = [];
       } else {
-        logSwallowedIoError("vba-source-comparison:readdir", err);
-        entries = [];
+        // Non-ENOENT readdir failures (EACCES, EPERM, EBUSY, EMFILE, …) are
+        // operator-visible defects, not silent missing-path state. Surface a
+        // typed `SOURCE_DIRECTORY_UNREADABLE` error so the caller can route
+        // it to the structured `warnings[]` channel as a completeness reason
+        // instead of swallowing it.
+        throw createDysflowError(
+          "SOURCE_DIRECTORY_UNREADABLE",
+          `verify_code collector could not read source directory '${directory}': ${errorMessage(err)}`,
+          {
+            retryable: false,
+            details: { directory, cause: errorCode(err) ?? "unknown" },
+          },
+        );
       }
     }
     for (const entry of entries) {
@@ -1085,13 +1165,19 @@ export async function collectVbaSourceFiles(
       if (!entry.isFile()) continue;
       const fileType = vbaSourceFileType(entry.name);
       if (fileType === undefined) continue;
-      const moduleName = moduleNameFromVbaFile(entry.name);
+      const moduleName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
       if (moduleFilter.size > 0 && !moduleFilter.has(moduleName.toLowerCase())) continue;
+      const identityKey = buildArtifactIdentityKey(
+        familyForFileType(fileType),
+        moduleName,
+        representationForFileType(fileType),
+      );
       files.push({
         moduleName,
         fileType,
         path,
         relativePath: relative(root, path).replace(/\\/g, "/"),
+        identityKey,
       });
     }
   }
@@ -1110,6 +1196,57 @@ function vbaSourceFileType(fileName: string): string | undefined {
   return undefined;
 }
 
+function familyForFileType(fileType: string): SnapshotArtifactFamily {
+  // `.bas` is the only "standard" module family per the snapshot taxonomy;
+  // every other code-bearing extension (.cls, .frm) is class-family. The
+  // ternary preserves the parent-committed mapping exactly: bas→standard,
+  // cls→class, frm→class (everything else falls through to class).
+  return fileType === "cls" ? "class" : fileType === "bas" ? "standard" : "class";
+}
+
+function representationForFileType(fileType: string): SnapshotRepresentation {
+  // code modules (.bas/.cls/.frm) are compared on their CODE representation;
+  // form.txt / report.txt are the LAYOUT representation. Anything unknown
+  // is treated as code (defensive default that matches the existing
+  // CODE_FILE_TYPES set in vba-semantic-classifier.ts).
+  if (fileType === "form.txt" || fileType === "report.txt") return "layout";
+  return "code";
+}
+
+/**
+ * Resolve the canonical module name for a VBA source file.
+ *
+ * For `.bas`/`.cls`/`.frm` (code modules) the source of truth is the
+ * `Attribute VB_Name = "…"` header that Access emits on export. When the
+ * header is absent or unparseable, we fall back to the filename case-folded
+ * — this keeps behavior stable for callers that feed ad-hoc `.bas` text
+ * (test fixtures, scratch scripts) without an `Attribute VB_Name` line.
+ *
+ * For `.form.txt`/`.report.txt` there is no `Attribute VB_Name` (the
+ * layout document names the form in `Begin … End`), so the filename minus
+ * the `.form.txt`/`.report.txt` suffix is the canonical name verbatim.
+ */
+async function resolveVbaModuleName(
+  fileSystem: ComparisonFileSystemPort,
+  path: string,
+  fileType: string,
+  fileName: string,
+): Promise<string> {
+  const filenameDerived = moduleNameFromVbaFile(fileName);
+  if (fileType !== "bas" && fileType !== "cls" && fileType !== "frm") {
+    return filenameDerived;
+  }
+  try {
+    const text = await fileSystem.readFile(path, "utf8");
+    const vbName = parseAttributeVbName(text);
+    if (vbName !== null && vbName.length > 0) return vbName;
+  } catch {
+    // Read failure during VB_Name parsing is non-fatal: fall back to the
+    // filename-derived name so the collector still emits a usable entry.
+  }
+  return filenameDerived;
+}
+
 function moduleNameFromVbaFile(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".form.txt")) return fileName.slice(0, -".form.txt".length);
@@ -1117,8 +1254,75 @@ function moduleNameFromVbaFile(fileName: string): string {
   return parse(fileName).name;
 }
 
-function comparisonKey(file: VbaSourceComparisonFile): string {
-  return `${file.moduleName.toLowerCase()}\0${file.fileType}`;
+/**
+ * Parse the canonical `Attribute VB_Name = "…"` header from a VBA source
+ * file's text. Returns the value or null when absent. The regex is
+ * case-insensitive and anchored to start/end of line so leading whitespace
+ * or trailing comments cannot confuse the parse. Multiple matches (rare,
+ * but possible in hand-edited files) resolve to the FIRST match — the
+ * Access VBE writes exactly one `Attribute VB_Name` line per module.
+ */
+export function parseAttributeVbName(text: string): string | null {
+  const match = text.match(/^\s*Attribute\s+VB_Name\s*=\s*"([^"]*)"\s*$/im);
+  if (!match) return null;
+  const captured = match[1];
+  return typeof captured === "string" ? captured : null;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function errorCode(err: unknown): string | undefined {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return undefined;
+}
+
+/**
+ * Build a `Map<identityKey, file>` while detecting duplicate identity keys.
+ * On duplicate, throws a `TypeError` whose message identifies the colliding
+ * identity key — mirroring the `indexByIdentityKey` contract in
+ * `./vba-source-snapshot.js`. Callers convert that throw into a typed
+ * `DUPLICATE_IDENTITY_KEY` completeness reason without losing evidence.
+ */
+function indexFilesByIdentityKey(
+  files: readonly VbaSourceComparisonFile[],
+): Map<string, VbaSourceComparisonFile> {
+  const out = new Map<string, VbaSourceComparisonFile>();
+  for (const file of files) {
+    if (out.has(file.identityKey)) {
+      throw new TypeError(`Duplicate identity key in collector: ${file.identityKey}`);
+    }
+    out.set(file.identityKey, file);
+  }
+  return out;
+}
+
+function buildFileIndex(
+  files: readonly VbaSourceComparisonFile[],
+  warnings: ExportWarning[],
+): Map<string, VbaSourceComparisonFile> {
+  try {
+    return indexFilesByIdentityKey(files);
+  } catch (err) {
+    if (err instanceof TypeError && err.message.startsWith("Duplicate identity key")) {
+      warnings.push({
+        module: "__collector__",
+        error: "DUPLICATE_IDENTITY_KEY",
+        message: err.message,
+      });
+      // Degraded fallback: rebuild with last-write-wins so the comparison
+      // still completes on partial evidence. The completeness reason is
+      // already surfaced via `warnings[]` for downstream visibility.
+      const fallback = new Map<string, VbaSourceComparisonFile>();
+      for (const file of files) fallback.set(file.identityKey, file);
+      return fallback;
+    }
+    throw err;
+  }
 }
 
 function toComparisonEntry(

@@ -33,6 +33,10 @@ Read the live full schema; do not combine `prune` with `filter`.
 
 Verbose entries include binary/file snapshots plus `classification`, `reason`, `actionable`, `recommendation`, and `classifierRules`.
 
+## Sidecar manifest (WU-4, Refs #1724)
+
+Every non-readOnly apply run writes `<destinationRoot>/export-manifest.json` with one record per emitted artifact: `{ moduleName, fileType, relativePath, codec, sha256, byteLength }`. `codec` is BOM-driven (`utf-8` / `utf-16le` / `utf-16be` / `unsupported`); `sha256` covers the raw bytes including the BOM. `prune` cleans up the sidecar alongside the managed module files because it shares the destination root. ReadOnly / plan mode skips emission.
+
 ## Common errors
 
 | Code | Description | Fix |

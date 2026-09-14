@@ -242,8 +242,9 @@ tool has a kebab-case `.md` example file there.
 
 Use `actionableOk` and `recommendedAction` as the sync gate. Raw `ok` means
 byte/source parity and can be false for non-actionable `caseOnly`,
-`whitespaceOnly`, `attributeOnly`, `formSerializationOnly`, or `encodingOnly`
-noise.
+`whitespaceOnly`, `attributeOnly`, `formSerializationOnly`, `encodingOnly`,
+`commentOnly`, `continuationOnly`, `statementBoundaryOnly`, or
+`nonActionableMixed` noise.
 
 `summaryByCategory` and `nonActionableByCategory` are aggregate counts. They do
 not identify module membership. Never align those totals with names from a

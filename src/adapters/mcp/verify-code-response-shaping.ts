@@ -74,6 +74,11 @@ export function shapeVerifyCodeResponse<T>(raw: T, options: VerifyCodeDiagnostic
     // says why, which pushed consumers to distrust the verdict or pay for
     // diagnostic mode. The core comparison already computes these counts;
     // this is the symmetric projection of `summaryByCategory`.
+    //
+    // WU-3 v2-categories (Refs #1724): the bucket set is now 9 named keys,
+    // mirroring `SummaryStructured.nonActionable` exactly. `nonActionableMixed`
+    // is the catch-all for diffs that equalize only under a combination of
+    // non-actionable normalizers (case + comment, etc.).
     compact.nonActionableByCategory = {
       caseOnly: numberOrZero(nonActionable.caseOnly ?? semanticSummary.caseOnly),
       whitespaceOnly: numberOrZero(nonActionable.whitespaceOnly ?? semanticSummary.whitespaceOnly),
@@ -82,6 +87,16 @@ export function shapeVerifyCodeResponse<T>(raw: T, options: VerifyCodeDiagnostic
         nonActionable.formSerializationOnly ?? semanticSummary.formSerializationOnly,
       ),
       encodingOnly: numberOrZero(nonActionable.encodingOnly ?? semanticSummary.encodingOnly),
+      commentOnly: numberOrZero(nonActionable.commentOnly ?? semanticSummary.commentOnly),
+      continuationOnly: numberOrZero(
+        nonActionable.continuationOnly ?? semanticSummary.continuationOnly,
+      ),
+      statementBoundaryOnly: numberOrZero(
+        nonActionable.statementBoundaryOnly ?? semanticSummary.statementBoundaryOnly,
+      ),
+      nonActionableMixed: numberOrZero(
+        nonActionable.nonActionableMixed ?? semanticSummary.nonActionableMixed,
+      ),
     };
     compact.bulkImportable = bulkImportable;
     compact.bulkImportableCount = numberOrZero(raw.bulkImportableCount ?? bulkImportable.length);

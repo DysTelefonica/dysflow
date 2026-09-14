@@ -88,7 +88,7 @@
 Output MUST preserve:
 
 1. `summaryStructured.actionable.total === sourceNewer + binaryNewer + bothChanged`
-2. `summaryStructured.nonActionable.total` = sum of its five buckets
+2. `summaryStructured.nonActionable.total` = sum of its nine buckets
 3. `recommendedAction === "manual_merge"` does NOT force empty bulk arrays; consumers MUST honor both
 4. `bulkImportable ⊆ actionableDifferent.filter(sourceNewer) ∪ missingInBinary`; `bulkExportable ⊆ actionableDifferent.filter(binaryNewer) ∪ missingInSource`
 

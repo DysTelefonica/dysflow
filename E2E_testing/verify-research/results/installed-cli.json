@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-09-13T09:07:19.0277802+00:00",
+  "entrypoint": "C:\\Users\\adm1\\AppData\\Local\\dysflow\\bin\\dysflow.ps1",
+  "version": {
+    "arguments": [
+      "--version"
+    ],
+    "exitCode": 0,
+    "stdout": "4.3.2",
+    "stderr": ""
+  },
+  "help": {
+    "arguments": [
+      "--help"
+    ],
+    "exitCode": 0,
+    "stdout": "Usage: dysflow [command]\n\nDefault:\n  dysflow Open the Dysflow terminal UI dashboard\n\nCommands:\n  mcp     Start the MCP stdio adapter\n  setup   Prepare local Dysflow configuration\n  doctor  Check local Dysflow requirements\n  install Run Dysflow installer (interactive MCP wiring + runtime copy)\n  update  Reinstall runtime when source version is newer\n  uninstall Run Dysflow uninstaller (revert integrations + clean runtime)\n  tui     Open the Dysflow terminal UI\n  serve   Start local HTTP API\n  access  Batch Access database operations (e.g. relink-directory)\n  lint    Run static VBA source checks (e.g. lint callees)\n  codegraph-drift Scan or fix stale codegraph-vba runtime refs in user-supplement blocks\n  migrate-dryrun Migrate legacy consumer dryRun payloads to apply with undo support\n  telemetry-evidence Analyze a collected telemetry window for the surface-profile gate",
+    "stderr": ""
+  },
+  "verify": {
+    "arguments": [
+      "verify"
+    ],
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "Unsupported command: verify\n\nUsage: dysflow [command]\n\nDefault:\n  dysflow Open the Dysflow terminal UI dashboard\n\nCommands:\n  mcp     Start the MCP stdio adapter\n  setup   Prepare local Dysflow configuration\n  doctor  Check local Dysflow requirements\n  install Run Dysflow installer (interactive MCP wiring + runtime copy)\n  update  Reinstall runtime when source version is newer\n  uninstall Run Dysflow uninstaller (revert integrations + clean runtime)\n  tui     Open the Dysflow terminal UI\n  serve   Start local HTTP API\n  access  Batch Access database operations (e.g. relink-directory)\n  lint    Run static VBA source checks (e.g. lint callees)\n  codegraph-drift Scan or fix stale codegraph-vba runtime refs in user-supplement blocks\n  migrate-dryrun Migrate legacy consumer dryRun payloads to apply with undo support\n  telemetry-evidence Analyze a collected telemetry window for the surface-profile gate"
+  },
+  "verifyAvailable": false,
+  "accessOpened": false,
+  "note": "Availability probe only. No Access operation or MCP tool call is performed."
+}

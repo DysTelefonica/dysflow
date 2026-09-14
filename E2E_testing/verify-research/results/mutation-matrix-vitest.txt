@@ -1,0 +1,65 @@
+
+ RUN  v4.1.9 C:/00repos/codigo/dysflow
+
+ ❯ E2E_testing/verify-research/mutation-matrix.test.ts (157 tests | 8 failed) 20ms
+     × 'comment-case-goal' actionable matches expected functional behavior 4ms
+     × 'combined-case-indent-comment-goal' actionable matches expected functional behavior 0ms
+     × 'rem-comment-content-goal' actionable matches expected functional behavior 0ms
+     × 'operator-spacing-goal' actionable matches expected functional behavior 0ms
+     × 'continuation-reflow-goal' actionable matches expected functional behavior 0ms
+     × 'colon-to-newline-goal' actionable matches expected functional behavior 0ms
+     × 'attribute-vb-name-case-goal' actionable matches expected functional behavior 0ms
+     × 'attribute-predeclared-id-goal' actionable matches expected functional behavior 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'comment-case-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'combined-case-indent-comment-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'rem-comment-content-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'operator-spacing-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'continuation-reflow-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'colon-to-newline-goal' actionable matches expected functional behavior
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'attribute-vb-name-case-goal' actionable matches expected functional behavior
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ E2E_testing/verify-research/mutation-matrix.test.ts:510:44
+    508| describe("GOAL functional behavior", () => {
+    509|   it.each(observations)("$id actionable matches expected functional be…
+    510|     expect(observation.observedActionable).toBe(observation.expectedFu…
+       |                                            ^
+    511|   });
+    512| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  E2E_testing/verify-research/mutation-matrix.test.ts > GOAL functional behavior > 'attribute-predeclared-id-goal' actionable matches expected functional behavior
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ E2E_testing/verify-research/mutation-matrix.test.ts:510:44
+    508| describe("GOAL functional behavior", () => {
+    509|   it.each(observations)("$id actionable matches expected functional be…
+    510|     expect(observation.observedActionable).toBe(observation.expectedFu…
+       |                                            ^
+    511|   });
+    512| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 149 passed (157)
+   Start at  11:35:38
+   Duration  297ms (transform 50ms, setup 0ms, import 82ms, tests 20ms, environment 0ms)
+

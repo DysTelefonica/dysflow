@@ -1284,7 +1284,16 @@ describe("encodingOnly — lossy out-of-codepage replacement", () => {
   });
 
   it("does NOT treat a real ASCII change as lossy encoding", () => {
-    // The differing characters are ASCII — must remain functional
+    // The differing characters are ASCII — must NOT classify as encodingOnly.
+    //
+    // BEHAVIOR CHANGE (Refs #1724, WU-3 v2-categories): comment-only diffs
+    // are now `commentOnly` rather than functional. The original v1 contract
+    // treated comment text as part of the functional diff so the test below
+    // expected `bothChanged`. The v2 taxonomy collapses whole-line-comment
+    // differences to `commentOnly` (non-actionable) because the VBE never
+    // reads comment bodies at runtime. Marked with an explicit testing-
+    // philosophy NORTH comment per the contract that v1→v2 changes must be
+    // honest about the new verdict, not silently rewritten.
     const src = "Option Explicit\n' Version 1\nPublic Sub DoThing()\nEnd Sub";
     const bin = "Option Explicit\n' Version 2\nPublic Sub DoThing()\nEnd Sub";
 
@@ -1296,8 +1305,9 @@ describe("encodingOnly — lossy out-of-codepage replacement", () => {
     });
 
     expect(result.classification).not.toBe("encodingOnly");
-    const functional: VbaSemanticCategory[] = ["sourceNewer", "binaryNewer", "bothChanged"];
-    expect(functional).toContain(result.classification);
+    // WU-3 v2 verdict: pure comment diffs are now `commentOnly` (non-actionable).
+    expect(result.classification).toBe("commentOnly");
+    expect(result.actionable).toBe(false);
   });
 });
 
@@ -2044,5 +2054,122 @@ describe("neutralizeLossyEncoding (string-aware, only neutralizer in src/)", () 
     const text = "Public Sub Men?()\nEnd Sub";
     const neutralized = neutralizeLossyEncoding(text);
     expect(neutralized).not.toContain("Men?");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WU-3 v2-categories (Refs #1724) — the four new non-actionable buckets
+// ---------------------------------------------------------------------------
+
+describe("commentOnly — whole-line ' or Rem comment content (#1724 WU-3)", () => {
+  it("classifies a case-only difference inside a ' comment as commentOnly", () => {
+    const src =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\n\' Business Note\n';
+    const bin =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\n\' business note\n';
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("commentOnly");
+    expect(result.actionable).toBe(false);
+    expect(result.recommendation).toBe("no_action");
+  });
+
+  it("classifies a Rem-content difference as commentOnly", () => {
+    const src =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\nRem Old note\n';
+    const bin =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Run()\nEnd Sub\nRem New note\n';
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("commentOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("classifies a multi-line comment-only diff as commentOnly", () => {
+    const src = "Attribute VB_Name = \"M\"\n' Header\n' Body\nPublic Sub Run()\nEnd Sub\n";
+    const bin =
+      "Attribute VB_Name = \"M\"\n' Header\n' Different Body\nPublic Sub Run()\nEnd Sub\n";
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("commentOnly");
+    expect(result.actionable).toBe(false);
+  });
+});
+
+describe("continuationOnly — VBA line-continuation reflow (#1724 WU-3)", () => {
+  it("classifies a `_<EOL>` reflow as continuationOnly", () => {
+    const src =
+      "Option Explicit\nPublic Function Total() As Long\n    Total = 1 + _\n        2\nEnd Function\n";
+    const bin =
+      "Option Explicit\nPublic Function Total() As Long\n    Total = 1 + 2\nEnd Function\n";
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("continuationOnly");
+    expect(result.actionable).toBe(false);
+  });
+});
+
+describe("statementBoundaryOnly — colon vs newline (#1724 WU-3)", () => {
+  it("classifies `: ` separator vs newline as statementBoundaryOnly", () => {
+    const src =
+      "Option Explicit\nPublic Function Run() As Long\n    a = 1: b = 2\n    Run = a + b\nEnd Function\n";
+    const bin =
+      "Option Explicit\nPublic Function Run() As Long\n    a = 1\n    b = 2\n    Run = a + b\nEnd Function\n";
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("statementBoundaryOnly");
+    expect(result.actionable).toBe(false);
+  });
+
+  it("does NOT rewrite `:=` (named-arg separator) inside the normalizer", () => {
+    // `:=` must be preserved. The classifier's statement-boundary normalizer
+    // never splits on `:=`, so the pair remains distinguishable and lands in
+    // the functional diff rather than collapsing to a false positive.
+    const src = "Option Explicit\nPublic Sub Run()\n    Call Foo(a:=1)\nEnd Sub\n";
+    const bin = "Option Explicit\nPublic Sub Run()\n    Call Foo(a:=1)\nEnd Sub\n";
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("matched");
+  });
+});
+
+describe("nonActionableMixed — multi-family (#1724 WU-3)", () => {
+  it("classifies case + comment combined as nonActionableMixed", () => {
+    const src =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub calculate()\nEnd Sub\n\' NOTE\n';
+    const bin =
+      'Attribute VB_Name = "M"\nOption Explicit\nPublic Sub Calculate()\nEnd Sub\n\' note\n';
+    const result = classifyVbaPair({
+      sourceText: src,
+      binaryText: bin,
+      fileType: "bas",
+      mode: "semantic",
+    });
+    expect(result.classification).toBe("nonActionableMixed");
+    expect(result.actionable).toBe(false);
   });
 });

@@ -59,7 +59,11 @@ callers do not have to re-filter `actionableDifferent` themselves.
         "whitespaceOnly": 6,
         "attributeOnly": 2,
         "formSerializationOnly": 0,
-        "encodingOnly": 0
+        "encodingOnly": 0,
+        "commentOnly": 0,
+        "continuationOnly": 0,
+        "statementBoundaryOnly": 0,
+        "nonActionableMixed": 0
       },
       "bulkImportable": ["Form_Customer", "Modulo_Logger", "Utils_Helpers"],
       "bulkImportableCount": 3,
