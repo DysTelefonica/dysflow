@@ -36,6 +36,7 @@
  */
 
 import type { DysflowError, OperationResult } from "../../core/contracts/index.js";
+import { createDysflowError } from "../../core/contracts/index.js";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -509,6 +510,12 @@ export async function runSyncBinary(args: {
         const params: SyncBinaryChunkParams = {
           ...forward,
           moduleNames: names,
+          // Issue #1733 — propagate the apply intent into every chunk. The
+          // bridge strips sync-binary-owned keys from `forward` so `apply`
+          // is NOT carried via `forward`; the orchestrator is the source of
+          // truth for the apply decision (`willExecute`), so each chunk
+          // receives the literal boolean here.
+          apply: willExecute,
           // sync_binary never threads `compile` - the runtime does not
           // compile (v1.19.0 / feat-759-no-compile). The human compiles
           // in Access (Debug > Compile) before re-running tests.
@@ -541,6 +548,10 @@ export async function runSyncBinary(args: {
         const params: SyncBinaryChunkParams = {
           ...forward,
           moduleNames: names,
+          // Issue #1733 — see the import loop above. Propagate apply so
+          // every export chunk receives `apply:true` when sync_binary was
+          // invoked with apply:true.
+          apply: willExecute,
         };
         const result = await adapter.runExportModules(params);
         lastExport = result;
@@ -558,6 +569,50 @@ export async function runSyncBinary(args: {
             return { ok: false, dryRun: false, error: result.error };
           }
         }
+      }
+    }
+
+    // Issue #1733 — defence: when willExecute is true, every chunk must
+    // produce an executed envelope (mode="execute" / dryRun=false /
+    // willExecute=true). A nested chunk that returns plan-only means the
+    // apply intent was lost between the orchestrator and the inner
+    // primitive; surface it as a typed failure instead of aggregating it
+    // into ok:true.
+    if (willExecute) {
+      const chunkRemainedPlan = (
+        data: OperationResult<unknown> | null,
+        direction: "import" | "export",
+      ): DysflowError | null => {
+        if (data === null || !data.ok) return null;
+        const obj = data.data;
+        if (obj === null || typeof obj !== "object") return null;
+        const envelope = obj as Record<string, unknown>;
+        const mode = envelope.mode;
+        const dryRun = envelope.dryRun;
+        const will = envelope.willExecute;
+        if (mode !== "plan" && dryRun !== true && will !== false) return null;
+        return createDysflowError(
+          "SYNC_BINARY_CHUNK_REMAINED_PLAN",
+          `sync_binary dispatched an apply chunk but ${direction}_modules returned a plan-only envelope (mode=${String(
+            mode,
+          )}, dryRun=${String(dryRun)}, willExecute=${String(will)}). The apply intent was lost between the orchestrator and the nested ${direction} primitive.`,
+          { retryable: false },
+        );
+      };
+      const planFailure =
+        chunkRemainedPlan(lastImport, "import") ??
+        chunkRemainedPlan(lastExport, "export");
+      if (planFailure !== null) {
+        const finishedAt = new Date();
+        execution = {
+          startedAt: startedAt.toISOString(),
+          finishedAt: finishedAt.toISOString(),
+          durationMs: finishedAt.getTime() - startedAtMs,
+          importResult: dataOf(lastImport),
+          exportResult: dataOf(lastExport),
+          chunksExecuted,
+        };
+        return { ok: false, dryRun: false, error: planFailure };
       }
     }
 

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `fix(sync-binary)`: propagate `apply:true` into every chunk dispatch (#1733). The bridge was listing `apply` as a sync-binary-owned key in `stripSyncBinaryOwnParams`, so the `forward` payload the orchestrator passed to each `import_modules` / `export_modules` chunk dropped `apply`. With `direction:'binary-to-src'` and `apply:true`, the nested `export_modules` therefore ran plan-only and surfaced `mode:'plan'`, `exportedPaths:[]` while the top-level `sync_binary` result still reported `ok:true` — a silent corruption. The orchestrator now forwards `apply:willExecute` verbatim into every chunk and, as defence-in-depth, rejects any nested plan-only envelope under `willExecute` with a typed `SYNC_BINARY_CHUNK_REMAINED_PLAN` error. Symmetric fix applies to `direction:'src-to-binary'` and `direction:'both'`. New RED coverage at `test/adapters/vba-sync/sync-binary-apply-forwarding-1733.test.ts` (AC1–AC4).
+
 ## [v4.4.0] - 2026-09-14
 
 ### Breaking Changes
