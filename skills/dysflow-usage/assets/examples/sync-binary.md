@@ -98,6 +98,7 @@ On failure, `env.error.code` is one of the codes below; `error.remediation` and 
 | `PROJECT_ID_MISMATCH` | Caller-supplied projectId does not match the configured id. | see `references/error-codes.md` |
 | `MCP_WRITES_DISABLED` | Process-level writes are disabled. | see `references/error-codes.md` |
 | `MCP_INPUT_INVALID` | Input does not satisfy the tool's schema. | see `references/error-codes.md` |
+| `SYNC_BINARY_CHUNK_REMAINED_PLAN` | `apply: true` was dispatched but a nested `import_modules` / `export_modules` chunk returned a plan-only envelope (mode=`"plan"`, dryRun=`true`, or willExecute=`false`). The apply intent was lost between the orchestrator and the inner primitive. Re-run with a fresh `apply: true` after fixing the dispatcher bridge; the failure is fail-closed. | n/a (dispatcher contract regression; if reproducible, file an issue with the exact `direction` + `moduleNames` slice) |
 
 
 ## Cross-reference
