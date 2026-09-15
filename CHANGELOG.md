@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.4.2] - 2026-09-15
+
+### Fixed
+
+- `fix(plugin-pi)`: `resolveDysflowCommand` now accepts Windows-style absolute paths (`C:\...` / `C:/...`) regardless of the host platform (#1736). Previously the function used `path.isAbsolute` for the runtime-directory check, which is OS-specific: on Linux it returns `false` for a drive-letter path, even when the caller intentionally passed one. The `release.yml` workflow's `Exact-SHA quality authority` job runs on `ubuntu-latest` and `test/quality-gates/pi-native-package-1723.test.ts` exercises a Windows-style path through the same helper, so the regression blocked the last three tag-triggered releases from being published automatically. The check now uses `looksLikeAbsolute(p)` (a portable `path.isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p)` predicate) and the launcher filename pin follows the same rule — `dysflow.cmd` whenever the runtime directory is Windows-style, even on non-Windows hosts. Windows behaviour is unchanged.
+
 ## [v4.4.1] - 2026-09-15
 
 ### Fixed

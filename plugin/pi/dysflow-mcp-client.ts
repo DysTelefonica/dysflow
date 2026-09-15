@@ -27,13 +27,29 @@ type ClientState = {
   transport: StdioClientTransport;
 };
 
+/**
+ * Detect a Windows-style absolute path (`C:\...` or `C:/...`) regardless of
+ * the host platform. `path.isAbsolute` is OS-specific — on Linux it returns
+ * `false` for a drive-letter path, but the caller can legitimately hand one
+ * over (the installer resolves a Windows runtime directory and the function
+ * has to preserve it verbatim).
+ */
+function looksLikeAbsolute(p: string): boolean {
+  return path.isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p);
+}
+
+/** True when the path carries a Windows drive letter (e.g. `C:\foo`). */
+function isWindowsStylePath(p: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(p);
+}
+
 export function resolveDysflowCommand(
   _moduleUrl: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const override = env.DYSFLOW_BIN?.trim();
   if (override) {
-    if (!path.isAbsolute(override)) {
+    if (!looksLikeAbsolute(override)) {
       throw new Error("DYSFLOW_BIN must be an absolute path to a trusted Dysflow launcher.");
     }
     return override;
@@ -59,10 +75,18 @@ export function resolveDysflowCommand(
     env.LOCALAPPDATA ?? path.join(env.USERPROFILE ?? env.HOME ?? "", "AppData", "Local"),
     "dysflow",
   );
-  if (!path.isAbsolute(runtimeDir)) {
+  if (!looksLikeAbsolute(runtimeDir)) {
     throw new Error("The resolved Dysflow runtime directory must be absolute.");
   }
-  return path.join(runtimeDir, "bin", process.platform === "win32" ? "dysflow.cmd" : "dysflow");
+  // Issue #1736 — when the runtime directory is Windows-style (drive letter),
+  // pin the launcher filename to `dysflow.cmd` even on non-Windows hosts. The
+  // installer's resolved path is authoritative and cross-platform consumers
+  // must not silently downgrade to a non-`.cmd` launcher.
+  const launcherName =
+    process.platform === "win32" || isWindowsStylePath(runtimeDir)
+      ? "dysflow.cmd"
+      : "dysflow";
+  return path.join(runtimeDir, "bin", launcherName);
 }
 
 export function dysflowChildEnvironment(
