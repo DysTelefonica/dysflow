@@ -10,6 +10,7 @@ This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` s
 
 The block between `<!-- dysflow:arnés --> ... <!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
 
+<!-- markdownlint-disable -->
 <!-- dysflow:arnés -->
 # dysflow — Operating Harness
 
@@ -213,7 +214,7 @@ load `access-vba-e2e-methodology`.
 ## 4. Companion skills to load (matrix)
 
 | When you are... | Load this skill FIRST |
-| --- | --- |
+|---|---|
 | Calling any dysflow tool | `dysflow-usage` (canonical tool / flag / error tables) |
 | Writing or reviewing VBA | `vba-access` (MS best practices + Telefónica D&S) |
 | Implementing a feature with TDD | `access-vba-tdd-loop` (§8 8-step loop) |
@@ -320,6 +321,7 @@ Source of truth: live `bootstrap` plus explicit schema/capability views. If this
 runtime, **runtime wins**; surface the drift and update via
 `dysflow-codegraph-update`.
 <!-- /dysflow:arnés -->
+<!-- markdownlint-enable -->
 ### Project-context (this worktree, NOT inside the canonical block)
 
 - `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
