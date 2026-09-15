@@ -219,10 +219,10 @@
     "sha256": "e4d61b5ad005033bb17c5cb369baf0bef6af2a05c5ef424a8b006d1848a0231f",
     "needs_human_content": false
   },
-  "sync_binary": {
-    "path": "assets/examples/sync-binary.md",
-    "sha256": "027f2ecfcb378fee0307123293ed06bdaab97eafb624a561b0989a67742c16f0",
-    "needs_human_content": false
+"sync_binary": {
+      "path": "assets/examples/sync-binary.md",
+      "sha256": "f1ed3e3e7f9eea8589ffd40f54a85741c70b525fb498538c735ea6751367a413",
+      "needs_human_content": false
   },
   "test_vba": {
     "path": "assets/examples/test-vba.md",
