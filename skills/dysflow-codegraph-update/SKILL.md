@@ -7,7 +7,7 @@ metadata:
   version: "3.2.0"
   status: active
   last_verified: "2026-09-02"
-  last_dysflow_version: "4.4.0"
+  last_dysflow_version: "4.4.1"
   last_codegraph_vba_version: "1.15.0"
   requires: "dysflow MCP >= 3.0, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
   managed_by: "The Dysflow release bundle owns this skill; `dysflow install` and `dysflow update` propagate it, while `dysflow doctor` audits installed runtime copies. The skill also audits user-owned consumer skills at their separate canonical source."
