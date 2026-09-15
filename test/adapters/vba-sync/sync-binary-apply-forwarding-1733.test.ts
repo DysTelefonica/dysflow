@@ -30,7 +30,6 @@ import {
   type SyncBinaryAdapterLike,
   type SyncBinaryFailureResult,
   type SyncBinaryInput,
-  type SyncBinaryVerifyOutcome,
   type SyncVerifySummary,
 } from "../../../src/adapters/vba-sync/sync-binary";
 
