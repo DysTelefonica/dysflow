@@ -43,10 +43,10 @@ describe("release package version", () => {
       expect(releasePrepare).toContain('"plugin/pi/package.json"');
       expect(releasePrepare).toContain("WriteAllBytes($piPackagePath, $piPackageBefore)");
       expect(workflow).toContain("registry-url: https://registry.npmjs.org");
-      expect(workflow).toContain("id-token: write");
-      expect(workflow).toContain("Verify npm trusted-publishing client");
-      expect(workflow).not.toContain("NPM_TOKEN");
-      expect(workflow).not.toContain("NODE_AUTH_TOKEN");
+      expect(workflow).toContain("secrets.NPM_TOKEN");
+      expect(workflow).toContain("Require NPM_TOKEN");
+      expect(workflow).not.toContain("id-token: write");
+      expect(workflow).not.toContain("Verify npm trusted-publishing client");
       expect(workflow).toContain("working-directory: plugin/pi");
       expect(workflow).toContain("npm pack --dry-run --json");
       expect(workflow).toContain("id: pi-package");
