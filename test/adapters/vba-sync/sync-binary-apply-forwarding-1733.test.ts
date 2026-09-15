@@ -100,7 +100,11 @@ function makeCapturingAdapter(
     },
     async runExportModules(params) {
       exportChunks.push({ ...params });
-      if (options.exportResponse && "ok" in options.exportResponse && options.exportResponse.ok === false) {
+      if (
+        options.exportResponse &&
+        "ok" in options.exportResponse &&
+        options.exportResponse.ok === false
+      ) {
         return {
           ok: false,
           error: (options.exportResponse as { ok: false; error: unknown }).error as never,

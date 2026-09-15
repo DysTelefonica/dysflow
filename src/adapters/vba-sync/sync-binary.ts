@@ -600,8 +600,7 @@ export async function runSyncBinary(args: {
         );
       };
       const planFailure =
-        chunkRemainedPlan(lastImport, "import") ??
-        chunkRemainedPlan(lastExport, "export");
+        chunkRemainedPlan(lastImport, "import") ?? chunkRemainedPlan(lastExport, "export");
       if (planFailure !== null) {
         const finishedAt = new Date();
         execution = {
