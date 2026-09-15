@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.4.3] - 2026-09-15
+
+### Fixed
+
+- `fix(ci)`: enable pnpm in `release.yml` `Build & Release Artifacts` job (#1739). `actions/setup-node@v5` auto-enables `package-manager-cache: true` whenever `registry-url` is set; that flag requires pnpm/npm/yarn on `PATH`. The other three jobs in the workflow already installed pnpm via `pnpm/action-setup@v6.1.0` immediately before setup-node, but this job previously went straight from `actions/checkout` into setup-node and tripped `##[error]Unable to locate executable file: pnpm.` Tagging `v4.4.2` triggered the bug end-to-end: the first three jobs passed (the #1736 fix unblocked the Linux runner), and the release-publication job failed at setup-node. The maintainer had to publish the GitHub release manually with `gh release create`. The fix is a single `pnpm/action-setup@v6.1.0` step with `run_install: false`, mirroring the other three jobs; no behavioural change to the npmjs Trusted Publishing flow.
+
 ## [v4.4.2] - 2026-09-15
 
 ### Fixed
