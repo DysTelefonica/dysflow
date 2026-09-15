@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [v4.4.3] - 2026-09-15
+
+### Fixed
+
+- `fix(ci)`: switch `npmjs-publish` in `.github/workflows/release.yml` from npm Trusted Publishing (OIDC, `id-token: write`) to a `NPM_TOKEN` automation-token secret (#1741, #1742). Trusted Publishing would have required an out-of-repo setup on `npmjs.com` for the `@aroman22/dysflow-pi` package and a maintainer action every time the publishing identity rotated; with `NPM_TOKEN` the only rotation surface is the repo's GitHub Actions secret. The job now requires the secret at the gate step and surfaces a typed remediation message (URL + intent) when it is missing. The npm CLI's trusted-publishing bootstrap is gone, so the `Verify npm trusted-publishing client` step (which pinned `npm >= 11.5.1`) was replaced by `Require NPM_TOKEN`.
+- `fix(ci)`: pin `pnpm/action-setup` before `actions/setup-node` in the `npmjs-publish` job (#1739, fixes `Unable to locate executable file: pnpm` on `ubuntu-latest`). `actions/setup-node` v5 auto-enables `package-manager-cache` whenever `registry-url` is set, and that flag requires `pnpm` / `npm` / `yarn` on `PATH`. The other three jobs in this workflow already install `pnpm` via `pnpm/action-setup` first; this job previously went straight to `setup-node` and tripped the cache check. The new pre-step uses `run_install: false` (the publish job runs `pnpm build` itself; it does not need `action-setup` to install dependencies).
+
 ## [v4.4.2] - 2026-09-15
 
 ### Fixed
