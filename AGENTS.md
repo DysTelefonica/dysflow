@@ -10,6 +10,7 @@ This section embeds the literal operating arnés from `dysflow-arnes/SKILL.md` s
 
 The block between `<!-- dysflow:arnés --> ... <!-- /dysflow:arnés -->` is verbatim from the canonical source — do not edit content inside it; updates propagate through `dysflow-codegraph-update` ARN-1 → ARN-2.
 
+<!-- markdownlint-disable -->
 <!-- dysflow:arnés -->
 # dysflow — Operating Harness
 
@@ -320,6 +321,7 @@ Source of truth: live `bootstrap` plus explicit schema/capability views. If this
 runtime, **runtime wins**; surface the drift and update via
 `dysflow-codegraph-update`.
 <!-- /dysflow:arnés -->
+<!-- markdownlint-enable -->
 ### Project-context (this worktree, NOT inside the canonical block)
 
 - `m_BackendSandboxURL` — TODO: fill against a real `tests/*.json` manifest run.
@@ -357,6 +359,7 @@ Read it. The essence:
   implementation-coupled test just to move a coverage number.
 
 Commands:
+
 - Unit/spec: `pnpm test` (`vitest.config.ts`).
 - Integration/E2E: `vitest.integration.config.ts` (`test/e2e/**`, `test/integration/**`) — requires Windows + Access COM.
 - Real MCP E2E: `node E2E_testing/mcp-e2e.mjs` (requires `ACCESS_VBA_PASSWORD`).
@@ -376,7 +379,7 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 ### What changed maps to what you update
 
 | When you change... | Update | Anchored by |
-|---|---|---|
+| --- | --- | --- |
 | An MCP tool name, parameter, or result contract | [MCP tool reference](./docs/api/mcp-tools.md) | `test/docs/mcp-readme-tool-surface.test.ts` |
 | Where a new MCP tool must be registered | [Adding an MCP tool](./docs/api/adding-an-mcp-tool.md) | `test/docs/add-a-tool-checklist-1493.test.ts` |
 | An HTTP route or its status mapping | [HTTP API](./docs/api/http-api.md) | `test/docs/http-api-doc.test.ts` |
@@ -430,30 +433,35 @@ Invariants — preserve them when editing:
 identifiers/keywords and the VBE re-cases them on import (`caseOnly`).
 
 Folding is **string-aware**: string-literal and comment bodies are compared case-sensitively, because their content is runtime-visible. Never fold the whole line blindly.
+
 - **A category must name the difference it folded.** Actionability is not the whole contract: an
 agent reads `classification`/`reason` to decide whether the drift is worth a human's attention, so a bucket that mislabels the noise is a defect even when `actionable` is already `false`.
 
 Leading indentation is folded as `whitespaceOnly` for code modules (`.bas`/`.cls`/`.frm`) BEFORE the case-folding step, never as `caseOnly` (#1669).
 
 Form/report serialization keeps its indentation — `normalizeLeadingWhitespace` is a no-op outside code file types.
+
 - **Lossy encoding (`►` → `?`) is `encodingOnly` outside string literals only.** A glyph change
   inside a quoted string stays functional.
 - **A leading BOM / mojibake-BOM (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is stripped**
 before comparison — it is never functional. But a `VB_Name` VALUE change (e.g.
 
 `MigracionIssue18` vs `ModuloMigracionIssue18`) MUST stay actionable; only the leading marker is stripped, never the name itself.
+
 - **Module/class header boilerplate is non-functional**: `Attribute VB_*` lines (in code modules
 AND a form's embedded `CodeBehindForm`) and the `VERSION x.x CLASS` + `BEGIN…END` instancing block are stripped — an Access export may emit them on one side only.
 
 `VB_Name` is the exception: it is functional whenever the two sides disagree — a real rename (both name it, values differ) OR one side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both carry the same name or both omit it.
 
 A `.frm` starts with `VERSION 5.00` and a control `Begin…End` tree — that is functional and must NOT be stripped; only `VERSION <num> CLASS` headers are.
+
 - **A form's code-behind is verified through its `forms/*.cls`, NOT its `.form.txt`.** The code lives
 canonically in the `.cls` (export writes it from `CodeModule.Lines`; import syncs it back into the document module).
 
 The `.form.txt` `CodeBehindForm` section is the same code serialized a second way (`SaveAsText`), so the classifier strips everything from `CodeBehindForm` onward and compares a `.form.txt` for its **UI/layout only**.
 
 Never compare form code-behind through the `.form.txt` — it double-counts and re-imports the serialization noise the `.cls` already owns.
+
 - **Form serialization noise is an allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
   `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `GUID` is
   functional — do not strip it. Unknown keys are retained (functional).
@@ -461,6 +469,7 @@ Never compare form code-behind through the `.form.txt` — it double-counts and 
 `Visible =-1`. Access only serializes a non-default value, so the written value is always the same and only its `NotDefault`/`0`/`-1` representation varies.
 
 This collapse is value-token scoped — a non-toggle value (`Width =9070`, `SomeEnum =2`) stays exact and functional.
+
 - **Strict mode (`strict: true`) bypasses every noise bucket** and does byte/text-exact comparison.
 - The AI-facing result contract is additive: keep `summaryStructured` counts,
 `bulkImportable[]`, `bulkExportable[]`, and per-entry `classification`/`reason` on both `actionableDifferent[]` and `nonActionableDifferent[]`.
@@ -486,26 +495,31 @@ are checked by `.github/workflows/release-title-guard.yml` (`release: [edited]`)
 Creation is protected separately inside `release.yml`: softprops receives `name: ${{ github.ref_name }}` and the publishing job immediately validates the live release.
 
 The split is intentional because `GITHUB_TOKEN`-created releases do not reliably trigger another workflow.
+
 - Keep business logic in `src/core`; never let domain logic leak into adapters.
 - **Update path security is per channel, and `stable` is the only signed one.** `dysflow install`
 / `dysflow update` / `dysflow doctor` take `--channel {stable|beta|main}` (issue #1521), resolved as `--channel` -> `DYSFLOW_CHANNEL` -> the channel recorded in `<runtimeDir>/.dysflow-install-state.json` -> `stable`.
 
 Omitting the flag keeps every existing call shape on `stable`, unchanged.
-  - `stable` (default, ungated): the GitHub Release tar.gz, verified by an Ed25519 signature over
+
+- `stable` (default, ungated): the GitHub Release tar.gz, verified by an Ed25519 signature over
 `SHA256SUMS` and then SHA-256 over the archive.
 
 Never weaken this path — the signature gate fails closed, and `--skip-checksum` remains a stable-only escape hatch that still requires `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
-  - `beta` (gated): the newest published prerelease tag's release tar.gz, verified by SHA-256
+
+- `beta` (gated): the newest published prerelease tag's release tar.gz, verified by SHA-256
     against the published `SHA256SUMS`. Prereleases are NOT covered by the trust anchor, so this
     channel is unreachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`.
-  - `main` (gated): `archive/refs/heads/main.tar.gz` — repository **source**, built locally with
+- `main` (gated): `archive/refs/heads/main.tar.gz` — repository **source**, built locally with
 `pnpm install` + `pnpm build` to reproduce the release-tarball shape. **Unverified by design**: GitHub publishes no `SHA256SUMS` for a branch archive and its bytes are not reproducible, so there is nothing to verify against.
 
 This is the one source-build path in the product; it is an explicitly gated development channel, never reachable without `DYSFLOW_ALLOW_INSECURE_UPDATE=1`, and it is never a fallback for a failed `stable` update.
-  - There is still NO git-clone update path, and no channel may silently substitute for another:
+
+- There is still NO git-clone update path, and no channel may silently substitute for another:
 the archive-traversal guard runs on every channel, and `update` refuses to move a runtime between channels without `--force`.
 
 See [`docs/security/update-trust-model.md`](./docs/security/update-trust-model.md).
+
 - **`export_all` prune is destructive — preserve its guards.** When `prune: true`, deletions are
 gated on a fully clean export (skip on ANY warning), scoped to managed source extensions (`.bas`/`.cls`/`.form.txt`/`.report.txt`), keyed off the export's own `exported` list, and the saved-queries folder is never scanned.
 
@@ -514,6 +528,7 @@ gated on a fully clean export (skip on ANY warning), scoped to managed source ex
 Never weaken these when editing `exportAllWithPrune` in `src/adapters/vba-sync/vba-modules-adapter.ts`.
 
 The legacy `.frm` binary form format is **not** in the managed allow-list — prune must leave `.frm` files alone, even when no matching VBE module exists. See issue #619.
+
 - **CodeGraph is the canonical code-exploration tool. Use it instead of `Read`/`Grep`/`Glob` when
 you can.** The `.codegraph/` index at the repo root holds a SQLite-backed symbol + call-path graph for the whole tree.
 
@@ -524,6 +539,7 @@ Reach for it BEFORE `Read`/`Grep` when you need to understand or locate code, an
 The MCP tool has no default project — pass `projectPath: "C:\Proyectos\dysflow"` (or the equivalent absolute path) explicitly.
 
 Example query: `codegraph_explore({ query: "modulesAdapter.execute exportPath dispatch chain", maxFiles: 8, projectPath: "C:\\Proyectos\\dysflow" })`.
+
 - **Keep the `.codegraph/` index fresh — re-run after every code change.** A stale index is a silent
   token sink: `codegraph_explore` answers return the OLD source, the agent reads the file again to
   "verify", and 3–5× the tokens are spent for no benefit. Re-index whenever you:
@@ -534,6 +550,7 @@ Example query: `codegraph_explore({ query: "modulesAdapter.execute exportPath di
 The standard tool is the `codegraph` CLI bundled with the MCP server — run `codegraph index C:\Proyectos\dysflow` (or `codegraph init` for a fresh index).
 
 Index drift is a P2 process defect; if you notice `codegraph_explore` returning answers that don't match the current source, re-index immediately.
+
 - **Never delete remote branches.** Once a branch is pushed to `origin`, the ref stays there for the
   life of the repo. The PR is the merge artifact; the branch is the history (other contributors may
   have referenced it, forks may have cloned it, CI may have cached artifacts against it). Concretely:
@@ -635,6 +652,7 @@ inspect_form({ sourcePath: "forms/Form_MyForm.form.txt" })
 ```
 
 Returns `{ name, kind, controls, events }`:
+
 - `name` — form name (derived from filename; prefix `Form_`/`Report_` and suffix `.form.txt` are stripped).
 - `kind` — `"Form"` or `"Report"`.
 - `controls` — flat array of `{ name, type, properties }` objects for every named control in the tree.
@@ -654,6 +672,7 @@ Use `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
 Use `verify_form_ui` to keep those changes behavior-safe.
 
 Golden path:
+
 1. `analyze_form_ui({ sourcePath })` reads `.form.txt` through FormIR and returns semantic controls,
    roles, bindings, and events.
 2. `map_form_behavior({ sourcePath, codegraphEvidence })` merges analysis with caller-supplied
@@ -686,7 +705,7 @@ For reusable instructions, load `skills/access-form-ui-builder/SKILL.md`.
 ### Key source paths
 
 | Artifact | Path convention |
-|---|---|
+| --- | --- |
 | Form SaveAsText export | `forms/Form_<Name>.form.txt` |
 | Form code-behind (VBA) | `forms/<Name>.cls` |
 | Report SaveAsText export | `reports/Report_<Name>.report.txt` |
@@ -714,6 +733,7 @@ For copy-pasteable, concrete JSON input payloads for everyday MCP tasks, see
 For structural analysis, caller tracing, and impact analysis of the VBA/Access codebase, use the **`codegraph-vba`** MCP server.
 
 Available custom agent skills in `codegraph-vba`:
+
 - **`vba-event-tracer`**: Traces event declarations, raise sites, and custom `WithEvents` event handlers.
 - **`vba-handler-backtrace`**: Traces form control event handlers, dynamic calls, circular references, UDT parameters, and reconstructs multiline SQL statements.
 - **`vba-sql-impact`**: Traces database tables/columns touched by saved queries, extracts `RecordSource` and `RowSource` layout properties, and resolves SQL table aliases.
@@ -780,6 +800,7 @@ This protocol is MANDATORY and ALWAYS ACTIVE — not something you activate on d
 ### SESSION START & PROJECT DETECTION PROTOCOL (mandatory)
 
 At the very beginning of the session, when the runtime supplies a current workspace directory:
+
 1. **Detect Project Name**: Call `mem_current_project` with the absolute path of the workspace directory supplied by the runtime in the `cwd` (or `directory`) parameter.
 2. **Consume Runtime Session Identity**: Use only the authoritative session ID already registered by the top-level runtime. Never invent, derive, generate, or register a session ID; do not call `mem_session_start`.
 3. **Persist State**: Store the resolved project name and, when available, the registered session ID in your active context. You MUST:
@@ -791,6 +812,7 @@ At the very beginning of the session, when the runtime supplies a current worksp
 ### PROACTIVE SAVE TRIGGERS (mandatory — do NOT wait for user to ask)
 
 Call `mem_save` IMMEDIATELY and WITHOUT BEING ASKED after any of these:
+
 - Architecture or design decision made
 - Team convention documented or established
 - Workflow change agreed upon
@@ -818,6 +840,7 @@ Saving to memory is internal bookkeeping. It NEVER counts as answering the user,
 - Never treat the text you stored in memory as the text you delivered: memory is for your future self, the reply is for the user.
 
 Format for `mem_save`:
+
 - **session_id**: The active session ID created at the start (required to associate memory with the correct project)
 - **title**: Verb + what — short, searchable (e.g. "Fixed N+1 query in UserList")
 - **type**: bugfix | decision | architecture | discovery | pattern | config | preference
@@ -831,6 +854,7 @@ Format for `mem_save`:
   - **Learned**: Gotchas, edge cases, things that surprised you (omit if none)
 
 Prompt capture behavior (Engram v1.15.3+):
+
 - `mem_save` captures the user prompt best-effort when the MCP process already has prompt context for the same `project + session_id`.
 - `mem_save` never invents prompt text. If no prompt context exists, the save still succeeds without prompt capture.
 - `mem_save_prompt` records the prompt and feeds SessionActivity so later `mem_save` calls can capture and dedupe it.
@@ -839,12 +863,14 @@ Prompt capture behavior (Engram v1.15.3+):
 - If an older Engram tool schema does not expose `capture_prompt`, omit the field rather than failing.
 
 Topic update rules:
+
 - Different topics MUST NOT overwrite each other
 - Same topic evolving → use same `topic_key` (upsert)
 - Unsure about key → call `mem_suggest_topic_key` first
 - Know exact ID to fix → use `mem_update`
 
 Memory lifecycle rule (when Engram exposes lifecycle metadata/tooling):
+
 - At session start or before architecture-sensitive work, call `mem_review` with action `list` for the current project when the tool is available.
 - If `mem_review` is unavailable, do not fail the task. Continue with normal `mem_context`/`mem_search`, and still apply lifecycle metadata from any returned observations when present.
 - `active` memories may be used normally.
@@ -853,6 +879,7 @@ Memory lifecycle rule (when Engram exposes lifecycle metadata/tooling):
 - Do NOT call `mem_review` with action `mark_reviewed` automatically. Only call `mark_reviewed` after explicit user confirmation or through a dedicated memory maintenance command.
 
 Session registration and ambiguous project recovery rules:
+
 - `mem_session_start` accepts a caller-supplied session ID and optional `directory`; it does not accept `project`, `project_choice_reason`, or `recovery_token`.
 - If `mem_session_start` fails with `ambiguous_project`, resolve the intended repository root and retry `mem_session_start` with that root as `directory`.
 - A failed start leaves the session ID unregistered; it is not permanently invalidated, but must never be attached to `mem_save` or another write until registration succeeds.
@@ -862,11 +889,13 @@ Session registration and ambiguous project recovery rules:
 ### WHEN TO SEARCH MEMORY
 
 On any variation of "remember", "recall", "what did we do", "how did we solve", or references to past work (in any language the user writes in):
+
 1. Call `mem_context` — checks recent session history (fast, cheap)
 2. If not found, call `mem_search` with relevant keywords
 3. If found, use `mem_get_observation` for full untruncated content
 
 Also search PROACTIVELY when:
+
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
 - User's FIRST message references the project, a feature, or a problem — call `mem_search` with keywords from their message to check for prior work before responding
@@ -876,21 +905,27 @@ Also search PROACTIVELY when:
 Before ending a session or saying "done" / "that's it" (or the equivalent in the user's language), call `mem_session_summary`:
 
 ## Goal
+
 [What we were working on this session]
 
 ## Instructions
+
 [User preferences or constraints discovered — skip if none]
 
 ## Discoveries
+
 - [Technical findings, gotchas, non-obvious learnings]
 
 ## Accomplished
+
 - [Completed items with key details]
 
 ## Next Steps
+
 - [What remains to be done — for the next session]
 
 ## Relevant Files
+
 - path/to/file — [what it does or what changed]
 
 This is NOT optional. If you skip this, the next session starts blind.
@@ -898,6 +933,7 @@ This is NOT optional. If you skip this, the next session starts blind.
 ### AFTER COMPACTION
 
 If you see a compaction message or "FIRST ACTION REQUIRED":
+
 1. IMMEDIATELY call `mem_session_summary` with the compacted summary content — this persists what was done before compaction
 2. Call `mem_context` to recover additional context from previous sessions
 3. Only THEN continue working
@@ -1007,7 +1043,7 @@ SDD phase workers are reserved for an explicit SDD request or a proposal the use
 Core principle: **does this inflate the parent context without need?** If yes, use one bounded worker. If no, do it inline.
 
 | Action | Direct inline | Delegated direct worker |
-|--------|---------------|-------------------------|
+| -------- | --------------- | ------------------------- |
 | Read to decide/verify (1–3 files) | ✅ | — |
 | Read to explore/understand (4+ files) | — | ✅ one narrow mapper |
 | Read as preparation for writing | — | ✅ together with the write |
@@ -1181,7 +1217,7 @@ Interactive approval is phase-scoped. Words like "continue", "dale", or "go on" 
 
 Do not treat a generated artifact as approved until the user has had a chance to review or explicitly delegate that review.
 
-### Research and Pre-Proposal Gate (MANDATORY) — Offer `sdd-research` immediately after `sdd-explore`; selection makes completion mandatory. Before every `propose`, invoke `sdd-propose` only when selected research is `done` or research is unselected, product decisions are `confirmed`, evidence references are valid, and the selected artifact-store state is ready. The orchestrator owns product discovery. Automatic unresolved choices require one lossless grouped prompt with all context, options, consequences, allowed answers, and exact tokens; it MUST persist the pending state before prompting, then STOP without invoking `sdd-propose`. The proposer receives a confirmed pre-proposal handoff and MUST NOT interview or infer consent. Native `gentle-ai.sdd-status/v2` is the sole status contract.
+### Research and Pre-Proposal Gate (MANDATORY) — Offer `sdd-research` immediately after `sdd-explore`; selection makes completion mandatory. Before every `propose`, invoke `sdd-propose` only when selected research is `done` or research is unselected, product decisions are `confirmed`, evidence references are valid, and the selected artifact-store state is ready. The orchestrator owns product discovery. Automatic unresolved choices require one lossless grouped prompt with all context, options, consequences, allowed answers, and exact tokens; it MUST persist the pending state before prompting, then STOP without invoking `sdd-propose`. The proposer receives a confirmed pre-proposal handoff and MUST NOT interview or infer consent. Native `gentle-ai.sdd-status/v2` is the sole status contract
 
 ### Automatic Mode Gatekeeper (MANDATORY)
 
@@ -1326,7 +1362,7 @@ Read this table at session start (or before first SDD/Judgment-Day delegation), 
 If an SDD/Judgment-Day phase is missing, use the `default` fallback row. If you lack access to the assigned model, substitute `sonnet` and continue.
 
 | Phase | Default Model | Reason |
-|-------|---------------|--------|
+| ------- | --------------- | -------- |
 | sdd-explore | sonnet | Reads code, structural - not architectural |
 | sdd-propose | opus | Architectural decisions |
 | sdd-spec | sonnet | Structured writing |
@@ -1402,7 +1438,7 @@ Sub-agents get a fresh context with NO memory. The orchestrator controls context
 Each phase has explicit read/write rules:
 
 | Phase | Reads | Writes |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `sdd-explore` | nothing | `explore` |
 | `sdd-propose` | exploration (optional) | `proposal` |
 | `sdd-spec` | proposal (required) | `spec` |
@@ -1445,7 +1481,7 @@ This prevents progress loss across batches. The sub-agent is responsible for rea
 ### Engram Topic Key Format
 
 | Artifact | Topic Key |
-|----------|-----------|
+| ---------- | ----------- |
 | Project context | `sdd-init/{project}` |
 | Exploration | `sdd/{change-name}/explore` |
 | Proposal | `sdd/{change-name}/proposal` |
@@ -1479,6 +1515,7 @@ Convention files under the agent's global skills directory (global) or `.agent/s
 First establish whether the requested outcome explicitly authorizes a change.
 
 Investigation, explanation, review, audit, comparison, and solution-proposal or planning-only requests are read-only unless the user explicitly requests implementation or another mutation.
+
 - Read-only work may inspect, explain, compare, and recommend, but must not write or edit files, delegate a writer, invoke apply, or create implementation artifacts.
 - If change intent is ambiguous or conditional, ask one clarification and remain read-only until answered.
 

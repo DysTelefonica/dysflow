@@ -48,6 +48,11 @@ E2E_testing/forms/*.form.json
 .dysflow/project.json
 E2E_testing/.mcp.json
 E2E_testing/.dysflow/mcp-e2e-temp/
+
+# Local IDE / agent tooling state (per-developer, never part of dysflow source).
+.openclaw/
+.windsurf/
+SOUL.md
 testResults.xml
 vitest-results*.txt
 /test-output-msg/
