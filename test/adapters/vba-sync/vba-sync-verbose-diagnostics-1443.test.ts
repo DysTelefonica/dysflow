@@ -178,45 +178,45 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
     expect(resultEntries[1]?.verbose.actionable).toBe(true);
   });
 
-  it.each([
-    "export_modules",
-    "export_all",
-  ] as const)("%s returns classified binary-before/file-after snapshots only when requested", async (toolName) => {
-    const payload = {
-      ok: true,
-      exported: ["Module1"],
-      verbose: [
-        {
-          module: "Module1",
-          binary: snapshot(5, 73, "a".repeat(64)),
-          file: snapshot(5, 69, "b".repeat(64)),
-          _binaryText: SOURCE.replace(/\n/g, "\r\n"),
-          _fileText: SOURCE,
-          fileType: ".bas",
-        },
-      ],
-    };
-    const result = await service(payload).execute(toolName, {
-      ...(toolName === "export_modules" ? { moduleNames: ["Module1"] } : {}),
-      destinationRoot: "C:/project/src",
-      apply: true,
-      verbose: true,
-    });
+  it.each(["export_modules", "export_all"] as const)(
+    "%s returns classified binary-before/file-after snapshots only when requested",
+    async (toolName) => {
+      const payload = {
+        ok: true,
+        exported: ["Module1"],
+        verbose: [
+          {
+            module: "Module1",
+            binary: snapshot(5, 73, "a".repeat(64)),
+            file: snapshot(5, 69, "b".repeat(64)),
+            _binaryText: SOURCE.replace(/\n/g, "\r\n"),
+            _fileText: SOURCE,
+            fileType: ".bas",
+          },
+        ],
+      };
+      const result = await service(payload).execute(toolName, {
+        ...(toolName === "export_modules" ? { moduleNames: ["Module1"] } : {}),
+        destinationRoot: "C:/project/src",
+        apply: true,
+        verbose: true,
+      });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected export success");
-    const data = result.data as { verbose: Array<Record<string, unknown>> };
-    expect(data.verbose[0]).toMatchObject({
-      module: "Module1",
-      binary: payload.verbose[0]?.binary,
-      file: payload.verbose[0]?.file,
-      classification: "whitespaceOnly",
-      actionable: false,
-      recommendation: "no_action",
-    });
-    expect(data.verbose[0]).not.toHaveProperty("_binaryText");
-    expect(data.verbose[0]).not.toHaveProperty("_fileText");
-  });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected export success");
+      const data = result.data as { verbose: Array<Record<string, unknown>> };
+      expect(data.verbose[0]).toMatchObject({
+        module: "Module1",
+        binary: payload.verbose[0]?.binary,
+        file: payload.verbose[0]?.file,
+        classification: "whitespaceOnly",
+        actionable: false,
+        recommendation: "no_action",
+      });
+      expect(data.verbose[0]).not.toHaveProperty("_binaryText");
+      expect(data.verbose[0]).not.toHaveProperty("_fileText");
+    },
+  );
 
   it("keeps verbose payload absent when export verbose is omitted", async () => {
     const result = await service({ ok: true, exported: ["Module1"] }).execute("export_modules", {

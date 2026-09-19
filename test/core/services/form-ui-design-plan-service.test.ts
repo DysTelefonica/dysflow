@@ -219,12 +219,13 @@ describe("form UI design plan service", () => {
     expect(verifyPlanAlignment(plan, expected)).toEqual([]);
   });
 
-  it.each([
-    ["rename", op("rename-control", "cmdSave", { newName: "cmdCommit" }), map],
-  ])("finds a wrong %s result", (_label, operation, wrong) => {
-    const plan = generateFormUiDesignPlan(wrong, { operations: [operation] });
-    expect(verifyPlanAlignment(plan, wrong)).toHaveLength(1);
-  });
+  it.each([["rename", op("rename-control", "cmdSave", { newName: "cmdCommit" }), map]])(
+    "finds a wrong %s result",
+    (_label, operation, wrong) => {
+      const plan = generateFormUiDesignPlan(wrong, { operations: [operation] });
+      expect(verifyPlanAlignment(plan, wrong)).toHaveLength(1);
+    },
+  );
 
   it("fails closed for an operation kind deserialized outside the supported union", () => {
     const unsupported = {

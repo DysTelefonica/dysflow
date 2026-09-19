@@ -163,28 +163,31 @@ describe("public form mutation MCP tools", () => {
   it.each([
     ["propertyName", { propertyName: "Caption" }],
     ["property", { property: "Caption" }],
-  ])("accepts the %s property-name field and dispatches the canonical propertyName", async (_field, alias) => {
-    const { tool, vbaSyncToolService } = toolByName("form_set_property", false);
+  ])(
+    "accepts the %s property-name field and dispatches the canonical propertyName",
+    async (_field, alias) => {
+      const { tool, vbaSyncToolService } = toolByName("form_set_property", false);
 
-    const result = await tool.handler({
-      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
-      controlName: "cmdSave",
-      ...alias,
-      value: '"Save"',
-      apply: false,
-    });
+      const result = await tool.handler({
+        sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+        controlName: "cmdSave",
+        ...alias,
+        value: '"Save"',
+        apply: false,
+      });
 
-    expect(result.isError).toBe(false);
-    expect(vbaSyncToolService.requests).toEqual([
-      {
-        toolName: "form_set_property",
-        input: expect.objectContaining({
-          propertyName: "Caption",
-        }),
-      },
-    ]);
-    expect(vbaSyncToolService.requests[0]?.input).not.toHaveProperty("property");
-  });
+      expect(result.isError).toBe(false);
+      expect(vbaSyncToolService.requests).toEqual([
+        {
+          toolName: "form_set_property",
+          input: expect.objectContaining({
+            propertyName: "Caption",
+          }),
+        },
+      ]);
+      expect(vbaSyncToolService.requests[0]?.input).not.toHaveProperty("property");
+    },
+  );
 
   it("names propertyName and property when the property-name field is missing", async () => {
     const { tool, vbaSyncToolService } = toolByName("form_set_property", false);

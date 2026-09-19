@@ -353,78 +353,82 @@ describe("contradictory write flags — truth table (issue #1078)", () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   describe("registry-driven truth-table sweep", () => {
-    it.each(
-      WRITE_CLASS_TOOLS.filter((name) => name !== "fix_encoding"),
-    )("%s — { apply: true, dryRun: true } is rejected with structured envelope", async (toolName) => {
-      if (!schemaDeclares(toolName, "apply")) return;
-      if (!schemaDeclares(toolName, "dryRun")) return;
-      const result = await invokeWithExtra(toolName, {
-        apply: true,
-        dryRun: true,
-      });
-      expect(result.error?.code).toBe("MCP_INPUT_INVALID");
-      if (result.error?.code === "MCP_INPUT_INVALID") {
-        const meta = registryEntry(toolName);
-        // Acceptance criterion #3 — rejected fields, canonical flag,
-        // remediation. We accept either the singular or the array
-        // form so the contract is forward-compatible with the
-        // `rejectedFlags` array the dispatcher will populate.
-        const rejectedFlag = result.error.rejectedFlag;
-        const rejectedFlags = (result.error as { rejectedFlags?: readonly string[] })
-          ?.rejectedFlags;
-        const allRejected = [rejectedFlag, ...(rejectedFlags ?? [])].filter(
-          (flag): flag is string => typeof flag === "string",
-        );
-        expect(allRejected).toContain("apply");
-        expect(allRejected).toContain("dryRun");
-        expect(result.error.toolCommitFlag).toBe(meta.commitFlag);
-        expect(result.error.remediation ?? "").toMatch(
-          new RegExp(meta.commitFlag === "apply" ? /\bapply\b/ : /\bdryRun\b/i),
-        );
-      }
-    });
+    it.each(WRITE_CLASS_TOOLS.filter((name) => name !== "fix_encoding"))(
+      "%s — { apply: true, dryRun: true } is rejected with structured envelope",
+      async (toolName) => {
+        if (!schemaDeclares(toolName, "apply")) return;
+        if (!schemaDeclares(toolName, "dryRun")) return;
+        const result = await invokeWithExtra(toolName, {
+          apply: true,
+          dryRun: true,
+        });
+        expect(result.error?.code).toBe("MCP_INPUT_INVALID");
+        if (result.error?.code === "MCP_INPUT_INVALID") {
+          const meta = registryEntry(toolName);
+          // Acceptance criterion #3 — rejected fields, canonical flag,
+          // remediation. We accept either the singular or the array
+          // form so the contract is forward-compatible with the
+          // `rejectedFlags` array the dispatcher will populate.
+          const rejectedFlag = result.error.rejectedFlag;
+          const rejectedFlags = (result.error as { rejectedFlags?: readonly string[] })
+            ?.rejectedFlags;
+          const allRejected = [rejectedFlag, ...(rejectedFlags ?? [])].filter(
+            (flag): flag is string => typeof flag === "string",
+          );
+          expect(allRejected).toContain("apply");
+          expect(allRejected).toContain("dryRun");
+          expect(result.error.toolCommitFlag).toBe(meta.commitFlag);
+          expect(result.error.remediation ?? "").toMatch(
+            new RegExp(meta.commitFlag === "apply" ? /\bapply\b/ : /\bdryRun\b/i),
+          );
+        }
+      },
+    );
 
-    it.each(
-      WRITE_CLASS_TOOLS,
-    )("%s — { apply: false, dryRun: false } is rejected (boolean equivalence is a contradiction)", async (toolName) => {
-      if (!schemaDeclares(toolName, "apply")) return;
-      if (!schemaDeclares(toolName, "dryRun")) return;
-      const result = await invokeWithExtra(toolName, {
-        apply: false,
-        dryRun: false,
-      });
-      expect(result.error?.code).toBe("MCP_INPUT_INVALID");
-    });
+    it.each(WRITE_CLASS_TOOLS)(
+      "%s — { apply: false, dryRun: false } is rejected (boolean equivalence is a contradiction)",
+      async (toolName) => {
+        if (!schemaDeclares(toolName, "apply")) return;
+        if (!schemaDeclares(toolName, "dryRun")) return;
+        const result = await invokeWithExtra(toolName, {
+          apply: false,
+          dryRun: false,
+        });
+        expect(result.error?.code).toBe("MCP_INPUT_INVALID");
+      },
+    );
 
-    it.each(
-      WRITE_CLASS_TOOLS,
-    )("%s — { apply: true, dryRun: false } is accepted (no contradiction)", async (toolName) => {
-      if (!schemaDeclares(toolName, "apply")) return;
-      if (!schemaDeclares(toolName, "dryRun")) return;
-      const result = await invokeWithExtra(toolName, {
-        apply: true,
-        dryRun: false,
-      });
-      if (result.error?.code === "MCP_INPUT_INVALID") {
-        expect(result.error.message).not.toMatch(/mutually exclusive/i);
-        expect(result.error.message).not.toMatch(/contradicts/i);
-      }
-    });
+    it.each(WRITE_CLASS_TOOLS)(
+      "%s — { apply: true, dryRun: false } is accepted (no contradiction)",
+      async (toolName) => {
+        if (!schemaDeclares(toolName, "apply")) return;
+        if (!schemaDeclares(toolName, "dryRun")) return;
+        const result = await invokeWithExtra(toolName, {
+          apply: true,
+          dryRun: false,
+        });
+        if (result.error?.code === "MCP_INPUT_INVALID") {
+          expect(result.error.message).not.toMatch(/mutually exclusive/i);
+          expect(result.error.message).not.toMatch(/contradicts/i);
+        }
+      },
+    );
 
-    it.each(
-      WRITE_CLASS_TOOLS,
-    )("%s — { apply: false, dryRun: true } is accepted (no contradiction)", async (toolName) => {
-      if (!schemaDeclares(toolName, "apply")) return;
-      if (!schemaDeclares(toolName, "dryRun")) return;
-      const result = await invokeWithExtra(toolName, {
-        apply: false,
-        dryRun: true,
-      });
-      if (result.error?.code === "MCP_INPUT_INVALID") {
-        expect(result.error.message).not.toMatch(/mutually exclusive/i);
-        expect(result.error.message).not.toMatch(/contradicts/i);
-      }
-    });
+    it.each(WRITE_CLASS_TOOLS)(
+      "%s — { apply: false, dryRun: true } is accepted (no contradiction)",
+      async (toolName) => {
+        if (!schemaDeclares(toolName, "apply")) return;
+        if (!schemaDeclares(toolName, "dryRun")) return;
+        const result = await invokeWithExtra(toolName, {
+          apply: false,
+          dryRun: true,
+        });
+        if (result.error?.code === "MCP_INPUT_INVALID") {
+          expect(result.error.message).not.toMatch(/mutually exclusive/i);
+          expect(result.error.message).not.toMatch(/contradicts/i);
+        }
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────

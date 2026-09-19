@@ -152,51 +152,51 @@ describe("cross-process-lock module API", () => {
         readAlias: "/data/finance.accdb",
         writeAlias: "/data/archive/../finance.accdb",
       },
-    ])("shares one read/write in-memory queue for $style aliases", async ({
-      readAlias,
-      writeAlias,
-    }) => {
-      const events: string[] = [];
-      const lockState = new Map<string, Promise<void>>();
-      const fileSystem: LockFileSystemPort = {
-        mkdir: async (path) => path,
-        rm: async () => {},
-        stat: async () => null,
-        utimes: async () => {},
-        writeFile: async () => {},
-        readFile: async () => null,
-        isProcessAlive: () => false,
-        tmpdir: () => tmpdir(),
-      };
+    ])(
+      "shares one read/write in-memory queue for $style aliases",
+      async ({ readAlias, writeAlias }) => {
+        const events: string[] = [];
+        const lockState = new Map<string, Promise<void>>();
+        const fileSystem: LockFileSystemPort = {
+          mkdir: async (path) => path,
+          rm: async () => {},
+          stat: async () => null,
+          utimes: async () => {},
+          writeFile: async () => {},
+          readFile: async () => null,
+          isProcessAlive: () => false,
+          tmpdir: () => tmpdir(),
+        };
 
-      const [readResult, writeResult] = await Promise.all([
-        runWithAccessExecutionReadLock(
-          readAlias,
-          async () => {
-            events.push("start:read");
-            await new Promise((resolve) => setTimeout(resolve, 10));
-            events.push("end:read");
-            return "read";
-          },
-          lockState,
-        ),
-        runWithAccessExecutionLock(
-          writeAlias,
-          async () => {
-            events.push("start:write");
-            events.push("end:write");
-            return "write";
-          },
-          5_000,
-          fileSystem,
-          lockState,
-        ),
-      ]);
+        const [readResult, writeResult] = await Promise.all([
+          runWithAccessExecutionReadLock(
+            readAlias,
+            async () => {
+              events.push("start:read");
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              events.push("end:read");
+              return "read";
+            },
+            lockState,
+          ),
+          runWithAccessExecutionLock(
+            writeAlias,
+            async () => {
+              events.push("start:write");
+              events.push("end:write");
+              return "write";
+            },
+            5_000,
+            fileSystem,
+            lockState,
+          ),
+        ]);
 
-      expect(readResult).toBe("read");
-      expect(writeResult).toBe("write");
-      expect(events).toEqual(["start:read", "end:read", "start:write", "end:write"]);
-    });
+        expect(readResult).toBe("read");
+        expect(writeResult).toBe("write");
+        expect(events).toEqual(["start:read", "end:read", "start:write", "end:write"]);
+      },
+    );
 
     it("accepts work that returns a non-promise value", async () => {
       const lockState = new Map<string, Promise<void>>();
@@ -800,60 +800,60 @@ describe("cross-process-lock module API", () => {
       vi.useRealTimers();
     });
 
-    it.each([
-      "refreshed",
-      "removal-failed",
-    ] as const)("waits before retrying when stale eviction reports %s", async (outcome) => {
-      vi.useFakeTimers({ shouldAdvanceTime: false });
-      vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-      const lockPath = "/locks/backoff.lock";
-      const claimPath = `${lockPath}.evicting`;
-      const staleMtimeMs = Date.now() - CROSS_PROCESS_LOCK_STALE_MS - 1;
-      const sleepMs = 25;
-      let lockMkdirCalls = 0;
-      let statCalls = 0;
-      const fileSystem: LockFileSystemPort = {
-        mkdir: async (path) => {
-          if (path === lockPath) {
-            lockMkdirCalls += 1;
-            if (lockMkdirCalls === 1) {
-              const error: NodeJS.ErrnoException = new Error("lock exists");
-              error.code = "EEXIST";
-              throw error;
+    it.each(["refreshed", "removal-failed"] as const)(
+      "waits before retrying when stale eviction reports %s",
+      async (outcome) => {
+        vi.useFakeTimers({ shouldAdvanceTime: false });
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const lockPath = "/locks/backoff.lock";
+        const claimPath = `${lockPath}.evicting`;
+        const staleMtimeMs = Date.now() - CROSS_PROCESS_LOCK_STALE_MS - 1;
+        const sleepMs = 25;
+        let lockMkdirCalls = 0;
+        let statCalls = 0;
+        const fileSystem: LockFileSystemPort = {
+          mkdir: async (path) => {
+            if (path === lockPath) {
+              lockMkdirCalls += 1;
+              if (lockMkdirCalls === 1) {
+                const error: NodeJS.ErrnoException = new Error("lock exists");
+                error.code = "EEXIST";
+                throw error;
+              }
             }
-          }
-          return path;
-        },
-        rm: async (path) => {
-          if (path === lockPath && outcome === "removal-failed") {
-            throw new Error("synthetic EPERM");
-          }
-          expect(path === lockPath || path === claimPath).toBe(true);
-        },
-        stat: async () => {
-          statCalls += 1;
-          if (outcome === "refreshed" && statCalls === 2) {
-            return { mtimeMs: Date.now() };
-          }
-          return { mtimeMs: staleMtimeMs };
-        },
-        utimes: async () => {},
-        writeFile: async () => {},
-        readFile: async () => null,
-        isProcessAlive: () => false,
-        tmpdir: () => tmpdir(),
-      };
+            return path;
+          },
+          rm: async (path) => {
+            if (path === lockPath && outcome === "removal-failed") {
+              throw new Error("synthetic EPERM");
+            }
+            expect(path === lockPath || path === claimPath).toBe(true);
+          },
+          stat: async () => {
+            statCalls += 1;
+            if (outcome === "refreshed" && statCalls === 2) {
+              return { mtimeMs: Date.now() };
+            }
+            return { mtimeMs: staleMtimeMs };
+          },
+          utimes: async () => {},
+          writeFile: async () => {},
+          readFile: async () => null,
+          isProcessAlive: () => false,
+          tmpdir: () => tmpdir(),
+        };
 
-      const acquisition = acquireCrossProcessAccessLock(lockPath, 1_000, sleepMs, fileSystem);
-      await vi.advanceTimersByTimeAsync(0);
+        const acquisition = acquireCrossProcessAccessLock(lockPath, 1_000, sleepMs, fileSystem);
+        await vi.advanceTimersByTimeAsync(0);
 
-      expect(lockMkdirCalls).toBe(1);
+        expect(lockMkdirCalls).toBe(1);
 
-      await vi.advanceTimersByTimeAsync(sleepMs);
-      const release = await acquisition;
-      expect(lockMkdirCalls).toBe(2);
-      await release();
-    });
+        await vi.advanceTimersByTimeAsync(sleepMs);
+        const release = await acquisition;
+        expect(lockMkdirCalls).toBe(2);
+        await release();
+      },
+    );
   });
 
   describe("RunnerLockTimeoutError", () => {

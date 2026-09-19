@@ -97,33 +97,33 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
   it.each([
     { toolName: "form_list_controls", toolInput: {} },
     { toolName: "form_get_geometry", toolInput: { controlName: "cmdSave" } },
-  ])("$toolName keeps contextId independent when projectId is omitted", async ({
-    toolName,
-    toolInput,
-  }) => {
-    const harness = await createProjectScopedMcpHarness();
-    try {
-      const contextId = `trace-${toolName}`;
-      const sourcePath = join(harness.project, "src", "forms", "Form_Test.form.txt");
-      const tool = harness.tools.find((candidate) => candidate.name === toolName);
-      if (tool === undefined) throw new Error(`missing ${toolName} tool`);
+  ])(
+    "$toolName keeps contextId independent when projectId is omitted",
+    async ({ toolName, toolInput }) => {
+      const harness = await createProjectScopedMcpHarness();
+      try {
+        const contextId = `trace-${toolName}`;
+        const sourcePath = join(harness.project, "src", "forms", "Form_Test.form.txt");
+        const tool = harness.tools.find((candidate) => candidate.name === toolName);
+        if (tool === undefined) throw new Error(`missing ${toolName} tool`);
 
-      const result = await tool.handler({ contextId, sourcePath, ...toolInput });
+        const result = await tool.handler({ contextId, sourcePath, ...toolInput });
 
-      expect(result).toMatchObject({ isError: false });
-      expect(harness.resolvedConfigs.map((config) => config.projectId)).toEqual([
-        "configured-project",
-      ]);
-      expect(harness.calls).toEqual([
-        {
-          toolName,
-          input: expect.objectContaining({ contextId, sourcePath, ...toolInput }),
-        },
-      ]);
-    } finally {
-      await harness.cleanup();
-    }
-  });
+        expect(result).toMatchObject({ isError: false });
+        expect(harness.resolvedConfigs.map((config) => config.projectId)).toEqual([
+          "configured-project",
+        ]);
+        expect(harness.calls).toEqual([
+          {
+            toolName,
+            input: expect.objectContaining({ contextId, sourcePath, ...toolInput }),
+          },
+        ]);
+      } finally {
+        await harness.cleanup();
+      }
+    },
+  );
 
   it("still rejects an explicit mismatching projectId without replacing it with contextId", async () => {
     const harness = await createProjectScopedMcpHarness();

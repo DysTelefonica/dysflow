@@ -75,24 +75,25 @@ describe("#1580 removed top-level project config fields", () => {
     expect(upgradeNote).toContain(APPLY_MIGRATION_CALL);
   });
 
-  it.each(
-    OPERATOR_DOCS,
-  )("documents the runtime error and both canonical replacements in %s", async (path) => {
-    const text = await readFile(path, "utf8");
+  it.each(OPERATOR_DOCS)(
+    "documents the runtime error and both canonical replacements in %s",
+    async (path) => {
+      const text = await readFile(path, "utf8");
 
-    expect(text).toContain("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
-    expect(text).toContain("capabilities.allowWrites");
-    expect(text).toContain("capabilities.procedures.allow");
-  });
+      expect(text).toContain("CONFIG_TOP_LEVEL_FIELDS_REMOVED");
+      expect(text).toContain("capabilities.allowWrites");
+      expect(text).toContain("capabilities.procedures.allow");
+    },
+  );
 
-  it.each([
-    ...OPERATOR_DOCS,
-    ...CONTRACT_SOURCES,
-  ])("does not describe removed fields as live read-through aliases in %s", async (path) => {
-    const text = await readFile(path, "utf8");
+  it.each([...OPERATOR_DOCS, ...CONTRACT_SOURCES])(
+    "does not describe removed fields as live read-through aliases in %s",
+    async (path) => {
+      const text = await readFile(path, "utf8");
 
-    expect(text).not.toMatch(/kept as (?:deprecated )?read-through aliases?/i);
-    expect(text).not.toMatch(/read-through aliases? until v1\.15\.0/i);
-    expect(text).not.toMatch(/read-through fallback to the deprecated top-level/i);
-  });
+      expect(text).not.toMatch(/kept as (?:deprecated )?read-through aliases?/i);
+      expect(text).not.toMatch(/read-through aliases? until v1\.15\.0/i);
+      expect(text).not.toMatch(/read-through fallback to the deprecated top-level/i);
+    },
+  );
 });

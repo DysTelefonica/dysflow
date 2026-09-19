@@ -257,24 +257,24 @@ describe("SDK path — unknown tool", () => {
     }
   }, 500);
 
-  it.each([
-    "query_sql",
-    "exec_sql",
-  ])("reports the canonical replacement for retired name %s", async (retiredName) => {
-    const { client, close } = await createSdkTestHarness([]);
-    try {
-      const result = await client.callTool({ name: retiredName, arguments: {} });
-      expect(result.isError).toBe(true);
-      expect(readUnknownToolError(result)).toMatchObject({
-        code: "MCP_TOOL_NOT_FOUND",
-        attemptedToolName: retiredName,
-        supersededBy: "query_execute",
-        remediation: expect.stringContaining('Use "query_execute"'),
-      });
-    } finally {
-      await close();
-    }
-  });
+  it.each(["query_sql", "exec_sql"])(
+    "reports the canonical replacement for retired name %s",
+    async (retiredName) => {
+      const { client, close } = await createSdkTestHarness([]);
+      try {
+        const result = await client.callTool({ name: retiredName, arguments: {} });
+        expect(result.isError).toBe(true);
+        expect(readUnknownToolError(result)).toMatchObject({
+          code: "MCP_TOOL_NOT_FOUND",
+          attemptedToolName: retiredName,
+          supersededBy: "query_execute",
+          remediation: expect.stringContaining('Use "query_execute"'),
+        });
+      } finally {
+        await close();
+      }
+    },
+  );
 
   it("points unmatched names to compact schema discovery and describe_tool", async () => {
     const tools: DysflowMcpTool[] = [

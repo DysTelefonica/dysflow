@@ -15,12 +15,12 @@ function isIgnored(path: string): boolean {
 }
 
 describe("repository ignore policy", () => {
-  it.each([
-    "src/forms/NewForm.cls",
-    "E2E_testing/src/forms/NewForm.form.txt",
-  ])("keeps canonical Access form source visible at %s", (path) => {
-    expect(isIgnored(path)).toBe(false);
-  });
+  it.each(["src/forms/NewForm.cls", "E2E_testing/src/forms/NewForm.form.txt"])(
+    "keeps canonical Access form source visible at %s",
+    (path) => {
+      expect(isIgnored(path)).toBe(false);
+    },
+  );
 
   it.each([
     ["bench-cache/artifact.json", true],

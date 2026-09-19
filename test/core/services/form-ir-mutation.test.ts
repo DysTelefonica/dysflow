@@ -228,35 +228,38 @@ End
     ["detail", "Detalle"],
     ["FormHeader", "EncabezadoDelFormulario"],
     ["FormFooter", "PieDelFormulario"],
-  ])("resolves canonical Access section %s to localized name %s", (targetSectionName, localizedName) => {
-    const ir = parseFormTxt(FORM_WITH_LOCALIZED_SECTIONS, { name: "CustomerForm" });
+  ])(
+    "resolves canonical Access section %s to localized name %s",
+    (targetSectionName, localizedName) => {
+      const ir = parseFormTxt(FORM_WITH_LOCALIZED_SECTIONS, { name: "CustomerForm" });
 
-    const result = addControl(ir, {
-      targetSectionName,
-      control: { name: `txt${targetSectionName}`, type: "TextBox" },
-    });
+      const result = addControl(ir, {
+        targetSectionName,
+        control: { name: `txt${targetSectionName}`, type: "TextBox" },
+      });
 
-    const localizedSection = result.ir.root.children.find((section) =>
-      section.entries.some(
-        (entry) =>
-          entry.kind === "scalar" && entry.key === "Name" && entry.value === `"${localizedName}"`,
-      ),
-    );
-    expect(localizedSection?.children[0]?.children).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          blockType: "TextBox",
-          entries: expect.arrayContaining([
-            expect.objectContaining({
-              kind: "scalar",
-              key: "Name",
-              value: `"txt${targetSectionName}"`,
-            }),
-          ]),
-        }),
-      ]),
-    );
-  });
+      const localizedSection = result.ir.root.children.find((section) =>
+        section.entries.some(
+          (entry) =>
+            entry.kind === "scalar" && entry.key === "Name" && entry.value === `"${localizedName}"`,
+        ),
+      );
+      expect(localizedSection?.children[0]?.children).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            blockType: "TextBox",
+            entries: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "scalar",
+                key: "Name",
+                value: `"txt${targetSectionName}"`,
+              }),
+            ]),
+          }),
+        ]),
+      );
+    },
+  );
 
   it("rejects an unknown target section without mutating localized form IR", () => {
     expectRefusalWithoutMutation(

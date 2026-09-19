@@ -290,7 +290,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     const result = procedureNotAllowed("Test_X", ["Test_A"]);
     expect(result.error?.errorCode).toBe(MCP_PROCEDURE_NOT_ALLOWED);
     expect(Array.isArray(result.error?.relatedIssueNumbers)).toBe(true);
-    expect((result.error?.relatedIssueNumbers as string[]).length).toBeGreaterThan(0);
+    expect(result.error?.relatedIssueNumbers?.length).toBeGreaterThan(0);
   });
 
   // ── (10) writesDisabled envelope carries relatedIssueNumbers (#659) ──
@@ -298,7 +298,7 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     const result = writesDisabled("delete_module");
     expect(result.error?.errorCode).toBe(MCP_WRITES_DISABLED);
     expect(Array.isArray(result.error?.relatedIssueNumbers)).toBe(true);
-    expect((result.error?.relatedIssueNumbers as string[]).length).toBeGreaterThan(0);
+    expect(result.error?.relatedIssueNumbers?.length).toBeGreaterThan(0);
   });
 
   // ── (11) allowlistNotConfigured envelope carries relatedIssueNumbers ──
@@ -306,6 +306,6 @@ describe("explain mode + uniform ErrorEnvelope (Round-12 #972)", () => {
     const result = allowlistNotConfigured("Test_X");
     expect(result.error?.errorCode).toBe(MCP_ALLOWLIST_NOT_CONFIGURED);
     expect(Array.isArray(result.error?.relatedIssueNumbers)).toBe(true);
-    expect((result.error?.relatedIssueNumbers as string[]).length).toBeGreaterThan(0);
+    expect(result.error?.relatedIssueNumbers?.length).toBeGreaterThan(0);
   });
 });

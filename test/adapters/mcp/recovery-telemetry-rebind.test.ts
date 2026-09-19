@@ -206,68 +206,68 @@ describe("authenticated recovery telemetry rebinding (#1340)", () => {
     }
   });
 
-  it.each([
-    "missing-capability",
-    "undefined",
-    "throw",
-  ] as const)("fails closed instead of retaining a raw-input recorder when authenticated resolution is %s", async (failureMode) => {
-    const tools = createDysflowMcpTools({
-      services: {
-        vbaService: { execute: async () => successResult({ returnValue: null }) },
-        queryService: { execute: async () => successResult({ rows: [] }) },
-        diagnosticsService: { run: async () => successResult({ checks: [] }) },
-      } as unknown as DysflowMcpServices,
-      writes: true,
-      cwd: startupRoot,
-      projectConfigResolver: (_input, cwd = startupRoot) => diagnostic(cwd),
-    });
-    const entriesFromRawInput: InvocationTelemetryEntry[] = [];
-    const invocationContextResolver = (async () => ({
-      recorder: {
-        record: async (entry: InvocationTelemetryEntry) => {
-          entriesFromRawInput.push(entry);
-        },
-      },
-      writeExecutionPolicy: "safe-by-default" as const,
-    })) as InvocationTelemetryContextResolver;
-    if (failureMode !== "missing-capability") {
-      invocationContextResolver.resolveAuthenticatedProjectRoot = async () => {
-        if (failureMode === "throw") throw new Error("authenticated telemetry target unavailable");
-        return undefined;
-      };
-    }
-
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const serverDone = startWithSdkServer(tools, serverTransport, {
-      invocationContextResolver,
-      resultValidationPolicy: "enforce",
-    });
-    const client = new Client({ name: "recovery-telemetry-fail-closed-test", version: "1" }, {});
-    await client.connect(clientTransport);
-
-    try {
-      const ambiguous = await client.callTool({
-        name: "resolve_project",
-        arguments: { cwd: startupRoot },
+  it.each(["missing-capability", "undefined", "throw"] as const)(
+    "fails closed instead of retaining a raw-input recorder when authenticated resolution is %s",
+    async (failureMode) => {
+      const tools = createDysflowMcpTools({
+        services: {
+          vbaService: { execute: async () => successResult({ returnValue: null }) },
+          queryService: { execute: async () => successResult({ rows: [] }) },
+          diagnosticsService: { run: async () => successResult({ checks: [] }) },
+        } as unknown as DysflowMcpServices,
+        writes: true,
+        cwd: startupRoot,
+        projectConfigResolver: (_input, cwd = startupRoot) => diagnostic(cwd),
       });
-      const token = payload(ambiguous as { content: readonly { text: string }[] }).recoveryToken;
-      entriesFromRawInput.length = 0;
-
-      const fresh = await client.callTool({
-        name: "setup_project",
-        arguments: {
-          cwd: worktreeB,
-          projectId: "shared-id",
-          projectChoiceReason: "user_selected_after_ambiguous_project",
-          recoveryToken: token,
+      const entriesFromRawInput: InvocationTelemetryEntry[] = [];
+      const invocationContextResolver = (async () => ({
+        recorder: {
+          record: async (entry: InvocationTelemetryEntry) => {
+            entriesFromRawInput.push(entry);
+          },
         },
-      });
+        writeExecutionPolicy: "safe-by-default" as const,
+      })) as InvocationTelemetryContextResolver;
+      if (failureMode !== "missing-capability") {
+        invocationContextResolver.resolveAuthenticatedProjectRoot = async () => {
+          if (failureMode === "throw")
+            throw new Error("authenticated telemetry target unavailable");
+          return undefined;
+        };
+      }
 
-      expect(fresh.isError).not.toBe(true);
-      expect(entriesFromRawInput).toEqual([]);
-    } finally {
-      await client.close();
-      await serverDone.catch(() => undefined);
-    }
-  });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const serverDone = startWithSdkServer(tools, serverTransport, {
+        invocationContextResolver,
+        resultValidationPolicy: "enforce",
+      });
+      const client = new Client({ name: "recovery-telemetry-fail-closed-test", version: "1" }, {});
+      await client.connect(clientTransport);
+
+      try {
+        const ambiguous = await client.callTool({
+          name: "resolve_project",
+          arguments: { cwd: startupRoot },
+        });
+        const token = payload(ambiguous as { content: readonly { text: string }[] }).recoveryToken;
+        entriesFromRawInput.length = 0;
+
+        const fresh = await client.callTool({
+          name: "setup_project",
+          arguments: {
+            cwd: worktreeB,
+            projectId: "shared-id",
+            projectChoiceReason: "user_selected_after_ambiguous_project",
+            recoveryToken: token,
+          },
+        });
+
+        expect(fresh.isError).not.toBe(true);
+        expect(entriesFromRawInput).toEqual([]);
+      } finally {
+        await client.close();
+        await serverDone.catch(() => undefined);
+      }
+    },
+  );
 });

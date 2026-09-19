@@ -62,16 +62,14 @@ describe("test_vba filter shape (#1442)", () => {
   // export/list tools, which accept a string only; if a later edit points
   // `test_vba` back at the shared property (or widens the shared one), these
   // tools silently lose their boundary type guard. Assert the containment.
-  it.each([
-    "export_modules",
-    "export_all",
-    "list_objects",
-    "harvest_form_catalog",
-  ])("keeps %s rejecting an object filter at the boundary", (toolName) => {
-    expect(validateInput({ filter: { tag: "smoke" } }, schemaFor(toolName))).toBe(
-      "filter must be a string.",
-    );
-  });
+  it.each(["export_modules", "export_all", "list_objects", "harvest_form_catalog"])(
+    "keeps %s rejecting an object filter at the boundary",
+    (toolName) => {
+      expect(validateInput({ filter: { tag: "smoke" } }, schemaFor(toolName))).toBe(
+        "filter must be a string.",
+      );
+    },
+  );
 });
 
 function schemaFor(toolName: string): JsonObjectSchema {

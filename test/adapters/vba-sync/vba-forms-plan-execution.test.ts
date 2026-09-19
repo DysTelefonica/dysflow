@@ -259,46 +259,52 @@ describe("VbaFormsAdapter — apply_form_design_plan (Phase 5.1 execution intern
       },
       "INVALID_INPUT",
     ],
-  ] as const)("apply:true with %s is refused before any write", async (_label, params, expectedCode) => {
-    const writeFile = vi.fn();
-    const orchestrator = makeOrchestrator();
-    const fs = mockFs({ writeFile });
-    const adapter = new VbaFormsAdapter(orchestrator, fs);
+  ] as const)(
+    "apply:true with %s is refused before any write",
+    async (_label, params, expectedCode) => {
+      const writeFile = vi.fn();
+      const orchestrator = makeOrchestrator();
+      const fs = mockFs({ writeFile });
+      const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("apply_form_design_plan", params);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe(expectedCode);
-    expect(writeFile).not.toHaveBeenCalled();
-    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
-  });
+      const result = await adapter.execute("apply_form_design_plan", params);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe(expectedCode);
+      expect(writeFile).not.toHaveBeenCalled();
+      expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+    },
+  );
 
   // (e) formName identity: mismatch / case-only / empty.
   it.each([
     ["different formName", "OtherForm", false, "FORM_UI_PLAN_FORM_MISMATCH"],
     ["empty formName", "", false, "FORM_UI_PLAN_FORM_NAME_MISSING"],
     ["case-only formName (accepted)", "CUSTOMER", true, null],
-  ] as const)("apply:true with %s: formName identity guard", async (_label, planFormName, expectOk, expectedCode) => {
-    const writeFile = vi.fn().mockResolvedValue(undefined);
-    const orchestrator = makeOrchestrator();
-    const fs = mockFs({ writeFile });
-    const adapter = new VbaFormsAdapter(orchestrator, fs);
+  ] as const)(
+    "apply:true with %s: formName identity guard",
+    async (_label, planFormName, expectOk, expectedCode) => {
+      const writeFile = vi.fn().mockResolvedValue(undefined);
+      const orchestrator = makeOrchestrator();
+      const fs = mockFs({ writeFile });
+      const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("apply_form_design_plan", {
-      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
-      plan: { ...plan([op("note", "cmdSave")]), formName: planFormName },
-      apply: true,
-    });
+      const result = await adapter.execute("apply_form_design_plan", {
+        sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+        plan: { ...plan([op("note", "cmdSave")]), formName: planFormName },
+        apply: true,
+      });
 
-    expect(result.ok).toBe(expectOk);
-    if (expectOk) {
-      expect(writeFile).toHaveBeenCalledTimes(1);
-    } else {
-      if (!result.ok) expect(result.error.code).toBe(expectedCode);
-      expect(writeFile).not.toHaveBeenCalled();
-      expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
-    }
-  });
+      expect(result.ok).toBe(expectOk);
+      if (expectOk) {
+        expect(writeFile).toHaveBeenCalledTimes(1);
+      } else {
+        if (!result.ok) expect(result.error.code).toBe(expectedCode);
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   // (b) operation fails mid-plan: target not in contract / preserves dropped.
   it.each([
@@ -312,28 +318,27 @@ describe("VbaFormsAdapter — apply_form_design_plan (Phase 5.1 execution intern
       [op("delete-control", "cmdSave")],
       "FORM_UI_PLAN_PRESERVES_DROPPED",
     ],
-  ] as [
-    string,
-    ReturnType<typeof op>[],
-    string,
-  ][])("apply:true with %s: whole-plan abort, ZERO writes", async (_label, operations, expectedCode) => {
-    const writeFile = vi.fn();
-    const orchestrator = makeOrchestrator();
-    const fs = mockFs({ writeFile });
-    const adapter = new VbaFormsAdapter(orchestrator, fs);
+  ] as [string, ReturnType<typeof op>[], string][])(
+    "apply:true with %s: whole-plan abort, ZERO writes",
+    async (_label, operations, expectedCode) => {
+      const writeFile = vi.fn();
+      const orchestrator = makeOrchestrator();
+      const fs = mockFs({ writeFile });
+      const adapter = new VbaFormsAdapter(orchestrator, fs);
 
-    const result = await adapter.execute("apply_form_design_plan", {
-      sourcePath: "C:/repo/forms/Form_Customer.form.txt",
-      plan: plan(operations),
-      apply: true,
-    });
+      const result = await adapter.execute("apply_form_design_plan", {
+        sourcePath: "C:/repo/forms/Form_Customer.form.txt",
+        plan: plan(operations),
+        apply: true,
+      });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.code).toBe(expectedCode);
-    expect(writeFile).not.toHaveBeenCalled();
-    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
-  });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe(expectedCode);
+      expect(writeFile).not.toHaveBeenCalled();
+      expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+    },
+  );
 
   // set-property on Caption for a control with events is allowed (Caption is not event-bound).
   it("set-property on Caption for a control with events is allowed", async () => {

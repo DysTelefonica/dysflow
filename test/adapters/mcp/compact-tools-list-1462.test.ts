@@ -77,7 +77,9 @@ describe("compact tools/list advertisements (#1462)", () => {
       const importSchema = importTool?.inputSchema as { properties?: Record<string, unknown> };
       expect(importSchema.properties?.apply).toBeDefined();
       expect(
-        String((importSchema.properties?.apply as { description?: string }).description),
+        String(
+          (importSchema.properties?.apply as { description?: string } | undefined)?.description,
+        ),
       ).toMatch(/apply|write|dry-run/i);
     } finally {
       await listed.close();

@@ -50,11 +50,14 @@ describe("validatePlanIdentity — form-name identity guard (#813 acceptance #1/
   it.each([
     ["empty", "", "Customer"],
     ["whitespace", "   ", "Customer"],
-  ])("rejects %s plan.formName with FORM_UI_PLAN_FORM_NAME_MISSING", (_label, formName, _resolved) => {
-    expect(() => validatePlanIdentity({ ...planFromMap([]), formName }, "Customer")).toThrowError(
-      expect.objectContaining({ code: "FORM_UI_PLAN_FORM_NAME_MISSING" }),
-    );
-  });
+  ])(
+    "rejects %s plan.formName with FORM_UI_PLAN_FORM_NAME_MISSING",
+    (_label, formName, _resolved) => {
+      expect(() => validatePlanIdentity({ ...planFromMap([]), formName }, "Customer")).toThrowError(
+        expect.objectContaining({ code: "FORM_UI_PLAN_FORM_NAME_MISSING" }),
+      );
+    },
+  );
 
   it("rejects a different formName with FORM_UI_PLAN_FORM_MISMATCH", () => {
     expect(() => validatePlanIdentity(planFromMap([]), "Other")).toThrowError(
