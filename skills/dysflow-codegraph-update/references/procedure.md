@@ -20,8 +20,9 @@ the owner-specific workflow described below.
    candidate launcher. Never fall back to the production installation.
 4. Confirm canonical target files are writable and record each repository's initial Git status.
    Preserve unrelated changes. Do not change user agent configuration or edit installed mirrors.
-5. Run `codegraph status` for code intelligence. Do not install, upgrade, or uninitialize
-   CodeGraph from this procedure.
+5. Run `codegraph status --json` for code intelligence and record its `version` and `indexPath`.
+   `indexPath` is the only evidence for where the CodeGraph index lives. Do not install, upgrade,
+   or uninitialize CodeGraph from this procedure.
 
 The six release-owned runtime skills are `access-form-ui-builder`, `dysflow-arnes`,
 `dysflow-usage`, `dysflow-codegraph-update`, `dysflow-examples-sync`, and
@@ -99,7 +100,13 @@ as evidence.
 7. Audit historical examples separately from active instructions. Historical prose may describe
    an old incident, but any copy-pasteable call must be visibly historical or accompanied by its
    current canonical equivalent so an agent cannot execute a removed contract.
-8. Capture the personal repository status before auditing. If it is dirty, do not edit, stage,
+8. Compare every CodeGraph index-directory claim (a path such as `<project>/.codegraph/`, a
+   `codegraph.db` location, or a probe order across index directories) with the directory name in
+   the Step 0 `indexPath`. A claim that names another directory is DRIFT, including in
+   release-owned skills. When the claim accurately describes Dysflow code that itself targets
+   another directory, report it under `runtimeGaps` for the Dysflow team instead of editing the
+   docs.
+9. Capture the personal repository status before auditing. If it is dirty, do not edit, stage,
    commit, reconcile, or push that lane. Return the exact dirty paths beside the findings so the
    owner can separate prior work from the alignment change.
 
