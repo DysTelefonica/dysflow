@@ -1,8 +1,8 @@
 # `@aroman22/dysflow-pi`
 
-This public Pi package provides one native tool named `dysflow`. It delegates through the official Dysflow MCP stdio boundary and renders collapsed rows with a bounded `⚡ Dysflow` label.
+This Pi package provides one native tool named `dysflow`. It delegates through the official Dysflow MCP stdio boundary and renders collapsed rows with a bounded `⚡ Dysflow` label.
 
-Install it through Dysflow so package ownership and the matching release version remain explicit:
+It ships inside every Dysflow runtime. Install it through Dysflow, which activates the runtime copy by local path so package ownership and the matching release version remain explicit:
 
 ```powershell
 dysflow install --agents pi --no-tui

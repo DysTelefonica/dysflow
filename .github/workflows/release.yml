@@ -316,40 +316,18 @@ jobs:
     # The actual secret value enters only its owning step.
     env:
       HAS_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
-      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      # Issue #1739 — actions/setup-node v5 auto-enables `package-manager-cache`
-      # when `registry-url` is set. That flag requires pnpm/npm/yarn on PATH;
-      # the other three jobs in this workflow install pnpm via
-      # pnpm/action-setup first, but this job previously went straight to
-      # setup-node and tripped `Unable to locate executable file: pnpm`.
-      - name: Enable pnpm for npmjs publication
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          run_install: false
-
-      # Issue #1741 — switch from npmjs Trusted Publishing (which requires
-      # manual setup on npmjs.com for the @aroman22/dysflow-pi package, outside
-      # this repo) to a `NPM_TOKEN` secret stored in the repo's GitHub Actions
-      # secrets. The token is the only thing that needs to be rotated when a
-      # maintainer leaves or loses access; nothing external to configure.
-      - name: Setup Node.js for npmjs publication
+      # Issue #1754 — Dysflow ships only through this GitHub Release. The Pi
+      # facade travels inside the signed archive (`plugin/pi`) and the installer
+      # activates it by local path; nothing is published to a package registry.
+      - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: 26
-          registry-url: https://registry.npmjs.org
-          token: ${{ secrets.NPM_TOKEN }}
-
-      - name: Require NPM_TOKEN
-        if: env.HAS_NPM_TOKEN != 'true'
-        run: |
-          echo "NPM_TOKEN is required to publish the @aroman22/dysflow-pi package." >&2
-          echo "Generate an npm automation token at https://www.npmjs.com/settings/<org>/tokens and store it as the GitHub Actions secret." >&2
-          exit 1
 
       - name: Verify checkout matches build input
         env:
@@ -448,59 +426,6 @@ jobs:
           openssl pkeyutl -verify -pubin -inkey "$PUBFILE" -rawin -in SHA256SUMS -sigfile "$RAWSIG"
           rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
           echo "Signed SHA256SUMS -> SHA256SUMS.sig"
-
-      - name: Verify Pi package contents without publishing
-        working-directory: plugin/pi
-        run: npm pack --dry-run --json
-
-      - name: Pack exact Pi package artifact
-        id: pi-package
-        working-directory: plugin/pi
-        run: |
-          set -euo pipefail
-          npm pack --json --pack-destination "$RUNNER_TEMP" \
-            > "$RUNNER_TEMP/pi-pack.json"
-          node <<'NODE'
-          const { appendFileSync, readFileSync } = require("node:fs");
-          const [pack] = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/pi-pack.json`, "utf8"));
-          if (!pack?.filename || !pack?.integrity) {
-            throw new Error("npm pack did not report filename and integrity");
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `tarball=${process.env.RUNNER_TEMP}/${pack.filename}\n`);
-          appendFileSync(process.env.GITHUB_OUTPUT, `integrity=${pack.integrity}\n`);
-          NODE
-
-      - name: Publish Pi package to npmjs
-        working-directory: plugin/pi
-        env:
-          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
-          if PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
-            --registry=https://registry.npmjs.org 2>/dev/null)"
-          then
-            test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
-            echo "${PACKAGE} already has the candidate integrity; preserving it."
-          else
-            npm publish "${{ steps.pi-package.outputs.tarball }}" \
-              --access public --registry=https://registry.npmjs.org
-          fi
-
-      - name: Verify Pi package publication
-        env:
-          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
-          PUBLISHED="$(npm view "${PACKAGE}" version \
-            --registry=https://registry.npmjs.org)"
-          PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
-            --registry=https://registry.npmjs.org)"
-          test "${PUBLISHED}" = "${VERSION}"
-          test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

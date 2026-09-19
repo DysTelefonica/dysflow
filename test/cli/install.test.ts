@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -85,20 +85,28 @@ const simulatedPiPackageRunner = async (
   const settingsPath = join(home, ".pi", "agent", "settings.json");
   const settings = await readJson(settingsPath).catch(() => ({ packages: [] }));
   const packages = Array.isArray(settings.packages) ? settings.packages : [];
+  // Like Pi: a local path is stored relative to the settings directory and
+  // matched by resolved location; an npm spec is matched by package name.
+  const settingsDir = dirname(settingsPath);
+  const key = (entry: unknown, fromSettings: boolean): string =>
+    typeof entry !== "string"
+      ? ""
+      : entry.startsWith("npm:@aroman22/dysflow-pi")
+        ? "npm:@aroman22/dysflow-pi"
+        : resolve(fromSettings ? settingsDir : "", entry);
+  const source = args[1] ?? "";
+  const others = packages.filter((entry) => key(entry, true) !== key(source, false));
   settings.packages =
     args[0] === "install"
-      ? [
-          ...packages.filter(
-            (entry) => typeof entry !== "string" || !entry.startsWith("npm:@aroman22/dysflow-pi"),
-          ),
-          args[1],
-        ]
-      : packages.filter(
-          (entry) => typeof entry !== "string" || !entry.startsWith("npm:@aroman22/dysflow-pi"),
-        );
+      ? [...others, source.startsWith("npm:") ? source : relative(settingsDir, source)]
+      : others;
   await mkdir(join(home, ".pi", "agent"), { recursive: true });
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 };
+
+/** The Pi settings entry for the runtime's facade, in the relative form Pi writes (#1754). */
+const piFacadeSettingsEntry = (home: string, runtimeDir: string): string =>
+  relative(join(home, ".pi", "agent"), join(runtimeDir, "app", "plugin", "pi"));
 
 const expectedOpenCodeCommand = (runtimeDir: string): string[] => [
   join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/"),
@@ -460,7 +468,7 @@ describe("Dysflow MCP config state", () => {
       expect(await hasDysflowMcpConfig("opencode", opencodeConfig)).toBe(true);
       expect(await hasDysflowMcpConfig("claude", claudeDesktopConfig)).toBe(false);
       expect((await readJson(join(home, ".pi", "agent", "settings.json"))).packages).toEqual([
-        "npm:@aroman22/dysflow-pi@0.2.0",
+        piFacadeSettingsEntry(home, runtimeDir),
       ]);
 
       const piMcpPath = join(home, ".pi", "agent", "mcp.json");
@@ -479,7 +487,7 @@ describe("Dysflow MCP config state", () => {
       });
       expect(await readFile(piMcpPath)).toEqual(piMcpBeforeFailedRemoval);
       expect((await readJson(join(home, ".pi", "agent", "settings.json"))).packages).toEqual([
-        "npm:@aroman22/dysflow-pi@0.2.0",
+        piFacadeSettingsEntry(home, runtimeDir),
       ]);
 
       const deselected = await applyIntegrationSelection(["opencode"], {
@@ -676,8 +684,10 @@ describe("handleInstallCommand end-to-end", () => {
       expect(piDysflow.args).toEqual(["mcp"]);
       expect(piDysflow.directTools).toBe(false);
       const piSettings = await readJson(join(home, ".pi", "agent", "settings.json"));
-      expect(piSettings.packages).toEqual(["npm:@aroman22/dysflow-pi@0.1.0"]);
-      await expect(access(join(runtimeDir, "app", "plugin", "pi", "index.ts"))).rejects.toThrow();
+      expect(piSettings.packages).toEqual([piFacadeSettingsEntry(home, runtimeDir)]);
+      await expect(
+        access(join(runtimeDir, "app", "plugin", "pi", "index.ts")),
+      ).resolves.toBeUndefined();
 
       const installedSkillDirs = [
         join(home, ".codex", "skills"),

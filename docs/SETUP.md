@@ -23,7 +23,7 @@ Install the CLI from the signed asset on the [current GitHub release](https://gi
 
 The root package is private and is not a public npm installation channel.
 
-The separate public `@aroman22/dysflow-pi` package is installed only through the Dysflow command below so ownership remains explicit.
+The Pi package `@aroman22/dysflow-pi` ships inside the release archive and is activated only through the Dysflow command below so ownership remains explicit.
 
 Then let Dysflow install its managed runtime and MCP integration:
 

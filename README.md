@@ -319,8 +319,9 @@ For true cross-user use on the same machine, choose a shared path that all inten
 dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
 ```
 
-Install the public `@aroman22/dysflow-pi` package through the same installer.
-Dysflow delegates to Pi's package manager and records ownership safely:
+Install the Pi package `@aroman22/dysflow-pi` through the same installer. It
+ships inside the runtime, and Dysflow activates it by local path through Pi's
+package manager and records ownership safely:
 
 ```powershell
 dysflow install --agents pi --no-tui
