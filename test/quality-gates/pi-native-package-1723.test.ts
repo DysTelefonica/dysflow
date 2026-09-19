@@ -88,7 +88,9 @@ describe("Dysflow Pi-native package (#1723)", () => {
     expect(repositoryManifest.private).toBe(true);
     expect(setup).not.toContain("npm install --global dysflow");
     expect(guide).toContain("dysflow install --agents pi --no-tui");
-    expect(guide).toContain("npm:@aroman22/dysflow-pi@");
+    // #1754 — the facade is activated from the runtime by local path, never from a registry.
+    expect(guide).toContain("pi install <runtime>/app/plugin/pi");
+    expect(guide).not.toContain("Trusted Publishing");
     expect(guide).toContain("directTools: false");
   });
 

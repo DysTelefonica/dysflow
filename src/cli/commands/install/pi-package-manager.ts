@@ -36,11 +36,21 @@ type PiPackageResult = {
   spec: string;
 };
 
-export function piPackageSpec(version: string): string {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-    throw new Error(`Cannot install the Pi package for invalid Dysflow version: ${version}.`);
-  }
-  return `npm:${PI_PACKAGE_NAME}@${version}`;
+const LEGACY_NPM_SPEC = `npm:${PI_PACKAGE_NAME}`;
+
+/**
+ * The Pi facade Dysflow activates: the runtime's own copy, by absolute path
+ * (issue #1754). Pi loads a local-path package in place, so the facade always
+ * matches the installed runtime and no package registry is involved.
+ */
+export function resolvePiFacadeDir(runtimeDir: string): string {
+  return path.join(runtimeDir, "app", "plugin", "pi");
+}
+
+function samePath(left: string, right: string): boolean {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 export function resolvePiPackageOwnershipPath(runtimeDir: string): string {
@@ -54,16 +64,42 @@ function packageSource(entry: unknown): string | undefined {
   return typeof source === "string" ? source : undefined;
 }
 
-function isPiPackageSource(source: string): boolean {
-  return source === `npm:${PI_PACKAGE_NAME}` || source.startsWith(`npm:${PI_PACKAGE_NAME}@`);
+function isLegacyNpmSource(source: string): boolean {
+  return source === LEGACY_NPM_SPEC || source.startsWith(`${LEGACY_NPM_SPEC}@`);
 }
 
-async function currentPiPackageSource(settingsPath: string): Promise<string | undefined> {
+/**
+ * The Dysflow facade entry in Pi settings, as a comparable identity: the npm
+ * spec an earlier release wrote, or the absolute facade path. Pi stores a
+ * local path relative to the settings directory, so entries are resolved
+ * against it before comparing.
+ */
+async function currentPiPackageSource(
+  settingsPath: string,
+  runtimeDir: string,
+): Promise<string | undefined> {
   const settings = await readJson(settingsPath);
   if (!Array.isArray(settings.packages)) return undefined;
-  return settings.packages
-    .map(packageSource)
-    .find((source): source is string => source !== undefined && isPiPackageSource(source));
+  const facadeDir = resolvePiFacadeDir(runtimeDir);
+  for (const source of settings.packages.map(packageSource)) {
+    if (source === undefined) continue;
+    if (isLegacyNpmSource(source)) return source;
+    if (!source.includes(":") || path.isAbsolute(source)) {
+      if (samePath(path.resolve(path.dirname(settingsPath), source), facadeDir)) return facadeDir;
+    }
+  }
+  return undefined;
+}
+
+function sameSource(left: string | undefined, right: string | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (isLegacyNpmSource(left) || isLegacyNpmSource(right)) return left === right;
+  return samePath(left, right);
+}
+
+/** The argument `pi remove` needs to drop an entry with this identity. */
+function removeArgument(source: string): string {
+  return isLegacyNpmSource(source) ? LEGACY_NPM_SPEC : source;
 }
 
 async function readOwnership(runtimeDir: string): Promise<PiPackageOwnership | undefined> {
@@ -102,15 +138,16 @@ export async function hasOwnedPiPackage(
 ): Promise<boolean> {
   const ownership = await readOwnership(runtimeDir);
   if (!ownership) return false;
-  return (await currentPiPackageSource(settingsPath)) === ownership.spec;
+  return sameSource(await currentPiPackageSource(settingsPath, runtimeDir), ownership.spec);
 }
 
 async function assertPackageSource(
   settingsPath: string,
+  runtimeDir: string,
   expected: string | undefined,
 ): Promise<void> {
-  const actual = await currentPiPackageSource(settingsPath);
-  if (actual !== expected) {
+  const actual = await currentPiPackageSource(settingsPath, runtimeDir);
+  if (!sameSource(actual, expected)) {
     throw new Error(
       expected === undefined
         ? "Pi reported package removal but the Dysflow package remains installed."
@@ -120,7 +157,6 @@ async function assertPackageSource(
 }
 
 export async function reconcilePiPackage(input: PiPackageInput): Promise<PiPackageResult> {
-  const baseSpec = `npm:${PI_PACKAGE_NAME}`;
   const mode = input.mode ?? "install";
   const runPiCommand = input.runPiCommand ?? defaultPiPackageCommandRunner;
   const commandContext = {
@@ -129,32 +165,32 @@ export async function reconcilePiPackage(input: PiPackageInput): Promise<PiPacka
   };
   const ownershipPath = resolvePiPackageOwnershipPath(input.runtimeDir);
   const ownership = await readOwnership(input.runtimeDir);
-  const current = await currentPiPackageSource(input.settingsPath);
+  const current = await currentPiPackageSource(input.settingsPath, input.runtimeDir);
   const packageVersion = input.packageVersion;
   let spec: string;
   if (mode === "remove") {
-    spec = ownership?.spec ?? current ?? baseSpec;
+    spec = ownership?.spec ?? current ?? resolvePiFacadeDir(input.runtimeDir);
   } else {
     if (packageVersion === undefined) {
       throw new Error("A Dysflow release version is required to install the Pi package.");
     }
-    spec = piPackageSpec(packageVersion);
+    spec = resolvePiFacadeDir(input.runtimeDir);
   }
-  const ownsCurrent = ownership !== undefined && ownership.spec === current;
+  const ownsCurrent = ownership !== undefined && sameSource(ownership.spec, current);
 
   if (mode === "remove") {
-    if (!ownsCurrent) {
+    if (!ownsCurrent || current === undefined) {
       if (ownership) await rm(ownershipPath, { force: true });
       return { status: "unchanged", active: current !== undefined, owned: false, spec };
     }
-    await runPiCommand(["remove", baseSpec], commandContext);
-    await assertPackageSource(input.settingsPath, undefined);
+    await runPiCommand(["remove", removeArgument(current)], commandContext);
+    await assertPackageSource(input.settingsPath, input.runtimeDir, undefined);
     await rm(ownershipPath, { force: true });
     return { status: "changed", active: false, owned: false, spec };
   }
 
   if (current !== undefined && !ownsCurrent) {
-    if (current === spec) {
+    if (sameSource(current, spec)) {
       return { status: "unchanged", active: true, owned: false, spec };
     }
     throw new Error(
@@ -162,14 +198,19 @@ export async function reconcilePiPackage(input: PiPackageInput): Promise<PiPacka
     );
   }
 
-  if (current === spec && ownsCurrent) {
+  if (ownsCurrent && sameSource(current, spec)) {
     return { status: "unchanged", active: true, owned: true, spec };
   }
 
   const previousSpec = current;
-  await runPiCommand(["install", spec], commandContext);
+  // An owned entry of another form (the npm spec an earlier release wrote)
+  // has a different Pi match key, so installing would add a second facade.
+  if (previousSpec !== undefined) {
+    await runPiCommand(["remove", removeArgument(previousSpec)], commandContext);
+  }
   try {
-    await assertPackageSource(input.settingsPath, spec);
+    await runPiCommand(["install", spec], commandContext);
+    await assertPackageSource(input.settingsPath, input.runtimeDir, spec);
     await (input.writeOwnershipFile ?? writeJson)(ownershipPath, {
       packageName: PI_PACKAGE_NAME,
       spec,
@@ -178,9 +219,12 @@ export async function reconcilePiPackage(input: PiPackageInput): Promise<PiPacka
     });
   } catch (error) {
     try {
-      if (previousSpec === undefined) {
-        await runPiCommand(["remove", baseSpec], commandContext);
-      } else {
+      // Only undo what actually landed: a failed `pi install` added nothing.
+      const landed = await currentPiPackageSource(input.settingsPath, input.runtimeDir);
+      if (sameSource(landed, spec)) {
+        await runPiCommand(["remove", spec], commandContext);
+      }
+      if (previousSpec !== undefined) {
         await runPiCommand(["install", previousSpec], commandContext);
       }
     } catch (rollbackError) {

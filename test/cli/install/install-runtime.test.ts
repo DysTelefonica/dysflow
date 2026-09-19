@@ -177,7 +177,7 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
   });
 
-  it("does not copy the independently distributed Pi package into the runtime", async () => {
+  it("keeps the Pi facade in the runtime without the source checkout's node_modules (#1754)", async () => {
     const packageRoot = join(root, "pkg");
     await mkdir(join(packageRoot, "plugin", "pi", "node_modules", "nested"), {
       recursive: true,
@@ -192,8 +192,10 @@ describe("installRuntime — runtime docs must be copied alongside dist (#940)",
     const report = await installRuntime(runtimePaths, packageRoot);
 
     const destination = join(runtimePaths.appDir, "plugin", "pi");
-    await expect(access(destination)).rejects.toThrow();
-    expect(report.copiedFiles.every((file) => !file.includes(join("plugin", "pi")))).toBe(true);
+    await expect(access(join(destination, "package.json"))).resolves.toBeUndefined();
+    await expect(access(join(destination, "node_modules", "nested"))).rejects.toThrow();
+    expect(report.copiedFiles).toContain(join(destination, "package.json"));
+    expect(report.copiedFiles.every((file) => !file.includes("node_modules"))).toBe(true);
   });
 
   it("retains every bundled skill byte-exactly in the installed runtime for update and doctor", async () => {

@@ -85,7 +85,7 @@ Use the installer-owned form for machine setup and the bundled `npx` form inside
 
 ## Pi Package Ownership
 
-`plugin/pi` is the source for public package `@aroman22/dysflow-pi`. It owns one native facade, the public MCP SDK client, and compact rendering.
+`plugin/pi` is the source for the Pi package `@aroman22/dysflow-pi`, which ships inside the runtime. It owns one native facade, the public MCP SDK client, and compact rendering.
 
 It does not own runtime schemas, Pi package settings, or an MCP manifest.
 
