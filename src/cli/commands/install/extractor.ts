@@ -3,6 +3,7 @@ import path from "node:path";
 import { runCommand } from "./command-runner.js";
 import { fileExists } from "./file-utils.js";
 import { writeRuntimeLaunchers } from "./path-configurator.js";
+import { resolvePiFacadeDir } from "./pi-package-manager.js";
 import { getSystemMarkerPath, RUNTIME_MARKER_VERSION } from "./runtime-dir.js";
 import { assertBundledSkillsAvailable } from "./skills-installer.js";
 
@@ -19,6 +20,8 @@ export type RuntimePaths = {
   packageJsonDest: string;
   skillsSource: string;
   skillsDest: string;
+  piFacadeSource: string;
+  piFacadeDest: string;
 };
 
 export function resolveRuntimePaths(runtimeDir: string, packageRoot: string): RuntimePaths {
@@ -37,6 +40,8 @@ export function resolveRuntimePaths(runtimeDir: string, packageRoot: string): Ru
     packageJsonDest: path.join(appDir, "package.json"),
     skillsSource: path.join(packageRoot, "skills"),
     skillsDest: path.join(appDir, "skills"),
+    piFacadeSource: path.join(packageRoot, "plugin", "pi"),
+    piFacadeDest: resolvePiFacadeDir(runtimeDir),
   };
 }
 
@@ -160,6 +165,41 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
       );
     }
   }
+
+  copiedFiles.push(...(await installPiFacade(runtimePaths)));
+  return copiedFiles;
+}
+
+/**
+ * Issue #1754 — keep the Pi facade inside the runtime and install its
+ * production dependencies there. Pi loads a local-path package in place and
+ * never installs its dependencies, so they must be present before
+ * `pi install <path>`. The facade's `.npmrc` disables peer installation, the
+ * same way Pi installs its own packages: the `@earendil-works/pi-*` peers are
+ * provided by Pi itself.
+ */
+async function installPiFacade(runtimePaths: RuntimePaths): Promise<string[]> {
+  if (!(await fileExists(path.join(runtimePaths.piFacadeSource, "package.json")))) return [];
+  const copiedFiles: string[] = [];
+  await mkdir(runtimePaths.piFacadeDest, { recursive: true });
+  const entries = await readdir(runtimePaths.piFacadeSource, { withFileTypes: true });
+  for (const entry of entries) {
+    // A source checkout carries its own dev install; the release archive
+    // already excludes it. Never copy it into the runtime.
+    if (entry.name === "node_modules" || entry.name.endsWith(".tgz")) continue;
+    const source = path.join(runtimePaths.piFacadeSource, entry.name);
+    const destination = path.join(runtimePaths.piFacadeDest, entry.name);
+    if (await copyIfDifferent(source, destination, { recursive: true, force: true })) {
+      copiedFiles.push(
+        ...(entry.isDirectory() ? await listDestinationFiles(source, destination) : [destination]),
+      );
+    }
+  }
+  const installArgs = ["install", "--ignore-scripts", "--prod", "--force"];
+  if (await fileExists(path.join(runtimePaths.piFacadeSource, "pnpm-lock.yaml"))) {
+    installArgs.push("--frozen-lockfile");
+  }
+  await runCommand("pnpm", installArgs, runtimePaths.piFacadeDest, { timeoutMs: 120_000 });
   return copiedFiles;
 }
 

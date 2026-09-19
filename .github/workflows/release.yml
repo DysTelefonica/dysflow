@@ -344,13 +344,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           token: ${{ secrets.NPM_TOKEN }}
 
-      - name: Require NPM_TOKEN
-        if: env.HAS_NPM_TOKEN != 'true'
-        run: |
-          echo "NPM_TOKEN is required to publish the @aroman22/dysflow-pi package." >&2
-          echo "Generate an npm automation token at https://www.npmjs.com/settings/<org>/tokens and store it as the GitHub Actions secret." >&2
-          exit 1
-
       - name: Verify checkout matches build input
         env:
           EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit_sha }}
@@ -449,59 +442,6 @@ jobs:
           rm -f "$KEYFILE" "$PUBFILE" "$RAWSIG"
           echo "Signed SHA256SUMS -> SHA256SUMS.sig"
 
-      - name: Verify Pi package contents without publishing
-        working-directory: plugin/pi
-        run: npm pack --dry-run --json
-
-      - name: Pack exact Pi package artifact
-        id: pi-package
-        working-directory: plugin/pi
-        run: |
-          set -euo pipefail
-          npm pack --json --pack-destination "$RUNNER_TEMP" \
-            > "$RUNNER_TEMP/pi-pack.json"
-          node <<'NODE'
-          const { appendFileSync, readFileSync } = require("node:fs");
-          const [pack] = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/pi-pack.json`, "utf8"));
-          if (!pack?.filename || !pack?.integrity) {
-            throw new Error("npm pack did not report filename and integrity");
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `tarball=${process.env.RUNNER_TEMP}/${pack.filename}\n`);
-          appendFileSync(process.env.GITHUB_OUTPUT, `integrity=${pack.integrity}\n`);
-          NODE
-
-      - name: Publish Pi package to npmjs
-        working-directory: plugin/pi
-        env:
-          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
-          if PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
-            --registry=https://registry.npmjs.org 2>/dev/null)"
-          then
-            test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
-            echo "${PACKAGE} already has the candidate integrity; preserving it."
-          else
-            npm publish "${{ steps.pi-package.outputs.tarball }}" \
-              --access public --registry=https://registry.npmjs.org
-          fi
-
-      - name: Verify Pi package publication
-        env:
-          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
-          PUBLISHED="$(npm view "${PACKAGE}" version \
-            --registry=https://registry.npmjs.org)"
-          PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
-            --registry=https://registry.npmjs.org)"
-          test "${PUBLISHED}" = "${VERSION}"
-          test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -533,6 +473,74 @@ jobs:
             exit 1
           fi
           echo "Release name matches tag: ${TAG}"
+
+      # Issue #1754 — npm is an optional, best-effort channel for the Pi
+      # facade. Every installed runtime already carries the facade and Pi
+      # activates it by local path, so the GitHub Release never depends on npm:
+      # these steps run only when NPM_TOKEN is set, after publication, and a
+      # failure here neither fails the job nor triggers the partial-release
+      # cleanup below.
+      - name: Verify Pi package contents without publishing
+        if: env.HAS_NPM_TOKEN == 'true'
+        continue-on-error: true
+        working-directory: plugin/pi
+        run: npm pack --dry-run --json
+
+      - name: Pack exact Pi package artifact
+        if: env.HAS_NPM_TOKEN == 'true'
+        continue-on-error: true
+        id: pi-package
+        working-directory: plugin/pi
+        run: |
+          set -euo pipefail
+          npm pack --json --pack-destination "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/pi-pack.json"
+          node <<'NODE'
+          const { appendFileSync, readFileSync } = require("node:fs");
+          const [pack] = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/pi-pack.json`, "utf8"));
+          if (!pack?.filename || !pack?.integrity) {
+            throw new Error("npm pack did not report filename and integrity");
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `tarball=${process.env.RUNNER_TEMP}/${pack.filename}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `integrity=${pack.integrity}\n`);
+          NODE
+
+      - name: Publish Pi package to npmjs
+        if: env.HAS_NPM_TOKEN == 'true'
+        continue-on-error: true
+        working-directory: plugin/pi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
+          if PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
+            --registry=https://registry.npmjs.org 2>/dev/null)"
+          then
+            test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
+            echo "${PACKAGE} already has the candidate integrity; preserving it."
+          else
+            npm publish "${{ steps.pi-package.outputs.tarball }}" \
+              --access public --registry=https://registry.npmjs.org
+          fi
+
+      - name: Verify Pi package publication
+        if: env.HAS_NPM_TOKEN == 'true'
+        continue-on-error: true
+        env:
+          EXPECTED_INTEGRITY: ${{ steps.pi-package.outputs.integrity }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="@aroman22/dysflow-pi@${VERSION}"
+          PUBLISHED="$(npm view "${PACKAGE}" version \
+            --registry=https://registry.npmjs.org)"
+          PUBLISHED_INTEGRITY="$(npm view "${PACKAGE}" dist.integrity \
+            --registry=https://registry.npmjs.org)"
+          test "${PUBLISHED}" = "${VERSION}"
+          test "${PUBLISHED_INTEGRITY}" = "${EXPECTED_INTEGRITY}"
 
       # A step failing after "Create GitHub Release" (e.g. the title assertion
       # above) would otherwise leave a broken, published GitHub Release behind

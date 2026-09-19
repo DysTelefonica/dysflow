@@ -25,10 +25,13 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
   7. On CI green, creates and pushes an annotated `vX.Y.Z` tag. That tag starts
      `.github/workflows/release.yml`, whose `e2e-validation` job runs
      `pnpm test:e2e:mcp:release` on the self-hosted Access runner.
-  8. The release job stamps the root and Pi package to the tag version, then
-     publishes `@aroman22/dysflow-pi` through npm Trusted Publishing (OIDC).
-  9. The GitHub Release is published only after npm verification. The publication
-     job declares `build`, `quality-authority`, and `e2e-validation` in `needs`.
+  8. The release job stamps the root and Pi package to the tag version and
+     builds the signed archive, which carries the Pi facade in `plugin/pi`.
+  9. The GitHub Release is published only after `build`, `quality-authority`,
+     and `e2e-validation` succeed; the publication job declares all three in
+     `needs`. Publishing the Pi
+     package to npm is optional: it runs afterwards, only when the `NPM_TOKEN`
+     secret is set, and cannot fail the release.
 
 Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
 
@@ -62,17 +65,13 @@ The script turns them into `### Changes` notes and preserves one physical bullet
 
 ## Pi package publication
 
-The full ownership, npm secret, publication-order, retry, and rollback contract
-lives in the [Pi-native integration guide](./pi-native-integration.md#release-contract).
+The full ownership, publication-order, retry, and rollback contract lives in the
+[Pi-native integration guide](./pi-native-integration.md#release-contract).
 Before pushing a tag:
 
-- [ ] npm Trusted Publishing names repository `DysTelefonica/dysflow` and workflow
-      `.github/workflows/release.yml`.
-- [ ] No persistent `NPM_TOKEN` repository secret exists.
 - [ ] `package.json` and `plugin/pi/package.json` have matching versions.
+- [ ] `plugin/pi/pnpm-lock.yaml` matches `plugin/pi/package.json`.
 - [ ] The package dry-run and focused Pi tests pass in sandbox paths.
-- [ ] The one-time local login + 2FA bootstrap, if still required, is explicitly
-      authorized and runs only after the exact source commit is green.
 
 The workflow uses a short-lived OIDC credential, publishes to npmjs, and verifies with `npm view` before creating the GitHub Release.
 

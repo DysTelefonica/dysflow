@@ -44,7 +44,8 @@ describe("release package version", () => {
       expect(releasePrepare).toContain("WriteAllBytes($piPackagePath, $piPackageBefore)");
       expect(workflow).toContain("registry-url: https://registry.npmjs.org");
       expect(workflow).toContain("secrets.NPM_TOKEN");
-      expect(workflow).toContain("Require NPM_TOKEN");
+      // #1754 — npm is optional: no hard gate on the secret.
+      expect(workflow).not.toContain("Require NPM_TOKEN");
       expect(workflow).not.toContain("id-token: write");
       expect(workflow).not.toContain("Verify npm trusted-publishing client");
       expect(workflow).toContain("working-directory: plugin/pi");
@@ -62,7 +63,22 @@ describe("release package version", () => {
       expect(packIndex).toBeGreaterThan(stampIndex);
       expect(publishIndex).toBeGreaterThan(packIndex);
       expect(verifyIndex).toBeGreaterThan(publishIndex);
-      expect(releaseIndex).toBeGreaterThan(verifyIndex);
+      // #1754 — the GitHub Release never waits on npm: every npm step runs
+      // after it, only with the secret, and cannot fail the job.
+      expect(packIndex).toBeGreaterThan(releaseIndex);
+      for (const step of [
+        "Verify Pi package contents without publishing",
+        "Pack exact Pi package artifact",
+        "Publish Pi package to npmjs",
+        "Verify Pi package publication",
+      ]) {
+        const index = workflow.indexOf(`- name: ${step}\n`);
+        expect(index).toBeGreaterThan(releaseIndex);
+        expect(workflow.slice(index).split("\n").slice(1, 3)).toEqual([
+          "        if: env.HAS_NPM_TOKEN == 'true'",
+          "        continue-on-error: true",
+        ]);
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
