@@ -200,15 +200,15 @@ describe("TypeScript import cycle report", () => {
     expect(result.stderr).toContain("src/d.ts -> src/a.ts");
   });
 
-  it.each(monotonicImprovementFixtures)("allows monotonic improvement when it $scenario", ({
-    baseline,
-    files,
-  }) => {
-    const result = check(project(files), baseline);
+  it.each(monotonicImprovementFixtures)(
+    "allows monotonic improvement when it $scenario",
+    ({ baseline, files }) => {
+      const result = check(project(files), baseline);
 
-    expect(result.status).toBe(0);
-    expect(result.stderr).toBe("");
-  });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+    },
+  );
 
   it("updates the baseline deliberately and the resulting baseline passes check", () => {
     const root = project({

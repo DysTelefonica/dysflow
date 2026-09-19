@@ -1039,25 +1039,28 @@ describe("Dysflow HTTP adapter", () => {
       ["projectId", "other-project"],
       ["testsPath", "C:/outside/tests.vba.json"],
       ["testsPath", "../outside/tests.vba.json"],
-    ])("rejects target override %s so the startup allowlist cannot authorize another target", async (key, value) => {
-      const vbaSyncToolService = createFakeVbaSyncToolService(["Test_A"]);
-      const services = createFakeServices({ vbaSyncToolService });
-      const server = await startTestServer({
-        services,
-        writesEnabled: true,
-        allowedProcedures: ["Test_A"],
-      });
+    ])(
+      "rejects target override %s so the startup allowlist cannot authorize another target",
+      async (key, value) => {
+        const vbaSyncToolService = createFakeVbaSyncToolService(["Test_A"]);
+        const services = createFakeServices({ vbaSyncToolService });
+        const server = await startTestServer({
+          services,
+          writesEnabled: true,
+          allowedProcedures: ["Test_A"],
+        });
 
-      const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ proceduresJson: '["Test_A"]', [key]: value }),
-      });
+        const { response, body } = await readJson<HttpErrorBody>(`${server.url}/vba/test`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ proceduresJson: '["Test_A"]', [key]: value }),
+        });
 
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe("HTTP_INVALID_INPUT");
-      expect(testVbaCalls).toEqual([]);
-    });
+        expect(response.status).toBe(400);
+        expect(body.error.code).toBe("HTTP_INVALID_INPUT");
+        expect(testVbaCalls).toEqual([]);
+      },
+    );
 
     it("rejects an empty body because HTTP /vba/test requires an inline proceduresJson plan", async () => {
       const vbaSyncToolService = createFakeVbaSyncToolService(undefined);

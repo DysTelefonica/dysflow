@@ -6,32 +6,31 @@ function ioError(code: string): NodeJS.ErrnoException {
 }
 
 describe("recovery-token-trio suite-owned cleanup (#1683)", () => {
-  it.each([
-    "EBUSY",
-    "EPERM",
-    "ENOTEMPTY",
-  ])("retries transient Windows %s from the competing worktree before succeeding", async (code) => {
-    const remove = vi
-      .fn()
-      .mockRejectedValueOnce(
-        Object.assign(ioError(code), {
-          path: "C:/temp/dysflow-e2e-recovery-token-trio/competing",
-        }),
-      )
-      .mockResolvedValue(undefined);
-    const sleep = vi.fn().mockResolvedValue(undefined);
+  it.each(["EBUSY", "EPERM", "ENOTEMPTY"])(
+    "retries transient Windows %s from the competing worktree before succeeding",
+    async (code) => {
+      const remove = vi
+        .fn()
+        .mockRejectedValueOnce(
+          Object.assign(ioError(code), {
+            path: "C:/temp/dysflow-e2e-recovery-token-trio/competing",
+          }),
+        )
+        .mockResolvedValue(undefined);
+      const sleep = vi.fn().mockResolvedValue(undefined);
 
-    await removeRecoveryTokenTrioFixtureWithRetry("C:/temp/dysflow-e2e-recovery-token-trio", {
-      remove,
-      sleep,
-      platform: "win32",
-      maxAttempts: 3,
-      initialDelayMs: 10,
-    });
+      await removeRecoveryTokenTrioFixtureWithRetry("C:/temp/dysflow-e2e-recovery-token-trio", {
+        remove,
+        sleep,
+        platform: "win32",
+        maxAttempts: 3,
+        initialDelayMs: 10,
+      });
 
-    expect(remove).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenCalledWith(10);
-  });
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(sleep).toHaveBeenCalledWith(10);
+    },
+  );
 
   it("fails actionably after the bounded retry budget is exhausted", async () => {
     const lockedPath = "C:/temp/dysflow-e2e-recovery-token-trio/competing";

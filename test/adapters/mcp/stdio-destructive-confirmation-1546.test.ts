@@ -110,79 +110,81 @@ function errorOf(result: PublicResult) {
 }
 
 describe("public MCP destructive-confirmation contract (#1546)", () => {
-  it.each(
-    CASES,
-  )("$name rejects missing confirmations before its service port", async (testCase) => {
-    const harness = await createHarness();
-    try {
-      for (const confirmation of [
-        {},
-        { implements_check: testCase.token },
-        { implements_check: testCase.token, confirmedRequiresConfirmation: false },
-      ]) {
+  it.each(CASES)(
+    "$name rejects missing confirmations before its service port",
+    async (testCase) => {
+      const harness = await createHarness();
+      try {
+        for (const confirmation of [
+          {},
+          { implements_check: testCase.token },
+          { implements_check: testCase.token, confirmedRequiresConfirmation: false },
+        ]) {
+          const result = (await harness.client.callTool({
+            name: testCase.name,
+            arguments: { ...testCase.input, apply: true, ...confirmation },
+          })) as PublicResult;
+          expect(result.isError).toBe(true);
+          expect(result.structuredContent).toMatchObject({
+            schemaVersion: "dysflow.result/v1",
+            ok: false,
+            isError: true,
+          });
+          expect(errorOf(result)).toMatchObject({
+            code: "CONFIRMATION_REQUIRED",
+            remediation: {
+              implements_check: testCase.token,
+              confirmedRequiresConfirmation: true,
+            },
+          });
+          expect(result.content).toEqual([
+            expect.objectContaining({
+              type: "text",
+              text: expect.stringContaining("CONFIRMATION_REQUIRED"),
+            }),
+          ]);
+        }
+        expect(callsFor(harness, testCase.port)).not.toHaveBeenCalled();
+        expect(harness.telemetry.map((entry) => entry.errorCode)).toEqual([
+          "CONFIRMATION_REQUIRED",
+          "CONFIRMATION_REQUIRED",
+          "CONFIRMATION_REQUIRED",
+        ]);
+      } finally {
+        await harness.close();
+      }
+    },
+  );
+
+  it.each(CASES)(
+    "$name rejects a wrong token through the public error envelope",
+    async (testCase) => {
+      const harness = await createHarness();
+      try {
         const result = (await harness.client.callTool({
           name: testCase.name,
-          arguments: { ...testCase.input, apply: true, ...confirmation },
-        })) as PublicResult;
-        expect(result.isError).toBe(true);
-        expect(result.structuredContent).toMatchObject({
-          schemaVersion: "dysflow.result/v1",
-          ok: false,
-          isError: true,
-        });
-        expect(errorOf(result)).toMatchObject({
-          code: "CONFIRMATION_REQUIRED",
-          remediation: {
-            implements_check: testCase.token,
+          arguments: {
+            ...testCase.input,
+            apply: true,
+            implements_check: "wrong_precheck",
             confirmedRequiresConfirmation: true,
           },
+        })) as PublicResult;
+        expect(result.isError).toBe(true);
+        expect(errorOf(result)).toMatchObject({
+          code: "MCP_INPUT_INVALID",
+          rejectedFlag: "implements_check",
+          expected: testCase.token,
         });
-        expect(result.content).toEqual([
-          expect.objectContaining({
-            type: "text",
-            text: expect.stringContaining("CONFIRMATION_REQUIRED"),
-          }),
+        expect(callsFor(harness, testCase.port)).not.toHaveBeenCalled();
+        expect(harness.telemetry).toEqual([
+          expect.objectContaining({ tool: testCase.name, errorCode: "MCP_INPUT_INVALID" }),
         ]);
+      } finally {
+        await harness.close();
       }
-      expect(callsFor(harness, testCase.port)).not.toHaveBeenCalled();
-      expect(harness.telemetry.map((entry) => entry.errorCode)).toEqual([
-        "CONFIRMATION_REQUIRED",
-        "CONFIRMATION_REQUIRED",
-        "CONFIRMATION_REQUIRED",
-      ]);
-    } finally {
-      await harness.close();
-    }
-  });
-
-  it.each(
-    CASES,
-  )("$name rejects a wrong token through the public error envelope", async (testCase) => {
-    const harness = await createHarness();
-    try {
-      const result = (await harness.client.callTool({
-        name: testCase.name,
-        arguments: {
-          ...testCase.input,
-          apply: true,
-          implements_check: "wrong_precheck",
-          confirmedRequiresConfirmation: true,
-        },
-      })) as PublicResult;
-      expect(result.isError).toBe(true);
-      expect(errorOf(result)).toMatchObject({
-        code: "MCP_INPUT_INVALID",
-        rejectedFlag: "implements_check",
-        expected: testCase.token,
-      });
-      expect(callsFor(harness, testCase.port)).not.toHaveBeenCalled();
-      expect(harness.telemetry).toEqual([
-        expect.objectContaining({ tool: testCase.name, errorCode: "MCP_INPUT_INVALID" }),
-      ]);
-    } finally {
-      await harness.close();
-    }
-  });
+    },
+  );
 
   it.each(CASES)("$name bypasses confirmation in plan mode", async (testCase) => {
     const harness = await createHarness();

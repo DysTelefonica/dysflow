@@ -829,39 +829,37 @@ describe("VbaSyncAdapter Orchestrator", () => {
       parseFailureOutputs.map((runnerOutput) => ({ toolName, params, ...runnerOutput })),
     );
 
-    it.each(matrix)("$toolName returns structured runner failure for $name", async ({
-      toolName,
-      params,
-      exitCode,
-      stdout,
-    }) => {
-      const service = new VbaSyncAdapter({
-        executor: async () => ({
+    it.each(matrix)(
+      "$toolName returns structured runner failure for $name",
+      async ({ toolName, params, exitCode, stdout }) => {
+        const service = new VbaSyncAdapter({
+          executor: async () => ({
+            exitCode,
+            stdout,
+            stderr,
+            durationMs: 4,
+            timedOut: false,
+          }),
+          scriptPath: "scripts/dysflow-vba-manager.ps1",
+          accessPath: "C:/db/front.accdb",
+          destinationRoot: "C:/repo/src",
+          env: {},
+        });
+
+        const result = await service.execute(toolName, { ...params, apply: true });
+
+        expect(result.ok).toBe(false);
+        if (result.ok) throw new Error("expected runner protocol failure");
+        expect(result.error.code).not.toBe("VBA_MANAGER_INVALID_OUTPUT");
+        expect(result.error.code).toBe("VBA_MANAGER_UNEXPECTED_EXIT");
+        expect(result.error.details).toMatchObject({
           exitCode,
           stdout,
           stderr,
-          durationMs: 4,
-          timedOut: false,
-        }),
-        scriptPath: "scripts/dysflow-vba-manager.ps1",
-        accessPath: "C:/db/front.accdb",
-        destinationRoot: "C:/repo/src",
-        env: {},
-      });
-
-      const result = await service.execute(toolName, { ...params, apply: true });
-
-      expect(result.ok).toBe(false);
-      if (result.ok) throw new Error("expected runner protocol failure");
-      expect(result.error.code).not.toBe("VBA_MANAGER_INVALID_OUTPUT");
-      expect(result.error.code).toBe("VBA_MANAGER_UNEXPECTED_EXIT");
-      expect(result.error.details).toMatchObject({
-        exitCode,
-        stdout,
-        stderr,
-        parseError: expect.objectContaining({ message: expect.any(String) }),
-      });
-    });
+          parseError: expect.objectContaining({ message: expect.any(String) }),
+        });
+      },
+    );
   });
 
   it("preserves stdout and stderr separately in sanitized runner failure details", async () => {

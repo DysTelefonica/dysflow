@@ -277,7 +277,7 @@ describe("repository quality gates", () => {
     // the tag.
     const workflow = await readText(".github/workflows/ci.yml");
 
-    expect(workflow).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v5\.\d+\.\d+/);
+    expect(workflow).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v7\.\d+\.\d+/);
     expect(workflow).toMatch(/uses: actions\/setup-node@[0-9a-f]{40} # v5\.\d+\.\d+/);
     expect(workflow).toMatch(/uses: pnpm\/action-setup@[0-9a-f]{40} # v6\.\d+\.\d+/);
   });

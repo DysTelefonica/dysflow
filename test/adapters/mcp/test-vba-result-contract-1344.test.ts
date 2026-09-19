@@ -131,37 +131,37 @@ describe("test_vba apply result contract — #1344", () => {
       },
       procedures: ["Test_One", "Test_Two"],
     },
-  ])("translates and validates the $label runner shape through the real MCP handler", async ({
-    raw,
-    procedures,
-  }) => {
-    const tool = createTestVbaTool(raw);
-    const result = await tool.handler({
-      proceduresJson: JSON.stringify(procedures.map((procedure) => ({ procedure, args: [] }))),
-      apply: true,
-    });
-    const payload = payloadFrom(result);
+  ])(
+    "translates and validates the $label runner shape through the real MCP handler",
+    async ({ raw, procedures }) => {
+      const tool = createTestVbaTool(raw);
+      const result = await tool.handler({
+        proceduresJson: JSON.stringify(procedures.map((procedure) => ({ procedure, args: [] }))),
+        apply: true,
+      });
+      const payload = payloadFrom(result);
 
-    expect(result.isError).toBe(false);
-    expect(
-      validateToolResult({
-        toolName: tool.name,
-        contract: tool.resultContract,
-        payload,
-        policy: "enforce",
-      }),
-    ).toEqual({ ok: true });
-    const expectedTests =
-      typeof raw === "object" && raw !== null && !Array.isArray(raw) && "tests" in raw
-        ? raw.tests
-        : Array.isArray(raw)
-          ? raw
-          : [raw];
-    expect(payload).toEqual({
-      mode: "apply",
-      passed: procedures.length,
-      failed: 0,
-      tests: expectedTests,
-    });
-  });
+      expect(result.isError).toBe(false);
+      expect(
+        validateToolResult({
+          toolName: tool.name,
+          contract: tool.resultContract,
+          payload,
+          policy: "enforce",
+        }),
+      ).toEqual({ ok: true });
+      const expectedTests =
+        typeof raw === "object" && raw !== null && !Array.isArray(raw) && "tests" in raw
+          ? raw.tests
+          : Array.isArray(raw)
+            ? raw
+            : [raw];
+      expect(payload).toEqual({
+        mode: "apply",
+        passed: procedures.length,
+        failed: 0,
+        tests: expectedTests,
+      });
+    },
+  );
 });

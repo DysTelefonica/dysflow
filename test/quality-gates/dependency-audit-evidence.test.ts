@@ -73,17 +73,15 @@ describe("dependency audit evidence", () => {
     expect(audit.output).toContain("audit-evidence=vulnerable");
   });
 
-  it.each([
-    "410",
-    "500",
-    "network",
-    "malformed",
-  ])("reports %s audit evidence as unavailable, never clean", (scenario) => {
-    const audit = runAudit(scenario);
-    expect(audit.result.status).toBe(0);
-    expect(audit.report).toMatchObject({ status: "unavailable", attempts: 3 });
-    expect(audit.summary).toContain("PR policy: warning");
-  });
+  it.each(["410", "500", "network", "malformed"])(
+    "reports %s audit evidence as unavailable, never clean",
+    (scenario) => {
+      const audit = runAudit(scenario);
+      expect(audit.result.status).toBe(0);
+      expect(audit.report).toMatchObject({ status: "unavailable", attempts: 3 });
+      expect(audit.summary).toContain("PR policy: warning");
+    },
+  );
 
   it.each([
     ["warn", 0],

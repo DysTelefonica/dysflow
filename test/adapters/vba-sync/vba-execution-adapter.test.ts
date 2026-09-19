@@ -1020,7 +1020,7 @@ describe("VbaExecutionAdapter", () => {
       ],
     });
     // The full per-procedure report (including the passing one) is retained.
-    expect((result.error.details?.results as unknown[]).length).toBe(2);
+    expect(result.error.details?.results).toHaveLength(2);
   });
 
   it("captures every failing procedure when multiple tests fail", async () => {

@@ -35,23 +35,24 @@ describe("arbitrary SQL table policy rejection (#1452)", () => {
     ["allowTables", ["People"]],
     ["denyTables", ["Secrets"]],
   ] as const) {
-    it.each(
-      ARBITRARY_SQL_CALLS,
-    )(`%s rejects ${policyName} with actionable MCP_INPUT_INVALID before mapper/service dispatch`, async (toolName, input) => {
-      const { requests, tools } = buildHarness();
-      const result = await tools
-        .find((tool) => tool.name === toolName)
-        ?.handler({ ...input, [policyName]: policyValue });
+    it.each(ARBITRARY_SQL_CALLS)(
+      `%s rejects ${policyName} with actionable MCP_INPUT_INVALID before mapper/service dispatch`,
+      async (toolName, input) => {
+        const { requests, tools } = buildHarness();
+        const result = await tools
+          .find((tool) => tool.name === toolName)
+          ?.handler({ ...input, [policyName]: policyValue });
 
-      expect(result).toMatchObject({
-        isError: true,
-        error: { code: "MCP_INPUT_INVALID", rejectedFlag: policyName },
-      });
-      expect(result?.error?.remediation).toMatch(
-        new RegExp(`omit.*${policyName}.*structured table action`, "i"),
-      );
-      expect(requests).toEqual([]);
-    });
+        expect(result).toMatchObject({
+          isError: true,
+          error: { code: "MCP_INPUT_INVALID", rejectedFlag: policyName },
+        });
+        expect(result?.error?.remediation).toMatch(
+          new RegExp(`omit.*${policyName}.*structured table action`, "i"),
+        );
+        expect(requests).toEqual([]);
+      },
+    );
   }
 
   it("keeps the existing write-gated path when table-policy parameters are omitted", async () => {

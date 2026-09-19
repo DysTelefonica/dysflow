@@ -492,8 +492,9 @@ function explainExportSourceGuardRefused(input: ExplainInput): ExplainObject {
  */
 function explainDestinationRootRequired(input: ExplainInput): ExplainObject {
   const toolName = typeof input.details?.toolName === "string" ? input.details.toolName : "<tool>";
-  const missingFields = Array.isArray(input.details?.missingFields)
-    ? (input.details?.missingFields as unknown[]).map((entry) => String(entry))
+  const rawMissingFields: unknown = input.details?.missingFields;
+  const missingFields = Array.isArray(rawMissingFields)
+    ? rawMissingFields.map((entry) => String(entry))
     : ["destinationRoot", "allowConfiguredDestinationRoot"];
   return {
     summary:

@@ -409,34 +409,37 @@ describe("VbaModulesAdapter", () => {
     ["form", "Auto"],
     ["code", "Code"],
     ["Form", "Auto"],
-  ])("normalizes import_modules importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
-    let capturedImportMode: unknown;
-    const service = new VbaSyncAdapter({
-      preflightCleanup: noopPreflightCleanup(),
-      executor: async (request) => {
-        capturedImportMode = request.extra.importMode;
-        return {
-          exitCode: 0,
-          stdout: 'DYSFLOW_RESULT {"ok":true}',
-          stderr: "",
-          durationMs: 1,
-          timedOut: false,
-        };
-      },
-      accessPath: "C:/db/front.accdb",
-      destinationRoot: "C:/repo/src",
-      env: {},
-    });
+  ])(
+    "normalizes import_modules importMode=%s before invoking the runner",
+    async (inputMode, expectedMode) => {
+      let capturedImportMode: unknown;
+      const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
+        executor: async (request) => {
+          capturedImportMode = request.extra.importMode;
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        },
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: "C:/repo/src",
+        env: {},
+      });
 
-    const result = await service.execute("import_modules", {
-      moduleNames: ["Variables Globales"],
-      importMode: inputMode,
-      apply: true,
-    });
+      const result = await service.execute("import_modules", {
+        moduleNames: ["Variables Globales"],
+        importMode: inputMode,
+        apply: true,
+      });
 
-    expect(result.ok).toBe(true);
-    expect(capturedImportMode).toBe(expectedMode);
-  });
+      expect(result.ok).toBe(true);
+      expect(capturedImportMode).toBe(expectedMode);
+    },
+  );
 
   it.each([
     ["replace", "Auto"],
@@ -444,30 +447,33 @@ describe("VbaModulesAdapter", () => {
     ["form", "Auto"],
     ["code", "Code"],
     ["Form", "Auto"],
-  ])("normalizes import_all importMode=%s before invoking the runner", async (inputMode, expectedMode) => {
-    let capturedImportMode: unknown;
-    const service = new VbaSyncAdapter({
-      preflightCleanup: noopPreflightCleanup(),
-      executor: async (request) => {
-        capturedImportMode = request.extra.importMode;
-        return {
-          exitCode: 0,
-          stdout: 'DYSFLOW_RESULT {"ok":true}',
-          stderr: "",
-          durationMs: 1,
-          timedOut: false,
-        };
-      },
-      accessPath: "C:/db/front.accdb",
-      destinationRoot: "C:/repo/src",
-      env: {},
-    });
+  ])(
+    "normalizes import_all importMode=%s before invoking the runner",
+    async (inputMode, expectedMode) => {
+      let capturedImportMode: unknown;
+      const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
+        executor: async (request) => {
+          capturedImportMode = request.extra.importMode;
+          return {
+            exitCode: 0,
+            stdout: 'DYSFLOW_RESULT {"ok":true}',
+            stderr: "",
+            durationMs: 1,
+            timedOut: false,
+          };
+        },
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: "C:/repo/src",
+        env: {},
+      });
 
-    const result = await service.execute("import_all", { importMode: inputMode, apply: true });
+      const result = await service.execute("import_all", { importMode: inputMode, apply: true });
 
-    expect(result.ok).toBe(true);
-    expect(capturedImportMode).toBe(expectedMode);
-  });
+      expect(result.ok).toBe(true);
+      expect(capturedImportMode).toBe(expectedMode);
+    },
+  );
 
   it("dry-run import_all with mismatched projectId returns CONFIG_PROJECT_ID_MISMATCH", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-worktrees-adapter-"));
@@ -1900,38 +1906,41 @@ describe("VbaModulesAdapter", () => {
     ['[{"name":"Live"}]', "an object"],
     ["[null]", "null"],
     ["[123]", "a number"],
-  ])("export_all --prune does NOT delete when exported contains %s (#689)", async (exportedJson) => {
-    const root = await mkdtemp(join(tmpdir(), "dysflow-prune-exported-bad-entry-"));
-    const sourceRoot = join(root, "src");
-    await mkdir(join(sourceRoot, "modules"), { recursive: true });
-    await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
-    await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
+  ])(
+    "export_all --prune does NOT delete when exported contains %s (#689)",
+    async (exportedJson) => {
+      const root = await mkdtemp(join(tmpdir(), "dysflow-prune-exported-bad-entry-"));
+      const sourceRoot = join(root, "src");
+      await mkdir(join(sourceRoot, "modules"), { recursive: true });
+      await writeFile(join(sourceRoot, "modules", "Live.bas"), "live", "utf8");
+      await writeFile(join(sourceRoot, "modules", "Orphan.bas"), "old", "utf8");
 
-    const service = new VbaSyncAdapter({
-      preflightCleanup: noopPreflightCleanup(),
-      executor: async () => ({
-        exitCode: 0,
-        stdout: `DYSFLOW_RESULT {"ok":true,"exported":${exportedJson}}`,
-        stderr: "",
-        durationMs: 5,
-        timedOut: false,
-      }),
-      scriptPath: "scripts/dysflow-vba-manager.ps1",
-      accessPath: "C:/db/front.accdb",
-      destinationRoot: sourceRoot,
-      env: {},
-    });
+      const service = new VbaSyncAdapter({
+        preflightCleanup: noopPreflightCleanup(),
+        executor: async () => ({
+          exitCode: 0,
+          stdout: `DYSFLOW_RESULT {"ok":true,"exported":${exportedJson}}`,
+          stderr: "",
+          durationMs: 5,
+          timedOut: false,
+        }),
+        scriptPath: "scripts/dysflow-vba-manager.ps1",
+        accessPath: "C:/db/front.accdb",
+        destinationRoot: sourceRoot,
+        env: {},
+      });
 
-    const result = await service.execute("export_all", { prune: true, apply: true });
+      const result = await service.execute("export_all", { prune: true, apply: true });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("expected success");
-    expect(result.data).toMatchObject({
-      prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
-    });
-    expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
-    expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
-  });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error("expected success");
+      expect(result.data).toMatchObject({
+        prune: { applied: false, reason: "exported-missing-or-invalid", deleted: [] },
+      });
+      expect(await readFile(join(sourceRoot, "modules", "Live.bas"), "utf8")).toBe("live");
+      expect(await readFile(join(sourceRoot, "modules", "Orphan.bas"), "utf8")).toBe("old");
+    },
+  );
 
   describe("export_all prune allow-list parity (#619)", () => {
     it("export_all prune never deletes .frm orphan files (#619)", async () => {

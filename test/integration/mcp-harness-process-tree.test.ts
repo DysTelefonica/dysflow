@@ -114,14 +114,13 @@ async function runFixture(mode: "success" | "error" | "timeout") {
 describe.skipIf(process.platform !== "win32")(
   "MCP harness owns its spawned process tree (#1286)",
   () => {
-    it.each([
-      "success",
-      "error",
-      "timeout",
-    ] as const)("retires the real descendant process on the %s path", async (mode) => {
-      const result = await runFixture(mode);
-      expect(result.timedOut).toBe(mode === "timeout");
-      expect(result.isError).toBe(mode !== "success");
-    });
+    it.each(["success", "error", "timeout"] as const)(
+      "retires the real descendant process on the %s path",
+      async (mode) => {
+        const result = await runFixture(mode);
+        expect(result.timedOut).toBe(mode === "timeout");
+        expect(result.isError).toBe(mode !== "success");
+      },
+    );
   },
 );

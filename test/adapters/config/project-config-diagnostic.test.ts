@@ -127,59 +127,57 @@ describe("per-worktree project config contract", () => {
     });
     expect(result.remediation).toBe("Replace it with frontendFile: 'Expedientes.accdb'.");
   });
-  it.each([
-    "databasePath",
-    "sourcePath",
-    "backendPath",
-  ] as const)("accepts %s when it exactly targets the configured owned backend", (alias) => {
-    const root = worktree();
-    const backend = join(root, "data.accdb");
-    mkdirSync(join(root, ".dysflow"));
-    mkdirSync(join(root, "src"));
-    writeFileSync(join(root, "app.accdb"), "");
-    writeFileSync(backend, "");
-    writeFileSync(
-      join(root, ".dysflow", "project.json"),
-      JSON.stringify({
-        id: "app",
-        accessPath: "app.accdb",
-        backendPath: backend,
-        destinationRoot: "src",
-      }),
-    );
-    expect(diagnoseProjectConfig(root, { [alias]: backend })).toMatchObject({
-      status: "valid",
-      writeReady: true,
-    });
-  });
-  it.each([
-    "databasePath",
-    "sourcePath",
-    "backendPath",
-  ] as const)("accepts %s when it exactly targets a configured external backend", (alias) => {
-    const root = worktree();
-    const external = mkdtempSync(join(tmpdir(), "dysflow-backend-external-"));
-    const backend = join(external, "data.accdb");
-    mkdirSync(join(root, ".dysflow"));
-    mkdirSync(join(root, "src"));
-    writeFileSync(join(root, "app.accdb"), "");
-    writeFileSync(backend, "");
-    writeFileSync(
-      join(root, ".dysflow", "project.json"),
-      JSON.stringify({ id: "app", accessPath: "app.accdb", backendPath: backend }),
-    );
-    try {
+  it.each(["databasePath", "sourcePath", "backendPath"] as const)(
+    "accepts %s when it exactly targets the configured owned backend",
+    (alias) => {
+      const root = worktree();
+      const backend = join(root, "data.accdb");
+      mkdirSync(join(root, ".dysflow"));
+      mkdirSync(join(root, "src"));
+      writeFileSync(join(root, "app.accdb"), "");
+      writeFileSync(backend, "");
+      writeFileSync(
+        join(root, ".dysflow", "project.json"),
+        JSON.stringify({
+          id: "app",
+          accessPath: "app.accdb",
+          backendPath: backend,
+          destinationRoot: "src",
+        }),
+      );
       expect(diagnoseProjectConfig(root, { [alias]: backend })).toMatchObject({
         status: "valid",
         writeReady: true,
       });
-      expect(diagnoseProjectConfig(root, { [alias]: join(external, "other.accdb") })).toMatchObject(
-        { status: "outside-project-root", writeReady: false },
+    },
+  );
+  it.each(["databasePath", "sourcePath", "backendPath"] as const)(
+    "accepts %s when it exactly targets a configured external backend",
+    (alias) => {
+      const root = worktree();
+      const external = mkdtempSync(join(tmpdir(), "dysflow-backend-external-"));
+      const backend = join(external, "data.accdb");
+      mkdirSync(join(root, ".dysflow"));
+      mkdirSync(join(root, "src"));
+      writeFileSync(join(root, "app.accdb"), "");
+      writeFileSync(backend, "");
+      writeFileSync(
+        join(root, ".dysflow", "project.json"),
+        JSON.stringify({ id: "app", accessPath: "app.accdb", backendPath: backend }),
       );
-    } finally {
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
+      try {
+        expect(diagnoseProjectConfig(root, { [alias]: backend })).toMatchObject({
+          status: "valid",
+          writeReady: true,
+        });
+        expect(
+          diagnoseProjectConfig(root, { [alias]: join(external, "other.accdb") }),
+        ).toMatchObject({ status: "outside-project-root", writeReady: false });
+      } finally {
+        rmSync(external, { recursive: true, force: true });
+      }
+    },
+  );
   it("allows a configured backend owned by another worktree", () => {
     const root = worktree();
     const nested = join(root, "nested");
