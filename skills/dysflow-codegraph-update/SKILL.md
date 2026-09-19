@@ -8,8 +8,8 @@ metadata:
   status: active
   last_verified: "2026-09-19"
   last_dysflow_version: "4.4.3"
-  last_codegraph_vba_version: "2.0.0"
-  requires: "dysflow MCP >= 3.0, codegraph-vba MCP, `dysflow` CLI on PATH (install / update / doctor)"
+  last_codegraph_vba_version: "2.1.1"
+  requires: "dysflow MCP >= 3.0, CodeGraph MCP server `codegraph` (codegraph-vba build), `dysflow` CLI on PATH (install / update / doctor)"
   managed_by: "The Dysflow release bundle owns this skill; `dysflow install` and `dysflow update` propagate it, while `dysflow doctor` audits installed runtime copies. The skill also audits user-owned consumer skills at their separate canonical source."
   trigger_patterns:
     - "dysflow release ships and the canonical mirror needs review"
@@ -98,8 +98,9 @@ doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct
 - **HR-16 — Run a consumer-skill semantic audit for every Dysflow or CodeGraph release.** Enumerate the
     canonical personal `skills/**/*.md` files that mention either runtime, then validate active
     tool calls, parameters, enum values, result-field claims, migration aliases, and project-config
-    guidance against the same candidate captures used for the release bundle, and CodeGraph
-    index-directory claims against the `indexPath` from `codegraph status --json`. A grep hit list is
+    guidance against the same candidate captures used for the release bundle, CodeGraph
+    index-directory claims against the `indexPath` from `codegraph status --json`, and CodeGraph
+    MCP server identity claims against `codegraph install --print-config <agent>`. A grep hit list is
     discovery evidence, not proof of alignment. Historical examples are classified separately and
     never accepted as current copy-paste guidance. Full procedure in `references/procedure.md`.
 

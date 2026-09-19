@@ -21,7 +21,9 @@ the owner-specific workflow described below.
 4. Confirm canonical target files are writable and record each repository's initial Git status.
    Preserve unrelated changes. Do not change user agent configuration or edit installed mirrors.
 5. Run `codegraph status --json` for code intelligence and record its `version` and `indexPath`.
-   `indexPath` is the only evidence for where the CodeGraph index lives. Do not install, upgrade,
+   `indexPath` is the only evidence for where the CodeGraph index lives. Record
+   `codegraph install --print-config <agent>` for each audited agent: it only prints the MCP
+   entry CodeGraph writes and is the evidence for the server identity. Do not install, upgrade,
    or uninitialize CodeGraph from this procedure.
 
 The six release-owned runtime skills are `access-form-ui-builder`, `dysflow-arnes`,
@@ -106,7 +108,11 @@ as evidence.
    release-owned skills. When the claim accurately describes Dysflow code that itself targets
    another directory, report it under `runtimeGaps` for the Dysflow team instead of editing the
    docs.
-9. Capture the personal repository status before auditing. If it is dirty, do not edit, stage,
+9. Compare every CodeGraph MCP server identity claim (the server name agents see, or the command
+   that launches it) with the entry `codegraph install --print-config <agent>` prints; it writes
+   no files. A claim that names another server or launch command is DRIFT. The CLI may also be
+   installed under an alias name; an alias is a CLI name, not the MCP server identity.
+10. Capture the personal repository status before auditing. If it is dirty, do not edit, stage,
    commit, reconcile, or push that lane. Return the exact dirty paths beside the findings so the
    owner can separate prior work from the alignment change.
 
