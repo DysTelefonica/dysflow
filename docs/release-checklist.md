@@ -29,9 +29,8 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
      builds the signed archive, which carries the Pi facade in `plugin/pi`.
   9. The GitHub Release is published only after `build`, `quality-authority`,
      and `e2e-validation` succeed; the publication job declares all three in
-     `needs`. Publishing the Pi
-     package to npm is optional: it runs afterwards, only when the `NPM_TOKEN`
-     secret is set, and cannot fail the release.
+     `needs`. Nothing is published to a package registry; the Pi package ships
+     inside the archive.
 
 Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
 

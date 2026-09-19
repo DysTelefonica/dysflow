@@ -132,17 +132,12 @@ Do not repair activation by editing Pi JSON, copying package files, registering 
 
 Dysflow and `@aroman22/dysflow-pi` use the same semantic version. `.github/scripts/set-release-package-version.mjs` stamps both manifests from the release tag, and the quality gate rejects drift.
 
-The facade reaches users inside the signed release archive; no registry publication is required. The tag workflow performs this order:
+The GitHub Release is the only distribution channel. The facade reaches users inside the signed release archive and is never published to a package registry. The tag workflow performs this order:
 
 1. Complete exact-SHA quality authority and Access E2E validation.
 2. Stamp both package versions.
 3. Build and sign the Dysflow release archive, which contains `plugin/pi` and its lockfile.
 4. Create and verify the GitHub release.
-5. Optionally publish the same package to npm, only when the `NPM_TOKEN` secret is set. These steps run after the GitHub release, and a failure there neither fails the job nor removes the release.
-
-When the npm steps run, they pack one exact tarball, publish it, and verify its version and registry `dist.integrity`.
-
-A retry continues only when an existing same-version artifact has the same integrity. The workflow never unpublishes.
 
 ## Sandboxed Contributor Checks
 
