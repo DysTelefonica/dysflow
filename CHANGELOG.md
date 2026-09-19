@@ -1,5 +1,14 @@
 # Changelog
 
+## [v4.4.4] - 2026-09-19
+
+### Changes
+
+- chore(deps): apply open Dependabot updates (#1757)
+- docs(skills): verify CodeGraph index-directory claims in dysflow-codegraph-update (#1753)
+- fix(release): ship releases and the Pi facade without npm (#1755)
+
+
 ## [Unreleased]
 
 ## [v4.4.3] - 2026-09-15
