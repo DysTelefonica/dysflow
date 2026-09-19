@@ -52,7 +52,13 @@ After that PR is merged and `main` is clean and synchronized, resume the prepare
     git pull --ff-only origin main
     pwsh -File scripts/release-prepare.ps1 -Resume -Version 4.0.5
 
-Recovery fails closed unless the explicit version equals `package.json`, HEAD equals `origin/main`, the changelog and both stamps already name that version, the tag and GitHub Release are absent, and exact-SHA CI is green.
+Recovery fails closed unless all of these hold:
+
+- the explicit version equals `package.json`;
+- HEAD equals `origin/main`;
+- the changelog and both stamps already name that version;
+- the tag and GitHub Release are absent;
+- exact-SHA CI is green.
 
 It does not modify or stage release files and does not push `main`; it only creates and pushes the annotated tag after those checks pass.
 

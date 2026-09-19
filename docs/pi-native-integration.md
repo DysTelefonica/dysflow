@@ -14,7 +14,9 @@ Install Dysflow and its Pi package:
 dysflow install --agents pi --no-tui
 ```
 
-Every installed runtime carries its own copy of the package at `<runtime>/app/plugin/pi`, with its production dependencies already installed. The installer activates that copy through Pi's package manager by local path:
+Every installed runtime carries its own copy of the package at `<runtime>/app/plugin/pi`, with its production dependencies already installed.
+
+The installer activates that copy through Pi's package manager by local path:
 
 ```text
 pi install <runtime>/app/plugin/pi
@@ -46,11 +48,17 @@ The package has no `pi.mcp` field and ships no `mcp.json`, so it cannot add a du
 
 ## Ownership and Reconciliation
 
-The package ships inside the signed release archive, so it always matches the installed runtime and no package registry is involved. The runtime installer copies `plugin/pi` to `<runtime>/app/plugin/pi` and installs its production dependencies from the committed `plugin/pi/pnpm-lock.yaml`.
+The package ships inside the signed release archive, so it always matches the installed runtime and no package registry is involved.
 
-Pi loads a local-path package in place and never installs its dependencies, so they must be present first. `plugin/pi/.npmrc` disables peer installation, the same way Pi installs its own packages: Pi provides the `@earendil-works/pi-*` and `typebox` peers at load time.
+The runtime installer copies `plugin/pi` to `<runtime>/app/plugin/pi` and installs its production dependencies from the committed `plugin/pi/pnpm-lock.yaml`.
 
-Dysflow invokes Pi's canonical package manager instead of editing package settings. Pi stores a local path relative to its settings directory; Dysflow resolves each entry against that directory to recognize its own.
+Pi loads a local-path package in place and never installs its dependencies, so they must be present first.
+
+`plugin/pi/.npmrc` disables peer installation, the same way Pi installs its own packages: Pi provides the `@earendil-works/pi-*` and `typebox` peers at load time.
+
+Dysflow invokes Pi's canonical package manager instead of editing package settings.
+
+Pi stores a local path relative to its settings directory; Dysflow resolves each entry against that directory to recognize its own.
 
 Dysflow stores its ownership record at `<runtime>/.dysflow-pi-package.json`. The record names the exact source Dysflow installed.
 
@@ -132,7 +140,9 @@ The facade reaches users inside the signed release archive; no registry publicat
 4. Create and verify the GitHub release.
 5. Optionally publish the same package to npm, only when the `NPM_TOKEN` secret is set. These steps run after the GitHub release, and a failure there neither fails the job nor removes the release.
 
-When the npm steps run, they pack one exact tarball, publish it, and verify its version and registry `dist.integrity`. A retry continues only when an existing same-version artifact has the same integrity. The workflow never unpublishes.
+When the npm steps run, they pack one exact tarball, publish it, and verify its version and registry `dist.integrity`.
+
+A retry continues only when an existing same-version artifact has the same integrity. The workflow never unpublishes.
 
 ## Sandboxed Contributor Checks
 
