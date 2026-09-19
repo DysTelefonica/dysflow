@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v4.4.5] - 2026-09-19
+
+### Fixed
+
+- `fix(ci)`: re-pin `pnpm/action-setup` before `actions/setup-node` in `.github/workflows/release.yml`'s `Build & Release Artifacts` job (#1739 regression that broke v4.4.4). `actions/setup-node` v5 now auto-enables `package-manager-cache` whenever it detects a `pnpm-lock.yaml` in the workspace (registry-url is no longer required); without pnpm on PATH, `Setup Node.js` fails with `Unable to locate executable file: pnpm`, so the `v4.4.4` run failed and no GitHub Release was published. #1755 removed this pre-step when it stopped npm publication ("ship only through this GitHub Release"); setup-node v5's auto-detection default was the regression. Restore `Enable pnpm` with `run_install: false` and re-release as `v4.4.5`; nothing publishes to a package registry — the release stays GitHub-Release-only.
+
 ## [v4.4.4] - 2026-09-19
 
 ### Changes
