@@ -776,6 +776,24 @@ El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin me
 
 El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
 
+### Excepción: releases (branch protection en `main`)
+
+`main` tiene branch protection activa con `enforce_admins: true` y cinco status checks requeridos antes de aceptar cualquier push: `Quality gates (26)`, `Analyze (javascript-typescript)`, `Classify changes`, `Documentation quality`, `CodeQL`. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
+
+Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica a releases**. El patrón real, comprobado en v4.4.5 (PR #1759, run `35466013339`):
+
+1. Hacer los commits localmente sobre `main` (fix + release prep: bump versions, CHANGELOG, `last_dysflow_version` de los skills release-owned, fecha en `skills/dysflow-usage/assets/write-flags-matrix.md` y `skills/dysflow-usage/references/error-codes.md`).
+2. `git push origin vX.Y.Z` con el tag — esto dispara `.github/workflows/release.yml` y crea el GitHub Release independientemente del estado de `main`.
+3. Esperar el job `Build & Release Artifacts` (28 s en v4.4.5). Si los 4 jobs del release (`Build release artifact`, `Exact-SHA quality authority`, `E2E validation (Windows self-hosted)`, `Build & Release Artifacts`) pasan, el release queda publicado con sus assets firmados (`dysflow-vX.Y.Z.tar.gz`, `SHA256SUMS`, `SHA256SUMS.sig`).
+4. Crear rama efímera desde el commit del tag (p.ej. `release-vX.Y.Z`), pushearla y abrir PR contra `main`.
+5. Esperar los 5 checks del branch protection en el PR (el cuello de botella en v4.4.5 fue `Quality gates (26)` a 5 m 28 s; los demás en segundos).
+6. Mergear el PR → `main` queda sincronizado con el commit del release.
+7. Limpiar el worktree temporal (`git worktree remove --force`) y la rama local; **no borrar la rama remota** (ver regla sobre preservación de ramas).
+
+`scripts/set-release-package-version.mjs` y los steps `Stamp release version` / `Verify synchronized Pi package version` cubren el stamp de versiones en `package.json` y `plugin/pi/package.json` en runtime, pero los bumps de `last_dysflow_version` y del header de release-date en los assets de skills siguen siendo responsabilidad del release prep.
+
+Para la regresión específica de v4.4.4 (job `Build & Release Artifacts` fallando por `Unable to locate executable file: pnpm` por la auto-detección del lockfile en `actions/setup-node@v5`), ver el commit `4c7006f0 fix(ci): enable pnpm in release.yml release job (#1739 regression)` y la nota del proyecto `dysflow/release-regression-1739` en memoria persistente.
+
 ## Hard rules del flujo de trabajo
 
 Estas reglas son obligatorias en cada cambio que llega al push.
