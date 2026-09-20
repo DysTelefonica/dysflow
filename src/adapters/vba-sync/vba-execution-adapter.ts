@@ -238,13 +238,15 @@ export class VbaExecutionAdapter {
           "PROCEDURE_NOT_ALLOWED",
           `Refusing to execute test_vba plan: procedure(s) [${disallowed.join(", ")}] ` +
             `are not in the configured allowedProcedures list. ` +
-            `Set allowedProcedures in .dysflow/project.json to allow these procedures.`,
+            `This project set capabilities.procedures.strictMode:true, so its ` +
+            `allowlist is enforced. Add them to capabilities.procedures.allow, ` +
+            `or drop strictMode to return to the default.`,
           {
             allowedProcedures: resolved,
             remediation:
               disallowed.length === 1
-                ? `Add '${disallowed[0]}' to allowedProcedures in .dysflow/project.json or test a procedure that is in the list.`
-                : `Add procedures [${disallowed.join(", ")}] to allowedProcedures in .dysflow/project.json or test a procedure that is in the list.`,
+                ? `Either add '${disallowed[0]}' to capabilities.procedures.allow, or drop capabilities.procedures.strictMode if this project no longer wants an enforced allowlist. Ask the human before changing either.`
+                : `Either add procedures [${disallowed.join(", ")}] to capabilities.procedures.allow, or drop capabilities.procedures.strictMode if this project no longer wants an enforced allowlist. Ask the human before changing either.`,
           },
         ),
       );

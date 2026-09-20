@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [v4.4.6] - 2026-09-20
+
+> **Read before upgrading.** Despite the patch version, this release changes
+> two observable contracts on the MCP surface. A populated
+> `capabilities.procedures.allow` stops restricting execution unless the
+> project also sets `capabilities.procedures.strictMode: true`, and
+> `run_vba` with `apply: true` now requires writes to be enabled. Operators
+> who relied on either behavior must act. See
+> [the migration guide](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md).
+
 ### Fixed
 
 - **`run_vba` is now subject to the write gate on MCP.** As an alias tool it
