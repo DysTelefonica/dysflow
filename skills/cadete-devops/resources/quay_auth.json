@@ -1,7 +1,8 @@
 {
+    "_comment": "PLACEHOLDER — never commit a real authfile. Generate the real one locally on the target environment with: podman login --authfile resources/quay_auth.json <registry-host>. The real file is ignored by .gitignore.",
     "auths": {
-        "quay.apps.ocgc4tools.mgmt.dc.es.telefonica": {
-            "auth": "d2NkeStvcGVuc2hpZnRfcHVzaDpUOFdEN1dDN1BXQ0E4Tkk4QTI0Q0pWQUtIMERCWDM0N0hNNVFTQjBWM1haNDRZOUVKR043OU1ERE1NNEM1Q09S",
+        "quay.apps.<cluster>.<domain>:443": {
+            "auth": "<base64(username:password)>",
             "email": ""
         }
     }
