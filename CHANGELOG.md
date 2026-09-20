@@ -3027,23 +3027,19 @@ Hardening and maintenance pass from a code-quality review of the MCP runtime.
 
 ## [v1.2.35] - 2026-06-09
 
-Fix for the user-reported issue #496 cascade: the user (via the IA mantenedora)
-reported that `dysflow.import_modules` with `importMode=Code` +
-`willModifyAccess=true` returned `VBA_MANAGER_SERIALIZATION_FAILED` instead
-of the real VBE error. Investigation surfaced three coordinated defects:
+Fix for the user-reported issue #496 cascade:
 
-1. The `Write-DysflowResult` writer in `dysflow-vba-manager.ps1` had a
-   generic `try/catch` that ate the underlying exception and emitted
-   a fallback `VBA_MANAGER_SERIALIZATION_FAILED` envelope, hiding the
-   real cause from the operator.
-2. The `Invoke-ImportAction` happy path passed a `List[object>` directly
-   to `Write-DysflowResult`. Under PowerShell 7.x, `ConvertTo-Json` on
-   a raw `List[object>` can hit `ArgumentException: Argument types do not
-   match`, which the fallback also swallows. The sad path was already
-   fixed in v1.2.30 to convert to `object[]` first; the happy path was
-   left untouched.
-3. The early read path in `dysflow-access-runner.ps1` (line ~1495)
-   opened the DAO database inside a try-block with NO catch.
+the user (via the IA mantenedora) reported that `dysflow.import_modules` with `importMode=Code` + `willModifyAccess=true` returned `VBA_MANAGER_SERIALIZATION_FAILED` instead of the real VBE error.
+
+Investigation surfaced three coordinated defects:
+
+1. The `Write-DysflowResult` writer in `dysflow-vba-manager.ps1` had a generic `try/catch` that ate the underlying exception and emitted a fallback `VBA_MANAGER_SERIALIZATION_FAILED` envelope, hiding the real cause from the operator. 2.
+
+   The `Invoke-ImportAction` happy path passed a `List[object>` directly to `Write-DysflowResult`. Under PowerShell 7.x, `ConvertTo-Json` on a raw `List[object>` can hit `ArgumentException:
+
+   Argument types do not match`, which the fallback also swallows. The sad path was already fixed in v1.2.30 to convert to `object[]` first; the happy path was left untouched. 3.
+
+   The early read path in `dysflow-access-runner.ps1` (line ~1495) opened the DAO database inside a try-block with NO catch.
 
    If the target database did not exist, the exception escaped, no
    `DYSFLOW_RESULT` was emitted, and the script exited with `exitCode 0`.

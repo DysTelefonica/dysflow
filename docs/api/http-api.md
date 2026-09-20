@@ -179,7 +179,9 @@ Request:
 
 Cleanup is safety-gated. Dysflow refuses to kill Access unless the operation exists, `accessPath` matches exactly, the registered PID still exists, the process start time matches, and the process name is `MSACCESS.EXE`. Never kill `MSACCESS.EXE` by process name from caller scripts; use this endpoint/tool only.
 
-The HTTP cleanup write gate is force-only, matching MCP behavior: requests with `force` absent or `false` may reach the core cleanup eligibility checks while writes are disabled, but `force: true` returns `403 HTTP_WRITES_DISABLED` unless the server was started with `--enable-writes`.
+The HTTP cleanup write gate is force-only, matching MCP behavior: requests with `force` absent or `false` may reach the core cleanup eligibility checks while writes are disabled, but `force:
+
+true` returns `403 HTTP_WRITES_DISABLED` unless the server was started with `--enable-writes`.
 
 ## Script examples
 

@@ -118,36 +118,35 @@ project declares `capabilities.procedures.strictMode: true`:
   write and still passes. Pinned by
   `test/adapters/mcp/run-vba-write-gate.test.ts`.
 
-The rationale: a stdio MCP server is launched by a trusted parent process. The operator
-who wires `dysflow mcp` into their client is the same operator who controls what runs.
-That operator's real per-deployment control is the WRITE gate —
-`writesProcess.enabled`, `capabilities.allowWrites`, and `writeExecutionPolicy`
-— plus `humanCompilePending` for stale p-code. A second allowlist the operator
-had to extend for every production procedure and every newly written test cost
-operational effort without adding a boundary the write gate did not already
-hold, so it became opt-in. HTTP cannot make the trusted-parent assumption,
-because a network caller is not necessarily the operator — hence its blanket
-write-gate AND its unconditional allowlist enforcement.
+The rationale: a stdio MCP server is launched by a trusted parent process. The operator who wires `dysflow mcp` into their client is the same operator who controls what runs.
 
-The HTTP composition root
-(`src/adapters/http/http-services-factory.ts`) pins `procedureStrictMode: true`
-on the service it builds, so `strictMode` in a project config never relaxes the
-network surface.
+That operator's real per-deployment control is the WRITE gate — `writesProcess.enabled`, `capabilities.allowWrites`, and `writeExecutionPolicy` — plus `humanCompilePending` for stale p-code.
+
+A second allowlist the operator had to extend for every production procedure and every newly written test cost operational effort.
+
+It added no boundary the write gate did not already hold, so it became opt-in.
+
+HTTP cannot make the trusted-parent assumption, because a network caller is not necessarily the operator — hence its blanket write-gate AND its unconditional allowlist enforcement.
+
+The HTTP composition root (`src/adapters/http/http-services-factory.ts`) pins `procedureStrictMode:
+
+true` on the service it builds, so `strictMode` in a project config never relaxes the network surface.
 
 ## Residual consideration (not a code change)
 
-The case worth an operator's attention: with the default (no `strictMode`), any
-procedure the write gate permits can run through stdio `run_vba` and any
-manifest-selected test through stdio `test_vba`. The write, sandbox, manifest,
-and human-compile gates remain intact, and on stdio there is no remote vector
-because the client is the trust boundary. For projects that want a narrower
-surface — CI, fleet automation, a shared non-interactive runner:
+The case worth an operator's attention:
+
+with the default (no `strictMode`), any procedure the write gate permits can run through stdio `run_vba` and any manifest-selected test through stdio `test_vba`.
+
+The write, sandbox, manifest, and human-compile gates remain intact, and on stdio there is no remote vector because the client is the trust boundary.
+
+For projects that want a narrower surface — CI, fleet automation, a shared non-interactive runner:
 
 > Set `capabilities.procedures.strictMode: true` and configure a non-empty
 > `capabilities.procedures.allow` list to opt into an enforced whitelist.
 
 ## Decision
 
-The HTTP/MCP VBA gate asymmetry is **by design** and stays. Tracked as
-[#522](https://github.com/DysTelefonica/dysflow/issues/522) (reclassified from bug to
-documentation), with the `test_vba` refinement tracked by #1556.
+The HTTP/MCP VBA gate asymmetry is **by design** and stays.
+
+Tracked as [#522](https://github.com/DysTelefonica/dysflow/issues/522) (reclassified from bug to documentation), with the `test_vba` refinement tracked by #1556.

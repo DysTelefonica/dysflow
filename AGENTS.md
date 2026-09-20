@@ -1321,7 +1321,9 @@ Cache the artifact store choice for the session. Pass it as `artifact_store.mode
 
 ### Delivery Strategy
 
-On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`.
+On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy:
+
+`ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`.
 
 Pass it as `delivery_strategy` to `sdd-tasks` and `sdd-apply` prompts.
 
@@ -1334,7 +1336,11 @@ When `delivery_strategy` results in chained PRs (either by user choice via `ask-
 
 Cache the chain strategy for the session. Pass it as `chain_strategy` to `sdd-tasks` and `sdd-apply` prompts alongside `delivery_strategy`. Do not ask again unless the user changes scope.
 
-When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match: resolve it by registry name through this template's existing skill-resolution mechanism (the same one it already uses to pass skills to phases) and ensure the `sdd-tasks` and `sdd-apply` phases load and follow it BEFORE planning or creating any PR.
+When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match:
+
+resolve it by registry name through this template's existing skill-resolution mechanism, the same one it already uses to pass skills to phases.
+
+The `sdd-tasks` and `sdd-apply` phases must load and follow it BEFORE planning or creating any PR.
 
 Do not hardcode the skill path; defer resolution to that mechanism.
 

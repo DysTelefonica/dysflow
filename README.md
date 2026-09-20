@@ -911,7 +911,9 @@ Defaults:
 - port: `17321`
 - writes: disabled by default
 
-**Bearer token auth**: prefer the env-first `httpTokenEnv` path in `.dysflow/project.json` and set `DYSFLOW_HTTP_TOKEN` in the runtime environment to require `Authorization: Bearer <token>` on every request:
+**Bearer token auth**: prefer the env-first `httpTokenEnv` path in `.dysflow/project.json` and set `DYSFLOW_HTTP_TOKEN` in the runtime environment to require `Authorization:
+
+Bearer <token>` on every request:
 
 ```json
 {
@@ -977,7 +979,9 @@ The same `--only` and `--exclude` filters accepted by install are available on u
 dysflow update --force
 ```
 
-The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub, verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it.
+The updater downloads the production GitHub Release archive (`tar.gz`) directly from GitHub.
+
+It then verifies the Ed25519 signature over the release checksum manifest, verifies the archive against the signed SHA-256 checksum, and extracts it.
 
 On `stable` and `beta` there is no source-build or git-clone fallback: a failed download never degrades into a source build, which is what protects the update path from supply-chain risks.
 

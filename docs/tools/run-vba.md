@@ -91,12 +91,11 @@ MUST branch on the exact code returned:
 
 ### Reclassifier patterns
 
-The reclassifier discriminates on the INNER Access message, never on the
-PowerShell wrapper around it. The VBA dispatch in
-`scripts/dysflow-access-runner.ps1` calls `$access.Run.Invoke(...)`
-without a `try`/`catch`, so a VBA `Err.Raise` inside the invoked
-procedure escapes to the script's global catch and reaches the service
-wrapped as:
+The reclassifier discriminates on the INNER Access message, never on the PowerShell wrapper around it.
+
+The VBA dispatch in `scripts/dysflow-access-runner.ps1` calls `$access.Run.Invoke(...)` without a `try`/`catch`.
+
+A VBA `Err.Raise` inside the invoked procedure therefore escapes to the script's global catch and reaches the service wrapped as:
 
 ```text
 Excepción al llamar a "Run" con "1" argumento(s): "<the real VBA error>"
@@ -115,18 +114,17 @@ own "cannot invoke this" errors, in either localization:
 | `object that is closed or doesn't exist` / `se refiere a un objeto que est[áa] cerrado o que no existe` | Access COM state error when the VBE is in a non-compiled state. |
 | `can'?t find the procedure` / `no encuentra el procedimiento` | Access cannot resolve the procedure name against the compiled project. |
 
-`VBA_RUNTIME_ERROR` fires when the failure carries the Access invocation
-wrapper (`Excepción al llamar a "Run"` / `Exception calling "Run"`) but
-the inner message is NOT one of the patterns above — meaning the
-procedure was reached and raised on its own. The service unwraps the
-inner message into `error.details.vbaMessage` and puts it in
-`error.message`, so the caller reads the VBA error the procedure emitted
-instead of a recompile instruction that cannot help (#1681).
+`VBA_RUNTIME_ERROR` fires when the failure carries the Access invocation wrapper (`Excepción al llamar a "Run"` / `Exception calling "Run"`) but the inner message is NOT one of the patterns above
 
-Both codes carry `error.details` with
-`{ procedure, moduleName, runnerCode, runnerMessage }` for traceability.
-Genuine runner failures (e.g. `VBA_MANAGER_TIMEOUT`,
-`VBA_MANAGER_FAILED`, an unrelated `RUNNER_FAILED`) propagate verbatim.
+meaning the procedure was reached and raised on its own.
+
+The service unwraps the inner message into `error.details.vbaMessage` and puts it in `error.message`.
+
+The caller therefore reads the VBA error the procedure emitted, instead of a recompile instruction that cannot help (#1681).
+
+Both codes carry `error.details` with `{ procedure, moduleName, runnerCode, runnerMessage }` for traceability. Genuine runner failures (e.g.
+
+`VBA_MANAGER_TIMEOUT`, `VBA_MANAGER_FAILED`, an unrelated `RUNNER_FAILED`) propagate verbatim.
 
 ## apply/dryRun consistency contract
 

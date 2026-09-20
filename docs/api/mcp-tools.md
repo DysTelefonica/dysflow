@@ -84,13 +84,15 @@ Reference: issue #1438, section "What changes" in the v2.37.2 CHANGELOG entry.
 ## Core MCP Tools
 
 ### `run_vba`
-Execute a public VBA procedure via COM automation. The procedure gate is default-allow: `allowedProcedures` is enforced only when the project declares `capabilities.procedures.strictMode: true`, in which case execution requires a non-empty list containing the requested procedure. Plan mode remains non-executing, and the write gate is authoritative either way.
-* **Parameters**:
-  - `procedureName` (string, **required**): Public VBA procedure name to execute.
-  - `moduleName` (string, optional): Target module containing the procedure.
-  - `arguments` (array, optional): Positional arguments passed to the procedure.
-  - `projectId`, `contextId` (optional)
-  - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
+Execute a public VBA procedure via COM automation. The procedure gate is default-allow:
+
+`allowedProcedures` is enforced only when the project declares `capabilities.procedures.strictMode: true`, in which case execution requires a non-empty list containing the requested procedure.
+
+Plan mode remains non-executing, and the write gate is authoritative either way. * **Parameters**: - `procedureName` (string, **required**):
+
+Public VBA procedure name to execute. - `moduleName` (string, optional): Target module containing the procedure. - `arguments` (array, optional):
+
+Positional arguments passed to the procedure. - `projectId`, `contextId` (optional) - `accessPath`, `backendPath`, `destinationRoot`, `projectRoot`, `timeoutMs` (optional overrides)
 
 ### `query_execute`
 Run arbitrary SQL statements. Writes are guarded by the write-safety model.
