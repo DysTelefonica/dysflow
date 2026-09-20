@@ -1558,13 +1558,16 @@ If any part is missing or ambiguous, ask and remain local; do not probe the dest
 <!-- /gentle-ai:remote-authorization -->
 <!-- /gentle-ai:agent-routing -->
 
-<!-- personal-skills:slice:dysflow @ vd1c8c32 -->
+<!-- personal-skills:slice:dysflow @ v671cfc4 -->
 ## Catálogo de skills
 
-Esta sección la materializa el catálogo personal-skills. Las skills del
-paquete gentle-ai (sdd-*, judgment-day, ranch-pr, chained-pr, etc.)
-las entrega gentle-ai sync por el agents.md global; las que figuran aquí
-son del catálogo DysTelefonica propagadas por propagate-team-skills.ps1.
+Esta sección la materializa el catálogo personal-skills.
+
+Las skills del paquete gentle-ai (sdd-*, judgment-day, branch-pr,
+chained-pr, etc.) las entrega gentle-ai sync por el agents.md global.
+
+Las que figuran aquí son del catálogo DysTelefonica, propagadas por
+`propagate-team-skills.ps1`.
 
 | Skill | Descripción | Trigger |
 |-------|-------------|---------|
@@ -1578,7 +1581,10 @@ son del catálogo DysTelefonica propagadas por propagate-team-skills.ps1.
 | `capability-docs` | Reverse-engineers features into SDD-grade, platform-agnostic docs with code as source o... | capability docs, business rules, what the app does, regression-proof specs, migration-ready docs, generate SDDs from docs |
 | `maintainer-prompt-drafter` | Generates structured, verifiable prompts for the maintainer AI of any tool. | maintainer prompt, upstream escalation |
 
-Las skills viven en `.agents/skills/<nombre>/SKILL.md`. El catálogo canónico es
-`C:\Users\adm1\personal-skills`. Para materialización por skill, vea
-`docs/skills-catalog.md` (slice extendido alan-style).
+Las skills viven en `.agents/skills/<nombre>/SKILL.md`.
+
+El catálogo canónico es `C:\Users\adm1\personal-skills`.
+
+Para materialización por skill, vea `docs/skills-catalog.md` (slice
+extendido alan-style).
 <!-- /personal-skills:slice:dysflow -->
