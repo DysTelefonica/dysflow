@@ -63,6 +63,7 @@ export type BootstrapToolOptions = Pick<
   | "writesEnabled"
   | "writeAccessResolver"
   | "allowedProcedures"
+  | "procedureStrictMode"
   | "projectId"
   | "allowWrites"
   | "surface"

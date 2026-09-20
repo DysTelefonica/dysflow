@@ -1,6 +1,6 @@
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import { ALIAS_TOOL_NAMES, type AliasToolName, buildAliasTools } from "./alias-tools.js";
-import type { AllowedProcedures } from "./allowed-procedures-resolver.js";
+import type { AllowedProcedures, StrictMode } from "./allowed-procedures-resolver.js";
 import { resultContractForToolAlias } from "./contracts/dispatch-result-contracts.js";
 import { createDispatchTool } from "./dispatch-factory.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -74,6 +74,10 @@ export function registerMcpTools(
   // compares the export destination against). When omitted, the guard
   // is best-effort with no project-root comparison.
   accessContextResolver?: McpAccessContextResolver,
+  // Opt-in procedure gate. Forwarded to the alias tools so `run_vba` enforces
+  // `allowedProcedures` only for projects that declare
+  // `capabilities.procedures.strictMode: true`.
+  procedureStrictMode?: StrictMode,
 ): DysflowMcpTool[] {
   const aliasTools = buildAliasTools(
     services,
@@ -81,6 +85,7 @@ export function registerMcpTools(
     writeAccessResolver,
     allowedProcedures,
     accessContextResolver,
+    procedureStrictMode,
   );
   const aliasToolsWithContracts = aliasTools.map((tool) => ({
     ...tool,

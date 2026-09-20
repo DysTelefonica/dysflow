@@ -16,6 +16,8 @@ import {
 import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
+  resolveStrictModeFor,
+  type StrictMode,
 } from "../mcp/allowed-procedures-resolver.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
@@ -51,14 +53,18 @@ export interface VbaSyncOrchestrator {
 
 export class VbaExecutionAdapter {
   /**
-   * `allowedProcedures` is an opt-in whitelist for test_vba. Undefined and
-   * empty allowlists impose no restriction; when non-empty, every procedure
-   * in the test plan must appear in the list. run_vba keeps its separate
-   * default-deny gate at the MCP boundary.
+   * `allowedProcedures` is the test_vba allowlist. It is enforced only when
+   * the targeted project declares `capabilities.procedures.strictMode: true`;
+   * without that flag the gate is default-allow and the list is documentation.
+   * Under strict mode the historical rule applies: undefined and empty
+   * allowlists impose no restriction, and when non-empty every procedure in
+   * the test plan must appear in the list (the plan is atomic). `run_vba`
+   * carries the same opt-in gate at the MCP boundary.
    */
   constructor(
     private readonly orchestrator: VbaSyncOrchestrator,
     private readonly allowedProcedures?: AllowedProcedures,
+    private readonly procedureStrictMode?: StrictMode,
   ) {}
 
   static handles(toolName: string): boolean {
@@ -179,9 +185,16 @@ export class VbaExecutionAdapter {
   /**
    * Opt-in whitelist gate for test_vba at the adapter boundary:
    *
-   *   1. When `allowedProcedures` is undefined OR empty, execution proceeds.
-   *   2. When `allowedProcedures` is configured, EVERY procedure in the
-   *      plan must appear in the list — the plan is atomic.
+   *   0. When the project does NOT declare
+   *      `capabilities.procedures.strictMode: true`, the gate enforces
+   *      nothing and execution proceeds. This is the default; the write gate
+   *      (`writesProcess.enabled`, `writesProject.allowWrites`,
+   *      `writeExecutionPolicy`) remains the authoritative protection, and a
+   *      populated `allowedProcedures` is documentation.
+   *   1. Under strict mode, when `allowedProcedures` is undefined OR empty,
+   *      execution proceeds.
+   *   2. Under strict mode, when `allowedProcedures` is configured, EVERY
+   *      procedure in the plan must appear in the list — the plan is atomic.
    *
    * Returns an `OperationResult<unknown>` failure when a configured whitelist
    * refuses the plan, or `undefined` when execution may proceed.
@@ -195,6 +208,15 @@ export class VbaExecutionAdapter {
     // a static array (legacy, frozen at construction) OR a resolver
     // function (per-input, reads project config each call) per the
     // #674 AllowedProcedures contract.
+    // Default-allow: the allowlist is enforced only for projects that opt in
+    // with `capabilities.procedures.strictMode: true`. Resolved per input so a
+    // single MCP process serving several worktrees reads each project's own
+    // posture rather than the one frozen at startup.
+    const strict = await resolveStrictModeFor(this.procedureStrictMode, params);
+    if (strict !== true) {
+      return undefined;
+    }
+
     const resolved = await resolveAllowedProceduresFor(this.allowedProcedures, params);
     if (resolved === undefined || resolved.length === 0) {
       return undefined;

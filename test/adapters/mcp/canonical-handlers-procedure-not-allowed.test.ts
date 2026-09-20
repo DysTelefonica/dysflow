@@ -9,6 +9,12 @@
  *   2. Procedure not in the populated allowlist
  *      → `MCP_PROCEDURE_NOT_ALLOWED` with the active allowlist surfaced.
  *
+ * Both branches are reachable only under `strictMode: true` — the gate is
+ * default-allow and refuses nothing until a project opts in via
+ * `capabilities.procedures.strictMode`. Every call below therefore passes
+ * `strictMode: true` explicitly; the default-allow contract itself is covered
+ * in `canonical-handlers.test.ts` and `canonical-handlers-default-allow.test.ts`.
+ *
  * This file extends the existing #621 PR1a tests with the new contract.
  */
 
@@ -17,7 +23,7 @@ import { ensureProcedureAllowed } from "../../../src/adapters/mcp/canonical-hand
 
 describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", () => {
   it("emits MCP_PROCEDURE_NOT_ALLOWED with the rejected procedure name in the body", () => {
-    const error = ensureProcedureAllowed("Test_X", ["Test_A"], undefined);
+    const error = ensureProcedureAllowed("Test_X", ["Test_A"], undefined, true);
     expect(error).toBeDefined();
     expect(error?.isError).toBe(true);
     expect(error?.ok).toBe(false);
@@ -26,20 +32,20 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
   });
 
   it("surfaces the active allowedProcedures list in the body", () => {
-    const error = ensureProcedureAllowed("DeleteAll", ["Refresh", "Sync"], undefined);
+    const error = ensureProcedureAllowed("DeleteAll", ["Refresh", "Sync"], undefined, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("Refresh");
     expect(error?.content[0]?.text).toContain("Sync");
   });
 
   it("includes a remediation hint mentioning get_capabilities in the body", () => {
-    const error = ensureProcedureAllowed("DeleteAll", ["Refresh"], undefined);
+    const error = ensureProcedureAllowed("DeleteAll", ["Refresh"], undefined, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("get_capabilities");
   });
 
   it("exposes a structured error envelope with code, message, allowedProcedures, remediation", () => {
-    const error = ensureProcedureAllowed("DeleteAll", ["Refresh", "Sync"], undefined);
+    const error = ensureProcedureAllowed("DeleteAll", ["Refresh", "Sync"], undefined, true);
     expect(error).toBeDefined();
     expect(error?.error?.code).toBe("MCP_PROCEDURE_NOT_ALLOWED");
     expect(error?.error?.message).toContain("DeleteAll");
@@ -49,12 +55,12 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
 
   it("structured error.allowedProcedures reflects the list active at the time of the call", () => {
     const allowed = ["Test_A", "Test_B", "Test_C"] as const;
-    const error = ensureProcedureAllowed("Test_X", allowed, undefined);
+    const error = ensureProcedureAllowed("Test_X", allowed, undefined, true);
     expect(error?.error?.allowedProcedures).toEqual(["Test_A", "Test_B", "Test_C"]);
   });
 
   it("fires the new envelope even when dryRun=true (allowlist membership check is independent of dryRun)", () => {
-    const error = ensureProcedureAllowed("Test_X", ["Test_A"], true);
+    const error = ensureProcedureAllowed("Test_X", ["Test_A"], true, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("MCP_PROCEDURE_NOT_ALLOWED");
   });
@@ -62,7 +68,7 @@ describe("ensureProcedureAllowed — procedure-not-in-allowlist branch (#659)", 
 
 describe("ensureProcedureAllowed — allowlist-not-configured branch emits MCP_ALLOWLIST_NOT_CONFIGURED (#757 F6)", () => {
   it("undefined allowlist AND no dryRun → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
-    const error = ensureProcedureAllowed("Anything", undefined, undefined);
+    const error = ensureProcedureAllowed("Anything", undefined, undefined, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.error?.code).toBe("MCP_ALLOWLIST_NOT_CONFIGURED");
@@ -74,21 +80,21 @@ describe("ensureProcedureAllowed — allowlist-not-configured branch emits MCP_A
   });
 
   it("empty allowlist AND no dryRun → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
-    const error = ensureProcedureAllowed("Anything", [], undefined);
+    const error = ensureProcedureAllowed("Anything", [], undefined, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
   });
 
   it("empty allowlist AND dryRun=false → MCP_ALLOWLIST_NOT_CONFIGURED", () => {
-    const error = ensureProcedureAllowed("Anything", [], false);
+    const error = ensureProcedureAllowed("Anything", [], false, true);
     expect(error).toBeDefined();
     expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
   });
 
   it("carries a remediation hint mentioning dryRun and the config file", () => {
-    const error = ensureProcedureAllowed("Anything", undefined, undefined);
+    const error = ensureProcedureAllowed("Anything", undefined, undefined, true);
     expect(error?.error?.remediation).toContain("dryRun");
     expect(error?.error?.remediation).toContain(".dysflow/project.json");
   });

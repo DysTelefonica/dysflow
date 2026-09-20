@@ -84,7 +84,7 @@ Reference: issue #1438, section "What changes" in the v2.37.2 CHANGELOG entry.
 ## Core MCP Tools
 
 ### `run_vba`
-Execute a public VBA procedure via COM automation. Default-deny: execution requires a non-empty `allowedProcedures` list containing the requested procedure; plan mode remains non-executing.
+Execute a public VBA procedure via COM automation. The procedure gate is default-allow: `allowedProcedures` is enforced only when the project declares `capabilities.procedures.strictMode: true`, in which case execution requires a non-empty list containing the requested procedure. Plan mode remains non-executing, and the write gate is authoritative either way.
 * **Parameters**:
   - `procedureName` (string, **required**): Public VBA procedure name to execute.
   - `moduleName` (string, optional): Target module containing the procedure.
@@ -495,7 +495,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
 * **`test_vba`**: Execute VBA unit tests.
   - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
-  - Missing or empty `allowedProcedures` imposes no restriction on stdio `test_vba`. A non-empty list is an opt-in whitelist applied atomically to the resolved plan. HTTP `/vba/test` remains default-deny because it is a network surface.
+  - Stdio `test_vba` enforces `allowedProcedures` only under `capabilities.procedures.strictMode: true`; without it, no list restricts the plan. Under `strictMode`, a missing or empty list still imposes no restriction and a non-empty list is a whitelist applied atomically to the resolved plan. HTTP `/vba/test` ignores `strictMode` and remains default-deny because it is a network surface.
   - On failure the result is `ok: false` with code `VBA_TESTS_FAILED`. The message names the failing procedures, and `error.details` carries the structured per-procedure report: `{ failedCount, failures[], results[] }`, where each failure keeps `procedure`, `error`, `logs`, `durationMs`, and `payload`.
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
 * **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
@@ -544,7 +544,7 @@ See the shipped [`references/error-codes.md`](../../references/error-codes.md) f
   - Parameters: `operationId` (string, required), `force` (boolean, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`exists`**: Verify if an object or module exists.
   - Parameters: `name` (string, optional), `moduleName` (string, optional), `timeoutMs` (number, optional)
-* **`run_vba`**: Execute an allowlisted public VBA procedure in an already compiled project. For one-shot code, use the version-controlled [`_Temp_*.bas` migration workflow](../vba-execution.md): preview/apply the import, stop for the human compile checkpoint, preview/apply `run_vba`, preview/apply `delete_module`, delete the source, and verify no orphan or unexpected drift remains.
+* **`run_vba`**: Execute a public VBA procedure in an already compiled project (allowlisted, when the project opted into `capabilities.procedures.strictMode`). For one-shot code, use the version-controlled [`_Temp_*.bas` migration workflow](../vba-execution.md): preview/apply the import, stop for the human compile checkpoint, preview/apply `run_vba`, preview/apply `delete_module`, delete the source, and verify no orphan or unexpected drift remains.
   - Parameters: `procedureName` (string, required), `argsJson` (string, optional), `accessPath`/`backendPath`/`projectRoot`/`destinationRoot` (optional)
 * **`vba_orphan_audit`**: Audit the VBA project for orphan/placeholder modules — modules with no on-disk source counterpart and modules whose names match the Access placeholder pattern (`Módulo1`, `Module1`, `Class1`, `Form1`, …). Each entry carries `isSuspicious` and `sourcePath` (or `null` for orphans). Read-only.
   - Parameters: none (uses the active project context)

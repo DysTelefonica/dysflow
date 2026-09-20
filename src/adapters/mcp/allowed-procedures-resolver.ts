@@ -49,3 +49,63 @@ export async function resolveAllowedProceduresFor(
   }
   return allowed as ResolvedAllowedProcedures;
 }
+
+/**
+ * Strict-mode resolver, parallel to {@link AllowedProcedures}.
+ *
+ * The procedure gate is default-allow: it enforces `allowedProcedures` only
+ * when the project declares `capabilities.procedures.strictMode: true`. Like
+ * the allowlist itself, the flag has to be resolved PER INPUT (#1440) — a
+ * single MCP process serves several worktrees, and a value frozen at startup
+ * would apply project A's posture to project B's binary.
+ */
+export type StrictMode =
+  | boolean
+  // The resolver may be sync or async and may return either the bare value or
+  // an `OperationResult` envelope. A real one reads project config, so it is
+  // naturally async AND wants `failureResult` for a CONFIG_* failure; the
+  // union admits that combination rather than forcing a cast at the call site.
+  | ((
+      input: unknown,
+    ) =>
+      | boolean
+      | undefined
+      | OperationResult<boolean | undefined>
+      | Promise<boolean | undefined | OperationResult<boolean | undefined>>);
+
+export type ResolvedStrictMode = boolean | undefined;
+
+/**
+ * Resolve the per-input strict-mode flag.
+ *
+ * Every failure mode resolves to `undefined` (= default-allow): an absent
+ * value, a throwing resolver, and a `failureResult` envelope all land there.
+ * That is deliberate — the write gate owns the write risk, so a misconfigured
+ * strict-mode resolver must not turn into an undebuggable refusal. It is the
+ * mirror image of {@link resolveAllowedProceduresFor}, whose fallback is
+ * `undefined` because under the old default-deny contract `undefined` meant
+ * "refuse".
+ */
+export async function resolveStrictModeFor(
+  strictMode: StrictMode | undefined,
+  input: unknown,
+): Promise<ResolvedStrictMode> {
+  if (strictMode === undefined) return undefined;
+  if (typeof strictMode === "function") {
+    try {
+      const result: boolean | undefined | OperationResult<boolean | undefined> = await (
+        strictMode as Exclude<StrictMode, boolean>
+      )(input);
+      // Accept either a direct value or an OperationResult envelope, so the
+      // resolver can surface CONFIG_* failures through the failureResult path
+      // without crashing the gate.
+      if (result !== null && typeof result === "object" && "ok" in result) {
+        return result.ok ? result.data : undefined;
+      }
+      return result as ResolvedStrictMode;
+    } catch {
+      return undefined;
+    }
+  }
+  return strictMode;
+}

@@ -36,6 +36,46 @@ The dry-run plan echoes the parsed values:
 }
 ```
 
+## The procedure gate is default-allow
+
+`run_vba` refuses nothing on account of the allowlist unless the targeted
+project declares `capabilities.procedures.strictMode: true` in
+`.dysflow/project.json`. Without that flag, `capabilities.procedures.allow` is
+documentation: every compiled procedure the write gate permits will run.
+
+The write gate is the authoritative protection: `writesProcess.enabled`,
+`writesProject.allowWrites`, and `writeExecutionPolicy` decide whether a
+write-class call executes at all, and `humanCompilePending` covers stale
+p-code. `run_vba` was the one exception — as an alias tool it never reached
+`createDispatchTool`, where that gate lives, so it ran compiled VBA with writes
+disabled and its allowlist was the only backend control. That is fixed in the
+same change that made the procedure gate opt-in: `run_vba` now runs the write
+gate ahead of the procedure gate. Relaxing the allowlist is only safe because
+of it. A second allowlist that
+every project had to hand-maintain — one entry per production procedure and one
+per new test — bought operational cost and no additional safety, so it became
+opt-in.
+
+| `capabilities.procedures` state | `run_vba` behavior |
+|---|---|
+| `allow` absent, or `[]` | Every procedure runs. |
+| `allow` populated, `strictMode` absent or not `true` | Every procedure runs; the list is documentation. |
+| `allow` populated, `strictMode: true` | In the list → runs. Not in the list → `MCP_PROCEDURE_NOT_ALLOWED`. |
+| `allow` absent or `[]`, `strictMode: true` | `MCP_ALLOWLIST_NOT_CONFIGURED`, unless `dryRun: true`. |
+
+A non-boolean `strictMode` resolves to `false` — a typo cannot silently re-arm
+a gate a project deliberately left open.
+
+The flag is resolved per input, so one MCP process serving several worktrees
+reads each project's own posture rather than the one present at startup.
+
+Two surfaces keep a stricter posture and are NOT governed by `strictMode`:
+HTTP `POST /vba/execute` still returns `HTTP_PROCEDURE_NOT_ALLOWED` for a
+procedure outside a populated allowlist, and HTTP `POST /vba/test` keeps its
+missing/empty-allowlist refusal. See
+[HTTP API](../api/http-api.md) and
+[adapter write gates](../security/adapter-write-gates.md).
+
 ## Procedure-resolution error codes
 
 The runtime distinguishes five mutually-exclusive conditions. A consumer
@@ -43,8 +83,8 @@ MUST branch on the exact code returned:
 
 | Code | Where it fires | Remediation |
 |---|---|---|
-| `MCP_PROCEDURE_NOT_ALLOWED` | Adapter gate (`canonical-handlers.ts::ensureProcedureAllowed`) — procedure is not in `allowedProcedures`. | Surface `error.allowedProcedures` to the user; ask whether to add the procedure to the allowlist. |
-| `MCP_ALLOWLIST_NOT_CONFIGURED` | Adapter gate — no allowlist AND `dryRun: true` was NOT passed. | Declare `allowedProcedures` in `.dysflow/project.json` for permanent fixes; pass `dryRun: true` once as opt-out. |
+| `MCP_PROCEDURE_NOT_ALLOWED` | Adapter gate (`canonical-handlers.ts::ensureProcedureAllowed`) — procedure is not in `allowedProcedures`. Reachable only under `capabilities.procedures.strictMode: true`. | Surface `error.allowedProcedures` to the user; ask whether to add the procedure to the allowlist, or whether the project wants `strictMode` at all. |
+| `MCP_ALLOWLIST_NOT_CONFIGURED` | Adapter gate — no allowlist AND `dryRun: true` was NOT passed. Reachable only under `capabilities.procedures.strictMode: true`; it is NOT emitted by default. | Declare `allowedProcedures` in `.dysflow/project.json`, drop `strictMode`, or pass `dryRun: true` once as opt-out. |
 | `PROCEDURE_NOT_FOUND` | Service preflight (`vba-service.ts::checkProcedureExists`) — procedure is NOT declared in the project's VBA source. | Read `error.details.{procedure, moduleName, scannedModules}`. Verify the spelling, run `import_modules({ moduleNames: [...] })` to seed the source tree, recompile in Access VBE. |
 | `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. Typical cause: stale p-code after source edits without a VBE recompile. | `error.remediation` says "Recompile in Access VBE (Debug → Compile) so the binary's compiled p-code matches the on-disk source, then retry." Follow it. NOT the same fix as `PROCEDURE_NOT_FOUND` (which needs an import). |
 | `VBA_RUNTIME_ERROR` | Service reclassifier — the procedure WAS invoked, it ran, and it raised. | Read `error.details.vbaMessage` for the error VBA emitted and fix the procedure or the state it depends on. Recompiling does not apply: the procedure is callable and running. |

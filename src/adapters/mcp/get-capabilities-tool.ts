@@ -113,7 +113,20 @@ export const ESCAPE_HATCH_MIGRATION_NOTES = {
  *   `resolved` — a projectId is in scope; `unresolved` — no projectId.
  * - `allowedProcedures`: the project's `allowedProcedures` allowlist, copied
  *   verbatim from the resolved `DysflowConfig`. `undefined` when no allowlist
- *   is configured.
+ *   is configured. On its own it does NOT tell a consumer whether the gate
+ *   enforces it — read `procedureStrictMode` for that.
+ * - `procedureStrictMode`: whether the procedure gate actually enforces
+ *   `allowedProcedures`, resolved from `capabilities.procedures.strictMode`.
+ *   The gate is default-allow, so a populated `allowedProcedures` with
+ *   `procedureStrictMode: false` is documentation, not a boundary: `run_vba`
+ *   and stdio `test_vba` will run a procedure that is not in the list. An
+ *   agent honoring the pre-flight self-check MUST read this flag before
+ *   concluding the allowlist restricts anything. HTTP ignores it and always
+ *   enforces a populated list.
+ *   `undefined` carries the same meaning it does for `allowedProcedures`:
+ *   the value is resolved per input rather than fixed at startup, so the
+ *   snapshot cannot state it. Treat `undefined` as "unknown here, read it
+ *   from the call that matters" — never as `false`.
  * - `dryRunDefault`: the global default for `dryRun`. Today every write-class
  *   tool in `MCP_TOOL_CONTRACTS` either declares `dryRunDefault: true` or
  *   defaults to true via the `contractFromGeneratedRoute` derivation
@@ -150,6 +163,12 @@ export type McpCapabilitySnapshot = {
   projectConfig?: ProjectConfigDiagnostic;
   worktreeCache?: WorktreeCacheTelemetry;
   allowedProcedures: readonly string[] | undefined;
+  /**
+   * Whether the procedure gate enforces `allowedProcedures`. `false` means
+   * the list above is inert on MCP; `undefined` means it is resolved per
+   * input and the startup snapshot cannot state it. See the block docstring.
+   */
+  procedureStrictMode: boolean | undefined;
   dryRunDefault: boolean;
   /**
    * v2.1.0 (#779) — active write-execution policy, resolved from
@@ -261,6 +280,11 @@ export type GetCapabilitiesAllInput = {
   writesEnabled: boolean;
   writeAccessResolver: McpWriteAccessResolver | undefined;
   allowedProcedures: readonly string[] | undefined;
+  /**
+   * Resolved `capabilities.procedures.strictMode` for the startup project.
+   * Omitted is `false`, which matches the default-allow gate.
+   */
+  procedureStrictMode?: boolean;
   projectId: string | undefined;
   allowWrites: boolean;
   surface?: "stdio" | "http";
@@ -371,6 +395,7 @@ export function projectCapabilitiesSnapshot(
   if (include.has("writeClassToolsPermitted"))
     base.writeClassToolsPermitted = snapshot.writeClassToolsPermitted;
   if (include.has("allowedProcedures")) base.allowedProcedures = snapshot.allowedProcedures;
+  if (include.has("procedureStrictMode")) base.procedureStrictMode = snapshot.procedureStrictMode;
   if (include.has("documentationBundle")) base.documentationBundle = snapshot.documentationBundle;
   if (include.has("projectConfig") && snapshot.projectConfig !== undefined)
     base.projectConfig = snapshot.projectConfig;
@@ -480,6 +505,7 @@ export function getCapabilitiesAll(input: GetCapabilitiesAllInput): McpCapabilit
       outcome: input.projectId === undefined ? "unresolved" : "resolved",
     },
     allowedProcedures: input.allowedProcedures,
+    procedureStrictMode: input.procedureStrictMode,
     dryRunDefault: deriveGlobalDryRunDefault(),
     writeExecutionPolicy,
     resultValidationPolicy: resolveResultValidationPolicy(input.resultValidationPolicy),
@@ -589,6 +615,12 @@ export function createGetCapabilitiesTool(opts: {
   // honest. The snapshot tool reads allowedProcedures for the introspection
   // surface, so a frozen start-up array would mis-report cross-project.
   allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined;
+  /**
+   * Resolved `capabilities.procedures.strictMode`. Accepts the resolver form
+   * for symmetry with `allowedProcedures`; like that field, the snapshot
+   * surfaces the STARTUP value because the tool takes no input.
+   */
+  procedureStrictMode?: import("./allowed-procedures-resolver.js").StrictMode;
   projectId: string | undefined;
   allowWrites: boolean;
   toolSurface?: ToolSurface;
@@ -628,6 +660,11 @@ export function createGetCapabilitiesTool(opts: {
     // take an input, so it surfaces the STARTUP value of the gate; per-input
     // semantics apply only on the call path (dysflow_vba_execute / test_vba).
     allowedProcedures: Array.isArray(opts.allowedProcedures) ? opts.allowedProcedures : undefined,
+    // Mirror the `allowedProcedures` treatment directly above: a resolver is
+    // per-input, so the startup snapshot reports `undefined` rather than
+    // claiming a posture it cannot know.
+    procedureStrictMode:
+      typeof opts.procedureStrictMode === "boolean" ? opts.procedureStrictMode : undefined,
     projectId: opts.projectId,
     allowWrites: opts.allowWrites,
     accessDbPath: opts.accessDbPath,

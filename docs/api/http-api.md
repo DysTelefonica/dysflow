@@ -134,6 +134,8 @@ When `allowedProcedures` is configured in `.dysflow/project.json`, procedures no
 
 For this `/vba/execute` route, an empty list (`[]`) or absent `allowedProcedures` field means all procedures are allowed. The `/vba/test` route below is stricter and defaults to deny unless the request uses `dryRun:true`.
 
+HTTP ignores `capabilities.procedures.strictMode`. That flag makes the MCP procedure gate opt-in (see [run_vba](../tools/run-vba.md)); the HTTP composition root pins strict enforcement on, so a project config can never relax this network surface.
+
 
 ### POST /vba/test
 

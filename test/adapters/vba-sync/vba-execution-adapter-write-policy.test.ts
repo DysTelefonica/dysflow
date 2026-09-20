@@ -42,7 +42,13 @@ import { successResult } from "../../../src/core/contracts/index.js";
 /**
  * Build a `VbaExecutionAdapter` with a stubbed orchestrator. The adapter
  * construction is the post-capa-3 wiring:
- *   `new VbaExecutionAdapter(orchestrator, allowedProcedures)`
+ *   `new VbaExecutionAdapter(orchestrator, allowedProcedures, strictMode)`
+ *
+ * This truth table is about how the write policy interacts with an ENFORCED
+ * allowlist, so every adapter here opts into
+ * `capabilities.procedures.strictMode: true`. Without that flag the procedure
+ * gate is default-allow and the allowlist column of the table would be
+ * unreachable; that default is covered in `vba-execution-adapter.test.ts`.
  */
 function makeAdapter(opts: {
   allowedProcedures?: AllowedProcedures | null | "missing";
@@ -58,7 +64,7 @@ function makeAdapter(opts: {
   // into the refusal branch without the helper's fallback overriding them.
   const allowedProcedures: AllowedProcedures | undefined =
     opts.allowedProcedures === "missing" ? undefined : (opts.allowedProcedures ?? ["Test_Alpha"]);
-  const adapter = new VbaExecutionAdapter(orchestrator, allowedProcedures);
+  const adapter = new VbaExecutionAdapter(orchestrator, allowedProcedures, true);
   return { adapter, executeMappedTool };
 }
 

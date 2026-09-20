@@ -1391,9 +1391,70 @@ describe("VbaExecutionAdapter", () => {
   });
 
   // --- #1556 — test_vba opt-in whitelist -----------------------------------
-  // Missing and empty lists allow execution. A non-empty list remains an
-  // atomic whitelist, covered by the configured-list tests below. run_vba's
-  // independent MCP gate remains default-deny.
+  // The gate is default-allow: it enforces nothing unless the project declares
+  // `capabilities.procedures.strictMode: true`, which the adapter receives as
+  // its third constructor argument. Under strict mode, missing and empty lists
+  // allow execution and a non-empty list is an atomic whitelist — the
+  // configured-list tests below all opt in explicitly. `run_vba` carries the
+  // same opt-in gate at the MCP boundary.
+
+  it("allows a procedure outside a populated allowlist when strictMode is absent", async () => {
+    // The friction this removes: a project whose allowlist holds only its
+    // registered test atoms could not run a newly written one without first
+    // editing `.dysflow/project.json`.
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValue(successResult([{ ok: true, procedure: "Test_BrandNew" }])),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Registered"]);
+
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_BrandNew",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orchestrator.executeMappedTool).toHaveBeenCalled();
+  });
+
+  it("does not even consult the allowlist resolver when strictMode is absent", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi
+        .fn()
+        .mockResolvedValue(successResult([{ ok: true, procedure: "Test_BrandNew" }])),
+      cwd: "C:/repo",
+    };
+    const resolver = vi.fn().mockResolvedValue(["Test_Registered"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
+
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_BrandNew",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it("enforces the populated allowlist once strictMode is opted into", async () => {
+    const orchestrator: VbaSyncOrchestrator = {
+      executeMappedTool: vi.fn(),
+      cwd: "C:/repo",
+    };
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Registered"], true);
+
+    const result = await adapter.execute("test_vba", {
+      procedureName: "Test_BrandNew",
+      argsJson: "[]",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a refusal");
+    expect(result.error.code).toBe("PROCEDURE_NOT_ALLOWED");
+    expect(orchestrator.executeMappedTool).not.toHaveBeenCalled();
+  });
 
   function makeUnconfiguredAdapter(executeMappedTool = vi.fn()): {
     adapter: VbaExecutionAdapter;
@@ -1592,7 +1653,7 @@ describe("VbaExecutionAdapter", () => {
     // Resolver function: returns the allowlist based on the input each call.
     // In production this reads the project config of the target project.
     const resolver = vi.fn().mockResolvedValue(["Test_Allowed", "Test_AlsoAllowed"]);
-    const adapter = new VbaExecutionAdapter(orchestrator, resolver);
+    const adapter = new VbaExecutionAdapter(orchestrator, resolver, true);
 
     const result = await adapter.execute("test_vba", {
       procedureName: "Test_Allowed",
@@ -1627,7 +1688,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"], true);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([{ procedure: "Test_NotInList", args: [] }]),
@@ -1653,7 +1714,7 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn(),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed"], true);
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -1678,7 +1739,11 @@ describe("VbaExecutionAdapter", () => {
       executeMappedTool: vi.fn().mockResolvedValue(successResult([{ ok: true }])),
       cwd: "C:/repo",
     };
-    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Allowed", "Test_AlsoAllowed"]);
+    const adapter = new VbaExecutionAdapter(
+      orchestrator,
+      ["Test_Allowed", "Test_AlsoAllowed"],
+      true,
+    );
 
     const result = await adapter.execute("test_vba", {
       proceduresJson: JSON.stringify([
@@ -1714,7 +1779,7 @@ describe("VbaExecutionAdapter", () => {
     };
     // Allowlist does NOT contain Test_FromManifest — gate must catch it after
     // the adapter loads the manifest.
-    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Other"]);
+    const adapter = new VbaExecutionAdapter(orchestrator, ["Test_Other"], true);
 
     const result = await adapter.execute("test_vba", { testsPath: "tests.vba.json" });
 

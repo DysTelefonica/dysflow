@@ -239,6 +239,10 @@ export function buildAliasTools(
   writeAccessResolver: McpWriteAccessResolver | undefined,
   allowedProcedures: import("./allowed-procedures-resolver.js").AllowedProcedures | undefined,
   accessContextResolver?: import("./result-translation.js").McpAccessContextResolver,
+  // Opt-in procedure gate. The gate enforces `allowedProcedures` only when the
+  // targeted project declares `capabilities.procedures.strictMode: true`;
+  // resolved per input for the same cross-worktree reason as the allowlist.
+  procedureStrictMode?: import("./allowed-procedures-resolver.js").StrictMode,
 ): DysflowMcpTool[] {
   const cleanupSchema = mcpSchemaFor("cleanup_access_operation");
   const runVbaSchema = mcpSchemaFor("run_vba");
@@ -309,6 +313,12 @@ export function buildAliasTools(
           resolved,
           (validatedInput) => buildRunVbaRequest(validatedInput),
           context,
+          procedureStrictMode,
+          // Write gate. Forwarded here because `run_vba` is an alias tool and
+          // never reaches `createDispatchTool`, where every other write-class
+          // tool picks the gate up.
+          writesEnabled,
+          writeAccessResolver,
         );
       },
     },

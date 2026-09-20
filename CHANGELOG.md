@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`run_vba` is now subject to the write gate on MCP.** As an alias tool it
+  never passed through `createDispatchTool`, the seam where every other
+  write-class tool consults `isWriteAllowed`, so it executed compiled VBA under
+  the default writes-disabled configuration — `query_execute` and `test_vba`
+  were gated, `run_vba` was not, and its allowlist was its only backend
+  control. The gate now runs in `handleMcpVbaExecute` ahead of the procedure
+  gate. `apply: true` now requires `writesProcess.enabled` and
+  `capabilities.allowWrites`; `apply: false` previews are unaffected.
+
+### Changed
+
+- **BREAKING — the MCP procedure gate is now default-allow.** `run_vba` and
+  stdio `test_vba` enforce `capabilities.procedures.allow` only when the same
+  project declares the new `capabilities.procedures.strictMode: true` in
+  `.dysflow/project.json`. Without that flag, a populated `allow` list is
+  documentation and any procedure the write gate permits will run. The gate had
+  been default-deny since PR1a #621 (v2.20.0), which meant a consumer had to
+  register every production procedure and every newly written test atom before
+  it could run — operational cost that bought no boundary the write gate
+  (`writesProcess.enabled`, `writesProject.allowWrites`,
+  `writeExecutionPolicy`) and `humanCompilePending` did not already hold.
+  `strictMode` is resolved per input, so one MCP process serving several
+  worktrees reads each project's own posture; a non-boolean value resolves to
+  `false` so a typo cannot silently re-arm the gate.
+  `MCP_PROCEDURE_NOT_ALLOWED` and `MCP_ALLOWLIST_NOT_CONFIGURED` keep their
+  codes, envelopes, and structured fields — they are simply unreachable on MCP
+  until a project opts in. **Both HTTP routes are unchanged and ignore
+  `strictMode`**: `POST /vba/execute` still returns
+  `HTTP_PROCEDURE_NOT_ALLOWED` for a procedure outside a populated allowlist,
+  and `POST /vba/test` keeps its missing/empty default-deny, because the HTTP
+  composition root pins strict enforcement on.
+  **Migration**: a project that wants the previous behavior adds
+  `capabilities.procedures.strictMode: true`; its existing `allow` list is then
+  enforced exactly as before. A project that does nothing sees the gate
+  bypassed. See
+  [MIGRATION_2026-09-20_strict-mode-opt-in.md](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md),
+  [run_vba](./docs/tools/run-vba.md), and
+  [adapter write gates](./docs/security/adapter-write-gates.md).
+
 ## [v4.4.5] - 2026-09-19
 
 ### Fixed

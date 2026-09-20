@@ -186,7 +186,7 @@ Inspect the active policy and per-tool effective defaults via `get_capabilities`
 writeExecutionPolicy: "developer"
 effectiveDryRunDefault: {
   import_modules:   false,    // routine-dev-write — flipped to false in developer mode
-  test_vba:        false,    // routine-dev-write — allowedProcedures gate is still authoritative
+  test_vba:        false,    // routine-dev-write — the write gate is still authoritative
   export_modules:   true,     // destructive-write — always plan unless explicit
   delete_module:    true,     // destructive-write — always plan unless explicit
   query_execute:    true,     // arbitrary-write — always plan unless explicit
@@ -219,10 +219,10 @@ Risk classification (v2.1.0):
 - `arbitrary-write` — always requires explicit apply (e.g. `exec_sql`, `run_script`, `query_execute`).
 - `process-control` — alias layer (`cleanup_access_operation`, `access_force_cleanup_orphaned`); per-call gating decides.
 
-The write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `allowedProcedures`) is **authoritative** — the new policy does NOT bypass any existing gate. In particular:
+The write-gate (`writesProcess.enabled`, `writesProject.allowWrites`, `writeExecutionPolicy`) is **authoritative** — the new policy does NOT bypass any existing gate. In particular:
 
 - A project with `allowWrites: false` still blocks every write, regardless of policy.
-- `run_vba` remains default-deny. Stdio `test_vba` runs when `allowedProcedures` is missing/empty; a non-empty list is an opt-in whitelist. HTTP `/vba/test` remains default-deny.
+- The procedure gate is default-allow: `run_vba` and stdio `test_vba` enforce `allowedProcedures` only under `capabilities.procedures.strictMode: true`. With that flag, `run_vba` is default-deny again and stdio `test_vba` runs when the list is missing/empty while a non-empty list is a whitelist. HTTP ignores `strictMode`: `/vba/execute` always enforces a populated list and `/vba/test` remains default-deny.
 
 #### 3b) Export-source guard (v2.1.0, issue #779)
 
@@ -254,19 +254,22 @@ With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and 
 
 The v2.1.0 promise of `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is finally live: in developer mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with the structured envelope shown above; `confirmOverwriteSource: true` bypasses the guard.
 
-The hard gates (`allowWrites`, `allowedProcedures`, explicit `dryRun`/`apply`) continue to win — explicit caller intent always wins over the policy default.
+The hard gates (`allowWrites`, explicit `dryRun`/`apply`, and `allowedProcedures` where `strictMode` enforces it) continue to win — explicit caller intent always wins over the policy default.
 
 See `openspec/changes/wire-write-policy-runtime-785/` for the full SDD change.
 
-### 4) VBA procedure allowlist
+### 4) VBA procedure allowlist (opt-in)
 
-Set `capabilities.procedures.allow` in `.dysflow/project.json` to restrict which VBA procedures can be called. This enforcement applies to all three execution entry points:
+Set `capabilities.procedures.allow` in `.dysflow/project.json` to declare which VBA procedures may be called, and `capabilities.procedures.strictMode: true` to have the MCP surface enforce it. Without `strictMode` the list is documentation and the MCP gate allows everything the write gate permits.
 
-- MCP `run_vba`
-- MCP `run_vba`
-- HTTP `POST /vba/execute`
+| Entry point | Honors `strictMode` | Default behavior |
+|---|---|---|
+| MCP `run_vba` | yes | allows everything; `strictMode: true` restores default-deny |
+| MCP `test_vba` | yes | allows everything; `strictMode: true` restores the atomic whitelist |
+| HTTP `POST /vba/execute` | no | always rejects a procedure outside a populated list |
+| HTTP `POST /vba/test` | no | default-deny when the list is missing or empty |
 
-A call to a procedure not in the list is rejected before any COM automation is started. An empty list or absent field means all procedures are allowed (default).
+Where the gate is enforced, a call to a procedure not in the list is rejected before any COM automation is started, and an empty list or absent field means all procedures are allowed. A non-boolean `strictMode` resolves to `false`.
 
 ---
 
@@ -697,7 +700,7 @@ Runtime behavior:
 | absent                   | present               | Values resolve from `capabilities.allowWrites` and `capabilities.procedures.allow` |
 | present                  | absent or present     | `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
-`procedures.deny` is reserved for a future advisory signal — the runtime allowlist stays `procedures.allow` only.
+`procedures.deny` is reserved for a future advisory signal — the runtime allowlist reads `procedures.allow` only, and the MCP surface enforces it only under `procedures.strictMode: true`.
 
 See [`docs/security/adapter-write-gates.md`](./docs/security/adapter-write-gates.md) for the full write-gate contract.
 
@@ -819,7 +822,7 @@ Every entry maps an error code to the fastest path back to a green build, and cr
 | `PROJECT_CONFIG_NOT_WRITE_READY` (and its 5 split children: `ACCESS_PATH_NOT_FOUND`, `BACKEND_PATH_NOT_FOUND`, `DESTINATION_ROOT_NOT_FOUND`, `OUTSIDE_PROJECT_ROOT`, `PROJECT_ID_MISMATCH`) | The project is unwired, the `destinationRoot` is missing, or the requested `projectId` does not match `.dysflow/project.json`. Each child code tells you exactly which invariant broke. | Run `dysflow resolve_project` first to read the resolved config and `diagnostics[]`; then `dysflow doctor`; then re-run `dysflow setup --write-project --project-id <id> --access-path <frontend.accdb>` if config is missing. For `OUTSIDE_PROJECT_ROOT`, copy the file into `destinationRoot` or pass an explicit `projectRoot` override — do not bend the path gate. | #962, #966, #968 |
 | `WRITE_LOCKED_BY_RUNNING_OP` / `OPERATION_ALREADY_RUNNING` | A prior Dysflow-owned Access operation is still holding the marker file in `.dysflow/runtime/markers/`. | List the operations with `list_access_operations`, then either wait for completion or call `cleanup_access_operation` on the specific `operationId`. For stale `status:"running"` markers (no PID, idle past the grace window), call `clean_stale_markers` with explicit `confirm: true`. | #967, #976 |
 | `LACCDB_STALE_DETECTED` / `LIVE_PROCESS_HOLDS_LACCDB` | Dysflow found a `*.laccdb` lock file when launching Access. The first means no live Access process holds the lock — it removes the stale lock and continues; the second means a real `MSACCESS.EXE` is bound to the same `accessPath` and refuses to start. | For `LACCDB_STALE_DETECTED`, no action needed (Dysflow removed it). For `LIVE_PROCESS_HOLDS_LACCDB`, identify the holder PID with `access_force_cleanup_orphaned`, verify it is **headless** and bound to **the same** `accessPath`, then pass `confirmPid` explicitly. Never `Stop-Process -Name MSACCESS`. | #967, #976 |
-| `MCP_ALLOWLIST_NOT_CONFIGURED` / `MCP_PROCEDURE_NOT_ALLOWED` | `run_vba` or HTTP `test_vba` has no configured allowlist, or the requested procedure is outside it. Stdio `test_vba` does not emit the missing-list error. | Add the procedure under `capabilities.procedures.allow`. For stdio `test_vba`, missing/empty means unrestricted and a non-empty list opts into whitelisting. | #962, #1556 |
+| `MCP_ALLOWLIST_NOT_CONFIGURED` / `MCP_PROCEDURE_NOT_ALLOWED` | On MCP, reachable only under `capabilities.procedures.strictMode: true`: no configured allowlist, or the requested procedure is outside it. HTTP `test_vba` emits the missing-list error regardless of `strictMode`; stdio `test_vba` never does. | Decide whether the project wants `strictMode` at all. If it does, add the procedure under `capabilities.procedures.allow`. If it does not, drop the flag and the gate stops refusing. | #962, #1556 |
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` | An `export_modules` / `export_all` call in developer mode is about to overwrite the active source tree. | Re-target the export to a sibling directory (`<repo>/export/`) or pass `confirmOverwriteSource: true` after confirming the destination is intentional. `prune:true` + `filter:...` is always rejected (`INVALID_INPUT`). | #779, #619 |
 | `RUNNER_INVALID_JSON` / `CONFIG_TARGET_NOT_FOUND` | Dysflow launched PowerShell but the runner did not return structured JSON, or the target `.accdb` is missing. | Run `dysflow doctor` — it surfaces both the runner binary path and the Access install. Then verify `accessPath` resolves against `.dysflow/project.json` (do **not** assume a fresh `pwd` if you are inside a worktree). | #594, #962 |
 | `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | The `.form.txt`/`.report.txt`/`.bas`/`.cls` source the agent tried to import does not parse. | Run `lint_module` (or the form import gate's structural pre-flight) before re-importing; repair the metadata with the `vba-form-metadata-repair` skill. | #958 |

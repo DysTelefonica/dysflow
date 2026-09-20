@@ -71,7 +71,8 @@ both in the dysflow-config module.
 | yes                               | no or yes                     | `CONFIG_TOP_LEVEL_FIELDS_REMOVED` |
 
 `procedures.deny` is a **project-level advisory signal** reserved for a future
-wire. The runtime gate stays `procedures.allow` only — `deny` is preserved in
+wire. The runtime gate reads `procedures.allow` only, and only under
+`procedures.strictMode: true` — `deny` is preserved in
 the schema so a future PR can wire it without breaking `.dysflow/project.json`
 consumers. See the `dysflow-config-capabilities-block.test.ts` suite for
 the locked precedence contract.
@@ -89,35 +90,61 @@ the locked precedence contract.
 |-----------|------|-----|-----|
 | SQL writes (`exec_sql`, fixtures, maintenance writes) | gated on `writesEnabled` | gated on `writesEnabled` / write resolver | Same on both — destructive SQL is always gated. |
 | `force` cleanup | gated | gated (the `force` branch of `handleMcpAccessCleanup` in `canonical-handlers.ts`) | Destructive escalation, gated on both. |
-| **Arbitrary VBA execution** (`/vba/execute`, `dysflow_vba_execute`, `run_vba`) | gated on `writesEnabled`; configured lists reject procedures outside them | `run_vba` is default-deny and requires a non-empty `allowedProcedures` list for execution | Arbitrary compiled VBA keeps the strongest procedure gate. |
-| **VBA tests** (`/vba/test`, `test_vba`) | `/vba/test` is default-deny when the allowlist is missing/empty | stdio `test_vba` is unrestricted when the list is missing/empty; a non-empty list is an opt-in whitelist | The local parent process is the stdio trust boundary; HTTP remains stricter. |
+| **Arbitrary VBA execution** (`/vba/execute`, `run_vba`) | gated on `writesEnabled`; a populated `allowedProcedures` rejects procedures outside it, always | `run_vba` is default-allow; it enforces `allowedProcedures` only under `capabilities.procedures.strictMode: true` | The stdio caller owns the process; HTTP is a network surface and keeps enforcing. |
+| **VBA tests** (`/vba/test`, `test_vba`) | `/vba/test` is default-deny when the allowlist is missing/empty, and rejects a procedure outside a populated one | stdio `test_vba` is default-allow; under `strictMode: true` a missing/empty list is unrestricted and a populated one is an atomic whitelist | The local parent process is the stdio trust boundary; HTTP remains stricter. |
 
-## Why VBA on MCP is allowlist-controlled, not write-gated
+## Why VBA on MCP is write-gated, not allowlist-controlled
 
-On MCP, the resolved allowlist from `capabilities.procedures.allow` has two intentional contracts, locked by tests:
+On MCP the procedure gate is **default-allow and opt-in**. The resolved
+allowlist from `capabilities.procedures.allow` is enforced only when the same
+project declares `capabilities.procedures.strictMode: true`:
 
-- `run_vba` is default-deny: a missing/empty list refuses execution, while a
-  configured list permits only named procedures.
-- `test_vba` treats a missing/empty list as unrestricted. A non-empty list is
-  an opt-in whitelist and atomically rejects a plan containing any other test.
-- VBA executes under the default (writes-disabled) MCP configuration across many of the
-  modern-tool and `run_vba` tests in that same file.
+- Without `strictMode`, neither `run_vba` nor `test_vba` refuses on account of
+  the allowlist, whatever `allow` contains.
+- With `strictMode: true`, `run_vba` is default-deny again — a missing/empty
+  list refuses execution and a populated list permits only its named
+  procedures — and `test_vba` treats a missing/empty list as unrestricted while
+  a populated one atomically rejects a plan containing any other test.
+- `strictMode` is resolved per input, so one process serving several worktrees
+  reads each project's own posture.
+- A non-boolean `strictMode` resolves to `false`; a typo cannot silently re-arm
+  the gate.
+- `run_vba` is write-gated. It is an alias tool, so it never reaches
+  `createDispatchTool` — the seam where every other write-class tool consults
+  `isWriteAllowed` — and for that reason it used to execute compiled VBA under
+  the default writes-disabled MCP configuration, with its procedure allowlist
+  as the only backend control. The gate now runs inside `handleMcpVbaExecute`,
+  ahead of the procedure gate. A non-executing `apply:false` plan is not a
+  write and still passes. Pinned by
+  `test/adapters/mcp/run-vba-write-gate.test.ts`.
 
 The rationale: a stdio MCP server is launched by a trusted parent process. The operator
 who wires `dysflow mcp` into their client is the same operator who controls what runs.
-The meaningful, per-deployment control over *which* VBA can run is the allowlist, which
-an operator sets in `.dysflow/project.json` / config. HTTP cannot make that assumption,
-because a network caller is not necessarily the operator — hence its blanket write-gate.
+That operator's real per-deployment control is the WRITE gate —
+`writesProcess.enabled`, `capabilities.allowWrites`, and `writeExecutionPolicy`
+— plus `humanCompilePending` for stale p-code. A second allowlist the operator
+had to extend for every production procedure and every newly written test cost
+operational effort without adding a boundary the write gate did not already
+hold, so it became opt-in. HTTP cannot make the trusted-parent assumption,
+because a network caller is not necessarily the operator — hence its blanket
+write-gate AND its unconditional allowlist enforcement.
+
+The HTTP composition root
+(`src/adapters/http/http-services-factory.ts`) pins `procedureStrictMode: true`
+on the service it builds, so `strictMode` in a project config never relaxes the
+network surface.
 
 ## Residual consideration (not a code change)
 
-The one case worth an operator's attention: **no `capabilities.procedures.allow` configured** means
-any manifest-selected test can run through stdio `test_vba`. It does not open arbitrary
-`run_vba`, and the write, sandbox, manifest, and human-compile gates remain intact. On
-stdio there is no remote vector because the client is the trust boundary. For projects
-that want a narrower test surface:
+The case worth an operator's attention: with the default (no `strictMode`), any
+procedure the write gate permits can run through stdio `run_vba` and any
+manifest-selected test through stdio `test_vba`. The write, sandbox, manifest,
+and human-compile gates remain intact, and on stdio there is no remote vector
+because the client is the trust boundary. For projects that want a narrower
+surface — CI, fleet automation, a shared non-interactive runner:
 
-> Configure a non-empty `capabilities.procedures.allow` list to opt into a test whitelist.
+> Set `capabilities.procedures.strictMode: true` and configure a non-empty
+> `capabilities.procedures.allow` list to opt into an enforced whitelist.
 
 ## Decision
 

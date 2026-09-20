@@ -9,6 +9,7 @@ export const CAPABILITY_BLOCK_NAMES = [
   "preferredAgentWorkflows",
   "writeClassToolsPermitted",
   "allowedProcedures",
+  "procedureStrictMode",
   "documentationBundle",
   "projectConfig",
   "worktreeCache",
