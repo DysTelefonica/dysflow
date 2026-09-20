@@ -3,6 +3,15 @@ on:
   pull_request:
 jobs:
   documentation-quality:
+    # Skill catalog propagation PRs use `skill-fleet/*` head branches and copy
+    # markdown whose style is governed by the team-skills catalog, not by this
+    # consumer's documentation rules (#1763). Skip the gate for those PRs so
+    # the catalog stays the single source of truth for skill markdown.
+    # The `startsWith()` expression keeps the exemption specific to the bot
+    # branch prefix and rejects `feat/skill-fleet-x` style human branches.
+    if: >-
+      github.event_name != 'pull_request' ||
+      !startsWith(github.event.pull_request.head.ref, 'skill-fleet/')
     name: Documentation quality
     runs-on: ubuntu-latest
     steps:
