@@ -1557,3 +1557,34 @@ If any part is missing or ambiguous, ask and remain local; do not probe the dest
 - Native ask rules are an additional runtime mechanism, not authorization inferred from local-development access. Automation modes and remembered approvals may suppress prompts. This behavioral contract is not a sandbox and does not guarantee a fresh human prompt for every execution.
 <!-- /gentle-ai:remote-authorization -->
 <!-- /gentle-ai:agent-routing -->
+
+<!-- personal-skills:slice:dysflow @ v671cfc4 -->
+## Catálogo de skills
+
+Esta sección la materializa el catálogo personal-skills.
+
+Las skills del paquete gentle-ai (sdd-*, judgment-day, branch-pr,
+chained-pr, etc.) las entrega gentle-ai sync por el agents.md global.
+
+Las que figuran aquí son del catálogo DysTelefonica, propagadas por
+`propagate-team-skills.ps1`.
+
+| Skill | Descripción | Trigger |
+|-------|-------------|---------|
+| `codegraph-usage` | Operates CodeGraph from live runtime and project evidence without memorizing a tool inv... | codegraph, code intelligence, blast radius, symbol impact, index synchronization |
+| `codegraph-vba-upstream-sync` | Safely integrates an upstream release while preserving the VBA delta and delegating pos... | upstream CodeGraph release, synchronize the VBA fork, merge an upstream tag, publish the fork, align runtime skills |
+| `deterministic-quality-harness` | Enforce criteria via mechanical self-policing gates. | deterministic code quality, ratchet gate, shrink-only baseline, fail-loud gate |
+| `intake-roadmap-loop` | Owner del ciclo completo intake → ADR → dev → UAT → archive para sprints con puesta en... | intake, sprint intake, client meeting, requirements doc, acta de requisitos, fuente de intake, tasks.md del SDD, features nuevas, fixes a arreglar, qué entra en este sprint, qué quedó pendiente, roadmap activo, qué va después, ciclo intake a UAT, governance sprint, owner del ciclo, ADR discipline, retomemos el ciclo, sigue con el ciclo, dónde quedamos, qué ciclo tengo abierto, cycle recovery fallback, worktree aislado por cambio, issue + PR + CI, trazabilidad por PR |
+| `repository-delivery-governance` | Audit and harden a repository's path from issue intake to production. | CI/CD audit, pipeline quality, issue policy, PR policy, labels, branch protection, merge permissions, deployment governance |
+| `documentation-alan-style` | Adaptador de locale sobre skill-style-guide + skill-creator + skill-improver (Gentleman... | redactar o revisar README, AGENTS, DOCS, CODEBASE-GUIDE, CONTRIBUTING, CHANGELOG, épicas o walkthroughs JSON en Castellano peninsular formal |
+| `gentle-ai-ai-slop-discipline` | Enforce the maintainer's 2026-08-13 guidance: PR owners must own every design decision... | any AI-assisted work in this repo (writing or reviewing PRs, planning fixes, drafting issues, amending code/prose/tests) |
+| `capability-docs` | Reverse-engineers features into SDD-grade, platform-agnostic docs with code as source o... | capability docs, business rules, what the app does, regression-proof specs, migration-ready docs, generate SDDs from docs |
+| `maintainer-prompt-drafter` | Generates structured, verifiable prompts for the maintainer AI of any tool. | maintainer prompt, upstream escalation |
+
+Las skills viven en `.agents/skills/<nombre>/SKILL.md`.
+
+El catálogo canónico es `C:\Users\adm1\personal-skills`.
+
+Para materialización por skill, vea `docs/skills-catalog.md` (slice
+extendido alan-style).
+<!-- /personal-skills:slice:dysflow -->
