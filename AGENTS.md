@@ -816,7 +816,7 @@ Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica
 6. Mergear el PR → `main` queda sincronizado con el commit del release.
 7. Limpiar el worktree temporal (`git worktree remove --force`) y la rama local; **no borrar la rama remota** (ver regla sobre preservación de ramas).
 
-`scripts/set-release-package-version.mjs` y los steps `Stamp release version` / `Verify synchronized Pi package version` cubren el stamp de versiones en `package.json` y `plugin/pi/package.json` en runtime, pero los bumps de `last_dysflow_version` y del header de release-date en los assets de skills siguen siendo responsabilidad del release prep.
+`.github/scripts/set-release-package-version.mjs` y los steps `Stamp release version` / `Verify synchronized Pi package version` cubren el stamp de versiones en `package.json` y `plugin/pi/package.json` en runtime, pero los bumps de `last_dysflow_version` y del header de release-date en los assets de skills siguen siendo responsabilidad del release prep.
 
 Para la regresión específica de v4.4.4 (job `Build & Release Artifacts` fallando por `Unable to locate executable file: pnpm` por la auto-detección del lockfile en `actions/setup-node@v5`), ver el commit `4c7006f0 fix(ci): enable pnpm in release.yml release job (#1739 regression)` y la nota del proyecto `dysflow/release-regression-1739` en memoria persistente.
 
