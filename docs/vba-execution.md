@@ -14,35 +14,41 @@ The `_Temp_*.bas` workflow below has no character cap. It is the replacement for
 snippets that used to hit the removed one.
 
 Put one-shot code in a reviewable `_Temp_*.bas` module. Import it, compile it manually in Access,
-run its allowlisted public procedure, and remove both the binary module and source file.
+run its public procedure, and remove both the binary module and source file.
 
-`run_vba` remains default-deny: an execute call requires a non-empty
-`allowedProcedures` list containing the target.
+## Configuring the allowlist
 
-This differs intentionally from stdio `test_vba`, where a missing or empty list imposes no
-restriction and a non-empty list enables an opt-in whitelist.
+`run_vba` and stdio `test_vba` are **default-allow**. Neither refuses on account of `capabilities.procedures.allow` unless the same project declares `capabilities.procedures.strictMode: true`.
 
-HTTP `/vba/test` keeps its stricter default-deny network boundary.
+Without that flag a populated `allow` list is documentation, and a one-shot `_Temp_*` procedure needs no config edit before it runs.
+
+Under `strictMode: true` the stricter contract returns:
+
+`run_vba` requires a non-empty `allow` list containing the target, while `test_vba` treats a missing or empty list as unrestricted and a non-empty one as an atomic whitelist.
+
+HTTP keeps its stricter network boundary either way and ignores `strictMode`:
+`/vba/execute` rejects a procedure outside a populated list, and `/vba/test`
+keeps its missing/empty default-deny.
 
 ## Migration path
 
-1. Add the exact procedure name (for example, `_Temp_Audit_ReadFlags`) to
-   `capabilities.allowedProcedures` in `.dysflow/project.json`.
-2. Create `src/modules/_Temp_Audit_ReadFlags.bas` with
-   `Attribute VB_Name = "_Temp_Audit_ReadFlags"` and one public procedure.
-3. Preview the import with `import_modules({ moduleNames: ["_Temp_Audit_ReadFlags"],
-   transactional: true, apply: false })`; review the plan, then repeat with `apply: true`.
-4. Ask the human to compile the project in Access with **Debug > Compile VBA Project** and wait
-   for explicit confirmation. This is project policy; Dysflow records compile-pending state and
-   reminders, but the human owns the compile checkpoint.
-5. Preview `run_vba({ procedureName: "_Temp_Audit_ReadFlags", apply: false })`, then execute the
-   same call with `apply: true` and the required `argsJson` when present.
-6. Preview `delete_module({ moduleName: "_Temp_Audit_ReadFlags", apply: false })`, review the
-   destructive target, then repeat with `apply: true`.
-7. Delete `src/modules/_Temp_Audit_ReadFlags.bas` from source control. Remove its temporary
-   `allowedProcedures` entry unless the procedure became permanent.
-8. Run `vba_orphan_audit` and `verify_code`. Finish only when no `_Temp_` orphan remains and the
-   source/binary report contains no unexpected actionable drift.
+1. If — and only if — the project has opted into `capabilities.procedures.strictMode: true`, add the exact procedure name (for example, `_Temp_Audit_ReadFlags`) to `capabilities.procedures.allow` in `.dysflow/project.json`.
+
+   Projects on the default need no config change. 2. Create `src/modules/_Temp_Audit_ReadFlags.bas` with `Attribute VB_Name = "_Temp_Audit_ReadFlags"` and one public procedure. 3.
+
+   Preview the import with `import_modules({ moduleNames: ["_Temp_Audit_ReadFlags"], transactional: true, apply: false })`; review the plan, then repeat with `apply: true`. 4.
+
+   Ask the human to compile the project in Access with **Debug > Compile VBA Project** and wait for explicit confirmation. This is project policy;
+
+   Dysflow records compile-pending state and reminders, but the human owns the compile checkpoint. 5.
+
+   Preview `run_vba({ procedureName: "_Temp_Audit_ReadFlags", apply: false })`, then execute the same call with `apply: true` and the required `argsJson` when present. 6.
+
+   Preview `delete_module({ moduleName: "_Temp_Audit_ReadFlags", apply: false })`, review the destructive target, then repeat with `apply: true`. 7.
+
+   Delete `src/modules/_Temp_Audit_ReadFlags.bas` from source control. Under `strictMode`, remove its temporary `capabilities.procedures.allow` entry unless the procedure became permanent. 8.
+
+   Run `vba_orphan_audit` and `verify_code`. Finish only when no `_Temp_` orphan remains and the source/binary report contains no unexpected actionable drift.
 
 ## Keep useful code
 

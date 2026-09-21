@@ -49,6 +49,13 @@ export async function createHttpServices(
 
   // VbaSyncAdapter enforces a configured test_vba whitelist. The HTTP route
   // owns its stricter missing/empty default-deny check at the network boundary.
+  //
+  // The MCP procedure gate is default-allow and enforces a populated allowlist
+  // only under `capabilities.procedures.strictMode: true`, because there the
+  // caller already owns the process. HTTP is a network surface with a
+  // different threat model, so it pins `procedureStrictMode: true`
+  // unconditionally and keeps enforcing a populated allowlist for every
+  // project — the posture it has always had.
   const vbaSyncToolService = new VbaSyncAdapter({
     operationRegistry,
     cleanupService: undefined, // VBA sync operations don't need Access-level cleanup
@@ -58,6 +65,7 @@ export async function createHttpServices(
     accessPassword: configResult.data.accessPassword,
     // Forward a configured allowlist so VbaExecutionAdapter enforces the whitelist.
     allowedProcedures: configResult.data.allowedProcedures,
+    procedureStrictMode: true,
   });
 
   return {

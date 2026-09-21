@@ -7,7 +7,7 @@ Invoke a public VBA procedure in the active project and return its payload. Use 
 ## Prerequisites
 
 - The human has compiled the project in Access (Debug > Compile) since the last persistence that touched this procedure. Verified via `get_capabilities.humanCompilePending:false`.
-- `procedureName` is declared in the `capabilities` block of `.dysflow/project.json` under `allowedProcedures` (or the call uses the non-executing `apply:false` plan).
+- The procedure gate is **default-allow**: no allowlist entry is required. A project that declared `capabilities.procedures.strictMode: true` is the exception — there `procedureName` must appear under `capabilities.procedures.allow`, or the call must use the non-executing `apply:false` plan.
 
 ## `procedureName` parsing contract (#1174)
 
@@ -53,7 +53,7 @@ The `apply:false` plan response echoes the parsed values so plan and apply agree
 
 ## Call — one-off non-executing plan via `apply:false`
 
-When the procedure is not (yet) in `allowedProcedures`, pass `apply:false` once. This is the documented escape hatch — not a habit, not a workaround.
+Under `capabilities.procedures.strictMode: true`, when the procedure is not (yet) in `capabilities.procedures.allow`, pass `apply:false` once. This is the documented escape hatch — not a habit, not a workaround. Projects on the default gate never need it for this reason.
 
 ```json
 {
@@ -65,20 +65,21 @@ When the procedure is not (yet) in `allowedProcedures`, pass `apply:false` once.
 }
 ```
 
-`apply:false` does not execute the procedure; it lets the runtime validate the call shape without raising `MCP_PROCEDURE_NOT_ALLOWED` / `MCP_ALLOWLIST_NOT_CONFIGURED`. To make the call stick across sessions, declare the procedure in the `capabilities` block of `.dysflow/project.json` (the runtime re-reads `allowedProcedures` per call).
+`apply:false` does not execute the procedure; it lets the runtime validate the call shape without raising `MCP_PROCEDURE_NOT_ALLOWED` / `MCP_ALLOWLIST_NOT_CONFIGURED`. To make the call stick across sessions under `strictMode`, declare the procedure in the `capabilities` block of `.dysflow/project.json` (the runtime re-reads both `allowedProcedures` and `strictMode` per call).
 
 ## One-shot `_Temp_*.bas` workflow (v4)
 
 `vba_inline_execution` no longer exists. For one-shot VBA, create a source-controlled module such
-as `src/modules/_Temp_Audit_ReadFlags.bas` and add its exact public procedure name to
-`capabilities.allowedProcedures`.
+as `src/modules/_Temp_Audit_ReadFlags.bas`. Under `capabilities.procedures.strictMode: true`, also
+add its exact public procedure name to `capabilities.procedures.allow`; on the default gate no
+config edit is needed.
 
 1. Preview and apply `import_modules` with `moduleNames`, `transactional:true`, and explicit
    `apply:false` then `apply:true` calls.
 2. Stop and wait for the human to compile with **Debug > Compile VBA Project**. This is a project
    policy checkpoint; do not describe it as automatic runtime compilation.
-3. Preview and apply `run_vba` for the allowlisted procedure.
-4. Preview and apply `delete_module`, then delete the `.bas` source and temporary allowlist entry.
+3. Preview and apply `run_vba` for the procedure.
+4. Preview and apply `delete_module`, then delete the `.bas` source and, under `strictMode`, its temporary allowlist entry.
 5. Finish with `vba_orphan_audit` plus `verify_code`; no `_Temp_` orphan or unexpected actionable
    drift may remain.
 
@@ -89,7 +90,7 @@ production backend writes.
 ## Anti-patterns for this call
 
 - Don't invent `procedureName` strings without checking the binary — use `list_objects` or an existing capability doc to confirm.
-- Don't use `apply:false` as a substitute for maintaining `allowedProcedures` when execution is intended. Declare the procedure in `.dysflow/project.json` so the runtime can enforce the gate across every call.
+- Under `strictMode`, don't use `apply:false` as a substitute for maintaining `capabilities.procedures.allow` when execution is intended. Either declare the procedure so the runtime can enforce the gate across every call, or decide the project does not want `strictMode` and drop the flag.
 - Don't call `run_vba` without compiling first — `get_capabilities.humanCompilePending:true` ⇒ the runtime will refuse or surface stale code.
 - Don't use the unqualified `<procedure>` shape as a habit — the apply path's all-modules fallback is more expensive than the targeted `<module>.<procedure>` lookup and obscures which module actually owns the symbol.
 - Don't conflate `PROCEDURE_NOT_FOUND` (procedure absent from source/binary) with `PROCEDURE_NOT_CALLABLE` (procedure present in binary but Access refused to invoke it). The remediation differs — the former needs an import, the latter needs a VBE recompile.
@@ -100,8 +101,8 @@ production backend writes.
 - `ok` — `true` on success.
 - `result` — return value serialized to JSON.
 - `error.code` — typed envelope on failure. The "procedure-resolution" codes are mutually exclusive and a consumer MUST branch on the exact one returned:
-  - `MCP_PROCEDURE_NOT_ALLOWED` — allowlist gate rejected the procedure. Surface `error.allowedProcedures` to the user.
-  - `MCP_ALLOWLIST_NOT_CONFIGURED` — no allowlist AND the non-executing `apply:false` plan was NOT used.
+  - `MCP_PROCEDURE_NOT_ALLOWED` — allowlist gate rejected the procedure. Reachable only under `capabilities.procedures.strictMode: true`. Surface `error.allowedProcedures` to the user.
+  - `MCP_ALLOWLIST_NOT_CONFIGURED` — `strictMode: true` with no allowlist AND the non-executing `apply:false` plan was NOT used. Never emitted on the default gate.
   - `PROCEDURE_NOT_FOUND` — procedure not declared in the project's VBA source. Remediation: import or fix the procedure name.
   - `PROCEDURE_NOT_CALLABLE` — procedure is in the binary's `VBComponents` but Access refused to invoke it (stale p-code). Remediation: recompile in Access VBE (Debug → Compile) and retry.
   - `VBA_RUNTIME_ERROR` — the procedure WAS invoked, ran, and raised. Remediation: read `error.details.vbaMessage` for the VBA error and fix the procedure or its state. Do NOT recompile.

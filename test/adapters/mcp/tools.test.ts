@@ -1519,6 +1519,10 @@ describe("MCP tool registration over core services", () => {
   });
 
   describe("allowedProcedures — procedureName allowlist for run_vba", () => {
+    // The procedure gate is default-allow: it enforces the allowlist only for
+    // projects that declare `capabilities.procedures.strictMode: true`. This
+    // block is about the enforced gate, so every helper opts in; the
+    // default-allow contract has its own block below.
     function makeTools(
       allowedProcedures: readonly string[],
       vba: FakeVbaService = new FakeVbaService(successResult({ returnValue: "ok" })),
@@ -1530,7 +1534,12 @@ describe("MCP tool registration over core services", () => {
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
         env: {},
+        // The write gate is level 1 and now applies to `run_vba` too; enable
+        // it so these cases exercise the PROCEDURE gate in isolation. The gate
+        // itself is covered in `run-vba-write-gate.test.ts`.
+        writes: true,
         allowedProcedures: allowedProcedures,
+        procedureStrictMode: true,
       });
     }
 
@@ -1556,7 +1565,7 @@ describe("MCP tool registration over core services", () => {
       expect(result?.isError).toBe(false);
     });
 
-    it("refuses apply:true when the allowlist is empty (default-deny, PR1a #621)", async () => {
+    it("refuses apply:true when the allowlist is empty (strictMode restores default-deny)", async () => {
       const tools = makeTools([]);
       const result = await tools
         .find((t) => t.name === "run_vba")
@@ -1568,13 +1577,15 @@ describe("MCP tool registration over core services", () => {
       expect(result?.content[0]?.text).toContain("allowedProcedures");
     });
 
-    it("refuses apply:true when allowedProcedures is not passed (default-deny, PR1a #621)", async () => {
+    it("refuses apply:true when allowedProcedures is not passed (strictMode restores default-deny)", async () => {
       const tools = createDysflowMcpTools({
         services: {
           vbaService: new FakeVbaService(successResult({ returnValue: "ok" })),
           queryService: new FakeQueryService(successResult({ rows: [] })),
           diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
         },
+        writes: true,
+        procedureStrictMode: true,
       });
       const result = await tools
         .find((t) => t.name === "run_vba")
@@ -1621,6 +1632,89 @@ describe("MCP tool registration over core services", () => {
       expect(result?.isError).toBe(true);
       expect(result?.content[0]?.text).toContain("DeleteAll");
       expect(result?.content[0]?.text).toContain("allowedProcedures");
+    });
+  });
+
+  describe("run_vba procedure gate is default-allow without strictMode", () => {
+    function makeTools(options: { allowedProcedures?: readonly string[]; vba?: FakeVbaService }) {
+      const vba = options.vba ?? new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = createDysflowMcpTools({
+        services: {
+          vbaService: vba,
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        env: {},
+        writes: true,
+        allowedProcedures: options.allowedProcedures,
+      });
+      return { tools, vba };
+    }
+
+    it("executes apply:true with no allowlist configured", async () => {
+      const { tools, vba } = makeTools({});
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({ procedureName: "AnyProcedure", apply: true });
+      expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({ procedureName: "AnyProcedure", dryRun: false }),
+      ]);
+    });
+
+    it("executes apply:true for a procedure outside a populated allowlist", async () => {
+      // The reported friction: a project whose allowlist holds only its test
+      // atoms could not run a production procedure without editing
+      // `.dysflow/project.json` first.
+      const { tools, vba } = makeTools({
+        allowedProcedures: ["Test_Indicadores_Calcular_ZeroCase_Atomic"],
+      });
+      const result = await tools
+        .find((t) => t.name === "run_vba")
+        ?.handler({
+          procedureName: "IndicadorBackfill.ReconstructReplanificationSnapshots",
+          apply: true,
+        });
+      expect(result?.isError).toBe(false);
+      expect(vba.requests).toEqual([
+        expect.objectContaining({
+          procedureName: "IndicadorBackfill.ReconstructReplanificationSnapshots",
+          dryRun: false,
+        }),
+      ]);
+    });
+
+    it("resolves strictMode per input so one process can serve projects with different postures", async () => {
+      const vba = new FakeVbaService(successResult({ returnValue: "ok" }));
+      const tools = createDysflowMcpTools({
+        services: {
+          vbaService: vba,
+          queryService: new FakeQueryService(successResult({ rows: [] })),
+          diagnosticsService: new FakeDiagnosticsService(successResult({ checks: [] })),
+        },
+        env: {},
+        writes: true,
+        allowedProcedures: ["Refresh"],
+        // Stands in for the stdio resolver that reads each input's project
+        // config: only the worktree at C:/strict has opted in.
+        procedureStrictMode: async (input) => (input as { cwd?: string }).cwd === "C:/strict",
+      });
+      const runVba = tools.find((t) => t.name === "run_vba");
+
+      const permissive = await runVba?.handler({
+        procedureName: "DeleteAll",
+        apply: true,
+        cwd: "C:/relaxed",
+      });
+      expect(permissive?.isError).toBe(false);
+
+      const strict = await runVba?.handler({
+        procedureName: "DeleteAll",
+        apply: true,
+        cwd: "C:/strict",
+      });
+      expect(strict?.isError).toBe(true);
+      expect(strict?.error?.code).toBe("MCP_PROCEDURE_NOT_ALLOWED");
     });
   });
 

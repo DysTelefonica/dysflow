@@ -11,6 +11,8 @@ import { isRecord } from "../../core/utils/index.js";
 import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
+  resolveStrictModeFor,
+  type StrictMode,
 } from "./allowed-procedures-resolver.js";
 import {
   allowlistNotConfigured,
@@ -44,12 +46,22 @@ function isMcpToolResult(value: unknown): value is McpToolResult {
 }
 
 /**
- * PR1a (#621 F1) — default-deny gate for compiled VBA execution at the MCP
- * adapter boundary. Refuses to call `services.vbaService.execute(...)` unless
- * EITHER (a) the project config declares a non-empty `allowedProcedures` AND
- * `procedureName` is in that list, OR (b) the caller explicitly passes
- * `dryRun: true`. The dry-run escape hatch is the consumer's explicit "plan
- * only" affirmation; without an allowlist it is the only path that survives.
+ * Procedure gate for compiled VBA execution at the MCP adapter boundary.
+ *
+ * The gate is DEFAULT-ALLOW and opt-in. It enforces nothing unless the project
+ * declares `capabilities.procedures.strictMode: true` in
+ * `.dysflow/project.json`. Rationale: the write gate
+ * (`writesProcess.enabled`, `writesProject.allowWrites`,
+ * `writeExecutionPolicy`) already owns the unwanted-write risk and
+ * `humanCompilePending` owns the stale-p-code risk, so a second allowlist
+ * every project has to hand-maintain bought operational cost and no safety.
+ * It replaces the PR1a (#621 F1) default-deny contract.
+ *
+ * Under `strictMode: true` the historical behavior is restored exactly: an
+ * absent or empty `allowedProcedures` refuses with
+ * `MCP_ALLOWLIST_NOT_CONFIGURED` (unless the caller passes `dryRun: true`),
+ * and a procedure outside a populated list refuses with
+ * `MCP_PROCEDURE_NOT_ALLOWED`.
  *
  * Exported so it can be unit-tested directly via
  * `test/adapters/mcp/canonical-handlers.test.ts` without a full MCP server
@@ -59,11 +71,14 @@ export function ensureProcedureAllowed(
   procedureName: string,
   allowedProcedures: readonly string[] | undefined,
   dryRun: boolean | undefined,
+  strictMode: boolean | undefined,
 ): McpToolResult | undefined {
-  // PR1a #621: default-deny gate. When the project config has no allowlist
-  // configured (undefined OR empty), execution MUST be rejected unless the
-  // caller explicitly passes `dryRun: true`. This closes the contract-truth
-  // gap where "read-only" tools could in fact run arbitrary compiled VBA.
+  // Default-allow. A populated `allowedProcedures` without `strictMode` is
+  // documentation, not a gate — the same posture the HTTP surface has had for
+  // an absent/empty list. Projects that want enforcement opt in explicitly.
+  if (strictMode !== true) return undefined;
+
+  // Strict mode: the pre-existing default-deny contract, unchanged.
   if (allowedProcedures === undefined || allowedProcedures.length === 0) {
     if (dryRun !== true) {
       // #757 (F6) — split out of the generic MCP_INPUT_INVALID so consumers can
@@ -90,6 +105,9 @@ export async function handleMcpVbaExecute(
   allowedProcedures: AllowedProcedures | undefined,
   buildRequest: (input: unknown) => RequestBuildResult<AccessVbaRequest>,
   context?: McpToolContext,
+  strictMode?: StrictMode,
+  writesEnabled = false,
+  writeAccessResolver?: McpWriteAccessResolver,
 ): Promise<McpToolResult> {
   const validation = validateInput(input, schema);
   if (validation !== undefined) {
@@ -108,15 +126,37 @@ export async function handleMcpVbaExecute(
   const request = buildRequest(input);
   if (isMcpToolResult(request)) return request;
 
+  // Write gate, level 1. `run_vba` is built as an alias tool, so it never
+  // passed through `createDispatchTool` — the seam where every other
+  // write-class tool consults `isWriteAllowed`. It was therefore the one
+  // compiled-VBA entry point with NO write gate, and its procedure allowlist
+  // was the only backend control over what a caller could execute, which is
+  // what made relaxing that allowlist unsafe. Running the gate here restores
+  // the documented order: write gate (1), procedure gate (2),
+  // humanCompile (3).
+  //
+  // A non-executing plan is not a write, so `dryRun` short-circuits ahead of
+  // the gate and `apply:false` previews keep working with writes disabled.
+  if (
+    request.dryRun !== true &&
+    !(await isWriteAllowed(input, writesEnabled, writeAccessResolver))
+  ) {
+    return writesDisabled();
+  }
+
   // #1440 — resolve the allowlist per-input so the gate reflects the project
   // the caller's target, not a frozen array captured at MCP startup. A
   // static array is still honored (legacy fast path); a function is the
   // per-input resolver wired by startMcpStdioAdapter.
   const resolvedAllowlist = await resolveAllowedProceduresFor(allowedProcedures, input);
+  // The strict-mode flag is resolved per-input for the same reason: one MCP
+  // process serves several worktrees, and each declares its own posture.
+  const resolvedStrictMode = await resolveStrictModeFor(strictMode, input);
   const allowlistError = ensureProcedureAllowed(
     request.procedureName,
     resolvedAllowlist,
     request.dryRun,
+    resolvedStrictMode,
   );
   if (allowlistError !== undefined) return allowlistError;
 

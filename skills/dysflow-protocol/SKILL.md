@@ -78,7 +78,7 @@ Never memorize tool names, flags, defaults, or error codes from this skill. Re-f
 
 ### HR-8 — Test definitions live in `tests/*.json` manifests, NOT in `.dysflow/project.json` allowlist.
 
-The allowlist is a runtime gate, not a test registry. Adding test names to allowlist on each fix is an anti-pattern.
+The allowlist is an opt-in runtime gate, not a test registry. Adding test names to it on each fix is an anti-pattern — and since the gate is default-allow, on most projects it does nothing at all. It only bites when the project declares `capabilities.procedures.strictMode: true`.
 
 ### HR-9 — Select worktrees per call, never by restarting the MCP.
 
@@ -171,8 +171,8 @@ If a call returns an error envelope, branch on `error.code`:
 | `CONFIRMATION_REQUIRED` | check requires confirmation, you didn't pass it | Re-call with `confirmedRequiresConfirmation: true` after `ask_user` |
 | `CONFIRMATION_NOT_NEEDED` | check does NOT require it, you passed it | Drop the override |
 | `MCP_INPUT_INVALID` | schema / flag contradiction | Read `error.rejectedFlag` + `error.toolCommitFlag` for the right replacement |
-| `MCP_PROCEDURE_NOT_ALLOWED` | procedure not in allowlist | Add to `.dysflow/project.json#allowedProcedures` OR plan only with `apply: false` |
-| `MCP_ALLOWLIST_NOT_CONFIGURED` | no allowlist set | Configure it OR plan only with `apply: false` |
+| `MCP_PROCEDURE_NOT_ALLOWED` | procedure not in allowlist, and the project opted into `capabilities.procedures.strictMode: true` | Add it under `capabilities.procedures.allow`, drop `strictMode`, OR plan only with `apply: false`. Never emitted without `strictMode`. |
+| `MCP_ALLOWLIST_NOT_CONFIGURED` | `strictMode: true` with no allowlist set | Configure `capabilities.procedures.allow`, drop `strictMode`, OR plan only with `apply: false`. Never emitted without `strictMode` on MCP; HTTP `/vba/test` still emits it. |
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` | destination overlaps source | Pass `implements_check: 'export_overwrites_source_precheck'` + `confirmedRequiresConfirmation: true` |
 | `DESTINATION_ROOT_REQUIRED` | no destination declared | Set explicit `destinationRoot` / `exportPath` OR `allowConfiguredDestinationRoot: true` |
 | `MCP_WRITES_DISABLED` | runtime disabled | Surface to user; do not retry |

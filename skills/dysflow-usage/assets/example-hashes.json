@@ -201,7 +201,7 @@
   },
   "run_vba": {
     "path": "assets/examples/run-vba.md",
-    "sha256": "9e654f488ff07003b2d80508d2821762c23376bb061e864b899d65b36ebbc5b0",
+    "sha256": "3080effb32a3312a0b5cbd737f7fbff194ed34f1111d266fa59331cdfd3503cc",
     "needs_human_content": false
   },
   "schema": {

@@ -7,7 +7,7 @@ metadata:
   version: "2.0.0"
   status: active
   last_verified: "2026-08-26"
-  last_dysflow_version: "4.4.5"
+  last_dysflow_version: "4.4.7"
   requires: "dysflow MCP >= 3.0"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
@@ -130,8 +130,9 @@ External database reads require `allowExternalAccessPath:true`; source/FormIR to
 `effectiveDryRunDefault`, `migrationNotes`, and the resolver-provided three-key
 `documentationBundle`. It deliberately omits
 `preferredAgentWorkflows`, `writeClassToolsPermitted`, `allowedProcedures`,
-`projectConfig`, `worktreeCache`, and `humanCompilePending` unless requested
-through `include` or `{ view: "full" }`.
+`procedureStrictMode`, `projectConfig`, `worktreeCache`, and
+`humanCompilePending` unless requested through `include` or
+`{ view: "full" }`.
 The full/selective capability response carries:
 
 | Field | Meaning |
@@ -144,6 +145,7 @@ The full/selective capability response carries:
 | `toolInventory` | Stable distinction: callable registry count, advertised `tools/list` count, and active surface. |
 | `documentationBundle` | Installed diagnostic-doc availability (`errorCodesMd`, `hresultGuideMd`) and the bundle version. Treat missing or version-skewed diagnostics as an installation defect before following local remediation docs. |
 | `writeClassToolsPermitted` | The allowlist of tools capable of mutating state. Cross-reference before documenting any tool name. |
+| `procedureStrictMode` | Whether the procedure gate actually enforces `allowedProcedures`. The gate is default-allow, so a populated `allowedProcedures` with `procedureStrictMode: false` is documentation, not a boundary — `run_vba` and stdio `test_vba` will run a procedure outside the list. Never infer enforcement from a non-empty `allowedProcedures` alone. `undefined` means the value is resolved per input and the startup snapshot cannot state it; treat that as "unknown here", never as `false`. HTTP ignores the flag and always enforces a populated list. |
 | `humanCompilePending` | Whether the human has compiled the project since last persistence. Test runs block on it. |
 | `writeExecutionPolicy` | Active risk-based write execution policy. `"safe-by-default"` (default) or `"developer"` (zero-friction routine dev loop). Resolved from `.dysflow/project.json` `capabilities.writeExecutionPolicy`. |
 | `effectiveDryRunDefault` | Per-tool effective plan default under the active policy. Keys are contract tool names; values are booleans. Check it with `canonicalCommitFlag` and pass explicit `apply` intent. |
@@ -404,7 +406,7 @@ intended database is the backend; never rely on path fallback when the target ma
 - `delete_module`, `compact_repair`, `relink_directory`, `localize_backend_links`, `drop_table`, and `teardown_fixture` require their schema-advertised `implements_check` token plus `confirmedRequiresConfirmation:true` whenever `apply:true`; `apply:false` plans without the second confirmation.
 - `cleanup_access_operation` with `force: true` requires explicit confirmation regardless of mode.
 - `access_force_cleanup_orphaned` with a positive `pid` requires `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` after explicit human approval.
-- The `test_vba` / `run_vba` allowlist gate (`capabilities.procedures.allow`, resolved as `allowedProcedures`) is enforced in both modes.
+- The `test_vba` / `run_vba` procedure gate is **default-allow**. `capabilities.procedures.allow` (resolved as `allowedProcedures`) is enforced only when the same project declares `capabilities.procedures.strictMode: true`; when it is, enforcement applies in both modes. The write gate stays authoritative either way and now covers `run_vba` as well (it previously did not, because `run_vba` is an alias tool that bypassed the dispatch seam) — never treat `MCP_PROCEDURE_NOT_ALLOWED` as the reason a write was refused without checking `writesProject.allowWrites` and `writesProcess.enabled` first. HTTP ignores `strictMode` and keeps enforcing.
 - The `capabilities.allowWrites: false` write-gate is enforced in both modes (the policy does NOT bypass it). Removed top-level fields fail with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`.
 
 **Export-source guard** (both modes reach it once the destination is

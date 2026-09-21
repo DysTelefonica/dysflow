@@ -120,6 +120,15 @@ export type CreateDysflowMcpToolsOptions = {
   allowedProcedures?:
     | readonly string[]
     | import("./allowed-procedures-resolver.js").AllowedProcedures;
+  /**
+   * Opt-in procedure gate. `run_vba` and `test_vba` enforce
+   * `allowedProcedures` only when the targeted project declares
+   * `capabilities.procedures.strictMode: true`. Omitting this keeps the gate
+   * default-allow, which is the contract for every project that has not opted
+   * in. Accepts a per-input resolver for the same cross-worktree reason as
+   * `allowedProcedures`.
+   */
+  procedureStrictMode?: import("./allowed-procedures-resolver.js").StrictMode;
   accessContextResolver?: McpAccessContextResolver;
   // PR-1 (issue #656) — capabilities snapshot needs the project-level
   // allowWrites flag and the resolved projectId. Both default to
@@ -176,6 +185,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     writeAccessResolver,
     env = process.env,
     allowedProcedures,
+    procedureStrictMode,
     accessContextResolver: accessContextResolverInput,
     allowWrites,
     projectId,
@@ -333,6 +343,12 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       writesEnabled,
       writeAccessResolver,
       allowedProcedures: Array.isArray(allowedProcedures) ? allowedProcedures : undefined,
+      // Contract truth: a consumer reading `allowedProcedures` alone cannot
+      // tell whether the gate enforces it, because the gate is default-allow.
+      // A resolver is per-input, so report `undefined` rather than a posture
+      // the startup snapshot cannot know — the same rule as the line above.
+      procedureStrictMode:
+        typeof procedureStrictMode === "boolean" ? procedureStrictMode : undefined,
       projectId,
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
@@ -350,6 +366,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       writesEnabled,
       writeAccessResolver,
       allowedProcedures,
+      procedureStrictMode,
       projectId,
       allowWrites: writesAllowedForCapabilities,
       accessDbPath,
@@ -489,6 +506,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // (already constructed above) so the export-source guard can read the
       // project's active source root before forwarding to vbaSyncToolService.
       accessContextResolver,
+      // Opt-in procedure gate — forwarded to the `run_vba` alias tool.
+      procedureStrictMode,
     ),
   ).map((tool) => ({
     ...tool,
