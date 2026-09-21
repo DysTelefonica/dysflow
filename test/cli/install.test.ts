@@ -754,13 +754,10 @@ describe("handleInstallCommand end-to-end", () => {
       ];
       for (const [filePath, agentId] of installedPointers) {
         const installed = await readFile(filePath, "utf8");
-        expect(
-          installed,
-          `${agentId} missing pointer marker at ${filePath}`,
-        ).toContain("<!-- user-supplement:dysflow:pointer -->");
-        expect(installed, `${agentId} pointer not canonical at ${filePath}`).toBe(
-          expectedPointer,
+        expect(installed, `${agentId} missing pointer marker at ${filePath}`).toContain(
+          "<!-- user-supplement:dysflow:pointer -->",
         );
+        expect(installed, `${agentId} pointer not canonical at ${filePath}`).toBe(expectedPointer);
       }
       await expect(access(join(home, ".cursor", "rules", "dysflow-vba.mdc"))).rejects.toThrow();
     } finally {
