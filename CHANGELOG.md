@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+
+### Changed
+
+- `chore(ci)`: delete `ci-result-test.sh` from the repository root.
+  - It was a verbatim copy of the `Validate routed jobs` step inlined in `.github/workflows/ci.yml`, committed alongside #1766. Nothing referenced it and no test exercised it.
+  - Wiring the workflow to call it instead would require adding `actions/checkout` to the `ci-result` job, which today has a single step and no checkout. That cost is not worth a cosmetic dedup.
+  - The inline block stays the single source of truth. Two copies of the job-routing contract drift, and the copy that does not run is the one that drifts silently.
+
+### Fixed
+
+- `docs(agents)`: correct the path to the release version stamper in `AGENTS.md`. The release section named `scripts/set-release-package-version.mjs`; the file is at `.github/scripts/set-release-package-version.mjs`, which is what `release.yml` and `release-package-version.test.ts` both use.
+
 ## [v4.4.7] - 2026-09-21
 
 > **Read before upgrading.** Despite the patch version, this release changes
