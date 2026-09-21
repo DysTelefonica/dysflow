@@ -36,6 +36,15 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: node scripts/check-documentation-quality.mjs classify --base "$BASE" --head "$HEAD" --github-output "$GITHUB_OUTPUT"
+      # #1776: the branch-protection required context is the `quality` job's
+      # literal display name, and GitHub drops the matrix suffix when that job is
+      # skipped — so a docs-only pull request reports a name branch protection
+      # does not require, with every visible check green. This step runs on every
+      # pull request, including the ones that skip `quality`, and fails loudly
+      # when that name drifts from engines.node instead of breaking protection
+      # silently.
+      - name: Guard the required context against drift
+        run: node scripts/check-quality-gate-context.mjs
 
   # A pull_request run checks GitHub's synthetic merge ref, not merely the
   # branch head. When the eventual main commit identifies that same base/head
@@ -137,7 +146,12 @@ jobs:
         run: node scripts/dependency-audit-evidence.mjs
 
   quality:
-    name: Quality gates
+    # The display name carries the Node major so the branch-protection required
+    # context (`Quality gates (26)`) is reported identically when the job runs
+    # and when a docs-only pull request skips it (#1776). A matrix job reports
+    # its bare name when skipped, so a matrix here could never satisfy the
+    # required context.
+    name: Quality gates (26)
     needs: [changes, main-integrity]
     if: >-
       always() &&
@@ -147,17 +161,10 @@ jobs:
         (github.event_name == 'push' && needs.main-integrity.outputs.validated_pr_merge != 'true')
       )
     runs-on: windows-latest
-    # One leg, because `engines.node` now claims one major. The two-leg matrix
-    # existed to prove the floor and ceiling of a `>=20 <27` range. With the
-    # range narrowed to Node 26, the second leg repeated deterministic work for
-    # no extra signal (#1506).
-    #
-    # test/quality-gates/ci-workflow.test.ts derives this list from
-    # engines.node, so widening support forces the matrix to widen with it.
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [26]
+    # Fixed Node, no matrix (#1776): engines.node claims one major, and the
+    # required context must exist even when this job is skipped.
+    # test/quality-gates/ci-workflow.test.ts derives the version from
+    # engines.node, so widening support forces a deliberate rename here.
 
     steps:
       - name: Checkout
@@ -171,7 +178,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 26
           cache: pnpm
 
       - name: Install dependencies
