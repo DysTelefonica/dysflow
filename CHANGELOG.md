@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [v4.4.6] - 2026-09-20
+## [v4.4.7] - 2026-09-21
 
 > **Read before upgrading.** Despite the patch version, this release changes
 > two observable contracts on the MCP surface. A populated
@@ -22,6 +22,14 @@
   control. The gate now runs in `handleMcpVbaExecute` ahead of the procedure
   gate. `apply: true` now requires `writesProcess.enabled` and
   `capabilities.allowWrites`; `apply: false` previews are unaffected.
+- `fix(e2e)`: pass `apply: true` in both `run_vba` cases of `E2E_testing/mcp-e2e.mjs` — the `vba` contract case and the `legacy` case.
+  - Both assert `expected: "error"` and neither passed a commit flag. `run_vba` reports `effectiveDryRunDefault: true`, so the runtime answered with a plan, which is a success envelope.
+  - The trigger is the procedure-gate change in this same release: the gate becomes default-allow behind `capabilities.procedures.strictMode`, after being default-deny since #621.
+  - The E2E fixture declares no allowlist and no `strictMode`, so the old gate refused the call before it reached the plan branch or Access, and that refusal satisfied the assertion.
+  - The case had been passing on the gate refusal, not on the missing procedure it names. Inferred from the fixture and the gate change; not reproduced against a v4.4.5 build.
+  - These two were the only failures in the abandoned `v4.4.6` tag run: E2E validation exited 1, Build & Release Artifacts never ran, and no GitHub Release was published.
+  - `apply: true` restores execution and the typed `RUNNER_FAILED` envelope. It is compatible both ways: default-deny still refuses, default-allow reaches the missing procedure.
+  - `apply` is a declared `run_vba` parameter and the tool requires no `implements_check` token, so the call shape is otherwise unchanged.
 
 ### Changed
 
