@@ -62,3 +62,6 @@ vitest-results*.txt
 .tmp/
 .tmp-mutated-form.txt
 .tmp-mutated-detail.txt
+
+# Secrets: never commit real authfiles (catalog propagation)
+skills/cadete-devops/resources/quay_auth.json
