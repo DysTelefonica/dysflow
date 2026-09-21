@@ -1,5 +1,19 @@
 # Changelog
 
+## [v4.4.8] - 2026-09-21
+
+### Changes
+
+- fix(skills): stop the semantic auditor from reading a file name as a tool (#1782)
+- fix(ci): name the Quality gates job with its Node major so the required context exists when skipped (#1780)
+- docs(skills): fix three defects in the codegraph-update audit procedure (#1781)
+- fix(install): dysflow install now rolls out the MUST-LOAD pointer block (#1779)
+- fix(release): release-prepare.ps1 no longer pushes a protected main (#1778)
+- chore(ci): remove the orphaned ci-result-test.sh and fix a stale path in AGENTS.md (#1775)
+- docs(agents): document release sync pattern under main branch protection (#1760)
+- fix(ci): exempt skill-fleet/* propagation PRs from consumer-specific gates (#1766)
+
+
 ## [Unreleased]
 
 
