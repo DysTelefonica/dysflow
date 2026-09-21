@@ -1,6 +1,6 @@
 {
   "name": "@aroman22/dysflow-pi",
-  "version": "4.4.7",
+  "version": "4.4.8",
   "description": "Pi-native Dysflow facade with compact tool rendering",
   "type": "module",
   "license": "Apache-2.0",
