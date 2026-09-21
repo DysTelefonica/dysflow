@@ -27,6 +27,11 @@ import {
   refreshBundledAgentPlugins,
 } from "./install/plugin-refresher.js";
 import {
+  discoverPointerRolloutTargets,
+  formatPointerRolloutReport,
+  installBundledPointerBlocks,
+} from "./install/pointer-rollout.js";
+import {
   discoverSkillTargets,
   formatSkillInstallReport,
   installBundledSkills,
@@ -352,9 +357,21 @@ export async function handleInstallCommand(
       }
       mcpConfigurations.push(configuration);
     }
+    const home = getHome(env);
+    const skillTargets = discoverSkillTargets(home, {
+      only: parsed.options.onlySkills,
+      exclude: parsed.options.excludeSkills,
+    });
     const skillInstall = await installBundledSkills({
       bundleRoot: packageRoot,
-      targets: discoverSkillTargets(getHome(env), {
+      targets: skillTargets,
+    });
+    const pointerRollout = await installBundledPointerBlocks({
+      bundleRoot: packageRoot,
+      home,
+      targets: discoverPointerRolloutTargets({
+        home,
+        installedSkillTargets: skillTargets,
         only: parsed.options.onlySkills,
         exclude: parsed.options.excludeSkills,
       }),
@@ -386,6 +403,7 @@ export async function handleInstallCommand(
         }),
         createPluginRefreshReport(pluginRefresh, { verbose: parsed.options.verbose }),
         formatSkillInstallReport(skillInstall),
+        formatPointerRolloutReport(pointerRollout),
       ]
         .filter((section) => section.length > 0)
         .join("\n"),

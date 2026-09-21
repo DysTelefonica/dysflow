@@ -719,6 +719,52 @@ describe("handleInstallCommand end-to-end", () => {
     }
   });
 
+  it("rolls out the pointer block to every selected adapter so a fresh install carries the MUST-LOAD rule", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-pointer-rollout-"));
+    const home = join(root, "home");
+    const runtimeDir = join(root, "runtime");
+    const packageRoot = await createPackageRoot(root, "0.1.0", "POINTER_ROLLOUT_RUNTIME");
+    const pointerPath = join(
+      packageRoot,
+      "skills",
+      "dysflow-pointer-rollout",
+      "assets",
+      "pointer.md",
+    );
+
+    try {
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "codex,opencode,claude,pi", "--no-tui"],
+        {
+          env: { USERPROFILE: home },
+          packageRoot,
+          piPackageCommandRunner: simulatedPiPackageRunner,
+        },
+      );
+
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(result.stdout).toContain("Pointer rollout:");
+
+      const expectedPointer = await readFile(pointerPath, "utf8");
+      const installedPointers: ReadonlyArray<readonly [string, string]> = [
+        [join(home, ".codex", "AGENTS.md"), "codex"],
+        [join(home, ".config", "opencode", "AGENTS.md"), "opencode"],
+        [join(home, ".claude", "CLAUDE.md"), "claude"],
+        [join(home, ".pi", "agent", "APPEND_SYSTEM.md"), "pi"],
+      ];
+      for (const [filePath, agentId] of installedPointers) {
+        const installed = await readFile(filePath, "utf8");
+        expect(installed, `${agentId} missing pointer marker at ${filePath}`).toContain(
+          "<!-- user-supplement:dysflow:pointer -->",
+        );
+        expect(installed, `${agentId} pointer not canonical at ${filePath}`).toBe(expectedPointer);
+      }
+      await expect(access(join(home, ".cursor", "rules", "dysflow-vba.mdc"))).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("keeps Pi configuration byte-identical on a second canonical install", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-install-pi-repeat-"));
     const home = join(root, "home");
