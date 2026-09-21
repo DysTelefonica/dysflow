@@ -51,7 +51,11 @@ describe("dysflow-codegraph-update ownership contract", () => {
     expect(procedure).toContain(
       "testing/suites/refresh-personal-symlinks/refresh-personal-symlinks.sh",
     );
-    expect(procedure).toContain("bin/link-personal-skills.ps1 -DryRun");
+    // #1769: the PowerShell driver moved to bin/legacy/, so the preview must name the live
+    // reconciler. The negative half is the actual regression guard: a command that still runs the
+    // moved PS1 as the entry point fails file-not-found for every auditor.
+    expect(procedure).toContain("bash bin/link-personal-skills.sh --dry-run");
+    expect(procedure).not.toMatch(/pwsh -File bin\/link-personal-skills\.ps1/);
     expect(procedure).toMatch(/post-commit hook/i);
     expect(procedure).not.toMatch(/\b\d+ personal skills\b/i);
   });
