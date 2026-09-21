@@ -7,11 +7,14 @@
 #   2. Generate one CHANGELOG bullet per non-merge commit and run the
 #      changelog format quality gate locally.
 #   3. Stage release-owned files and commit "chore(release): prepare vX.Y.Z".
-#   4. Push to origin/main.
-#   5. Wait for the CI workflow on the release commit to reach
-#      `conclusion: success` (or fail loudly if it stays red).
-#   6. ONLY when CI is green: create annotated tag vX.Y.Z and push it.
-#   7. The existing `.github/workflows/release.yml` fires on the tag push,
+#   4. Stop there. `main` is protected, so the release commit reaches it
+#      through a pull request, never a direct push. The script prints the
+#      delivery steps and exits.
+#   5. After that pull request merges, re-run with `-Resume -Version X.Y.Z`.
+#      Resume verifies the prepared state against origin/main, waits for the
+#      CI workflow on that commit to reach `conclusion: success`, and only
+#      then creates annotated tag vX.Y.Z and pushes it.
+#   6. The existing `.github/workflows/release.yml` fires on the tag push,
 #      builds the tarball, signs SHA256SUMS with Ed25519, and publishes the
 #      GitHub Release with the assets.
 #
@@ -540,8 +543,17 @@ $preCommitSucceeded = $true
 git commit -m "chore(release): prepare $tag"
 
 $headSha = git rev-parse HEAD
-Write-Host "Release commit $headSha created locally. Pushing to origin/main..." -ForegroundColor Cyan
-git push origin main
+Write-Host ""
+Write-Host "Release commit $headSha prepared locally for $tag." -ForegroundColor Green
+Write-Host "main is protected, so this script does not push it. Deliver with:" -ForegroundColor Cyan
+Write-Host "  1. git switch -c release/$tag; git push -u origin release/$tag"
+Write-Host "  2. gh pr create --base main --fill --title $tag"
+Write-Host "  3. Wait for the five required checks, then merge the pull request."
+Write-Host "  4. git switch main; git pull --ff-only"
+Write-Host "  5. pwsh -File scripts/release-prepare.ps1 -Resume -Version $next"
+Write-Host ""
+Write-Host "Resume tags and publishes. See the release section of AGENTS.md."
+return
 }
 
 # --- wait for CI ------------------------------------------------------------
@@ -586,7 +598,7 @@ Write-Host ""
 Write-Host "Release $tag dispatched. The release.yml workflow will:" -ForegroundColor Green
 Write-Host "  - Build the tarball"
 Write-Host "  - Sign SHA256SUMS with Ed25519"
-Write-Host "  - Publish and verify the matching Pi package on npmjs"
+Write-Host "  - Bundle the Pi facade inside the signed archive (no package registry)"
 Write-Host "  - Publish the GitHub Release with the assets"
 Write-Host ""
 Write-Host "Watch progress: gh run watch --workflow release.yml"

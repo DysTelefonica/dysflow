@@ -338,12 +338,12 @@ Describe "release safety behavior" {
             Should -BeNullOrEmpty
     }
 
-    It "uses exact-SHA green CI before creating and pushing an annotated tag" {
+    It "prepares the release commit locally and never pushes a protected main" {
         Push-Location $script:fixtureRoot
         try { Invoke-ReleasePrepare -Bump patch -SemanticAuditEvidencePath (Join-Path $script:fixtureRoot "semantic-audit.json") -CiMaxWaitSeconds 1 -CiPollSeconds 1 } finally { Pop-Location }
 
-        $writes = @($script:gitCalls | Where-Object { $_ -match "^(push|tag)\b" })
-        $writes | Should -Be @("push origin main", "tag -a v4.0.6 -m v4.0.6", "push origin v4.0.6")
+        @($script:gitCalls | Where-Object { $_ -match "^(push|tag)\b" }) | Should -BeNullOrEmpty
+        @($script:gitCalls | Where-Object { $_ -match "^commit\b" }) | Should -HaveCount 1
     }
 
     It "updates and stages every release-owned version stamp with package and changelog" {
@@ -523,17 +523,6 @@ Describe "release safety behavior" {
         $script:gitCalls | Where-Object { $_ -match "^(add|commit|push)\b" } | Should -BeNullOrEmpty
     }
 
-    It "refuses the tag when exact-SHA CI is red" {
-        $script:ciResult = "failure"
-        Push-Location $script:fixtureRoot
-        try {
-            { Invoke-ReleasePrepare -Bump patch -SemanticAuditEvidencePath (Join-Path $script:fixtureRoot "semantic-audit.json") -CiMaxWaitSeconds 1 -CiPollSeconds 1 } | Should -Throw "*NOT pushing the tag*"
-        } finally { Pop-Location }
-
-        $script:gitCalls | Where-Object { $_ -match "^(tag|push origin v)\b" } |
-            Should -BeNullOrEmpty
-    }
-
     It "refuses a resumed tag when exact-SHA CI is red" {
         $script:ciResult = "failure"
         Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"4.0.6"}' -NoNewline
@@ -552,15 +541,21 @@ Describe "release safety behavior" {
         $script:gitCalls | Where-Object { $_ -match "^(add|commit|tag|push)\b" } | Should -BeNullOrEmpty
     }
 
-    It "bounds CI polling when no run matches the release SHA" {
+    It "bounds CI polling when no run matches the resumed release SHA" {
         $script:includeMatchingRun = $false
+        Set-Content (Join-Path $script:fixtureRoot "package.json") '{"version":"4.0.6"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "plugin/pi/package.json") '{"name":"@aroman22/dysflow-pi","version":"4.0.6"}' -NoNewline
+        Set-Content (Join-Path $script:fixtureRoot "CHANGELOG.md") ($script:baseChangelog -replace "# Changelog", "# Changelog`n`n## [v4.0.6] - 2026-08-26") -NoNewline
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/references/error-codes.md") -Version ([Version]"4.0.6")
+        Update-ReleaseVersionStamp -Path (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Version ([Version]"4.0.6")
+        Set-FixtureSkillVersion -Root $script:fixtureRoot -Version "4.0.6"
         Push-Location $script:fixtureRoot
         try {
-            { Invoke-ReleasePrepare -Bump patch -SemanticAuditEvidencePath (Join-Path $script:fixtureRoot "semantic-audit.json") -CiMaxWaitSeconds 1 -CiPollSeconds 1 } | Should -Throw "*did not conclude within 1 s*"
+            { Invoke-ReleasePrepare -Resume -Version "4.0.6" -CiMaxWaitSeconds 1 -CiPollSeconds 1 } | Should -Throw "*did not conclude within 1 s*"
         } finally { Pop-Location }
 
         Should -Invoke gh -ParameterFilter { ($args -join " ") -match "^run list " } -Times 1
-        $script:gitCalls | Where-Object { $_ -match "^(tag|push origin v)\b" } |
+        $script:gitCalls | Where-Object { $_ -match "^(tag|push origin v)" } |
             Should -BeNullOrEmpty
     }
 }
