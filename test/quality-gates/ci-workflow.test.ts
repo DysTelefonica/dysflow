@@ -304,39 +304,64 @@ describe("repository quality gates", () => {
     }
   });
 
+  it("reports the branch-protection required context even when the gate is skipped (#1776)", async () => {
+    // A skipped matrix job reports its bare job name: GitHub never expands the
+    // matrix, so the required context `Quality gates (26)` never appeared on a
+    // docs-only pull request and branch protection had nothing to satisfy.
+    // The job must therefore carry the Node major in its literal display name
+    // and run no matrix at all — a fixed-Node job reports the same name whether
+    // it runs or skips. The major is derived from engines.node, so widening
+    // support without renaming the job fails here.
+    const workflow = await readText(".github/workflows/ci.yml");
+    const declared =
+      (JSON.parse(await readText("package.json")) as { engines?: Record<string, string> }).engines
+        ?.node ?? "";
+    const supported = enginesNodeBoundaries(declared);
+    expect(
+      supported.floor,
+      "this derivation assumes engines.node claims exactly one Node major; widening support requires updating the job name and matrix strategy deliberately",
+    ).toBe(supported.ceiling);
+    const quality = workflowJobBlock(workflow, "quality");
+
+    expect(quality).toMatch(new RegExp(`name:\\s*Quality gates \\(${supported.floor}\\)`));
+    expect(
+      /strategy:\s*\n\s*matrix:/.test(quality),
+      "a matrix job reports its bare name when skipped, so the required branch-protection context would vanish again (#1776)",
+    ).toBe(false);
+  });
+
   it("runs the quality gates on every Node major the package claims to support (#1153)", async () => {
-    // Both halves are derived, never restated: widening `engines.node` without a
-    // matching matrix entry — or matrixing a Node the package never claimed —
+    // Both halves are derived, never restated: widening `engines.node` without
+    // a matching job version — or pinning a Node the package never claimed —
     // fails here instead of shipping an unverified support claim.
     //
-    // The claim is verified on the pull-request path, the event every change
-    // passes through. A narrower arm for other events is allowed (a push to
-    // main re-verifying an already-proven tree) but may never reach a major
-    // outside the declared range.
+    // #1776 replaced the one-leg matrix with a fixed `node-version:` so the
+    // skipped job still reports the required branch-protection context.
     const workflow = await readText(".github/workflows/ci.yml");
     const declared =
       (JSON.parse(await readText("package.json")) as { engines?: Record<string, string> }).engines
         ?.node ?? "";
     const supported = enginesNodeBoundaries(declared);
     const quality = workflowJobBlock(workflow, "quality");
-    const matrix = matrixNodeCoverage(quality);
 
-    expect(quality, "the Quality gates job must take its Node version from the matrix").toMatch(
-      /node-version:\s*\$\{\{\s*matrix\.node-version\s*\}\}/,
+    const literal = [...quality.matchAll(/node-version:[ \t]*(\d+)/g)].map((match) =>
+      Number.parseInt(match[1] ?? "", 10),
     );
     expect(
-      matrix.pullRequest,
-      `engines.node "${declared}" claims Node ${supported.floor}, which the Quality gates matrix never runs on a pull request`,
-    ).toContain(supported.floor);
-    expect(
-      matrix.pullRequest,
-      `engines.node "${declared}" claims Node up to ${supported.ceiling}, which the Quality gates matrix never runs on a pull request`,
-    ).toContain(supported.ceiling);
-    for (const major of matrix.everyEvent) {
+      literal.length,
+      "the Quality gates job declares no literal Node version",
+    ).toBeGreaterThan(0);
+    for (const major of new Set(literal)) {
       expect(
         major >= supported.floor && major <= supported.ceiling,
-        `the Quality gates matrix runs Node ${major}, which engines.node "${declared}" does not claim to support`,
+        `the Quality gates job runs Node ${major}, which engines.node "${declared}" does not claim to support`,
       ).toBe(true);
+    }
+    for (const major of [supported.floor, supported.ceiling]) {
+      expect(
+        literal,
+        `engines.node "${declared}" claims Node ${major}, which the Quality gates job never runs`,
+      ).toContain(major);
     }
   });
 
@@ -385,7 +410,8 @@ describe("repository quality gates", () => {
     const legs = matrixNodeCoverage(quality).everyEvent;
 
     if (legs.length <= 1) {
-      expect(legs.length).toBe(1);
+      // 0 legs: #1776 removed the matrix; a fixed-Node job cannot repeat a
+      // step across legs because it has none. 1 leg: nothing can repeat.
       return;
     }
 
