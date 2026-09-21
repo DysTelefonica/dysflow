@@ -36,6 +36,15 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.sha }}
         run: node scripts/check-documentation-quality.mjs classify --base "$BASE" --head "$HEAD" --github-output "$GITHUB_OUTPUT"
+      # #1776: the branch-protection required context is the `quality` job's
+      # literal display name, and GitHub drops the matrix suffix when that job is
+      # skipped — so a docs-only pull request reports a name branch protection
+      # does not require, with every visible check green. This step runs on every
+      # pull request, including the ones that skip `quality`, and fails loudly
+      # when that name drifts from engines.node instead of breaking protection
+      # silently.
+      - name: Guard the required context against drift
+        run: node scripts/check-quality-gate-context.mjs
 
   # A pull_request run checks GitHub's synthetic merge ref, not merely the
   # branch head. When the eventual main commit identifies that same base/head

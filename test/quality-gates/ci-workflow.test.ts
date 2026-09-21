@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error The script is JavaScript; its public behavior is exercised here.
+import { checkQualityGateContext } from "../../scripts/check-quality-gate-context.mjs";
 import { PR_SMOKE_TESTS } from "../e2e-suite-authority.js";
 
 async function readText(path: string): Promise<string> {
@@ -655,5 +657,78 @@ describe("repository quality gates", () => {
 
     expect(unitConfig).toContain("forbidOnly: true");
     expect(integrationConfig).toContain("forbidOnly: true");
+  });
+});
+
+describe("required context drift guard (#1776)", () => {
+  const declared = ">=26.0.0 <27.0.0";
+  const workflowWith = (name: string, extra = "") =>
+    [
+      "jobs:",
+      "  quality:",
+      `    name: ${name}`,
+      "    runs-on: windows-latest",
+      extra,
+      "    steps:",
+      "      - name: Setup Node.js",
+      "        with:",
+      "          node-version: 26",
+      "  other:",
+      "    runs-on: ubuntu-latest",
+      "",
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+
+  it("accepts a job name that carries the claimed Node major", () => {
+    expect(
+      checkQualityGateContext({ workflow: workflowWith("Quality gates (26)"), declared }),
+    ).toEqual([]);
+  });
+
+  it("rejects a job name that dropped the Node major", () => {
+    const findings = checkQualityGateContext({
+      workflow: workflowWith("Quality gates"),
+      declared,
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain("Quality gates (26)");
+  });
+
+  it("rejects a reintroduced matrix, because a skipped matrix job reports its bare name", () => {
+    const findings = checkQualityGateContext({
+      workflow: workflowWith(
+        "Quality gates (26)",
+        "    strategy:\n      fail-fast: false\n      matrix:\n        node-version: [26]",
+      ),
+      declared,
+    });
+    expect(findings).toEqual([expect.stringContaining("matrix")]);
+  });
+
+  it("rejects a claimed major the job does not run", () => {
+    const findings = checkQualityGateContext({
+      workflow: workflowWith("Quality gates (26)"),
+      declared: ">=27.0.0 <28.0.0",
+    });
+    expect(findings).toEqual(
+      expect.arrayContaining([expect.stringContaining("Quality gates (27)")]),
+    );
+  });
+
+  it("rejects an engines.node range spanning more than one major", () => {
+    const findings = checkQualityGateContext({
+      workflow: workflowWith("Quality gates (26)"),
+      declared: ">=26.0.0 <29.0.0",
+    });
+    expect(findings).toEqual([expect.stringContaining("spans Node 26-28")]);
+  });
+
+  it("keeps the checked-in workflow in sync with package.json", async () => {
+    const workflow = await readText(".github/workflows/ci.yml");
+    const pkg = JSON.parse(await readText("package.json")) as {
+      engines?: { node?: string };
+    };
+    expect(checkQualityGateContext({ workflow, declared: pkg.engines?.node ?? "" })).toEqual([]);
   });
 });
