@@ -116,19 +116,26 @@ old contract. New code should use `apply: true`.
 
 ## Opt-in allowlist (#1556)
 
-For stdio `test_vba`, missing or empty `allowedProcedures` means no
-restriction. A non-empty list enables whitelist mode: every procedure in
+Stdio `test_vba` is **default-allow**: it enforces `allowedProcedures` only
+when the project declares `capabilities.procedures.strictMode: true` in
+`.dysflow/project.json`. Without that flag, no list restricts the plan — a
+newly written test atom runs without a config edit, and the write, sandbox,
+manifest, and human-compile gates remain in force.
+
+Under `strictMode: true`, missing or empty `allowedProcedures` still means no
+restriction, and a non-empty list enables whitelist mode: every procedure in
 the resolved plan must appear in the list, or the whole plan is rejected
-before Access starts. HTTP `/vba/test` is a network surface and remains
-default-deny when the list is missing or empty.
+before Access starts. HTTP `/vba/test` is a network surface, ignores
+`strictMode`, and remains default-deny when the list is missing or empty.
 
-The stdio contract has two outcomes:
+The stdio contract has three outcomes:
 
-- `PROCEDURE_NOT_ALLOWED` — the allowlist is configured and the
-  plan contains a procedure NOT in the list. Fix: add the procedure
-  to the allowlist or test a procedure that is in the list.
-- Missing/empty allowlist — execution proceeds, subject to the write,
-  sandbox, manifest, and human-compile gates.
+- No `strictMode` — execution proceeds regardless of the allowlist.
+- `PROCEDURE_NOT_ALLOWED` — `strictMode: true`, the allowlist is configured,
+  and the plan contains a procedure NOT in the list. Fix: add the procedure to
+  the allowlist, drop `strictMode`, or test a procedure that is in the list.
+- `strictMode: true` with a missing/empty allowlist — execution proceeds,
+  subject to the write, sandbox, manifest, and human-compile gates.
 
 ## Failure envelope (issue #1166)
 

@@ -210,7 +210,15 @@ jobs:
     needs: changes
     # The PR proves these integration paths before merge. The main-push
     # integrity receipt remains the exact-SHA authority used by releases.
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code_required == 'true'
+    # Skill catalog propagation PRs (head ref `skill-fleet/*`) copy skill
+    # markdown and asset files only; they do not touch PowerShell, Access,
+    # or VBA code paths, so this Windows smoke is not applicable (#1763).
+    # The `startsWith()` expression keeps the exemption specific to the bot
+    # branch prefix and rejects `feat/skill-fleet-x` style human branches.
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.code_required == 'true' &&
+      !startsWith(github.event.pull_request.head.ref, 'skill-fleet/')
     runs-on: windows-latest
 
     steps:
@@ -278,6 +286,7 @@ jobs:
       - name: Validate routed jobs
         env:
           EVENT: ${{ github.event_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           CODE_REQUIRED: ${{ needs.changes.outputs.code_required }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           INTEGRITY_RESULT: ${{ needs.main-integrity.result }}
@@ -301,7 +310,15 @@ jobs:
             test "$INTEGRITY_RESULT" = skipped
             if test "$CODE_REQUIRED" = true; then
               test "$QUALITY_RESULT" = success
-              test "$SMOKE_RESULT" = success
+              case "$HEAD_REF" in
+                skill-fleet/*)
+                  echo "skill-fleet/* propagation: Windows smoke skipped (#1763)"
+                  test "$SMOKE_RESULT" = skipped
+                  ;;
+                *)
+                  test "$SMOKE_RESULT" = success
+                  ;;
+              esac
             else
               echo "docs-only: code quality jobs intentionally skipped"
               test "$QUALITY_RESULT" = skipped

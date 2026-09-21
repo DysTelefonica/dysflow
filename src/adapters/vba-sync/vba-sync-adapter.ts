@@ -34,7 +34,7 @@ import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js"
 import { findPackageRootNear } from "../../core/utils/package-info.js";
 import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
-import type { AllowedProcedures } from "../mcp/allowed-procedures-resolver.js";
+import type { AllowedProcedures, StrictMode } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
 import {
   type DestinationRootOrchestratorLike,
@@ -135,9 +135,10 @@ export type VbaSyncAdapterOptions = {
   accessPassword?: string;
   timeoutMs?: number;
   /**
-   * `allowedProcedures` is forwarded to `VbaExecutionAdapter` as an opt-in
-   * test_vba whitelist. Undefined or empty permits tests; a non-empty list is
-   * enforced atomically. run_vba keeps its separate default-deny MCP gate.
+   * `allowedProcedures` is forwarded to `VbaExecutionAdapter` as the test_vba
+   * whitelist. It is enforced only under `procedureStrictMode`; within strict
+   * mode, undefined or empty permits tests and a non-empty list is enforced
+   * atomically. `run_vba` carries the same opt-in gate at the MCP boundary.
    *
    * #757 (F7) — accepts a per-input RESOLVER (function) as well as a frozen
    * array. The composition root passes a resolver so `test_vba` re-reads the
@@ -146,6 +147,13 @@ export type VbaSyncAdapterOptions = {
    * ignoring mid-session config edits until a server restart).
    */
   allowedProcedures?: AllowedProcedures;
+  /**
+   * Opt-in enforcement switch for the test_vba procedure gate, resolved from
+   * `capabilities.procedures.strictMode`. Omitted or anything other than
+   * `true` leaves the gate default-allow. Accepts a per-input resolver for the
+   * same cross-worktree reason as `allowedProcedures`.
+   */
+  procedureStrictMode?: StrictMode;
   /**
    * Issue #830 — optional internal CodeGraph-VBA invoker. One-way only
    * (dysflow → codegraph-vba). When supplied, the `map_form_behavior`
@@ -474,6 +482,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
           this.executeMappedTool(toolName, params, mapping),
       },
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
+      options.procedureStrictMode, // opt-in enforcement switch for that gate
     );
     this.formsAdapter = new VbaFormsAdapter(
       {

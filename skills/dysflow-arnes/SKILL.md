@@ -4,10 +4,10 @@ description: "Trigger: MUST-LOAD for any AI agent touching dysflow artifacts (.d
 license: Apache-2.0
 metadata:
   author: "Andrés Román"
-  version: "1.0.0"
+  version: "1.1.0"
   status: active
-  last_verified: "2026-08-26"
-  last_dysflow_version: "4.4.5"
+  last_verified: "2026-09-20"
+  last_dysflow_version: "4.4.7"
   requires: "dysflow MCP >= 3.0, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
@@ -76,12 +76,16 @@ authoritative.
 
 - **HR-4 — Pre-flight BEFORE every dysflow write call.** Start from
   `bootstrap({})`, then fetch the bounded capability blocks needed by the
-  selected tool. Self-check (5 points): (1) `adapterVersion` is current,
+  selected tool. Self-check (6 points): (1) `adapterVersion` is current,
   (2) `effectiveDryRunDefault[toolName]` matches your intent,
   (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
   (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
   (5) `toolInventory.advertised` or `.callable` matches the claim you cite;
-  legacy `toolsVisible` has context-dependent meaning.
+  legacy `toolsVisible` has context-dependent meaning,
+  (6) NEVER infer the procedure gate from `allowedProcedures` alone — read
+  `procedureStrictMode`. The gate is default-allow, so a populated
+  `allowedProcedures` with `procedureStrictMode:false` restricts nothing, and
+  `undefined` means "resolved per input, unknown at startup", never `false`.
   If any check fails, STOP and surface the gap.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
@@ -91,8 +95,16 @@ authoritative.
   this arnés or any skill, trust runtime and surface drift to the user.
 
 - **HR-6 — Test definitions live in `tests/*.json` manifests, NOT in
-  `.dysflow/project.json` allowlist.** The allowlist is a runtime gate, not a
-  test registry. Adding test names to allowlist on each fix is an anti-pattern.
+  `.dysflow/project.json` allowlist.** The allowlist is an OPT-IN runtime gate,
+  not a test registry, and by default it gates nothing: `run_vba` and stdio
+  `test_vba` enforce `capabilities.procedures.allow` only when the same project
+  declares `capabilities.procedures.strictMode:true`. Adding test names to the
+  allowlist on each fix was always an anti-pattern; on a default project it is
+  now also a no-op. Write the test into the manifest and run it.
+  When you DO hit `MCP_PROCEDURE_NOT_ALLOWED` or
+  `MCP_ALLOWLIST_NOT_CONFIGURED` on MCP, the project opted into `strictMode` —
+  ask the human whether it still wants that, do not silently extend the list.
+  The two HTTP routes ignore `strictMode` and keep enforcing.
 
 - **HR-7 — Verify process liveness BEFORE asserting or blocking.** Never
   assert a process exists from cached / registry / prior-turn state.
@@ -180,6 +192,18 @@ authoritative.
   entries, classified independently. Identifier-only `caseOnly` drift is
   non-actionable; strings and comments remain case-sensitive.
 
+- **HR-16 — The write gate is level 1 and it now covers `run_vba`.** The order
+  is: write gate (`writesProcess.enabled`, `writesProject.allowWrites`,
+  `writeExecutionPolicy`) → procedure gate (`procedureStrictMode` +
+  `allowedProcedures`) → `humanCompilePending`. Never reorder it and never
+  read a lower gate's refusal as the reason a higher one fired.
+  `run_vba` used to be the exception: registered as an alias tool, it bypassed
+  the dispatch seam that holds the gate and executed compiled VBA with writes
+  disabled, which is why its allowlist could not safely be relaxed. It is gated
+  now, so `run_vba({apply:true})` requires writes to be enabled exactly like
+  every other write-class tool, and `MCP_WRITES_DISABLED` is the envelope you
+  will get when they are not. `apply:false` plans are not writes and still run.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -249,7 +273,9 @@ load `access-vba-e2e-methodology`.
   `export_modules` uses a disposable binary copy by default;
   `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
-- **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
+- **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix,
+  or reading `allowedProcedures` as proof that execution is restricted. Both
+  ignore `procedureStrictMode`, which is what actually decides. See HR-6.
 - **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
   DATA; never serve to skip the data-layer E2E.
 - **AP-8** — Mutating `TbConfiguracionBackends` from test code. Config table is
@@ -320,7 +346,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v1.0.0 · last_verified 2026-08-26 · requires
+dysflow harness v1.1.0 · last_verified 2026-09-20 · requires
 dysflow MCP >= 3.0 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `bootstrap` plus explicit schema/capability views. If this arnés disagrees with

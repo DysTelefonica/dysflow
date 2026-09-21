@@ -269,17 +269,19 @@ on internal call order.
 ### Requirement: CLI Invoke-RunProcedureAction Honors the Same Allowlist as MCP `run_vba`
 
 `Invoke-RunProcedureAction` MUST refuse to call `Invoke-AccessProcedure`
-when the project config declares a non-empty `allowedProcedures` list AND
-the requested procedure is not in that list. This mirrors the MCP adapter's
-default-deny gate so consumers observe identical gate behavior across CLI
-and MCP. **This is a forward-looking requirement; no PowerShell code is
-changed in PR1.** A separate capability change is required to bring the
-PowerShell layer to parity; until then, the MCP adapter gate is the only
-enforcement point.
+when the project config declares `capabilities.procedures.strictMode: true`
+AND a non-empty `allowedProcedures` list AND the requested procedure is not
+in that list. This mirrors the MCP adapter's opt-in gate so consumers observe
+identical gate behavior across CLI and MCP. Without `strictMode`, the MCP
+gate is default-allow and the CLI has nothing to mirror. **This is a
+forward-looking requirement; no PowerShell code is changed in PR1.** A
+separate capability change is required to bring the PowerShell layer to
+parity; until then, the MCP adapter gate is the only enforcement point.
 
 #### Scenario: CLI with allowlist configured — procedure outside the list is refused
 
-- GIVEN `.dysflow/project.json` declares `allowedProcedures: ["Refresh"]`
+- GIVEN `.dysflow/project.json` declares `capabilities.procedures.strictMode: true`
+  and `allowedProcedures: ["Refresh"]`
 - WHEN `Invoke-RunProcedureAction` runs with `-ProcedureName "DeleteAll"`
 - THEN the action MUST return an error result whose message contains
   the literal substring `allowedProcedures`
@@ -305,8 +307,8 @@ enforcement point.
 - GIVEN `.dysflow/project.json` does NOT declare `allowedProcedures`
 - WHEN `Invoke-RunProcedureAction` runs with `-ProcedureName "Anything"`
 - THEN the action MUST proceed (today: it always proceeds; the future
-  contract asserts that any default-deny introduced for parity offers a
-  dry-run-class escape hatch consistent with the MCP adapter)
+  contract asserts that any strict-mode enforcement introduced for parity
+  offers a dry-run-class escape hatch consistent with the MCP adapter)
 - (Pin: future test; PR1 does not write it.)
 
 ### Requirement: Runtime-Safe Export Write
@@ -440,7 +442,8 @@ in v1.19.0 (feat-759-no-compile hard break).
 ### Requirement: No compile Parameter on Mutation Imports
 
 The import_modules, import_all, and 	est_vba actions MUST NOT accept a compile parameter.
-ollbackOnCompileFail MUST NOT exist on import_modules. Removed in v1.19.0 (feat-759-no-compile
+
+ollbackOnCompileFail MUST NOT exist on import_modules. Removed in v1.19.0 (feat-759-no-compile
 hard break).
 
 #### Scenario: import_modules schema rejects compile
@@ -450,10 +453,12 @@ hard break).
 - THEN the schema validator (Zod dditionalProperties:false) rejects the call with
   MCP_INPUT_INVALID
 
-#### Scenario: import_modules schema rejects ollbackOnCompileFail
+#### Scenario: import_modules schema rejects 
+ollbackOnCompileFail
 
 - GIVEN a v1.19.0+ runtime
-- WHEN import_modules is called with ollbackOnCompileFail: true
+- WHEN import_modules is called with 
+ollbackOnCompileFail: true
 - THEN the schema validator rejects the call with MCP_INPUT_INVALID
 
 #### Scenario: test_vba does not expose compile

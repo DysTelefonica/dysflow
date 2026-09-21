@@ -363,12 +363,13 @@ function explainProcedureNotAllowed(input: ExplainInput): ExplainObject {
       },
       {
         step: 3,
-        check: "Add the procedure to allowedProcedures and retry.",
+        check: "Decide whether this project still wants an enforced allowlist.",
         result: "LIKELY",
-        evidence: "Once `get_capabilities` reports the new entry, the call succeeds.",
+        evidence:
+          "This branch is reachable only under `capabilities.procedures.strictMode: true`. Extending the list and dropping the flag are both valid exits; the write gate stays authoritative either way.",
         remediation:
           input.remediation ??
-          `Add '${procedure}' to the 'allowedProcedures' allowlist in \`.dysflow/project.json\`, or call \`get_capabilities\` to introspect the current allowlist before retrying.`,
+          `Either add '${procedure}' to \`capabilities.procedures.allow\`, or drop \`capabilities.procedures.strictMode\` if this project no longer wants an enforced allowlist. Ask the human before changing either; call \`get_capabilities\` to read the live allowlist and \`procedureStrictMode\`.`,
       },
     ],
   };
@@ -390,19 +391,20 @@ function explainAllowlistNotConfigured(input: ExplainInput): ExplainObject {
       },
       {
         step: 2,
-        check: "Is this a fresh worktree that hasn't set the allowlist yet?",
+        check: "Did this project mean to set `capabilities.procedures.strictMode: true`?",
         result: "LIKELY",
         evidence:
-          "A fresh `dysflow setup` may have skipped the allowlist, or the operator has tightened it after removing the previous runtime.",
+          "On MCP the gate is default-allow, so this refusal requires `strictMode`. Strict mode with no allowlist refuses everything, which is rarely the intent — it usually means the flag was set without the list, or copied from another project.",
       },
       {
         step: 3,
-        check: "Declare a non-empty allowedProcedures allowlist, or pass dryRun:true.",
+        check: "Declare the allowlist, or drop strictMode, or pass dryRun:true.",
         result: "LIKELY",
-        evidence: "After populating the allowlist, the gate stops firing.",
+        evidence:
+          "Either exit stops the gate firing; the write gate keeps deciding whether the write happens at all.",
         remediation:
           input.remediation ??
-          "Declare a non-empty `allowedProcedures` allowlist in `.dysflow/project.json` (re-read per call — no restart is needed), or pass `dryRun:true` to plan without executing.",
+          "Either declare `capabilities.procedures.allow` (re-read per call — no restart is needed), or drop `capabilities.procedures.strictMode` to return to the default where the write gate alone decides. Pass `dryRun:true` to plan without executing.",
       },
     ],
   };

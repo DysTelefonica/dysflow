@@ -48,8 +48,11 @@ export type DysflowConfigSource = "explicit-request" | "repo-config" | "runtime-
  * config loading rejects either with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`.
  *
  * `procedures.deny` is exposed as a project-level advisory signal only — the
- * runtime gate stays `procedures.allow`. The shape is preserved so a future
+ * runtime gate reads `procedures.allow`. The shape is preserved so a future
  * PR can wire the denylist without breaking `.dysflow/project.json` consumers.
+ *
+ * The procedure gate is default-allow and enforces `procedures.allow` only
+ * when `procedures.strictMode` is exactly `true`.
  */
 export type DysflowProjectCapabilities = {
   allowWrites?: boolean;
@@ -60,6 +63,17 @@ export type DysflowProjectCapabilities = {
   procedures?: {
     allow?: readonly string[];
     deny?: readonly string[];
+    /**
+     * Opt-in enforcement switch for the procedure gate. The gate is
+     * default-allow: unless this is exactly `true`, neither `run_vba` nor
+     * `test_vba` refuse a procedure, and `allow` is documentation. Set it to
+     * `true` to restore enforcement — `allow` then becomes the authoritative
+     * allowlist and an absent/empty `allow` refuses execution outright.
+     *
+     * Any non-boolean value resolves to `false` (default-allow). Schema-shape
+     * errors belong to `validateInput` upstream, not to a new config code.
+     */
+    strictMode?: boolean;
   };
   /**
    * Per-rule lint overrides (#731). Each entry maps a known rule id
@@ -173,6 +187,13 @@ export type DysflowConfig = {
   configSource: DysflowConfigSource;
   allowWrites: boolean;
   allowedProcedures?: readonly string[];
+  /**
+   * Resolved `capabilities.procedures.strictMode`. `true` makes the procedure
+   * gate enforce `allowedProcedures`; any other value (including absent)
+   * leaves the gate default-allow. The write gate remains the authoritative
+   * protection either way.
+   */
+  procedureStrictMode?: boolean;
   accessDbPath: string;
   frontendFile?: string;
   backendPath?: string;
@@ -1037,6 +1058,7 @@ function buildProjectConfig(
   const {
     allowWrites,
     allowedProcedures: capabilitiesAllowedProcedures,
+    procedureStrictMode,
     lintRulesOverride,
     writeExecutionPolicy,
     lintIdentifierSafetyStrict,
@@ -1054,6 +1076,7 @@ function buildProjectConfig(
       capabilitiesAllowedProcedures,
       discoveryResult,
     ),
+    procedureStrictMode,
     accessDbPath,
     frontendFile,
     backendPath,
@@ -1378,13 +1401,20 @@ function pickFirstDefined<T>(...values: (T | undefined)[]): T | undefined {
  * top-level fields before this helper runs.
  *
  * `procedures.deny` is advisory only and is NOT projected into
- * `DysflowConfig.allowedProcedures` — the runtime gate stays `allow`. The
- * shape is preserved so a future PR can wire the denylist without breaking
- * `.dysflow/project.json` consumers.
+ * `DysflowConfig.allowedProcedures` — the runtime gate reads `allow`, and
+ * only when `procedures.strictMode === true`. The shape is preserved so a
+ * future PR can wire the denylist without breaking `.dysflow/project.json`
+ * consumers.
  */
 function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
   allowWrites: boolean;
   allowedProcedures: readonly string[] | undefined;
+  /**
+   * Resolved `capabilities.procedures.strictMode`. Only an exact `true`
+   * enables the procedure gate; everything else (absent, `false`, or a
+   * non-boolean typo) resolves to `false` so the gate stays default-allow.
+   */
+  procedureStrictMode: boolean;
   /** #731 — per-rule lint overrides from `capabilities.lint.rules`. */
   lintRulesOverride: Readonly<Partial<Record<LintRuleId, LintRuleOverride>>> | undefined;
   /**
@@ -1451,6 +1481,9 @@ function resolveCapabilities(raw: DysflowProjectConfig): OperationResult<{
   return successResult({
     allowWrites: capabilitiesAllowWrites === true,
     allowedProcedures: capabilitiesAllow === undefined ? undefined : [...capabilitiesAllow],
+    // Strict equality, not truthiness: a typo such as `"true"` or `1` must NOT
+    // silently re-arm the gate a project deliberately left default-allow.
+    procedureStrictMode: capabilities?.procedures?.strictMode === true,
     lintRulesOverride: normalizeLintRulesOverride(capabilities?.lint?.rules),
     writeExecutionPolicy,
     lintIdentifierSafetyStrict: capabilities?.lint?.identifierSafety?.strictNonAscii === true,

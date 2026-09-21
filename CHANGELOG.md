@@ -2,6 +2,65 @@
 
 ## [Unreleased]
 
+## [v4.4.7] - 2026-09-21
+
+> **Read before upgrading.** Despite the patch version, this release changes
+> two observable contracts on the MCP surface. A populated
+> `capabilities.procedures.allow` stops restricting execution unless the
+> project also sets `capabilities.procedures.strictMode: true`, and
+> `run_vba` with `apply: true` now requires writes to be enabled. Operators
+> who relied on either behavior must act. See
+> [the migration guide](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md).
+
+### Fixed
+
+- **`run_vba` is now subject to the write gate on MCP.** As an alias tool it
+  never passed through `createDispatchTool`, the seam where every other
+  write-class tool consults `isWriteAllowed`, so it executed compiled VBA under
+  the default writes-disabled configuration — `query_execute` and `test_vba`
+  were gated, `run_vba` was not, and its allowlist was its only backend
+  control. The gate now runs in `handleMcpVbaExecute` ahead of the procedure
+  gate. `apply: true` now requires `writesProcess.enabled` and
+  `capabilities.allowWrites`; `apply: false` previews are unaffected.
+- `fix(e2e)`: pass `apply: true` in both `run_vba` cases of `E2E_testing/mcp-e2e.mjs` — the `vba` contract case and the `legacy` case.
+  - Both assert `expected: "error"` and neither passed a commit flag. `run_vba` reports `effectiveDryRunDefault: true`, so the runtime answered with a plan, which is a success envelope.
+  - The trigger is the procedure-gate change in this same release: the gate becomes default-allow behind `capabilities.procedures.strictMode`, after being default-deny since #621.
+  - The E2E fixture declares no allowlist and no `strictMode`, so the old gate refused the call before it reached the plan branch or Access, and that refusal satisfied the assertion.
+  - The case had been passing on the gate refusal, not on the missing procedure it names. Inferred from the fixture and the gate change; not reproduced against a v4.4.5 build.
+  - These two were the only failures in the abandoned `v4.4.6` tag run: E2E validation exited 1, Build & Release Artifacts never ran, and no GitHub Release was published.
+  - `apply: true` restores execution and the typed `RUNNER_FAILED` envelope. It is compatible both ways: default-deny still refuses, default-allow reaches the missing procedure.
+  - `apply` is a declared `run_vba` parameter and the tool requires no `implements_check` token, so the call shape is otherwise unchanged.
+
+### Changed
+
+- **BREAKING — the MCP procedure gate is now default-allow.** `run_vba` and
+  stdio `test_vba` enforce `capabilities.procedures.allow` only when the same
+  project declares the new `capabilities.procedures.strictMode: true` in
+  `.dysflow/project.json`. Without that flag, a populated `allow` list is
+  documentation and any procedure the write gate permits will run. The gate had
+  been default-deny since PR1a #621 (v2.20.0), which meant a consumer had to
+  register every production procedure and every newly written test atom before
+  it could run — operational cost that bought no boundary the write gate
+  (`writesProcess.enabled`, `writesProject.allowWrites`,
+  `writeExecutionPolicy`) and `humanCompilePending` did not already hold.
+  `strictMode` is resolved per input, so one MCP process serving several
+  worktrees reads each project's own posture; a non-boolean value resolves to
+  `false` so a typo cannot silently re-arm the gate.
+  `MCP_PROCEDURE_NOT_ALLOWED` and `MCP_ALLOWLIST_NOT_CONFIGURED` keep their
+  codes, envelopes, and structured fields — they are simply unreachable on MCP
+  until a project opts in. **Both HTTP routes are unchanged and ignore
+  `strictMode`**: `POST /vba/execute` still returns
+  `HTTP_PROCEDURE_NOT_ALLOWED` for a procedure outside a populated allowlist,
+  and `POST /vba/test` keeps its missing/empty default-deny, because the HTTP
+  composition root pins strict enforcement on.
+  **Migration**: a project that wants the previous behavior adds
+  `capabilities.procedures.strictMode: true`; its existing `allow` list is then
+  enforced exactly as before. A project that does nothing sees the gate
+  bypassed. See
+  [MIGRATION_2026-09-20_strict-mode-opt-in.md](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md),
+  [run_vba](./docs/tools/run-vba.md), and
+  [adapter write gates](./docs/security/adapter-write-gates.md).
+
 ## [v4.4.5] - 2026-09-19
 
 ### Fixed
@@ -2976,23 +3035,19 @@ Hardening and maintenance pass from a code-quality review of the MCP runtime.
 
 ## [v1.2.35] - 2026-06-09
 
-Fix for the user-reported issue #496 cascade: the user (via the IA mantenedora)
-reported that `dysflow.import_modules` with `importMode=Code` +
-`willModifyAccess=true` returned `VBA_MANAGER_SERIALIZATION_FAILED` instead
-of the real VBE error. Investigation surfaced three coordinated defects:
+Fix for the user-reported issue #496 cascade:
 
-1. The `Write-DysflowResult` writer in `dysflow-vba-manager.ps1` had a
-   generic `try/catch` that ate the underlying exception and emitted
-   a fallback `VBA_MANAGER_SERIALIZATION_FAILED` envelope, hiding the
-   real cause from the operator.
-2. The `Invoke-ImportAction` happy path passed a `List[object>` directly
-   to `Write-DysflowResult`. Under PowerShell 7.x, `ConvertTo-Json` on
-   a raw `List[object>` can hit `ArgumentException: Argument types do not
-   match`, which the fallback also swallows. The sad path was already
-   fixed in v1.2.30 to convert to `object[]` first; the happy path was
-   left untouched.
-3. The early read path in `dysflow-access-runner.ps1` (line ~1495)
-   opened the DAO database inside a try-block with NO catch.
+the user (via the IA mantenedora) reported that `dysflow.import_modules` with `importMode=Code` + `willModifyAccess=true` returned `VBA_MANAGER_SERIALIZATION_FAILED` instead of the real VBE error.
+
+Investigation surfaced three coordinated defects:
+
+1. The `Write-DysflowResult` writer in `dysflow-vba-manager.ps1` had a generic `try/catch` that ate the underlying exception and emitted a fallback `VBA_MANAGER_SERIALIZATION_FAILED` envelope, hiding the real cause from the operator. 2.
+
+   The `Invoke-ImportAction` happy path passed a `List[object>` directly to `Write-DysflowResult`. Under PowerShell 7.x, `ConvertTo-Json` on a raw `List[object>` can hit `ArgumentException:
+
+   Argument types do not match`, which the fallback also swallows. The sad path was already fixed in v1.2.30 to convert to `object[]` first; the happy path was left untouched. 3.
+
+   The early read path in `dysflow-access-runner.ps1` (line ~1495) opened the DAO database inside a try-block with NO catch.
 
    If the target database did not exist, the exception escaped, no
    `DYSFLOW_RESULT` was emitted, and the script exited with `exitCode 0`.

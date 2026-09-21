@@ -498,36 +498,52 @@ JSDoc note above the `McpToolRoute` union).
 - **AND** no MCP client SHOULD observe any change in tool names, schema
   shapes, or response payloads
 
-### Requirement: VBA Execution Default-Deny at the MCP Adapter
+### Requirement: VBA Execution Procedure Gate at the MCP Adapter (Opt-In)
 
-`run_vba`, `dysflow_vba_execute`, and their aliases MUST refuse to call
+The procedure gate is default-allow. `run_vba` and its aliases MUST NOT
+refuse a call on account of `allowedProcedures` unless the targeted
+project's config declares `capabilities.procedures.strictMode: true`. A
+non-boolean `strictMode` MUST resolve to `false`. The flag MUST be resolved
+per input, so one process serving several worktrees reads each project's own
+posture.
+
+Under `strictMode: true`, the adapter MUST refuse to call
 `services.vbaService.execute(...)` unless EITHER (1) the project config
 declares a non-empty `allowedProcedures` AND `procedureName` is in that
 list, OR (2) the caller passes `dryRun: true`. Refusal MUST be observable
 as `isError: true` with text matching `/allowedProcedures/`.
 
-#### Scenario: procedure not in allowlist (modern)
+#### Scenario: populated allowlist without strictMode — the list is documentation
 
-- GIVEN `allowedProcedures=["Refresh"]`
-- WHEN `dysflow_vba_execute` is invoked with `{ procedureName: "DeleteAll" }`
-- THEN result MUST have `isError: true` and text matching `/allowedProcedures/`
-- AND `vbaService.execute` MUST NOT be invoked
-- (Pin: `test/adapters/mcp/tools.test.ts` — new
-  `dysflow_vba_execute default-deny when no allowlist match and no dryRun`)
+- GIVEN `allowedProcedures=["Refresh"]` and no `strictMode`
+- WHEN `run_vba` is invoked with `{ procedureName: "DeleteAll", apply: true }`
+- THEN result MUST have `isError: false`
+- AND `vbaService.execute` MUST be invoked
+- (Pin: `test/adapters/mcp/tools.test.ts` —
+  `executes apply:true for a procedure outside a populated allowlist`)
 
-#### Scenario: procedure not in allowlist (legacy `run_vba`)
+#### Scenario: no allowlist without strictMode — execution proceeds
 
-- GIVEN `allowedProcedures=["Refresh"]`
+- GIVEN no allowlist configured and no `strictMode`
+- WHEN `run_vba` is invoked with `{ procedureName: "AnyProcedure", apply: true }`
+- THEN result MUST have `isError: false`
+- (Pin: same file — `executes apply:true with no allowlist configured`)
+
+#### Scenario: procedure not in allowlist under strictMode
+
+- GIVEN `allowedProcedures=["Refresh"]` and `strictMode: true`
 - WHEN `run_vba` is invoked with `{ procedureName: "DeleteAll" }`
 - THEN result MUST have `isError: true` and text matching `/allowedProcedures/`
-- (Pin: same file — new `run_vba default-deny when no allowlist match`)
+- AND `vbaService.execute` MUST NOT be invoked
+- (Pin: same file — `blocks a procedure not in the allowlist`)
 
-#### Scenario: allowlist unconfigured, no dryRun — closed by default
+#### Scenario: allowlist unconfigured under strictMode, no dryRun — closed
 
-- GIVEN no allowlist configured
-- WHEN `dysflow_vba_execute` is invoked with `{ procedureName: "Anything" }`
+- GIVEN no allowlist configured and `strictMode: true`
+- WHEN `run_vba` is invoked with `{ procedureName: "Anything", apply: true }`
 - THEN result MUST have `isError: true` and text mentioning `allowedProcedures` OR `dryRun`
-- (Pin: same file — new `default-deny when allowlist is unconfigured and no dryRun`)
+- (Pin: same file —
+  `refuses apply:true when allowedProcedures is not passed (strictMode restores default-deny)`)
 
 #### Scenario: dryRun is the explicit escape hatch
 

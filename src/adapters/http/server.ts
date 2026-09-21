@@ -395,7 +395,7 @@ async function routeRequest(
         failureResult(
           createDysflowError(
             "MCP_ALLOWLIST_NOT_CONFIGURED",
-            "Refusing to execute HTTP test_vba: project config declares no allowedProcedures allowlist. Declare a non-empty allowedProcedures list, or pass apply:false (or dryRun:true) to plan without executing.",
+            "Refusing to execute HTTP test_vba: project config declares no allowedProcedures allowlist. This is the HTTP network surface, which enforces the allowlist unconditionally and ignores capabilities.procedures.strictMode — the MCP default-allow gate does not apply here. Declare a non-empty allowedProcedures list, or pass apply:false (or dryRun:true) to plan without executing.",
           ),
         ),
         400,
