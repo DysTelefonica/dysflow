@@ -18,6 +18,31 @@ the owner-specific workflow described below.
    unavailable and do not edit personal consumer skills.
 3. Build Dysflow into repository-local `test-runtime/` and set `DYSFLOW_SHIM` to that
    candidate launcher. Never fall back to the production installation.
+
+   From the repository root, build the CLI and install the throwaway runtime:
+
+   ```bash
+   pnpm build
+   node dist/cli/index.js install --runtime-dir ./test-runtime --no-tui
+   ```
+
+   That `install` invocation is the canonical candidate build. `.github/workflows/release.yml`
+   runs the same command for its throwaway runtime, and `E2E_testing/README.md` documents it as
+   the pre-release procedure. It creates `<dir>/bin/dysflow.cmd` (Windows) and
+   `<dir>/bin/dysflow.ps1`, which is what `DYSFLOW_SHIM` must point at.
+
+   `test-runtime/` is gitignored and may already hold unrelated artefacts — Access fixtures such
+   as `db-*.accdb` used by the integration tests — beside the `bin/` launcher. Installing into a
+   populated `test-runtime/` is expected and safe: the installer adds the runtime tree and never
+   deletes foreign files.
+
+   **This step writes outside the repository.** `install` copies the six release-owned skills
+   recursively into the five runtime adapter SkillsDirs listed below and inlines the pointer
+   block into their instruction files. A candidate built from a branch that changes a skill
+   therefore overwrites the user-global copies with unreleased content. Step 4 verifies the
+   outcome; it cannot prevent the write. Run this step only when that blast radius is intended,
+   and record the pre-run path+hash manifest of those directories when the audit must stay
+   read-only.
 4. Confirm canonical target files are writable and record each repository's initial Git status.
    Preserve unrelated changes. Do not change user agent configuration or edit installed mirrors.
 5. Run `codegraph status --json` for code intelligence and record its `version` and `indexPath`.
@@ -156,9 +181,14 @@ cannot be mistaken for current executable guidance.
 
 6. Preview the supplementary destination reconciliation without mutation:
 
-   ```powershell
-   pwsh -File bin/link-personal-skills.ps1 -DryRun
+   ```bash
+   bash bin/link-personal-skills.sh --dry-run
    ```
+
+   `bin/link-personal-skills.sh` is the live reconciler; its `--dry-run` (also `-n`) flag prints
+   what it would create or skip and writes nothing. The former PowerShell driver moved to
+   `bin/legacy/link-personal-skills.ps1` and is no longer the entry point, so a command naming
+   `bin/link-personal-skills.ps1` fails with file-not-found.
 
 7. Let the personal repository's normal delivery policy create any commit. Its post-commit hook
    runs `sync`; when delivery is not part of the task, leave canonical changes uncommitted and
