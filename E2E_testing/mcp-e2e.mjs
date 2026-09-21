@@ -1267,7 +1267,7 @@ await record("protocol", "discovered_projects_isolation", { projectId: "A" });
 
 await recordContract("diagnostics", "doctor", { projectId, includeEnvironment: true }, {}, ["bootstrap", "success"]);
 await recordContract("query", "query_execute", { projectId, sql: "SELECT COUNT(*) AS RowCount FROM TbNoConformidades", mode: "read", backendPath }, {}, ["sql"]);
-await recordContract("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure" }, { expected: "error" }, ["alias", "typed-error"]);
+await recordContract("vba", "run_vba", { projectId, procedureName: "DysflowMcpE2EMissingProcedure", apply: true }, { expected: "error" }, ["alias", "typed-error"]);
 await record("operations", "list_access_operations", {});
 await recordContract("operations", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" }, ["recovery"]);
 await record("operations", "access_force_cleanup_orphaned", {
@@ -2744,7 +2744,7 @@ addResult({
   summary: clonePass ? clonePreservation.summary : "cloned form structure or preservation proof missing",
 });
 
-await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]" }, { expected: "error" });
+await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]", apply: true }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });
 await record("legacy", "list_access_operations", {});
 
