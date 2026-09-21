@@ -131,8 +131,8 @@ async function main() {
     );
     process.exit(1);
   }
-  console.log(
-    `Required context OK: github reports "${qualityJobName(workflow)}" whether the job runs or is skipped (engines.node "${engines.declared}").`,
+  process.stdout.write(
+    `Required context OK: github reports "${qualityJobName(workflow)}" whether the job runs or is skipped (engines.node "${engines.declared}").\n`,
   );
 }
 
