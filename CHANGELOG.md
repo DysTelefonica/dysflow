@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `fix(e2e)`: pass `apply: true` in both `run_vba` cases of `E2E_testing/mcp-e2e.mjs` — the `vba` contract case and the `legacy` case.
+  - Both assert `expected: "error"` and neither passed a commit flag. `run_vba` reports `effectiveDryRunDefault: true`, so the runtime answered with a plan, which is a success envelope.
+  - The trigger is the v4.4.6 procedure-gate change: it makes the MCP procedure gate default-allow behind `capabilities.procedures.strictMode`, after being default-deny since #621.
+  - The E2E fixture declares no allowlist and no `strictMode`, so the old gate refused the call before it reached the plan branch or Access, and that refusal satisfied the assertion.
+  - The case had been passing on the gate refusal, not on the missing procedure it names. Inferred from the fixture and the gate change; not reproduced against a v4.4.5 build.
+  - These two were the only failures in the v4.4.6 release run: E2E validation exited 1, Build & Release Artifacts never ran, and the tag was pushed with no GitHub Release published.
+  - `apply: true` restores execution and the typed `RUNNER_FAILED` envelope. It is compatible both ways: default-deny still refuses, default-allow reaches the missing procedure.
+  - `apply` is a declared `run_vba` parameter and the tool requires no `implements_check` token, so the call shape is otherwise unchanged.
+
 ## [v4.4.5] - 2026-09-19
 
 ### Fixed
