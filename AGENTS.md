@@ -1558,7 +1558,7 @@ If any part is missing or ambiguous, ask and remain local; do not probe the dest
 <!-- /gentle-ai:remote-authorization -->
 <!-- /gentle-ai:agent-routing -->
 
-<!-- personal-skills:slice:dysflow @ v671cfc4 -->
+<!-- personal-skills:slice:dysflow @ vfa7dac4 -->
 ## Catálogo de skills
 
 Esta sección la materializa el catálogo personal-skills.
