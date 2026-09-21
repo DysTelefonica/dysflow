@@ -172,6 +172,15 @@ export async function startMcpStdioAdapter(
       if (!configResult.ok) return undefined;
       return configResult.data.allowedProcedures;
     },
+    // The procedure gate is default-allow and enforces the allowlist only for
+    // projects that declare `capabilities.procedures.strictMode: true`. This
+    // resolver reads that flag from the config of the project the input
+    // targets, for the same cross-project reason as the allowlist above.
+    procedureStrictMode: async (input) => {
+      const configResult = await resolveConfigForInput(input);
+      if (!configResult.ok) return undefined;
+      return configResult.data.procedureStrictMode;
+    },
     accessContextResolver: async (input) => resolveMcpAccessContextForInput(input, startupConfig),
     projectConfigResolver: (input, cwd = process.cwd()) =>
       diagnoseProjectConfig(
@@ -694,9 +703,10 @@ export function createConfiguredServices(
       cwd: config.projectRoot ?? process.cwd(),
       env: process.env,
       accessPassword: config.accessPassword,
-      // Forward the project's allowedProcedures list so test_vba enforces it
-      // as an opt-in whitelist. Missing/empty allows tests; run_vba keeps its
-      // separate default-deny gate in `handleMcpVbaExecute`.
+      // Forward the project's allowedProcedures list so test_vba can enforce
+      // it. Enforcement itself is opt-in through `procedureStrictMode` below;
+      // without it the gate is default-allow. `run_vba` carries the same
+      // opt-in gate in `handleMcpVbaExecute`.
       //
       // #757 (F7) — pass a per-input RESOLVER instead of the frozen
       // config.allowedProcedures. This service bundle is cached by serviceCache
@@ -709,6 +719,12 @@ export function createConfiguredServices(
       allowedProcedures: async (input: unknown) => {
         const resolved = await resolveConfigForInput(input, options);
         return resolved.ok ? resolved.data.allowedProcedures : undefined;
+      },
+      // Opt-in enforcement switch for that gate, resolved per input from the
+      // targeted project's `capabilities.procedures.strictMode`.
+      procedureStrictMode: async (input: unknown) => {
+        const resolved = await resolveConfigForInput(input, options);
+        return resolved.ok ? resolved.data.procedureStrictMode : undefined;
       },
       // Issue #830 — internal CodeGraph-VBA invoker (one-way: dysflow →
       // codegraph-vba). The default factory shells out to the

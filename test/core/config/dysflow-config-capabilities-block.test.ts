@@ -200,3 +200,98 @@ describe("DysflowProjectConfig — capabilities consolidated block (#657, #655, 
     });
   });
 });
+
+describe("capabilities.procedures.strictMode — opt-in procedure gate", () => {
+  it("resolves to false when the procedures block is absent", () => {
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: { allowWrites: true },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.procedureStrictMode).toBe(false);
+  });
+
+  it("resolves to false when an allowlist is declared without strictMode", () => {
+    // A populated `allow` is documentation until the project opts in. This is
+    // the whole point of the default-allow contract.
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: { allowWrites: true, procedures: { allow: ["Test_A"] } },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.allowedProcedures).toEqual(["Test_A"]);
+    expect(result.data.procedureStrictMode).toBe(false);
+  });
+
+  it("resolves to true when strictMode is declared under capabilities.procedures", () => {
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: {
+        allowWrites: true,
+        procedures: { allow: ["Test_A"], strictMode: true },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.allowedProcedures).toEqual(["Test_A"]);
+    expect(result.data.procedureStrictMode).toBe(true);
+  });
+
+  it("resolves to true with strictMode but no allowlist (the default-deny opt-in)", () => {
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: { allowWrites: true, procedures: { strictMode: true } },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.procedureStrictMode).toBe(true);
+  });
+
+  it("resolves to false for strictMode: false", () => {
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: { allowWrites: true, procedures: { strictMode: false } },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.procedureStrictMode).toBe(false);
+  });
+
+  it("resolves a non-boolean strictMode to false instead of failing the load", () => {
+    // Deliberate: a typo must not silently re-arm a gate the project left
+    // default-allow, and it must not brick config loading either. Schema-shape
+    // errors belong to validateInput upstream, not to a new config code.
+    for (const bogus of ["true", 1, {}, []]) {
+      const result = buildConfigWithCapabilities({
+        accessPath: "app.accdb",
+        capabilities: { allowWrites: true, procedures: { strictMode: bogus } },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw result.error;
+      expect(result.data.procedureStrictMode).toBe(false);
+    }
+  });
+
+  it("keeps procedures.deny advisory and unrelated to strictMode", () => {
+    const result = buildConfigWithCapabilities({
+      accessPath: "app.accdb",
+      capabilities: {
+        allowWrites: true,
+        procedures: { allow: ["Test_A"], deny: ["Test_B"], strictMode: true },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw result.error;
+    expect(result.data.allowedProcedures).toEqual(["Test_A"]);
+    expect(result.data.procedureStrictMode).toBe(true);
+  });
+});

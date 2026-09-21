@@ -1083,10 +1083,18 @@ export function procedureNotAllowed(
   options: { explain?: boolean } = {},
 ): McpToolResult {
   const allowedJson = JSON.stringify([...allowedProcedures]);
+  // The gate only reaches this branch when the project opted in with
+  // `capabilities.procedures.strictMode: true`. Extending the list is one exit
+  // and dropping the flag is the other; naming only the first would push every
+  // consumer into maintaining an allowlist it may never have wanted.
   const remediation =
-    `Add '${procedureName}' to the 'allowedProcedures' allowlist in ` +
-    `.dysflow/project.json, or call 'get_capabilities' to introspect ` +
-    `the current allowlist before retrying.`;
+    `This project set 'capabilities.procedures.strictMode: true' in ` +
+    `.dysflow/project.json, so its allowlist is enforced. Either add ` +
+    `'${procedureName}' to 'capabilities.procedures.allow' there, or drop ` +
+    `'strictMode' if the project no longer wants an enforced allowlist — the ` +
+    `write gate stays authoritative either way. Ask the human before changing ` +
+    `either; call 'get_capabilities' to read the live allowlist and ` +
+    `'procedureStrictMode'.`;
   const message =
     `Procedure '${procedureName}' is not in the configured allowedProcedures ` +
     `list (active: ${allowedJson}). ${remediation}`;
@@ -1122,9 +1130,11 @@ export function allowlistNotConfigured(
   options: { explain?: boolean } = {},
 ): McpToolResult {
   const remediation =
-    `Declare a non-empty 'allowedProcedures' allowlist in .dysflow/project.json ` +
-    `(it is re-read per call — no server restart is needed), or pass dryRun:true ` +
-    `to plan without executing.`;
+    `This project set 'capabilities.procedures.strictMode: true' without an ` +
+    `allowlist, which refuses everything. In .dysflow/project.json either ` +
+    `declare 'capabilities.procedures.allow' (re-read per call — no server ` +
+    `restart is needed), or drop 'strictMode' to return to the default where ` +
+    `the write gate alone decides. Pass dryRun:true to plan without executing.`;
   const message =
     `Refusing to execute VBA procedure '${procedureName}': project config declares ` +
     `no allowedProcedures allowlist. ${remediation}`;

@@ -70,12 +70,16 @@ authoritative.
 
 - **HR-4 — Pre-flight BEFORE every dysflow write call.** Start from
   `bootstrap({})`, then fetch the bounded capability blocks needed by the
-  selected tool. Self-check (5 points): (1) `adapterVersion` is current,
+  selected tool. Self-check (6 points): (1) `adapterVersion` is current,
   (2) `effectiveDryRunDefault[toolName]` matches your intent,
   (3) `writesProcess.enabled` AND `writesProject.allowWrites` are both `true`,
   (4) `humanCompilePending` is `false` before `test_vba` / `run_vba`,
   (5) `toolInventory.advertised` or `.callable` matches the claim you cite;
-  legacy `toolsVisible` has context-dependent meaning.
+  legacy `toolsVisible` has context-dependent meaning,
+  (6) NEVER infer the procedure gate from `allowedProcedures` alone — read
+  `procedureStrictMode`. The gate is default-allow, so a populated
+  `allowedProcedures` with `procedureStrictMode:false` restricts nothing, and
+  `undefined` means "resolved per input, unknown at startup", never `false`.
   If any check fails, STOP and surface the gap.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
@@ -85,8 +89,16 @@ authoritative.
   this arnés or any skill, trust runtime and surface drift to the user.
 
 - **HR-6 — Test definitions live in `tests/*.json` manifests, NOT in
-  `.dysflow/project.json` allowlist.** The allowlist is a runtime gate, not a
-  test registry. Adding test names to allowlist on each fix is an anti-pattern.
+  `.dysflow/project.json` allowlist.** The allowlist is an OPT-IN runtime gate,
+  not a test registry, and by default it gates nothing: `run_vba` and stdio
+  `test_vba` enforce `capabilities.procedures.allow` only when the same project
+  declares `capabilities.procedures.strictMode:true`. Adding test names to the
+  allowlist on each fix was always an anti-pattern; on a default project it is
+  now also a no-op. Write the test into the manifest and run it.
+  When you DO hit `MCP_PROCEDURE_NOT_ALLOWED` or
+  `MCP_ALLOWLIST_NOT_CONFIGURED` on MCP, the project opted into `strictMode` —
+  ask the human whether it still wants that, do not silently extend the list.
+  The two HTTP routes ignore `strictMode` and keep enforcing.
 
 - **HR-7 — Verify process liveness BEFORE asserting or blocking.** Never
   assert a process exists from cached / registry / prior-turn state.
@@ -174,6 +186,18 @@ authoritative.
   entries, classified independently. Identifier-only `caseOnly` drift is
   non-actionable; strings and comments remain case-sensitive.
 
+- **HR-16 — The write gate is level 1 and it now covers `run_vba`.** The order
+  is: write gate (`writesProcess.enabled`, `writesProject.allowWrites`,
+  `writeExecutionPolicy`) → procedure gate (`procedureStrictMode` +
+  `allowedProcedures`) → `humanCompilePending`. Never reorder it and never
+  read a lower gate's refusal as the reason a higher one fired.
+  `run_vba` used to be the exception: registered as an alias tool, it bypassed
+  the dispatch seam that holds the gate and executed compiled VBA with writes
+  disabled, which is why its allowlist could not safely be relaxed. It is gated
+  now, so `run_vba({apply:true})` requires writes to be enabled exactly like
+  every other write-class tool, and `MCP_WRITES_DISABLED` is the envelope you
+  will get when they are not. `apply:false` plans are not writes and still run.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -243,7 +267,9 @@ load `access-vba-e2e-methodology`.
   `export_modules` uses a disposable binary copy by default;
   `mutateBinary:true` is legacy opt-in only.
 - **AP-5** — Editing production `.accdb` or bypassing the `allowWrites` gate. See HR-3.
-- **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix. See HR-6.
+- **AP-6** — Adding test names to `.dysflow/project.json` allowlist on each fix,
+  or reading `allowedProcedures` as proof that execution is restricted. Both
+  ignore `procedureStrictMode`, which is what actually decides. See HR-6.
 - **AP-7** — Mocking to skip a real integration test. Fakes isolate LOGIC from
   DATA; never serve to skip the data-layer E2E.
 - **AP-8** — Mutating `TbConfiguracionBackends` from test code. Config table is
@@ -314,7 +340,7 @@ user request.
 
 ## 10. Version + authorship
 
-dysflow harness v1.0.0 · last_verified 2026-08-26 · requires
+dysflow harness v1.1.0 · last_verified 2026-09-20 · requires
 dysflow MCP >= 3.0 · author: Andrés Román · license: Apache-2.0
 
 Source of truth: live `bootstrap` plus explicit schema/capability views. If this arnés disagrees with
@@ -775,6 +801,24 @@ Dysflow es un consumible acoplado hacia abajo: los ficheros fuente aquí aliment
 El flujo multi-paso estándar añade revisión de PR y ceremonia de merge sin mejorar la corrección aquí, y retrasa que el consumidor observe el cambio.
 
 El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren la red de seguridad que el ciclo de PR proporcionaría.
+
+### Excepción: releases (branch protection en `main`)
+
+`main` tiene branch protection activa con `enforce_admins: true` y cinco status checks requeridos antes de aceptar cualquier push: `Quality gates (26)`, `Analyze (javascript-typescript)`, `Classify changes`, `Documentation quality`, `CodeQL`. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
+
+Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica a releases**. El patrón real, comprobado en v4.4.5 (PR #1759, run `35466013339`):
+
+1. Hacer los commits localmente sobre `main` (fix + release prep: bump versions, CHANGELOG, `last_dysflow_version` de los skills release-owned, fecha en `skills/dysflow-usage/assets/write-flags-matrix.md` y `skills/dysflow-usage/references/error-codes.md`).
+2. `git push origin vX.Y.Z` con el tag — esto dispara `.github/workflows/release.yml` y crea el GitHub Release independientemente del estado de `main`.
+3. Esperar el job `Build & Release Artifacts` (28 s en v4.4.5). Si los 4 jobs del release (`Build release artifact`, `Exact-SHA quality authority`, `E2E validation (Windows self-hosted)`, `Build & Release Artifacts`) pasan, el release queda publicado con sus assets firmados (`dysflow-vX.Y.Z.tar.gz`, `SHA256SUMS`, `SHA256SUMS.sig`).
+4. Crear rama efímera desde el commit del tag (p.ej. `release-vX.Y.Z`), pushearla y abrir PR contra `main`.
+5. Esperar los 5 checks del branch protection en el PR (el cuello de botella en v4.4.5 fue `Quality gates (26)` a 5 m 28 s; los demás en segundos).
+6. Mergear el PR → `main` queda sincronizado con el commit del release.
+7. Limpiar el worktree temporal (`git worktree remove --force`) y la rama local; **no borrar la rama remota** (ver regla sobre preservación de ramas).
+
+`scripts/set-release-package-version.mjs` y los steps `Stamp release version` / `Verify synchronized Pi package version` cubren el stamp de versiones en `package.json` y `plugin/pi/package.json` en runtime, pero los bumps de `last_dysflow_version` y del header de release-date en los assets de skills siguen siendo responsabilidad del release prep.
+
+Para la regresión específica de v4.4.4 (job `Build & Release Artifacts` fallando por `Unable to locate executable file: pnpm` por la auto-detección del lockfile en `actions/setup-node@v5`), ver el commit `4c7006f0 fix(ci): enable pnpm in release.yml release job (#1739 regression)` y la nota del proyecto `dysflow/release-regression-1739` en memoria persistente.
 
 ## Hard rules del flujo de trabajo
 
@@ -1277,7 +1321,9 @@ Cache the artifact store choice for the session. Pass it as `artifact_store.mode
 
 ### Delivery Strategy
 
-On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`.
+On the first `/sdd-new`, `/sdd-ff`, or `/sdd-continue` (or an equivalent natural-language request) in a session, ask once for and cache delivery strategy:
+
+`ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`.
 
 Pass it as `delivery_strategy` to `sdd-tasks` and `sdd-apply` prompts.
 
@@ -1290,7 +1336,11 @@ When `delivery_strategy` results in chained PRs (either by user choice via `ask-
 
 Cache the chain strategy for the session. Pass it as `chain_strategy` to `sdd-tasks` and `sdd-apply` prompts alongside `delivery_strategy`. Do not ask again unless the user changes scope.
 
-When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match: resolve it by registry name through this template's existing skill-resolution mechanism (the same one it already uses to pass skills to phases) and ensure the `sdd-tasks` and `sdd-apply` phases load and follow it BEFORE planning or creating any PR.
+When delivery planning yields chained PRs, treat `chained-pr` (registry skill `gentle-ai-chained-pr`) as a required skill match:
+
+resolve it by registry name through this template's existing skill-resolution mechanism, the same one it already uses to pass skills to phases.
+
+The `sdd-tasks` and `sdd-apply` phases must load and follow it BEFORE planning or creating any PR.
 
 Do not hardcode the skill path; defer resolution to that mechanism.
 
@@ -1311,7 +1361,9 @@ Each phase returns: `status`, `executive_summary`, `artifacts`, `next_recommende
 
 After `sdd-tasks` completes and before launching `sdd-apply`, inspect the task result summary for `Review Workload Forecast`.
 
-If it says `Chained PRs recommended: Yes`, `400-line budget risk: High`, estimated changed lines exceed 400, or `Decision needed before apply: Yes`, apply the cached `delivery_strategy`: `ask-on-risk` asks, `auto-chain` asks for a missing `chain_strategy` and applies only the next PR slice, `single-pr` requires `size:exception`, and `exception-ok` records the exception.
+If it says `Chained PRs recommended: Yes`, `400-line budget risk: High`, estimated changed lines exceed 400, or `Decision needed before apply: Yes`, apply the cached `delivery_strategy`.
+
+`ask-on-risk` asks, `auto-chain` asks for a missing `chain_strategy` and applies only the next PR slice, `single-pr` requires `size:exception`, and `exception-ok` records the exception.
 
 Any other `delivery_strategy` value is invalid. Do NOT pick the nearest branch and do NOT proceed: STOP, report the unrecognised value, and re-collect the delivery strategy before `sdd-apply` runs.
 
@@ -1452,9 +1504,13 @@ For phases with required dependencies, sub-agent reads directly from the backend
 
 ### Archive Final-State Handoff (MANDATORY)
 
-When launching `sdd-archive`, forward explicit final-state facts for any work completed after `apply-progress` or `verify-report` were persisted — verify warnings fixed in later commits, blockers resolved, tasks finished, updated test or issue counts — with commit or evidence references where available.
+When launching `sdd-archive`, forward explicit final-state facts for any work completed after `apply-progress` or `verify-report` were persisted.
 
-Those two artifacts are intermediate snapshots, valid at the time they were written; the archive report records the state at close, and explicit final-state facts in the `sdd-archive` launch prompt outrank stale snapshot claims.
+That means verify warnings fixed in later commits, blockers resolved, tasks finished, and updated test or issue counts, with commit or evidence references where available.
+
+Those two artifacts are intermediate snapshots, valid at the time they were written.
+
+The archive report records the state at close, and explicit final-state facts in the `sdd-archive` launch prompt outrank stale snapshot claims.
 
 ### Strict TDD Forwarding (MANDATORY)
 

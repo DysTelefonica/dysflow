@@ -13,6 +13,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | `compile_vba` MCP tool | Removed in v1.19.0 (`feat-759-no-compile`). Guard entries remain so a legacy `compile: true` fails loudly. |
 | `vba_inline_execution` MCP tool | Removed in v4.0.0. Use the version-controlled [`_Temp_*.bas` workflow](../vba-execution.md) with `import_modules`, the human compile checkpoint, and `run_vba`. |
 | Top-level project-config `allowWrites` / `allowedProcedures` | Removed in v1.15.0. Config loading rejects them with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`; see the [v4.0.3 migration note](../migrations/v4-0-3.md). |
+| A default-deny procedure gate on MCP | Removed as a default after v4.4.5. `run_vba` and stdio `test_vba` allow every procedure the write gate permits unless the project sets `capabilities.procedures.strictMode: true`. The refusal codes still exist and fire under that flag; the HTTP routes never had it removed. See [run_vba](../tools/run-vba.md). |
 | Web dashboard or server-rendered UI | Not found. No HTMX, template, or UI route exists. |
 | Auth, login, OAuth, session, or tenant boundary | Not implemented. |
 | Git-clone or source-build update *fallback* | Not found. No failure ever falls back to a source build. The `main` channel builds from source only when an operator names it and sets `DYSFLOW_ALLOW_INSECURE_UPDATE=1`. |
