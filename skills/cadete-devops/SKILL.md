@@ -23,7 +23,7 @@ Use this skill for Cadete image changes caused by CVEs, base-image updates, or a
 
 - Never print tokens, `.env`, `quay_auth.json`, pull secrets, or decoded secret content.
 - Production build uses root `Dockerfile`; never use `Dockerfile.local` for Quay/OCP.
-- Quay authfile lives in this skill: `resources/quay_auth.json`.
+- Quay authfile lives in this skill as a placeholder: `resources/quay_auth.json` (see also `quay_auth.json.example`). Generate the real authfile locally on the target environment with `podman login --authfile <path> <registry>`; never commit it — `.gitignore` blocks `resources/quay_auth.json`.
 - Quay/OCP traffic must go through the corporate path (`10.14.x.x`, gateway `10.14.7.4`). Chat/Internet may use WiFi (`192.168.x.x`). If curl/push goes via WiFi, bind/route to the corporate interface.
 - Before touching production, ask the user to run `oc login` for PRO. Do not paste or execute tokens yourself.
 - Cadete frontend allows only one pod: always scale to `0`, change image, then scale to `1`.

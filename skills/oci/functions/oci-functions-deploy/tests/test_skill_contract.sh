@@ -172,7 +172,7 @@ EOF
 {
   "auths": {
     "phx.ocir.io": {
-      "auth": "dXNlcjp0b2tlbg=="
+      "auth": "<base64(user:token)>"
     }
   }
 }
