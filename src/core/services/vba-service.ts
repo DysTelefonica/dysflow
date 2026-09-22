@@ -287,7 +287,20 @@ export class AccessVbaService {
     // #1787 — the caller's ORIGINAL name stays in the envelope; the name that
     // actually went on the wire is reported alongside it so the remediation
     // can name the right suspect.
-    return reclassifyRunnerFailure(ensured, normalizedRequest, invokedProcedureName);
+    //
+    // A qualifier the preflight could not tie to a local module is the one
+    // case where qualification is a live suspect. Hand the verdict over
+    // rather than letting the reclassifier re-derive it from the string.
+    const unverifiedQualifier =
+      parsedName.moduleName.length > 0 && preflight.kind !== "declared-in-named-module"
+        ? { qualifier: parsedName.moduleName, procName: parsedName.procName }
+        : undefined;
+    return reclassifyRunnerFailure(
+      ensured,
+      normalizedRequest,
+      invokedProcedureName,
+      unverifiedQualifier,
+    );
   }
 
   /**
@@ -436,6 +449,15 @@ function reclassifyRunnerFailure<T>(
   result: OperationResult<T>,
   request: AccessVbaRequest,
   invokedProcedureName: string = request.procedureName,
+  /**
+   * #1787 — set when the caller supplied a `<qualifier>.<procedure>` name AND
+   * the preflight could NOT prove the qualifier names a module of this
+   * project, so the name was forwarded to COM verbatim. `undefined` means
+   * either the prefix was stripped (qualification ruled out) or none was
+   * supplied. Passing the preflight's verdict in is what keeps this function
+   * from guessing the cause from the shape of a string.
+   */
+  unverifiedQualifier?: { qualifier: string; procName: string },
 ): OperationResult<T> {
   if (result.ok) return result;
   const message = result.error.message;
@@ -449,32 +471,57 @@ function reclassifyRunnerFailure<T>(
 
   const classification = classifyVbaRunnerFailure(message);
   if (classification?.code === "PROCEDURE_NOT_CALLABLE") {
-    // #1787 — a name that was STILL qualified when it reached
-    // `Application.Run` has a likelier explanation than stale p-code: Access
-    // does not resolve a module qualifier at all. Say that first, and keep
-    // the recompile advice as the fallback. When the name went out
-    // unqualified, qualification is ruled out and the original stale-p-code
-    // remediation is the right one again.
-    const stillQualified = invokedProcedureName.includes(".");
-    const bareName = invokedProcedureName.slice(invokedProcedureName.indexOf(".") + 1);
+    // #1787 — WHO to blame is decided by the preflight outcome the service
+    // already computed, never by looking for a `.` in the invoked name.
+    //
+    // An earlier cut of this branch sniffed `invokedProcedureName.includes(".")`
+    // and adversarial review corroborated two defects in that heuristic:
+    //
+    //   - Misattribution. `found-elsewhere` and `unverifiable` forward the
+    //     caller's name verbatim, so a legitimate `referencedDatabase.procedure`
+    //     call was told to "retry unqualified" — advice that silently retargets
+    //     the call from the referenced database to a same-named local
+    //     procedure.
+    //   - The retry loop this issue exists to kill. The suggested name was cut
+    //     at the FIRST dot, so a multi-segment name produced another dotted
+    //     name that re-entered this same branch on retry.
+    //
+    // So: when the prefix WAS stripped, qualification is ruled out by
+    // construction and the stale-p-code remediation is correct regardless of
+    // what the procedure name looks like. When a qualifier was supplied but
+    // could NOT be verified, name both real possibilities and offer at most a
+    // terminal retry name — one that has nothing left to strip.
+    if (unverifiedQualifier === undefined) {
+      return failureResult(
+        createDysflowError(
+          "PROCEDURE_NOT_CALLABLE",
+          `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
+            "recompile in Access VBE (Debug → Compile) and retry.",
+          { retryable: true, details: sharedDetails, remediation: classification.remediation },
+        ),
+      ) as OperationResult<T>;
+    }
+
+    const { qualifier, procName } = unverifiedQualifier;
+    // Only offer a retry name when it is terminal. A name that still carries a
+    // dot would come straight back here, which is the loop, not a remedy.
+    const terminalRetry = procName.includes(".")
+      ? ""
+      : ` If '${qualifier}' was meant as a module, retry with procedureName '${procName}'.`;
     return failureResult(
       createDysflowError(
         "PROCEDURE_NOT_CALLABLE",
-        stillQualified
-          ? `Procedure '${request.procedureName}' could not be invoked by Access COM. ` +
-              "Access resolves 'Application.Run' by procedure name — a module qualifier is " +
-              `not resolvable — so retry with procedureName: '${bareName}'. ` +
-              "If the unqualified call fails too, recompile in Access VBE (Debug → Compile) and retry."
-          : `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
-              "recompile in Access VBE (Debug → Compile) and retry.",
+        `Procedure '${request.procedureName}' could not be invoked by Access COM, and the ` +
+          `qualifier '${qualifier}' does not name a module of this project's source.${terminalRetry}` +
+          " If the name is already correct, recompile in Access VBE (Debug → Compile) and retry.",
         {
           retryable: true,
           details: sharedDetails,
-          remediation: stillQualified
-            ? `Retry with the unqualified procedureName '${bareName}'. Access only accepts a ` +
-              "REFERENCED database's project name as a qualifier, never a module name. " +
-              "If that also fails, recompile in Access VBE (Debug → Compile) and retry."
-            : classification.remediation,
+          remediation:
+            `Access resolves 'Application.Run' by procedure name; the only qualifier it accepts ` +
+            `is the project name of a referenced database. Check whether '${qualifier}' is a ` +
+            `referenced database and that the reference resolves.${terminalRetry} ` +
+            "If the name is already correct, recompile in Access VBE (Debug → Compile) and retry.",
         },
       ),
     ) as OperationResult<T>;

@@ -263,3 +263,104 @@ describe("#1787 — run_vba sends Access a resolvable procedure name", () => {
     });
   });
 });
+
+/**
+ * #1787 round 2 — the first cut of the `PROCEDURE_NOT_CALLABLE` remediation
+ * decided who to blame by looking for a `.` in the invoked name. Adversarial
+ * review corroborated two defects in that heuristic:
+ *
+ *   R3 — misattribution. `found-elsewhere` and `unverifiable` forward the
+ *        caller's name verbatim, so a legitimate `referencedDatabase.procedure`
+ *        call was told to "retry unqualified" — advice that silently retargets
+ *        the call from the referenced database to a same-named local procedure.
+ *
+ *   R4 — the retry loop this issue exists to kill. The suggestion was built by
+ *        slicing at the FIRST dot, so a multi-segment name yielded another
+ *        dotted name, which re-entered the same branch on retry.
+ *
+ * The contract below replaces the string sniff: the remediation is decided by
+ * the preflight outcome the service already computed, and it never promises
+ * that one more retry will resolve the name.
+ */
+describe("#1787 round 2 — the remediation is decided by the preflight, not by dots", () => {
+  const MULTI_SEGMENT_SOURCE = [
+    'Attribute VB_Name = "MyModule"',
+    "Public Sub Helper()",
+    "End Sub",
+  ].join("\n");
+
+  it("does not tell a referenced-database call to drop its qualifier", async () => {
+    // `SharedLib` is a REFERENCED database, not a module here. A local module
+    // happens to declare a procedure of the same name, so the preflight
+    // resolves `found-elsewhere` and the name is forwarded verbatim.
+    const runner = new CapturingRunner(notCallableResult());
+    const service = new AccessVbaService({
+      runner,
+      config,
+      sourceResolver: {
+        async resolveModuleSource(): Promise<string | undefined> {
+          return undefined;
+        },
+        async resolveAllModuleSources(): Promise<Record<string, string>> {
+          return { MyModule: MULTI_SEGMENT_SOURCE };
+        },
+      },
+    });
+
+    const result = await service.execute({
+      moduleName: "SharedLib",
+      procedureName: "SharedLib.Helper",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure envelope");
+    const remediation = result.error.remediation ?? "";
+    // The qualifier could not be verified — say so, and name the referenced
+    // database possibility. Never assert a module qualifier as the cause.
+    expect(remediation).toMatch(/SharedLib/);
+    expect(remediation).toMatch(/referenced database/i);
+    expect(remediation).not.toMatch(/a module qualifier is not resolvable/i);
+  });
+
+  it("never suggests a retry name that would land in this same branch again", async () => {
+    // No resolver: `unverifiable`, so the multi-segment name goes out verbatim.
+    const runner = new CapturingRunner(notCallableResult());
+    const service = new AccessVbaService({ runner, config });
+
+    const result = await service.execute({
+      moduleName: "",
+      procedureName: "Module.Nested.Type.Proc",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure envelope");
+    const remediation = result.error.remediation ?? "";
+    // The old code sliced at the first dot and offered 'Nested.Type.Proc',
+    // which re-enters this branch on retry. Any name the remediation offers as
+    // a retry must be terminal — no dots left to strip.
+    const offered = `${result.error.message} ${remediation}`;
+    for (const suggestion of offered.matchAll(/procedureName '([^']+)'/g)) {
+      expect(suggestion[1], `suggested retry name: ${suggestion[1]}`).not.toContain(".");
+    }
+  });
+
+  it("keeps the stale-p-code remediation when the preflight licensed the strip", async () => {
+    const runner = new CapturingRunner(notCallableResult());
+    const service = new AccessVbaService({
+      runner,
+      config,
+      sourceResolver: resolverWithModule,
+    });
+
+    const result = await service.execute({
+      moduleName: "MyModule",
+      procedureName: "MyModule.RunMe",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure envelope");
+    // We stripped, so the qualifier is ruled out by construction.
+    expect(result.error.remediation).toMatch(/Recompile in Access VBE/i);
+    expect(result.error.remediation).not.toMatch(/referenced database/i);
+  });
+});

@@ -26,6 +26,14 @@ qualifier does not resolve locally — or nothing could be verified — the name
 goes out verbatim, which is what the referenced-database form needs.
 `error.details.invokedProcedureName` reports whichever name was used.
 
+The `PROCEDURE_NOT_CALLABLE` remediation is derived from that same preflight
+verdict, never from whether the name contains a `.`. Sniffing the string
+misattributed a legitimate `referencedDatabase.procedure` call as a module
+qualifier, and it built its suggested retry name by cutting at the FIRST dot —
+so a multi-segment name produced another dotted name that re-entered the same
+branch on retry. The service now offers a retry name only when that name is
+terminal, and otherwise asks the caller to check the reference.
+
 ## procedureName parsing contract
 
 The pure parser lives at
@@ -104,7 +112,7 @@ MUST branch on the exact code returned:
 | `MCP_PROCEDURE_NOT_ALLOWED` | Adapter gate (`canonical-handlers.ts::ensureProcedureAllowed`) — procedure is not in `allowedProcedures`. Reachable only under `capabilities.procedures.strictMode: true`. | Surface `error.allowedProcedures` to the user; ask whether to add the procedure to the allowlist, or whether the project wants `strictMode` at all. |
 | `MCP_ALLOWLIST_NOT_CONFIGURED` | Adapter gate — no allowlist AND `dryRun: true` was NOT passed. Reachable only under `capabilities.procedures.strictMode: true`; it is NOT emitted by default. | Declare `allowedProcedures` in `.dysflow/project.json`, drop `strictMode`, or pass `dryRun: true` once as opt-out. |
 | `PROCEDURE_NOT_FOUND` | Service preflight (`vba-service.ts::checkProcedureExists`) — procedure is NOT declared in the project's VBA source. | Read `error.details.{procedure, moduleName, scannedModules}`. Verify the spelling, run `import_modules({ moduleNames: [...] })` to seed the source tree, recompile in Access VBE. |
-| `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. | Read `error.remediation`; it names the suspect from `error.details.invokedProcedureName`. A name that still carries a `.` was not resolvable by Access at all — retry unqualified. An unqualified name that still fails points at stale p-code — recompile in Access VBE (Debug → Compile) and retry. Neither is the `PROCEDURE_NOT_FOUND` fix (which needs an import). |
+| `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. | Read `error.remediation`. It is decided by the preflight outcome, not by the shape of the name: when the prefix was stripped, qualification is ruled out and stale p-code is the cause — recompile in Access VBE (Debug → Compile). When a qualifier was supplied that does not name a module of this project's source, the remediation names it and asks whether it is a referenced database whose reference resolves. Neither is the `PROCEDURE_NOT_FOUND` fix (which needs an import). |
 | `VBA_RUNTIME_ERROR` | Service reclassifier — the procedure WAS invoked, it ran, and it raised. | Read `error.details.vbaMessage` for the error VBA emitted and fix the procedure or the state it depends on. Recompiling does not apply: the procedure is callable and running. |
 
 ### Reclassifier patterns
@@ -155,8 +163,9 @@ for the same procedureName in the same binary:
 
 2. `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is
    in `VBComponents` but Access refused to invoke it. Follow
-   `error.remediation`: it reads `error.details.invokedProcedureName` and
-   tells you whether to retry unqualified (#1787) or recompile.
+   `error.remediation`, which the service derives from the preflight verdict
+   (#1787): either the qualifier could not be tied to a local module, or
+   qualification is ruled out and the p-code is stale.
 
 3. `apply: true` fails with `VBA_RUNTIME_ERROR` → the procedure ran and
    raised. Read `error.details.vbaMessage`. Do NOT recompile: `apply`
