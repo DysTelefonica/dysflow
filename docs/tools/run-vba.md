@@ -14,25 +14,32 @@ The `<module>.` prefix addresses **dysflow's** source preflight and allowlist
 lookup. It is not an Access addressing form.
 
 `Access.Application.Run` resolves its `ProcedureName` argument by procedure
-name; the only qualifier it accepts is the project name of a **referenced**
-database (`referencedProject.procedure`). A module qualifier never resolves,
-and Access answers `can't find the procedure` / `no encuentra el
-procedimiento`.
+name. The only qualifier it accepts is the project name of a **referenced**
+database (`referencedProject.procedure`).
+
+A module qualifier never resolves. Access answers `can't find the procedure` /
+`no encuentra el procedimiento`.
 
 `AccessVbaService.execute` therefore drops the prefix before the name reaches
-COM, but **only** when the preflight resolved that qualifier to a module of
-this project and confirmed the module declares the procedure. When the
-qualifier does not resolve locally — or nothing could be verified — the name
-goes out verbatim, which is what the referenced-database form needs.
+COM. It does so **only** when the preflight tied that qualifier to a module of
+this project that declares the procedure.
+
+When the qualifier does not resolve locally — or nothing could be verified —
+the name goes out verbatim, which is what the referenced-database form needs.
+
 `error.details.invokedProcedureName` reports whichever name was used.
 
 The `PROCEDURE_NOT_CALLABLE` remediation is derived from that same preflight
-verdict, never from whether the name contains a `.`. Sniffing the string
-misattributed a legitimate `referencedDatabase.procedure` call as a module
-qualifier, and it built its suggested retry name by cutting at the FIRST dot —
-so a multi-segment name produced another dotted name that re-entered the same
-branch on retry. The service now offers a retry name only when that name is
-terminal, and otherwise asks the caller to check the reference.
+verdict, never from whether the name contains a `.`.
+
+Sniffing the string misattributed a legitimate `referencedDatabase.procedure`
+call as a module qualifier.
+
+It also built its retry name by cutting at the FIRST dot, so a multi-segment
+name produced another dotted name that re-entered the same branch.
+
+The service now offers a retry name only when that name is terminal, and
+otherwise asks the caller to check the reference.
 
 ## procedureName parsing contract
 
@@ -163,9 +170,8 @@ for the same procedureName in the same binary:
 
 2. `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is
    in `VBComponents` but Access refused to invoke it. Follow
-   `error.remediation`, which the service derives from the preflight verdict
-   (#1787): either the qualifier could not be tied to a local module, or
-   qualification is ruled out and the p-code is stale.
+   `error.remediation`, which the service derives from the preflight
+   verdict (#1787), not from the shape of the name.
 
 3. `apply: true` fails with `VBA_RUNTIME_ERROR` → the procedure ran and
    raised. Read `error.details.vbaMessage`. Do NOT recompile: `apply`
