@@ -30,7 +30,7 @@ All Access, VBA, schema, and form tools are first-class API. No compatibility ti
 
 ## Releases
 
-Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`, which wraps the full workflow (bump version, update CHANGELOG, push, **wait for CI green on the release commit's SHA**, tag, push tag) and refuses to tag unless CI concludes `success`.
+Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`. `main` is protected, so the script prepares the release commit and **stops**: it never pushes `main` itself. You deliver that commit through a pull request, then re-run the script with `-Resume`, which waits for CI green on the **release commit's exact SHA** and only then creates and pushes the annotated tag. It refuses to tag unless CI concludes `success`.
 
 The release workflow then builds the tarball, signs `SHA256SUMS` with Ed25519, and publishes the GitHub Release.
 
@@ -55,6 +55,11 @@ pwsh -File scripts/release-prepare.ps1 -Bump patch    # v1.10.3 → v1.10.4
 pwsh -File scripts/release-prepare.ps1 -Bump minor    # v1.10.x → v1.11.0
 pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
 ```
+
+The script prints the pull-request delivery steps when it finishes preparing.
+
+After that pull request merges, resume the prepared version with
+`pwsh -File scripts/release-prepare.ps1 -Resume -Version X.Y.Z`.
 
 ## What Dysflow is (and is not)
 
@@ -322,16 +327,27 @@ For true cross-user use on the same machine, choose a shared path that all inten
 dysflow install --runtime-dir C:\Dysflow --agents opencode --no-tui
 ```
 
-Install the Pi package `@aroman22/dysflow-pi` through the same installer. It
-ships inside the runtime, and Dysflow activates it by local path through Pi's
-package manager and records ownership safely:
+### Pi plugin
+
+The Pi facade is `@aroman22/dysflow-pi`, and it is **not installed from npm**.
+
+Dysflow retired the package-registry channel in #1754. The facade now ships
+inside the signed release archive, so it always matches the runtime you just
+installed.
+
+Install it with the Dysflow installer, which registers the runtime's own
+`app/plugin/pi` path in Pi's settings and records ownership safely:
 
 ```powershell
 dysflow install --agents pi --no-tui
 ```
 
-Reload Pi, then verify the compact `⚡ Dysflow` facade. The
-[Pi-native integration guide](./docs/pi-native-integration.md) owns setup,
+A leftover `npm:@aroman22/dysflow-pi` entry from an earlier release is removed
+during that reconciliation; the previous entry is restored if the install fails.
+
+Reload Pi, then verify the compact `⚡ Dysflow` facade.
+
+The [Pi-native integration guide](./docs/pi-native-integration.md) owns setup,
 configuration, update, uninstall, and troubleshooting.
 
 `dysflow install` persists the resolved runtime directory in a machine-level marker so future `dysflow update` calls can reuse the same installed runtime instead of falling back to the current user's `%LOCALAPPDATA%` path.

@@ -5,7 +5,10 @@ to make manual maintenance decisions auditable and visible in CI.
 
 ## Automation
 
-The canonical release workflow is `scripts/release-prepare.ps1`. It:
+The canonical release workflow is `scripts/release-prepare.ps1`, and it runs in
+two phases because `main` is protected.
+
+**Phase 1 — prepare (`-Bump` or `-Version`).** The script:
 
   1. Refuses to start on a dirty working tree (so the release commit cannot
      bundle unrelated work).
@@ -18,16 +21,25 @@ The canonical release workflow is `scripts/release-prepare.ps1`. It:
   4. Runs `test/quality-gates/changelog-release-entry-format.test.ts` locally
      against the generated file. A malformed entry aborts before `git add`,
      commit, or push.
-  5. Pushes the `chore(release): prepare vX.Y.Z` commit to `origin/main`.
-  6. **Polls `gh run list --workflow ci.yml` for the release commit's exact
+  5. Creates the `chore(release): prepare vX.Y.Z` commit and **stops**. It does
+     not push `main`: branch protection rejects a direct push. The script prints
+     the pull-request delivery steps (branch, `gh pr create`, wait for the
+     required checks, merge, then return to `main`).
+
+**Phase 2 — resume (`-Resume -Version X.Y.Z`), after that pull request merges.**
+The script:
+
+  6. Re-verifies the prepared state against `origin/main`, requires HEAD to equal
+     `origin/main`, and confirms the tag and GitHub Release are still absent.
+  7. **Polls `gh run list --workflow ci.yml` for the release commit's exact
      SHA** — not the latest run — and refuses to tag unless exact-SHA `main` CI
      succeeds.
-  7. On CI green, creates and pushes an annotated `vX.Y.Z` tag. That tag starts
+  8. On CI green, creates and pushes an annotated `vX.Y.Z` tag. That tag starts
      `.github/workflows/release.yml`, whose `e2e-validation` job runs
      `pnpm test:e2e:mcp:release` on the self-hosted Access runner.
-  8. The release job stamps the root and Pi package to the tag version and
+  9. The release job stamps the root and Pi package to the tag version and
      builds the signed archive, which carries the Pi facade in `plugin/pi`.
-  9. The GitHub Release is published only after `build`, `quality-authority`,
+  10. The GitHub Release is published only after `build`, `quality-authority`,
      and `e2e-validation` succeed; the publication job declares all three in
      `needs`. Nothing is published to a package registry; the Pi package ships
      inside the archive.
@@ -68,27 +80,42 @@ Review the non-merge commit subjects since the previous tag as consumer-facing r
 
 The script turns them into `### Changes` notes and preserves one physical bullet per commit, but the operator still owns wording and grouping.
 
-## Pi package publication
+## Pi facade packaging (no package registry)
 
-The full ownership, publication-order, retry, and rollback contract lives in the
+The full ownership, reconciliation, retry, and rollback contract lives in the
 [Pi-native integration guide](./pi-native-integration.md#release-contract).
+
 Before pushing a tag:
 
 - [ ] `package.json` and `plugin/pi/package.json` have matching versions.
 - [ ] `plugin/pi/pnpm-lock.yaml` matches `plugin/pi/package.json`.
-- [ ] The package dry-run and focused Pi tests pass in sandbox paths.
+- [ ] The focused Pi tests pass in sandbox paths.
 
-The workflow uses a short-lived OIDC credential, publishes to npmjs, and verifies with `npm view` before creating the GitHub Release.
+The Pi facade is **not published to a package registry** (#1754).
 
-A failed post-publication run is retried forward; it never unpublishes or replaces immutable package bytes.
+The GitHub Release is the only distribution channel. The tag workflow stamps the
+root and Pi manifests to the tag version.
 
-The first package creation is the sole manual exception: local `npm login` plus 2FA, followed immediately by Trusted Publisher configuration.
+It then bundles `plugin/pi` and its lockfile into the signed
+`dysflow-<tag>.tar.gz`.
+
+There is no registry credential and no `npm publish`.
+
+Nothing verifies a published package afterwards, so there is no
+post-publication step to retry: a failed run is retried forward as a whole
+workflow.
+
+Immutable release assets are never replaced.
+
+`test/quality-gates/release-package-version.test.ts` pins that contract.
+
+It fails if the workflow regains `npm publish`, `npm pack`, `NPM_TOKEN`,
+`NODE_AUTH_TOKEN`, `registry.npmjs.org`, or `id-token: write`.
 
 ### Fresh-Pi visual acceptance
 
-After the implementation is green and uploaded, the implementation session stops.
-
-Once the authorized tag workflow has published the matching npm package, complete final acceptance from a completely new Pi process and session:
+Complete final acceptance from a completely new Pi process and session, after the
+tag workflow has published the matching archive:
 
 - [ ] Run `dysflow install --agents pi --no-tui`; do not install from a local path.
 - [ ] Start another fresh Pi session after installation.
@@ -97,9 +124,10 @@ Once the authorized tag workflow has published the matching npm package, complet
       comparable to Engram, and the expanded result exposes structured payload.
 - [ ] Record the installed runtime/package version and visual verdict on issue #1723.
 
-A `/reload` inside the implementation session is not final acceptance evidence. If
-the matching npm version is unavailable, stop; do not bypass the canonical owner-
-aware installer.
+A `/reload` inside the implementation session is not final acceptance evidence.
+
+If the tag workflow did not publish the archive, stop; do not bypass the
+canonical owner-aware installer.
 
 ## MCP protocol compatibility
 
