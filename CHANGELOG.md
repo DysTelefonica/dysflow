@@ -1,5 +1,15 @@
 # Changelog
 
+## [v4.4.9] - 2026-09-22
+
+### Changes
+
+- chore(skills): remove vba-lanzadera-backend-config (not in fleet catalog) (#1789)
+- fix(run-vba): stop handing Access COM a module-qualified name it cannot resolve (#1788)
+- refactor(skills): make the examples audit testable and fix three extractor nits (#1786)
+- docs: align the release flow and Pi plugin install with what ships (#1785)
+
+
 ## [v4.4.8] - 2026-09-21
 
 ### Changes
