@@ -8,6 +8,39 @@ plan and the apply-path preflight
 paths therefore MUST agree on procedure resolution for the same input —
 the bug #1174 reports is exactly the asymmetry that broke that contract.
 
+## What the module qualifier does and does not address (#1787)
+
+The `<module>.` prefix addresses **dysflow's** source preflight and allowlist
+lookup. It is not an Access addressing form.
+
+`Access.Application.Run` resolves its `ProcedureName` argument by procedure
+name. The only qualifier it accepts is the project name of a **referenced**
+database (`referencedProject.procedure`).
+
+A module qualifier never resolves. Access answers `can't find the procedure` /
+`no encuentra el procedimiento`.
+
+`AccessVbaService.execute` therefore drops the prefix before the name reaches
+COM. It does so **only** when the preflight tied that qualifier to a module of
+this project that declares the procedure.
+
+When the qualifier does not resolve locally — or nothing could be verified —
+the name goes out verbatim, which is what the referenced-database form needs.
+
+`error.details.invokedProcedureName` reports whichever name was used.
+
+The `PROCEDURE_NOT_CALLABLE` remediation is derived from that same preflight
+verdict, never from whether the name contains a `.`.
+
+Sniffing the string misattributed a legitimate `referencedDatabase.procedure`
+call as a module qualifier.
+
+It also built its retry name by cutting at the FIRST dot, so a multi-segment
+name produced another dotted name that re-entered the same branch.
+
+The service now offers a retry name only when that name is terminal, and
+otherwise asks the caller to check the reference.
+
 ## procedureName parsing contract
 
 The pure parser lives at
@@ -86,7 +119,7 @@ MUST branch on the exact code returned:
 | `MCP_PROCEDURE_NOT_ALLOWED` | Adapter gate (`canonical-handlers.ts::ensureProcedureAllowed`) — procedure is not in `allowedProcedures`. Reachable only under `capabilities.procedures.strictMode: true`. | Surface `error.allowedProcedures` to the user; ask whether to add the procedure to the allowlist, or whether the project wants `strictMode` at all. |
 | `MCP_ALLOWLIST_NOT_CONFIGURED` | Adapter gate — no allowlist AND `dryRun: true` was NOT passed. Reachable only under `capabilities.procedures.strictMode: true`; it is NOT emitted by default. | Declare `allowedProcedures` in `.dysflow/project.json`, drop `strictMode`, or pass `dryRun: true` once as opt-out. |
 | `PROCEDURE_NOT_FOUND` | Service preflight (`vba-service.ts::checkProcedureExists`) — procedure is NOT declared in the project's VBA source. | Read `error.details.{procedure, moduleName, scannedModules}`. Verify the spelling, run `import_modules({ moduleNames: [...] })` to seed the source tree, recompile in Access VBE. |
-| `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. Typical cause: stale p-code after source edits without a VBE recompile. | `error.remediation` says "Recompile in Access VBE (Debug → Compile) so the binary's compiled p-code matches the on-disk source, then retry." Follow it. NOT the same fix as `PROCEDURE_NOT_FOUND` (which needs an import). |
+| `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. | Read `error.remediation`. It is decided by the preflight outcome, not by the shape of the name: when the prefix was stripped, qualification is ruled out and stale p-code is the cause — recompile in Access VBE (Debug → Compile). When a qualifier was supplied that does not name a module of this project's source, the remediation names it and asks whether it is a referenced database whose reference resolves. Neither is the `PROCEDURE_NOT_FOUND` fix (which needs an import). |
 | `VBA_RUNTIME_ERROR` | Service reclassifier — the procedure WAS invoked, it ran, and it raised. | Read `error.details.vbaMessage` for the error VBA emitted and fix the procedure or the state it depends on. Recompiling does not apply: the procedure is callable and running. |
 
 ### Reclassifier patterns
@@ -136,8 +169,9 @@ for the same procedureName in the same binary:
    on-disk source. Recompile in Access VBE and retry.
 
 2. `apply: true` fails with `PROCEDURE_NOT_CALLABLE` → the procedure is
-   in `VBComponents` but Access refused to invoke it (stale p-code).
-   Follow `error.remediation` and recompile.
+   in `VBComponents` but Access refused to invoke it. Follow
+   `error.remediation`, which the service derives from the preflight
+   verdict (#1787), not from the shape of the name.
 
 3. `apply: true` fails with `VBA_RUNTIME_ERROR` → the procedure ran and
    raised. Read `error.details.vbaMessage`. Do NOT recompile: `apply`

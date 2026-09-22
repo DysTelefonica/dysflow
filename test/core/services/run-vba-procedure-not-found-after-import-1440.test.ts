@@ -134,10 +134,16 @@ describe("#1440 — run_vba preflight accepts a freshly-imported procedure", () 
 
   it("the parsed moduleName populates the runner request (apply path matches the dry-run plan)", async () => {
     // The reproduction invokes `run_vba` with a `<module>.<proc>`
-    // procedureName and the runner must receive the parsed moduleName
-    // so the runner's downstream AccessApplication.Run() can resolve
-    // the procedure. The dry-run plan (#1174) already does this; the
-    // apply path has to match.
+    // procedureName and the runner must receive the parsed moduleName.
+    // The dry-run plan (#1174) already does this; the apply path has to match.
+    //
+    // #1787 — the runner's `procedureName` is the BARE name once the preflight
+    // has resolved the qualifier to a module of this project. This test used
+    // to assert the qualified name reached the runner "so the runner's
+    // downstream AccessApplication.Run() can resolve the procedure" — that
+    // premise was wrong. `Application.Run` resolves by procedure name, with a
+    // REFERENCED database's project name as the only legal qualifier, so the
+    // module-qualified form never resolved at all.
     const runner = new RecordingRunner();
     const resolver = {
       resolveModuleSource: async (moduleName: string) =>
@@ -157,7 +163,7 @@ describe("#1440 — run_vba preflight accepts a freshly-imported procedure", () 
       kind: "vba",
       request: {
         moduleName: freshModuleName,
-        procedureName: `${freshModuleName}.RunAll`,
+        procedureName: "RunAll",
       },
     });
   });

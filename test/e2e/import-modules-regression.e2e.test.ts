@@ -338,6 +338,10 @@ function buildToolCases(): ToolCase[] {
       { projectId, erdPath: join(workspaceRoot, "erd-output.txt") },
       150_000,
     ),
+    // #1787 — this one asserts `ok === true` (see the dedicated block below),
+    // not just the universal contract. A `PROCEDURE_NOT_CALLABLE` envelope
+    // satisfies the universal contract, which is how a `run_vba` that could
+    // never resolve a module-qualified name shipped behind a "happy" label.
     t("run_vba", "happy", { procedureName: "TestGoodModule.Always42", argsJson: "[]" }, 150_000),
     t("run_vba", "sad", { procedureName: "NoSuchModule.NoSuchSub", argsJson: "[]" }, 150_000),
     t("test_vba", "happy", { projectId, proceduresJson: "[]" }, 150_000),
@@ -489,6 +493,42 @@ describe.skipIf(!canRunE2e)(
         c.timeoutMs + 30_000,
       );
     }
+
+    // ----- run_vba: the module qualifier must not decide the outcome (#1787) -----
+    // Access resolves `Application.Run` by procedure name; a MODULE qualifier
+    // is not resolvable, so `TestGoodModule.Always42` used to fail while
+    // `Always42` succeeded against the same binary. dysflow now strips the
+    // prefix once the preflight proves the qualifier names a module of this
+    // project.
+    //
+    // The assertions are deliberately p-code-independent: they pin the
+    // qualifier's (non-)effect rather than a green run, because this workspace
+    // has no human in it to press Debug -> Compile. The universal contract
+    // above would pass on a PROCEDURE_NOT_CALLABLE envelope, which is exactly
+    // how this shipped behind a "happy" label for releases on end.
+    it("run_vba resolves a module-qualified name exactly as it resolves the bare name", async () => {
+      const qualified = await callMcp(
+        "run_vba",
+        { procedureName: "TestGoodModule.Always42", argsJson: "[]", apply: true },
+        { timeoutMs: 150_000 },
+      );
+      const bare = await callMcp(
+        "run_vba",
+        { procedureName: "Always42", argsJson: "[]", apply: true },
+        { timeoutMs: 150_000 },
+      );
+      assertUniversalContract(qualified);
+      assertUniversalContract(bare);
+
+      // The qualified string must never be what reaches Application.Run.
+      // (`procedure` still echoes the caller's original name; only
+      // `invokedProcedureName` reports what went on the wire.)
+      expect(qualified.text).not.toMatch(/"invokedProcedureName"\s*:\s*"TestGoodModule\.Always42"/);
+
+      // Same procedure, same binary, same moment: the qualifier is not
+      // allowed to change the verdict.
+      expect(qualified.ok).toBe(bare.ok);
+    }, 330_000);
 
     // ----- Whole-project verify regression -----
     // A consumer reported VBA_MANAGER_FAILED ("...NormalizedModules ... matriz

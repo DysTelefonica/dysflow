@@ -106,6 +106,7 @@
 | Symptom | Fix |
 |---|---|
 | Calling `run_vba` and getting `PROCEDURE_NOT_FOUND` after a successful plan with the same `procedureName` | Force manual recompile in Access VBE (Debug -> Compile). The binary's compiled p-code is stale; do NOT chase a phantom import issue. AP of `dysflow-usage` §6. |
+| Reading every `PROCEDURE_NOT_CALLABLE` as stale p-code and recompiling again | Read `error.remediation` first. dysflow derives it from the source preflight (#1787) and will tell you when the qualifier, not the p-code, is the suspect. Recompiling cannot fix an unresolvable qualifier, and that loop does not terminate. |
 | Calling `run_vba` and getting `RUNNER_FAILED` whose message matches `Excepcion al llamar a "Run"` | The reclassifier at `src/core/services/vba-service.ts::reclassifyRunnerFailure` missed it. File a dysflow bug with the payload + runner log. |
 | Claiming "TDD-green" without BOTH user-confirmed compile AND all-green `test_vba` result | Surface both gates; HR-1 / HR-7 of `dysflow-arnes`. |
 
