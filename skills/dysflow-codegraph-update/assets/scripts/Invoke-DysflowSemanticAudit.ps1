@@ -245,43 +245,67 @@ foreach ($workflow in @($caps.preferredAgentWorkflows)) {
 }
 if ((Compare-Object ($validPhases | Sort-Object) ($seenPhases | Sort-Object))) { Add-Issue workflow phases 'phase set differs from documented canonical phases' }
 
+# #1783: the examples audit is a pure function over one document's text, so the test harness can
+# drive every branch with a fixture instead of needing a live capture. It returns issue records and
+# the caller decides which list (drift or runtime gap) each one lands in.
+function Get-ExampleIssue {
+    param(
+        [string]$FileName,
+        [string]$Text,
+        [string[]]$CapNames,
+        $FullByName
+    )
+    $issues = [System.Collections.Generic.List[object]]::new()
+    # A historical marker classifies the whole document, not only the block that follows it: the
+    # result-field scan below reads the whole file text, and an archived snapshot marks every
+    # assertion in it the same way. Computed once per file, deliberately, not per block.
+    $fileIsHistorical = Test-HistoricalExample -Text $Text
+    $jsonBlocks = @([regex]::Matches($Text, '(?s)```json\s*(\{.*?\})\s*```') | Where-Object { $_.Groups[1].Value -match '"tool"\s*:' })
+    $previousBlockEnd = 0
+    # #1772: a `result.X` assertion attributes to the nearest preceding block that named a KNOWN
+    # tool. A block that resolves none clears the attribution, so an assertion is never charged
+    # against a tool from an earlier section of the same file.
+    $lastTool = $null
+    $blockIndex = 0
+    foreach ($match in $jsonBlocks) {
+        $blockIndex++
+        $blockPreamble = $Text.Substring($previousBlockEnd, $match.Index - $previousBlockEnd)
+        $compatibility = Test-HistoricalExample -Text $blockPreamble
+        $previousBlockEnd = $match.Index + $match.Length
+        try { $example = $match.Groups[1].Value | ConvertFrom-Json -Depth 100 -ErrorAction Stop } catch { $lastTool = $null; $issues.Add([pscustomobject]@{kind='example-json';target="$($FileName):block$blockIndex";detail=$_.Exception.Message;historical=$compatibility}); continue }
+        $toolName = Get-ExampleToolName -Example $example
+        # A block that parsed but names no tool is a different defect class from a block that failed
+        # to parse, so it carries its own kind and names which block it is.
+        if (-not $toolName) { $lastTool = $null; $issues.Add([pscustomobject]@{kind='example-no-tool';target="$($FileName):block$blockIndex";detail='example block names neither a tool nor a name+arguments pair';historical=$compatibility}); continue }
+        if ($toolName -notin $CapNames) { $lastTool = $null; $issues.Add([pscustomobject]@{kind='example-tool';target="$($FileName):$toolName";detail='example names a tool absent from get_capabilities.tools';historical=$compatibility}); continue }
+        $lastTool = $toolName
+        $arguments = if ($example.arguments) { $example.arguments } else { $example }
+        foreach ($property in $arguments.PSObject.Properties.Name) {
+            if ($property -in @('tool','name','arguments')) { continue }
+            if (-not $FullByName[$toolName].parameters.$property) { $issues.Add([pscustomobject]@{kind='example-parameter';target="$($FileName):$toolName.$property";detail='parameter is not in full schema';historical=$compatibility}) }
+            elseif (-not $compatibility -and $FullByName[$toolName].parameters.$property.deprecated -and $FullByName[$toolName].parameters.$property.canonicalName -ne $property -and $FullByName[$toolName].parameters.$property.canonicalName -in @($FullByName[$toolName].parameters.PSObject.Properties.Name)) { $issues.Add([pscustomobject]@{kind='example-parameter';target="$($FileName):$toolName.$property";detail='deprecated/alias parameter used without explicit compatibility marker';historical=$compatibility}) }
+        }
+        foreach ($requiredParameter in @($FullByName[$toolName].inputSchema.required | Where-Object { $_ })) {
+            if ($requiredParameter -notin @($arguments.PSObject.Properties.Name)) { $issues.Add([pscustomobject]@{kind='example-missingParam';target="$($FileName):$toolName.$requiredParameter";detail='example omits a schema-required parameter; live MCP_INPUT_INVALID uses missingParam for this boundary';historical=$compatibility}) }
+        }
+    }
+    foreach ($match in [regex]::Matches($Text, '(?i)\b(?:result|response)\.([A-Za-z][A-Za-z0-9_]*)')) {
+        if (-not $lastTool) { continue }
+        $toolName = $lastTool
+        $field = $match.Groups[1].Value
+        $result = $FullByName[$toolName].resultContract
+        $fields = @('content','isError','ok','error') + @($result.dataSchema.properties.PSObject.Properties.Name) + @($result.errorEnvelope.shape.PSObject.Properties.Name)
+        if ($field -notin $fields) { $issues.Add([pscustomobject]@{kind='example-result';target="$($FileName):$field";detail='asserted result field is absent from resultContract/envelope';historical=$fileIsHistorical}) }
+    }
+    return $issues
+}
+
 $examplesDir = Join-Path $SkillRoot 'assets\examples'
 if (Test-Path -LiteralPath $examplesDir) {
     foreach ($file in Get-ChildItem -LiteralPath $examplesDir -Filter '*.md' -File) {
         $text = Get-Content -Raw -LiteralPath $file.FullName
-        $jsonBlocks = @([regex]::Matches($text, '(?s)```json\s*(\{.*?\})\s*```') | Where-Object { $_.Groups[1].Value -match '"tool"\s*:' })
-        $previousBlockEnd = 0
-        # #1772: a `result.X` assertion below attributes to the tool the nearest preceding
-        # block named. When no block named one, the assertion is unattributable and is
-        # skipped rather than charged against a fabricated tool name.
-        $lastTool = $null
-        foreach ($match in $jsonBlocks) {
-            $blockPreamble = $text.Substring($previousBlockEnd, $match.Index - $previousBlockEnd)
-            $compatibility = Test-HistoricalExample $blockPreamble
-            $previousBlockEnd = $match.Index + $match.Length
-            try { $example = $match.Groups[1].Value | ConvertFrom-Json -Depth 100 -ErrorAction Stop } catch { Add-Issue example-json $file.Name $_.Exception.Message -Historical:$compatibility; continue }
-            $toolName = Get-ExampleToolName $example
-            if (-not $toolName) { Add-Issue example-json "$($file.Name):unnamed-block" 'example block names neither a tool nor a name+arguments pair' -Historical:$compatibility; continue }
-            if ($toolName -notin $capNames) { Add-Issue example-tool "$($file.Name):$toolName" 'example names a tool absent from get_capabilities.tools' -Historical:$compatibility; continue }
-            $lastTool = $toolName
-            $arguments = if ($example.arguments) { $example.arguments } else { $example }
-            foreach ($property in $arguments.PSObject.Properties.Name) {
-                if ($property -in @('tool','name','arguments')) { continue }
-                if (-not $fullByName[$toolName].parameters.$property) { Add-Issue example-parameter "$($file.Name):$toolName.$property" 'parameter is not in full schema' -Historical:$compatibility }
-                elseif (-not $compatibility -and $fullByName[$toolName].parameters.$property.deprecated -and $fullByName[$toolName].parameters.$property.canonicalName -ne $property -and $fullByName[$toolName].parameters.$property.canonicalName -in @($fullByName[$toolName].parameters.PSObject.Properties.Name)) { Add-Issue example-parameter "$($file.Name):$toolName.$property" 'deprecated/alias parameter used without explicit compatibility marker' -Historical:$compatibility }
-            }
-            foreach ($requiredParameter in @($fullByName[$toolName].inputSchema.required | Where-Object { $_ })) {
-                if ($requiredParameter -notin @($arguments.PSObject.Properties.Name)) { Add-Issue example-missingParam "$($file.Name):$toolName.$requiredParameter" 'example omits a schema-required parameter; live MCP_INPUT_INVALID uses missingParam for this boundary' -Historical:$compatibility }
-            }
-        }
-        $fileIsHistorical = Test-HistoricalExample $text
-        foreach ($match in [regex]::Matches($text, '(?i)\b(?:result|response)\.([A-Za-z][A-Za-z0-9_]*)')) {
-            if (-not $lastTool) { continue }
-            $toolName = $lastTool
-            $field = $match.Groups[1].Value
-            $result = $fullByName[$toolName].resultContract
-            $fields = @('content','isError','ok','error') + @($result.dataSchema.properties.PSObject.Properties.Name) + @($result.errorEnvelope.shape.PSObject.Properties.Name)
-            if ($field -notin $fields) { Add-Issue example-result "$($file.Name):$field" 'asserted result field is absent from resultContract/envelope' -Historical:$fileIsHistorical }
+        foreach ($issue in Get-ExampleIssue -FileName $file.Name -Text $text -CapNames $capNames -FullByName $fullByName) {
+            Add-Issue -Kind $issue.kind -Target $issue.target -Detail $issue.detail -Historical:$issue.historical
         }
     }
 }

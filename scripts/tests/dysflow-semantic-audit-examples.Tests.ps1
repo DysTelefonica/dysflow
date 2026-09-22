@@ -42,6 +42,7 @@ BeforeAll {
 
     Import-AuditFunction "Get-ExampleToolName"
     Import-AuditFunction "Test-HistoricalExample"
+    Import-AuditFunction "Get-ExampleIssue"
 }
 
 Describe "example tool extraction" {
@@ -86,5 +87,97 @@ Describe "historical example markers" {
         Test-HistoricalExample "Call the tool with apply:true after review." | Should -BeFalse
         # "legacy" alone is not a marker: the marker vocabulary is the documented one.
         Test-HistoricalExample "Access would reject that assignment, so the test is valid." | Should -BeFalse
+    }
+}
+
+Describe "example audit issue classification" {
+    BeforeAll {
+        $script:knownTool = "find_references"
+        $script:capNames = @("find_references")
+        $script:fullByName = @{
+            "find_references" = [pscustomobject]@{
+                parameters           = [pscustomobject]@{ symbol = [pscustomobject]@{} }
+                inputSchema          = [pscustomobject]@{ required = @("symbol") }
+                resultContract       = [pscustomobject]@{
+                    dataSchema    = [pscustomobject]@{ properties = [pscustomobject]@{ matches = [pscustomobject]@{} } }
+                    errorEnvelope = [pscustomobject]@{ shape = [pscustomobject]@{} }
+                }
+            }
+        }
+    }
+
+    It "separates a parse failure from a block that parsed but named no tool" {
+        # The triple backticks are the markdown fence marker. Single-quoted here-strings keep
+        # them literal so PowerShell does not try to interpret ` as an escape character.
+        $unparseable = @'
+```json
+{"tool": "find_references", oops}
+```
+'@
+        $nameless = @'
+```json
+{"tool": "", "arguments": {} }
+```
+'@
+
+        $kindsA = @((Get-ExampleIssue -FileName "a.md" -Text $unparseable -CapNames $script:capNames -FullByName $script:fullByName) | ForEach-Object kind)
+        $kindsB = @((Get-ExampleIssue -FileName "b.md" -Text $nameless -CapNames $script:capNames -FullByName $script:fullByName) | ForEach-Object kind)
+
+        $kindsA | Should -Contain "example-json"
+        $kindsB | Should -Contain "example-no-tool"
+        # The two classes must not collapse into one kind.
+        $kindsB | Should -Not -Contain "example-json"
+    }
+
+    It "names which block is unnamed when a file holds several" {
+        $text = @'
+```json
+{"tool": "find_references", "arguments": { "symbol": "x" } }
+```
+
+```json
+{"tool": "", "arguments": {} }
+```
+'@
+
+        $targets = @(Get-ExampleIssue -FileName "multi.md" -Text $text -CapNames $script:capNames -FullByName $script:fullByName |
+                Where-Object kind -eq "example-no-tool" | ForEach-Object target)
+
+        $targets | Should -Be @("multi.md:block2")
+    }
+
+    It "clears the tool attribution when a block names an unknown tool" {
+        # Block 1 names an unknown tool. A later `result.x` must not be charged against it, and
+        # must not be charged against anything else either.
+        $text = @'
+```json
+{"tool": "not_a_real_tool", "arguments": {} }
+```
+
+result.notAField
+'@
+
+        $issues = @(Get-ExampleIssue -FileName "attrib.md" -Text $text -CapNames $script:capNames -FullByName $script:fullByName)
+
+        @($issues | ForEach-Object kind) | Should -Contain "example-tool"
+        @($issues | ForEach-Object kind) | Should -Not -Contain "example-result"
+    }
+
+    It "marks result findings historical when the document carries a historical marker" {
+        $text = @'
+> **Historical evidence snapshot (2026-07-08), not an operational example.**
+
+```json
+{"tool": "find_references", "arguments": { "symbol": "x" } }
+```
+
+result.notAField
+'@
+
+        $results = @(Get-ExampleIssue -FileName "hist.md" -Text $text -CapNames $script:capNames -FullByName $script:fullByName |
+                Where-Object kind -eq "example-result")
+
+        $results.Count | Should -Be 1
+        $results[0].historical | Should -BeTrue
     }
 }
