@@ -92,7 +92,7 @@ production backend writes.
 - Don't invent `procedureName` strings without checking the binary — use `list_objects` or an existing capability doc to confirm.
 - Under `strictMode`, don't use `apply:false` as a substitute for maintaining `capabilities.procedures.allow` when execution is intended. Either declare the procedure so the runtime can enforce the gate across every call, or decide the project does not want `strictMode` and drop the flag.
 - Don't call `run_vba` without compiling first — `get_capabilities.humanCompilePending:true` ⇒ the runtime will refuse or surface stale code.
-- Don't use the unqualified `<procedure>` shape as a habit — the apply path's all-modules fallback is more expensive than the targeted `<module>.<procedure>` lookup and obscures which module actually owns the symbol.
+- Prefer the `<module>.<procedure>` shape — the apply path's all-modules fallback is more expensive than the targeted lookup and obscures which module actually owns the symbol. The prefix addresses dysflow's source preflight, not Access: since #1787 the runtime strips it before calling `Application.Run`, because Access resolves by procedure name and accepts only a REFERENCED database's project name as a qualifier. Both shapes therefore reach the same procedure.
 - Don't conflate `PROCEDURE_NOT_FOUND` (procedure absent from source/binary) with `PROCEDURE_NOT_CALLABLE` (procedure present in binary but Access refused to invoke it). The remediation differs — the former needs an import, the latter needs a VBE recompile.
 - Don't treat `VBA_RUNTIME_ERROR` as a compile problem. The procedure ran; recompiling cannot change what it raised. Read `error.details.vbaMessage` and fix the procedure or the data it depends on.
 
@@ -104,10 +104,10 @@ production backend writes.
   - `MCP_PROCEDURE_NOT_ALLOWED` — allowlist gate rejected the procedure. Reachable only under `capabilities.procedures.strictMode: true`. Surface `error.allowedProcedures` to the user.
   - `MCP_ALLOWLIST_NOT_CONFIGURED` — `strictMode: true` with no allowlist AND the non-executing `apply:false` plan was NOT used. Never emitted on the default gate.
   - `PROCEDURE_NOT_FOUND` — procedure not declared in the project's VBA source. Remediation: import or fix the procedure name.
-  - `PROCEDURE_NOT_CALLABLE` — procedure is in the binary's `VBComponents` but Access refused to invoke it (stale p-code). Remediation: recompile in Access VBE (Debug → Compile) and retry.
+  - `PROCEDURE_NOT_CALLABLE` — procedure is in the binary's `VBComponents` but Access refused to invoke it. Read `error.remediation`, which names the right suspect: when `error.details.invokedProcedureName` still carries a `.`, Access could not resolve that qualifier and the fix is to retry unqualified; otherwise the p-code is stale and the fix is a VBE recompile (Debug → Compile). Follow it ONCE — a recompile that reports no errors and does not change the outcome means the cause is elsewhere.
   - `VBA_RUNTIME_ERROR` — the procedure WAS invoked, ran, and raised. Remediation: read `error.details.vbaMessage` for the VBA error and fix the procedure or its state. Do NOT recompile.
   - `VBA_MANAGER_TIMEOUT`, `VBA_MANAGER_FAILED` — generic runner-side failures.
-- `error.details` — structured (for timeouts: `phase`, `wasApply`, `operationTimeoutMs`, `reapedProcessPids`, `cleanupWarnings`, `expectedLockFile`; for `PROCEDURE_NOT_CALLABLE`: `procedure`, `moduleName`, `runnerCode`, `runnerMessage`; for `VBA_RUNTIME_ERROR`: the same four plus `vbaMessage`).
+- `error.details` — structured (for timeouts: `phase`, `wasApply`, `operationTimeoutMs`, `reapedProcessPids`, `cleanupWarnings`, `expectedLockFile`; for `PROCEDURE_NOT_CALLABLE`: `procedure`, `moduleName`, `invokedProcedureName` (the name that actually reached `Application.Run`), `runnerCode`, `runnerMessage`; for `VBA_RUNTIME_ERROR`: the same four plus `vbaMessage`).
 
 ## Live verification
 

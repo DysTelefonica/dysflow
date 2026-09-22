@@ -165,7 +165,8 @@ export class AccessVbaService {
         createDysflowError(
           "PROCEDURE_NOT_FOUND",
           parsedName.code === "PROCEDURE_NAME_EMPTY"
-            ? `Procedure name is empty. Pass a '<module>.<procedure>' name, e.g. 'Module.Foo'.`
+            ? `Procedure name is empty. Pass a procedure name, e.g. 'Foo', or the ` +
+                `'<module>.<procedure>' form, e.g. 'Module.Foo'.`
             : parsedName.message,
           {
             details: {
@@ -235,17 +236,42 @@ export class AccessVbaService {
     // configured, or a non-source-tracked `procedureName`), the service
     // falls through to the runner so the existing diagnostics still fire —
     // this is non-regressive behavior.
-    if (preflightResolver !== undefined) {
-      const preflight = await this.checkProcedureExists(
-        normalizedRequest,
-        parsedName.procName,
-        preflightResolver,
-      );
-      if (preflight !== undefined) return preflight;
-    }
+    const preflight =
+      preflightResolver === undefined
+        ? UNVERIFIABLE
+        : await this.checkProcedureExists(
+            normalizedRequest,
+            parsedName.procName,
+            preflightResolver,
+          );
+    if (preflight.kind === "absent") return preflight.result;
+
+    // #1787 — hand Access a name it can actually resolve.
+    //
+    // `Access.Application.Run` resolves its `ProcedureName` argument by
+    // procedure name, optionally qualified by the project/database name of a
+    // REFERENCED database (`referencedProject.procedure`). It does NOT accept
+    // a MODULE qualifier. Forwarding `MyModule.RunMe` verbatim therefore
+    // always failed with "can't find the procedure", which the reclassifier
+    // below turned into `PROCEDURE_NOT_CALLABLE` plus a "recompile" hint that
+    // could not possibly help — an unterminating loop for the caller.
+    //
+    // The prefix is dropped ONLY when the preflight proved the qualifier is a
+    // module of THIS project and that module declares the procedure. When the
+    // qualifier does not resolve locally (or nothing could be verified), the
+    // name goes out verbatim, which is what the legitimate
+    // `referencedProject.procedure` form needs.
+    const invokedProcedureName =
+      preflight.kind === "declared-in-named-module"
+        ? parsedName.procName
+        : normalizedRequest.procedureName;
+    const runnerRequest: AccessVbaRequest =
+      invokedProcedureName === normalizedRequest.procedureName
+        ? normalizedRequest
+        : { ...normalizedRequest, procedureName: invokedProcedureName };
 
     const result = await this.runner.run<AccessVbaExecutionResult>(
-      { kind: "vba", request: normalizedRequest },
+      { kind: "vba", request: runnerRequest },
       this.config,
       {
         onProgress,
@@ -257,15 +283,30 @@ export class AccessVbaService {
     // (PROCEDURE_NOT_FOUND). Without this, both surface as RUNNER_FAILED
     // with a Spanish-localized COM message and agents cannot tell whether
     // to re-import (no-op) or recompile (the actual fix).
-    return reclassifyRunnerFailure(ensured, normalizedRequest);
+    //
+    // #1787 — the caller's ORIGINAL name stays in the envelope; the name that
+    // actually went on the wire is reported alongside it so the remediation
+    // can name the right suspect.
+    return reclassifyRunnerFailure(ensured, normalizedRequest, invokedProcedureName);
   }
 
   /**
    * Verify the requested procedure is declared in the project's VBA source.
-   * Returns a failure `OperationResult` when verified absent, `undefined`
-   * when the procedure is present OR when the resolver could not produce
-   * any source text to verify against (defensive — the runner will surface
-   * the real Access-side failure in that case).
+   *
+   * #1787 — the outcome is a discriminated value rather than
+   * `OperationResult | undefined`, because the caller now needs to know HOW
+   * the procedure was found, not merely THAT it was:
+   *
+   *   - `absent` — verified missing; carries the typed `PROCEDURE_NOT_FOUND`.
+   *   - `declared-in-named-module` — the request's `moduleName` resolved to a
+   *     module of this project AND that module declares the procedure. This
+   *     is the only outcome that licenses dropping the module qualifier
+   *     before the name reaches `Access.Application.Run`.
+   *   - `found-elsewhere` — the procedure exists somewhere in the source tree
+   *     but not (verifiably) in the named module, so the qualifier may name a
+   *     referenced database rather than a local module. Forward verbatim.
+   *   - `unverifiable` — no resolver, or the resolver produced no source at
+   *     all. Forward verbatim and let the runner surface the real failure.
    *
    * #1174 — the lookup uses the parser-supplied `procName` (no module
    * prefix) so `<module>.<procedure>` requests compare against the
@@ -283,12 +324,16 @@ export class AccessVbaService {
     request: AccessVbaRequest,
     procName: string,
     resolver: VbaSourceResolver | undefined,
-  ): Promise<OperationResult<AccessVbaResult> | undefined> {
-    if (resolver === undefined) return undefined;
+  ): Promise<ProcedurePreflight> {
+    if (resolver === undefined) return UNVERIFIABLE;
     if (typeof procName !== "string" || procName.length === 0) {
-      return undefined;
+      return UNVERIFIABLE;
     }
 
+    // #1787 — track whether the scan is the NAMED module's own source or the
+    // whole-tree fallback. Only the former proves the qualifier is a local
+    // module, which is what licenses dropping it before the COM call.
+    let scannedNamedModule = false;
     let modulesToScan: Record<string, string>;
     if (typeof request.moduleName === "string" && request.moduleName.length > 0) {
       const source = await resolver.resolveModuleSource(request.moduleName);
@@ -301,12 +346,13 @@ export class AccessVbaService {
         modulesToScan = await resolver.resolveAllModuleSources();
       } else {
         modulesToScan = { [request.moduleName]: source };
+        scannedNamedModule = true;
       }
     } else {
       modulesToScan = await resolver.resolveAllModuleSources();
     }
 
-    if (Object.keys(modulesToScan).length === 0) return undefined;
+    if (Object.keys(modulesToScan).length === 0) return UNVERIFIABLE;
 
     const target = procName.toLowerCase();
     let found = false;
@@ -318,7 +364,7 @@ export class AccessVbaService {
       }
     }
 
-    if (found) return undefined;
+    if (found) return scannedNamedModule ? DECLARED_IN_NAMED_MODULE : FOUND_ELSEWHERE;
 
     const moduleSuffix =
       typeof request.moduleName === "string" && request.moduleName.length > 0
@@ -328,7 +374,7 @@ export class AccessVbaService {
       `Procedure '${procName}' was not found in the project's VBA source modules` +
       `${moduleSuffix}. Verify the procedure name and module, or import the procedure into the binary before retrying.`;
 
-    return failureResult(
+    const absent = failureResult(
       createDysflowError("PROCEDURE_NOT_FOUND", message, {
         details: {
           procedure: procName,
@@ -340,8 +386,24 @@ export class AccessVbaService {
         },
       }),
     );
+    return { kind: "absent", result: absent as OperationResult<AccessVbaResult> };
   }
 }
+
+/**
+ * #1787 — outcome of the source-side procedure preflight. See
+ * `AccessVbaService.checkProcedureExists` for what each variant means and
+ * why the caller needs the distinction.
+ */
+type ProcedurePreflight =
+  | { kind: "absent"; result: OperationResult<AccessVbaResult> }
+  | { kind: "declared-in-named-module" }
+  | { kind: "found-elsewhere" }
+  | { kind: "unverifiable" };
+
+const UNVERIFIABLE: ProcedurePreflight = { kind: "unverifiable" };
+const DECLARED_IN_NAMED_MODULE: ProcedurePreflight = { kind: "declared-in-named-module" };
+const FOUND_ELSEWHERE: ProcedurePreflight = { kind: "found-elsewhere" };
 
 /**
  * #1174 / #1681 — reclassify a generic `RUNNER_FAILED` into the typed
@@ -373,27 +435,46 @@ export class AccessVbaService {
 function reclassifyRunnerFailure<T>(
   result: OperationResult<T>,
   request: AccessVbaRequest,
+  invokedProcedureName: string = request.procedureName,
 ): OperationResult<T> {
   if (result.ok) return result;
   const message = result.error.message;
   const sharedDetails = {
     procedure: request.procedureName,
     moduleName: request.moduleName,
+    invokedProcedureName,
     runnerCode: result.error.code,
     runnerMessage: message,
   };
 
   const classification = classifyVbaRunnerFailure(message);
   if (classification?.code === "PROCEDURE_NOT_CALLABLE") {
+    // #1787 — a name that was STILL qualified when it reached
+    // `Application.Run` has a likelier explanation than stale p-code: Access
+    // does not resolve a module qualifier at all. Say that first, and keep
+    // the recompile advice as the fallback. When the name went out
+    // unqualified, qualification is ruled out and the original stale-p-code
+    // remediation is the right one again.
+    const stillQualified = invokedProcedureName.includes(".");
+    const bareName = invokedProcedureName.slice(invokedProcedureName.indexOf(".") + 1);
     return failureResult(
       createDysflowError(
         "PROCEDURE_NOT_CALLABLE",
-        `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
-          "recompile in Access VBE (Debug → Compile) and retry.",
+        stillQualified
+          ? `Procedure '${request.procedureName}' could not be invoked by Access COM. ` +
+              "Access resolves 'Application.Run' by procedure name — a module qualifier is " +
+              `not resolvable — so retry with procedureName: '${bareName}'. ` +
+              "If the unqualified call fails too, recompile in Access VBE (Debug → Compile) and retry."
+          : `Procedure '${request.procedureName}' is present in the binary but Access COM cannot invoke it. ` +
+              "recompile in Access VBE (Debug → Compile) and retry.",
         {
           retryable: true,
           details: sharedDetails,
-          remediation: classification.remediation,
+          remediation: stillQualified
+            ? `Retry with the unqualified procedureName '${bareName}'. Access only accepts a ` +
+              "REFERENCED database's project name as a qualifier, never a module name. " +
+              "If that also fails, recompile in Access VBE (Debug → Compile) and retry."
+            : classification.remediation,
         },
       ),
     ) as OperationResult<T>;

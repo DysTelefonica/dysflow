@@ -88,7 +88,16 @@ export type ParsedProcedureName =
  *   - `"Module.Proc"` → `{ moduleName: "Module", procName: "Proc" }`
  *   - `"Module.Nested.Type.Proc"` → first dot wins:
  *     `{ moduleName: "Module", procName: "Nested.Type.Proc" }`
- *     (matches how `AccessApplication.Run` resolves qualified names).
+ *
+ * #1787 — this split is dysflow's OWN addressing convention for the source
+ * preflight and the allowlist. It is NOT how `Access.Application.Run`
+ * resolves a name: Access resolves by procedure name and accepts only a
+ * REFERENCED database's project name as a qualifier, never a module name.
+ * `AccessVbaService.execute` therefore drops the module prefix before the
+ * name reaches COM once the preflight has proved the qualifier is a module
+ * of this project. An earlier version of this docstring claimed the split
+ * "matches how AccessApplication.Run resolves qualified names" — it does not,
+ * and that belief is what shipped the bug.
  *   - `"JustAProc"` (no `.`) → `{ moduleName: "", procName: "JustAProc" }`
  *     (legacy shape; apply path falls back to all-modules scan).
  *   - `""` or whitespace-only → `{ ok: false, code: "PROCEDURE_NAME_EMPTY" }`.

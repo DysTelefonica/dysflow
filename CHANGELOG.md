@@ -17,6 +17,19 @@
 ## [Unreleased]
 
 
+### Fixed
+
+- `fix(run-vba)`: stop handing Access COM a module-qualified name it cannot resolve (#1787).
+  - `Access.Application.Run` resolves its `ProcedureName` by procedure name and accepts only a REFERENCED database's project name as a qualifier — never a module name. `run_vba` forwarded `<module>.<procedure>` verbatim, so Access answered "can't find the procedure" / "no encuentra el procedimiento" and the reclassifier turned that into `PROCEDURE_NOT_CALLABLE` with a "recompile in Access VBE" remediation that could not help. Consumers looped: import, ask a human to compile, run, same error.
+  - `AccessVbaService.execute` now drops the module prefix before the name reaches the runner, but only when the source preflight resolved that qualifier to a module of this project AND confirmed the module declares the procedure. A qualifier that does not resolve locally is forwarded verbatim, which preserves the legitimate `referencedProject.procedure` form.
+  - `PROCEDURE_NOT_CALLABLE` raised for a name that was still qualified on the wire now names the qualifier as the first suspect and tells the caller to retry unqualified; the stale-p-code remediation is kept for the unqualified case, where it is still correct. `error.details.invokedProcedureName` reports the name that actually reached COM.
+  - The caller's original `procedureName` is unchanged everywhere it was already echoed: the dry-run plan, the allowlist lookup, `error.details.procedure` and `error.details.fullProcedureName`. The #1681/#1682 `VBA_RUNTIME_ERROR` split is untouched.
+  - Paths: `src/core/services/vba-service.ts`, `src/core/services/vba-procedure-name-parser.ts` (docstring only), `test/core/services/run-vba-qualified-name-1787.test.ts` (new), `test/core/services/run-vba-procedure-not-found-after-import-1440.test.ts`, `test/e2e/import-modules-regression.e2e.test.ts`, `docs/tools/run-vba.md`, `skills/dysflow-usage/SKILL.md`, `skills/dysflow-usage/assets/examples/run-vba.md`, `skills/dysflow-usage/assets/anti-patterns.md`, `skills/dysflow-usage/references/error-codes.md`.
+
+- `test(e2e)`: give the `run_vba` E2E case a real assertion (#1787).
+  - `test/e2e/import-modules-regression.e2e.test.ts` registered `run_vba` / `"happy"` with a module-qualified name but applied only `assertUniversalContract` — non-empty text, no serialization failure, no timeout. A `PROCEDURE_NOT_CALLABLE` envelope satisfied all three, which is how a call that could never resolve shipped behind a "happy" label.
+  - The new case asserts the qualifier does not change the verdict: the qualified and bare forms of the same procedure must agree on `ok`, and the qualified string must never appear as `invokedProcedureName`. Both assertions are p-code-independent, because that workspace has no human in it to press Debug -> Compile.
+
 ### Changed
 
 - `chore(ci)`: delete `ci-result-test.sh` from the repository root.
