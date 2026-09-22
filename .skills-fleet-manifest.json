@@ -36,7 +36,6 @@
     "vba-extract-candidates",
     "vba-form-repair",
     "vba-handler-backtrace",
-    "vba-lanzadera-backend-config",
     "vba-query-decoupler",
     "vba-run-tests",
     "vba-source-impact",
