@@ -1,6 +1,6 @@
 ﻿# Dysflow MCP Error Codes Reference
 
-> **Source of truth**: candidate-runtime full schema and selective `describe_tool({name:"<X>"}).errorCodes` captures verified for the v4.4.8 release on 2026-09-21. The runtime is authoritative.
+> **Source of truth**: candidate-runtime full schema and selective `describe_tool({name:"<X>"}).errorCodes` captures verified for the v4.4.9 release on 2026-09-22. The runtime is authoritative.
 >
 > **How to update**: re-run `describe_tool({name:"X"})` for one tool per preferredAgentWorkflows phase, aggregate the union into the table below, bump the version / commit / run the canonical verifier.
 >
