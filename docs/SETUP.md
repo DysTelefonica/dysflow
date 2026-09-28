@@ -71,9 +71,18 @@ server to the selected clients.
 | `codex` | `~/.codex/config.toml` |
 | `opencode` | `~/.config/opencode/opencode.json` |
 | `claude` | `~/.claude/settings.json`, or the Claude Desktop config when that file is absent |
-| `pi` | `~/.pi/agent/mcp.json` and `~/.pi/agent/settings.json` |
+| `pi` | `<pi-agent-dir>/mcp.json` and `<pi-agent-dir>/settings.json`, where `<pi-agent-dir>` defaults to `~/.pi/agent` |
 
 Restart the selected client after installation so it reloads the MCP configuration.
+
+### Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `PI_CODING_AGENT_DIR` | Selects the Pi agent directory that owns every Pi-managed artifact: MCP configuration, settings, skills, and the harness pointer. Set and non-blank, its absolute resolution wins; otherwise `~/.pi/agent` applies. |
+| `DYSFLOW_CHANNEL` | Selects the update channel when `--channel` is absent. See [installation channels](./installation-channels.md). |
+
+Export `PI_CODING_AGENT_DIR` for `dysflow install`, `dysflow update`, `dysflow uninstall`, and `dysflow doctor` alike, so every command reconciles the same Pi profile.
 
 Pi users should follow the [Pi-native integration guide](./pi-native-integration.md); that page is the single source for Pi reconciliation, rendering, update, and uninstall behavior.
 

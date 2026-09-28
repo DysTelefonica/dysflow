@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { resolvePiAgentDir } from "./agent-config.js";
 import { SKILL_AGENT_IDS, type SkillAgentId, type SkillTarget } from "./skills-installer.js";
 
 const POINTER_OPEN = "<!-- user-supplement:dysflow:pointer -->";
@@ -61,15 +62,40 @@ function pointerRegion(content: string, source: string): string {
   return content.slice(start, end);
 }
 
-export function pointerInstructionFile(home: string, agentId: SkillAgentId): string {
+/**
+ * The directory a pointer target must stay inside. Pi owns its own agent
+ * directory (see `resolvePiAgentDir`), which a host may place outside the user
+ * home; every other agent is home-relative.
+ */
+function pointerContainmentRoot(
+  home: string,
+  agentId: SkillAgentId,
+  env: NodeJS.ProcessEnv,
+): string {
+  const resolvedHome = resolvedUserHome(home);
+  if (agentId !== "pi") return resolvedHome;
+  const piAgentDir = path.resolve(resolvePiAgentDir(resolvedHome, env));
+  if (piAgentDir === path.parse(piAgentDir).root) {
+    throw new Error(
+      `Refusing filesystem-root Pi agent directory for pointer rollout: ${piAgentDir}`,
+    );
+  }
+  return piAgentDir;
+}
+
+export function pointerInstructionFile(
+  home: string,
+  agentId: SkillAgentId,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const relativePaths: Record<SkillAgentId, readonly string[]> = {
     opencode: [".config", "opencode", "AGENTS.md"],
     claude: [".claude", "CLAUDE.md"],
     codex: [".codex", "AGENTS.md"],
     cursor: [".cursor", "rules", "dysflow-vba.mdc"],
-    pi: [".pi", "agent", "APPEND_SYSTEM.md"],
+    pi: ["APPEND_SYSTEM.md"],
   };
-  return path.join(resolvedUserHome(home), ...relativePaths[agentId]);
+  return path.join(pointerContainmentRoot(home, agentId, env), ...relativePaths[agentId]);
 }
 
 export function discoverPointerRolloutTargets(options: {
@@ -77,15 +103,17 @@ export function discoverPointerRolloutTargets(options: {
   installedSkillTargets: readonly SkillTarget[];
   only?: readonly SkillAgentId[];
   exclude?: readonly SkillAgentId[];
+  env?: NodeJS.ProcessEnv;
 }): PointerRolloutTarget[] {
   const home = resolvedUserHome(options.home);
+  const env = options.env ?? process.env;
   const only = new Set(options.only ?? []);
   const exclude = new Set(options.exclude ?? []);
   const installed = new Set(options.installedSkillTargets.map((target) => target.agentId));
   return SKILL_AGENT_IDS.filter((agentId) => {
     if (exclude.has(agentId)) return false;
     if (only.size > 0) return only.has(agentId);
-    return installed.has(agentId) || existsSync(pointerInstructionFile(home, agentId));
+    return installed.has(agentId) || existsSync(pointerInstructionFile(home, agentId, env));
   }).map((agentId) => ({ agentId }));
 }
 
@@ -109,13 +137,12 @@ function cursorFrontmatter(content: string, filePath: string): string {
   return match[0];
 }
 
-async function assertNoSymlinkTraversal(home: string, filePath: string): Promise<void> {
-  const resolvedHome = resolvedUserHome(home);
-  const relative = path.relative(resolvedHome, filePath);
+async function assertNoSymlinkTraversal(containmentRoot: string, filePath: string): Promise<void> {
+  const relative = path.relative(containmentRoot, filePath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Refusing pointer target outside the user home: ${filePath}`);
+    throw new Error(`Refusing pointer target outside its owning directory: ${filePath}`);
   }
-  let current = resolvedHome;
+  let current = containmentRoot;
   for (const segment of relative.split(path.sep)) {
     current = path.join(current, segment);
     const info = await lstat(current).catch(() => undefined);
@@ -130,7 +157,9 @@ export async function installBundledPointerBlocks(options: {
   bundleRoot: string;
   home: string;
   targets: readonly PointerRolloutTarget[];
+  env?: NodeJS.ProcessEnv;
 }): Promise<PointerRolloutReport> {
+  const env = options.env ?? process.env;
   const canonicalPointer = await readFile(
     path.join(
       path.resolve(options.bundleRoot),
@@ -148,11 +177,13 @@ export async function installBundledPointerBlocks(options: {
   const mutations: Array<{ filePath: string; previous?: string }> = [];
   let backupDir: string | undefined;
 
-  async function backUp(filePath: string, content: string): Promise<void> {
+  async function backUp(containmentRoot: string, filePath: string, content: string): Promise<void> {
     backupDir ??= await mkdtemp(path.join(tmpdir(), "dysflow-pointer-backup-"));
-    const relative = path.relative(path.resolve(options.home), filePath);
+    const relative = path.relative(containmentRoot, filePath);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      throw new Error(`Refusing to back up pointer target outside the user home: ${filePath}`);
+      throw new Error(
+        `Refusing to back up pointer target outside its owning directory: ${filePath}`,
+      );
     }
     const backupPath = path.join(backupDir, `${relative}.bak`);
     await mkdir(path.dirname(backupPath), { recursive: true });
@@ -160,9 +191,10 @@ export async function installBundledPointerBlocks(options: {
   }
 
   for (const target of options.targets) {
-    const filePath = pointerInstructionFile(options.home, target.agentId);
+    const containmentRoot = pointerContainmentRoot(options.home, target.agentId, env);
+    const filePath = pointerInstructionFile(options.home, target.agentId, env);
     try {
-      await assertNoSymlinkTraversal(options.home, filePath);
+      await assertNoSymlinkTraversal(containmentRoot, filePath);
       const fileExists = await exists(filePath);
       const current = fileExists ? await readFile(filePath, "utf8") : "";
       let next: string;
@@ -213,7 +245,7 @@ export async function installBundledPointerBlocks(options: {
         }
       }
 
-      if (fileExists) await backUp(filePath, current);
+      if (fileExists) await backUp(containmentRoot, filePath, current);
       await mkdir(path.dirname(filePath), { recursive: true });
       mutations.push({ filePath, ...(fileExists ? { previous: current } : {}) });
       await writeFile(filePath, next, "utf8");

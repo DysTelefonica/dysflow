@@ -77,7 +77,7 @@ export async function handleUninstallCommand(
   // Reconcile Pi's MCP entry and owned package as one transaction. MCP goes
   // first so a configuration failure cannot remove the package prematurely;
   // package failure restores the exact previous MCP bytes.
-  const agentConfigPaths = resolveAgentConfigPaths(home);
+  const agentConfigPaths = resolveAgentConfigPaths(home, env);
   const piSnapshot = await capturePiIntegration(agentConfigPaths.pi);
   try {
     await reconcilePiIntegration({

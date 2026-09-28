@@ -123,7 +123,7 @@ export async function applyIntegrationSelection(
   const runtimeDir = resolveRuntimeDir(options.runtimeDir, env);
   const packageRoot = options.packageRoot ?? resolvePackageRoot();
   const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
-  const agentConfigPaths = resolveAgentConfigPaths(getHome(env));
+  const agentConfigPaths = resolveAgentConfigPaths(getHome(env), env);
   const commandPath = commandPathForConfig(runtimeDir);
   const selected = new Set(selectedAgents);
 
@@ -204,7 +204,7 @@ export async function applyIntegrationSelection(
     }
     const skillInstall = await installBundledSkills({
       bundleRoot: packageRoot,
-      targets: discoverSkillTargets(getHome(env), { only: selectedAgents, exclude: [] }),
+      targets: discoverSkillTargets(getHome(env), { only: selectedAgents, exclude: [] }, env),
     });
     const pluginRefresh = await refreshBundledAgentPlugins(
       packageRoot,
@@ -315,7 +315,7 @@ export async function handleInstallCommand(
   }
 
   const runtimePaths = resolveRuntimePaths(runtimeDir, packageRoot);
-  const agentConfigPaths = resolveAgentConfigPaths(getHome(env));
+  const agentConfigPaths = resolveAgentConfigPaths(getHome(env), env);
   const commandPath = commandPathForConfig(runtimeDir);
 
   try {
@@ -358,10 +358,14 @@ export async function handleInstallCommand(
       mcpConfigurations.push(configuration);
     }
     const home = getHome(env);
-    const skillTargets = discoverSkillTargets(home, {
-      only: parsed.options.onlySkills,
-      exclude: parsed.options.excludeSkills,
-    });
+    const skillTargets = discoverSkillTargets(
+      home,
+      {
+        only: parsed.options.onlySkills,
+        exclude: parsed.options.excludeSkills,
+      },
+      env,
+    );
     const skillInstall = await installBundledSkills({
       bundleRoot: packageRoot,
       targets: skillTargets,
@@ -369,11 +373,13 @@ export async function handleInstallCommand(
     const pointerRollout = await installBundledPointerBlocks({
       bundleRoot: packageRoot,
       home,
+      env,
       targets: discoverPointerRolloutTargets({
         home,
         installedSkillTargets: skillTargets,
         only: parsed.options.onlySkills,
         exclude: parsed.options.excludeSkills,
+        env,
       }),
     });
     const pluginRefresh = await refreshBundledAgentPlugins(

@@ -69,7 +69,7 @@ async function refreshInstalledPiIntegration(
     active: boolean;
   }[]
 > {
-  const paths = resolveAgentConfigPaths(getHome(env));
+  const paths = resolveAgentConfigPaths(getHome(env), env);
   const commandPath = path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/");
   const hasMcp = await hasPiIntegration(paths.pi, commandPath);
   const hasPackage = await hasOwnedPiPackage(paths.piSettings, runtimeDir);
@@ -457,10 +457,14 @@ export async function handleUpdateCommand(
     try {
       await writeRuntimeMarker(getSystemMarkerPath(env), runtimeDir);
       const home = getHome(env);
-      const skillTargets = discoverSkillTargets(home, {
-        only: parsed.options.onlySkills,
-        exclude: parsed.options.excludeSkills,
-      });
+      const skillTargets = discoverSkillTargets(
+        home,
+        {
+          only: parsed.options.onlySkills,
+          exclude: parsed.options.excludeSkills,
+        },
+        env,
+      );
       const skillInstall = await installBundledSkills({
         bundleRoot: localPackageRoot,
         targets: skillTargets,
@@ -468,11 +472,13 @@ export async function handleUpdateCommand(
       const pointerRollout = await installBundledPointerBlocks({
         bundleRoot: localPackageRoot,
         home,
+        env,
         targets: discoverPointerRolloutTargets({
           home,
           installedSkillTargets: skillTargets,
           only: parsed.options.onlySkills,
           exclude: parsed.options.excludeSkills,
+          env,
         }),
       });
       await refreshInstalledPiIntegration(
@@ -514,10 +520,14 @@ export async function handleUpdateCommand(
       env,
     );
     const home = getHome(env);
-    const skillTargets = discoverSkillTargets(home, {
-      only: parsed.options.onlySkills,
-      exclude: parsed.options.excludeSkills,
-    });
+    const skillTargets = discoverSkillTargets(
+      home,
+      {
+        only: parsed.options.onlySkills,
+        exclude: parsed.options.excludeSkills,
+      },
+      env,
+    );
     const skillInstall = await installBundledSkills({
       bundleRoot: preparedPackage.packageRoot,
       targets: skillTargets,
@@ -525,11 +535,13 @@ export async function handleUpdateCommand(
     const pointerRollout = await installBundledPointerBlocks({
       bundleRoot: preparedPackage.packageRoot,
       home,
+      env,
       targets: discoverPointerRolloutTargets({
         home,
         installedSkillTargets: skillTargets,
         only: parsed.options.onlySkills,
         exclude: parsed.options.excludeSkills,
+        env,
       }),
     });
     const pluginRefresh = await refreshBundledAgentPlugins(

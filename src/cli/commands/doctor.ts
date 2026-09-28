@@ -191,7 +191,7 @@ async function runSkillsInstallationCheck(
   if (context.checkSkillsInstallation === false) return [];
   if (context.checkSkillsInstallation) return [...(await context.checkSkillsInstallation())];
   const env = context.env ?? (process.env as Record<string, string | undefined>);
-  const targets = discoverSkillTargets(getHome(env));
+  const targets = discoverSkillTargets(getHome(env), {}, env);
   if (targets.length === 0) return [];
   return diagnoseBundledSkills({ bundleRoot: resolvePackageRoot(), targets });
 }
@@ -286,7 +286,7 @@ async function runWiringCheck(context: CliCommandContext): Promise<McpWiringChec
   const env = context.env ?? (process.env as Record<string, string | undefined>);
   const cwd = context.cwd ?? process.cwd();
   const home = getHome(env);
-  const agentPaths = resolveAgentConfigPaths(home);
+  const agentPaths = resolveAgentConfigPaths(home, env);
 
   return checkOpencodeWiring({
     globalConfigPath: agentPaths.opencode,

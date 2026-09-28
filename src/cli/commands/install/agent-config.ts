@@ -24,14 +24,31 @@ export function getHome(env: NodeJS.ProcessEnv): string {
   return env.USERPROFILE ?? env.HOME ?? env.USER ?? "";
 }
 
-export function resolveAgentConfigPaths(home: string): AgentConfigPaths {
+/**
+ * Resolve the directory that owns every Pi-managed artifact: MCP configuration,
+ * settings, SkillsDir and the harness pointer file.
+ *
+ * Precedence:
+ * 1. `PI_CODING_AGENT_DIR`, when set and non-blank after trimming — a
+ *    Pi-compatible host uses it to select the active agent profile. The value
+ *    is resolved to an absolute path.
+ * 2. `<home>/.pi/agent` otherwise — the conventional Pi profile.
+ */
+export function resolvePiAgentDir(home: string, env: NodeJS.ProcessEnv): string {
+  const configured = env.PI_CODING_AGENT_DIR?.trim() ?? "";
+  if (configured.length > 0) return path.resolve(configured);
+  return path.join(home, ".pi", "agent");
+}
+
+export function resolveAgentConfigPaths(home: string, env: NodeJS.ProcessEnv): AgentConfigPaths {
+  const piAgentDir = resolvePiAgentDir(home, env);
   return {
     codex: path.join(home, ".codex", "config.toml"),
     opencode: path.join(home, ".config", "opencode", "opencode.json"),
     claudeDesktop: path.join(home, "AppData", "Roaming", "Claude", "claude_desktop_config.json"),
     claudeSettings: path.join(home, ".claude", "settings.json"),
-    pi: path.join(home, ".pi", "agent", "mcp.json"),
-    piSettings: path.join(home, ".pi", "agent", "settings.json"),
+    pi: path.join(piAgentDir, "mcp.json"),
+    piSettings: path.join(piAgentDir, "settings.json"),
   };
 }
 
