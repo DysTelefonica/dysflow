@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.4.10] - 2026-09-28
+
+### Changes
+
+- fix(install): honor PI_CODING_AGENT_DIR for every Pi-owned artifact (#1798)
+- chore(mcp): refresh the MCP protocol spec review for the DELTA-012 age gate (#1799)
+
+
 ## [v4.4.9] - 2026-09-22
 
 ### Changes
