@@ -29,6 +29,13 @@
 
 ### Fixed
 
+- `fix(install)`: honor `PI_CODING_AGENT_DIR` for every Pi-owned artifact (#1797).
+  - `dysflow install --agents pi --no-tui` always resolved the Pi configuration directory as `<home>/.pi/agent`. A Pi-compatible host can select a different agent directory with `PI_CODING_AGENT_DIR`, so with a custom profile active the package, the MCP compatibility entry, the SkillsDir and the harness pointer landed in the conventional profile while the active one stayed untouched — one installation split across two Pi profiles.
+  - `resolvePiAgentDir(home, env)` in `src/cli/commands/install/agent-config.ts` is now the single resolver: `path.resolve(PI_CODING_AGENT_DIR)` when that variable is set and non-blank after trimming, `<home>/.pi/agent` otherwise. The three sites that used to build the directory by hand route through it, and `env` is threaded explicitly from every caller instead of being read deep inside a helper.
+  - Pointer rollout containment is now per target: Pi's `APPEND_SYSTEM.md` is bounded by the resolved Pi agent directory, which a host may place outside the user home, while every other agent stays home-bounded. Backups follow the same root.
+  - A blank or absent `PI_CODING_AGENT_DIR` keeps the `<home>/.pi/agent` contract byte-identical: same config paths, same SkillsDir, same pointer file, same ownership, rollback and conflict behavior.
+  - Paths: `src/cli/commands/install/agent-config.ts`, `src/cli/commands/install/skills-installer.ts`, `src/cli/commands/install/pointer-rollout.ts`, `src/cli/commands/install.ts`, `src/cli/commands/install/updater.ts`, `src/cli/commands/uninstall.ts`, `src/cli/commands/doctor.ts`, `test/cli/commands/install/pi-agent-dir-1797.test.ts` (new), `docs/pi-native-integration.md`, `docs/SETUP.md`.
+
 - `chore(mcp)`: refresh the MCP protocol spec review so the DELTA-012 age gate passes again.
   - `MCP_PROTOCOL_VERSION_REVIEW.reviewedAt` was `2026-06-27`, so the 90-day age gate in `test/adapters/mcp/stdio-protocol-review.test.ts` failed at 93.8 days and blocked every pull request against `main`.
   - Cross-check performed against the pinned SDK and the upstream specification: `@modelcontextprotocol/sdk@1.29.0` negotiates `2025-03-26` by default and supports up to `2025-11-25`; the upstream current revision is `2026-07-28`.

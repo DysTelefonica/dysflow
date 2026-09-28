@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { readPackageVersionNear } from "../../../core/utils/package-info.js";
+import { resolvePiAgentDir } from "./agent-config.js";
 
 export const DYSSKILL_NAMES = [
   "access-form-ui-builder",
@@ -122,17 +123,21 @@ async function readSkillTree(skillRoot: string): Promise<Map<string, Buffer>> {
   return files;
 }
 
-function canonicalSkillTargets(home: string): SkillTarget[] {
+function canonicalSkillTargets(home: string, env: NodeJS.ProcessEnv): SkillTarget[] {
   return [
     { agentId: "opencode", skillsDir: path.join(home, ".config", "opencode", "skills") },
     { agentId: "claude", skillsDir: path.join(home, ".claude", "skills") },
     { agentId: "codex", skillsDir: path.join(home, ".codex", "skills") },
     { agentId: "cursor", skillsDir: path.join(home, ".cursor", "skills") },
-    { agentId: "pi", skillsDir: path.join(home, ".pi", "agent", "skills") },
+    { agentId: "pi", skillsDir: path.join(resolvePiAgentDir(home, env), "skills") },
   ];
 }
 
-function hasAdapterConfiguration(home: string, agentId: SkillAgentId): boolean {
+function hasAdapterConfiguration(
+  home: string,
+  agentId: SkillAgentId,
+  env: NodeJS.ProcessEnv,
+): boolean {
   const configPaths: Record<SkillAgentId, string[]> = {
     opencode: [path.join(home, ".config", "opencode", "opencode.json")],
     claude: [
@@ -141,7 +146,7 @@ function hasAdapterConfiguration(home: string, agentId: SkillAgentId): boolean {
     ],
     codex: [path.join(home, ".codex", "config.toml")],
     cursor: [path.join(home, ".cursor", "mcp.json")],
-    pi: [path.join(home, ".pi", "agent", "mcp.json")],
+    pi: [path.join(resolvePiAgentDir(home, env), "mcp.json")],
   };
   return configPaths[agentId].some((configPath) => existsSync(configPath));
 }
@@ -150,21 +155,24 @@ function hasAdapterConfiguration(home: string, agentId: SkillAgentId): boolean {
  * Return only adapter-owned SkillsDir targets that are already discoverable.
  * `only` is the explicit opt-in route and may therefore return a target whose
  * directory does not exist yet. `exclude` never creates or discovers paths.
+ * `env` selects the Pi agent directory (see `resolvePiAgentDir`).
  */
 export function discoverSkillTargets(
   home: string,
   filters: SkillTargetFilters = {},
+  env: NodeJS.ProcessEnv = process.env,
 ): SkillTarget[] {
   if (home.trim().length === 0) return [];
   const resolvedHome = path.resolve(home);
-  const candidates = canonicalSkillTargets(resolvedHome);
+  const candidates = canonicalSkillTargets(resolvedHome, env);
   const only = new Set(filters.only ?? []);
   const exclude = new Set(filters.exclude ?? []);
   return candidates.filter((candidate) => {
     if (exclude.has(candidate.agentId)) return false;
     if (only.size > 0) return only.has(candidate.agentId);
     return (
-      existsSync(candidate.skillsDir) || hasAdapterConfiguration(resolvedHome, candidate.agentId)
+      existsSync(candidate.skillsDir) ||
+      hasAdapterConfiguration(resolvedHome, candidate.agentId, env)
     );
   });
 }

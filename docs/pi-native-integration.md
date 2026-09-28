@@ -42,9 +42,28 @@ Pi native facade → MCP SDK client → absolute Dysflow launcher → dysflow mc
 
 The package does not copy MCP schemas. Runtime discovery remains `bootstrap({})`, `schema({ view: "index" })`, and the relevant capability views.
 
-Dysflow separately owns the global Pi MCP entry in `~/.pi/agent/mcp.json`. It uses the absolute installer-managed launcher and `directTools: false`.
+Dysflow separately owns the global Pi MCP entry in the resolved Pi agent directory. It uses the absolute installer-managed launcher and `directTools: false`.
 
 The package has no `pi.mcp` field and ships no `mcp.json`, so it cannot add a duplicate MCP or override `mcp`, `mcp__dysflow`, or pi-mcp-adapter tools.
+
+## Agent Directory Selection
+
+Dysflow resolves one Pi agent directory and writes every Pi-owned artifact into it: `mcp.json`, `settings.json`, the SkillsDir, and the `APPEND_SYSTEM.md` harness pointer.
+
+Resolution precedence:
+
+1. `PI_CODING_AGENT_DIR`, when it is set and non-blank after trimming — the absolute resolution of that value.
+2. `<home>/.pi/agent` otherwise.
+
+A Pi-compatible host sets `PI_CODING_AGENT_DIR` to select an agent profile other than the conventional one.
+
+Set the same value for every Dysflow command that reconciles Pi: `install`, `update`, `uninstall`, and `doctor`.
+
+```bash
+PI_CODING_AGENT_DIR=/path/to/profile/agent dysflow install --agents pi --no-tui
+```
+
+Each invocation reconciles only the directory it resolves, so a value that changes between install and uninstall leaves the earlier profile untouched.
 
 ## Ownership and Reconciliation
 
@@ -122,6 +141,7 @@ The package uses Pi's public extension and TUI APIs; it does not use private Pi 
 | The runtime install cannot fetch the facade's dependencies | Restore network access to the public package registry and rerun. No account is needed. |
 | A user-managed package entry is already present | Decide which installation owns the package. Dysflow preserves the user installation until the conflict is resolved explicitly. |
 | Pi does not show `dysflow` | Run `/reload`, then rerun the bootstrap check. |
+| Artifacts landed in a profile Pi is not using | Export `PI_CODING_AGENT_DIR` for the active agent directory, then rerun `dysflow install --agents pi --no-tui`. |
 | The call lacks `⚡ Dysflow` | Rerun `dysflow install --agents pi --no-tui`, resolve any reported conflict, and reload. |
 | The MCP child cannot start | Run `dysflow doctor` and verify the configured runtime or `DYSFLOW_BIN` resolves to an absolute launcher. |
 | A protected Access operation fails | Set the required Dysflow password environment variable before starting Pi, then reload. |
