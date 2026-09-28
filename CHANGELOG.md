@@ -29,6 +29,13 @@
 
 ### Fixed
 
+- `chore(mcp)`: refresh the MCP protocol spec review so the DELTA-012 age gate passes again.
+  - `MCP_PROTOCOL_VERSION_REVIEW.reviewedAt` was `2026-06-27`, so the 90-day age gate in `test/adapters/mcp/stdio-protocol-review.test.ts` failed at 93.8 days and blocked every pull request against `main`.
+  - Cross-check performed against the pinned SDK and the upstream specification: `@modelcontextprotocol/sdk@1.29.0` negotiates `2025-03-26` by default and supports up to `2025-11-25`; the upstream current revision is `2026-07-28`.
+  - `MCP_PROTOCOL_VERSION` is derived from the SDK's `DEFAULT_NEGOTIATED_PROTOCOL_VERSION`, so it cannot drift. The negotiated target and `specRef` are unchanged and still correct; adopting a newer revision stays a separate feature-level change.
+  - The cross-check is recorded in `docs/testing/mcp-protocol-maintenance.md` so future bumps are auditable instead of blind.
+  - Paths: `src/adapters/mcp/stdio.ts`, `docs/testing/mcp-protocol-maintenance.md`.
+
 - `fix(run-vba)`: stop handing Access COM a module-qualified name it cannot resolve (#1787).
   - `Access.Application.Run` resolves its `ProcedureName` by procedure name and accepts only a REFERENCED database's project name as a qualifier — never a module name. `run_vba` forwarded `<module>.<procedure>` verbatim, so Access answered "can't find the procedure" / "no encuentra el procedimiento" and the reclassifier turned that into `PROCEDURE_NOT_CALLABLE` with a "recompile in Access VBE" remediation that could not help. Consumers looped: import, ask a human to compile, run, same error.
   - `AccessVbaService.execute` now drops the module prefix before the name reaches the runner, but only when the source preflight resolved that qualifier to a module of this project AND confirmed the module declares the procedure. A qualifier that does not resolve locally is forwarded verbatim, which preserves the legitimate `referencedProject.procedure` form.

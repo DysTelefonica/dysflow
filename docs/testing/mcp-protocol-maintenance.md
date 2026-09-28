@@ -30,6 +30,31 @@ When the SDK is upgraded (which may change the negotiated/latest versions):
 3. add or adjust runtime tests for any changed initialize/tools behavior;
 4. keep unsupported capabilities absent from `capabilities` until implemented.
 
+## Cross-check log
+
+The age gate in `test/adapters/mcp/stdio-protocol-review.test.ts` fails once
+`reviewedAt` is older than 90 days. Record each cross-check here so the bump is
+auditable rather than a blind date refresh.
+
+| reviewedAt | SDK | Negotiated | SDK latest | Upstream current | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| 2026-09-28 | 1.29.0 | 2025-03-26 | 2025-11-25 | 2026-07-28 | target unchanged |
+
+Notes for the 2026-09-28 cross-check:
+
+- `MCP_PROTOCOL_VERSION` is derived from the SDK, so it cannot drift from what
+  the server negotiates. No code change was required.
+- `specRef` still cites `2025-03-26`, the revision that justifies the current
+  negotiated target.
+- Upstream has since published `2025-06-18`, `2025-11-25` and the current
+  `2026-07-28`.
+- `2026-07-28` replaces the initialize handshake with a per-request
+  `io.modelcontextprotocol/protocolVersion` value and a `server/discover` RPC.
+- That revision documents backward compatibility for the handshake-based
+  revisions `2025-11-25` and earlier.
+- Adopting a newer revision remains a separate, feature-level change, as
+  **Future work** below already states.
+
 ## JSON-RPC compatibility guards
 
 The SDK transport handles JSON-RPC framing, but runtime tests still assert the

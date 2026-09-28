@@ -119,7 +119,7 @@ export const MCP_PROTOCOL_VERSION_REVIEW = {
   // Vitest age gate in test/adapters/mcp/stdio-protocol-review.test.ts
   // fails when this is older than 90 days; see
   // docs/testing/mcp-protocol-maintenance.md.
-  reviewedAt: "2026-06-27",
+  reviewedAt: "2026-09-28",
   specRef: "https://modelcontextprotocol.io/specification/2025-03-26",
 } as const;
 
