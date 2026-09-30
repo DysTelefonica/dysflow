@@ -6,6 +6,10 @@ import { nodeConfigFileSystem } from "../../../src/adapters/config/dysflow-confi
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic";
 import { loadDysflowConfigAsyncWith } from "../../../src/core/config/dysflow-config";
 import { resolveExecutionTarget } from "../../../src/core/config/execution-target";
+import { useHermeticTmpdir } from "../../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 describe("Multi-worktree project config resolution (#1058)", () => {
   let rootDir: string;
