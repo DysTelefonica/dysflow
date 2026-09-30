@@ -1,5 +1,6 @@
 /** Cheap, in-process tests that belong to the default suite on every change. */
 export const UNIT_E2E_TESTS = [
+  "test/e2e/binary-inspection-requirements-1801.e2e.test.ts",
   "test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts",
   "test/e2e/mcp-catalog-dryrun.e2e.test.ts",
   "test/e2e/mcp-harness-watchdog.e2e.test.ts",

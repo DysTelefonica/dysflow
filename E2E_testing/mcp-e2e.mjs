@@ -986,6 +986,63 @@ function resolveEnvelopeFrictionScenario(tool, args, options) {
       },
     };
   }
+  // Issue #1801 — an incomplete source:"binary" call is rejected once, naming
+  // every missing parameter, before any Access process is spawned.
+  if (tool === "get_procedure:binary-missing-params") {
+    return {
+      args,
+      options: { ...options, expected: "error" },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const text = String(result?.text ?? "");
+        const pass =
+          (error?.code === "MCP_INPUT_INVALID" || text.includes("MCP_INPUT_INVALID")) &&
+          text.includes("missing required parameters: allowExternalAccessPath:true, accessPath");
+        return {
+          pass,
+          expected: "one MCP_INPUT_INVALID naming allowExternalAccessPath:true and accessPath",
+          summary: pass ? "both binary requirements named at once" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "get_procedure:binary-databasePath-redirect") {
+    return {
+      args,
+      options: { ...options, expected: "error" },
+      assert: (result) => {
+        const error = mcpErrorFromResult(result);
+        const text = String(result?.text ?? "");
+        const pass =
+          (error?.code === "MCP_INPUT_INVALID" || text.includes("MCP_INPUT_INVALID")) &&
+          text.includes("pass the same path as accessPath") &&
+          !text.includes("databasePath is not allowed");
+        return {
+          pass,
+          expected: "databasePath redirected to accessPath",
+          summary: pass ? "databasePath caller redirected" : normalize(result?.text),
+        };
+      },
+    };
+  }
+  if (tool === "get_procedure:binary-real-accdb") {
+    return {
+      args,
+      options,
+      assert: (result) => {
+        const parsed = payloadOf(result);
+        const pass =
+          parsed?.module === args.module &&
+          parsed?.procedure === args.procedure &&
+          String(parsed?.body ?? "").includes(args.procedure);
+        return {
+          pass,
+          expected: "procedure body read from the real .accdb",
+          summary: pass ? "binary procedure read from fixture accdb" : normalize(result?.text),
+        };
+      },
+    };
+  }
   if (tool === "compact_repair:target-precedence") {
     return {
       args,
@@ -2790,6 +2847,20 @@ await record("vba-introspection", "get_procedure", {
   module: "DysflowMcpE2EInline",
   procedure: "DysflowMcpE2E_DoWork",
   source: inlineSourceFixture,
+});
+// Issue #1801 — binary inspection through the real stdio server: incomplete
+// shapes fail once with every missing parameter named, and the complete shape
+// reads the procedure from the real fixture .accdb.
+await record("vba-introspection", "get_procedure:binary-missing-params", {
+  projectId, module: existingModuleName, procedure: "BorrarContenidoCarpeta", source: "binary",
+});
+await record("vba-introspection", "get_procedure:binary-databasePath-redirect", {
+  projectId, module: existingModuleName, procedure: "BorrarContenidoCarpeta", source: "binary",
+  allowExternalAccessPath: true, databasePath: accessPath,
+});
+await record("vba-introspection", "get_procedure:binary-real-accdb", {
+  projectId, module: existingModuleName, procedure: "BorrarContenidoCarpeta", source: "binary",
+  accessPath, allowExternalAccessPath: true, timeoutMs: 120_000,
 });
 await record("vba-introspection", "get_procedure", {
   projectId,

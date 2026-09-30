@@ -57,6 +57,16 @@ detection to 24 hours without serializing every pull request behind the single
 `dysflow-e2e` runner. The workflow queues overlapping nightlies rather than
 cancelling an active Access operation.
 
+A maintainer can also start the same battery with `workflow_dispatch`, for
+example to prove a fix against real Access on `main` before tagging.
+
+The job stays restricted to `refs/heads/main`, so pull-request and fork code
+never reaches the self-hosted runner of this public repository.
+
+Pull requests prove adapter-level contracts through the in-process MCP protocol
+E2E tests listed in `UNIT_E2E_TESTS` (`test/e2e-suite-authority.ts`), which run
+in the quality suite on every change.
+
 The tag-only release gate in `.github/workflows/release.yml` remains mandatory
 and unchanged.
 

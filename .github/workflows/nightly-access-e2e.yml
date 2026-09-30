@@ -3,6 +3,11 @@ name: Nightly Access E2E
 on:
   schedule:
     - cron: '17 2 * * *'
+  # Maintainer-triggered run of the same battery, e.g. to prove a fix against
+  # real Access on main before tagging a release. Only users with write access
+  # can dispatch, and the job below stays restricted to refs/heads/main, so no
+  # fork or pull-request code ever reaches the self-hosted Access runner.
+  workflow_dispatch:
 
 # One physical Access runner serves the repository. Queue a later nightly run
 # instead of cancelling an active database operation or overlapping two runs.
