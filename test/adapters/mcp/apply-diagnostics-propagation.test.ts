@@ -27,6 +27,10 @@ import {
 import { createResolveProjectTool } from "../../../src/adapters/mcp/resolve-project-tool";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
+import { useHermeticTmpdir } from "../../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 class FakeQueryService {
   async execute() {
