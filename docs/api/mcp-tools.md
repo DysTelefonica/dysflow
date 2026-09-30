@@ -225,6 +225,16 @@ The literal `source: "binary"` reads the live VBComponent through `list_vba_modu
 Retrieve one VBA procedure body from inline or managed source, or directly from an Access binary. Read-only.
 
 The literal `source: "binary"` follows the same explicit `accessPath` and `allowExternalAccessPath:true` contract as `list_procedures`. It does not export files.
+
+Required parameters by `source` (the same table applies to `list_procedures` and `lint_module`):
+
+| `source` | Required with `module` | Notes |
+| --- | --- | --- |
+| omitted | `projectId` or `cwd` | Resolves the module under the configured source root. |
+| inline VBA text | nothing else | Parsed in process; no project needed. |
+| `"binary"` | `accessPath` (`.accdb`/`.mdb`) and `allowExternalAccessPath:true` | Add `projectId` or `cwd` to select the project. `databasePath` is not accepted; pass that path as `accessPath`. |
+
+An incomplete binary call is rejected once with `MCP_INPUT_INVALID`, naming every missing parameter together (#1801).
 * **Parameters**:
   - `module` (string, **required**): VBA module name without extension.
   - `procedure` (string, **required**): Procedure name to retrieve.

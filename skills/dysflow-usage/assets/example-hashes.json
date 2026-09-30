@@ -126,7 +126,7 @@
   },
   "get_procedure": {
     "path": "assets/examples/get-procedure.md",
-    "sha256": "a340640f71ec4606ee4bc57f3242e90181ab08d4e1ade23870a7c01d2b38eddb",
+    "sha256": "f813cadaf684253d26a2f501ff5c820d0823cc985082772d5b6fc4d9e5c8ebb9",
     "needs_human_content": false
   },
   "import_modules": {
