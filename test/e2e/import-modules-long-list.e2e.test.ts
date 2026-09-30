@@ -14,11 +14,14 @@ delete process.env.DYSFLOW_HOME;
  * Skipped-on-no-Access is the contract (per `import-modules-regression.e2e.test.ts`).
  */
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  createGitOwnedE2eWorkspace,
+  type GitOwnedE2eWorkspace,
+} from "../integration/_helpers/git-owned-e2e-workspace";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cliCommand =
@@ -60,9 +63,19 @@ function hasAccessCom(): boolean {
 
 const describeE2e = canRunE2e ? describe : describe.skip;
 
-const workspaceRoot = join(tmpdir(), `dysflow-import-lists-e2e-${process.pid}-${Date.now()}`);
+// import_modules is write-class: the product refuses it outside a Git worktree
+// (OUTSIDE_PROJECT_ROOT) and, under an OS temp dir nested in an ambient Git repo,
+// resolves the config at that repo's root (PROJECT_CONFIG_NOT_WRITE_READY). A
+// Git-owned sandbox worktree satisfies the intended-write contract, and its
+// per-run project id cannot collide with sibling sandboxes an aborted run left.
+let ownedWorkspace: GitOwnedE2eWorkspace | undefined;
+let workspaceRoot = "";
+let projectId = "";
 
 function setupWorkspace(): void {
+  ownedWorkspace = createGitOwnedE2eWorkspace(repoRoot, "import-lists");
+  workspaceRoot = ownedWorkspace.root;
+  projectId = ownedWorkspace.projectId;
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
   mkdirSync(join(workspaceRoot, "src", "modules"), { recursive: true });
   cpSync(fixtureFront, join(workspaceRoot, "NoConformidades.accdb"));
@@ -70,7 +83,7 @@ function setupWorkspace(): void {
   writeFileSync(
     join(workspaceRoot, ".dysflow", "project.json"),
     JSON.stringify({
-      id: "import-lists-e2e",
+      id: projectId,
       accessPath: "NoConformidades.accdb",
       backendPath: "NoConformidades_Datos.accdb",
       destinationRoot: "src",
@@ -88,11 +101,8 @@ function setupWorkspace(): void {
 }
 
 function teardownWorkspace(): void {
-  try {
-    rmSync(workspaceRoot, { recursive: true, force: true });
-  } catch {
-    // best effort
-  }
+  ownedWorkspace?.cleanup();
+  ownedWorkspace = undefined;
 }
 
 interface McpResponse {
@@ -184,6 +194,7 @@ function parsePayload(text: string): unknown {
 let serverStarted = false;
 
 beforeAll(async () => {
+  if (!canRunE2e) return;
   setupWorkspace();
   try {
     await startServer();
@@ -214,7 +225,7 @@ describeE2e("import_modules long-list (E2E)", () => {
     // feat-759-no-compile (v1.19.0) — `compile` parameter is gone; the
     // import persists via save-only (acCmdSaveAllModules = RunCommand 280).
     const res = await callMcp("import_modules", {
-      projectId: "import-lists-e2e",
+      projectId,
       moduleNames: names,
       apply: true,
     });

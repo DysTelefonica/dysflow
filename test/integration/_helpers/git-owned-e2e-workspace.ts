@@ -1,10 +1,21 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export interface GitOwnedE2eWorkspace {
   root: string;
   gitRoot: string;
+  /**
+   * A dysflow project id unique to this workspace.
+   *
+   * Every workspace is created as a sibling under the shared `.dysflow-e2e`
+   * directory, and product discovery scans those siblings for `.dysflow`
+   * configs. A fixed id collides (`PROJECT_ID_COLLISION`) with any sibling a
+   * previous run failed to remove, for example when Access still held the
+   * frontend lock during cleanup. Deriving the id from the unique directory
+   * name keeps each run independent of whatever an aborted run left behind.
+   */
+  projectId: string;
   cleanup(): void;
 }
 
@@ -56,7 +67,21 @@ export function createGitOwnedE2eWorkspace(cwd: string, prefix: string): GitOwne
   return {
     root,
     gitRoot: sandboxGitRoot,
+    projectId: `dysflow-${basename(root)}`,
     cleanup: () => {
+      // Drop the project config first. It is never held open by Access, so even
+      // when a locked frontend defeats the removal below, the leftover directory
+      // no longer advertises a project to sibling discovery in later runs.
+      try {
+        rmSync(join(root, ".dysflow"), {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 200,
+        });
+      } catch {
+        /* The full removal below still runs and reports its own failure. */
+      }
       try {
         execFileSync("git", ["worktree", "remove", "--force", root], {
           cwd: sourceGitRoot,

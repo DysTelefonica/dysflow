@@ -83,7 +83,9 @@ const ownedWorkspace = canRunE2e
   ? createGitOwnedE2eWorkspace(repoRoot, "stale-codebehind")
   : undefined;
 const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "stale-skipped");
-const projectId = "dysflow-stale-codebehind-e2e";
+// Unique per run: a fixed id collides with sibling workspaces an aborted run left
+// under `.dysflow-e2e`, which product discovery correctly reports as PROJECT_ID_COLLISION.
+const projectId = ownedWorkspace?.projectId ?? "dysflow-stale-codebehind-e2e";
 
 function setupWorkspace(): void {
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
