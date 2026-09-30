@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.4.11] - 2026-09-30
+
+### Changes
+
+- fix(mcp): name every missing binary-inspection parameter in one rejection (#1802)
+
+
 ## [v4.4.10] - 2026-09-28
 
 ### Changes
