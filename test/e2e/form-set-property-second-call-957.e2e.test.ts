@@ -99,7 +99,9 @@ const ownedWorkspace = canRunE2e
   ? createGitOwnedE2eWorkspace(repoRoot, "form-second-call-957")
   : undefined;
 const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "form-957-skipped");
-const projectId = "dysflow-form-second-call-957-e2e";
+// Unique per run: a fixed id collides with sibling sandboxes an aborted run left
+// under `.dysflow-e2e`, which product discovery correctly reports as PROJECT_ID_COLLISION.
+const projectId = ownedWorkspace?.projectId ?? "dysflow-form-second-call-957-e2e";
 
 function setupWorkspace(): void {
   mkdirSync(join(workspaceRoot, ".dysflow"), { recursive: true });
