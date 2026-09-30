@@ -34,7 +34,6 @@ import { successResult } from "../../src/core/contracts/index.js";
  */
 const UNCOVERED_BY_DESIGN: Readonly<Record<string, string>> = Object.freeze({
   // Non-form gaps.
-  lint_module: "source-only linter; no Access round trip to exercise",
   register_worktree: "worktree pre-warm covered by adapters/config unit tests",
   bootstrap: "shipped in #1484 after the battery was last extended",
   diagnose: "diagnostic surface; scenario pending",
