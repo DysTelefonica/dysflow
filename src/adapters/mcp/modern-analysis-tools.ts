@@ -220,6 +220,35 @@ type BinaryModulesResolution =
   | { ok: true; modules: readonly Record<string, unknown>[] }
   | { ok: false; response: McpToolResult };
 
+const BINARY_INSPECTION_REMEDIATION =
+  'Call with source:"binary", accessPath:"<path>.accdb" and allowExternalAccessPath:true together; add projectId or cwd to select the project.';
+
+/**
+ * Issue #1801 — name every missing binary-inspection requirement in ONE
+ * rejection. Reporting them one at a time forced callers through an opaque
+ * retry sequence. A `databasePath` (accepted by the SQL tools) is redirected
+ * to `accessPath` instead of surfacing as a bare unknown-key rejection.
+ */
+function incompleteBinaryInspection(input: unknown): McpToolResult | undefined {
+  if (typeof input !== "object" || input === null) return undefined;
+  const params = input as Record<string, unknown>;
+  if (params.source !== "binary") return undefined;
+  const hasAccessPath = typeof params.accessPath === "string" && params.accessPath.trim() !== "";
+  const missing = [
+    ...(params.allowExternalAccessPath === true ? [] : ["allowExternalAccessPath:true"]),
+    ...(hasAccessPath ? [] : ["accessPath"]),
+  ];
+  if (missing.length === 0) return undefined;
+  const databasePathHint =
+    !hasAccessPath && params.databasePath !== undefined
+      ? " databasePath is not a parameter of this tool; pass the same path as accessPath."
+      : "";
+  return invalidInput(
+    `Binary inspection is missing required parameters: ${missing.join(", ")}. The allowExternalAccessPath opt-in is scoped to this read-only inspection.${databasePathHint}`,
+    BINARY_INSPECTION_REMEDIATION,
+  );
+}
+
 /** Inspect an explicitly opted-in Access binary through the existing read-only port. */
 async function inspectBinaryModules(
   input: unknown,
@@ -229,20 +258,8 @@ async function inspectBinaryModules(
   const params =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
   const accessPath = typeof params.accessPath === "string" ? params.accessPath.trim() : "";
-  if (params.allowExternalAccessPath !== true) {
-    return {
-      ok: false,
-      response: invalidInput(
-        "Binary inspection requires allowExternalAccessPath:true. The opt-in is scoped to this read-only inspection.",
-      ),
-    };
-  }
-  if (accessPath.length === 0) {
-    return {
-      ok: false,
-      response: invalidInput("Binary inspection requires an explicit accessPath."),
-    };
-  }
+  const incomplete = incompleteBinaryInspection({ ...params, source: "binary" });
+  if (incomplete !== undefined) return { ok: false, response: incomplete };
   if (!/\.(?:accdb|mdb)$/i.test(accessPath)) {
     return {
       ok: false,
@@ -773,6 +790,8 @@ export function createModernAnalysisTools(
       inputSchema: LIST_PROCEDURES_SCHEMA,
       resultContract: listProceduresResultContract,
       handler: async (input) => {
+        const incompleteBinary = incompleteBinaryInspection(input);
+        if (incompleteBinary !== undefined) return incompleteBinary;
         const validation = validateInput(input, LIST_PROCEDURES_SCHEMA);
         if (validation !== undefined)
           return rejectInvalidInput(validation, "list_procedures", LIST_PROCEDURES_SCHEMA);
@@ -824,6 +843,8 @@ export function createModernAnalysisTools(
       inputSchema: GET_PROCEDURE_SCHEMA,
       resultContract: getProcedureResultContract,
       handler: async (input) => {
+        const incompleteBinary = incompleteBinaryInspection(input);
+        if (incompleteBinary !== undefined) return incompleteBinary;
         const validation = validateInput(input, GET_PROCEDURE_SCHEMA);
         if (validation !== undefined)
           return rejectInvalidInput(validation, "get_procedure", GET_PROCEDURE_SCHEMA);
@@ -1294,6 +1315,8 @@ export function createModernAnalysisTools(
       inputSchema: LINT_MODULE_SCHEMA,
       resultContract: lintModuleResultContract,
       handler: async (input) => {
+        const incompleteBinary = incompleteBinaryInspection(input);
+        if (incompleteBinary !== undefined) return incompleteBinary;
         const validation = validateInput(input, LINT_MODULE_SCHEMA);
         if (validation !== undefined)
           return rejectInvalidInput(validation, "lint_module", LINT_MODULE_SCHEMA);

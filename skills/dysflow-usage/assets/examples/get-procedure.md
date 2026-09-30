@@ -21,3 +21,7 @@ Returns one parsed VBA procedure from inline, managed-source, or Access-binary c
 
 The `.accdb`/`.mdb` path and opt-in are both required. This read-only call does
 not export source or authorize binary mutation.
+
+When either is missing, one `MCP_INPUT_INVALID` rejection names every missing
+parameter at once. `databasePath` is not a parameter of this tool; pass that
+path as `accessPath`.
