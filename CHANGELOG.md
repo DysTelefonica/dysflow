@@ -1,5 +1,15 @@
 # Changelog
 
+## [v4.4.11] - 2026-09-30
+
+### Changes
+
+- test(e2e): stop the nightly Access E2E from failing on leftovers and ambient repos (#1806)
+- test: make the suite hermetic against ambient git and dysflow ancestors (#1805)
+- test(e2e): prove the #1801 binary-inspection contract end to end (#1804)
+- fix(mcp): name every missing binary-inspection parameter in one rejection (#1802)
+
+
 ## [v4.4.10] - 2026-09-28
 
 ### Changes
