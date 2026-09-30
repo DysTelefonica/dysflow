@@ -197,7 +197,7 @@ describe("Remediation structured shape (#970)", () => {
     // shape only — the copy-paste-ready claim is still validated by the shape match.
     const bash = process.env.DYSFLOW_TEST_BASH ?? "C:/Program Files/Git/bin/bash.exe";
     if (existsSync(bash)) {
-      const res = spawnSync(bash, ["-lc", rem.command], {
+      const res = spawnSync(bash, ["-c", rem.command], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -209,7 +209,7 @@ describe("Remediation structured shape (#970)", () => {
         join(target, "forms"),
       ];
       for (const p of expectedPaths) {
-        const probe = spawnSync(bash, ["-lc", `[ -d "${p.replaceAll("\\", "/")}" ] && echo yes`], {
+        const probe = spawnSync(bash, ["-c", `[ -d "${p.replaceAll("\\", "/")}" ] && echo yes`], {
           encoding: "utf8",
         });
         expect(probe.stdout.trim()).toBe("yes");
