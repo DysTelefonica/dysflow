@@ -8,6 +8,10 @@ import { handleServeCommand } from "../../src/cli/commands/serve";
 import { handleSetupCommand } from "../../src/cli/commands/setup";
 import { runCli } from "../../src/cli/index";
 import { successResult } from "../../src/core/contracts/index";
+import { useHermeticTmpdir } from "../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 const plannedCommandCases = [
   ["install", ""],

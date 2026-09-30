@@ -10,6 +10,10 @@ import {
   loadDysflowConfigAsyncWith,
 } from "../../../src/core/config/dysflow-config.js";
 import { resolveExecutionTarget } from "../../../src/core/config/execution-target.js";
+import { useHermeticTmpdir } from "../../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 const hash = async (path: string): Promise<string> =>
   createHash("sha256")

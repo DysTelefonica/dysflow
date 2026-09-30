@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { diagnoseProjectConfig } from "../../src/adapters/config/project-config-diagnostic";
+import { useHermeticTmpdir } from "../_helpers/hermetic-tmpdir";
 import { createGitOwnedE2eWorkspace } from "../integration/_helpers/git-owned-e2e-workspace";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 const roots: string[] = [];
 

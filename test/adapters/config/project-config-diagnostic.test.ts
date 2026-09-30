@@ -3,6 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
+import { useHermeticTmpdir } from "../../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 describe("per-worktree project config contract", () => {
   const worktree = () => {

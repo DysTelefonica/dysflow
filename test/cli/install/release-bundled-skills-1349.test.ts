@@ -49,8 +49,24 @@ async function tar(args: string[], cwd = repoRoot): Promise<string> {
   return result.stdout;
 }
 
-beforeAll(async () => {
+// The suite packs the real `dist/` into a release archive. CI builds before
+// testing; a fresh worktree has no `dist/` yet, so build it once (same
+// command as `pnpm build`) instead of failing the whole file with ENOENT.
+async function ensureBuilt(): Promise<void> {
+  try {
+    await access(path.join(repoRoot, "dist", "cli", "index.js"));
+  } catch {
+    const tsc = path.join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+    await execFileAsync(process.execPath, [tsc, "-p", "tsconfig.json"], {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  }
   await access(path.join(repoRoot, "dist", "cli", "index.js"));
+}
+
+beforeAll(async () => {
+  await ensureBuilt();
   root = await mkdtemp(path.join(tmpdir(), "dysflow-release-skills-1349-"));
   roots.push(root);
   archivePath = path.join(root, "dysflow-test.tar.gz");

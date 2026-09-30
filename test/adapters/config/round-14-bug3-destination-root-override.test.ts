@@ -24,6 +24,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
+import { useHermeticTmpdir } from "../../_helpers/hermetic-tmpdir";
+
+// Temp fixtures must not inherit an ambient `.git` / `.dysflow` ancestor.
+useHermeticTmpdir();
 
 function makeModernProject(): { root: string; cleanup: () => void } {
   const root = mkdtempSync(join(tmpdir(), "round14-bug3-"));
