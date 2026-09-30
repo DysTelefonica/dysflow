@@ -186,6 +186,9 @@ async function callMcp(
 }
 
 const ownedWorkspace = canRunE2e ? createGitOwnedE2eWorkspace(repoRoot, "unicode") : undefined;
+// Unique per run: a fixed id collides with sibling sandboxes an aborted run left
+// under `.dysflow-e2e`, which product discovery correctly reports as PROJECT_ID_COLLISION.
+const projectId = ownedWorkspace?.projectId ?? "dysflow-unicode-e2e";
 const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "unicode-skipped");
 
 function setupWorkspace(): void {
@@ -197,7 +200,7 @@ function setupWorkspace(): void {
     join(workspaceRoot, ".dysflow", "project.json"),
     `${JSON.stringify(
       {
-        id: "dysflow-unicode-e2e",
+        id: projectId,
         accessPath: "NoConformidades.accdb",
         backendPath: "NoConformidades_Datos.accdb",
         destinationRoot: "src",
@@ -264,7 +267,7 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
     async () => {
       // 1. Import the Unicode module into Access.
       const importResp = await callMcp("import_modules", {
-        projectId: "dysflow-unicode-e2e",
+        projectId,
         moduleNames: ["TestUnicodeRoundTrip"],
         importMode: "Code",
       });
@@ -273,7 +276,7 @@ describe("import-export round-trip — Unicode (EXPEDIENTES bug)", () => {
 
       // 2. Export it back to disk.
       const exportResp = await callMcp("export_modules", {
-        projectId: "dysflow-unicode-e2e",
+        projectId,
         moduleNames: ["TestUnicodeRoundTrip"],
         destinationRoot: join(workspaceRoot, "src", "modules"),
       });

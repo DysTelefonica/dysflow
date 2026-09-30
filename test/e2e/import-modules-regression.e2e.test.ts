@@ -126,6 +126,17 @@ interface McpToolResponse {
   timedOut: boolean;
 }
 
+// MCP servers still running hold their cwd open; on Windows that keeps a
+// sandbox directory from being removed. afterAll drains this set first.
+const activeMcpChildren = new Set<ReturnType<typeof spawn>>();
+
+async function waitForMcpChildren(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (activeMcpChildren.size > 0 && Date.now() < deadline) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+}
+
 async function callMcp(
   toolName: string,
   args: Record<string, unknown>,
@@ -147,6 +158,7 @@ async function callMcp(
           process.env.ACCESS_VBA_PASSWORD ?? process.env.DYSFLOW_BACKEND_PASSWORD,
       },
     });
+    activeMcpChildren.add(child);
     let buf = "";
     let settled = false;
     const finish = (r: McpToolResponse) => {
@@ -195,6 +207,7 @@ async function callMcp(
       finish({ ok: false, isError: true, text: e.message, timedOut: false }),
     );
     child.on("close", () => {
+      activeMcpChildren.delete(child);
       if (!settled) finish({ ok: false, isError: true, text: "MCP closed", timedOut: false });
     });
     child.stdin.write(
@@ -561,7 +574,9 @@ describe.skipIf(!canRunE2e)(
 let nonAsciiSandbox: GitOwnedE2eWorkspace;
 let nonAsciiWorkspace: string;
 const nonAsciiModuleName = "TestMódulo"; // TestMódulo — ó = U+00F3
-const nonAsciiProjectId = "dysflow-nonascii-e2e";
+// Assigned from the sandbox in beforeAll: a fixed id collides with sibling sandboxes an
+// aborted run left under `.dysflow-e2e` (PROJECT_ID_COLLISION).
+let nonAsciiProjectId = "";
 
 function setupNonAsciiWorkspace(): void {
   mkdirSync(join(nonAsciiWorkspace, ".dysflow"), { recursive: true });
@@ -609,9 +624,11 @@ describe.skipIf(!canRunE2e)(
     beforeAll(() => {
       nonAsciiSandbox = createGitOwnedE2eWorkspace(repoRoot, "nonascii-import");
       nonAsciiWorkspace = nonAsciiSandbox.root;
+      nonAsciiProjectId = nonAsciiSandbox.projectId;
       setupNonAsciiWorkspace();
     });
-    afterAll(() => {
+    afterAll(async () => {
+      await waitForMcpChildren();
       try {
         nonAsciiSandbox.cleanup();
       } catch {

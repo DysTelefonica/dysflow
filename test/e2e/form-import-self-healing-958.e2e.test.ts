@@ -71,7 +71,9 @@ const ownedWorkspace = canRunE2e
   ? createGitOwnedE2eWorkspace(repoRoot, "self-healing-958")
   : undefined;
 const workspaceRoot = ownedWorkspace?.root ?? join(repoRoot, ".dysflow-e2e", "958-skipped");
-const projectId = "dysflow-self-healing-958-e2e";
+// Unique per run: a fixed id collides with sibling sandboxes an aborted run left
+// under `.dysflow-e2e`, which product discovery correctly reports as PROJECT_ID_COLLISION.
+const projectId = ownedWorkspace?.projectId ?? "dysflow-self-healing-958-e2e";
 
 /** First control Name ="..." found in the fixture layout — must survive the round-trip. */
 let sentinelControlName = "";
