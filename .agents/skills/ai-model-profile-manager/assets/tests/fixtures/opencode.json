@@ -1,0 +1,67 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [],
+  "permission": { "edit": "deny" },
+  "agent": {
+    "gentle-orchestrator": {
+      "description": "Test orchestrator",
+      "mode": "primary",
+      "model": "minimax-coding-plan/MiniMax-M3",
+      "variant": "adaptive",
+      "permission": {
+        "bash": "allow",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "general": "allow",
+          "jd-fix-agent": "allow",
+          "jd-judge-a": "allow",
+          "jd-judge-b": "allow",
+          "review-readability": "allow",
+          "review-refuter": "allow",
+          "review-reliability": "allow",
+          "review-resilience": "allow",
+          "review-risk": "allow",
+          "sdd-apply": "allow",
+          "sdd-archive": "allow",
+          "sdd-design": "allow",
+          "sdd-explore": "allow",
+          "sdd-init": "allow",
+          "sdd-onboard": "allow",
+          "sdd-propose": "allow",
+          "sdd-spec": "allow",
+          "sdd-tasks": "allow",
+          "sdd-verify": "allow"
+        }
+      },
+      "prompt": "orchestrator prompt",
+      "tools": { "bash": true, "task": true }
+    },
+    "general": {
+      "model": "minimax-coding-plan/MiniMax-M3",
+      "variant": "low",
+      "prompt": "general prompt"
+    },
+    "jd-fix-agent": { "model": "old/m", "variant": "low", "prompt": "p" },
+    "jd-fix-agent-fallback": { "model": "old/m", "variant": "low", "prompt": "p" },
+    "jd-judge-a": { "model": "old/m", "variant": "low" },
+    "jd-judge-a-fallback": { "model": "old/m", "variant": "low" },
+    "jd-judge-b": { "model": "old/m", "variant": "low" },
+    "jd-judge-b-fallback": { "model": "old/m", "variant": "low" },
+    "review-readability": { "model": "old/m", "prompt": "p" },
+    "review-refuter": { "model": "old/m" },
+    "review-reliability": { "model": "old/m", "variant": "low" },
+    "review-resilience": { "model": "old/m", "variant": "low" },
+    "review-risk": { "model": "old/m", "variant": "low" },
+    "sdd-apply": { "model": "old/m", "variant": "" },
+    "sdd-archive": { "model": "old/m", "variant": "" },
+    "sdd-design": { "model": "old/m" },
+    "sdd-explore": { "model": "old/m" },
+    "sdd-init": { "model": "old/m" },
+    "sdd-onboard": { "model": "old/m" },
+    "sdd-propose": { "model": "old/m" },
+    "sdd-spec": { "model": "old/m" },
+    "sdd-tasks": { "model": "old/m" },
+    "sdd-verify": { "model": "old/m" }
+  }
+}
