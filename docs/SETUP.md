@@ -98,15 +98,19 @@ dysflow doctor
 Then open a fresh agent session and invoke the MCP tool:
 
 ```text
-get_capabilities({})
+bootstrap({})
+schema({view:"index"})
+get_capabilities({view:"full"})
 ```
 
 Confirm that the response reports:
 
 - the expected `adapterVersion`;
-- the expected tools in `toolsVisible`;
+- the expected callable/advertised tools in `toolInventory`;
 - `writesProcess.enabled` and the per-project write posture you intended; and
-- a healthy `projectConfig.status` for a configured Access project.
+- a healthy `projectConfig.status` and `projectConfig.writeReady` for a configured Access project.
+
+The default compact capability view omits project diagnostics. Use the explicit full view above when checking readiness; process write gates alone do not prove that project paths are usable.
 
 `get_capabilities` is an MCP tool, not a CLI subcommand. Do not run
 `dysflow get_capabilities` in a terminal.
@@ -159,6 +163,6 @@ The only accepted values are `"core"` and `"full"`. An invalid project value fai
 | Symptom | Check |
 | --- | --- |
 | Agent cannot see Dysflow tools | Restart the client and inspect its MCP configuration destination above. |
-| Reported version is stale | Compare `dysflow --version` with `get_capabilities({}).adapterVersion`, then run `dysflow update`. |
+| Reported version is stale | Compare `dysflow --version` with `bootstrap({}).adapterVersion`, then run `dysflow update`. |
 | OpenCode points at a checkout or `test-runtime` | Re-run `dysflow install --agents opencode --no-tui`. |
 | Project diagnostics fail | Run `dysflow doctor` from the project root and repair `.dysflow/project.json`; do not bypass its path or write guards. |

@@ -81,12 +81,12 @@
   },
   "export_all": {
     "path": "assets/examples/export-all.md",
-    "sha256": "9c5027d1cf8d3f2921fd74aaf43f5d1886a6fcadf726826096845c16b75929e1",
+    "sha256": "3040b481aa2985abc010c5bbd01d2a36832c1a568dfc37abe6f0deaf186eda85",
     "needs_human_content": false
   },
   "export_modules": {
     "path": "assets/examples/export-modules.md",
-    "sha256": "6f6f3a73b59fd25112cff9a67507e39f52c3c333536985534a826bb103a83f42",
+    "sha256": "5c88723231f66af6c865f732b7889b96da687db0dca79e17ef36604676951dc1",
     "needs_human_content": false
   },
   "find_references": {

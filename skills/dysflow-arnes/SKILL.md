@@ -7,7 +7,7 @@ metadata:
   version: "1.1.0"
   status: active
   last_verified: "2026-09-20"
-  last_dysflow_version: "4.4.11"
+  last_dysflow_version: "4.4.12"
   requires: "dysflow MCP >= 3.0, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
@@ -87,6 +87,13 @@ authoritative.
   `allowedProcedures` with `procedureStrictMode:false` restricts nothing, and
   `undefined` means "resolved per input, unknown at startup", never `false`.
   If any check fails, STOP and surface the gap.
+
+  For export readiness, explicitly fetch `get_capabilities({view:"full"})` and
+  inspect `projectConfig.status` / `projectConfig.writeReady`; bootstrap write
+  gates alone are insufficient. In v4.4.12, `export_all` / `export_modules`
+  refresh the effective destination directory before the write gate. Repair the
+  exact missing directory and retry; see `dysflow-usage` for destination forms
+  and recovery. This adds no configuration-authorship restriction.
 
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
   defaults, or error codes from any doc. Re-fetch `bootstrap`, route through

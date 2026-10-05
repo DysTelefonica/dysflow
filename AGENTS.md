@@ -82,6 +82,13 @@ authoritative.
   `undefined` means "resolved per input, unknown at startup", never `false`.
   If any check fails, STOP and surface the gap.
 
+  For export readiness, explicitly fetch `get_capabilities({view:"full"})` and
+  inspect `projectConfig.status` / `projectConfig.writeReady`; bootstrap write
+  gates alone are insufficient. In v4.4.12, `export_all` / `export_modules`
+  refresh the effective destination directory before the write gate. Repair the
+  exact missing directory and retry; see `dysflow-usage` for destination forms
+  and recovery. This adds no configuration-authorship restriction.
+
 - **HR-5 — Runtime is source of truth.** Never memorize tool names, flags,
   defaults, or error codes from any doc. Re-fetch `bootstrap`, route through
   `schema({view:"index"})`, and expand the relevant capability/schema blocks
@@ -1267,7 +1274,9 @@ Do not treat a generated artifact as approved until the user has had a chance to
 
 In **Automatic** mode the orchestrator is the gatekeeper between phases.
 
-The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent, the orchestrator MUST validate that the phase reached its objective with everything in order.
+The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent.
+
+The orchestrator MUST validate that the phase reached its objective with everything in order.
 
 This is autonomous validation — it does NOT ask the user (that is Interactive mode); it only surfaces to the user when it catches a problem.
 
