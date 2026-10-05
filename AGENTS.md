@@ -1274,7 +1274,9 @@ Do not treat a generated artifact as approved until the user has had a chance to
 
 In **Automatic** mode the orchestrator is the gatekeeper between phases.
 
-The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent, the orchestrator MUST validate that the phase reached its objective with everything in order.
+The gatekeeper runs after every phase: when a delegated phase returns and BEFORE launching the next sub-agent.
+
+The orchestrator MUST validate that the phase reached its objective with everything in order.
 
 This is autonomous validation — it does NOT ask the user (that is Interactive mode); it only surfaces to the user when it catches a problem.
 

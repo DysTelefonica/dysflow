@@ -68,9 +68,15 @@ The contract covers `export_modules`, `export_all`, `import_modules`, `import_al
 | Containment | An override that escapes the worktree fails with `OUTSIDE_PROJECT_ROOT` (typed), not the generic `DESTINATION_ROOT_NOT_FOUND`. The round-14 containment check (#1228) runs **before** the existence check so escape paths get the typed verdict. | `src/adapters/config/project-config-diagnostic.ts:555-587` |
 | Error envelope | `DESTINATION_ROOT_NOT_FOUND` references the exact path the gate tried to read, post-normalization. The legacy wording "Configured destinationRoot" is gone. | `src/adapters/config/project-config-diagnostic.ts:587-593`, `src/core/contracts/remediation.ts:144-156` |
 
-For `export_all` and `export_modules`, each destination-declaring call refreshes filesystem readiness before its write gate. Configured opt-in, explicit `destinationRoot`, and `exportPath` therefore check the current effective directory, not a cached existence verdict. Creating or deleting it is visible on the next export.
+For `export_all` and `export_modules`, each destination-declaring call refreshes filesystem readiness before its write gate.
 
-Evidence: `src/adapters/config/worktree-context-cache.ts` and `test/adapters/mcp/issue-1814-destination-root-coherence.test.ts`. This does not refresh every capability snapshot or add a configuration-authorship requirement.
+Configured opt-in, explicit `destinationRoot`, and `exportPath` therefore check the current effective directory, not a cached existence verdict.
+
+Creating or deleting it is visible on the next export.
+
+Evidence: `src/adapters/config/worktree-context-cache.ts` and `test/adapters/mcp/issue-1814-destination-root-coherence.test.ts`.
+
+This does not refresh every capability snapshot or add a configuration-authorship requirement.
 
 The success envelope adds two stable fields for every write-class tool that resolved the override path.
 
