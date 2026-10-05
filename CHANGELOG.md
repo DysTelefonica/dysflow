@@ -1,5 +1,16 @@
 # Changelog
 
+## [v4.4.12] - 2026-10-05
+
+### Changes
+
+- test(exports): resolve native Windows fixture paths
+- test(exports): canonicalize Windows destination fixtures
+- docs(security): split environment sandbox paragraph
+- docs(exports): document fresh destination gate diagnostics
+- fix(exports): refresh destination readiness before write gates
+
+
 ## [v4.4.11] - 2026-09-30
 
 ### Changes
