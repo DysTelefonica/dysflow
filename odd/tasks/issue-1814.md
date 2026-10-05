@@ -242,3 +242,5 @@ L6: Only export readiness refreshed. Exact original incident timeline unproven; 
 L7: User explicitly requested global review disable; observed off. Independent verification retained. Add trust-model evidence for export gate freshness. Implementation/test authored230 lines; automated verbatim task tracking240 lines separately retained. Single coherent fix PR, no code-golf. Prettier unavailable; repository biome formatting passed instead.
 
 L8: PR CI on 32cb4b9 reproduced three fixture failures because Windows TEMP used an 8.3 user alias and ownership checks canonicalized the worktree. Canonicalize the temporary fixture root with realpathSync; production guards unchanged. Focused coherence/cache tests: 20 passed. CI remains the full-suite proof. Memory mirror pending because runtime session registration is unavailable.
+
+L9: Non-native realpathSync still retained RUNNER~1 on hosted Windows. Explorer confirmed lexical containment against Git-resolved root. Use realpathSync.native for the fixture; preserve production containment. Separate existing descendant-process enumeration probe also failed; no unverified CI bypass.

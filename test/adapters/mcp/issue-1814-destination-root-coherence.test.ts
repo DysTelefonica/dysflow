@@ -9,7 +9,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 const projects: string[] = [];
 
 function makeProject(): { root: string; destinationRoot: string } {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "issue-1814-")));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), "issue-1814-")));
   projects.push(root);
   writeFileSync(join(root, ".git"), "gitdir: fixture", "utf8");
   mkdirSync(join(root, ".dysflow"), { recursive: true });
