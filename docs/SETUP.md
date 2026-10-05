@@ -163,8 +163,6 @@ The only accepted values are `"core"` and `"full"`. An invalid project value fai
 | Symptom | Check |
 | --- | --- |
 | Agent cannot see Dysflow tools | Restart the client and inspect its MCP configuration destination above. |
-| Reported version is stale | Compare `dysflow --version` with `bootstrap({})
-schema({view:"index"})
-get_capabilities({view:"full"}).adapterVersion`, then run `dysflow update`. |
+| Reported version is stale | Compare `dysflow --version` with `bootstrap({}).adapterVersion`, then run `dysflow update`. |
 | OpenCode points at a checkout or `test-runtime` | Re-run `dysflow install --agents opencode --no-tui`. |
 | Project diagnostics fail | Run `dysflow doctor` from the project root and repair `.dysflow/project.json`; do not bypass its path or write guards. |
