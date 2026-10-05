@@ -180,8 +180,9 @@ COMPUTERNAME, LOCALAPPDATA, APPDATA, HOMEDRIVE, HOMEPATH, HOME, USER
 ```
 
 All other host variables — API tokens, secrets, credentials — are excluded from the
-child's environment unless the caller explicitly passes them via `options.env`. The
-`buildChildEnv` function enforces this allowlist; callers cannot accidentally forward
+child's environment unless the caller explicitly passes them via `options.env`.
+
+The `buildChildEnv` function enforces this allowlist; callers cannot accidentally forward
 the full host environment by omission.
 
 ## Callers
