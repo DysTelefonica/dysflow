@@ -166,9 +166,9 @@ No version bump is prescribed.
 - [x] I removed secrets and private environment details from this report.
 
 ## Tasks
-- [x] T1 — S1,S3 — delegated: cache coherence fixed; RED observed (stale missing and stale ready); full suite 6099 passed, 1 skipped, 1 todo; independent focused verification 43+24 passed; commit pending.
-- [ ] T2 — S1,S2 — inline: native review, PR, exact-head CI and merge; commit pending.
-- [ ] T3 — S1,S2 — delegated: release checklist/audit/preparation; inline delivery, exact-SHA CI, tag and published release proof; commit pending.
+- [x] T1 — S1,S3 — delegated: cache coherence fixed; RED observed (stale missing and stale ready); full suite 6099 passed, 1 skipped, 1 todo; independent focused verification 43+24 passed; commit 3266408091f60b54c420c8c163f83dfd9493f045.
+- [ ] T2 — S1,S2 — inline: native review, PR, exact-head CI and merge; commit 3266408091f60b54c420c8c163f83dfd9493f045.
+- [ ] T3 — S1,S2 — delegated: release checklist/audit/preparation; inline delivery, exact-SHA CI, tag and published release proof; commit 3266408091f60b54c420c8c163f83dfd9493f045.
 
 ## Log
 L1: "resuelve en wt la issue 1814 luego pr merge a main si ci verde y release"
@@ -238,3 +238,5 @@ ofrece diga "disco" cuando el disco no es la causa.
 L5: Secondary comment is explicitly nonblocking. Verify hand-authored versus setup serialization claims; no authorization inferred for new provenance enforcement. Primary S3 remains unchanged.
 
 L6: Only export readiness refreshed. Exact original incident timeline unproven; boundary regression reproduces both stale rejection and stale acceptance. Real Access export not run; binaryMutated:false asserted on external-I/O stub. Parent focused test passed. Verifier confirmed production operation routing and no provenance rule. Source normalizers/lint/tsc passed.
+
+L7: User explicitly requested global review disable; observed off. Independent verification retained. Add trust-model evidence for export gate freshness. Implementation/test authored230 lines; automated verbatim task tracking240 lines separately retained. Single coherent fix PR, no code-golf. Prettier unavailable; repository biome formatting passed instead.

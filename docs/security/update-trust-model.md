@@ -3,6 +3,15 @@
 This document describes the security properties of the Dysflow self-update path and the
 PowerShell process spawn boundary.
 
+## Export destination readiness
+
+Before `export_all` or `export_modules` writes to a configured or explicit destination,
+the worktree resolver refreshes its filesystem-dependent diagnostic. Creating a missing
+destination or removing an existing one must not reuse cached write readiness.
+The project-config watcher alone cannot observe those directory changes.
+
+Evidence: `src/adapters/config/worktree-context-cache.ts` and
+`test/adapters/mcp/issue-1814-destination-root-coherence.test.ts`.
 ## Update mechanism
 
 The only supported update mechanism is downloading a GitHub Release archive (`tar.gz`),
