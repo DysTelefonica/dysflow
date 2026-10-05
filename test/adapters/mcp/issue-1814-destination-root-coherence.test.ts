@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,7 +9,7 @@ import { successResult } from "../../../src/core/contracts/index.js";
 const projects: string[] = [];
 
 function makeProject(): { root: string; destinationRoot: string } {
-  const root = mkdtempSync(join(tmpdir(), "issue-1814-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "issue-1814-")));
   projects.push(root);
   writeFileSync(join(root, ".git"), "gitdir: fixture", "utf8");
   mkdirSync(join(root, ".dysflow"), { recursive: true });
