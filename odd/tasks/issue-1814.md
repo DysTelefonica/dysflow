@@ -165,10 +165,15 @@ No version bump is prescribed.
 - [x] I searched open and closed issues for an equivalent report.
 - [x] I removed secrets and private environment details from this report.
 
+S4: "tienes que alinear la documentación y los skills de dysflow arnes y ussage"
+S5: "para que no haya nada desalineado con lo que hace esta versión nueva"
+
 ## Tasks
 - [x] T1 — S1,S3 — delegated: cache coherence fixed; RED observed (stale missing and stale ready); full suite 6099 passed, 1 skipped, 1 todo; independent focused verification 43+24 passed; commit 3266408091f60b54c420c8c163f83dfd9493f045.
 - [x] T2 — S1,S2 — inline: review disabled by user; PR #1815 merged as ec7255d316e1cbaed4a12f160079b2db7c949815 after exact-head CI 37290605944 succeeded.
 - [ ] T3 — S1,S2 — inline preparation/delivery; delegated long audit: merged-head semantic audit 94 tools/zero drift and 64 examples/zero findings; prepare commit 69b6c1786900eb4d6915b68aa55b567f3be18a0c; publication pending.
+
+- [ ] T4 — S4,S5 — inline: align canonical docs/usage/harness against candidate runtime; delegated semantic audit and independent review; commit pending.
 
 ## Log
 L1: "resuelve en wt la issue 1814 luego pr merge a main si ci verde y release"
@@ -246,3 +251,5 @@ L8: PR CI on 32cb4b9 reproduced three fixture failures because Windows TEMP used
 L9: Non-native realpathSync still retained RUNNER~1 on hosted Windows. Explorer confirmed lexical containment against Git-resolved root. Use realpathSync.native for the fixture; preserve production containment. Separate existing descendant-process enumeration probe also failed; no unverified CI bypass.
 
 L10: Fix PR merged with exact-head CI green. v4.4.12 prepared via canonical script after merged-head semantic audit; version/changelog tests 10 passed. Personal consumer drift remains pre-existing outside clean release-owned source. Release PR #1816, main CI, tag workflow and real Access gate pending. Risk: items 2 and 5 (write guards and release delivery).
+
+L11: User added S4/S5 before release publication. Mapping found stale dryRun guidance, compact-view readiness claims and missing fresh-export recovery guidance. Correct canonical sources and regenerate embedded harness byte-for-byte; no provenance gate invented. Automated audits alone did not catch prose drift. Personal canonical lane remains dirty and protected; installed mirrors are installer-owned.

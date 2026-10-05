@@ -342,6 +342,20 @@ enumerates what to set; `error.toolName` names the offending tool). The
 post-resolve #785 guard then fires normally once the destination IS
 declared — after explicit approval, use `implements_check:"export_overwrites_source_precheck"` with `confirmedRequiresConfirmation:true` to bypass an overlap refusal.
 
+**Export readiness (v4.4.12, #1814).** `export_all` and `export_modules`
+refresh destination filesystem diagnostics before their write gate for all three
+explicit destination forms above. Creating or removing the effective directory
+is visible on the next export; no MCP restart or configuration rewrite is needed.
+
+On `DESTINATION_ROOT_NOT_FOUND`, repair the exact directory named by the error,
+fetch `get_capabilities({view:"full"})` to inspect `projectConfig.status` and
+`projectConfig.writeReady`, then retry the same target. Process write gates alone
+are insufficient. Use `setup_project` for missing/invalid configuration, not as
+an authorship reset for a valid config. Other cached snapshots are not covered.
+
+Evidence: `src/adapters/config/worktree-context-cache.ts` and
+`test/adapters/mcp/issue-1814-destination-root-coherence.test.ts`.
+
 `destinationRoot` chooses **where bytes land**, not which database is opened —
 that is still `projectId` / `accessPath` / `backendPath`. Confirm the
 parameter is accepted with `describe_tool({name:"<tool>"})` before relying on

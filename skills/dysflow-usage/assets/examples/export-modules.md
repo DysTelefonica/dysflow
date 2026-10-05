@@ -22,6 +22,14 @@ destinationRoot must exist before `apply:true`. If `git rm -r src/` removed the
 directory itself, recreate it before the call; Dysflow fails closed rather than
 silently choosing another destination.
 
+## Destination readiness
+
+Declare `destinationRoot`, its `exportPath` alias, or `allowConfiguredDestinationRoot:true`. For the same effective directory, each form gets a fresh existence check before the export write gate (v4.4.12). These flags do not waive containment or overlap safeguards.
+
+If `DESTINATION_ROOT_NOT_FOUND` names a missing directory, create or restore that exact target, inspect `projectConfig.status/writeReady` through `get_capabilities({view:"full"})`, and retry. Use `setup_project` only when configuration itself is missing or invalid.
+
+Evidence: `src/adapters/config/worktree-context-cache.ts` and `test/adapters/mcp/issue-1814-destination-root-coherence.test.ts`.
+
 ## Call shape
 
 ```json
