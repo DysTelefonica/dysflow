@@ -49,6 +49,8 @@ const TARGET_KEYS = new Set([
   "allowExternalAccessPath",
 ]);
 
+const DESTINATION_EXPORT_TOOLS = new Set(["export_all", "export_modules"]);
+
 export class WorktreeContextCache {
   readonly #entries = new Map<string, CacheEntry>();
   readonly #resolveDiagnostic: DiagnosticResolver;
@@ -120,6 +122,15 @@ export class WorktreeContextCache {
     sourceHint: WorktreeContextSource,
   ): Promise<ProjectConfigDiagnostic> {
     const cached = await this.getContext(cwdInput, sourceHint);
+    if (requiresFreshDestinationDiagnostic(request)) {
+      // Destination existence is mutable filesystem state, not config state:
+      // the config watcher cannot invalidate a cached readiness result when
+      // an operator creates or removes the configured export directory.
+      // Re-run only destination-bearing export checks so unrelated requests
+      // keep the worktree cache's normal reuse behavior.
+      this.#misses += 1;
+      return await this.#resolveDiagnostic(cached.context.cwd, request);
+    }
     if (requiresSelectorSpecificDiagnostic(request, cached.context)) {
       // A selector that names another target must retain the resolver's
       // fail-closed project-selection behavior. The cached context still
@@ -188,6 +199,16 @@ export class WorktreeContextCache {
     this.#entries.delete(key);
     this.#invalidations += 1;
   }
+}
+
+function requiresFreshDestinationDiagnostic(request: Record<string, unknown>): boolean {
+  if (typeof request.operation !== "string" || !DESTINATION_EXPORT_TOOLS.has(request.operation))
+    return false;
+  return (
+    request.allowConfiguredDestinationRoot === true ||
+    (typeof request.destinationRoot === "string" && request.destinationRoot.length > 0) ||
+    (typeof request.exportPath === "string" && request.exportPath.length > 0)
+  );
 }
 
 function requiresSelectorSpecificDiagnostic(
