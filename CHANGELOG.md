@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.4.13] - 2026-10-06
+
+### Changes
+
+- fix(sync): compare live state and preserve parity verdicts (#1818)
+
+
 ## [v4.4.12] - 2026-10-05
 
 ### Changes
