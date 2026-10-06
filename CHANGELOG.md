@@ -4,6 +4,8 @@
 
 ### Changes
 
+- fix(deps): patch high/critical proxy-addr and source-map-js advisories blocking release
+
 - fix(sync): compare live state and preserve parity verdicts (#1818)
 - fix(exports): preserve unchanged artifact bytes and timestamps
 - test(sync): gate release on real Access edits and idempotence in both directions
