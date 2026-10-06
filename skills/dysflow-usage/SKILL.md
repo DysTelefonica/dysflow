@@ -371,6 +371,15 @@ hand-editing a config that predates the current contract; see
 
 ## VBA-sync workflow — `sync_binary`
 
+Manual Access edits require live binary → source reconciliation, not a restart.
+Compare each exported `.form.txt` with its source counterpart and each `.cls`
+with its counterpart; never compare database hashes with source hashes.
+
+Inspect workflow `ok`, `postSync` and `recommendation` before declaring parity.
+Unchanged sync repeats execute no chunks; unchanged exports preserve source
+bytes and timestamps. Access database bookkeeping may still change physical bytes.
+
+
 When an AI agent needs a whole-project source ⇄ binary workflow, prefer `sync_binary` over the manual 5-step loop. For an explicit narrow list of modules, use `import_modules({moduleNames:[...]})` or `export_modules({moduleNames:[...]})`; Dysflow does not steer those focused calls toward a broader workflow. When the composed verify/plan/re-verify envelope is still useful for an explicit list, pass `scope:{moduleNamesOnly:true}` so modules outside that list cannot affect the workflow result. `sync_binary` composes `verify_code` + `import_modules` + `export_modules` + re-verify into a single round-trip. Workflow pattern lives in the **`vba-binary-sync`** skill; this is its MCP one-shot wrapper.
 
 | Direction | What it does |

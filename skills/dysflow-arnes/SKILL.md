@@ -211,6 +211,13 @@ authoritative.
   every other write-class tool, and `MCP_WRITES_DISABLED` is the envelope you
   will get when they are not. `apply:false` plans are not writes and still run.
 
+- **HR-17 — Reconcile manual binary edits using fresh evidence.** Compare
+  `.form.txt` to `.form.txt` and `.cls` to `.cls`, never database hashes to
+  source hashes. Inspect sync `ok`, `postSync` and `recommendation` before
+  reporting completion. Unchanged repeats must preserve functional state;
+  sync dispatches no chunks and export preserves unchanged source timestamps.
+  `manual_merge` requires an explicit one-way decision, never an automatic winner.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:

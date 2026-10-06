@@ -5,6 +5,10 @@
 ### Changes
 
 - fix(sync): compare live state and preserve parity verdicts (#1818)
+- fix(exports): preserve unchanged artifact bytes and timestamps
+- test(sync): gate release on real Access edits and idempotence in both directions
+- docs(skills): align usage and operating harness with fresh synchronization evidence
+- ci(release): disable automatic post-job package-manager cache on the Access runner
 
 
 ## [v4.4.12] - 2026-10-05

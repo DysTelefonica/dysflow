@@ -31,6 +31,7 @@ import { runMcpHarness, runMcpSession } from "./_helpers/mcp-harness.mjs";
 import { resolveMcpE2eCommand } from "./_helpers/resolve-mcp-e2e-command.mjs";
 import { validateMcpResultAgainstDescription } from "./_helpers/result-contract-validator.mjs";
 import { removeRecoveryTokenTrioFixtureWithRetry } from "./_helpers/suite-owned-cleanup.mjs";
+import { runIssue1817SyncJourney } from "./mcp-e2e-issue-1817-sync.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -1672,6 +1673,37 @@ await record("write", "seed_fixture", { ...ctx, databasePath: backendPath, table
 // above TEST_ID_BASE, which is why every probe row above is seeded inside it.
 await record("write", "teardown_fixture", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, implements_check: "teardown_fixture_precheck", confirmedRequiresConfirmation: true, allowTable: probeTable, predicate: { column: "ID", min: TEST_ID_BASE, max: TEST_ID_BASE + 999 } });
 await record("write", "drop_table", { ...ctx, databasePath: backendPath, tableName: probeTable, apply: true, implements_check: "drop_table_precheck", confirmedRequiresConfirmation: true });
+
+// Real out-of-band edits, all four operations, in persistent MCP sessions.
+// Failure is fatal: never publish a release with this journey silently skipped.
+try {
+  await runIssue1817SyncJourney({
+    command: cliCommand, args: mcpCliArgs, shell: true,
+    env: { ...process.env, ACCESS_VBA_PASSWORD: "", DYSFLOW_ACCESS_PASSWORD: "" },
+    onChild: async (pid) => {
+      if (pid) {
+        suiteOwnPids.add(pid);
+        await resumeController.registerOwnedPid(pid);
+      }
+    },
+    onClosed: async (pid) => {
+      if (pid && !isOwnPidAlive(pid)) {
+        suiteOwnPids.delete(pid);
+        await resumeController.clearOwnedPid(pid);
+      }
+    },
+    onCase: async (operation) => {
+      addResult({ area: "vba-sync", tool: `issue-1817:${operation}`, pass: true,
+        expected: "manual edits propagate; unchanged repeats preserve functional state", ms: 0,
+        summary: "UI, form code and independent class; two edits each and idempotent repeats" });
+      console.log(`PASS\tissue-1817:${operation}\t0ms\treal Access idempotence`);
+    },
+  });
+} catch (error) {
+  addResult({ area: "vba-sync", tool: "issue-1817:sync-journey", pass: false,
+    expected: "all four real Access operations pass", ms: 0, summary: normalize(error?.message ?? error) });
+  throw error;
+}
 
 await record("vba-sync", "list_objects", ctx);
 await record("vba-sync", "exists", { ...ctx, name: "DysflowMcpE2EMissing", moduleName: "DysflowMcpE2EMissing" });

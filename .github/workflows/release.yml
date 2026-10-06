@@ -225,16 +225,12 @@ jobs:
           run_install: false
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        # The `cache:` key is omitted entirely to disable the post-run cache
-        # upload. `cache: ''` (empty string) does NOT disable caching; the
-        # action still packages the workspace pnpm store into a 52 MB tar
-        # and tries to upload it, which on this home network runs at
-        # <0.1 MB/s for ~17 min — enough to push the job into the timeout
-        # territory just for an upload that buys nothing on a self-hosted
-        # runner (the runner persists across jobs and keeps its own
-        # setup-pnpm store).
+        # setup-node auto-detects pnpm from packageManager even without cache:.
+        # Explicitly disable its post-job archive/save on the persistent runner.
+        # Both v4.4.12 attempts passed Access E2E but timed out in this post step.
         with:
           node-version: 26
+          package-manager-cache: false
 
       - name: Install dependencies
         # pnpm/action-setup@v6 pins PNPM_HOME to its bundled pnpm install
