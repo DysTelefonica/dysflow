@@ -247,55 +247,6 @@ const TIMEOUT_WRITE_TOOLS = new Set([
 ]);
 
 /**
- * Issue #1043 — `VbaModulesAdapter` tools whose successful apply:true
- * invalidates the `sync_binary` verify_code cache. Dry-run plan calls do
- * NOT invalidate because the plan never mutates the binary.
- *
- * `apply_form_design_plan` lives in `VbaFormsAdapter` and reaches the
- * binary through the form import gate; it has its own allow-list
- * (`SYNC_BINARY_INVALIDATING_FORMS`) below.
- */
-const SYNC_BINARY_INVALIDATING_TOOLS = new Set([
-  "import_modules",
-  "import_all",
-  "export_modules",
-  "export_all",
-  "delete_module",
-]);
-
-/**
- * Issue #1043 — form-mutation tools whose successful apply reaches the
- * binary through the import_modules gate (and therefore must invalidate
- * the `sync_binary` verify_code cache the same way a direct
- * `import_modules apply:true` does).
- */
-const SYNC_BINARY_INVALIDATING_FORMS = new Set(["apply_form_design_plan"]);
-
-/**
- * Issue #1043 — build the `sync_binary` verify_code cache key from the
- * call params. Distinct `(accessPath, moduleNames, strict, directoryPath)`
- * combinations are cached separately so a focused sync_binary call does
- * NOT serve a cached whole-project verify result. The accessPath prefix
- * is the invalidation handle: `invalidateVerifyCacheForAccessPath` walks
- * the keys by prefix.
- */
-function syncBinaryVerifyCacheKey(
-  params: Record<string, unknown>,
-  fallbackAccessPath: string | undefined,
-): string {
-  const accessPath =
-    typeof params.accessPath === "string" && params.accessPath.length > 0
-      ? params.accessPath
-      : (fallbackAccessPath ?? "");
-  const moduleNames = Array.isArray(params.moduleNames)
-    ? (params.moduleNames as readonly unknown[]).map((n) => String(n)).join(",")
-    : "";
-  const strict = params.strict === true ? "strict" : "semantic";
-  const directoryPath = typeof params.directoryPath === "string" ? params.directoryPath : "";
-  return `${accessPath.toLowerCase()}|${moduleNames}|${strict}|${directoryPath}`;
-}
-
-/**
  * Derives the lock file that MAY linger for an Access binary. This is a pure
  * path derivation, NOT a filesystem scan — it tells the consumer which file to
  * check, without asserting it exists.
@@ -438,22 +389,6 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
-  /**
-   * Issue #1043 — `sync_binary dryRun` returns stale source-vs-binary diff
-   * after `import_modules apply` because every `sync_binary` call re-ran
-   * the (expensive) `verify_code` round-trip while ALSO not invalidating
-   * the conceptual cache the compose layer relied on. We memoize the most
-   * recent `VbaVerifyResult` keyed by a tuple of (accessPath, moduleNames,
-   * strict, directoryPath) so two consecutive `sync_binary dryRun` calls
-   * on the same binary reuse the result, and any successful mutation tool
-   * (`execute()` below) clears the entry for that accessPath so the next
-   * `sync_binary` re-verifies.
-   *
-   * The cache is process-local and scoped to a single `VbaSyncAdapter`
-   * instance — each test/consumer wires its own adapter, so the Fixture
-   * Gate rule (tests can reset shared state) is naturally satisfied.
-   */
-  private readonly verifyCache: Map<string, VbaVerifyResult> = new Map();
 
   constructor(options: VbaSyncAdapterOptions = {}) {
     this.env = options.env ?? process.env;
@@ -537,18 +472,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     // the compose layer pure and testable (sync-binary.ts has zero I/O
     // imports); only the adapter bridge here touches Access / PowerShell.
     if (toolName === "sync_binary") {
-      const isApply = params.dryRun !== true && params.apply === true;
-      const result = await this.executeSyncBinary(params);
-      // Issue #1043 — a sync_binary apply:true round-trip may have mutated
-      // the binary (import_modules / export_modules dispatched inside the
-      // compose layer). The verify_code memo is stale on a successful
-      // apply — drop the entry so the next sync_binary dryRun re-verifies.
-      // A dryRun sync_binary does NOT mutate the binary; the cache hit
-      // path is the deliberate perf win for back-to-back dryRun calls.
-      if (result.ok && isApply && this.accessPath !== undefined) {
-        this.invalidateVerifyCacheForAccessPath(this.accessPath);
-      }
-      return result;
+      return this.executeSyncBinary(params);
     }
 
     if (VbaOperationsAdapter.handles(toolName)) {
@@ -558,34 +482,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
       return this.executionAdapter.execute(toolName, params);
     }
     if (VbaFormsAdapter.handles(toolName)) {
-      const result = await this.formsAdapter.execute(toolName, params);
-      // Issue #1043 — apply_form_design_plan reaches into the binary
-      // through the form import gate. Any successful apply invalidates
-      // the verify_code memo for the resolved accessPath.
-      if (
-        result.ok &&
-        this.accessPath !== undefined &&
-        SYNC_BINARY_INVALIDATING_FORMS.has(toolName)
-      ) {
-        this.invalidateVerifyCacheForAccessPath(this.accessPath);
-      }
-      return result;
+      return this.formsAdapter.execute(toolName, params);
     }
     if (VbaModulesAdapter.handles(toolName)) {
-      const result = await this.modulesAdapter.execute(toolName, params);
-      // Issue #1043 — successful apply on a binary-state-changing tool
-      // (import_*, export_*, delete_module, etc.) invalidates the
-      // verify_code memo for the resolved accessPath so the next
-      // `sync_binary dryRun` re-verifies instead of returning the stale
-      // pre-mutation snapshot.
-      if (
-        result.ok &&
-        this.accessPath !== undefined &&
-        SYNC_BINARY_INVALIDATING_TOOLS.has(toolName)
-      ) {
-        this.invalidateVerifyCacheForAccessPath(this.accessPath);
-      }
-      return result;
+      return this.modulesAdapter.execute(toolName, params);
     }
 
     return failureResult(createDysflowError("TOOL_NOT_IMPLEMENTED", TOOL_NOT_IMPLEMENTED_MESSAGE));
@@ -693,37 +593,15 @@ export class VbaSyncAdapter implements VbaSyncPort {
     | { ok: true; summary: SyncVerifySummary }
     | { ok: false; error: import("../../core/contracts/index.js").DysflowError }
   > {
-    // Issue #1043 — cache hit avoids a redundant `verify_code` round-trip
-    // when sync_binary is called repeatedly on the same binary without any
-    // mutation in between. Cache misses fall through to the live
-    // `verify_code` and populate the entry. The cache is invalidated by
-    // `execute()` after every successful mutation tool (import_*, export_*,
-    // delete_module, apply_form_design_plan) so the next sync_binary call
-    // always sees fresh state.
-    const cacheKey = syncBinaryVerifyCacheKey(params, this.accessPath);
-    const cached = this.verifyCache.get(cacheKey);
-    if (cached !== undefined) {
-      return { ok: true, summary: projectVerifyToSyncSummary(cached) };
-    }
+    // Access and source files may change outside Dysflow between any two calls.
+    // Pre- and post-sync evidence must come from a live comparison, never a
+    // process-local snapshot keyed only by paths/options (#1817).
     const verifyResult = await this.modulesAdapter.execute("verify_code", params);
     if (!verifyResult.ok) {
       return { ok: false, error: verifyResult.error };
     }
     const verifyData = verifyResult.data as VbaVerifyResult;
-    this.verifyCache.set(cacheKey, verifyData);
     return { ok: true, summary: projectVerifyToSyncSummary(verifyData) };
-  }
-
-  /**
-   * Issue #1043 — drop every cached verify_code entry whose key starts
-   * with the resolved `accessPath` prefix. Called after any successful
-   * disk-state-changing tool so the next `sync_binary` re-verifies.
-   */
-  private invalidateVerifyCacheForAccessPath(accessPath: string): void {
-    const prefix = `${accessPath.toLowerCase()}|`;
-    for (const key of [...this.verifyCache.keys()]) {
-      if (key.startsWith(prefix)) this.verifyCache.delete(key);
-    }
   }
 
   private async executeMappedTool(
@@ -1369,7 +1247,7 @@ function dedupeByModuleName<T extends { moduleName: string }>(entries: readonly 
  * `sync_binary` output sees the same flat shape the issue spec lists.
  */
 function toSyncBinaryResponse(result: SyncBinarySuccessResult): {
-  ok: true;
+  ok: boolean;
   dryRun: boolean;
   preSync: SyncVerifySummary;
   plan: SyncBinaryPlan;
@@ -1378,7 +1256,7 @@ function toSyncBinaryResponse(result: SyncBinarySuccessResult): {
   recommendation: string;
 } {
   return {
-    ok: true,
+    ok: result.ok,
     dryRun: result.dryRun,
     preSync: result.preSync,
     plan: result.plan,

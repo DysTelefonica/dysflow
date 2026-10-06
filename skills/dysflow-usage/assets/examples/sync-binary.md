@@ -87,6 +87,26 @@ silently choosing another destination.
 ```
 On failure, `env.error.code` is one of the codes below; `error.remediation` and `error.toolName` are also present.
 
+## Live synchronization evidence
+
+Each sync performs a fresh source/binary comparison before planning and after
+apply. Manual Access or filesystem edits are not hidden behind a process-local
+comparison cache. Repeating a successful sync without changes must produce
+`recommendation: "no_action"`, zero actionable drift and no mutation chunks.
+
+The workflow payload's `ok` reflects the post-sync outcome, not merely whether
+the request executed. Inspect `postSync` and `recommendation`; unresolved drift
+must not be treated as completed synchronization.
+
+`manual_merge` concerns the object's exported source artifacts, not merging
+`.accdb` bytes. Compare each `.form.txt` and `.cls` with its exported counterpart.
+Choose an explicit direction and review the conflict before using
+`acceptBothChanged:true`; this is not automatic conflict acceptance.
+
+Evidence: `src/adapters/vba-sync/vba-sync-adapter.ts`,
+`src/adapters/vba-sync/sync-binary.ts` and
+`test/adapters/vba-sync/issue-1817-sync-freshness.test.ts`.
+
 ## Common errors
 
 | Code | Description | Fix |
