@@ -7,7 +7,7 @@ metadata:
   version: "2.0.0"
   status: active
   last_verified: "2026-08-26"
-  last_dysflow_version: "4.4.12"
+  last_dysflow_version: "4.4.13"
   requires: "dysflow MCP >= 3.0"
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
@@ -370,6 +370,15 @@ hand-editing a config that predates the current contract; see
 `assets/examples/migrate-project-config.md`.
 
 ## VBA-sync workflow — `sync_binary`
+
+Manual Access edits require live binary → source reconciliation, not a restart.
+Compare each exported `.form.txt` with its source counterpart and each `.cls`
+with its counterpart; never compare database hashes with source hashes.
+
+Inspect workflow `ok`, `postSync` and `recommendation` before declaring parity.
+Unchanged sync repeats execute no chunks; unchanged exports preserve source
+bytes and timestamps. Access database bookkeeping may still change physical bytes.
+
 
 When an AI agent needs a whole-project source ⇄ binary workflow, prefer `sync_binary` over the manual 5-step loop. For an explicit narrow list of modules, use `import_modules({moduleNames:[...]})` or `export_modules({moduleNames:[...]})`; Dysflow does not steer those focused calls toward a broader workflow. When the composed verify/plan/re-verify envelope is still useful for an explicit list, pass `scope:{moduleNamesOnly:true}` so modules outside that list cannot affect the workflow result. `sync_binary` composes `verify_code` + `import_modules` + `export_modules` + re-verify into a single round-trip. Workflow pattern lives in the **`vba-binary-sync`** skill; this is its MCP one-shot wrapper.
 

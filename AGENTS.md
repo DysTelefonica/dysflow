@@ -205,6 +205,13 @@ authoritative.
   every other write-class tool, and `MCP_WRITES_DISABLED` is the envelope you
   will get when they are not. `apply:false` plans are not writes and still run.
 
+- **HR-17 — Reconcile manual binary edits using fresh evidence.** Compare
+  `.form.txt` to `.form.txt` and `.cls` to `.cls`, never database hashes to
+  source hashes. Inspect sync `ok`, `postSync` and `recommendation` before
+  reporting completion. Unchanged repeats must preserve functional state;
+  sync dispatches no chunks and export preserves unchanged source timestamps.
+  `manual_merge` requires an explicit one-way decision, never an automatic winner.
+
 ## 3. Workflow loop (canonical 8 steps)
 
 For any feature that touches dysflow-managed artifacts:
@@ -1262,7 +1269,9 @@ In **Interactive** mode, between phases:
 3. Ask: "¿Continuamos? / Continue?" — accept YES/continue, NO/stop, or specific feedback to adjust
 4. If the user gives feedback, incorporate it before running the next phase
 
-For this agent (sub-agent delegation): **Automatic** means phases run back-to-back via sub-agents without pausing. **Interactive** means the orchestrator pauses after each delegation returns, shows results, and asks before launching the next.
+For this agent (sub-agent delegation): **Automatic** means phases run back-to-back via sub-agents without pausing.
+
+**Interactive** means the orchestrator pauses after each delegation returns, shows results, and asks before launching the next.
 
 Interactive approval is phase-scoped. Words like "continue", "dale", or "go on" approve only the immediate next phase, not the rest of the SDD pipeline.
 

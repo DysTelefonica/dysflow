@@ -7,7 +7,7 @@ metadata:
   version: "1.1.0"
   status: active
   last_verified: "2026-09-20"
-  last_dysflow_version: "4.4.12"
+  last_dysflow_version: "4.4.13"
   requires: "dysflow MCP >= 3.0, dysflow-usage skill"
   managed_by: "dysflow install / dysflow upgrade (shipped with the runtime)"
   scope:
@@ -210,6 +210,13 @@ authoritative.
   now, so `run_vba({apply:true})` requires writes to be enabled exactly like
   every other write-class tool, and `MCP_WRITES_DISABLED` is the envelope you
   will get when they are not. `apply:false` plans are not writes and still run.
+
+- **HR-17 — Reconcile manual binary edits using fresh evidence.** Compare
+  `.form.txt` to `.form.txt` and `.cls` to `.cls`, never database hashes to
+  source hashes. Inspect sync `ok`, `postSync` and `recommendation` before
+  reporting completion. Unchanged repeats must preserve functional state;
+  sync dispatches no chunks and export preserves unchanged source timestamps.
+  `manual_merge` requires an explicit one-way decision, never an automatic winner.
 
 ## 3. Workflow loop (canonical 8 steps)
 

@@ -799,10 +799,16 @@ function Write-Utf8NoBom {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Text
+        [Parameter(Mandatory = $true)][string]$Text,
+        [switch]$SkipUnchanged
     )
 
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    if ($SkipUnchanged -and [System.IO.File]::Exists($Path)) {
+        $existing = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Path))
+        $requested = [Convert]::ToBase64String($utf8NoBom.GetBytes($Text))
+        if ($existing -ceq $requested) { return }
+    }
     [System.IO.File]::WriteAllText($Path, $Text, $utf8NoBom)
 }
 
@@ -2610,24 +2616,25 @@ function Export-VbaModule {
             }
             if ($script:ExportVerbose) { $binaryText = [string]$savedContent }
 
-            Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
+            # Normalize in memory; intermediate writes would defeat unchanged-export idempotence.
             # issue #743: inject/replace `Attribute VB_Name` so Access never invents a
             # `Form_TempSccObjN` placeholder on re-import. SaveAsText is the source of
             # truth for everything BUT Attribute VB_Name (which the binary may already
             # be missing on legacy graphs that imported through older dysflow versions).
-            $formTxtContent = [System.IO.File]::ReadAllText($finalPath, [System.Text.Encoding]::UTF8)
+            $formTxtContent = [string]$savedContent
             if (-not $isReportDocument) {
                 $formTxtContent = Ensure-AccessFormAutoResizeMarker -DocumentText $formTxtContent
             }
             $formTxtContent = Ensure-CodeBehindFormVbName -Text $formTxtContent -ModuleName $actualName
-            Write-Utf8NoBom -Path $finalPath -Text $formTxtContent
+            Write-Utf8NoBom -Path $finalPath -Text $formTxtContent -SkipUnchanged
         } else {
             if (-not $component) {
                 throw ("Componente no encontrado en VBProject para '{0}' y no es un documento Form/Report." -f $actualName)
             }
             $tmp = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("VBAManager_export_{0}{1}" -f @([guid]::NewGuid().ToString("N"), $ext))
             $component.Export($tmp)
-            Convert-AnsiToUtf8NoBom -InputPath $tmp -OutputPath $finalPath
+            $exportedText = [System.IO.File]::ReadAllText($tmp, [System.Text.Encoding]::GetEncoding(1252))
+            Write-Utf8NoBom -Path $finalPath -Text $exportedText -SkipUnchanged
         }
 
         # Exportar tambien el codigo VBA como .cls para document modules (para diff y lectura rapida)
@@ -2647,7 +2654,7 @@ function Export-VbaModule {
                 # Attribute VB_Name, so we must inject it explicitly to make the file
                 # re-importable as the canonical form (not a Form_TempSccObjN).
                 $codeLines = Ensure-VbNameAttributeAtTop -Text $codeLines -ModuleName $actualName
-                Write-Utf8NoBom -Path $clsPath -Text $codeLines
+                Write-Utf8NoBom -Path $clsPath -Text $codeLines -SkipUnchanged
             }
         }
 

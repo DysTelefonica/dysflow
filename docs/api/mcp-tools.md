@@ -782,6 +782,12 @@ Custom behaviors layered on top of the SDK (preserved from the previous hand-rol
 
 ## Synchronization freshness and completion
 
+Unchanged `export_modules` artifacts retain bytes and timestamps. Export
+normalization happens in memory before a final equal-byte write check.
+
+Evidence: `scripts/dysflow-vba-manager.ps1` (`Export-VbaModule`) and
+`E2E_testing/mcp-e2e-issue-1817-sync.mjs` (real Access timestamp sentinel).
+
 `sync_binary` compares live source and binary content before its plan and after
 apply.
 

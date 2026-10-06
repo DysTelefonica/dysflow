@@ -91,7 +91,12 @@ Describe "issue #1443 - Export-VbaModule captures both sides" {
             param([AllowEmptyString()][string]$Text)
             [pscustomobject]@{ lines = @($Text -split "`n").Count; bytes = $Text.Length; sha256 = ('a' * 64) }
         }
-        function script:Convert-AnsiToUtf8NoBom { param($InputPath, $OutputPath) Copy-Item $InputPath $OutputPath -Force }
+        $writerAst = $ast.FindAll(
+            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Write-Utf8NoBom' },
+            $true
+        ) | Select-Object -First 1
+        if (-not $writerAst) { throw "Write-Utf8NoBom not found in $managerPath" }
+        Invoke-Expression $writerAst.Extent.Text
     }
 
     BeforeEach {
