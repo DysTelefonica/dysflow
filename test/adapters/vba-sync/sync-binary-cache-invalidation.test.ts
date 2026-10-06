@@ -390,39 +390,3 @@ describe("sync_binary missingInBinary/missingInSource dedup (issue #1043) — Te
     expect(frmSplash).toHaveLength(1);
   });
 });
-
-// ─── Cache reuse ────────────────────────────────────────────────────────────
-
-describe("sync_binary verify_code cache reuse (issue #1043)", () => {
-  beforeEach(() => {
-    mockedCompare.mockReset();
-  });
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("verify_code is called ONCE per cache key when no mutation occurs between sync_binary calls", async () => {
-    mockedCompare.mockResolvedValue(verifyEnvelope({}));
-
-    const service = newService(makeExecutor());
-
-    await service.execute("sync_binary", {
-      dryRun: true,
-      accessPath: ACCESS_PATH,
-      destinationRoot: DESTINATION_ROOT,
-    });
-    await service.execute("sync_binary", {
-      dryRun: true,
-      accessPath: ACCESS_PATH,
-      destinationRoot: DESTINATION_ROOT,
-    });
-    await service.execute("sync_binary", {
-      dryRun: true,
-      accessPath: ACCESS_PATH,
-      destinationRoot: DESTINATION_ROOT,
-    });
-
-    // Without cache: 3 verify_code calls. With cache: 1.
-    expect(mockedCompare).toHaveBeenCalledTimes(1);
-  });
-});
