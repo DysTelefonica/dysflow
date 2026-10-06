@@ -1269,7 +1269,9 @@ In **Interactive** mode, between phases:
 3. Ask: "¿Continuamos? / Continue?" — accept YES/continue, NO/stop, or specific feedback to adjust
 4. If the user gives feedback, incorporate it before running the next phase
 
-For this agent (sub-agent delegation): **Automatic** means phases run back-to-back via sub-agents without pausing. **Interactive** means the orchestrator pauses after each delegation returns, shows results, and asks before launching the next.
+For this agent (sub-agent delegation): **Automatic** means phases run back-to-back via sub-agents without pausing.
+
+**Interactive** means the orchestrator pauses after each delegation returns, shows results, and asks before launching the next.
 
 Interactive approval is phase-scoped. Words like "continue", "dale", or "go on" approve only the immediate next phase, not the rest of the SDD pipeline.
 
