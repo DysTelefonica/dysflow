@@ -783,12 +783,18 @@ Custom behaviors layered on top of the SDK (preserved from the previous hand-rol
 ## Synchronization freshness and completion
 
 `sync_binary` compares live source and binary content before its plan and after
-apply. Manual Access and filesystem edits do not require a process restart or
+apply.
+
+Manual Access and filesystem edits do not require a process restart or
 worktree-cache cleanup to refresh that comparison.
 
 The workflow payload's `ok` preserves the post-sync outcome. A processed request
-is not proof of parity: inspect `postSync` and `recommendation` before reporting
-completion. An unchanged successful repeat has no actionable drift or mutation
+is not proof of parity.
+
+Inspect `postSync` and `recommendation` before reporting
+completion.
+
+An unchanged successful repeat has no actionable drift or mutation
 chunks.
 
 Evidence: `src/adapters/vba-sync/vba-sync-adapter.ts`,
