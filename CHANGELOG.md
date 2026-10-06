@@ -4,6 +4,8 @@
 
 ### Changes
 
+- ci(release): budget the complete Access battery and all idempotence journeys without skips
+
 - No user-visible changes were detected; verify the previous tag.
 
 
