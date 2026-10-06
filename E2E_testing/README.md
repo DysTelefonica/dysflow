@@ -30,7 +30,7 @@ pay the E2E cost only when you need it.
 | Every change | `pnpm test` (Vitest unit) | seconds | always, on every edit |
 | Per feature/bug | `pnpm test:integration -t <pattern>` (Vitest integration) | seconds–minute | every PR / branch |
 | Per feature/bug | manual JSON-RPC smoke for the touched tool | seconds | when integration tests don't cover the change end-to-end |
-| Pre-release | **full E2E battery** (`pnpm test:e2e:mcp:release`) | 5–15 minutes | **only** when cutting a release |
+| Pre-release | **full E2E battery** (`pnpm test:e2e:mcp:release`) | over 30 minutes; 60-minute CI budget | **only** when cutting a release |
 
 Targeted hotfix scripts:
 
@@ -179,7 +179,7 @@ node E2E_testing\mcp-e2e.mjs   # then read the report — or hand-craft a JSON-R
 ```
 
 **Do not run the full E2E during feature work** unless you have a specific reason. The cost is
-5–15 minutes and it competes for Access locks with anything else on the dev box.
+over 30 minutes; 60-minute CI budget and it competes for Access locks with anything else on the dev box.
 
 ## Gotchas
 
