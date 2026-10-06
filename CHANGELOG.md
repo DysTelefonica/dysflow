@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.4.14] - 2026-10-06
+
+### Changes
+
+- No user-visible changes were detected; verify the previous tag.
+
+
 ## [v4.4.13] - 2026-10-06
 
 ### Changes
