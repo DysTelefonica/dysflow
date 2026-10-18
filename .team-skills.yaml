@@ -1,0 +1,12 @@
+# Auto-generado por propagate-team-skills.ps1 (catalog @ 2c4356e4).
+# La lista include_skills se regenera en cada corrida; los demas campos
+# se preservan del manifest previo para no pisar hand-edits del consumer.
+project_type: runtime
+tiers:
+  - universal
+overlays:
+  - shared
+agents_md_path: AGENTS.md
+slice_block_sha256: f2179e9a4c7510a59e5a614fb0966db052b6b8b550fceb02a149f3838b8a7b44
+include_skills:
+
