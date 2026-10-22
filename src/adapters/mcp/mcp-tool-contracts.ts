@@ -48,15 +48,17 @@ const generatedContracts = {
       contractFromGeneratedRoute(name),
     ]),
   ),
-  // `test_vba` uses an opt-in whitelist: missing/empty allows execution,
-  // while a non-empty `allowedProcedures` list is enforced atomically with
-  // `error.allowedProcedures` + `error.remediation`. The dispatcher route stays
-  // `mutatesBinary: false` so the tool remains conditional-write.
+  // `test_vba` uses an opt-in whitelist gated by `procedureStrictMode`
+  // (issue #1833): only a project declaring
+  // `capabilities.procedures.strictMode: true` enforces a non-empty
+  // `allowedProcedures` list, atomically, with `error.allowedProcedures` +
+  // `error.remediation`. The dispatcher route stays `mutatesBinary: false` so
+  // the tool remains conditional-write.
   test_vba: {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
-      "Conditional-write MCP contract; test execution is unrestricted when allowedProcedures is missing or empty, and a non-empty list acts as an opt-in allowlist. Plan mode remains non-executing.",
+      "Conditional-write MCP contract; the procedure gate is default-allow. allowedProcedures is enforced only when procedureStrictMode is true (the project declares capabilities.procedures.strictMode); when it is false or unresolved, list membership restricts nothing and the write gate alone decides. Under strict mode a non-empty list must contain every planned procedure, and a missing or empty list imposes no restriction. Plan mode (apply:false) remains non-executing.",
   },
   verify_code: {
     access: "read-only",
@@ -86,7 +88,7 @@ const aliasContracts: Record<AliasToolName, McpToolContract> = {
     access: "conditional-write",
     writeGate: "conditional",
     summary:
-      "Conditional-write MCP contract; VBA execution is gated by the project's allowedProcedures allowlist, with dryRun:true as an explicit escape hatch when no allowlist is configured.",
+      "Conditional-write MCP contract; execution is write-gated and the procedure gate is default-allow. allowedProcedures is enforced only when procedureStrictMode is true (the project declares capabilities.procedures.strictMode); when it is false or unresolved, list membership restricts nothing. Under strict mode a procedure outside the list refuses with MCP_PROCEDURE_NOT_ALLOWED and a missing or empty list refuses with MCP_ALLOWLIST_NOT_CONFIGURED. apply:false plans without executing.",
   },
   query_sql: {
     access: "read-only",

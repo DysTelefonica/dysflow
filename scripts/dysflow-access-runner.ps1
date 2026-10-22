@@ -126,17 +126,16 @@ function Invoke-WithDaoDatabase {
 function Disable-StartupFeatures {
   param(
     [Parameter(Mandatory = $true)] [string] $DatabasePath,
-    [Parameter(Mandatory = $false)] [string] $Password = ""
-  )
-
-  Invoke-WithDaoDatabase -DatabasePath $DatabasePath -Password $Password -Action {
-    param($db)
-    $restoreInfo = [ordered]@{
+    [Parameter(Mandatory = $false)] [string] $Password = "",
+    [Parameter(Mandatory = $false)] $RestoreInfo = [pscustomobject]@{
       RenamedAutoExec = $false
       OriginalStartupForm = $null
       HasStartupForm = $false
     }
+  )
 
+  Invoke-WithDaoDatabase -DatabasePath $DatabasePath -Password $Password -Action {
+    param($db)
     try {
       $scripts = $db.Containers("Scripts")
       foreach ($doc in $scripts.Documents) {
@@ -153,14 +152,28 @@ function Disable-StartupFeatures {
           break
         }
       }
-    } catch { Write-Debug "Disable AutoExec skipped: $_" }
+      # Refresh and read back instead of treating a returned setter as proof.
+      $scripts.Documents.Refresh()
+      foreach ($doc in $db.Containers("Scripts").Documents) {
+        if ($doc.Name -eq "AutoExec") { throw "AutoExec is still present after suppression." }
+      }
+    } catch { throw "Startup suppression failed for AutoExec: $_" }
 
     try {
-      $prop = $db.Properties("StartupForm")
-      $restoreInfo.OriginalStartupForm = $prop.Value
-      $restoreInfo.HasStartupForm = $true
-      $db.Properties.Delete("StartupForm")
-    } catch { Write-Debug "Disable StartupForm skipped: $_" }
+      # Enumerating distinguishes legitimate absence from lookup/access errors.
+      foreach ($prop in $db.Properties) {
+        if ($prop.Name -eq "StartupForm") {
+          $restoreInfo.OriginalStartupForm = $prop.Value
+          $restoreInfo.HasStartupForm = $true
+          $db.Properties.Delete("StartupForm")
+          break
+        }
+      }
+      $db.Properties.Refresh()
+      foreach ($prop in $db.Properties) {
+        if ($prop.Name -eq "StartupForm") { throw "StartupForm is still present after suppression." }
+      }
+    } catch { throw "Startup suppression failed for StartupForm: $_" }
 
     return [pscustomobject]$restoreInfo
   }
@@ -1803,7 +1816,14 @@ try {
       Remove-Item -LiteralPath $sentinelPath -Force -ErrorAction SilentlyContinue
     }
 
-    $startupInfo = Disable-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword
+    # Retain partial restoration metadata even when suppression throws before
+    # returning. The existing finally restores changes without opening Access.
+    $startupInfo = [pscustomobject]@{
+      RenamedAutoExec = $false
+      OriginalStartupForm = $null
+      HasStartupForm = $false
+    }
+    $startupInfo = Disable-StartupFeatures -DatabasePath $AccessDbPath -Password $AccessPassword -RestoreInfo $startupInfo
     if ($null -eq $startupInfo) {
       throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm. Se aborta la apertura para evitar ejecucion no desatendida."
     }
