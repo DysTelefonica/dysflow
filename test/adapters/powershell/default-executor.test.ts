@@ -1,3 +1,4 @@
+import { getEventListeners } from "node:events";
 import { isAbsolute } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -259,7 +260,8 @@ describe("spawnPowerShellProcess — bounded timeout settlement", () => {
     });
     await Promise.resolve();
 
-    expect(kill).toHaveBeenCalledTimes(1);
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(kill).not.toHaveBeenCalled();
     await expect(resultPromise).resolves.toMatchObject({
       exitCode: null,
       timedOut: false,
@@ -324,6 +326,54 @@ describe("spawnPowerShellProcess — bounded timeout settlement", () => {
       durationMs: 100,
     });
   });
+
+  it.each(["abort", "close", "timeout"] as const)(
+    "settles once and releases the abort listener after %s (#1834)",
+    async (ending) => {
+      vi.useFakeTimers();
+      const kill = vi.fn();
+      let close: ((code: number | null) => void) | undefined;
+      mockSpawn.mockImplementation(() => ({
+        pid: undefined,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: (event: string, cb: (code: number | null) => void) => {
+          if (event === "close") close = cb;
+        },
+        kill,
+      }));
+      const controller = new AbortController();
+      const settled = vi.fn();
+
+      const resultPromise = spawnPowerShellProcess({
+        args: ["-Command", "Start-Sleep 60"],
+        timeoutMs: 100,
+        signal: controller.signal,
+      }).then((result) => {
+        settled();
+        return result;
+      });
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(1);
+
+      if (ending === "abort") controller.abort();
+      if (ending === "close") close?.(0);
+      if (ending === "timeout") await vi.advanceTimersByTimeAsync(100);
+      // A late close after termination must not settle a second time.
+      close?.(1);
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      const result = await resultPromise;
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+      expect(result).toMatchObject({
+        aborted: ending === "abort",
+        timedOut: ending === "timeout",
+        exitCode: ending === "close" ? 0 : null,
+      });
+      expect(kill).toHaveBeenCalledTimes(ending === "close" ? 0 : 1);
+    },
+  );
 });
 
 describe("spawnPowerShellProcess — tree-kill on Windows", () => {
@@ -844,6 +894,27 @@ describe("spawnPowerShellProcess — returns powershellWorkerPid", () => {
 });
 
 describe("createDefaultPowerShellExecutor — includes powershellWorkerPid", () => {
+  it("forwards active cancellation to the owned PowerShell process (#1834)", async () => {
+    const kill = vi.fn();
+    mockSpawn.mockImplementation(() => ({
+      stdout: { on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn(),
+      kill,
+    }));
+    const controller = new AbortController();
+    const pending = createDefaultPowerShellExecutor()("powershell.exe", [], {
+      signal: controller.signal,
+      timeoutMs: 5000,
+      operationId: "cancel-test",
+      accessPath: "C:\\test.accdb",
+      onAccessProcessCaptured: async () => {},
+    });
+    controller.abort();
+    await expect(pending).resolves.toMatchObject({ aborted: true, timedOut: false });
+    expect(kill).toHaveBeenCalledTimes(1);
+  });
+
   it("returns powershellWorkerPid from the spawned child", async () => {
     mockSpawn.mockImplementation(() => ({
       pid: 42,

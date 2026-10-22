@@ -775,6 +775,17 @@ Custom behaviors layered on top of the SDK (preserved from the previous hand-rol
 - Error messages have Windows/UNC/POSIX paths scrubbed before reaching the client.
 - A 1 MiB per-line size guard (`SizeLimitTransform`) sits between `process.stdin` and the SDK transport.
 
+### Request cancellation (#1834)
+
+The SDK request signal (`notifications/cancelled`) reaches `McpToolContext.signal`. Evidence: `src/adapters/mcp/stdio.ts`.
+
+- A request already cancelled when its handler would start does not run the tool and starts no I/O.
+- Only read SQL is interruptible: `query_execute` with `mode:"read"` and `query_sql`. The signal flows through `AccessQueryService.execute` and `AccessPowerShellRunner.run` to the PowerShell executor, which terminates the PowerShell child it owns. Evidence: `src/core/runner/access-runner.ts`.
+- A read cancelled while queued behind the per-database lock still waits for its turn, then returns without spawning PowerShell. Lock waiting itself is not interrupted.
+- Cancellation reports `RUNNER_ABORTED`; a timeout still reports `RUNNER_TIMEOUT`. The two are never merged.
+- Every other tool, including `query_execute` with `mode:"write"`, is non-cancellable. An active write runs to completion and its real outcome is recorded; cancellation never claims a rollback.
+- Cancellation never kills a process by name. Only the PowerShell child spawned by that request is terminated.
+
 ---
 
 [Next: HTTP API](./http-api.md)
