@@ -6,7 +6,15 @@ import {
   successResult,
 } from "../../core/contracts/index.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
-import { classifyVbaRunnerFailure } from "../../core/services/vba-service.js";
+import {
+  diagnoseNotCallable,
+  type ProcedureInvocation,
+  resolvePlanProcedureInvocation,
+} from "../../core/services/vba-procedure-invocation.js";
+import {
+  classifyVbaRunnerFailure,
+  type VbaSourceResolver,
+} from "../../core/services/vba-service.js";
 import {
   isAbsolutePath,
   isRecord,
@@ -49,6 +57,13 @@ export interface VbaSyncOrchestrator {
     mapping: DirectMapping,
   ): Promise<OperationResult<unknown>>;
   cwd: string;
+  /**
+   * #1823 — the project's VBA source tree for the call's execution target.
+   * `test_vba` resolves every plan name against it before the name reaches
+   * `Access.Application.Run`. Optional: without it every name is forwarded
+   * verbatim, which is the pre-#1823 behavior.
+   */
+  resolveSourceResolver?(params: Record<string, unknown>): Promise<VbaSourceResolver | undefined>;
 }
 
 export class VbaExecutionAdapter {
@@ -173,13 +188,36 @@ export class VbaExecutionAdapter {
     const gateError = await this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
     if (gateError !== undefined) return gateError;
 
+    // #1823 — hand Access names it can resolve, through the same seam
+    // run_vba uses (#1787). The plan above, the dry-run echo and the
+    // allowlist gate all keep the caller's original names; only the wire
+    // payload is rewritten.
+    const invocations = await this.resolvePlanInvocations(params, resolvedProcedureNames);
+
     return inspectTestResult(
       await this.orchestrator.executeMappedTool(
         "test_vba",
-        { ...params, proceduresJson: resolvedProceduresJson },
+        {
+          ...params,
+          proceduresJson: rewriteInvokedProcedureNames(resolvedProceduresJson, invocations),
+        },
         EXECUTION_MAPPINGS.test_vba,
       ),
+      invocations,
     );
+  }
+
+  private async resolvePlanInvocations(
+    params: Record<string, unknown>,
+    procedureNames: readonly string[],
+  ): Promise<readonly ProcedureInvocation[]> {
+    const resolved = await this.orchestrator.resolveSourceResolver?.(params);
+    const resolver = resolved === undefined ? undefined : memoizeSourceResolver(resolved);
+    const invocations: ProcedureInvocation[] = [];
+    for (const name of procedureNames) {
+      invocations.push(await resolvePlanProcedureInvocation(name, resolver));
+    }
+    return invocations;
   }
 
   /**
@@ -686,6 +724,8 @@ function matchesTestFilter(test: VbaTestPlanEntry, filter: TestFilterParts): boo
 /** Per-procedure detail preserved for each failing test (see {@link inspectTestResult}). */
 type VbaTestFailureDetail = {
   procedure: string | undefined;
+  /** #1823 — the name that reached `Application.Run`, when it differs from `procedure`. */
+  invokedProcedureName?: string;
   error: string | undefined;
   logs: unknown[];
   durationMs: number | undefined;
@@ -700,11 +740,27 @@ type VbaTestFailureDetail = {
 /** How many failing procedures to name in the human-readable error message. */
 const TESTS_FAILED_SUMMARY_LIMIT = 5;
 
-function toTestFailureDetail(test: Record<string, unknown>): VbaTestFailureDetail {
+function toTestFailureDetail(
+  test: Record<string, unknown>,
+  invocation: ProcedureInvocation | undefined,
+): VbaTestFailureDetail {
   const error = stringValue(test.error);
   const classification = error === undefined ? undefined : classifyVbaRunnerFailure(error);
+  const runnerProcedure = stringValue(test.procedure);
+  // #1823 — report the caller's name; add the wire name only when it differs.
+  const procedure = invocation?.requestedProcedureName ?? runnerProcedure;
+  const invokedProcedureName =
+    invocation !== undefined &&
+    invocation.invokedProcedureName !== invocation.requestedProcedureName
+      ? invocation.invokedProcedureName
+      : undefined;
+  const notCallable =
+    classification?.code === "PROCEDURE_NOT_CALLABLE"
+      ? diagnoseNotCallable(procedure ?? "", invocation ?? {})
+      : undefined;
   return {
-    procedure: stringValue(test.procedure),
+    procedure,
+    ...(invokedProcedureName === undefined ? {} : { invokedProcedureName }),
     error,
     logs: Array.isArray(test.logs) ? test.logs : [],
     durationMs: typeof test.durationMs === "number" ? test.durationMs : undefined,
@@ -712,14 +768,18 @@ function toTestFailureDetail(test: Record<string, unknown>): VbaTestFailureDetai
     ...(classification === undefined
       ? {}
       : {
-          cause: {
-            code: classification.code,
-            retryable: classification.retryable,
-            remediation:
-              classification.code === "PROCEDURE_NOT_CALLABLE"
-                ? classification.remediation
-                : (createDysflowError(classification.code, "").remediation ?? ""),
-          },
+          cause:
+            notCallable === undefined
+              ? {
+                  code: classification.code,
+                  retryable: classification.retryable,
+                  remediation: createDysflowError(classification.code, "").remediation ?? "",
+                }
+              : {
+                  code: classification.code,
+                  retryable: notCallable.retryable,
+                  remediation: notCallable.remediation,
+                },
         }),
   };
 }
@@ -753,7 +813,10 @@ function buildTestsFailedMessage(failures: readonly VbaTestFailureDetail[]): str
  * itself returns them in its JSON payload (`ok: false` plus error/logs).
  * Dysflow does not parse VBA assertion output on its own.
  */
-function inspectTestResult(result: OperationResult<unknown>): OperationResult<unknown> {
+function inspectTestResult(
+  result: OperationResult<unknown>,
+  invocations: readonly ProcedureInvocation[] = [],
+): OperationResult<unknown> {
   if (!result.ok) return result;
   // Issue #1657 — the PowerShell runner now transports multi-procedure
   // results inside an object envelope (`{ tests: [...] }`). Keeping the array
@@ -784,9 +847,25 @@ function inspectTestResult(result: OperationResult<unknown>): OperationResult<un
     return result.metadata === undefined ? failure : { ...failure, metadata: result.metadata };
   }
 
+  // The runner executes the plan in order, so a result's index is its plan
+  // entry. Fall back to the wire name when the counts disagree.
+  const invocationFor = (test: Record<string, unknown>, index: number) =>
+    tests.length === invocations.length
+      ? invocations[index]
+      : invocations.find((entry) => entry.invokedProcedureName === stringValue(test.procedure));
   const failures = tests
-    .filter((test): test is Record<string, unknown> => isRecord(test) && test.ok === false)
-    .map(toTestFailureDetail);
+    .map((test, index) => ({ test, index }))
+    .filter(
+      (entry): entry is { test: Record<string, unknown>; index: number } =>
+        isRecord(entry.test) && entry.test.ok === false,
+    )
+    .map(({ test, index }) => toTestFailureDetail(test, invocationFor(test, index)));
+  // #1823 — every procedure test_vba reports carries the caller's name, so
+  // logs and assertions match what was requested; the wire name rides along
+  // as `invokedProcedureName` only when it differs.
+  const reported = tests.map((test, index) =>
+    isRecord(test) ? withRequestedProcedureName(test, invocationFor(test, index)) : test,
+  );
   if (failures.length === 0) {
     return {
       ...result,
@@ -794,7 +873,7 @@ function inspectTestResult(result: OperationResult<unknown>): OperationResult<un
         mode: "apply",
         passed: tests.length,
         failed: 0,
-        tests,
+        tests: reported,
       },
     };
   }
@@ -804,7 +883,7 @@ function inspectTestResult(result: OperationResult<unknown>): OperationResult<un
       details: {
         failedCount: failures.length,
         failures,
-        results: tests,
+        results: reported,
       },
     }),
     {
@@ -815,4 +894,71 @@ function inspectTestResult(result: OperationResult<unknown>): OperationResult<un
     },
   );
   return result.metadata === undefined ? failure : { ...failure, metadata: result.metadata };
+}
+
+/**
+ * #1823 — replace each plan entry's `procedure` with the name the shared
+ * invocation seam decided Access should receive. Entries line up with
+ * `extractProcedureNames`, which skips entries without a procedure string.
+ */
+function rewriteInvokedProcedureNames(
+  proceduresJson: string,
+  invocations: readonly ProcedureInvocation[],
+): string {
+  if (invocations.every((entry) => entry.invokedProcedureName === entry.requestedProcedureName)) {
+    return proceduresJson;
+  }
+  const parsed: unknown = JSON.parse(proceduresJson);
+  if (!Array.isArray(parsed)) return proceduresJson;
+  let next = 0;
+  const rewritten = parsed.map((entry) => {
+    if (!isRecord(entry) || typeof entry.procedure !== "string" || entry.procedure.length === 0) {
+      return entry;
+    }
+    const invocation = invocations[next++];
+    return invocation === undefined
+      ? entry
+      : { ...entry, procedure: invocation.invokedProcedureName };
+  });
+  return JSON.stringify(rewritten);
+}
+
+/**
+ * One plan resolves many names against the same tree; read it once per call
+ * rather than once per entry.
+ */
+function memoizeSourceResolver(resolver: VbaSourceResolver): VbaSourceResolver {
+  const modules = new Map<string, Promise<string | undefined>>();
+  let all: Promise<Record<string, string>> | undefined;
+  return {
+    resolveModuleSource(moduleName) {
+      let cached = modules.get(moduleName);
+      if (cached === undefined) {
+        cached = resolver.resolveModuleSource(moduleName);
+        modules.set(moduleName, cached);
+      }
+      return cached;
+    },
+    resolveAllModuleSources() {
+      all ??= resolver.resolveAllModuleSources();
+      return all;
+    },
+  };
+}
+
+function withRequestedProcedureName(
+  test: Record<string, unknown>,
+  invocation: ProcedureInvocation | undefined,
+): Record<string, unknown> {
+  if (
+    invocation === undefined ||
+    invocation.invokedProcedureName === invocation.requestedProcedureName
+  ) {
+    return test;
+  }
+  return {
+    ...test,
+    procedure: invocation.requestedProcedureName,
+    invokedProcedureName: invocation.invokedProcedureName,
+  };
 }

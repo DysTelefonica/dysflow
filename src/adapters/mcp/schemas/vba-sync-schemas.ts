@@ -14,6 +14,27 @@ import {
 } from "../../../shared/validation/index.js";
 import type { VbaSyncToolName } from "../mcp-tool-registry.js";
 
+/**
+ * Issue #1833 — `test_vba.filter` advertises the shape union it really
+ * accepts. `SCHEMA_PROPS.testFilter` declares no `type` on purpose (#1442):
+ * the boundary validator matches one primitive per property, and skipping it
+ * hands the shape check to `parseTestFilter`, the single site that rejects an
+ * invalid object. The validator ignores property-level `anyOf`, so adding it
+ * here only makes discovery truthful; enforcement is unchanged.
+ */
+const TEST_FILTER_SCHEMA = {
+  ...SCHEMA_PROPS.testFilter,
+  anyOf: [
+    { type: "string" },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["tag"],
+      properties: { tag: { type: "string", minLength: 1 } },
+    },
+  ],
+} as JsonSchemaProperty;
+
 const CODEGRAPH_EVIDENCE_SCHEMA: JsonSchemaProperty = {
   type: "object",
   description:
@@ -241,7 +262,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       operationId: SCHEMA_PROPS.operationId,
-      force: SCHEMA_PROPS.force,
+      force: {
+        ...SCHEMA_PROPS.force,
+        description:
+          "Explicit false inspects registry evidence without mutation or process actions. Omit for existing eligible-operation cleanup. True requests forced cleanup, subject to write and ownership guards.",
+      },
       ...CONFIRMATION_OVERRIDE_BLOCK,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,
@@ -544,7 +569,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // object (`{ tag: "smoke" }`) alongside the legacy string, so it uses
       // the dedicated `testFilter` property instead of the shared, string-only
       // `SCHEMA_PROPS.filter` the export/list tools rely on.
-      filter: SCHEMA_PROPS.testFilter,
+      filter: TEST_FILTER_SCHEMA,
       testsPath: SCHEMA_PROPS.testsPath,
       // Round-3 Item 5 (P2) — `dryRun: true` short-circuits to a plan-shaped
       // result in `VbaExecutionAdapter.executeTestVba` (no PowerShell spawn,

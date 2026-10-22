@@ -212,7 +212,7 @@ describe("release CI receipt", () => {
     expect(quality).toContain("needs.main-integrity.outputs.validated_pr_merge != 'true'");
     expect(quality).toContain("needs.changes.outputs.code_required == 'true'");
     expect(ci).toMatch(
-      /windows-integration-smoke:[\s\S]*?needs\.changes\.outputs\.code_required == 'true'[\s\S]*?runs-on: windows-latest/,
+      /windows-integration-smoke:[\s\S]*?needs\.changes\.outputs\.windows_smoke_required == 'true'[\s\S]*?runs-on: windows-latest/,
     );
     expect(authority).toContain("needs: build");
     expect(authority).toContain("actions: read");
