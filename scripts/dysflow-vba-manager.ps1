@@ -567,17 +567,23 @@ function Disable-StartupFeatures {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)][string]$AccessPath,
-        [string]$Password
+        [string]$Password,
+        # Caller-owned restoration metadata (#1841). It is mutated in place so a
+        # suppression that aborts part-way still tells the caller what to restore.
+        $RestoreInfo = $null
     )
 
     $dbEngine = $null
     $db = $null
-    $restoreInfo = [ordered]@{
-        RenamedAutoExec     = $false
-        OriginalStartupForm = $null
-        HasStartupForm      = $false
-        OriginalAppIcon     = $null
-        HasAppIcon          = $false
+    $restoreInfo = $RestoreInfo
+    if ($null -eq $restoreInfo) {
+        $restoreInfo = [pscustomobject]@{
+            RenamedAutoExec     = $false
+            OriginalStartupForm = $null
+            HasStartupForm      = $false
+            OriginalAppIcon     = $null
+            HasAppIcon          = $false
+        }
     }
 
     try {
@@ -623,23 +629,32 @@ function Disable-StartupFeatures {
                     break
                 }
             }
-        } catch { Write-Debug "Diagnostics: $_" }
+            # #1841 — refresh and read back instead of treating a returned setter as proof.
+            $scripts.Documents.Refresh()
+            foreach ($doc in $db.Containers("Scripts").Documents) {
+                if ($doc.Name -eq "AutoExec") { throw "AutoExec is still present after suppression." }
+            }
+        } catch { throw "Startup suppression failed for AutoExec: $_" }
 
-        try {
-            $prop = $db.Properties("StartupForm")
-            $restoreInfo.OriginalStartupForm = $prop.Value
-            $restoreInfo.HasStartupForm = $true
-            $db.Properties.Delete("StartupForm")
-        } catch { Write-Debug "Diagnostics: $_" }
+        foreach ($propName in @("StartupForm", "AppIcon")) {
+            try {
+                # Enumerating distinguishes legitimate absence from lookup/access errors.
+                foreach ($prop in $db.Properties) {
+                    if ($prop.Name -eq $propName) {
+                        $restoreInfo."Original$propName" = $prop.Value
+                        $restoreInfo."Has$propName" = $true
+                        $db.Properties.Delete($propName)
+                        break
+                    }
+                }
+                $db.Properties.Refresh()
+                foreach ($prop in $db.Properties) {
+                    if ($prop.Name -eq $propName) { throw "$propName is still present after suppression." }
+                }
+            } catch { throw "Startup suppression failed for ${propName}: $_" }
+        }
 
-        try {
-            $prop = $db.Properties("AppIcon")
-            $restoreInfo.OriginalAppIcon = $prop.Value
-            $restoreInfo.HasAppIcon = $true
-            $db.Properties.Delete("AppIcon")
-        } catch { Write-Debug "Diagnostics: $_" }
-
-        return [pscustomobject]$restoreInfo
+        return $restoreInfo
 
     } catch {
         $detail = if ($_.Exception -and $_.Exception.Message) { $_.Exception.Message } else { [string]$_ }
@@ -2302,7 +2317,16 @@ function Open-AccessDatabase {
                 HasAppIcon          = $false
             }
         } else {
-            $startupInfo = Disable-StartupFeatures -AccessPath $AccessPath -Password $Password
+            # #1841 — seed restoration metadata before suppression so the catch below
+            # restores partial changes even when Disable-StartupFeatures aborts.
+            $startupInfo = [pscustomobject]@{
+                RenamedAutoExec     = $false
+                OriginalStartupForm = $null
+                HasStartupForm      = $false
+                OriginalAppIcon     = $null
+                HasAppIcon          = $false
+            }
+            $startupInfo = Disable-StartupFeatures -AccessPath $AccessPath -Password $Password -RestoreInfo $startupInfo
             if (-not $startupInfo) {
                 throw "CRITICAL: No se pudo deshabilitar AutoExec/StartupForm. Se aborta la apertura para evitar ejecucion no desatendida. Si estás en un entorno controlado de testing y aceptás ejecutar startup code, reintentá con --allow-startup-execution."
             }
