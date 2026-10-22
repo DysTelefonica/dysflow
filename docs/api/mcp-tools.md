@@ -133,15 +133,22 @@ Inspect a tracked operation or safely clean up eligible `MSACCESS.EXE` processes
   - `force` (boolean, optional): Explicit `false` reads the registered operation without changing it, inspecting processes, or terminating anything. Omitting `force` retains eligible-operation cleanup. `true` requests forced cleanup and requires writes to be enabled (`MCP_WRITES_DISABLED` otherwise); ownership and running-process guards still apply.
 
 Successful results carry `cleanup: { operationId, accessPid, status }` and
-`registryHealth`. Inspection preserves the recorded status and nullable PID;
-it never reports `cleaned` merely because inspection succeeded. Missing IDs return
-`CLEANUP_OPERATION_NOT_FOUND`; a mismatched database returns
-`CLEANUP_ACCESS_PATH_MISMATCH`. The executable schema accepts these recovery
-payloads without requiring a synthetic root `mode`, `ok`, or `dryRun`.
+`registryHealth`.
 
-Evidence: `canonical-handlers.ts:handleMcpAccessCleanup` and
-`contracts/bootstrap-result-contracts.ts:cleanupAccessOperationResultContract`
-under `src/adapters/mcp/`; public dispatch regression coverage lives in
+Inspection preserves the recorded status and nullable PID. It never reports
+`cleaned` merely because inspection succeeded.
+
+Missing IDs return `CLEANUP_OPERATION_NOT_FOUND`; a mismatched database returns
+`CLEANUP_ACCESS_PATH_MISMATCH`.
+
+The executable schema accepts these recovery payloads without requiring a
+synthetic root `mode`, `ok`, or `dryRun`.
+
+Evidence: `handleMcpAccessCleanup` in `src/adapters/mcp/canonical-handlers.ts`
+and `cleanupAccessOperationResultContract` in
+`src/adapters/mcp/contracts/bootstrap-result-contracts.ts`.
+
+Public dispatch regression coverage lives in
 `test/adapters/mcp/cleanup-inspection-1830.test.ts`.
 
 ### `access_force_cleanup_orphaned`
