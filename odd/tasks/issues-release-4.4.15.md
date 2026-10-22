@@ -11,17 +11,18 @@ Runner: focused Vitest/Pester regressions, repository quality gates, and `pnpm t
 ## Tasks
 
 - T1 | S1–S3 | delegated explorer | mapping complete | baseline `623ba51a`.
-- T2 | S1–S3 | delegated independent issue lanes | #1831 readiness guard | RED 2; GREEN 26; MCP 2,187; independent verification pending.
-- T3 | S1–S3 | delegated independent issue lanes | #1830 cleanup contract | RED contract + inspection; MCP GREEN 2,195; independent verification pending.
-- T4 | S1–S3 | delegated independent issue lanes | #1812 startup suppression | RED 4; GREEN 8; runner regressions 147; independent verification pending.
-- T5 | S1–S3 | inline isolated lanes | #1832 CI applicability: commit `583384f0`, PR #1837 pending CI; #1835 pinned Pester: RED 3/GREEN 3, broader proof pending.
-- T6 | S1–S3 | delegated independent issue lanes | #1833 discovery metadata | pending.
-- T7 | S1–S3 | delegated independent issue lanes | #1834 cancellation | pending.
-- T8 | S1–S3 | delegated independent issue lanes | #1822 isolated Pi installation | pending.
-- T9 | S1–S3 | delegated independent issue lanes | #1823 test procedure callability | pending.
-- T10 | S1–S3 | inline | #1824 shipped harness/examples reconciliation | pending.
-- T11 | S1–S3 | inline | close #1836 after child evidence; final queue reconciliation, release gates and publication | pending.
-- T12 | S1–S3 | independent issue lane | #1838 repair preexisting COM lifecycle test doubles; full pinned Pester suite | pending.
+- T2 | S1–S3 | delegated writer (parallel) | #1831 readiness guard | PR #1849; RED 2/GREEN 15; independent verifier running.
+- T3 | S1–S3 | delegated writer (parallel) | #1830 cleanup contract | PR #1844; RED 7/GREEN 15; verifier PASS; in merge train.
+- T4 | S1–S3 | delegated writer (parallel) | #1812 startup suppression | PR #1839; RED 4/GREEN 8; verifier PASS; in merge train. Real-DAO proof via nightly Access E2E before tag.
+- T5 | S1–S3 | inline | #1832 merged as PR #1837 (`f54bb798`); #1835 PR #1845 RED 3/GREEN 3, lint clean, re-queued after doc-length fix.
+- T6 | S1–S3 | delegated writer (parallel) | #1833 discovery metadata | PR #1842; RED 7/GREEN 9; verifier PASS (155 diffs classified); in merge train.
+- T7 | S1–S3 | delegated writer (parallel) | #1834 cancellation (read SQL scope) | PR #1848; RED 7; verifier running.
+- T8 | S1–S3 | delegated writer (parallel) | #1822 gentle-shell Pi profile | PR #1847; RED 11/GREEN 13; verifier running.
+- T9 | S1–S3 | delegated writer (parallel) | #1823 test_vba invocation seam (same-name module diagnosis) | PR #1846; RED 5; verifier running.
+- T10 | S1–S3 | inline | #1824 closed with evidence, no source change.
+- T11 | S1–S3 | inline | close #1836 after child evidence; nightly Access E2E on main; release v4.4.15 | pending.
+- T12 | S1–S3 | delegated writer | #1838 COM test doubles | merged as PR #1840.
+- T13 | S1–S3 | delegated writer | #1841 (new, found in T4) vba-manager startup suppression | PR #1843; RED 6/GREEN 11; verifier PASS; in merge train.
 
 ## Log
 
@@ -35,3 +36,5 @@ Runner: focused Vitest/Pester regressions, repository quality gates, and `pnpm t
 - L8: #1830 explicit `force:false` is now a pure registry inspection; omitted `force` preserves existing cleanup behavior. This distinction satisfies the reported inspection scope without silently changing default cleanup. SDK registration now reuses the canonical contract resolver.
 - L9: #1812 broader COM suite exposed the same 20 baseline failures due to successful fakes missing writable UserControl; tracked with matching readback in https://github.com/DysTelefonica/dysflow/issues/1838. No production guard relaxation is authorized by this fixture repair.
 - L10: User resumed with "sigue" after an intentional interruption. Three active workers and all issue worktrees were checked and retained.
+- L11 (2026-10-22): Claude Code session resumed with user request: "tienes que atacar todos los issues y sacar release. Estas autorizado a todo y solo me has de hacer preguntas cuando no tengas más remedio. Trabaja desatendido". One writer per lane (parallelism trigger), independent verifier per high-risk PR.
+- L12: Branch protection requires up-to-date branches and auto-merge is disabled; a serialized local merge train (update-branch → green → squash with explicit subject/body) delivers PRs. Parallel full suites exhausted machine memory; local node_modules were stale (biome 2.5.2 vs lockfile 2.5.13) and some lane worktrees symlinked them — each lane now uses its own `CI=true pnpm install --frozen-lockfile`.
