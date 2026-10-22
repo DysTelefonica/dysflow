@@ -271,6 +271,14 @@ export async function hasOwnedPiPackage(
 }
 
 /**
+ * The Pi settings files the ownership record holds a per-profile entry for
+ * (issue #1822), as the normalized keys the record stores.
+ */
+export async function recordedPiSettingsPaths(runtimeDir: string): Promise<string[]> {
+  return Object.keys((await readOwnership(runtimeDir))?.profiles ?? {});
+}
+
+/**
  * True when the profile references a Dysflow facade this runtime cannot prove
  * it owns: the case install and update must report instead of overwrite.
  */
@@ -281,6 +289,25 @@ export async function hasUnownedPiPackage(
   const current = await currentPiPackageSource(settingsPath, runtimeDir);
   if (current === undefined || sameSource(current, resolvePiFacadeDir(runtimeDir))) return false;
   return !(await hasOwnedPiPackage(settingsPath, runtimeDir));
+}
+
+/**
+ * After `pi remove`, only the removed identity must be gone. Another Dysflow
+ * facade the runtime never owned (a development checkout next to the owned
+ * entry) legitimately stays behind (issue #1822).
+ */
+async function assertSourceRemoved(settingsPath: string, removed: string): Promise<void> {
+  const settings = await readJson(settingsPath);
+  const entries = Array.isArray(settings.packages) ? settings.packages.map(packageSource) : [];
+  const remains = entries.some((source) => {
+    if (source === undefined) return false;
+    if (isLegacyNpmSource(removed)) return isLegacyNpmSource(source);
+    if (source.includes(":") && !path.isAbsolute(source)) return false;
+    return samePath(path.resolve(path.dirname(settingsPath), source), removed);
+  });
+  if (remains) {
+    throw new Error("Pi reported package removal but the Dysflow package remains installed.");
+  }
 }
 
 async function assertPackageSource(
@@ -332,7 +359,7 @@ export async function reconcilePiPackage(input: PiPackageInput): Promise<PiPacka
       return { status: "unchanged", active: current !== undefined, owned: false, spec };
     }
     await runPiCommand(["remove", removeArgument(current)], commandContext);
-    await assertPackageSource(input.settingsPath, input.runtimeDir, undefined);
+    await assertSourceRemoved(input.settingsPath, current);
     if (record) await releaseOwnership(record, input.settingsPath, ownershipPath, writeOwnership);
     return { status: "changed", active: false, owned: false, spec };
   }

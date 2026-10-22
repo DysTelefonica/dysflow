@@ -16,6 +16,7 @@ import {
 } from "../../../../src/cli/commands/install/pi-package-manager.js";
 import { DYSSKILL_NAMES } from "../../../../src/cli/commands/install/skills-installer.js";
 import { handleInstallCommand, handleUpdateCommand } from "../../../../src/cli/commands/install.js";
+import { handleUninstallCommand } from "../../../../src/cli/commands/uninstall.js";
 import { useHermeticTmpdir } from "../../../_helpers/hermetic-tmpdir.js";
 
 /**
@@ -476,5 +477,177 @@ describe("dysflow install --agents pi covers the gentle-shell profile (#1822)", 
     for (const agentDir of [box.ordinary, box.gentleShell]) {
       await expectProfileAligned(agentDir, box.runtimeDir, bundleRoot);
     }
+  });
+});
+
+describe("dysflow uninstall removes owned wiring from every recorded Pi profile (#1822)", () => {
+  /** Uninstall deletes the runtime and the marker: both stay inside the sandbox. */
+  function uninstallEnv(box: { root: string; env: { USERPROFILE: string }; runtimeDir: string }) {
+    return {
+      ...box.env,
+      DYSFLOW_HOME: box.runtimeDir,
+      DYSFLOW_RUNTIME_MARKER_PATH: join(box.root, "marker", ".dysflow-marker"),
+    };
+  }
+
+  /**
+   * The pre-#1822 uninstall output for one profile. Lines before the success
+   * line are the host-environment `DYSFLOW_HOME` warnings, which depend on the
+   * process running the suite, not on the change.
+   */
+  function expectPlainUninstallSuccess(result: {
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+  }) {
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    const lines = result.stdout.split("\n");
+    expect(lines.at(-1)).toBe("Dysflow uninstalled successfully.");
+    expect(lines.slice(0, -1).every((line) => line.startsWith("Warning: DYSFLOW_"))).toBe(true);
+  }
+
+  async function installedDualProfiles() {
+    const box = await sandbox();
+    const bundleRoot = await releasePackage(box.root, "9.9.9");
+    for (const agentDir of [box.ordinary, box.gentleShell]) {
+      await writeJsonFile(join(agentDir, "mcp.json"), {
+        mcpServers: { other: { command: "other-server" } },
+      });
+      await writeJsonFile(join(agentDir, "settings.json"), { theme: "dark", packages: ["npm:x"] });
+      await writeFile(join(agentDir, "APPEND_SYSTEM.md"), "user-owned guidance\n", "utf8");
+      await mkdir(join(agentDir, "skills", "user-skill"), { recursive: true });
+      await writeFile(join(agentDir, "skills", "user-skill", "SKILL.md"), "# mine\n", "utf8");
+    }
+    const install = await handleInstallCommand(
+      ["--runtime-dir", box.runtimeDir, "--agents", "pi", "--no-tui"],
+      { env: box.env, packageRoot: bundleRoot, piPackageCommandRunner: fakePi },
+    );
+    expect(install.exitCode).toBe(0);
+    return { ...box, bundleRoot };
+  }
+
+  async function expectProfileClean(agentDir: string) {
+    expect(await readJsonFile(join(agentDir, "settings.json"))).toEqual({
+      theme: "dark",
+      packages: ["npm:x"],
+    });
+    expect((await readJsonFile(join(agentDir, "mcp.json"))).mcpServers).toEqual({
+      other: { command: "other-server" },
+    });
+    expect(await readFile(join(agentDir, "APPEND_SYSTEM.md"), "utf8")).toBe(
+      "user-owned guidance\n",
+    );
+    expect((await readdir(join(agentDir, "skills"))).sort()).toEqual(["user-skill"]);
+  }
+
+  it("finishes uninstall when an unowned facade sits next to the owned one (B1)", async () => {
+    const box = await sandbox();
+    const devFacade = join(box.root, "dev-checkout", "plugin", "pi");
+    await writeJsonFile(join(devFacade, "package.json"), { name: PI_PACKAGE_NAME });
+    const devEntry = relative(box.ordinary, devFacade);
+    await writeJsonFile(join(box.ordinary, "settings.json"), {
+      packages: [facadeEntry(box.ordinary, box.runtimeDir), devEntry],
+    });
+    await writeJsonFile(join(box.ordinary, "mcp.json"), {
+      mcpServers: { dysflow: { command: launcher(box.runtimeDir), args: ["mcp"] } },
+    });
+    await writeJsonFile(resolvePiPackageOwnershipPath(box.runtimeDir), {
+      packageName: PI_PACKAGE_NAME,
+      spec: resolvePiFacadeDir(box.runtimeDir),
+      version: "9.9.9",
+      owned: true,
+    });
+
+    const result = await handleUninstallCommand([], {
+      env: uninstallEnv(box),
+      piPackageCommandRunner: fakePi,
+    });
+
+    expectPlainUninstallSuccess(result);
+    expect((await readJsonFile(join(box.ordinary, "settings.json"))).packages).toEqual([devEntry]);
+    expect((await readJsonFile(join(box.ordinary, "mcp.json"))).mcpServers).toEqual({});
+    await expect(readdir(box.runtimeDir)).rejects.toThrow();
+  });
+
+  it("removes owned wiring from the gentle-shell profile install recorded (B2)", async () => {
+    const box = await installedDualProfiles();
+
+    const result = await handleUninstallCommand([], {
+      env: uninstallEnv(box),
+      piPackageCommandRunner: fakePi,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+    await expectProfileClean(box.gentleShell);
+    // The selected profile keeps its pre-#1822 uninstall behavior.
+    expect((await readJsonFile(join(box.ordinary, "settings.json"))).packages).toEqual(["npm:x"]);
+  });
+
+  it("preserves and reports an unowned facade in a recorded gentle-shell profile", async () => {
+    const box = await installedDualProfiles();
+    const devFacade = join(box.root, "dev-checkout", "plugin", "pi");
+    await writeJsonFile(join(devFacade, "package.json"), { name: PI_PACKAGE_NAME });
+    await writeJsonFile(join(box.gentleShell, "settings.json"), {
+      packages: [relative(box.gentleShell, devFacade)],
+    });
+    const before = await snapshot([join(box.gentleShell, "settings.json")]);
+
+    const result = await handleUninstallCommand([], {
+      env: uninstallEnv(box),
+      piPackageCommandRunner: fakePi,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(await snapshot([join(box.gentleShell, "settings.json")])).toEqual(before);
+    expect(result.stdout).toContain(`Pi profile ${box.gentleShell}`);
+    expect(result.stdout).toContain("preserved");
+    expect((await readJsonFile(join(box.gentleShell, "mcp.json"))).mcpServers).toEqual({
+      other: { command: "other-server" },
+    });
+  });
+
+  it("leaves gentle-shell untouched under an explicit PI_CODING_AGENT_DIR or the exclusion", async () => {
+    for (const extra of [
+      (box: { ordinary: string }) => ({ PI_CODING_AGENT_DIR: box.ordinary }),
+      () => ({ [SKIP_GENTLE_SHELL_ENV]: "1" }),
+    ]) {
+      const box = await installedDualProfiles();
+      const watched = ["settings.json", "mcp.json", "APPEND_SYSTEM.md"].map((file) =>
+        join(box.gentleShell, file),
+      );
+      const before = await snapshot(watched);
+      const skillsBefore = (await readdir(join(box.gentleShell, "skills"))).sort();
+
+      const result = await handleUninstallCommand([], {
+        env: { ...uninstallEnv(box), ...extra(box) },
+        piPackageCommandRunner: fakePi,
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(await snapshot(watched)).toEqual(before);
+      expect((await readdir(join(box.gentleShell, "skills"))).sort()).toEqual(skillsBefore);
+    }
+  });
+
+  it("keeps the single default profile uninstall output unchanged", async () => {
+    const box = await sandbox();
+    const bundleRoot = await releasePackage(box.root, "9.9.9");
+    await mkdir(box.ordinary, { recursive: true });
+    const install = await handleInstallCommand(
+      ["--runtime-dir", box.runtimeDir, "--agents", "pi", "--no-tui"],
+      { env: box.env, packageRoot: bundleRoot, piPackageCommandRunner: fakePi },
+    );
+    expect(install.exitCode).toBe(0);
+
+    const result = await handleUninstallCommand([], {
+      env: uninstallEnv(box),
+      piPackageCommandRunner: fakePi,
+    });
+
+    expectPlainUninstallSuccess(result);
+    expect((await readJsonFile(join(box.ordinary, "settings.json"))).packages).toEqual([]);
+    expect((await readJsonFile(join(box.ordinary, "mcp.json"))).mcpServers).toEqual({});
   });
 });

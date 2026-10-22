@@ -7,6 +7,10 @@ import {
 } from "./install/mcp-configurator.js";
 import { reconcilePiPackage } from "./install/pi-package-manager.js";
 import {
+  removeAdditionalPiProfiles,
+  resolveRecordedAdditionalPiProfiles,
+} from "./install/pi-profiles.js";
+import {
   ALL_AGENTS,
   fileExists,
   getHome,
@@ -78,6 +82,8 @@ export async function handleUninstallCommand(
   // first so a configuration failure cannot remove the package prematurely;
   // package failure restores the exact previous MCP bytes.
   const agentConfigPaths = resolveAgentConfigPaths(home, env);
+  // Read before the selected profile releases its own ownership entry.
+  const additionalPiProfiles = await resolveRecordedAdditionalPiProfiles(home, env, runtimeDir);
   const piSnapshot = await capturePiIntegration(agentConfigPaths.pi);
   try {
     await reconcilePiIntegration({
@@ -108,6 +114,15 @@ export async function handleUninstallCommand(
       stderr: error instanceof Error ? error.message : String(error),
     };
   }
+
+  // Additional Pi profiles install recorded (issue #1822). A profile that
+  // cannot be cleaned is reported and never blocks the rest of uninstall.
+  const additionalPiLines = await removeAdditionalPiProfiles({
+    profiles: additionalPiProfiles,
+    runtimeDir,
+    commandPath: path.join(runtimeDir, "bin", "dysflow.cmd"),
+    runPiCommand: context?.piPackageCommandRunner,
+  });
 
   // Revert other agent configurations. Their historical best-effort cleanup
   // behavior remains unchanged.
@@ -159,6 +174,7 @@ export async function handleUninstallCommand(
     );
   }
 
+  stdoutParts.push(...additionalPiLines);
   stdoutParts.push("Dysflow uninstalled successfully.");
 
   return { exitCode: 0, stdout: stdoutParts.join("\n"), stderr: "" };

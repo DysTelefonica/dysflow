@@ -143,6 +143,16 @@ Uninstall calls `pi remove` with the owned source only when the current Pi setti
 
 A pre-existing package, a package changed later by the user, `pi-mcp-adapter`, and foreign MCP entries are preserved.
 
+Another Dysflow facade next to the owned one, such as a development checkout, stays in place and does not fail uninstall.
+
+Uninstall also cleans every additional profile the ownership record lists, such as the gentle-shell profile `install` wired.
+
+It removes the managed MCP entry, the owned facade, the release-owned skills whose bytes still match the recorded hashes, and the marker-bounded pointer.
+
+Unowned references and edited skills stay byte-identical; uninstall names them in a `Pi profile ... preserved ...` line.
+
+An explicit `PI_CODING_AGENT_DIR` or `DYSFLOW_SKIP_GENTLE_SHELL=1` keeps uninstall on the selected profile, as for `install` and `update`.
+
 ## Rendering Contract
 
 Collapsed calls show one bounded status line. They never include arguments, secrets, paths, arbitrary operation names, or arbitrary MCP error text.
