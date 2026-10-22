@@ -80,9 +80,14 @@ Restart the selected client after installation so it reloads the MCP configurati
 | Variable | Effect |
 | --- | --- |
 | `PI_CODING_AGENT_DIR` | Selects the Pi agent directory that owns every Pi-managed artifact: MCP configuration, settings, skills, and the harness pointer. Set and non-blank, its absolute resolution wins; otherwise `~/.pi/agent` applies. |
+| `DYSFLOW_SKIP_GENTLE_SHELL` | Set to `1` or `true` to keep `install`, `update`, and `uninstall` off the gentle-shell Pi profile. Without it, an existing gentle-shell agent directory is reconciled next to the selected Pi profile; see [Pi agent directory selection](./pi-native-integration.md#agent-directory-selection). |
 | `DYSFLOW_CHANNEL` | Selects the update channel when `--channel` is absent. See [installation channels](./installation-channels.md). |
 
 Export `PI_CODING_AGENT_DIR` for `dysflow install`, `dysflow update`, `dysflow uninstall`, and `dysflow doctor` alike, so every command reconciles the same Pi profile.
+
+An explicit `PI_CODING_AGENT_DIR` selects exactly that profile; gentle-shell discovery applies only when it is unset.
+
+`dysflow uninstall` removes Dysflow-owned wiring from every additional profile `install` recorded and reports unowned references it leaves in place.
 
 Pi users should follow the [Pi-native integration guide](./pi-native-integration.md); that page is the single source for Pi reconciliation, rendering, update, and uninstall behavior.
 

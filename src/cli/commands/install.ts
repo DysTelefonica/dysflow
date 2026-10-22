@@ -23,6 +23,13 @@ import {
 import { resolvePackageRoot } from "./install/package-root.js";
 import { type PiPackageCommandRunner, reconcilePiPackage } from "./install/pi-package-manager.js";
 import {
+  type AdditionalPiProfileReport,
+  formatAdditionalPiProfilesReport,
+  formatAdditionalPiProfileWarnings,
+  reconcileAdditionalPiProfiles,
+  resolveAdditionalPiProfiles,
+} from "./install/pi-profiles.js";
+import {
   createPluginRefreshReport,
   refreshBundledAgentPlugins,
 } from "./install/plugin-refresher.js";
@@ -206,6 +213,19 @@ export async function applyIntegrationSelection(
       bundleRoot: packageRoot,
       targets: discoverSkillTargets(getHome(env), { only: selectedAgents, exclude: [] }, env),
     });
+    const additionalPiProfiles: AdditionalPiProfileReport[] = selected.has("pi")
+      ? await reconcileAdditionalPiProfiles({
+          profiles: resolveAdditionalPiProfiles(getHome(env), env),
+          runtimeDir,
+          commandPath,
+          packageVersion,
+          mode: "install",
+          runPiCommand: options.piPackageCommandRunner,
+          bundleRoot: packageRoot,
+          home: getHome(env),
+          skillFilters: { only: [], exclude: [] },
+        })
+      : [];
     const pluginRefresh = await refreshBundledAgentPlugins(
       packageRoot,
       getHome(env),
@@ -221,10 +241,11 @@ export async function applyIntegrationSelection(
         }),
         createPluginRefreshReport(pluginRefresh, { verbose: true }),
         formatSkillInstallReport(skillInstall),
+        formatAdditionalPiProfilesReport(additionalPiProfiles),
       ]
         .filter((section) => section.length > 0)
         .join("\n"),
-      stderr: "",
+      stderr: formatAdditionalPiProfileWarnings(additionalPiProfiles),
     };
   } catch (error) {
     const message =
@@ -382,6 +403,22 @@ export async function handleInstallCommand(
         env,
       }),
     });
+    const additionalPiProfiles: AdditionalPiProfileReport[] = agents.includes("pi")
+      ? await reconcileAdditionalPiProfiles({
+          profiles: resolveAdditionalPiProfiles(home, env),
+          runtimeDir,
+          commandPath,
+          packageVersion,
+          mode: "install",
+          runPiCommand: context.piPackageCommandRunner,
+          bundleRoot: packageRoot,
+          home,
+          skillFilters: {
+            only: parsed.options.onlySkills,
+            exclude: parsed.options.excludeSkills,
+          },
+        })
+      : [];
     const pluginRefresh = await refreshBundledAgentPlugins(
       packageRoot,
       getHome(env),
@@ -410,10 +447,11 @@ export async function handleInstallCommand(
         createPluginRefreshReport(pluginRefresh, { verbose: parsed.options.verbose }),
         formatSkillInstallReport(skillInstall),
         formatPointerRolloutReport(pointerRollout),
+        formatAdditionalPiProfilesReport(additionalPiProfiles),
       ]
         .filter((section) => section.length > 0)
         .join("\n"),
-      stderr: "",
+      stderr: formatAdditionalPiProfileWarnings(additionalPiProfiles),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to install Dysflow runtime.";

@@ -39,6 +39,12 @@ import {
   type PiPackageCommandRunner,
   reconcilePiPackage,
 } from "./pi-package-manager.js";
+import {
+  formatAdditionalPiProfilesReport,
+  formatAdditionalPiProfileWarnings,
+  reconcileAdditionalPiProfiles,
+  resolveAdditionalPiProfiles,
+} from "./pi-profiles.js";
 import { createPluginRefreshReport, refreshBundledAgentPlugins } from "./plugin-refresher.js";
 import {
   discoverPointerRolloutTargets,
@@ -487,6 +493,18 @@ export async function handleUpdateCommand(
         env,
         context.piPackageCommandRunner,
       );
+      const additionalPiProfiles = await reconcileAdditionalPiProfiles({
+        profiles: resolveAdditionalPiProfiles(home, env),
+        runtimeDir,
+        commandPath: path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/"),
+        packageVersion: installedVersion ?? latestRelease.version,
+        mode: "update",
+        runPiCommand: context.piPackageCommandRunner,
+        bundleRoot: localPackageRoot,
+        home,
+        skillFilters: { only: parsed.options.onlySkills, exclude: parsed.options.excludeSkills },
+      });
+      const additionalPiReport = formatAdditionalPiProfilesReport(additionalPiProfiles);
       // Refresh the pin even when nothing was downloaded, so a runtime installed
       // before install state existed still records the channel it is tracking.
       await persistInstallState({
@@ -497,8 +515,8 @@ export async function handleUpdateCommand(
       });
       return {
         exitCode: 0,
-        stdout: `${channelReportPrefix(resolvedChannel)}${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}\n${formatPointerRolloutReport(pointerRollout)}`,
-        stderr: "",
+        stdout: `${channelReportPrefix(resolvedChannel)}${createNoUpdateReport(runtimeDir, latestRelease.version)}\n${formatSkillInstallReport(skillInstall)}\n${formatPointerRolloutReport(pointerRollout)}${additionalPiReport.length === 0 ? "" : `\n${additionalPiReport}`}`,
+        stderr: formatAdditionalPiProfileWarnings(additionalPiProfiles),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to refresh bundled skills.";
@@ -558,6 +576,18 @@ export async function handleUpdateCommand(
       env,
       context.piPackageCommandRunner,
     );
+    const additionalPiProfiles = await reconcileAdditionalPiProfiles({
+      profiles: resolveAdditionalPiProfiles(home, env),
+      runtimeDir,
+      commandPath: path.join(runtimeDir, "bin", "dysflow.cmd").replaceAll("\\", "/"),
+      packageVersion: landedVersion,
+      mode: "update",
+      runPiCommand: context.piPackageCommandRunner,
+      bundleRoot: preparedPackage.packageRoot,
+      home,
+      skillFilters: { only: parsed.options.onlySkills, exclude: parsed.options.excludeSkills },
+    });
+    const additionalPiReport = formatAdditionalPiProfilesReport(additionalPiProfiles);
     const pluginRefreshReport = createPluginRefreshReport(pluginRefresh);
     const previousVersionStr =
       installedVersion !== undefined ? `v${installedVersion}` : "none (not installed)";
@@ -589,8 +619,9 @@ export async function handleUpdateCommand(
         ) +
         `\n${formatSkillInstallReport(skillInstall)}` +
         `\n${formatPointerRolloutReport(pointerRollout)}` +
+        (additionalPiReport.length === 0 ? "" : `\n${additionalPiReport}`) +
         (pluginRefreshReport.length === 0 ? "" : `\n${pluginRefreshReport}`),
-      stderr: "",
+      stderr: formatAdditionalPiProfileWarnings(additionalPiProfiles),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update Dysflow runtime.";
