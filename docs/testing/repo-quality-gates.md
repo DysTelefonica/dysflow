@@ -182,6 +182,7 @@ reorganization) and violate the [testing philosophy](./testing-philosophy.md) no
 
 The Windows smoke workflow selects Pester **5.7.1** explicitly for installation
 and import. A different preinstalled version does not satisfy the requirement.
+
 The step reports the loaded version before running `scripts/tests` (#1835).
 
 Call out skipped Pester execution with an explicit reason, such as no `pwsh` in the CI
