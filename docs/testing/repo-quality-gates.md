@@ -97,12 +97,14 @@ The hosted subset is pinned by
 `windows-integration-smoke` job:
 
 Smoke applicability comes from changed paths in `scripts/check-documentation-quality.mjs`,
-including both rename endpoints. Documentation, `skills/`, and `.team-skills.yaml`
-alone skip smoke. Source or script changes require it regardless of branch name.
+including both rename endpoints.
+
+Documentation, `skills/`, and `.team-skills.yaml` alone skip smoke. Source or
+script changes require it regardless of branch name.
 
 The classifier emits `windows_smoke_required`; the job condition and final CI
 aggregate consume that same output. Applicable smoke that fails or is skipped
-cannot produce a successful aggregate (#1832).
+cannot pass the aggregate (#1832).
 
 - `test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts`
 - `test/e2e/mcp-catalog-dryrun.e2e.test.ts`
