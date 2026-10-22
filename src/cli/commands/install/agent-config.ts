@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -38,6 +39,103 @@ export function resolvePiAgentDir(home: string, env: NodeJS.ProcessEnv): string 
   const configured = env.PI_CODING_AGENT_DIR?.trim() ?? "";
   if (configured.length > 0) return path.resolve(configured);
   return path.join(home, ".pi", "agent");
+}
+
+/** One Pi agent directory Dysflow reconciles, with the paths it owns there. */
+export type PiProfile = {
+  agentDir: string;
+  /**
+   * `default`: `<home>/.pi/agent`; `override`: `PI_CODING_AGENT_DIR`;
+   * `gentle-shell`: the home gentle-shell launches Pi with (issue #1822).
+   */
+  origin: "default" | "override" | "gentle-shell";
+  mcpConfigPath: string;
+  settingsPath: string;
+  /**
+   * The environment that selects this profile for Pi itself (`pi install`) and
+   * for every Dysflow helper that resolves the Pi directory from `env`.
+   */
+  env: NodeJS.ProcessEnv;
+};
+
+/** Set to `1`/`true` to keep install and update off the gentle-shell profile. */
+export const SKIP_GENTLE_SHELL_ENV = "DYSFLOW_SKIP_GENTLE_SHELL";
+
+function expandUserPath(value: string, home: string): string {
+  if (value === "~") return home;
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(home, value.slice(2));
+  return path.resolve(home, value);
+}
+
+function readGentleShellHomeSetting(home: string): string | undefined {
+  const configPath = path.join(home, ".gentle-shell", "config.json");
+  if (!existsSync(configPath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
+    const value = (parsed as Record<string, unknown>).home;
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+  } catch {
+    // gentle-shell itself treats a malformed config as "use the default home".
+    return undefined;
+  }
+}
+
+/**
+ * The agent directory gentle-shell launches Pi with when started without a
+ * home flag, mirroring its own launcher resolution: `~/.gentle-shell/config.json`
+ * `home` is `"link"` (the user's own Pi home), `"isolated"` (the default), or a
+ * path; the isolated home is `GENTLE_SHELL_HOME` or `~/.gentle-shell/agent`.
+ */
+export function resolveGentleShellAgentDir(home: string, env: NodeJS.ProcessEnv): string {
+  const setting = readGentleShellHomeSetting(home);
+  if (setting === "link") {
+    const userPiHome = env.GENTLE_SHELL_USER_PI_HOME?.trim() ?? "";
+    return userPiHome.length > 0 ? path.resolve(userPiHome) : path.join(home, ".pi", "agent");
+  }
+  if (setting !== undefined && setting !== "isolated") return expandUserPath(setting, home);
+  const isolated = env.GENTLE_SHELL_HOME?.trim() ?? "";
+  return isolated.length > 0 ? path.resolve(isolated) : path.join(home, ".gentle-shell", "agent");
+}
+
+function samePiDir(left: string, right: string): boolean {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+function piProfile(agentDir: string, origin: PiProfile["origin"], env: NodeJS.ProcessEnv) {
+  return {
+    agentDir,
+    origin,
+    mcpConfigPath: path.join(agentDir, "mcp.json"),
+    settingsPath: path.join(agentDir, "settings.json"),
+    env,
+  } satisfies PiProfile;
+}
+
+/**
+ * Every Pi agent directory install and update reconcile (issue #1822).
+ *
+ * The first entry is always the selected profile (`resolvePiAgentDir`) with the
+ * caller's environment untouched. An explicit `PI_CODING_AGENT_DIR` selects
+ * exactly that profile (#1797). Otherwise an EXISTING gentle-shell agent
+ * directory that differs from the selected one is added, unless
+ * `DYSFLOW_SKIP_GENTLE_SHELL` excludes it. Nothing here creates a directory.
+ */
+export function resolvePiProfiles(home: string, env: NodeJS.ProcessEnv): PiProfile[] {
+  const override = (env.PI_CODING_AGENT_DIR?.trim() ?? "").length > 0;
+  const primaryDir = resolvePiAgentDir(home, env);
+  const profiles: PiProfile[] = [piProfile(primaryDir, override ? "override" : "default", env)];
+  if (override || home.trim().length === 0) return profiles;
+  const skip = env[SKIP_GENTLE_SHELL_ENV]?.trim().toLowerCase() ?? "";
+  if (skip === "1" || skip === "true") return profiles;
+  const gentleShellDir = resolveGentleShellAgentDir(home, env);
+  if (samePiDir(gentleShellDir, primaryDir) || !existsSync(gentleShellDir)) return profiles;
+  profiles.push(
+    piProfile(gentleShellDir, "gentle-shell", { ...env, PI_CODING_AGENT_DIR: gentleShellDir }),
+  );
+  return profiles;
 }
 
 export function resolveAgentConfigPaths(home: string, env: NodeJS.ProcessEnv): AgentConfigPaths {

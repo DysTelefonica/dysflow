@@ -48,7 +48,7 @@ The package has no `pi.mcp` field and ships no `mcp.json`, so it cannot add a du
 
 ## Agent Directory Selection
 
-Dysflow resolves one Pi agent directory and writes every Pi-owned artifact into it: `mcp.json`, `settings.json`, the SkillsDir, and the `APPEND_SYSTEM.md` harness pointer.
+Dysflow resolves a selected Pi agent directory and writes every Pi-owned artifact into it: `mcp.json`, `settings.json`, the SkillsDir, and the `APPEND_SYSTEM.md` harness pointer.
 
 Resolution precedence:
 
@@ -63,7 +63,33 @@ Set the same value for every Dysflow command that reconciles Pi: `install`, `upd
 PI_CODING_AGENT_DIR=/path/to/profile/agent dysflow install --agents pi --no-tui
 ```
 
-Each invocation reconciles only the directory it resolves, so a value that changes between install and uninstall leaves the earlier profile untouched.
+An explicit `PI_CODING_AGENT_DIR` reconciles only that directory, so a value that changes between install and uninstall leaves the earlier profile untouched.
+
+### The gentle-shell profile
+
+When `PI_CODING_AGENT_DIR` is unset, `install --agents pi` and `update` also reconcile the gentle-shell Pi profile (issue #1822).
+
+Dysflow resolves it the way the gentle-shell launcher does:
+
+1. `~/.gentle-shell/config.json` `home` set to a path: that directory.
+2. `home` set to `link`: the user's own Pi home, already the selected profile.
+3. `home` set to `isolated`, or absent or malformed: `GENTLE_SHELL_HOME`, otherwise `~/.gentle-shell/agent`.
+
+The directory must already exist; Dysflow never creates a gentle-shell profile. `install` wires it when Pi is selected. `update` refreshes it only when it already carries Dysflow wiring.
+
+Each reconciled profile gets the same MCP entry, facade, six release-owned skills, and marker-bounded pointer as the selected profile.
+
+It also gets its own entry in the runtime ownership record.
+
+`--only`/`--exclude` skill filters apply to it too. Set `DYSFLOW_SKIP_GENTLE_SHELL=1` to exclude it.
+
+A gentle-shell profile Dysflow cannot reconcile safely does not fail the selected profile.
+
+Typical causes are a Dysflow facade from a development checkout, which Dysflow does not own, or a foreign `dysflow` MCP entry.
+
+Dysflow leaves its files byte-identical, prints `NOT reconciled` with the reason, and writes a warning to stderr.
+
+The selected profile keeps failing closed on the same conflicts.
 
 ## Ownership and Reconciliation
 
@@ -141,6 +167,7 @@ The package uses Pi's public extension and TUI APIs; it does not use private Pi 
 | The runtime install cannot fetch the facade's dependencies | Restore network access to the public package registry and rerun. No account is needed. |
 | A user-managed package entry is already present | Decide which installation owns the package. Dysflow preserves the user installation until the conflict is resolved explicitly. |
 | Pi does not show `dysflow` | Run `/reload`, then rerun the bootstrap check. |
+| `Pi profile ... was not reconciled` after an update | The profile references a Dysflow facade this runtime does not own. Run the printed `pi remove <source>` with the printed `PI_CODING_AGENT_DIR`, then rerun `dysflow update`. |
 | Artifacts landed in a profile Pi is not using | Export `PI_CODING_AGENT_DIR` for the active agent directory, then rerun `dysflow install --agents pi --no-tui`. |
 | The call lacks `⚡ Dysflow` | Rerun `dysflow install --agents pi --no-tui`, resolve any reported conflict, and reload. |
 | The MCP child cannot start | Run `dysflow doctor` and verify the configured runtime or `DYSFLOW_BIN` resolves to an absolute launcher. |
