@@ -40,14 +40,20 @@ BeforeAll {
 }
 
 # Helper mirrors New-FakeAccessApp from the unit tests so the same setup
-# reads identically across both files.
-function script:New-FakeAccessApp {
+# reads identically across both files. It carries its own name because a
+# script-scoped function with the same name would replace the unit-test helper
+# when both files run in one Invoke-Pester call (#1838). Visible/UserControl
+# start at `$true` like the real COM default and stay writable, because
+# Open-CanonicalAccess forces both to `$false` before OpenCurrentDatabase (#730).
+function script:New-E2EFakeAccessApp {
     param(
         [int]$hWndAccessApp = 0
     )
     $fake = [PSCustomObject]@{
         hWndAccessApp      = $hWndAccessApp
         AutomationSecurity = 3   # msoAutomationSecurityByUI
+        Visible            = $true
+        UserControl        = $true
     }
     $fake | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
         param($Path, $Exclusive, $Password)
@@ -64,7 +70,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
         It "returns a PSCustomObject with DatabaseOpened as the 5th documented field (#571 contract)" {
             # Caller contract: Session has 5 fields. If a future refactor adds
             # or removes one without updating the doc-comment, this catches it.
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9001
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9001
 
             $session = Open-CanonicalAccess `
                 -DbPath            "C:\fake.accdb" `
@@ -82,7 +88,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
         }
 
         It "DatabaseOpened is $true after the production default flow (caller does not pass -OpenDatabase)" {
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9002
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9002
 
             $session = Open-CanonicalAccess `
                 -DbPath            "C:\fake.accdb" `
@@ -99,7 +105,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
         }
 
         It "DatabaseOpened is $false when the caller explicitly skipped the DB open (isDirectTargetQuery path)" {
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9003
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9003
 
             $session = Open-CanonicalAccess `
                 -DbPath            "C:\fake.accdb" `
@@ -117,7 +123,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
     Context "Caller contract — DatabaseOpened is NEVER observed on a failed open" {
 
         It "password rejection throws DYSFLOW_OPEN_CURRENT_DATABASE_FAILED before the caller ever sees a session" {
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9004
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9004
             $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Force -Value {
                 param($Path, $Exclusive, $Password)
                 throw "wrong password"
@@ -148,7 +154,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
         }
 
         It "missing-path COM exception also throws DYSFLOW_OPEN_CURRENT_DATABASE_FAILED (no silent session)" {
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9005
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9005
             $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Force -Value {
                 param($Path, $Exclusive, $Password)
                 throw "could not find file '$Path'"
@@ -176,7 +182,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
     Context "Caller contract — the returned session supports the documented teardown shape" {
 
         It "a successful session flows cleanly into Close-CanonicalAccess without throwing (#571 round-trip)" {
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9006
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9006
 
             $session = Open-CanonicalAccess `
                 -DbPath            "C:\fake.accdb" `
@@ -205,7 +211,7 @@ Describe "Issue #571 — DatabaseOpened flag from the CALLER's perspective (E2E)
             # isDirectTargetQuery callers call Close-CanonicalAccess even though
             # no DB was opened. The Session must carry enough state for the
             # close path to do the right thing (Quit + cleanup).
-            $fakeApp = New-FakeAccessApp -hWndAccessApp 9007
+            $fakeApp = New-E2EFakeAccessApp -hWndAccessApp 9007
 
             $session = Open-CanonicalAccess `
                 -DbPath            "C:\fake.accdb" `
