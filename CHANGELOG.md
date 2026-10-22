@@ -80,6 +80,12 @@
 
 ### Fixed
 
+- `fix(mcp)`: `cleanup_access_operation` results satisfy their executable contract (#1830).
+  - Over SDK/stdio dispatch, alias tools were registered with the generic `vba-write` result contract (root `mode`, `ok` or `dryRun`), so every cleanup payload `{ cleanup, registryHealth }` — including the read-only `force:false` inspection observed in 4.4.14 — was rejected with `RESULT_CONTRACT_VIOLATION`. SDK registration now reuses `executableResultContractForTool`, the same canonical contract introspection advertises; global validation and malformed-result rejection are unchanged.
+  - The cleanup contract accepts every recorded `AccessOperationStatus` and a nullable `accessPid`, so evidence is preserved instead of fabricated as `cleaned`.
+  - Explicit `force:false` is now a pure registry inspection: no registry update, process inspection, scan or termination. Missing IDs return `CLEANUP_OPERATION_NOT_FOUND`; a different database returns `CLEANUP_ACCESS_PATH_MISMATCH`. Omitting `force` keeps the existing eligible-operation cleanup; `force:true` keeps its write-gate and ownership guards.
+  - Paths: `src/adapters/mcp/dispatch.ts`, `src/adapters/mcp/canonical-handlers.ts`, `src/adapters/mcp/contracts/bootstrap-result-contracts.ts`, `src/adapters/mcp/schemas/vba-sync-schemas.ts`, `src/adapters/mcp/tool-parity-registry.ts`, `docs/api/mcp-tools.md`, `test/adapters/mcp/cleanup-inspection-1830.test.ts` (new). Fixed in the release that follows 4.4.14 (planned 4.4.15).
+
 - `fix(install)`: honor `PI_CODING_AGENT_DIR` for every Pi-owned artifact (#1797).
   - `dysflow install --agents pi --no-tui` always resolved the Pi configuration directory as `<home>/.pi/agent`. A Pi-compatible host can select a different agent directory with `PI_CODING_AGENT_DIR`, so with a custom profile active the package, the MCP compatibility entry, the SkillsDir and the harness pointer landed in the conventional profile while the active one stayed untouched — one installation split across two Pi profiles.
   - `resolvePiAgentDir(home, env)` in `src/cli/commands/install/agent-config.ts` is now the single resolver: `path.resolve(PI_CODING_AGENT_DIR)` when that variable is set and non-blank after trimming, `<home>/.pi/agent` otherwise. The three sites that used to build the directory by hand route through it, and `env` is threaded explicitly from every caller instead of being read deep inside a helper.

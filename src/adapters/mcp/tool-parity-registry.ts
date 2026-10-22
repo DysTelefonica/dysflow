@@ -43,7 +43,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   list_access_operations:
     "List the Access operations dysflow is tracking, with their PIDs and status. Read-only. Use it to verify whether an MSACCESS process is actually live before asserting it or blocking a destructive action.",
   cleanup_access_operation:
-    "Reconcile or release a tracked Access operation by operationId. WITHOUT force it inspects the recorded PID and reconciles a dead one (kills nothing); WITH force:true it kills the process. Write-gated.",
+    "Inspect or reconcile a tracked Access operation by operationId. Explicit force:false only reads registry evidence; omitted force retains eligible owned-operation cleanup. force:true requires writes and ownership checks; it never authorizes killing an unknown PID or a live running operation.",
   // VBA sync — source <-> binary sync
   export_modules:
     "Export specific VBA modules from the Access binary to the on-disk source tree. Scope with moduleNames (exact) or filter (substring). Read-only on the binary. destinationRoot is honored only when accessPath is also passed; otherwise the project source root is used. For a full mirror use export_all. With verbose:true, the response adds per-module binary-before/file-after snapshots and the canonical VBA semantic classification, actionability, recommendation, reason, and classifier-rules version; verbose is absent otherwise.",
