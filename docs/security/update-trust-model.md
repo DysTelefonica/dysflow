@@ -3,6 +3,31 @@
 This document describes the security properties of the Dysflow self-update path and the
 PowerShell process spawn boundary.
 
+## Startup suppression before frontend opening
+
+Before opening a frontend, `Disable-StartupFeatures` renames an existing AutoExec
+macro and removes an existing StartupForm property through DAO.
+
+It refreshes both collections and reads them back to verify neither startup entry
+remains. Absent startup entries are supported.
+
+A rename, deletion, or verification failure aborts before frontend opening and
+business VBA execution.
+
+The runner retains partial restoration metadata before suppression starts. Its
+existing `finally` restores changed settings even when suppression fails.
+
+Headless settings and owned-process cleanup remain the canonical COM helper's
+responsibility.
+
+Direct-target DAO operations retain their existing frontend bypass.
+
+Evidence: `scripts/dysflow-access-runner.ps1` and the isolated DAO fault-injection
+tests in `scripts/tests/dysflow-access-runner-startup-suppression-1812.Tests.ps1`.
+
+These tests exercise the runner's pre-open boundary without launching Access or
+opening a consumer frontend.
+
 ## Export destination readiness
 
 Before `export_all` or `export_modules` writes to a configured or explicit destination,
