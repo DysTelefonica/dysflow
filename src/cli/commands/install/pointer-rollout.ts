@@ -300,6 +300,36 @@ export async function installBundledPointerBlocks(options: {
   };
 }
 
+/**
+ * Remove the marker-bounded Dysflow pointer from a markdown instruction file
+ * (issue #1822 uninstall). Content outside the markers is kept; the separator
+ * `appendPointer` added is dropped, and a file left with no content is removed.
+ * Missing markers are a no-op; malformed markers leave the file untouched.
+ */
+export async function removePointerBlock(
+  filePath: string,
+): Promise<"removed" | "absent" | "malformed"> {
+  const current = await readFile(filePath, "utf8").catch(() => undefined);
+  if (current === undefined) return "absent";
+  const openCount = markerCount(current, POINTER_OPEN);
+  const closeCount = markerCount(current, POINTER_CLOSE);
+  if (openCount === 0 && closeCount === 0) return "absent";
+  if (openCount !== 1 || closeCount !== 1) return "malformed";
+  const start = current.indexOf(POINTER_OPEN);
+  const close = current.indexOf(POINTER_CLOSE);
+  if (close < start) return "malformed";
+  let end = close + POINTER_CLOSE.length;
+  if (current.startsWith("\r\n", end)) end += 2;
+  else if (current.startsWith("\n", end)) end += 1;
+  let before = current.slice(0, start);
+  if (before.endsWith("\n\n")) before = before.slice(0, -1);
+  else if (before.endsWith("\r\n\r\n")) before = before.slice(0, -2);
+  const next = `${before}${current.slice(end)}`;
+  if (next.trim().length === 0) await rm(filePath, { force: true });
+  else await writeFile(filePath, next, "utf8");
+  return "removed";
+}
+
 export function formatPointerRolloutReport(report: PointerRolloutReport): string {
   if (report.targets.length === 0) {
     return "Pointer rollout: no discovered or explicitly selected user-global targets.";

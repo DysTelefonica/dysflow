@@ -490,6 +490,52 @@ export async function diagnoseBundledSkills(options: {
   return statuses;
 }
 
+export type OwnedSkillRemovalReport = {
+  skillsDir: string;
+  removed: DysflowSkillName[];
+  /** Skills whose bytes no longer match the recorded hash: left in place. */
+  preserved: DysflowSkillName[];
+};
+
+/**
+ * Remove the release-owned skills a previous install wrote into `skillsDir`.
+ * Ownership is the `.dysflow-harness.json` record: a skill is removed only
+ * while its tree still hashes to the recorded value, so an edited copy and
+ * every unrelated skill stay byte-identical. The record goes away once no
+ * owned skill remains.
+ */
+export async function removeOwnedBundledSkills(
+  skillsDir: string,
+): Promise<OwnedSkillRemovalReport> {
+  const root = assertSafeSkillsDir({ agentId: "pi", skillsDir });
+  const report: OwnedSkillRemovalReport = { skillsDir: root, removed: [], preserved: [] };
+  const metadataFile = childPath(root, HARNESS_METADATA_FILE);
+  let recorded: Partial<Record<DysflowSkillName, unknown>>;
+  try {
+    const parsed = JSON.parse(await readFile(metadataFile, "utf8")) as { skills?: unknown };
+    if (typeof parsed.skills !== "object" || parsed.skills === null) return report;
+    recorded = parsed.skills as Partial<Record<DysflowSkillName, unknown>>;
+  } catch {
+    return report;
+  }
+  for (const name of DYSSKILL_NAMES) {
+    const expected = recorded[name];
+    const skillDir = childPath(root, name);
+    if (typeof expected !== "string" || !(await pathExists(skillDir))) continue;
+    const actual = await readSkillTree(skillDir)
+      .then((files) => skillTreeHash(files))
+      .catch(() => undefined);
+    if (actual === expected) {
+      await rm(skillDir, { recursive: true, force: true });
+      report.removed.push(name);
+    } else {
+      report.preserved.push(name);
+    }
+  }
+  if (report.preserved.length === 0) await rm(metadataFile, { force: true });
+  return report;
+}
+
 export function formatSkillInstallReport(report: SkillInstallReport): string {
   if (report.installed.length === 0) {
     return "Bundled skills: no discovered or explicitly selected adapter SkillsDir targets.";
