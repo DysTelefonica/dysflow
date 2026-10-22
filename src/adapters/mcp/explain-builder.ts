@@ -398,13 +398,13 @@ function explainAllowlistNotConfigured(input: ExplainInput): ExplainObject {
       },
       {
         step: 3,
-        check: "Declare the allowlist, or drop strictMode, or pass dryRun:true.",
+        check: "Declare the allowlist, or drop strictMode, or retry with apply:false.",
         result: "LIKELY",
         evidence:
           "Either exit stops the gate firing; the write gate keeps deciding whether the write happens at all.",
         remediation:
           input.remediation ??
-          "Either declare `capabilities.procedures.allow` (re-read per call — no restart is needed), or drop `capabilities.procedures.strictMode` to return to the default where the write gate alone decides. Pass `dryRun:true` to plan without executing.",
+          "Either declare `capabilities.procedures.allow` (re-read per call — no restart is needed), or drop `capabilities.procedures.strictMode` to return to the default where the write gate alone decides. Retry with `apply:false` to plan without executing.",
       },
     ],
   };
