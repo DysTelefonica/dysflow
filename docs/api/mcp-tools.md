@@ -130,11 +130,30 @@ Retrieve active and completed Access operation handles managed by Dysflow.
 * **Parameters**: None.
 
 ### `cleanup_access_operation`
-Safely terminate stuck or left-over `MSACCESS.EXE` processes owned by Dysflow.
+Inspect a tracked operation or safely clean up eligible `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
   - `operationId` (string, **required**): Handle ID of the operation to clean.
   - `accessPath` (string, **required**): Database file path associated with the target operation.
-  - `force` (boolean, optional): Terminate immediately. Requires writes to be enabled (`MCP_WRITES_DISABLED` is returned when writes are off); non-force cleanup is always allowed.
+  - `force` (boolean, optional): Explicit `false` reads the registered operation without changing it, inspecting processes, or terminating anything. Omitting `force` retains eligible-operation cleanup. `true` requests forced cleanup and requires writes to be enabled (`MCP_WRITES_DISABLED` otherwise); ownership and running-process guards still apply.
+
+Successful results carry `cleanup: { operationId, accessPid, status }` and
+`registryHealth`.
+
+Inspection preserves the recorded status and nullable PID. It never reports
+`cleaned` merely because inspection succeeded.
+
+Missing IDs return `CLEANUP_OPERATION_NOT_FOUND`; a mismatched database returns
+`CLEANUP_ACCESS_PATH_MISMATCH`.
+
+The executable schema accepts these recovery payloads without requiring a
+synthetic root `mode`, `ok`, or `dryRun`.
+
+Evidence: `handleMcpAccessCleanup` in `src/adapters/mcp/canonical-handlers.ts`
+and `cleanupAccessOperationResultContract` in
+`src/adapters/mcp/contracts/bootstrap-result-contracts.ts`.
+
+Public dispatch regression coverage lives in
+`test/adapters/mcp/cleanup-inspection-1830.test.ts`.
 
 ### `access_force_cleanup_orphaned`
 List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.

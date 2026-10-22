@@ -262,7 +262,11 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
     additionalProperties: false,
     properties: {
       operationId: SCHEMA_PROPS.operationId,
-      force: SCHEMA_PROPS.force,
+      force: {
+        ...SCHEMA_PROPS.force,
+        description:
+          "Explicit false inspects registry evidence without mutation or process actions. Omit for existing eligible-operation cleanup. True requests forced cleanup, subject to write and ownership guards.",
+      },
       ...CONFIRMATION_OVERRIDE_BLOCK,
       ...CTX_PROPS,
       ...ACCESS_OVERRIDE,

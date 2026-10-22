@@ -255,7 +255,18 @@ export const cleanupAccessOperationResultContract = defineResultContract({
       cleanup: z.object({
         operationId: z.string(),
         accessPid: z.number().int().nullable(),
-        status: z.literal("cleaned"),
+        status: z.enum([
+          "starting",
+          "running",
+          "completed",
+          "failed",
+          "timed_out",
+          "cleanup_pending",
+          "cleaned",
+          "pid_unknown",
+          "running_untracked",
+          "abandoned",
+        ]),
       }),
       registryHealth,
     })
