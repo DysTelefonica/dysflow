@@ -4,6 +4,8 @@
 
 ### Changes
 
+- fix(deps): patch high @modelcontextprotocol/sdk (runtime and Pi plugin) and vite advisories blocking release (#1856)
+
 - fix(ci): give nightly Access E2E the release E2E budget (#1854)
 - fix(test-vba): report unparsable atom output per atom instead of failing the call (#1852)
 - docs(ops): track 4.4.15 issue queue and release execution (#1851)
