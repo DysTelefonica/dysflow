@@ -44,6 +44,7 @@ Many MCP tools share common context and override parameters:
 * **Operation Safeguards**:
   - `timeoutMs` (number, optional): Operation timeout override in milliseconds.
   - `apply` (boolean, optional): Pass `false` to preview or `true` to apply write actions. The removed `dryRun` input is not accepted.
+  - `dryRunWithPreflight` (boolean, optional, on supported tools): Validate project readiness without executing a write. When combined with `apply:true`, apply takes precedence and retains every normal write and project-readiness guard. A missing or non-write-ready project cannot be bypassed by adding preflight. The legacy `dryRun:true` combination is rejected.
   - `forceSpecialized` (boolean, optional): Available on specialized write-capable and legacy tools. Suppresses additive preferred-tool guidance for an intentional granular call; the dispatcher consumes the flag and never forwards it to the implementation.
 
 ### Preferred-tool warning contract
