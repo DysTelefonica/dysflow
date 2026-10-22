@@ -6,7 +6,7 @@
  * string. The runner tries to decode it and, when that fails, silently treats
  * the atom as passing with no payload — so a malformed envelope read as a pass
  * and its `ok:false` never reached the caller. An output that opens like an
- * envelope (`{`) and does not parse is reported instead, per atom, so every
+ * envelope (`{"` or `{}`) and does not parse is reported instead, per atom, so every
  * other atom of the run is still reported. A plain non-JSON string (`"OK"`)
  * is not an envelope and keeps its existing meaning.
  */
@@ -26,7 +26,9 @@ export type UnparsableAtomOutput = {
 export function detectUnparsableAtomOutput(returnValue: unknown): UnparsableAtomOutput | undefined {
   if (typeof returnValue !== "string") return undefined;
   const trimmed = returnValue.trim();
-  if (!trimmed.startsWith("{")) return undefined;
+  // Only an output that opens like a JSON object (`{"` or `{}`) intends to be
+  // an envelope; a GUID such as `{3F2504E0-…}` is a plain value that passes.
+  if (!/^\{\s*["}]/.test(trimmed)) return undefined;
   try {
     JSON.parse(trimmed);
     return undefined;

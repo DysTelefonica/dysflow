@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { sanitizeConnectStrings, sanitizeSecrets } from "./index.js";
 
 /**
@@ -59,7 +60,10 @@ function sanitizeStringLeaf(value: string, secrets?: readonly string[]): string 
       return redactSensitiveText(value, secrets);
     }
     if (typeof parsed === "object" && parsed !== null) {
-      return JSON.stringify(sanitizeMcpErrorValue(parsed, secrets));
+      const sanitized = sanitizeMcpErrorValue(parsed, secrets);
+      // Re-serializing compacts the text and normalizes numbers and escapes;
+      // keep the original bytes unless redaction actually changed a value.
+      return isDeepStrictEqual(sanitized, parsed) ? value : JSON.stringify(sanitized);
     }
   }
   return redactSensitiveText(value, secrets);

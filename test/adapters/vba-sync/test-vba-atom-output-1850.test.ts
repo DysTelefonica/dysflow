@@ -237,6 +237,28 @@ describe("test_vba atom output — #1850", () => {
     expect(JSON.parse(failure.returnValue)).toEqual({ ok: false, error: "[PATH] [REDACTED]" });
   });
 
+  it("keeps a JSON leaf byte-for-byte when redaction changes nothing in it", () => {
+    const returnValue =
+      '{ "ok": false, "error": "caf\\u00e9", "ratio": 1.0, "id": 12345678901234567890 }';
+    const result = translateCoreResultToMcpContent(
+      failureResult(
+        createDysflowError("VBA_TESTS_FAILED", "1 VBA test(s) failed", {
+          details: { failures: [{ procedure: "Test_X", returnValue }] },
+        }),
+      ),
+    ) as unknown as { error: { details: { failures: Array<{ returnValue: string }> } } };
+
+    expect(result.error.details.failures[0]?.returnValue).toBe(returnValue);
+  });
+
+  it("keeps a GUID-style braced return value a pass, as before", async () => {
+    const result = await runTestVba([atom("Test_Guid", "{3F2504E0-4F89-11D3-9A0C-0305E82C3301}")]);
+
+    expect(result.ok).toBe(true);
+    const data = JSON.parse(result.content[0]?.text ?? "{}") as { passed: number };
+    expect(data.passed).toBe(1);
+  });
+
   it("keeps a plain non-JSON atom return value a pass, as before", async () => {
     const result = await runTestVba([atom("Test_Plain", "OK")]);
 
