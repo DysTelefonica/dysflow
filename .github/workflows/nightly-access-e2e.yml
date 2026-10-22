@@ -23,7 +23,9 @@ jobs:
     name: Full Access E2E on main
     if: github.ref == 'refs/heads/main'
     runs-on: dysflow-e2e
-    timeout-minutes: 30
+    # Same budget as the release E2E validation job (#1821): the full battery
+    # no longer completes within 30 minutes (#1853).
+    timeout-minutes: 60
 
     steps:
       - name: Checkout main schedule revision
