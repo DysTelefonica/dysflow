@@ -104,13 +104,17 @@ Describe "issue #861 — AutoExec gate password fallback" {
                     $db = [PSCustomObject]@{ }
                     $db | Add-Member -MemberType ScriptMethod -Name Containers -Value {
                         param($name)
-                        # No AutoExec script — the common bulk-read case.
-                        return [PSCustomObject]@{ Documents = [System.Collections.ArrayList]::new() }
+                        # No AutoExec script — the common bulk-read case. DAO
+                        # collections expose Refresh, used by the #1841 readback.
+                        $documents = [System.Collections.ArrayList]::new()
+                        Add-Member -InputObject $documents -MemberType ScriptMethod -Name Refresh -Value { }
+                        return [PSCustomObject]@{ Documents = $documents }
                     }
-                    $db | Add-Member -MemberType ScriptMethod -Name Properties -Value {
-                        param($name)
-                        throw "Property '$name' not found"
-                    }
+                    # No StartupForm/AppIcon properties: an empty, refreshable collection.
+                    $properties = [System.Collections.ArrayList]::new()
+                    Add-Member -InputObject $properties -MemberType ScriptMethod -Name Refresh -Value { }
+                    Add-Member -InputObject $properties -MemberType ScriptMethod -Name Delete -Value { param($name) throw "Property '$name' not found" }
+                    $db | Add-Member -MemberType NoteProperty -Name Properties -Value $properties
                     $db | Add-Member -MemberType ScriptMethod -Name Close -Value { }
                     return $db
                 }
