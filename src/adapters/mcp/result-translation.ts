@@ -368,6 +368,7 @@ export type DysflowMcpServices = {
     execute(
       request: AccessQueryRequest,
       onProgress?: (percent: number, total?: number, message?: string) => void,
+      signal?: AbortSignal,
     ): Promise<OperationResult<AccessQueryResult>>;
   };
   diagnosticsService: {

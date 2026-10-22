@@ -3,6 +3,8 @@
  * Lives in the adapter layer — NEVER import this from src/core/.
  */
 export interface McpToolContext {
+  /** SDK request cancellation; consumers must opt in only at safe read boundaries. */
+  signal?: AbortSignal;
   progressToken?: string | number;
   /**
    * Privacy-safe audit evidence accumulated by dispatch wrappers and emitted
