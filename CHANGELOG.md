@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- fix(test-vba): an atom whose output carries text read from files no longer turns the whole `test_vba` call into `MCP_TOOL_ERROR` "Expected double-quoted property name in JSON" (#1850). Error details were serialized, path-stripped as one string and parsed back; the path patterns consumed escaping backslashes and spanned `","` boundaries, and HRESULT advice was appended after the closing brace. `error.details` is now redacted leaf by leaf (`src/core/utils/sanitize-error.ts`, `src/adapters/mcp/result-translation.ts`), and a JSON leaf such as `returnValue` stays valid JSON. An atom whose `{`-envelope does not parse now fails on its own with `cause.code: "ATOM_OUTPUT_UNPARSABLE"` and a bounded `outputExcerpt` instead of passing silently, while the rest of the run is still reported (`src/core/services/vba-atom-output.ts`, `src/adapters/vba-sync/vba-execution-adapter.ts`). Documented in `docs/api/mcp-tools.md` and `skills/dysflow-usage/references/error-codes.md`.
+
 ## [v4.4.14] - 2026-10-06
 
 ### Changes

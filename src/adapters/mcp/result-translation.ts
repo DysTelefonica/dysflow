@@ -24,7 +24,7 @@ import {
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryResult } from "../../core/services/query-service.js";
 import type { AccessVbaResult } from "../../core/services/vba-service.js";
-import { sanitizeMcpErrorMessage } from "../../core/utils/sanitize-error.js";
+import { sanitizeMcpErrorMessage, sanitizeMcpErrorValue } from "../../core/utils/sanitize-error.js";
 import type { AnyExecutableResultContract } from "./contracts/result-contract.js";
 import type { ExplainObject } from "./explain-builder.js";
 import { relatedIssueNumbersForCode } from "./explain-builder.js";
@@ -422,7 +422,9 @@ function sanitizeMcpErrorDetails(
   details: Record<string, unknown>,
   secrets?: readonly string[],
 ): Record<string, unknown> {
-  return JSON.parse(sanitizeMcpErrorMessage(stringifyForMcp(details), secrets)) as Record<
+  // #1850 — redact leaf by leaf; regex-stripping the serialized text could
+  // break its JSON structure and throw away the whole tool result.
+  return sanitizeMcpErrorValue(JSON.parse(stringifyForMcp(details)), secrets) as Record<
     string,
     unknown
   >;

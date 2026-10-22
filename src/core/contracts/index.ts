@@ -417,6 +417,10 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   // the remediation points at the raised message instead. Before this code
   // existed, these failures were reported as PROCEDURE_NOT_CALLABLE and the
   // caller recompiled forever without ever seeing the real error.
+  // #1850 — the atom ran but its result envelope is not valid JSON, so the
+  // runner cannot read its ok/error. The fix is in the atom's JSON builder.
+  ATOM_OUTPUT_UNPARSABLE:
+    "Inspect details.failures[].outputExcerpt, fix the atom's JSON envelope builder (escape backslashes, quotes, and control characters; no trailing commas), then rerun the atom.",
   VBA_RUNTIME_ERROR:
     "The procedure executed and raised. Read details.vbaMessage for the error VBA emitted, then fix the procedure or the data it depends on. Recompiling does not apply.",
 };
