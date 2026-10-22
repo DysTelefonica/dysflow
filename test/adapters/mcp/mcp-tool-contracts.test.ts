@@ -41,16 +41,20 @@ describe("MCP tool contract metadata", () => {
     });
   });
 
-  it("reclassifies run_vba as conditional-write honoring the allowlist/dryRun gate (PR1a #621)", () => {
+  it("reclassifies run_vba as conditional-write honoring the strict-mode allowlist and apply:false plan (#621, #1833)", () => {
     // #777 (Opción A cont.) — only `run_vba` survives; the legacy
     // `dysflow_vba_execute` contract was folded into `aliasContracts.run_vba`.
     expect(getMcpToolContract("run_vba")).toMatchObject({
       access: "conditional-write",
       writeGate: "conditional",
     });
+    // #1833 — run_vba has no dryRun input; the plan path is apply:false and
+    // enforcement depends on procedureStrictMode (see
+    // discovery-contract-truth-1833.test.ts for the runtime-derived anchors).
     const summary = getMcpToolContract("run_vba").summary;
-    expect(summary.toLowerCase()).toContain("allowlist");
-    expect(summary.toLowerCase()).toContain("dryrun");
+    expect(summary).toContain("allowedProcedures");
+    expect(summary).toContain("procedureStrictMode");
+    expect(summary).toContain("apply:false");
   });
 
   it("reclassifies test_vba contract metadata to conditional-write (PR1a #621, runtime gate deferred to PR1b)", () => {
@@ -59,7 +63,8 @@ describe("MCP tool contract metadata", () => {
       writeGate: "conditional",
     });
     const summary = getMcpToolContract("test_vba").summary;
-    expect(summary.toLowerCase()).toContain("allowlist");
+    expect(summary).toContain("allowedProcedures");
+    expect(summary).toContain("procedureStrictMode");
   });
 
   it("defines contract metadata for every modern tool", () => {
