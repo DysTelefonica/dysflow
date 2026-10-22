@@ -36,6 +36,7 @@ import type { CodeGraphVbaInvoker } from "../codegraph-vba/index.js";
 import { nodeConfigFileSystem } from "../config/dysflow-config-node.js";
 import type { AllowedProcedures, StrictMode } from "../mcp/allowed-procedures-resolver.js";
 import { POWERSHELL_EXE, spawnPowerShellProcess } from "../powershell/default-executor.js";
+import { createNodeVbaSourceResolver } from "../services/node-vba-source-resolver.js";
 import {
   type DestinationRootOrchestratorLike,
   withResolvedDestinationRoot,
@@ -415,6 +416,13 @@ export class VbaSyncAdapter implements VbaSyncPort {
         cwd: this.cwd,
         executeMappedTool: (toolName, params, mapping) =>
           this.executeMappedTool(toolName, params, mapping),
+        // #1823 — test_vba resolves each plan name against the SAME source
+        // tree the run targets (per-call destinationRoot honored), exactly as
+        // run_vba's preflight does.
+        resolveSourceResolver: async (params) => {
+          const target = await this.resolveExecutionTarget(params);
+          return target.ok ? createNodeVbaSourceResolver(target.data.destinationRoot) : undefined;
+        },
       },
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
       options.procedureStrictMode, // opt-in enforcement switch for that gate
