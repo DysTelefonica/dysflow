@@ -97,7 +97,11 @@ Execute a public VBA procedure via COM automation. The procedure gate is default
 
 `allowedProcedures` is enforced only when the project declares `capabilities.procedures.strictMode: true`, in which case execution requires a non-empty list containing the requested procedure.
 
-When `procedureStrictMode` is false or unresolved, list membership restricts nothing. Plan mode (`apply:false`) remains non-executing, and the write gate is authoritative either way. * **Parameters**: - `procedureName` (string, **required**):
+When `procedureStrictMode` is false or unresolved, list membership restricts nothing.
+
+Plan mode (`apply:false`) remains non-executing, and the write gate is authoritative either way.
+
+* **Parameters**: - `procedureName` (string, **required**):
 
 Public VBA procedure name to execute. - `moduleName` (string, optional): Target module containing the procedure. - `arguments` (array, optional):
 
