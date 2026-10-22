@@ -212,6 +212,42 @@ describe("test_vba procedure invocation — #1823", () => {
     });
   });
 
+  it("reports the caller's name in data.tests[] on success, with the wire name alongside", async () => {
+    const root = await sourceTree({ Test_Suite: moduleDeclaring("Test_Suite", "Test_Alpha") });
+    const { adapter } = adapterFor(root, passing);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["Test_Suite.Test_Alpha", "Test_Alpha"]),
+      apply: true,
+    });
+
+    if (!result.ok) throw new Error("expected test_vba to pass");
+    const tests = (result.data as { tests: Array<Record<string, unknown>> }).tests;
+    expect(tests.map((entry) => entry.procedure)).toEqual(["Test_Suite.Test_Alpha", "Test_Alpha"]);
+    expect(tests[0]?.invokedProcedureName).toBe("Test_Alpha");
+    expect(tests[1]).not.toHaveProperty("invokedProcedureName");
+  });
+
+  it("reports the caller's name in error.details.results[], agreeing with failures[]", async () => {
+    const root = await sourceTree({ Test_Suite: moduleDeclaring("Test_Suite", "Test_Alpha") });
+    const { adapter } = adapterFor(root, notFound);
+
+    const result = await adapter.execute("test_vba", {
+      proceduresJson: JSON.stringify(["Test_Suite.Test_Alpha"]),
+      apply: true,
+    });
+
+    if (result.ok) throw new Error("expected test_vba to fail");
+    const details = result.error.details as {
+      failures: Array<{ procedure?: string }>;
+      results: Array<Record<string, unknown>>;
+    };
+    expect(details.results[0]?.procedure).toBe("Test_Suite.Test_Alpha");
+    expect(details.results[0]?.invokedProcedureName).toBe("Test_Alpha");
+    expect(details.failures[0]?.procedure).toBe(details.results[0]?.procedure);
+    expect(result.error.message).toContain("Test_Suite.Test_Alpha");
+  });
+
   it("keeps the dry-run plan echoing the caller's original names", async () => {
     const root = await sourceTree({ Test_Suite: moduleDeclaring("Test_Suite", "Test_Alpha") });
     const { adapter, captured } = adapterFor(root, passing);

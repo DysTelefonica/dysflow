@@ -860,6 +860,12 @@ function inspectTestResult(
         isRecord(entry.test) && entry.test.ok === false,
     )
     .map(({ test, index }) => toTestFailureDetail(test, invocationFor(test, index)));
+  // #1823 — every procedure test_vba reports carries the caller's name, so
+  // logs and assertions match what was requested; the wire name rides along
+  // as `invokedProcedureName` only when it differs.
+  const reported = tests.map((test, index) =>
+    isRecord(test) ? withRequestedProcedureName(test, invocationFor(test, index)) : test,
+  );
   if (failures.length === 0) {
     return {
       ...result,
@@ -867,7 +873,7 @@ function inspectTestResult(
         mode: "apply",
         passed: tests.length,
         failed: 0,
-        tests,
+        tests: reported,
       },
     };
   }
@@ -877,7 +883,7 @@ function inspectTestResult(
       details: {
         failedCount: failures.length,
         failures,
-        results: tests,
+        results: reported,
       },
     }),
     {
@@ -937,5 +943,22 @@ function memoizeSourceResolver(resolver: VbaSourceResolver): VbaSourceResolver {
       all ??= resolver.resolveAllModuleSources();
       return all;
     },
+  };
+}
+
+function withRequestedProcedureName(
+  test: Record<string, unknown>,
+  invocation: ProcedureInvocation | undefined,
+): Record<string, unknown> {
+  if (
+    invocation === undefined ||
+    invocation.invokedProcedureName === invocation.requestedProcedureName
+  ) {
+    return test;
+  }
+  return {
+    ...test,
+    procedure: invocation.requestedProcedureName,
+    invokedProcedureName: invocation.invokedProcedureName,
   };
 }
