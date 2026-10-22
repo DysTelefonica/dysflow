@@ -258,10 +258,12 @@ jobs:
       - name: Run PowerShell Pester tests
         shell: pwsh
         run: |
-          if (-not (Get-Module -ListAvailable -Name Pester)) {
-            Install-Module Pester -Force -Scope CurrentUser
+          $pesterVersion = '5.7.1'
+          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object Version -EQ ([version]$pesterVersion))) {
+            Install-Module Pester -RequiredVersion $pesterVersion -Force -Scope CurrentUser
           }
-          Import-Module Pester
+          $pester = Import-Module Pester -RequiredVersion $pesterVersion -Force -PassThru
+          Write-Host "Loaded Pester $($pester.Version)"
           $result = Invoke-Pester -Path scripts/tests -PassThru -Output Minimal
           if ($result.FailedCount -gt 0) { exit 1 }
 
