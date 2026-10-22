@@ -277,7 +277,7 @@ export const SCHEMA_PROPS = {
   dryRunWithPreflight: {
     type: "boolean",
     description:
-      "Issue #977 — run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with `dryRun` and `apply`. A failed preflight returns the specific errorCode from the taxonomy (#962); a successful preflight returns ok:true with a preflight summary. Default false.",
+      "Run the same pre-flight checks as apply:true (filesystem, runtime, capabilities, project config) WITHOUT committing any write. Mutually exclusive with dryRun:true. Explicit apply:true takes precedence and runs the normal apply path, including all write and project-readiness guards. A failed preflight returns the specific readiness error; a successful preflight returns ok:true with a preflight summary. Default false.",
   } as JsonSchemaProperty,
   prune: {
     type: "boolean",

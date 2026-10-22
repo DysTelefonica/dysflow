@@ -80,6 +80,11 @@
 
 ### Fixed
 
+- `fix(mcp)`: combining `dryRunWithPreflight:true` with `apply:true` no longer bypasses the central project-readiness guard (#1831).
+  - The preflight intercept returned straight to the tool handler whenever `apply:true` was also present, so a workspace with no `.dysflow/project.json` reached the service with `isError:false` while plain `apply:true` returned `PROJECT_CONFIG_NOT_WRITE_READY`.
+  - `apply:true` still takes precedence, but now traverses the ordinary write path: process write gate, project `allowWrites`, and project readiness all run before any I/O. Standalone preflight and the `dryRun:true` rejection are unchanged; the `dryRunWithPreflight` schema description now states the apply precedence instead of claiming mutual exclusivity with `apply`.
+  - Paths: `src/adapters/mcp/tools.ts`, `src/shared/validation/schema-props.ts`, `test/adapters/mcp/dryrun-preflight.test.ts`, `docs/api/mcp-tools.md`.
+
 - `fix(install)`: honor `PI_CODING_AGENT_DIR` for every Pi-owned artifact (#1797).
   - `dysflow install --agents pi --no-tui` always resolved the Pi configuration directory as `<home>/.pi/agent`. A Pi-compatible host can select a different agent directory with `PI_CODING_AGENT_DIR`, so with a custom profile active the package, the MCP compatibility entry, the SkillsDir and the harness pointer landed in the conventional profile while the active one stayed untouched — one installation split across two Pi profiles.
   - `resolvePiAgentDir(home, env)` in `src/cli/commands/install/agent-config.ts` is now the single resolver: `path.resolve(PI_CODING_AGENT_DIR)` when that variable is set and non-blank after trimming, `<home>/.pi/agent` otherwise. The three sites that used to build the directory by hand route through it, and `env` is threaded explicitly from every caller instead of being read deep inside a helper.

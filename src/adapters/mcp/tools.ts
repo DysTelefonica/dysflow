@@ -536,36 +536,20 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     return {
       ...tool,
       handler: async (input: unknown, context?: McpToolContext): Promise<McpToolResult> => {
-        // Issue #977 — dryRunWithPreflight intercept. Mutually exclusive
-        // with `dryRun` (set when both flags present → MCP_INPUT_INVALID)
-        // and applied BEFORE the standard requestRequiresWriteReady path.
-        // When preflight is requested, we run the same pre-flight gates as
-        // apply:true WITHOUT performing the write, regardless of whether
-        // the caller also passed `apply:true`. The preflight return shape:
-        //   - failed: projectConfigNotWriteReady (same errorCode path as
-        //     apply:true would have).
-        //   - succeeded: {ok:true, preflight:{passed:true, checks:[...]},
-        //     dryRun:true} WITHOUT invoking the underlying handler.
+        // Standalone preflight validates readiness without invoking I/O.
+        // Explicit apply takes precedence and must traverse the ordinary
+        // write-readiness path below, including every project guard (#1831).
         const inputRecord =
           typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
         const dryRunWithPreflightRequested = inputRecord.dryRunWithPreflight === true;
-        if (dryRunWithPreflightRequested) {
-          // Mutual exclusivity: dryRunWithPreflight + dryRun → MCP_INPUT_INVALID.
-          // dryRunWithPreflight + apply is also mutually exclusive, BUT in
-          // that case apply wins on the existing dispatch seam (per
-          // #977 acceptance criterion "apply takes precedence on the
-          // existing path" — keep that legacy behavior).
-          if (inputRecord.dryRun === true) {
-            return invalidInput(
-              "dryRunWithPreflight is mutually exclusive with dryRun. Pass only one of the two.",
-              "Pass dryRunWithPreflight:true to validate the project's readiness without writing, or dryRun:true to plan the write without preflight. They cannot be combined.",
-              { rejectedFlag: "dryRunWithPreflight", toolName: tool.name },
-            );
-          }
-          // apply:true + dryRunWithPreflight:true — apply wins, legacy behavior.
-          // Forward to the underlying handler unchanged; the preflight
-          // effectively becomes a no-op when apply is set.
-          if (inputRecord.apply === true) return tool.handler(input, context);
+        if (dryRunWithPreflightRequested && inputRecord.dryRun === true) {
+          return invalidInput(
+            "dryRunWithPreflight is mutually exclusive with dryRun. Pass only one of the two.",
+            "Pass dryRunWithPreflight:true to validate the project's readiness without writing, or dryRun:true to plan the write without preflight. They cannot be combined.",
+            { rejectedFlag: "dryRunWithPreflight", toolName: tool.name },
+          );
+        }
+        if (dryRunWithPreflightRequested && inputRecord.apply !== true) {
           // Pure preflight — run the standard projectConfigResolver gate
           // even when this is normally a "dryRun-able" tool path. We must
           // NOT consult requestRequiresWriteReady with the original input
