@@ -54,7 +54,7 @@ describe("ensureProcedureAllowed — strictMode: true restores default-deny", ()
     expect(error?.content[0]?.text).toContain("MCP_ALLOWLIST_NOT_CONFIGURED");
     expect(error?.content[0]?.text).toContain("DeleteAll");
     expect(error?.content[0]?.text).toContain("allowedProcedures");
-    expect(error?.content[0]?.text).toContain("dryRun");
+    expect(error?.content[0]?.text).toContain("apply:false");
   });
 
   it("refuses when allowedProcedures is empty AND dryRun is not true", () => {

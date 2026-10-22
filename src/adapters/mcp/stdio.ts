@@ -405,8 +405,22 @@ export async function startWithSdkServer(
         extra.sendNotification(n as Parameters<typeof extra.sendNotification>[0]),
     });
 
-    const context: McpToolContext = { progressToken, sendProgress, auditEvents: [] };
-    const wrappedHandler = wrapWithSanitizer(wrapWithErrorAbsorber(tool.handler));
+    const context: McpToolContext = {
+      progressToken,
+      sendProgress,
+      auditEvents: [],
+      signal: extra.signal,
+    };
+    const wrappedHandler = wrapWithSanitizer(
+      wrapWithErrorAbsorber(async (input, toolContext) => {
+        if (extra.signal.aborted) {
+          throw Object.assign(new Error("Request was cancelled before tool execution."), {
+            code: "MCP_REQUEST_CANCELLED",
+          });
+        }
+        return tool.handler(input, toolContext);
+      }),
+    );
     const result = await wrappedHandler(args, context);
     const invocationRecorder = await resolvePostHandlerInvocationRecorder(
       options,
@@ -822,10 +836,10 @@ export function createDynamicServices(
       },
     },
     queryService: {
-      execute: async (request, onProgress) => {
+      execute: async (request, onProgress, signal) => {
         const res = await resolveService(request);
         if (!res.ok) return failureResult(res.error);
-        return res.services.queryService.execute(request, onProgress);
+        return res.services.queryService.execute(request, onProgress, signal);
       },
     },
     diagnosticsService: {

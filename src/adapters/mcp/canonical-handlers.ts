@@ -248,7 +248,11 @@ export async function handleMcpQueryExecute(
   }
 
   return translateCoreResultToMcpContent(
-    await services.queryService.execute(request, context?.sendProgress),
+    await services.queryService.execute(
+      request,
+      context?.sendProgress,
+      request.mode === "read" ? context?.signal : undefined,
+    ),
   );
 }
 

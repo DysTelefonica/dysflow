@@ -326,7 +326,7 @@ export function buildAliasTools(
       name: "query_sql",
       description: TOOL_DESCRIPTIONS.query_sql,
       inputSchema: querySqlSchema,
-      handler: async (input) => {
+      handler: async (input, context) => {
         // Run schema validation FIRST so type errors surface as schema errors
         // ("sql must be a string", etc.) before the typed builder runs. Then
         // apply the DELTA-010 empty-sql guard via the typed builder.
@@ -353,6 +353,7 @@ export function buildAliasTools(
             }
             return request;
           },
+          context === undefined ? undefined : { signal: context.signal },
         );
       },
     },
