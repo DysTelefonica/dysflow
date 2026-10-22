@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { sanitizeConnectStrings, sanitizeSecrets } from "./index.js";
 
 /**
@@ -14,6 +15,62 @@ import { sanitizeConnectStrings, sanitizeSecrets } from "./index.js";
  * in a single combined pattern (defense against catastrophic backtracking).
  */
 export function sanitizeMcpErrorMessage(message: string, secrets?: readonly string[]): string {
+  return appendRemediationAdvice(message, redactSensitiveText(message, secrets));
+}
+
+/**
+ * Sanitizes structured error data (for example `error.details`) leaf by leaf.
+ *
+ * Issue #1850 — the details used to be serialized, path-stripped as one string,
+ * and parsed back. The path patterns are text heuristics: they consumed the
+ * backslash that escaped a quote, or ran lazily across `","` boundaries, and
+ * the remediation advice was appended after the closing brace. Any of those
+ * turned valid JSON into a SyntaxError that discarded the whole `test_vba`
+ * result. Redacting each string separately cannot change the structure, and
+ * a secret is matched in its raw form instead of its JSON-escaped form.
+ *
+ * Object keys are redacted too. The returned value is always JSON-serializable
+ * plain data (`stringifyForMcp`-normalized input is expected).
+ */
+export function sanitizeMcpErrorValue(value: unknown, secrets?: readonly string[]): unknown {
+  if (typeof value === "string") return sanitizeStringLeaf(value, secrets);
+  if (Array.isArray(value)) return value.map((entry) => sanitizeMcpErrorValue(entry, secrets));
+  if (typeof value === "object" && value !== null) {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      sanitized[redactSensitiveText(key, secrets)] = sanitizeMcpErrorValue(entry, secrets);
+    }
+    return sanitized;
+  }
+  return value;
+}
+
+/**
+ * A string leaf can itself be JSON text — a VBA atom's `returnValue` is its
+ * serialized result envelope. Redact such a leaf structurally too and
+ * re-serialize it, so it stays parseable exactly as `run_vba` returned it.
+ */
+function sanitizeStringLeaf(value: string, secrets?: readonly string[]): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return redactSensitiveText(value, secrets);
+    }
+    if (typeof parsed === "object" && parsed !== null) {
+      const sanitized = sanitizeMcpErrorValue(parsed, secrets);
+      // Re-serializing compacts the text and normalizes numbers and escapes;
+      // keep the original bytes unless redaction actually changed a value.
+      return isDeepStrictEqual(sanitized, parsed) ? value : JSON.stringify(sanitized);
+    }
+  }
+  return redactSensitiveText(value, secrets);
+}
+
+/** Steps 1–3 of {@link sanitizeMcpErrorMessage}: redaction only, no advice. */
+function redactSensitiveText(message: string, secrets?: readonly string[]): string {
   let result = secrets !== undefined ? sanitizeSecrets(message, secrets) : message;
   result = sanitizeConnectStrings(result);
   // UNC paths: \\server\share[\subdir...][\ ]
@@ -39,7 +96,11 @@ export function sanitizeMcpErrorMessage(message: string, secrets?: readonly stri
   result = result.replace(/[A-Za-z]:\\[^\s"',]*/g, "[PATH]");
   // POSIX directory paths: /dir/subdir/...
   result = result.replace(/(?<!\S)\/(?:[^/\s"'<>:]+\/)*[^/\s"'<>:]+/g, "[PATH]");
+  return result;
+}
 
+function appendRemediationAdvice(message: string, sanitized: string): string {
+  let result = sanitized;
   const upperMsg = message.toUpperCase();
   if (
     upperMsg.includes("0X800ADEB9") ||

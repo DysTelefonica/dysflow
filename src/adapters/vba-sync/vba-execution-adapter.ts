@@ -5,6 +5,7 @@ import {
   type OperationResult,
   successResult,
 } from "../../core/contracts/index.js";
+import { detectUnparsableAtomOutput } from "../../core/services/vba-atom-output.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
 import {
   diagnoseNotCallable,
@@ -731,10 +732,12 @@ type VbaTestFailureDetail = {
   durationMs: number | undefined;
   payload: unknown;
   cause?: {
-    code: "PROCEDURE_NOT_CALLABLE" | "VBA_RUNTIME_ERROR";
+    code: "PROCEDURE_NOT_CALLABLE" | "VBA_RUNTIME_ERROR" | "ATOM_OUTPUT_UNPARSABLE";
     retryable: boolean;
     remediation: string;
   };
+  /** #1850 — bounded raw output around the parse failure (ATOM_OUTPUT_UNPARSABLE only). */
+  outputExcerpt?: string;
 };
 
 /** How many failing procedures to name in the human-readable error message. */
@@ -745,6 +748,21 @@ function toTestFailureDetail(
   invocation: ProcedureInvocation | undefined,
 ): VbaTestFailureDetail {
   const error = stringValue(test.error);
+  if (isRecord(test.cause) && test.cause.code === "ATOM_OUTPUT_UNPARSABLE") {
+    return {
+      procedure: invocation?.requestedProcedureName ?? stringValue(test.procedure),
+      error,
+      logs: Array.isArray(test.logs) ? test.logs : [],
+      durationMs: typeof test.durationMs === "number" ? test.durationMs : undefined,
+      payload: test.payload,
+      cause: {
+        code: "ATOM_OUTPUT_UNPARSABLE",
+        retryable: false,
+        remediation: stringValue(test.cause.remediation) ?? "",
+      },
+      outputExcerpt: stringValue(test.outputExcerpt),
+    };
+  }
   const classification = error === undefined ? undefined : classifyVbaRunnerFailure(error);
   const runnerProcedure = stringValue(test.procedure);
   // #1823 — report the caller's name; add the wire name only when it differs.
@@ -824,14 +842,14 @@ function inspectTestResult(
   // wrappers while preserving the existing public MCP apply contract.
   // Continue accepting the legacy singleton and top-level-array shapes so a
   // newer adapter can still consume output from an older packaged script.
-  const tests = Array.isArray(result.data)
+  const runnerTests = Array.isArray(result.data)
     ? result.data
     : isRecord(result.data)
       ? Array.isArray(result.data.tests)
         ? result.data.tests
         : [result.data]
       : undefined;
-  if (tests === undefined) {
+  if (runnerTests === undefined) {
     const failure = failureResult(
       createDysflowError(
         "VBA_MANAGER_INVALID_OUTPUT",
@@ -850,9 +868,14 @@ function inspectTestResult(
   // The runner executes the plan in order, so a result's index is its plan
   // entry. Fall back to the wire name when the counts disagree.
   const invocationFor = (test: Record<string, unknown>, index: number) =>
-    tests.length === invocations.length
+    runnerTests.length === invocations.length
       ? invocations[index]
       : invocations.find((entry) => entry.invokedProcedureName === stringValue(test.procedure));
+  // #1850 — an atom whose envelope does not parse fails on its own, typed,
+  // instead of passing silently; the rest of the run is reported unchanged.
+  const tests: unknown[] = runnerTests.map((test, index) =>
+    isRecord(test) ? withUnparsableOutputFailure(test, invocationFor(test, index)) : test,
+  );
   const failures = tests
     .map((test, index) => ({ test, index }))
     .filter(
@@ -894,6 +917,32 @@ function inspectTestResult(
     },
   );
   return result.metadata === undefined ? failure : { ...failure, metadata: result.metadata };
+}
+
+/**
+ * #1850 — turn an atom whose output opens as a JSON envelope but does not
+ * parse into a typed per-atom failure carrying a bounded excerpt.
+ */
+function withUnparsableOutputFailure(
+  test: Record<string, unknown>,
+  invocation: ProcedureInvocation | undefined,
+): Record<string, unknown> {
+  const unparsable = detectUnparsableAtomOutput(test.returnValue);
+  if (unparsable === undefined) return test;
+  const procedure =
+    invocation?.requestedProcedureName ?? stringValue(test.procedure) ?? "(unknown procedure)";
+  const code = "ATOM_OUTPUT_UNPARSABLE";
+  return {
+    ...test,
+    ok: false,
+    error: `${code}: ${procedure} returned output that is not valid JSON (${unparsable.parseError}).`,
+    cause: {
+      code,
+      retryable: false,
+      remediation: createDysflowError(code, "").remediation ?? "",
+    },
+    outputExcerpt: unparsable.excerpt,
+  };
 }
 
 /**
