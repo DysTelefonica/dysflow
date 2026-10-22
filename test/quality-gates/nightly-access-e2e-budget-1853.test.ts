@@ -13,14 +13,8 @@ function jobTimeoutMinutes(workflowPath: string, jobId: string): number {
 
 describe("nightly Access E2E budget (#1853)", () => {
   it("gives the nightly battery at least the release E2E validation budget", () => {
-    const release = jobTimeoutMinutes(
-      ".github/workflows/release.yml",
-      "e2e-validation",
-    );
-    const nightly = jobTimeoutMinutes(
-      ".github/workflows/nightly-access-e2e.yml",
-      "e2e-validation",
-    );
+    const release = jobTimeoutMinutes(".github/workflows/release.yml", "e2e-validation");
+    const nightly = jobTimeoutMinutes(".github/workflows/nightly-access-e2e.yml", "e2e-validation");
     expect(nightly).toBeGreaterThanOrEqual(release);
   });
 });
