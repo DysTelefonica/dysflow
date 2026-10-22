@@ -67,6 +67,7 @@ export class AccessQueryService {
   async execute(
     request: AccessQueryRequest,
     onProgress?: AccessRunnerProgressCallback,
+    signal?: AbortSignal,
   ): Promise<OperationResult<AccessQueryResult>> {
     if (request.mode === "read" && typeof request.sql === "string" && request.sql.trim() !== "") {
       if (!looksLikeReadOnlySql(request.sql)) {
@@ -98,7 +99,7 @@ export class AccessQueryService {
     const result = await this.runner.run<AccessQueryResult>(
       { kind: "query", request },
       this.config,
-      { onProgress },
+      { onProgress, ...(signal === undefined ? {} : { signal }) },
     );
     return ensureResultShape(result, isRecord);
   }

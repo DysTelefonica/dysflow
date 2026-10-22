@@ -87,7 +87,10 @@ import {
 export type { AccessDiagnosticsRequest, AccessRunnerOperation } from "./access-runner-operation.js";
 export { extractResultPayload, RESULT_MARKER, RunnerResultChannelError };
 
-export type AccessRunnerRunOptions = { onProgress?: AccessRunnerProgressCallback };
+export type AccessRunnerRunOptions = {
+  onProgress?: AccessRunnerProgressCallback;
+  signal?: AbortSignal;
+};
 export type AccessRunner = {
   run<TData = unknown>(
     operation: AccessRunnerOperation,
@@ -200,6 +203,19 @@ export class AccessPowerShellRunner implements AccessRunner {
     config?: DysflowConfig,
     options: AccessRunnerRunOptions = {},
   ): Promise<OperationResult<TData>> {
+    // Only these read requests take the direct read-only DAO path, before
+    // startup suppression or Access.Application activation. Other phases
+    // deliberately remain non-interruptible until their safety is proven.
+    const interruptible =
+      operation.kind === "query" &&
+      operation.request.mode === "read" &&
+      (operation.request.action === undefined || operation.request.action === "query_sql");
+    options = { ...options, signal: interruptible ? options.signal : undefined };
+    if (options.signal?.aborted) {
+      return failureResult(
+        createDysflowError("RUNNER_ABORTED", "Read operation was cancelled before execution."),
+      );
+    }
     if (config === undefined) {
       return failureResult(
         createDysflowError(
@@ -351,6 +367,11 @@ export class AccessPowerShellRunner implements AccessRunner {
     // `runLockedOperation` directly (without going through `run`) still compile.
     heartbeatErrors?: unknown[],
   ): Promise<OperationResult<TData>> {
+    if (options.signal?.aborted) {
+      return failureResult(
+        createDysflowError("RUNNER_ABORTED", "Read operation was cancelled before execution."),
+      );
+    }
     const queryPreflight = await resolveQueryPreflight(
       operation,
       config,
@@ -365,7 +386,17 @@ export class AccessPowerShellRunner implements AccessRunner {
     const finalOperation = queryPreflight.operation;
     const compactRepairTarget = queryPreflight.compactRepairTarget;
 
+    if (options.signal?.aborted) {
+      return failureResult(
+        createDysflowError("RUNNER_ABORTED", "Read operation was cancelled before execution."),
+      );
+    }
     const preflightResult = await this.runPreflightCleanup(config);
+    if (options.signal?.aborted) {
+      return failureResult(
+        createDysflowError("RUNNER_ABORTED", "Read operation was cancelled before execution."),
+      );
+    }
     const operationId = this.operationIdFactory();
     let record = await this.operationRegistry.create({
       operationId,
@@ -400,6 +431,7 @@ export class AccessPowerShellRunner implements AccessRunner {
         accessPath: config.accessDbPath,
         env: buildPowerShellEnvironment(config, finalOperation),
         onProgress: options.onProgress,
+        signal: options.signal,
         onAccessProcessCaptured: async (process) => {
           try {
             // Sanitize free-text marker fields before persisting so secrets
@@ -466,6 +498,13 @@ export class AccessPowerShellRunner implements AccessRunner {
     }
     record = await this.updateOperationFromExecution(record, execution);
     const operationMetadata = toOperationMetadata(record);
+
+    if (execution.aborted) {
+      return failureResult(
+        createDysflowError("RUNNER_ABORTED", "Read operation was cancelled before completion."),
+        { diagnostics, durationMs: execution.durationMs, operation: operationMetadata },
+      );
+    }
 
     if (execution.timedOut) {
       return failureResult(
@@ -564,13 +603,15 @@ export class AccessPowerShellRunner implements AccessRunner {
     record: AccessOperationRecord,
     execution: PowerShellExecutionResult,
   ): Promise<AccessOperationRecord> {
-    const status = execution.timedOut
-      ? "timed_out"
-      : execution.accessProcess === undefined && record.accessPid === null
-        ? "pid_unknown"
-        : execution.exitCode === 0
-          ? "completed"
-          : "failed";
+    const status = execution.aborted
+      ? "failed"
+      : execution.timedOut
+        ? "timed_out"
+        : execution.accessProcess === undefined && record.accessPid === null
+          ? "pid_unknown"
+          : execution.exitCode === 0
+            ? "completed"
+            : "failed";
     return (
       (await this.operationRegistry.update(record.operationId, {
         accessPid: execution.accessProcess?.pid ?? record.accessPid,

@@ -93,9 +93,11 @@ describe("ensureProcedureAllowed — allowlist-not-configured branch emits MCP_A
     expect(error?.content[0]?.text).not.toContain("MCP_PROCEDURE_NOT_ALLOWED");
   });
 
-  it("carries a remediation hint mentioning dryRun and the config file", () => {
+  it("carries a remediation hint naming the apply:false plan and the config file", () => {
+    // #1833 — run_vba declares no dryRun input, so the plan hint is apply:false.
     const error = ensureProcedureAllowed("Anything", undefined, undefined, true);
-    expect(error?.error?.remediation).toContain("dryRun");
+    expect(error?.error?.remediation).toContain("apply:false");
+    expect(error?.error?.remediation).not.toContain("dryRun");
     expect(error?.error?.remediation).toContain(".dysflow/project.json");
   });
 });

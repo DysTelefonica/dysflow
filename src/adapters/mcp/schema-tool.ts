@@ -135,9 +135,16 @@ export type DescribeToolSection = (typeof DESCRIBE_TOOL_SECTIONS)[number];
  * Single parameter descriptor exposed under `ToolSchema.parameters`.
  * Mirrors the issue's TypeScript sketch; the `type` literal is narrow so
  * the consumer can branch without consulting JSON Schema.
+ *
+ * Issue #1833 — a parameter that accepts more than one shape (its
+ * inputSchema property declares `anyOf`) reports `type: "union"` and copies
+ * the accepted alternatives into `anyOf`, so the projection never collapses
+ * the union to the first primitive it happens to recognise.
  */
 export type ToolParameterSchema = {
-  type: "string" | "number" | "boolean" | "object" | "array" | "enum";
+  type: "string" | "number" | "boolean" | "object" | "array" | "enum" | "union";
+  /** Accepted shapes when `type === "union"`, copied from the inputSchema. */
+  anyOf?: Record<string, unknown>[];
   required: boolean;
   description: string;
   enumValues?: string[];
@@ -573,6 +580,25 @@ const ALIAS_INPUT_SCHEMA_OVERRIDES: Record<string, JsonObjectSchema> = {
 
 // ─── Error-code registry ──────────────────────────────────────────────────────
 
+/**
+ * Issue #1833 — the `MCP_WRITES_DISABLED` recovery hint is derived from the
+ * tool's own inputSchema, so it never recommends a flag the schema rejects.
+ * `apply:false` is the canonical plan input; `dryRun:true` is offered only to
+ * a tool that still declares `dryRun` without `apply`.
+ */
+function writesDisabledDescription(inputSchema: JsonObjectSchema): string {
+  const base =
+    'Process-level writes are disabled. Set "allowWrites": true in .dysflow/project.json or restart the MCP with --enable-writes';
+  const properties = inputSchema.properties;
+  if (properties.apply?.type === "boolean") {
+    return `${base}, or retry with apply:false to plan without writing.`;
+  }
+  if (properties.dryRun?.type === "boolean") {
+    return `${base}, or pass dryRun:true to preview.`;
+  }
+  return `${base}. This tool has no non-writing plan input.`;
+}
+
 const WRITE_GATE_ERROR_CODES: ToolErrorCodeSchema[] = [
   {
     code: DESTINATION_ROOT_NOT_FOUND,
@@ -639,11 +665,23 @@ const READ_ONLY_ERROR_CODES: ToolErrorCodeSchema[] = [
 function parameterFromJsonSchema(
   name: string,
   property:
-    | { type?: string; enum?: unknown[]; const?: unknown; description?: string; default?: unknown }
+    | {
+        type?: string;
+        enum?: unknown[];
+        const?: unknown;
+        description?: string;
+        default?: unknown;
+        anyOf?: unknown[];
+      }
     | undefined,
   required: boolean,
 ): ToolParameterSchema {
-  const jsonType = property?.type ?? "string";
+  const alternatives = Array.isArray(property?.anyOf)
+    ? property.anyOf.filter(
+        (alt): alt is Record<string, unknown> => typeof alt === "object" && alt !== null,
+      )
+    : [];
+  const jsonType = property?.type ?? (alternatives.length > 0 ? "union" : "string");
   const isEnum = Array.isArray(property?.enum) && property.enum.length > 0;
   let narrowType: ToolParameterSchema["type"];
   switch (jsonType) {
@@ -663,6 +701,9 @@ function parameterFromJsonSchema(
     case "enum":
       narrowType = "enum";
       break;
+    case "union":
+      narrowType = "union";
+      break;
     default:
       narrowType = isEnum ? "enum" : "string";
       break;
@@ -674,6 +715,9 @@ function parameterFromJsonSchema(
   };
   if (isEnum) {
     result.enumValues = (property?.enum ?? []).map((value) => String(value));
+  }
+  if (narrowType === "union") {
+    result.anyOf = alternatives.map((alt) => structuredClone(alt));
   }
   if (property?.const !== undefined) result.expectedValue = property.const;
   if (property?.default !== undefined) {
@@ -926,6 +970,7 @@ function parametersFromInputSchema(
         enum?: unknown[];
         description?: string;
         default?: unknown;
+        anyOf?: unknown[];
         requiredWith?: readonly string[];
       },
       requiredSet.has(name),
@@ -970,11 +1015,19 @@ function isWriteClassAccess(access: McpToolAccess): boolean {
   return access === "read-write" || access === "conditional-write";
 }
 
-function errorCodesForTool(name: string, access: McpToolAccess): ToolErrorCodeSchema[] {
+function errorCodesForTool(
+  name: string,
+  access: McpToolAccess,
+  inputSchema: JsonObjectSchema,
+): ToolErrorCodeSchema[] {
   const writeClass = isWriteClassAccess(access);
   const codes = !writeClass
     ? READ_ONLY_ERROR_CODES.map((entry) => ({ ...entry }))
-    : WRITE_GATE_ERROR_CODES.map((entry) => ({ ...entry }));
+    : WRITE_GATE_ERROR_CODES.map((entry) =>
+        entry.code === MCP_WRITES_DISABLED
+          ? { ...entry, description: writesDisabledDescription(inputSchema) }
+          : { ...entry },
+      );
   if (name === "query_execute") {
     codes.push({
       code: "INVALID_READ_ONLY_QUERY",
@@ -1142,7 +1195,7 @@ function buildSchemaForTool(name: string): ToolSchema {
       type: "object",
       schema: { ...MCP_TOOL_RESULT_JSON_SCHEMA },
     },
-    errorCodes: errorCodesForTool(name, access),
+    errorCodes: errorCodesForTool(name, access, inputSchema),
     crossReferences,
     requiredCapabilities: requiredCapabilitiesForTool(access),
     safeByDefault: safeByDefaultForTool(name, access),

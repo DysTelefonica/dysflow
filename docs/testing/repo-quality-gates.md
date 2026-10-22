@@ -96,6 +96,16 @@ The hosted subset is pinned by
 `test/quality-gates/ci-workflow.test.ts` and runs in the existing
 `windows-integration-smoke` job:
 
+Smoke applicability comes from changed paths in `scripts/check-documentation-quality.mjs`,
+including both rename endpoints.
+
+Documentation, `skills/`, and `.team-skills.yaml` alone skip smoke. Source or
+script changes require it regardless of branch name.
+
+The classifier emits `windows_smoke_required`; the job condition and final CI
+aggregate consume that same output. Applicable smoke that fails or is skipped
+cannot pass the aggregate (#1832).
+
 - `test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts`
 - `test/e2e/mcp-catalog-dryrun.e2e.test.ts`
 - `test/e2e/mcp-harness-watchdog.e2e.test.ts`
@@ -169,6 +179,11 @@ reorganization) and violate the [testing philosophy](./testing-philosophy.md) no
   `PowerShellExecutor` — no `.ps1` file reads.
 
 **Gate**: run `pnpm test:ps1` when Pester coverage for PowerShell contracts changes.
+
+The Windows smoke workflow selects Pester **5.7.1** explicitly for installation
+and import. A different preinstalled version does not satisfy the requirement.
+
+The step reports the loaded version before running `scripts/tests` (#1835).
 
 Call out skipped Pester execution with an explicit reason, such as no `pwsh` in the CI
 environment for that run.

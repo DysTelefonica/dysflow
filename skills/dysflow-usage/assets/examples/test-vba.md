@@ -44,8 +44,7 @@ Execute the validated VBA test manifest after the human-compile gate is clear.
 - `apply`
 - `testsPath`
 - `proceduresJson`
-- `filter` (substring match against procedure names — typed `string`)
-- `testFilter` (object-shape filter, e.g. `{tag: "issue-82"}` — introduced by #1442; untyped so JSON shapes pass the boundary validator)
+- `filter` — one parameter, two shapes (#1442, #1833). A string (`"smoke"` or `"smoke|regression"`) matches name, procedure or tags by case-insensitive substring; an object `{ "tag": "issue-82" }` matches tags only. The live schema advertises both as `anyOf`, and `describe_tool` reports `type: "union"`.
 - `timeoutMs`
 
 ## Call shape
@@ -100,7 +99,7 @@ Replace these placeholders with values from your worktree (HR-10, HR-11):
 - `cwd`: TODO -- worktree root, or omit for the startup worktree.
 - `accessPath` / `backendPath`: TODO -- only if resolving a non-default frontend/backend.
 - `apply`: TODO -- `false` to plan, `true` to commit (default plans in `safe-by-default`).
-- `filter` (string OR object): TODO -- for substring use `filter`; for object shapes (e.g. `{tag: "..."}`) use the dedicated `testFilter` parameter introduced by #1442.
+- `filter` (string OR `{ tag }` object): TODO -- a string for name/procedure/tag substring match, or `{ "tag": "..." }` for tags only. There is no separate `testFilter` input.
 - For `query_execute`: `mode` is REQUIRED (`read` or `write`, never omitted).
 - For confirmation flags: `implements_check` + `confirmedRequiresConfirmation:true` paired (NEVER legacy `dryRun:true` / `options.confirm:true` / `confirmPid:N` -- HR-9, migration map in `dysflow-usage` section 6).
 - Other tool-specific runtime values per `describe_tool({name:'test_vba'})`.

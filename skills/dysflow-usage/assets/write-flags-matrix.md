@@ -43,7 +43,7 @@
 |---|---|---|---|---|
 | `test_vba` | `plan` | `[]` | `critical-write` | Executes the validated test manifest. **Block on `humanCompilePending === true`** before invoking (HR-1 of `dysflow-arnes`). `apply:true` commits and runs; `apply:false` is the documented opt-out when `capabilities.procedures.strictMode: true` is set and `allowedProcedures` is empty. Without `strictMode` the procedure gate refuses nothing. |
 
-> **`test_vba` filter shape (post #1442):** the legacy `filter` (typed `string`) is preserved as substring match. For object-shape filtering (e.g. `{tag: "issue-82"}`) use the dedicated `testFilter` parameter (untyped at the boundary; shape handed to `parseTestFilter`). Both are optional.
+> **`test_vba` filter shape (#1442, #1833):** `filter` accepts a string (substring match on name, procedure or tags) or an object `{tag: "issue-82"}` (tags only). The inputSchema advertises both shapes as `anyOf` and `describe_tool` reports `type: "union"`; `parseTestFilter` rejects every other object with `MCP_INPUT_INVALID`. There is no separate `testFilter` input.
 
 ### forms (12 tools)
 

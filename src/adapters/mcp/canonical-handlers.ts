@@ -1,13 +1,13 @@
 import { join } from "node:path";
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
-import { successResult } from "../../core/contracts/index.js";
+import { createDysflowError, failureResult, successResult } from "../../core/contracts/index.js";
 import type { AccessOperationListEntry } from "../../core/operations/access-operation-registry.js";
 import {
   type AccessOperationRegistryHealth,
   listRecentAccessOperations,
   resolveAccessOperationRegistry,
 } from "../../core/operations/access-operation-registry.js";
-import { isRecord } from "../../core/utils/index.js";
+import { isRecord, normalizePathForMatching } from "../../core/utils/index.js";
 import {
   type AllowedProcedures,
   resolveAllowedProceduresFor,
@@ -248,7 +248,11 @@ export async function handleMcpQueryExecute(
   }
 
   return translateCoreResultToMcpContent(
-    await services.queryService.execute(request, context?.sendProgress),
+    await services.queryService.execute(
+      request,
+      context?.sendProgress,
+      request.mode === "read" ? context?.signal : undefined,
+    ),
   );
 }
 
@@ -293,6 +297,46 @@ export async function handleMcpAccessCleanup(
   }
   const confirmation = enforceRequiresConfirmation(input, "cleanup_access_operation");
   if (confirmation !== undefined) return confirmation;
+  const request = buildRequest(input);
+  if (isMcpToolResult(request)) return request;
+  // Explicit false is an inspection, even for stale records. Omitting force
+  // retains the existing recovery path; never call cleanup during inspection.
+  if (isRecord(input) && input.force === false) {
+    const registry = resolveAccessOperationRegistry(services.operationRegistry);
+    const record = await registry.get(request.operationId);
+    if (record === undefined) {
+      return translateCoreResultToMcpContent(
+        failureResult(
+          createDysflowError(
+            "CLEANUP_OPERATION_NOT_FOUND",
+            `Operation ${request.operationId} was not found.`,
+          ),
+        ),
+      );
+    }
+    if (
+      normalizePathForMatching(record.accessPath) !== normalizePathForMatching(request.accessPath)
+    ) {
+      return translateCoreResultToMcpContent(
+        failureResult(
+          createDysflowError(
+            "CLEANUP_ACCESS_PATH_MISMATCH",
+            "Cleanup refused because accessPath does not match the registered operation.",
+          ),
+        ),
+      );
+    }
+    return translateCoreResultToMcpContent(
+      successResult({
+        cleanup: {
+          operationId: record.operationId,
+          accessPid: record.accessPid,
+          status: record.status,
+        },
+        registryHealth: registry.getHealth(),
+      }),
+    );
+  }
   if (services.cleanupService === undefined) {
     return {
       content: [
@@ -305,8 +349,6 @@ export async function handleMcpAccessCleanup(
       ok: false,
     };
   }
-  const request = buildRequest(input);
-  if (isMcpToolResult(request)) return request;
   // `force: true` escalates cleanup to a destructive operation (it retires operations with an
   // unknown/null PID and bypasses the eligible-status guard to kill processes). Gate that
   // escalation behind the MCP write-gate. The non-force path stays open as a safe recovery route.
