@@ -10,10 +10,16 @@ const docPath = (path) =>
   (/^[^/]+\.md$/i.test(path) || /^docs\/.+\.md$/i.test(path)) && !excluded.test(path);
 export function classifyChanges(changes) {
   if (!Array.isArray(changes) || changes.length === 0)
-    return { codeRequired: true, docsChanged: false, applicableDocs: [] };
+    return {
+      codeRequired: true,
+      windowsSmokeRequired: true,
+      docsChanged: false,
+      applicableDocs: [],
+    };
   const known = /^(?:A|C\d*|D|M|R\d*|T)$/;
   const paths = [];
   let codeRequired = false;
+  let windowsSmokeRequired = false;
   for (const change of changes) {
     if (
       !known.test(change.status) ||
@@ -22,13 +28,27 @@ export function classifyChanges(changes) {
       change.paths.some((p) => typeof p !== "string" || !p)
     ) {
       codeRequired = true;
+      windowsSmokeRequired = true;
       continue;
     }
     paths.push(...change.paths);
     if (change.paths.some((path) => !docPath(path))) codeRequired = true;
+    // Catalog propagation does not exercise this repository's Access boundary.
+    // Inspect every rename endpoint; branch names never establish applicability.
+    if (
+      change.paths.some(
+        (path) => !docPath(path) && !path.startsWith("skills/") && path !== ".team-skills.yaml",
+      )
+    )
+      windowsSmokeRequired = true;
   }
   const applicableDocs = [...new Set(paths.filter(docPath))];
-  return { codeRequired, docsChanged: applicableDocs.length > 0, applicableDocs };
+  return {
+    codeRequired,
+    windowsSmokeRequired,
+    docsChanged: applicableDocs.length > 0,
+    applicableDocs,
+  };
 }
 const repositoryPath = (documentPath, link) =>
   posix
@@ -207,7 +227,7 @@ async function main() {
   if (options["github-output"])
     await appendFile(
       options["github-output"],
-      `code_required=${result.codeRequired}\ndocs_changed=${result.docsChanged}\n`,
+      `code_required=${result.codeRequired}\nwindows_smoke_required=${result.windowsSmokeRequired}\ndocs_changed=${result.docsChanged}\n`,
     );
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))

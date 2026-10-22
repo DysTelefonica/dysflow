@@ -154,6 +154,8 @@ export type PowerShellExecutionResult = {
 };
 
 export type PowerShellExecutorOptions = {
+  /** Cancellation for a caller-verified interruptible operation, never an active write. */
+  signal?: AbortSignal;
   timeoutMs: number;
   operationId: string;
   accessPath: string;
