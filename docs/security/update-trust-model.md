@@ -210,6 +210,28 @@ child's environment unless the caller explicitly passes them via `options.env`.
 The `buildChildEnv` function enforces this allowlist; callers cannot accidentally forward
 the full host environment by omission.
 
+## VBA manager startup suppression
+
+Before `Open-AccessDatabase` opens a frontend, `Disable-StartupFeatures` in
+`scripts/dysflow-vba-manager.ps1` renames an existing AutoExec macro.
+
+It also removes existing StartupForm and AppIcon properties through DAO.
+
+It refreshes both collections and reads them back to verify no entry remains. Absent
+entries are supported.
+
+A rename, deletion, or verification failure raises the `CRITICAL` abort before the
+frontend opens.
+
+The caller seeds restoration metadata before suppression starts. Its existing catch
+restores partial changes when suppression aborts.
+
+`--allow-startup-execution` keeps skipping suppression by explicit opt-in.
+
+Evidence: the isolated DAO fault-injection tests in
+`scripts/tests/dysflow-vba-manager-startup-suppression-1841.Tests.ps1`. They exercise the
+pre-open boundary without launching Access.
+
 ## Callers
 
 | Caller | File | Args source |
