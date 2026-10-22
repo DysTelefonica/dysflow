@@ -1,5 +1,25 @@
 # Changelog
 
+## [v4.4.15] - 2026-10-22
+
+### Changes
+
+- fix(ci): give nightly Access E2E the release E2E budget (#1854)
+- fix(test-vba): report unparsable atom output per atom instead of failing the call (#1852)
+- docs(ops): track 4.4.15 issue queue and release execution (#1851)
+- fix(mcp): keep readiness guard when preflight is combined with apply (#1849)
+- fix(install): reconcile the gentle-shell Pi profile on install, update and uninstall (#1847)
+- fix(mcp): validate cleanup_access_operation results against its canonical contract (#1844)
+- fix(test-vba): resolve plan names through the run_vba invocation seam (#1846)
+- fix(vba-manager): fail closed on partial startup suppression (#1843)
+- fix(mcp): propagate request cancellation to read SQL execution (#1848)
+- fix(mcp): align discovery metadata with accepted inputs and procedure gate (#1842)
+- fix(ci): pin Windows smoke Pester to 5.7.1 (#1845)
+- fix(runner): fail closed on partial startup suppression (#1839)
+- test(access-com): give COM lifecycle doubles writable UserControl/Visible (#1840)
+- fix(ci): require Windows smoke by changed paths (#1837)
+
+
 ## [Unreleased]
 
 ### Fixed
