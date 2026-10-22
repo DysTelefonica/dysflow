@@ -1,7 +1,7 @@
 /**
  * Round-12 / Issue #977 — `dryRunWithPreflight: true` for write-tools.
  *
- * Adds a new input flag (mutually exclusive with `dryRun` and `apply`)
+ * Adds a new input flag (mutually exclusive with `dryRun`; `apply:true` wins)
  * that runs the same pre-flight checks as `apply: true` (filesystem,
  * runtime, capabilities, project config) WITHOUT performing any write.
  * Closes the false-confidence gap exposed by #962 — today
@@ -314,7 +314,71 @@ describe("dryRunWithPreflight — failed preflight replicates apply failure (#97
   });
 });
 
-// ─── Acceptance criterion (3) — dryRunWithPreflight is mutually exclusive with dryRun/apply ─
+describe("combined apply/preflight preserves write guards (#1831)", () => {
+  it.each([false, true])(
+    "rejects missing configuration before I/O (preflight=%s)",
+    async (preflight) => {
+      const root = mkdtempSync(join(tmpdir(), "dysflow-1831-missing-"));
+      freshRoots.push(root);
+      writeFileSync(join(root, ".git"), "gitdir: isolated-fixture");
+      const services = makeServices();
+      const tools = createDysflowMcpTools({
+        services: services as unknown as DysflowMcpServices,
+        writes: true,
+        cwd: root,
+        projectConfigResolver: (input) =>
+          diagnoseProjectConfig(root, input as Record<string, string>),
+      });
+      const result = await callTool(tools, "export_modules", {
+        moduleNames: ["Example"],
+        projectId: "app",
+        apply: true,
+        ...(preflight ? { dryRunWithPreflight: true } : {}),
+        destinationRoot: join(root, "src"),
+        implements_check: "export_overwrites_source_precheck",
+        confirmedRequiresConfirmation: true,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.error?.code).toBe("PROJECT_CONFIG_NOT_WRITE_READY");
+      expect(services.vbaSyncToolService.requests).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["process", false, true, "MCP_WRITES_DISABLED"],
+    ["project", true, false, "CAPABILITIES_DISALLOW_WRITE"],
+  ] as const)("retains the %s write gate", async (_gate, writes, allowWrites, code) => {
+    const root = makeRootWithConfig({
+      id: "app",
+      accessPath: "app.accdb",
+      destinationRoot: "src",
+      capabilities: { allowWrites },
+    });
+    const services = makeServices();
+    const tools = createDysflowMcpTools({
+      services: services as unknown as DysflowMcpServices,
+      writes,
+      allowWrites,
+      cwd: root,
+      projectConfigResolver: (input) =>
+        diagnoseProjectConfig(root, input as Record<string, string>),
+    });
+    const result = await callTool(tools, "export_modules", {
+      moduleNames: ["Example"],
+      projectId: "app",
+      apply: true,
+      dryRunWithPreflight: true,
+      destinationRoot: join(root, "src"),
+      implements_check: "export_overwrites_source_precheck",
+      confirmedRequiresConfirmation: true,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.error?.code).toBe(code);
+    expect(services.vbaSyncToolService.requests).toEqual([]);
+  });
+});
+
+// ─── Acceptance criterion (3) — preflight exclusivity and apply precedence ─
 
 describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
   it("dryRunWithPreflight + dryRun both set returns MCP_INPUT_INVALID (documented behavior)", async () => {
@@ -349,8 +413,8 @@ describe("dryRunWithPreflight — flag exclusivity (#977)", () => {
       confirmedRequiresConfirmation: true,
       // Issue #1226 — destinationRoot gate must pass before the
       // dryRun/apply exclusivity test reaches the dispatch seam.
-      destinationRoot: `${root}/scratch-1226`,
-      exportPath: `${root}/scratch-1226`,
+      destinationRoot: join(root, "src"),
+      exportPath: join(root, "src"),
     });
     // apply wins on the existing dispatch seam — the preflight is
     // bypassed and the call runs the apply path. The apply path
