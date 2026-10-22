@@ -97,7 +97,11 @@ Execute a public VBA procedure via COM automation. The procedure gate is default
 
 `allowedProcedures` is enforced only when the project declares `capabilities.procedures.strictMode: true`, in which case execution requires a non-empty list containing the requested procedure.
 
-Plan mode remains non-executing, and the write gate is authoritative either way. * **Parameters**: - `procedureName` (string, **required**):
+When `procedureStrictMode` is false or unresolved, list membership restricts nothing.
+
+Plan mode (`apply:false`) remains non-executing, and the write gate is authoritative either way.
+
+* **Parameters**: - `procedureName` (string, **required**):
 
 Public VBA procedure name to execute. - `moduleName` (string, optional): Target module containing the procedure. - `arguments` (array, optional):
 
@@ -514,9 +518,11 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
 * **`fix_encoding`**: Normalize leading UTF-8 BOM artifacts in source files and round-trip affected module encoding in the binary. It does not restore lossy mojibake characters.
   - Parameters: `location` (string, optional), `timeoutMs` (number, optional)
 * **`test_vba`**: Execute VBA unit tests.
-  - Parameters: `proceduresJson` (string, optional), `filter` (string, optional), `testsPath` (string, optional), `timeoutMs` (number, optional)
+  - Parameters: `proceduresJson` (string, optional), `filter` (string or `{ tag }` object, optional), `testsPath` (string, optional), `apply` (boolean, optional), `timeoutMs` (number, optional)
+  - `filter` accepts a string (`"smoke"` or `"smoke|regression"`, case-insensitive substring over name, procedure and tags) or an object `{ "tag": "smoke" }` (tags only). The inputSchema declares both shapes as `anyOf`; the `schema` and `describe_tool` parameter projections report `type: "union"` with the same `anyOf` alternatives. Any other object is rejected with `MCP_INPUT_INVALID`.
+  - With writes disabled, `MCP_WRITES_DISABLED` recovery is `apply:false` (plan without executing); `test_vba` has no `dryRun` input.
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
-  - Stdio `test_vba` enforces `allowedProcedures` only under `capabilities.procedures.strictMode: true`; without it, no list restricts the plan. Under `strictMode`, a missing or empty list still imposes no restriction and a non-empty list is a whitelist applied atomically to the resolved plan. HTTP `/vba/test` ignores `strictMode` and remains default-deny because it is a network surface.
+  - Stdio `test_vba` enforces `allowedProcedures` only under `capabilities.procedures.strictMode: true` (`procedureStrictMode` in `get_capabilities`); when it is false or unresolved, no list restricts the plan. Under `strictMode`, a missing or empty list still imposes no restriction and a non-empty list is a whitelist applied atomically to the resolved plan. HTTP `/vba/test` ignores `strictMode` and remains default-deny because it is a network surface.
   - On failure the result is `ok: false` with code `VBA_TESTS_FAILED`. The message names the failing procedures, and `error.details` carries the structured per-procedure report: `{ failedCount, failures[], results[] }`, where each failure keeps `procedure`, `error`, `logs`, `durationMs`, and `payload`.
   - Each plan name goes to `Access.Application.Run` through the same resolution as `run_vba` (#1787, #1823). A `<module>.<procedure>` name whose module is in this project's source and declares the procedure is sent bare; any other qualifier, such as a referenced database, is sent verbatim. The plan, the allowlist, `data.tests[]`, `error.details.results[]` and `failures[]` keep the caller's name in `procedure`; `invokedProcedureName` appears only when the wire name differs.
   - A `PROCEDURE_NOT_CALLABLE` cause is diagnosed from the source, not the name's shape. A procedure declared in a module of the same name gets `retryable: false` and a rename remediation, because Access resolves that name to the module and recompiling cannot help. An unverified qualifier is named as the suspect; otherwise the recompile remediation stands. `run_vba` gives the same diagnosis.
@@ -776,6 +782,17 @@ Custom behaviors layered on top of the SDK (preserved from the previous hand-rol
 - Tool handler exceptions are absorbed into `{ isError: true }` results — they never propagate as JSON-RPC `-32603` internal errors.
 - Error messages have Windows/UNC/POSIX paths scrubbed before reaching the client.
 - A 1 MiB per-line size guard (`SizeLimitTransform`) sits between `process.stdin` and the SDK transport.
+
+### Request cancellation (#1834)
+
+The SDK request signal (`notifications/cancelled`) reaches `McpToolContext.signal`. Evidence: `src/adapters/mcp/stdio.ts`.
+
+- A request already cancelled when its handler would start does not run the tool and starts no I/O.
+- Only read SQL is interruptible: `query_execute` with `mode:"read"` and `query_sql`. The signal flows through `AccessQueryService.execute` and `AccessPowerShellRunner.run` to the PowerShell executor, which terminates the PowerShell child it owns. Evidence: `src/core/runner/access-runner.ts`.
+- A read cancelled while queued behind the per-database lock still waits for its turn, then returns without spawning PowerShell. Lock waiting itself is not interrupted.
+- Cancellation reports `RUNNER_ABORTED`; a timeout still reports `RUNNER_TIMEOUT`. The two are never merged.
+- Every other tool, including `query_execute` with `mode:"write"`, is non-cancellable. An active write runs to completion and its real outcome is recorded; cancellation never claims a rollback.
+- Cancellation never kills a process by name. Only the PowerShell child spawned by that request is terminated.
 
 ---
 

@@ -1117,8 +1117,8 @@ export function procedureNotAllowed(
 
 /**
  * Issue #757 (F6) — gate-rejection envelope for the allowlist-NOT-configured
- * branch (project declares no `allowedProcedures` and the caller did not pass
- * `dryRun:true`). Distinct from `procedureNotAllowed` (which fires when an
+ * branch (project declares no `allowedProcedures` and the caller did not ask
+ * for a plan with `apply:false`). Distinct from `procedureNotAllowed` (which fires when an
  * allowlist IS configured but the requested procedure is absent) and from the
  * generic schema-rejection `invalidInput`. Emits the new
  * `MCP_ALLOWLIST_NOT_CONFIGURED` code in BOTH the legacy `content[0].text`
@@ -1134,7 +1134,7 @@ export function allowlistNotConfigured(
     `allowlist, which refuses everything. In .dysflow/project.json either ` +
     `declare 'capabilities.procedures.allow' (re-read per call — no server ` +
     `restart is needed), or drop 'strictMode' to return to the default where ` +
-    `the write gate alone decides. Pass dryRun:true to plan without executing.`;
+    `the write gate alone decides. Retry with apply:false to plan without executing.`;
   const message =
     `Refusing to execute VBA procedure '${procedureName}': project config declares ` +
     `no allowedProcedures allowlist. ${remediation}`;

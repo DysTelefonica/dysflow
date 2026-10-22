@@ -152,6 +152,16 @@ export function spawnPowerShellProcess(
   options: PowerShellProcessOptions,
 ): Promise<PowerShellProcessResult> {
   const startedAt = Date.now();
+  if (options.signal?.aborted) {
+    return Promise.resolve({
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      durationMs: 0,
+      timedOut: false,
+      aborted: true,
+    });
+  }
   const childEnv = buildChildEnv(options.env);
   const resolvedCommand = resolvePowerShellExecutable(options.command, { env: childEnv });
   if (resolvedCommand === undefined) {
@@ -314,6 +324,7 @@ export function createDefaultPowerShellExecutor(): PowerShellExecutor {
       args,
       timeoutMs: options.timeoutMs,
       env: options.env,
+      signal: options.signal,
       onStderr: (text) => {
         pending += text;
         let newlineIndex = pending.indexOf("\n");
