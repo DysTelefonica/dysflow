@@ -174,6 +174,7 @@ describe("SCHEMA_PROPS — shared schema property atoms", () => {
       "replace",
       "strict_write",
       "erdPath",
+      "acknowledgeCodeBehindWins",
       "catalogPath",
       "specPath",
       "spec",
