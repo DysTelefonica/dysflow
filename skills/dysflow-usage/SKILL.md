@@ -253,6 +253,15 @@ tool has a kebab-case `.md` example file there.
 `generate_erd` is a documentation export: with the output inside the project
 root it runs with writes disabled. See `assets/examples/generate-erd.md`.
 
+## `lint_module` p_Error rules (#1863)
+
+Four rules check the error-propagation convention. They run by default and apply only to methods that declare `p_Error`; legacy methods without it stay clean.
+
+- `error-param-last` (error): `p_Error` must be the last parameter, declared `Optional ByRef p_Error As String`.
+- `error-propagation-check` (error): a call to another `p_Error` method in the same module must be followed by `If <var> <> "" Then`. Omitting the argument is a `warning`.
+- `error-handler-writes-perror` (error): the `On Error GoTo` handler must assign `p_Error` and must not `MsgBox` or `Err.Raise`.
+- `test-ignores-perror` (error): a `Test_*` function must use the `p_Error` it receives from a `p_Error` method.
+
 ## `verify_code` decision contract
 
 Use `actionableOk` and `recommendedAction` as the sync gate. Raw `ok` means
