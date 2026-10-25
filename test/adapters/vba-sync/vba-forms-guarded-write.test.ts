@@ -126,6 +126,9 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
       expect(result.error.details).toMatchObject({
         cause: expect.objectContaining({ code: "IMPORT_FAILED" }),
         rollback: { attempted: true, applied: true, targetExisted: true },
+        // Issue #1868 — the envelope states what happened to each side.
+        sourceUnchanged: true,
+        binaryState: "unverified",
       });
     }
     // 1 mutation write + 1 rollback write; import_modules invoked exactly once.
@@ -195,6 +198,9 @@ describe("applyGuardedFormWrite — internal seam (PR 4 contract)", () => {
           targetExisted: true,
           error: { message: expect.stringContaining("ENOSPC") },
         },
+        // Issue #1868 — a failed restore leaves the source changed; say so.
+        sourceUnchanged: false,
+        binaryState: "unverified",
       });
     }
   });
