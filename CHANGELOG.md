@@ -3406,9 +3406,10 @@ Hardening and maintenance pass from a code-quality review of the MCP runtime.
   numeric bounds, `additionalProperties`).
 
   The only unsupported constructs (numeric enums, integer distinction,
-  `oneOf`/`anyOf`) are unused, so a migration would have added a dependency
-  and ~700 lines for zero behavior change. Revisit if a future schema needs
-  those constructs.
+  `oneOf`/`anyOf`) are unused.
+
+  A migration would have added a dependency and ~700 lines for zero behavior
+  change. Revisit if a future schema needs those constructs.
 
 ## [v1.2.35] - 2026-06-09
 
