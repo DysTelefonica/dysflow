@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runAccessEdit } from "./_helpers/issue-1817-edit-runner.mjs";
 import { runMcpSession } from "./_helpers/mcp-harness.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -18,10 +19,15 @@ const artifacts = [
 ];
 
 function edit(root, action, marker) {
-  const result = spawnSync("powershell.exe", [
-    "-NoProfile", "-NonInteractive", "-File", editor,
-    "-Root", root, "-Action", action, "-Marker", marker,
-  ], { encoding: "utf8", windowsHide: true, timeout: 60000 });
+  // The edit only sets a fixed value, so a retry after a spawn timeout is safe (#1898).
+  const result = runAccessEdit({
+    spawn: spawnSync,
+    env: process.env,
+    args: [
+      "-NoProfile", "-NonInteractive", "-File", editor,
+      "-Root", root, "-Action", action, "-Marker", marker,
+    ],
+  });
   assert.equal(result.status, 0, `External Access edit failed: ${result.stderr || result.error}`);
   assert.match(result.stdout, /ISSUE_1817_EDIT_SAVED/);
 }
