@@ -132,10 +132,16 @@ function argumentVariable(args: string[]): string | undefined {
   return /^\w+$/.test(last) ? last : undefined;
 }
 
+const NON_EMPTY_CHECK_RE = /^If\s+(?:(\w+)\s*<>\s*""|Len\((\w+)\)\s*>\s*0)/i;
+
 function checksVariable(code: string, variable: string): boolean {
-  const escaped = variable.replace(/[$]/g, "\\$");
-  const check = new RegExp(`^If\\s+(?:${escaped}\\s*<>\\s*""|Len\\(${escaped}\\)\\s*>\\s*0)`, "i");
-  return check.test(code);
+  const match = NON_EMPTY_CHECK_RE.exec(code);
+  if (match === null) return false;
+  return (match[1] ?? match[2] ?? "").toLowerCase() === variable.toLowerCase();
+}
+
+function mentionsVariable(line: string, variable: string): boolean {
+  return line.split(/\W+/).some((token) => token.toLowerCase() === variable.toLowerCase());
 }
 
 function lintPropagation(
@@ -179,8 +185,9 @@ function lintTestIgnoresPError(
   for (let i = procedure.declarationIndex + 1; i < procedure.endIndex; i += 1) {
     const site = callSiteOf(codes[i] ?? "", i + 1, targets);
     if (site === undefined || site.errorVar === undefined) continue;
-    const variable = new RegExp(`\\b${site.errorVar}\\b`, "i");
-    const used = codes.slice(i + 1, procedure.endIndex).some((line) => variable.test(line));
+    const used = codes
+      .slice(i + 1, procedure.endIndex)
+      .some((line) => mentionsVariable(line, site.errorVar ?? ""));
     if (used) continue;
     diagnostics.push({
       rule: "test-ignores-perror",
