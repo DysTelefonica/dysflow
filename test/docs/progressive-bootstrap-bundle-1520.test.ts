@@ -23,7 +23,6 @@ function expectProgressiveDiscovery(content: string): void {
 describe("progressive Dysflow discovery bundle (#1520)", () => {
   it.each([
     "skills/dysflow-usage/SKILL.md",
-    "skills/dysflow-arnes/SKILL.md",
     "skills/dysflow-pointer-rollout/assets/pointer.md",
     "skills/dysflow-codegraph-update/SKILL.md",
     "docs/api/mcp-tools.md",
@@ -32,7 +31,8 @@ describe("progressive Dysflow discovery bundle (#1520)", () => {
   });
 
   it("teaches structured result parsing without treating bounded text as canonical (#1636)", async () => {
-    const usage = await text("skills/dysflow-usage/SKILL.md");
+    // #1871 — the parsing rule is HR-13 in dysflow-arnes.
+    const usage = await text("skills/dysflow-arnes/SKILL.md");
 
     expect(usage).toMatch(/prefer `structuredContent` first/i);
     expect(usage).toMatch(/use `content\[0\]\.text` only when it contains the complete payload/i);

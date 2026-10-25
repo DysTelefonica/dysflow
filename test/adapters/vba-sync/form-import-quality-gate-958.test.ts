@@ -76,9 +76,11 @@ function buildAdapter(executor: VbaManagerExecutor, destinationRoot: string) {
   });
 }
 
+// Issue #1866 item 3 — the plan reads the binary through a read-only Export, which
+// is not an import. `calls.count` counts write-capable runner calls only.
 function okExecutor(calls: { count: number }): VbaManagerExecutor {
-  return async () => {
-    calls.count += 1;
+  return async (request) => {
+    if (request.action !== "Export") calls.count += 1;
     return {
       exitCode: 0,
       stdout: "DYSFLOW_RESULT []",
