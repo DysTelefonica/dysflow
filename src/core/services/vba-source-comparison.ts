@@ -1,4 +1,4 @@
-import { extname, parse, relative, resolve } from "node:path";
+import { basename, extname, parse, relative, resolve } from "node:path";
 import type { ResolvedDestinationRoot } from "../config/execution-target.js";
 import {
   createDysflowError,
@@ -370,6 +370,7 @@ export async function compareSourceAgainstBinary(
   const deadlineMs = Date.now() + effectiveTimeoutMs;
   let pendingResult: OperationResult<VbaVerifyResult> | undefined;
   let cleanupTempExportRoot = true;
+  let snapshotRoot: string | undefined;
   const finalize = (result: OperationResult<VbaVerifyResult>): OperationResult<VbaVerifyResult> => {
     pendingResult = result;
     return result;
@@ -390,11 +391,21 @@ export async function compareSourceAgainstBinary(
       return finalize(failureResult(preflightCleanup.error, { durationMs: preflightTimeoutMs }));
     }
     const preflightDiagnostics = diagnosticsFromPreflightCleanup(preflightCleanup.data);
+    // Issue #1866 item 1 — verify_code is read-only. The runner opens the database
+    // with write-capable maintenance (bypass key, startup disable), which rewrites
+    // the committed .accdb even for an export. Export from a disposable copy so
+    // the original file stays byte-identical. A missing database has nothing to
+    // protect: the runner reports it.
+    const exportAccessPath = await snapshotAccessDatabase(target.data.accessPath, fileSystem, {
+      onCreated: (dir) => {
+        snapshotRoot = dir;
+      },
+    });
     const exportTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const request = {
       scriptPath: ctx.scriptPath,
       action: "Export",
-      accessPath: target.data.accessPath,
+      accessPath: exportAccessPath,
       destinationRoot: tempExportRoot,
       moduleNames: requestedModules,
       moduleNamesProvided: requestedModules.length > 0,
@@ -564,6 +575,9 @@ export async function compareSourceAgainstBinary(
       ),
     );
   } finally {
+    if (snapshotRoot !== undefined) {
+      await fileSystem.rm(snapshotRoot, { recursive: true, force: true }).catch(() => undefined);
+    }
     if (cleanupTempExportRoot) {
       const cleanupDiagnostics = await cleanupTempExportRootBounded(
         () => fileSystem.rm(tempExportRoot, { recursive: true, force: true }),
@@ -722,6 +736,29 @@ async function withPhaseTimeout<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Issue #1866 item 1 — copy the Access database to a disposable directory so a
+ * read-only verify never writes the committed file. Returns the original path
+ * unchanged when the file does not exist (the runner reports the missing file)
+ * or when the port cannot copy (optional `copyFile`; the production port always
+ * provides it, pinned by the adapter wiring test).
+ */
+async function snapshotAccessDatabase(
+  accessPath: string | undefined,
+  fileSystem: ComparisonFileSystemPort,
+  hooks: { onCreated: (dir: string) => void },
+): Promise<string | undefined> {
+  if (accessPath === undefined || fileSystem.copyFile === undefined) return accessPath;
+  if (fileSystem.exists !== undefined && !(await fileSystem.exists(accessPath))) {
+    return accessPath;
+  }
+  const dir = await fileSystem.mkdtemp(resolve(fileSystem.tmpdir(), "dysflow-vba-verify-db-"));
+  hooks.onCreated(dir);
+  const snapshotPath = resolve(dir, basename(accessPath));
+  await fileSystem.copyFile(accessPath, snapshotPath);
+  return snapshotPath;
 }
 
 function controlPropertyMismatchFields(
