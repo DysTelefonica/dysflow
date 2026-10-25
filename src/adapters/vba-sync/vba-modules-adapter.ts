@@ -61,6 +61,7 @@ import {
   type FormCodeBehindDivergence,
   type FormSourceDefect,
 } from "./form-source-quality.js";
+import { collectImportLintFindings, type ImportLintFinding } from "./import-lint-gate.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
@@ -72,6 +73,22 @@ import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 // the canonical mutation path per openspec/specs/vba-manager-actions/spec.md.
 // ========================================================================
 
+/** Issue #1863 — one-line description of a lint finding, marked new or inherited. */
+function formatLintFinding(finding: ImportLintFinding): string {
+  const status = finding.inherited ? "inherited" : "new";
+  return `LINT_FINDING: ${finding.file}:${finding.line} [${finding.rule}] ${finding.severity} ${status}: ${finding.message}`;
+}
+
+/** Issue #1863 — an inherited finding as a success-result warning. */
+function lintDiagnostic(finding: ImportLintFinding): Diagnostic {
+  return {
+    level: "warning",
+    source: "import-lint",
+    code: "LINT_INHERITED",
+    path: finding.file,
+    message: formatLintFinding(finding),
+  };
+}
 // Issue #1866 item 3 — plan-side mapping from a verify_code classification to the
 // action an import/export would take. Mirrors the recommendations verify_code emits.
 const ACTIONABLE_PLAN_CLASSIFICATIONS: ReadonlySet<string> = new Set([
@@ -608,7 +625,46 @@ export class VbaModulesAdapter {
     );
   }
 
+  /**
+   * Issue #1863 — import_modules / import_all lint gate. A real import (not a
+   * dry run) is refused when a module it would load has a NEW error-severity
+   * finding. Inherited findings never block; they are returned as diagnostics
+   * on a successful import.
+   */
   async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const isImport = toolName === "import_all" || toolName === "import_modules";
+    const dryRun = params.dryRun === true || params.apply === false;
+    if (!isImport || dryRun) return this.executeCore(toolName, params);
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return this.executeCore(toolName, params);
+    const findings = await this.collectImportLint(toolName, params, target.data);
+    const newErrors = findings.filter((f) => f.severity === "error" && !f.inherited);
+    if (newErrors.length > 0) {
+      const listing = newErrors.map(formatLintFinding).join(" | ");
+      return failureResult(
+        createDysflowError(
+          "LINT_FINDINGS_ERROR",
+          `Refused import: ${newErrors.length} new lint error(s) in the modules to import: ${listing}`,
+          {
+            details: { findings: newErrors },
+            remediation:
+              "Fix the new findings in the source and retry. Findings that the committed version already had are reported as warnings and do not block. Run the same call with apply:false to see every finding, marked new or inherited.",
+          },
+        ),
+      );
+    }
+
+    const result = await this.executeCore(toolName, params);
+    const inherited = findings.filter((f) => f.inherited).map(lintDiagnostic);
+    if (!result.ok || inherited.length === 0) return result;
+    return { ...result, diagnostics: [...result.diagnostics, ...inherited] };
+  }
+
+  private async executeCore(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
@@ -1622,6 +1678,19 @@ export class VbaModulesAdapter {
     );
   }
 
+  private async collectImportLint(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
+  ): Promise<ImportLintFinding[]> {
+    const root = String(target.destinationRoot);
+    const moduleNames =
+      toolName === "import_modules"
+        ? stringArray(params.moduleNames)
+        : await discoverImportModules(target.destinationRoot);
+    return collectImportLintFindings({ root, moduleNames, fileSystem: this.fileSystem });
+  }
+
   /**
    * Issue #1865 — refuse apply:true when a form's CodeBehindForm copy
    * diverges from its sibling .cls: the .cls would win and drop the copy's edit.
@@ -1713,6 +1782,10 @@ export class VbaModulesAdapter {
     const formDefects = await this.collectImportFormDefects(toolName, params, target.data);
     for (const defect of formDefects) {
       errors.push(`FORM_SOURCE_MALFORMED: ${defect.file} — ${defect.message}`);
+    }
+    // Issue #1863 — preview every lint finding, warnings included.
+    for (const finding of await this.collectImportLint(toolName, params, target.data)) {
+      warnings.push(formatLintFinding(finding));
     }
     // Issue #1865 — preview the divergences that an apply would refuse.
     const divergences = await this.collectImportCodeBehindDivergences(

@@ -22,6 +22,8 @@ use `diff` only when reported as a compatibility alias. `apply_form_design_plan`
 
 ## Source and binary sync
 
+Import lint gate (#1863): `import_modules` / `import_all` lint each module they would load with the default rules. `apply:true` is refused with `LINT_FINDINGS_ERROR` only for a NEW error-severity finding; a finding the committed version (`HEAD`) already had is inherited and reported as a warning. The previous version is `HEAD` because the binary cannot be read without Access. `apply:false` lists every finding, marked new or inherited. The `p_Error` rules (`error-param-last`, `error-propagation-check`, `error-handler-writes-perror`, `test-ignores-perror`) apply only to methods that declare `p_Error`; `error-param-last` is an error.
+
 A form's code lives in `forms/<Name>.cls`; a copy sits in the `CodeBehindForm` section of `forms/Form_<Name>.form.txt`. Importing the `.cls` overwrites a functional edit made only in the copy, so `import_modules` / `import_all` refuse that case with `FORM_CODE_BEHIND_DIVERGES` (see `error-codes.md`). Case, whitespace and encoding differences are not divergences. Pass `acknowledgeCodeBehindWins:true` only when the `.cls` must win. `lint_form_code` reports the same condition as the `code-behind-divergence` warning.
 
 Use the three primitives directly. Do not script a whole-project round trip through a single workflow tool.

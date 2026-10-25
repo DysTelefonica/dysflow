@@ -20,6 +20,7 @@ import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 const CLS_TEXT = [
   'Attribute VB_Name = "Form_Sana"',
   "Option Compare Database",
+  "Option Explicit",
   "Private Sub Form_Load()",
   '    Debug.Print "cls"',
   "End Sub",
@@ -42,6 +43,7 @@ function formTxt(codeBehind: string): string {
 const DIVERGENT_CODE = [
   'Attribute VB_Name = "Form_Sana"',
   "Option Compare Database",
+  "Option Explicit",
   "Private Sub Form_Load()",
   '    Debug.Print "edited only in the form"',
   "End Sub",

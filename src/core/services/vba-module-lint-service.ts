@@ -1,3 +1,4 @@
+import { ERROR_PROPAGATION_RULES, lintErrorPropagation } from "./vba-error-propagation-lint.js";
 import { listVbaProcedures } from "./vba-procedure-service.js";
 
 export const VBA_MODULE_LINT_RULES = [
@@ -13,6 +14,11 @@ export const VBA_MODULE_LINT_RULES = [
   "implicit-variant",
   "missing-exit-handler",
   "invalid-static-class-call",
+  // Issue #1863 — p_Error propagation; scoped to methods that declare p_Error.
+  "error-param-last",
+  "error-propagation-check",
+  "error-handler-writes-perror",
+  "test-ignores-perror",
 ] as const;
 
 export type VbaModuleLintRule = (typeof VBA_MODULE_LINT_RULES)[number];
@@ -431,6 +437,17 @@ function finishLintReport(
     const found = lintForbiddenName(request.source, lines);
     flatDiagnostics.push(...found);
     byRule["forbidden-name"]?.push(...found);
+  }
+  const errorRules = rules.filter((rule) =>
+    (ERROR_PROPAGATION_RULES as readonly string[]).includes(rule),
+  ) as (typeof ERROR_PROPAGATION_RULES)[number][];
+  if (errorRules.length > 0) {
+    const grouped = lintErrorPropagation(request.source, errorRules);
+    for (const rule of errorRules) {
+      const found = grouped[rule] ?? [];
+      flatDiagnostics.push(...found);
+      byRule[rule]?.push(...found);
+    }
   }
 
   // Reconstruct logical lines for rules that benefit from statement-level context

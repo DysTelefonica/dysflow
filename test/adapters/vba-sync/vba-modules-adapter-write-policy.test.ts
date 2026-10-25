@@ -494,7 +494,11 @@ describe("VbaModulesAdapter — direct adapter truth table (#785, capa 2)", () =
     return new VbaModulesAdapter(orchestrator, {
       mkdtemp: async () => "C:/repo",
       readdir: async () => [],
-      readFile: async () => "",
+      // A module with the declarations the default lint rules expect (#1863 gate).
+      readFile: async () =>
+        ['Attribute VB_Name = "Module_Foo"', "Option Compare Database", "Option Explicit", ""].join(
+          "\r\n",
+        ),
       readFileBytes: async () => new Uint8Array(),
       rm: async () => undefined,
       tmpdir: () => "/tmp",

@@ -29,7 +29,7 @@ function fixture() {
   const accessPath = join(root, "Frontend.accdb");
   writeFileSync(accessPath, "External Access I/O fixture");
   const code =
-    'Attribute VB_Name = "Probe"\nOption Explicit\nPublic Function Value() As Long\nValue = 1\nEnd Function\n';
+    'Attribute VB_Name = "Probe"\nOption Compare Database\nOption Explicit\nPublic Function Value() As Long\nValue = 1\nEnd Function\n';
   const sourceFile = join(source, "Probe.bas");
   const binaryFile = join(binary, "Probe.bas");
   writeFileSync(sourceFile, code);

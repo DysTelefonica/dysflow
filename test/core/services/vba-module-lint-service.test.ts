@@ -62,6 +62,10 @@ describe("vba-module-lint-service", () => {
         "implicit-variant",
         "missing-exit-handler",
         "invalid-static-class-call",
+        "error-param-last",
+        "error-propagation-check",
+        "error-handler-writes-perror",
+        "test-ignores-perror",
       ],
       isClean: true,
       flatDiagnostics: [],
@@ -215,6 +219,10 @@ describe("vba-module-lint-service", () => {
       "implicit-variant",
       "missing-exit-handler",
       "invalid-static-class-call",
+      "error-param-last",
+      "error-propagation-check",
+      "error-handler-writes-perror",
+      "test-ignores-perror",
     ]);
     expect(report.isClean).toBe(false);
     expect(report.flatDiagnostics.length).toBeGreaterThan(0);
