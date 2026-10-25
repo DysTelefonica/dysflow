@@ -382,6 +382,14 @@ rewrites `.dysflow/project.json` atomically. Reach for it instead of
 hand-editing a config that predates the current contract; see
 `assets/examples/migrate-project-config.md`.
 
+## Form code-behind divergence — `FORM_CODE_BEHIND_DIVERGES` (#1865)
+
+A form's code lives in `forms/<Name>.cls`, and a copy sits in the `CodeBehindForm` section of `forms/Form_<Name>.form.txt`. Importing the `.cls` overwrites any functional edit made only in the copy.
+
+- `import_modules` / `import_all` with `apply:false` report each divergence as a `FORM_CODE_BEHIND_DIVERGES` warning, naming the form, the first differing lines and the `.cls` that wins.
+- `apply:true` is refused with `FORM_CODE_BEHIND_DIVERGES` before Access is spawned. Move the edit into the `.cls`, or pass `acknowledgeCodeBehindWins:true` to let the `.cls` win.
+- Case, whitespace and encoding differences are not divergences; the verify_code classifier decides.
+
 ## VBA-sync workflow — `sync_binary`
 
 Manual Access edits require live binary → source reconciliation, not a restart.

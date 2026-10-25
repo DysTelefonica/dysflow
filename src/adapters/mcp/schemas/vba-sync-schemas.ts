@@ -416,6 +416,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...STRICT_CTX,
       moduleNames: SCHEMA_PROPS.moduleNames,
       importMode: SCHEMA_PROPS.importMode,
+      acknowledgeCodeBehindWins: SCHEMA_PROPS.acknowledgeCodeBehindWins,
       ...WRITE_INTENT_BLOCK,
       // Issue #1014 — write-tool convention parity. The description
       // template promises "apply:true or dryRun:false" as the commit
@@ -495,6 +496,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       ...ACCESS_OVERRIDE,
       ...STRICT_CTX,
       importMode: SCHEMA_PROPS.importMode,
+      acknowledgeCodeBehindWins: SCHEMA_PROPS.acknowledgeCodeBehindWins,
       ...WRITE_INTENT_BLOCK,
       // Issue #1031 — apply:true parity with the registry; precedent: #1014 / PR #1030.
       // issue #752 — opt-in verbose flag.
