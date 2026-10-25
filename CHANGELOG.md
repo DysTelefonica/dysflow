@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- feat(import): `import_modules` and `import_all` dry runs classify each module against the binary, so an import over a binary-newer module is visible before `apply:true` (#1866)
+
 - feat(diagnose): bootstrap and doctor warn when `projectRoot` in `.dysflow/project.json` points at another worktree (`CONFIG_PROJECT_ROOT_STALE`) (#1866)
 
 - fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
