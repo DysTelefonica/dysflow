@@ -102,7 +102,7 @@
 | Tool | Default behavior | Legacy aliases | Risk class | Notes |
 |---|---|---|---|---|
 | `migrate_project_config` | `plan` | `[]` | `routine-dev-write` | Rewrite `.dysflow/project.json` atomically (e.g. legacy `accessPath` -> `frontendFile`). |
-| `access_force_cleanup_orphaned` | `noop` | `[]` | `read-only` (despite the name) | Lists orphan candidates OR retires one verified orphan PID. `pid:<positive>` requires `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true` AFTER explicit human approval. |
+| `access_force_cleanup_orphaned` | `noop` | `[]` | `read-only` (despite the name) | Lists orphan candidates OR retires one verified orphan PID. The listing (`pid` omitted or `null`) and a retire need no `allowWrites` (#1862). `pid:<positive>` requires `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true` AFTER explicit human approval. |
 | `clean_stale_markers` | `plan` | `[]` | `routine-dev-write` | Marker-file maintenance for the dispatch seam. |
 | `setup_project` | `plan` | `[]` | `conditional-write` | Bootstrap a missing per-worktree project config. Plan + apply form a 2-call sequence. `projectId` is REQUIRED and the trio `projectId` + `projectChoiceReason` + `recoveryToken` is the ambiguity-recovery contract. |
 
@@ -142,7 +142,7 @@ The per-call write-gate is AUTHORITATIVE and is never bypassed, independent of m
 - `writesProject.allowWrites === false` -> stop, regardless of mode (see `MCP_WRITES_DISABLED` / `CAPABILITIES_DISALLOW_WRITE`).
 - `humanCompilePending === true` before `test_vba` / `run_vba` -> stop, ask the human.
 - `cleanup_access_operation({force:true})` -> require explicit human confirmation.
-- `access_force_cleanup_orphaned({pid:positive})` -> require `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true`.
+- `access_force_cleanup_orphaned({pid:positive})` -> require `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true`. No `allowWrites` needed (#1862); the ownership guards still decide.
 
 ## When this file gets stale
 
