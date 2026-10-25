@@ -89,6 +89,28 @@ describe("dysflow-usage Recipes (#1871)", () => {
     }
   });
 
+  it("passes every parameter the live schema requires", () => {
+    for (const row of recipeRows(markdown)) {
+      for (const call of callsIn(row.call)) {
+        const schema = inputSchemaForTool(call.tool) as
+          | {
+              required?: string[];
+              anyOf?: { required?: string[] }[];
+            }
+          | undefined;
+        for (const key of schema?.required ?? []) {
+          expect(call.keys, `${row.action}: ${call.tool} requires ${key}`).toContain(key);
+        }
+        if (schema?.anyOf !== undefined && schema.anyOf.length > 0) {
+          const satisfied = schema.anyOf.some((alternative) =>
+            (alternative.required ?? []).every((key) => call.keys.includes(key)),
+          );
+          expect(satisfied, `${row.action}: ${call.tool} needs one anyOf alternative`).toBe(true);
+        }
+      }
+    }
+  });
+
   it("names only tools and parameters the live schemas advertise", () => {
     for (const row of recipeRows(markdown)) {
       for (const call of callsIn(row.call)) {

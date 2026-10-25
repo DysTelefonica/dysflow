@@ -27,7 +27,6 @@ Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to e
 | Bootstrap the session | `bootstrap({cwd})`, then `schema({view:"index"})` |
 | Check source against binary | `verify_code({cwd})`; decide on `actionableOk`, `bulkImportable`, `bulkExportable` |
 | Plan an import of changed modules | `import_modules({cwd, moduleNames:["<Module>"], apply:false})`; then the same call with `apply:true` |
-| Plan a whole-tree import | `import_all({cwd, apply:false})` |
 | Export a module into the project source | `export_modules({cwd, moduleNames:["<Module>"], destinationRoot:"<worktree>/src", mutateBinary:false, apply:true})` |
 | Export a module to a folder outside the project | `export_modules({cwd, moduleNames:["<Module>"], exportPath:"<folder>", mutateBinary:false, apply:true})` |
 | Validate a test manifest | `validate_manifest({cwd, testsPath:"tests/tests.vba.json"})` |
@@ -37,7 +36,8 @@ Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to e
 | Inspect a form read-only | `analyze_form_ui({cwd, sourcePath:"<worktree>/src/forms/<Form_Name>.form.txt"})` |
 | Regenerate the schema diagram | `generate_erd({cwd})` |
 | Find the references to a symbol | `find_references({cwd, symbol:"<Name>", scope:"source"})` |
-| Free a stuck Access process | `list_access_operations({})`, then `cleanup_access_operation({cwd, operationId:"<id>"})` |
+| List and clean one stuck Access operation | `list_access_operations({})`, then `cleanup_access_operation({cwd, operationId:"<id>", accessPath:"<worktree>/<frontend>.accdb"})` |
+| Clean orphaned Access processes | `access_force_cleanup_orphaned({cwd})` lists them; after the human approves a listed `pid`, call `access_force_cleanup_orphaned({cwd, pid:<pid>, implements_check:"orphans_msaccess", confirmedRequiresConfirmation:true})` |
 
 The parameter names above are checked against the live tool schemas by `test/docs/dysflow-usage-recipes-1871.test.ts`.
 
