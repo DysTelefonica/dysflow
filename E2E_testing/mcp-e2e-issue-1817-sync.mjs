@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { runMcpSession } from "./_helpers/mcp-harness.mjs";
 import { runAccessEdit } from "./_helpers/issue-1817-edit-runner.mjs";
+import { runMcpSession } from "./_helpers/mcp-harness.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const editor = join(repoRoot, "E2E_testing", "_helpers", "issue-1817-access-edit.ps1");

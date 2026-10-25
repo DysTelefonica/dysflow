@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_EDIT_ATTEMPTS,
   DEFAULT_EDIT_TIMEOUT_MS,
-  runAccessEdit,
   resolveEditTimeoutMs,
+  runAccessEdit,
 } from "../../E2E_testing/_helpers/issue-1817-edit-runner.mjs";
 
-type Outcome = { status: number | null; stdout: string; stderr: string; error?: NodeJS.ErrnoException };
+type Outcome = {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: NodeJS.ErrnoException;
+};
 
 function fakeSpawn(outcomes: Outcome[]) {
   const calls: Array<{ command: string; timeout: number }> = [];
@@ -38,8 +43,12 @@ describe("issue #1898: Access edit timeout and bounded retry", () => {
   });
 
   it("rejects a non-positive or non-numeric timeout instead of silently using it", () => {
-    expect(() => resolveEditTimeoutMs({ DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS: "0" })).toThrow(/positive integer/);
-    expect(() => resolveEditTimeoutMs({ DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS: "abc" })).toThrow(/positive integer/);
+    expect(() => resolveEditTimeoutMs({ DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS: "0" })).toThrow(
+      /positive integer/,
+    );
+    expect(() => resolveEditTimeoutMs({ DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS: "abc" })).toThrow(
+      /positive integer/,
+    );
   });
 
   it("retries once after a spawn timeout and succeeds on the second attempt", () => {

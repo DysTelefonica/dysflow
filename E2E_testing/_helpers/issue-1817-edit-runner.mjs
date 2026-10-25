@@ -18,7 +18,13 @@ export function resolveEditTimeoutMs(env) {
   return Number(raw);
 }
 
-export function runAccessEdit({ spawn, args, env, command = "powershell.exe", attempts = DEFAULT_EDIT_ATTEMPTS }) {
+export function runAccessEdit({
+  spawn,
+  args,
+  env,
+  command = "powershell.exe",
+  attempts = DEFAULT_EDIT_ATTEMPTS,
+}) {
   const timeout = resolveEditTimeoutMs(env);
   let result;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
