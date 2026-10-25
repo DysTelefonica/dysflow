@@ -26,6 +26,9 @@
 
 ### Fixed
 
+- feat(install): `dysflow install` and `dysflow update` take `--maintainer-skills` (the `DYSFLOW_MAINTAINER_SKILLS=1` variable still works); doctor reports the release channel; the retired `dysflow-protocol` link is removed (#1860)
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - chore(deps): bump GitHub Actions pins: setup-node v7.1.0, codeql-action v4.39.0, upload-artifact v7.0.2
 
 - fix(mcp): a call with no `cwd` after `resolve_project` resolves the project that was fixed for the session, instead of the startup cwd (#1867)

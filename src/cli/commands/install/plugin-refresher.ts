@@ -40,7 +40,7 @@ export type PluginRefreshEntry = {
 
 export type PluginRefreshReport = {
   entries: PluginRefreshEntry[];
-  skillSymlinkStatus: "absent" | "preserved";
+  skillSymlinkStatus: "absent" | "preserved" | "removed";
 };
 
 async function listFileBytes(root: string): Promise<Map<string, Buffer>> {
@@ -217,10 +217,45 @@ export async function refreshBundledAgentPlugins(
     }
   }
 
-  return {
-    entries,
-    skillSymlinkStatus: skillSymlinksBefore.size === 0 ? "absent" : "preserved",
-  };
+  // #1860 — the dysflow-protocol skill is retired. Its link from an earlier install
+  // is removed once the refresh has verified the mirror; only links that point at a
+  // dysflow-protocol skill directory are touched.
+  const retired = await removeRetiredProtocolLinks(home);
+  const skillSymlinkStatus: PluginRefreshReport["skillSymlinkStatus"] =
+    retired.removed.length > 0
+      ? "removed"
+      : skillSymlinksBefore.size === 0
+        ? "absent"
+        : "preserved";
+
+  return { entries, skillSymlinkStatus };
+}
+
+/**
+ * #1860 — remove the retired dysflow-protocol skill link that earlier installs
+ * created in each agent's skills directory. A symlink is removed only when its
+ * target is a dysflow-protocol directory; a real directory or any other link stays.
+ */
+export async function removeRetiredProtocolLinks(
+  home: string,
+): Promise<{ removed: string[]; preserved: string[] }> {
+  const removed: string[] = [];
+  const preserved: string[] = [];
+  for (const agent of PLUGIN_AGENTS) {
+    const linkPath = path.join(home, ...agent.skillParts);
+    const info = await lstat(linkPath).catch(() => undefined);
+    if (info === undefined) continue;
+    if (info.isSymbolicLink()) {
+      const target = await readlink(linkPath).catch(() => "");
+      if (path.basename(target) === "dysflow-protocol") {
+        await rm(linkPath, { force: true, recursive: false });
+        removed.push(linkPath);
+        continue;
+      }
+    }
+    preserved.push(linkPath);
+  }
+  return { removed, preserved };
 }
 
 export function createPluginRefreshReport(
