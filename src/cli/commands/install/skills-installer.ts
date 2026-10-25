@@ -59,6 +59,8 @@ export type SkillInstallReport = {
 
 export type SkillDoctorStatus = SkillTarget & {
   skillsDirExists: boolean;
+  /** #1860 — the release channel the install record names ("stable", "beta", "main"). */
+  channel?: string;
   versionMatch: boolean;
   hashesMatch: boolean;
   installedVersion?: string;
@@ -389,11 +391,16 @@ async function readRecordedSkillHashes(skillsDir: string): Promise<Record<string
   }
 }
 
-function metadataContent(hashes: Record<DysflowSkillName, string>, harnessVersion: string): string {
+function metadataContent(
+  hashes: Record<DysflowSkillName, string>,
+  harnessVersion: string,
+  channel: string | undefined,
+): string {
   return `${JSON.stringify(
     {
       schemaVersion: HARNESS_METADATA_SCHEMA_VERSION,
       mcpHarnessVersion: harnessVersion,
+      ...(channel === undefined ? {} : { channel }),
       skills: hashes,
     },
     null,
@@ -412,6 +419,8 @@ export async function installBundledSkills(options: {
   targets: readonly SkillTarget[];
   /** #1860 — maintainer skills are written only when explicitly requested. */
   includeMaintainerSkills?: boolean;
+  /** #1860 — the release channel this install came from, recorded for doctor. */
+  channel?: string;
 }): Promise<SkillInstallReport> {
   const bundle = await readBundle(options.bundleRoot);
   // The environment switch is the opt-in until the install and update commands take a flag.
@@ -487,7 +496,11 @@ export async function installBundledSkills(options: {
       files.push({ path: metadataFile, previous: previousMetadata });
       await writeFile(
         metadataFile,
-        metadataContent(pickHashes(bundle.hashes, selected), bundle.harnessVersion),
+        metadataContent(
+          pickHashes(bundle.hashes, selected),
+          bundle.harnessVersion,
+          options.channel,
+        ),
         "utf8",
       );
       writtenFiles.push(metadataFile);
@@ -513,6 +526,7 @@ export async function diagnoseBundledSkills(options: {
     const skillsDir = assertSafeSkillsDir(target);
     const skillsDirExists = await pathExists(skillsDir);
     let installedVersion: string | undefined;
+    let installedChannel: string | undefined;
     let recordedNames: string[] = [];
     try {
       const metadata = JSON.parse(
@@ -521,6 +535,8 @@ export async function diagnoseBundledSkills(options: {
       if (typeof metadata.mcpHarnessVersion === "string") {
         installedVersion = metadata.mcpHarnessVersion;
       }
+      const recordedChannel = (metadata as { channel?: unknown }).channel;
+      if (typeof recordedChannel === "string") installedChannel = recordedChannel;
       if (typeof metadata.skills === "object" && metadata.skills !== null) {
         recordedNames = Object.keys(metadata.skills);
       }
@@ -547,6 +563,7 @@ export async function diagnoseBundledSkills(options: {
       skillsDir,
       skillsDirExists,
       installedVersion,
+      channel: installedChannel,
       versionMatch: installedVersion === bundle.harnessVersion,
       hashesMatch: staleSkills.length === 0,
       expectedHashes: bundle.hashes,

@@ -390,6 +390,8 @@ export async function handleInstallCommand(
     const skillInstall = await installBundledSkills({
       bundleRoot: packageRoot,
       targets: skillTargets,
+      channel: resolvedChannel.channel,
+      includeMaintainerSkills: parsed.options.maintainerSkills,
     });
     const pointerRollout = await installBundledPointerBlocks({
       bundleRoot: packageRoot,

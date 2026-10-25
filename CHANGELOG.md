@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- feat(install): `dysflow install` and `dysflow update` take `--maintainer-skills` (the `DYSFLOW_MAINTAINER_SKILLS=1` variable still works); doctor reports the release channel; the retired `dysflow-protocol` link is removed (#1860)
+
 - fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
