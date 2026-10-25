@@ -18,6 +18,8 @@ const FORM = [
   "            Name =\"Nombre\"",
   "            Left =1428",
   "            Top =1000",
+  "            Width =1200",
+  "            Height =300",
   "            LayoutCachedLeft =1428",
   "            LayoutCachedTop =1000",
   "        End",
@@ -25,6 +27,8 @@ const FORM = [
   "            Name =\"DESCRIPCION\"",
   "            Left =1425",
   "            Top =1500",
+  "            Width =1200",
+  "            Height =300",
   "            LayoutCachedLeft =1425",
   "            LayoutCachedTop =1500",
   "        End",
@@ -55,19 +59,22 @@ describe("align / distribute write integer twips (#1868)", () => {
   });
 
   it("distribute writes integer Left values and keeps LayoutCachedLeft in step", () => {
-    const ir = parseFormTxt(FORM);
-    // Gap of 10 twips across 3 controls leaves a non-integer middle start.
+    // Gap of 7 twips across 3 controls leaves a non-integer middle start.
     const three = parseFormTxt(
       FORM.replace(
-        "CodeBehindForm",
+        "    End\r\nEnd\r\nCodeBehindForm",
         [
           "        Begin TextBox",
           "            Name =\"Middle\"",
           "            Left =1500",
           "            Top =2000",
+          "            Width =1200",
+          "            Height =300",
           "            LayoutCachedLeft =1500",
           "            LayoutCachedTop =2000",
           "        End",
+          "    End",
+          "End",
           "CodeBehindForm",
         ].join("\r\n"),
       ),
@@ -76,6 +83,5 @@ describe("align / distribute write integer twips (#1868)", () => {
 
     expect(result.source).not.toMatch(/Left =\d+\.\d+/);
     expect(result.source).not.toMatch(/LayoutCachedLeft =\d+\.\d+/);
-    expect(ir.root).toBeDefined();
   });
 });
