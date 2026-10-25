@@ -11,6 +11,14 @@ import { buildImportPlanResult } from "../../../src/core/services/vba-import-pla
 import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 import { resolveDestinationRootForTest } from "../../_helpers/resolve-destination-root.js";
 
+// A module with the declarations the default lint rules expect (#1863 gate).
+const LIVE_MODULE_SRC = [
+  'Attribute VB_Name = "Live"',
+  "Option Compare Database",
+  "Option Explicit",
+  "",
+].join("\r\n");
+
 describe("VbaModulesAdapter", () => {
   it("handles module tools", () => {
     expect(VbaModulesAdapter.handles("export_modules")).toBe(true);
@@ -912,7 +920,11 @@ describe("VbaModulesAdapter", () => {
     await mkdir(join(sourceRoot, "modules"), { recursive: true });
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    await writeFile(join(sourceRoot, "modules", "Live.bas"), "", "utf8");
+    await writeFile(
+      join(sourceRoot, "modules", "Live.bas"),
+      ['Attribute VB_Name = "Live"', "Option Compare Database", "Option Explicit", ""].join("\r\n"),
+      "utf8",
+    );
     await writeFile(
       join(root, ".dysflow", "project.json"),
       JSON.stringify({ id: "import-prune", accessPath: "front.accdb", destinationRoot: "src" }),
@@ -1087,7 +1099,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(sourceRoot, { recursive: true });
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    await writeFile(join(sourceRoot, "Live.bas"), "", "utf8");
+    await writeFile(join(sourceRoot, "Live.bas"), LIVE_MODULE_SRC, "utf8");
     await writeFile(
       join(root, ".dysflow", "project.json"),
       JSON.stringify({ id: "discovery-fails", accessPath: "front.accdb", destinationRoot: "src" }),
@@ -1148,7 +1160,7 @@ describe("VbaModulesAdapter", () => {
           if (path === sourceRoot) throw new Error("permission denied");
           return [];
         },
-        readFile: async () => "",
+        readFile: async () => LIVE_MODULE_SRC,
         readFileBytes: async () => new Uint8Array(),
         rm: async () => undefined,
         tmpdir: () => tmpdir(),
@@ -1172,7 +1184,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(formsRoot, { recursive: true });
     await mkdir(join(root, ".dysflow"), { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
-    await writeFile(join(modulesRoot, "Live.bas"), "", "utf8");
+    await writeFile(join(modulesRoot, "Live.bas"), LIVE_MODULE_SRC, "utf8");
     await writeFile(
       join(root, ".dysflow", "project.json"),
       JSON.stringify({ id: "subfolder-fails", accessPath: "front.accdb", destinationRoot: "src" }),
@@ -1242,7 +1254,7 @@ describe("VbaModulesAdapter", () => {
           if (path === formsRoot) throw new Error("permission denied reading forms");
           return [];
         },
-        readFile: async () => "",
+        readFile: async () => LIVE_MODULE_SRC,
         readFileBytes: async () => new Uint8Array(),
         rm: async () => undefined,
         tmpdir: () => tmpdir(),
