@@ -1,4 +1,4 @@
-import { extname, parse, relative, resolve } from "node:path";
+import { basename, extname, parse, relative, resolve } from "node:path";
 import type { ResolvedDestinationRoot } from "../config/execution-target.js";
 import {
   createDysflowError,
@@ -370,6 +370,7 @@ export async function compareSourceAgainstBinary(
   const deadlineMs = Date.now() + effectiveTimeoutMs;
   let pendingResult: OperationResult<VbaVerifyResult> | undefined;
   let cleanupTempExportRoot = true;
+  let snapshotRoot: string | undefined;
   const finalize = (result: OperationResult<VbaVerifyResult>): OperationResult<VbaVerifyResult> => {
     pendingResult = result;
     return result;
@@ -390,11 +391,21 @@ export async function compareSourceAgainstBinary(
       return finalize(failureResult(preflightCleanup.error, { durationMs: preflightTimeoutMs }));
     }
     const preflightDiagnostics = diagnosticsFromPreflightCleanup(preflightCleanup.data);
+    // Issue #1866 item 1 — verify_code is read-only. The runner opens the database
+    // with write-capable maintenance (bypass key, startup disable), which rewrites
+    // the committed .accdb even for an export. Export from a disposable copy so
+    // the original file stays byte-identical. A missing database has nothing to
+    // protect: the runner reports it.
+    const exportAccessPath = await snapshotAccessDatabase(target.data.accessPath, fileSystem, {
+      onCreated: (dir) => {
+        snapshotRoot = dir;
+      },
+    });
     const exportTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const request = {
       scriptPath: ctx.scriptPath,
       action: "Export",
-      accessPath: target.data.accessPath,
+      accessPath: exportAccessPath,
       destinationRoot: tempExportRoot,
       moduleNames: requestedModules,
       moduleNamesProvided: requestedModules.length > 0,
@@ -564,6 +575,9 @@ export async function compareSourceAgainstBinary(
       ),
     );
   } finally {
+    if (snapshotRoot !== undefined) {
+      await fileSystem.rm(snapshotRoot, { recursive: true, force: true }).catch(() => undefined);
+    }
     if (cleanupTempExportRoot) {
       const cleanupDiagnostics = await cleanupTempExportRootBounded(
         () => fileSystem.rm(tempExportRoot, { recursive: true, force: true }),
@@ -722,6 +736,29 @@ async function withPhaseTimeout<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Issue #1866 item 1 — copy the Access database to a disposable directory so a
+ * read-only verify never writes the committed file. Returns the original path
+ * unchanged when the file does not exist (the runner reports the missing file)
+ * or when the port cannot copy (optional `copyFile`; the production port always
+ * provides it, pinned by the adapter wiring test).
+ */
+async function snapshotAccessDatabase(
+  accessPath: string | undefined,
+  fileSystem: ComparisonFileSystemPort,
+  hooks: { onCreated: (dir: string) => void },
+): Promise<string | undefined> {
+  if (accessPath === undefined || fileSystem.copyFile === undefined) return accessPath;
+  if (fileSystem.exists !== undefined && !(await fileSystem.exists(accessPath))) {
+    return accessPath;
+  }
+  const dir = await fileSystem.mkdtemp(resolve(fileSystem.tmpdir(), "dysflow-vba-verify-db-"));
+  hooks.onCreated(dir);
+  const snapshotPath = resolve(dir, basename(accessPath));
+  await fileSystem.copyFile(accessPath, snapshotPath);
+  return snapshotPath;
 }
 
 function controlPropertyMismatchFields(
@@ -892,8 +929,18 @@ export async function compareVbaSourceTrees(
       diffs.push({
         ...entry,
         ...controlPropertyFields,
-        sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
-        binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
+        sourceSnippet: functionalLineSnippet(
+          sourceText,
+          binaryText,
+          "source",
+          classification.firstUniqueSourceLine,
+        ),
+        binarySnippet: functionalLineSnippet(
+          binaryText,
+          sourceText,
+          "binary",
+          classification.firstUniqueBinaryLine,
+        ),
         // Additive semantic fields
         classification: classification.classification,
         reason: classification.reason,
@@ -1348,6 +1395,27 @@ function sortDiffEntries(entries: VbaSourceDiffEntry[]): VbaSourceDiffEntry[] {
   return entries.sort((left, right) =>
     `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`),
   );
+}
+
+/**
+ * Issue #1866 item 4 — point the snippet at the first line that counts toward the
+ * functional diff. `functionalLine` is the normalized text the classifier reported;
+ * the raw line is matched case-insensitively. Falls back to the first raw
+ * difference when the side has no functional line or no raw line matches.
+ */
+function functionalLineSnippet(
+  leftText: string,
+  rightText: string,
+  label: string,
+  functionalLine: string | undefined,
+): string {
+  if (functionalLine !== undefined) {
+    const key = functionalLine.trim().toLowerCase();
+    const lines = leftText.split("\n");
+    const index = lines.findIndex((line) => line.trim().toLowerCase() === key);
+    if (index >= 0) return `${label}:${index + 1}: ${(lines[index] ?? "").trimEnd()}`;
+  }
+  return firstDifferentLineSnippet(leftText, rightText, label);
 }
 
 function firstDifferentLineSnippet(leftText: string, rightText: string, label: string): string {
