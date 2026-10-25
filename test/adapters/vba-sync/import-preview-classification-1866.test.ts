@@ -45,6 +45,7 @@ describe("import_modules preview classifies each module (#1866 item 3)", () => {
     });
 
     expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected plan success");
     const plan = result.data as {
       moduleClassifications?: { module: string; classification: string }[];
       warnings: string[];
@@ -62,6 +63,7 @@ describe("import_modules preview classifies each module (#1866 item 3)", () => {
       moduleNames: ["Calculo"],
     });
 
+    if (!result.ok) throw new Error("expected plan success");
     const plan = result.data as {
       moduleClassifications?: { module: string; classification: string }[];
       warnings: string[];
