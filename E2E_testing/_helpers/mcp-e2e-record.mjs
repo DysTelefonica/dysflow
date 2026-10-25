@@ -5,7 +5,7 @@
 // fakes. The body's behavior is byte-for-byte identical to the in-suite
 // version; only the dependency surface becomes explicit.
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
 //
 // The hard rules pinned here:
@@ -172,6 +172,10 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // A live harness-owned child is NOT an ordinary assertion failure. Later
   // records would be unsafe and could multiply leaked Access processes.
   if (!zombiePass) {
+    // Zombie attribution (#1899): on a failing zombie-check, dump the Access,
+    // shell and node processes with parent PID and command line so the owning
+    // process of each suite-owned Access instance can be identified. Failure path only.
+    dumpZombieDiagnostics(tool, result.childPid);
     consoleError(
       `mcp-e2e: UNSAFE-STOP after ${tool} (zombie.pass=${zombiePass}). ` +
         `Aborting battery because the harness-owned child did not exit.`,
@@ -380,4 +384,21 @@ export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsP
     }
     return false;
   }
+}
+
+// Prints the process table entries that matter for zombie attribution (#1899).
+// Never kills anything.
+function dumpZombieDiagnostics(tool, childPid) {
+  const script =
+    "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(MSACCESS|powershell|pwsh|node|cmd).exe$' } " +
+    "| Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress";
+  const ps = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 20000,
+  });
+  console.log(
+    `ZOMBIE tool=${tool} childPid=${childPid} ps-status=${ps.status} ps-error=${ps.error?.code ?? "none"}`,
+  );
+  console.log(`ZOMBIE table=${(ps.stdout || ps.stderr || "").trim().slice(0, 12000)}`);
 }
