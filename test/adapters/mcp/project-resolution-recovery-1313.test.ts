@@ -588,7 +588,8 @@ describe("issue #1313 project recovery token", () => {
 
   it("keeps the example and HR-11 harness aligned with the runtime schema", () => {
     const example = readFileSync("assets/examples/resolve-project-recovery.md", "utf8");
-    const harness = readFileSync("skills/dysflow-protocol/SKILL.md", "utf8");
+    // #1871 — the rules moved to dysflow-arnes; dysflow-protocol is retired.
+    const harness = readFileSync("skills/dysflow-arnes/SKILL.md", "utf8");
     const embeddedHarness = readFileSync("AGENTS.md", "utf8");
     const resolveSchema = inputSchemaForTool("resolve_project").properties ?? {};
 
@@ -597,9 +598,8 @@ describe("issue #1313 project recovery token", () => {
       expect(example, field).toContain(field);
     }
     expect(example).toContain("DYSFLOW_RESOLUTION_CACHE_TTL_MS");
-    expect(harness).toContain("HR-11 — Bootstrap and ambiguity recovery are different operations");
-    expect(harness).toContain("user_selected_after_ambiguous_project");
-    expect(embeddedHarness).toContain("HR-11 — Recover ambiguity without overwriting config");
-    expect(embeddedHarness).toContain("user_selected_after_ambiguous_project");
+    expect(harness).toContain("HR-11 — Ask on ambiguity");
+    expect(example).toContain("user_selected_after_ambiguous_project");
+    expect(embeddedHarness).toContain("HR-11 — Ask on ambiguity");
   });
 });
