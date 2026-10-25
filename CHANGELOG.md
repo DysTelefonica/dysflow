@@ -28,6 +28,8 @@
 
 - feat(diagnose): bootstrap and doctor warn when `projectRoot` in `.dysflow/project.json` points at another worktree (`CONFIG_PROJECT_ROOT_STALE`) (#1866)
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
