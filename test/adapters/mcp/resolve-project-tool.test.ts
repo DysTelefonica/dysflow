@@ -270,9 +270,13 @@ describe("createResolveProjectTool() — tool factory", () => {
       outcome: "resolved",
       reason: "explicit id match",
       accessPath: "C:/data/app.accdb",
-      projectRoot: "C:/repos/captured-cwd",
       sourceRoot: "C:/repos/captured-cwd/src",
     });
+    // Issue #1867 — one project root per response: the resolved worktree, not the
+    // projectRoot copied into the config.
+    const config = payload.projectConfig as { projectRoot?: string };
+    expect(payload.projectRoot).toBe(config.projectRoot);
+    expect(payload.projectRoot).not.toBe("C:/repos/captured-cwd");
   });
 
   it("handler refuses non-object input without throwing", async () => {

@@ -64,6 +64,7 @@ import {
   resolveInvocationWriteIntent,
 } from "./invocation-telemetry.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { projectContextMissingError } from "./project-context-missing.js";
 import { withWireResponseEnvelope } from "./response-envelope.js";
 import { type McpToolResult, withSchemaVersion } from "./result-translation.js";
 import { createSessionProjectRoot } from "./session-project-root.js";
@@ -789,6 +790,12 @@ export function createDynamicServices(
   ): Promise<{ ok: true; services: DysflowMcpServices } | { ok: false; error: DysflowError }> => {
     const configResult = await resolveConfigForInput(input, options);
     if (!configResult.ok) {
+      // Issue #1867 — a call with no project context fails by naming that cause.
+      const missingContext = projectContextMissingError(input, {
+        sessionCwd: () => undefined,
+        startupError: startupError === undefined ? undefined : { code: startupError.code },
+      });
+      if (missingContext !== undefined) return { ok: false, error: missingContext };
       if (startupError !== undefined) {
         return { ok: false, error: startupError };
       }
