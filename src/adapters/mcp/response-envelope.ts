@@ -53,7 +53,7 @@ export function withWireResponseEnvelope<T extends ResponseEnvelopeShape>(result
     ...payload,
     schemaVersion: RESULT_SCHEMA_VERSION,
     isError: result.isError,
-    ...(result.ok === undefined ? {} : { ok: result.ok }),
+    ...(wireOk(result, payload) === undefined ? {} : { ok: wireOk(result, payload) }),
     ...(result.error === undefined ? {} : { error: result.error }),
     ...(large ? {} : { content: result.content }),
   };
@@ -96,6 +96,19 @@ function parseObjectPayload(text: string | undefined): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+/**
+ * Issue #1866 item 5 — verify_code's payload `ok` is the comparison verdict. The
+ * envelope `ok` only reports that the operation ran, so it must not replace it on
+ * the wire; every other tool keeps the envelope value.
+ */
+function wireOk(
+  result: Pick<ResponseEnvelopeShape, "ok">,
+  payload: Record<string, unknown>,
+): boolean | undefined {
+  if (payload.operation === "verify_code" && typeof payload.ok === "boolean") return payload.ok;
+  return result.ok;
+}
+
 function summaryText(
   result: Pick<ResponseEnvelopeShape, "isError" | "ok" | "error">,
   payload: Record<string, unknown>,
@@ -107,7 +120,7 @@ function summaryText(
   return JSON.stringify({
     schemaVersion: RESULT_SCHEMA_VERSION,
     isError: result.isError,
-    ...(result.ok === undefined ? {} : { ok: result.ok }),
+    ...(wireOk(result, payload) === undefined ? {} : { ok: wireOk(result, payload) }),
     ...(error === undefined
       ? {}
       : {

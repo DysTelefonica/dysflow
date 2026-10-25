@@ -417,7 +417,11 @@ export function buildDiagnoseChecks(input: {
   runtime: DiagnoseRuntime;
 }): readonly DiagnoseCheck<unknown>[] {
   const { projectConfig, filesystem, runtime } = input;
-  const warningCodes = new Set(["CWD_NOT_IN_WORKTREE", "TARGET_MISMATCH_WARNING"]);
+  const warningCodes = new Set([
+    "CWD_NOT_IN_WORKTREE",
+    "TARGET_MISMATCH_WARNING",
+    "CONFIG_PROJECT_ROOT_STALE",
+  ]);
   const projectWarnings = projectConfig.diagnostics.filter((entry) => warningCodes.has(entry.code));
   const overlapsSource =
     filesystem.destinationRoot.path !== null &&

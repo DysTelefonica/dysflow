@@ -1,6 +1,19 @@
 import type { DysflowConfig } from "../config/dysflow-config.js";
 import { stringValue } from "../utils/index.js";
 
+/**
+ * Issue #1866 item 3 — per-module verdict for an `import_modules` / `import_all`
+ * plan, computed with the same classifier verify_code uses. `classification` is
+ * one of sourceNewer, binaryNewer, bothChanged, matched, missingInBinary or
+ * missingInSource.
+ */
+export type ImportPlanModuleClassification = {
+  module: string;
+  classification: string;
+  actionable: boolean;
+  recommendation: string;
+};
+
 export type ImportPlanResult = {
   operation: "import_all" | "import_modules";
   dryRun: true;
@@ -16,6 +29,7 @@ export type ImportPlanResult = {
   importMode?: string;
   modulesPlanned: readonly string[];
   modulesCount: number;
+  moduleClassifications?: readonly ImportPlanModuleClassification[];
   warnings: readonly string[];
   errors: readonly string[];
 };
@@ -33,12 +47,14 @@ export type BuildImportPlanResultOptions = {
   params: Record<string, unknown>;
   target: ImportPlanTarget;
   modulesPlanned: readonly string[];
+  moduleClassifications?: readonly ImportPlanModuleClassification[];
   warnings: readonly string[];
   errors: readonly string[];
 };
 
 export function buildImportPlanResult(options: BuildImportPlanResultOptions): ImportPlanResult {
-  const { toolName, params, target, modulesPlanned, warnings, errors } = options;
+  const { toolName, params, target, modulesPlanned, warnings, errors, moduleClassifications } =
+    options;
   return {
     operation: toolName,
     dryRun: true,
@@ -55,6 +71,7 @@ export function buildImportPlanResult(options: BuildImportPlanResultOptions): Im
     importMode: stringValue(params.importMode),
     modulesPlanned,
     modulesCount: modulesPlanned.length,
+    ...(moduleClassifications === undefined ? {} : { moduleClassifications }),
     warnings,
     errors,
   };
