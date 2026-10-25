@@ -1,6 +1,6 @@
 # Project context resolution
 
-This page states how a tool call finds its dysflow project and which parameters each tool still needs from the caller. It is the reference behind the context rules in the `dysflow-usage` skill (#1867).
+This page states how a tool call finds its dysflow project, and which parameters each tool still needs from the caller. It backs the context rules in the `dysflow-usage` skill (#1867).
 
 ## Resolution order
 
@@ -16,7 +16,9 @@ An explicit `projectId` never falls back to the session project.
 
 ## What the config already provides
 
-For a resolved project, the config supplies `accessPath` (frontend), `backendPath`, `destinationRoot` (the source root for modules and forms) and `projectRoot`. Tools derive these values, so the caller does not repeat them.
+For a resolved project, the config supplies `accessPath` (frontend), `backendPath`, `destinationRoot` (the source root for modules and forms) and `projectRoot`.
+
+Tools derive these values, so the caller does not repeat them.
 
 ## Form tools: `formName`
 
