@@ -8,8 +8,8 @@
   "toolCount": 71,
   "metrics": {
     "toolsList": {
-      "logicalBytes": 84000,
-      "wireBytes": 84035
+      "logicalBytes": 84047,
+      "wireBytes": 84082
     },
     "bootstrap": {
       "logicalBytes": 1088,
@@ -24,8 +24,8 @@
       "wireBytes": 49896
     },
     "schemaFull": {
-      "logicalBytes": 827846,
-      "wireBytes": 828298
+      "logicalBytes": 827882,
+      "wireBytes": 828334
     },
     "schemaCompact": {
       "logicalBytes": 119890,
@@ -36,8 +36,8 @@
       "wireBytes": 12189
     },
     "describeTool": {
-      "logicalBytes": 744731,
-      "wireBytes": 2083496
+      "logicalBytes": 744745,
+      "wireBytes": 2083510
     },
     "describeToolSelected": {
       "logicalBytes": 180735,

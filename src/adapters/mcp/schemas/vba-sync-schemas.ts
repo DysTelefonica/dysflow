@@ -725,6 +725,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
         description:
           "Sync direction: src-to-binary imports, binary-to-src exports, and both (default) plans both.",
       },
+      acknowledgeCodeBehindWins: SCHEMA_PROPS.acknowledgeCodeBehindWins,
       acceptBothChanged: {
         type: "boolean",
         default: false,

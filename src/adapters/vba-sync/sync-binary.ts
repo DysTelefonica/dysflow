@@ -136,6 +136,12 @@ export type SyncBinaryInput = {
    * The default remains false; direction:"both" never auto-resolves.
    */
   acceptBothChanged?: boolean;
+  /**
+   * Issue #1895 — the .cls wins over a diverging CodeBehindForm copy during the
+   * inner import_modules calls (see FORM_CODE_BEHIND_DIVERGES). Carried into
+   * every chunk's params.
+   */
+  acknowledgeCodeBehindWins?: boolean;
   scope?: SyncBinaryScope;
   moduleNames?: readonly string[];
   directoryPath?: string;
@@ -452,6 +458,7 @@ export async function runSyncBinary(args: {
   const isDryRun = !willExecute;
 
   const forward: Record<string, unknown> = { ...(input.forward ?? {}) };
+  if (input.acknowledgeCodeBehindWins === true) forward.acknowledgeCodeBehindWins = true;
   const focusedModuleNames =
     input.moduleNames !== undefined && input.moduleNames.length > 0
       ? [...input.moduleNames]

@@ -77,7 +77,10 @@ describe("compareFormCodeBehind (#1865)", () => {
 describe("compareFormCodeBehind ignores Attribute VB_* header lines (#1895)", () => {
   it("does not diverge when the copy differs only in Attribute VB_* lines", () => {
     const formText = formWithCodeBehind(
-      CLS.replace('Attribute VB_Name = "Form_Sana"', 'Attribute VB_Name = "Form_Sana"\r\nAttribute VB_Exposed = False'),
+      CLS.replace(
+        'Attribute VB_Name = "Form_Sana"',
+        'Attribute VB_Name = "Form_Sana"\r\nAttribute VB_Exposed = False',
+      ),
     );
     expect(compareFormCodeBehind({ formText, clsText: CLS }).diverges).toBe(false);
   });
@@ -86,7 +89,7 @@ describe("compareFormCodeBehind ignores Attribute VB_* header lines (#1895)", ()
     const formText = formWithCodeBehind(
       [
         'Attribute VB_Name = "Form_Sana"',
-        'Attribute VB_Exposed = False',
+        "Attribute VB_Exposed = False",
         "Option Compare Database",
         "Private Sub Form_Load()",
         '    Debug.Print "edited only in the form"',

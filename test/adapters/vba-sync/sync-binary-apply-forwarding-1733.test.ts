@@ -265,3 +265,31 @@ describe("sync_binary apply propagation (#1733, AC4) — defence against nested 
     expect(failure.dryRun).toBe(false);
   });
 });
+
+// ─── #1895: acknowledgeCodeBehindWins reaches every import_modules chunk ──
+
+describe("sync_binary forwards acknowledgeCodeBehindWins (#1895)", () => {
+  it("carries acknowledgeCodeBehindWins:true into every import_modules chunk", async () => {
+    const { adapter, importChunks } = makeCapturingAdapter(
+      makeVerifyResult({
+        missingInBinary: [{ moduleName: "Form_Issue1817Form" }, { moduleName: "M2" }],
+        hasFunctionalDifferences: true,
+        recommendedAction: "import_to_binary",
+      }),
+      makeVerifyResult(),
+    );
+
+    const input = {
+      direction: "src-to-binary",
+      apply: true,
+      batchSize: 1,
+      acknowledgeCodeBehindWins: true,
+    } as SyncBinaryInput;
+    await runSyncBinary({ adapter, input });
+
+    expect(importChunks.length).toBeGreaterThan(0);
+    for (const chunk of importChunks) {
+      expect(chunk.acknowledgeCodeBehindWins).toBe(true);
+    }
+  });
+});
