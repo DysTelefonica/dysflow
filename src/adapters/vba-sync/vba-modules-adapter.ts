@@ -55,6 +55,7 @@ import {
   withResolvedDestinationRoot,
 } from "./destination-root-override.js";
 import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
+import { collectImportLintFindings, type ImportLintFinding } from "./import-lint-gate.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 
@@ -65,6 +66,11 @@ import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 // are gone with them. Save-only persistence (acCmdSaveAllModules = 280) is
 // the canonical mutation path per openspec/specs/vba-manager-actions/spec.md.
 // ========================================================================
+
+/** Issue #1863 — one-line description of a lint finding. */
+function formatLintFinding(finding: ImportLintFinding): string {
+  return `LINT_FINDING: ${finding.file}:${finding.line} [${finding.rule}] ${finding.severity}: ${finding.message}`;
+}
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
@@ -692,6 +698,9 @@ export class VbaModulesAdapter {
     if (toolName === "import_all" || toolName === "import_modules") {
       const gate = await this.gateImportFormSources(toolName, params);
       if (!gate.ok) return gate;
+      // Issue #1863 — error-severity lint findings refuse the apply.
+      const lintGate = await this.gateImportLint(toolName, params);
+      if (!lintGate.ok) return lintGate;
     }
 
     // Issue #807 (Feature 2) — import_modules bulk by directory. When
@@ -1587,6 +1596,47 @@ export class VbaModulesAdapter {
     );
   }
 
+  /**
+   * Issue #1863 — refuse apply:true when a module an import would load has an
+   * error-severity lint finding. Refused before the runner is spawned.
+   */
+  private async gateImportLint(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<undefined>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const errors = (await this.collectImportLint(toolName, params, target.data)).filter(
+      (finding) => finding.severity === "error",
+    );
+    if (errors.length === 0) return successResult(undefined);
+    const listing = errors.map(formatLintFinding).join(" | ");
+    return failureResult(
+      createDysflowError(
+        "LINT_FINDINGS_ERROR",
+        `Refused import: ${errors.length} lint error(s) in the modules to import: ${listing}`,
+        {
+          details: { findings: errors },
+          remediation:
+            "Fix the listed findings in the source and retry. Run the same call with apply:false to see every finding, warnings included, without writing.",
+        },
+      ),
+    );
+  }
+
+  private async collectImportLint(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
+  ): Promise<ImportLintFinding[]> {
+    const root = String(target.destinationRoot);
+    const moduleNames =
+      toolName === "import_modules"
+        ? stringArray(params.moduleNames)
+        : await discoverImportModules(target.destinationRoot);
+    return collectImportLintFindings({ root, moduleNames, fileSystem: this.fileSystem });
+  }
+
   private async collectImportFormDefects(
     toolName: "import_all" | "import_modules",
     params: Record<string, unknown>,
@@ -1632,6 +1682,10 @@ export class VbaModulesAdapter {
     const formDefects = await this.collectImportFormDefects(toolName, params, target.data);
     for (const defect of formDefects) {
       errors.push(`FORM_SOURCE_MALFORMED: ${defect.file} — ${defect.message}`);
+    }
+    // Issue #1863 — preview every lint finding, warnings included.
+    for (const finding of await this.collectImportLint(toolName, params, target.data)) {
+      warnings.push(formatLintFinding(finding));
     }
     if (target.data.accessPath !== undefined) {
       await stat(target.data.accessPath).catch(() =>
