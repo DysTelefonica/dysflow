@@ -382,8 +382,6 @@ export async function handleMcpAccessOrphanCleanup(
   input: unknown,
   schema: JsonObjectSchema,
   services: DysflowMcpServices,
-  writesEnabled: boolean,
-  writeAccessResolver: McpWriteAccessResolver | undefined,
   buildRequest: (
     input: unknown,
   ) =>
@@ -391,6 +389,9 @@ export async function handleMcpAccessOrphanCleanup(
     | { accessPath: string; projectRoot: string; confirmPid?: number }
     | McpToolResult,
 ): Promise<McpToolResult> {
+  // Issue #1862 — neither the listing nor a retire needs allowWrites. The
+  // retire path still requires the HR-2 confirmation (#1537) and every
+  // ownership guard inside AccessOrphanCleanupService.
   const confirmationInput =
     isRecord(input) && typeof input.pid === "number"
       ? { ...input, implements_check: "orphans_msaccess" }
@@ -437,10 +438,6 @@ export async function handleMcpAccessOrphanCleanup(
         totalCount: listing.data.length,
       }),
     );
-  }
-
-  if (!(await isWriteAllowed(input, writesEnabled, writeAccessResolver))) {
-    return writesDisabled();
   }
 
   return translateCoreResultToMcpContent(

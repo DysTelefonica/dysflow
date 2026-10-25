@@ -145,9 +145,11 @@ describe("access_force_cleanup_orphaned tool", () => {
       ...confirmedOrphanCleanup(12345),
     });
 
-    expect(result?.isError).toBe(true);
-    expect(result?.content[0]?.text).toContain("MCP_WRITES_DISABLED");
-    expect(fakeOrphan.cleanupOrphanRequests).toEqual([]);
+    // Issue #1862 — a confirmed retire no longer needs allowWrites; the
+    // ownership guards in the service decide, so the fake receives the request.
+    expect(result?.isError).toBe(false);
+    expect(result?.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(fakeOrphan.cleanupOrphanRequests).toHaveLength(1);
   });
 
   it("handler returns ORPHAN_CLEANUP_NOT_CONFIGURED when orphanCleanupService is undefined", async () => {
