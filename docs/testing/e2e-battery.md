@@ -166,6 +166,10 @@ $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
 
 # Fijar el conteo global de MSACCESS.EXE al inicio (en CI o cuando ya hay Access ajenos).
 $env:DYSFLOW_E2E_PRE_MSACCESS_COUNT = "0"
+
+# Timeout de la edición externa de Access del escenario Issue 1817 (default 60000 ms).
+# Sólo se reintenta un ETIMEDOUT, como máximo dos intentos (#1898).
+$env:DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS = "120000"
 ```
 
 Si el harness aborta antes de la primera herramienta, el mensaje nombra el código de
