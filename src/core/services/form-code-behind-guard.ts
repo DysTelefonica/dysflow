@@ -40,15 +40,10 @@ function linesNotIn(text: string, other: string): string[] {
     .slice(0, SHOWN_DIFFERENCES);
 }
 
-export function compareFormCodeBehind(input: {
-  formText: string;
-  clsText: string;
-}): CodeBehindComparison {
-  const codeBehind = codeBehindOf(input.formText);
-  if (codeBehind === undefined) return { diverges: false };
-
+/** Compare an already extracted CodeBehindForm text with the sibling .cls. */
+export function compareCodeBehindText(codeBehind: string, clsText: string): CodeBehindComparison {
   const verdict = classifyVbaPair({
-    sourceText: input.clsText,
+    sourceText: clsText,
     binaryText: codeBehind,
     fileType: "cls",
     mode: "semantic",
@@ -58,6 +53,15 @@ export function compareFormCodeBehind(input: {
   return {
     diverges: true,
     classification: verdict.classification,
-    firstDifferences: linesNotIn(codeBehind, input.clsText),
+    firstDifferences: linesNotIn(codeBehind, clsText),
   };
+}
+
+export function compareFormCodeBehind(input: {
+  formText: string;
+  clsText: string;
+}): CodeBehindComparison {
+  const codeBehind = codeBehindOf(input.formText);
+  if (codeBehind === undefined) return { diverges: false };
+  return compareCodeBehindText(codeBehind, input.clsText);
 }

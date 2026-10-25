@@ -1030,6 +1030,7 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
             "named-and-positional-args-mixing",
             "unicode-sensitive-executable-tokens",
             "control-property-support",
+            "code-behind-divergence",
           ],
         },
         description:
