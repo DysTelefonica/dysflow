@@ -598,6 +598,15 @@ function quoteName(name: string): string {
   return `"${name}"`;
 }
 
+/**
+ * Issue #1868 — numeric, boolean, enum and colour properties take their
+ * value as a raw token; text properties stay quoted even when the text looks
+ * numeric (Caption "7400").
+ */
+function preservesTokens(key: string): boolean {
+  return expectedTypeOf(key) !== "string";
+}
+
 function normalizeMutationValue(value: string | number | boolean, preserveTokens = false): string {
   if (typeof value === "boolean") return value ? " NotDefault" : "0";
   if (typeof value === "number") return String(value);
@@ -1049,7 +1058,11 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
     );
   }
 
-  upsertScalar(control, input.property, normalizeMutationValue(input.value));
+  upsertScalar(
+    control,
+    input.property,
+    normalizeMutationValue(input.value, preservesTokens(input.property)),
+  );
   return mutationResult(ir, next, input.controlName, {
     controlKnown: true,
     propertyKnown: true,
@@ -1150,7 +1163,7 @@ export function setProperties(ir: FormIR, input: SetPropertiesInput): FormMutati
         `Property "${key}" is an opaque blob and cannot be replaced with a scalar value.`,
       );
     }
-    upsertScalar(control, key, normalizeMutationValue(value));
+    upsertScalar(control, key, normalizeMutationValue(value, preservesTokens(key)));
   }
   // Touch stripped keys to ensure they aren't tree-shaken by the
   // mutation-side bookkeeping — they never made it into `next` so this
