@@ -2,6 +2,8 @@
 
 ## [v4.5.1] - 2026-10-25
 
+v4.5.0 was tagged but its GitHub Release was not published: its end-to-end battery failed on the #1817 fixture when the import gate of #1865 refused it (#1895). The fix is #1896. v4.5.1 is the first published release of this content.
+
 ### Changes
 
 - fix(forms): ignore Attribute header lines in the code-behind guard; sync_binary acknowledges the divergence (#1896)
