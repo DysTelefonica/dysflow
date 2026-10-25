@@ -34,6 +34,7 @@ Run the preferred source-to-binary or binary-to-source verify, plan, apply, and 
     - `strict`
     - `direction`
     - `acceptBothChanged`
+    - `acknowledgeCodeBehindWins`
     - `scope`
     - `apply`
     - `diff`
@@ -102,6 +103,8 @@ must not be treated as completed synchronization.
 `.accdb` bytes. Compare each `.form.txt` and `.cls` with its exported counterpart.
 Choose an explicit direction and review the conflict before using
 `acceptBothChanged:true`; this is not automatic conflict acceptance.
+
+When a form's `CodeBehindForm` copy differs from its `.cls` (`FORM_CODE_BEHIND_DIVERGES`), pass `acknowledgeCodeBehindWins:true` only when the `.cls` must win. It is forwarded to every inner `import_modules` chunk.
 
 Evidence: `src/adapters/vba-sync/vba-sync-adapter.ts`,
 `src/adapters/vba-sync/sync-binary.ts` and

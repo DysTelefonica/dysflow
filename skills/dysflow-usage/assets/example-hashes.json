@@ -221,7 +221,7 @@
   },
 "sync_binary": {
       "path": "assets/examples/sync-binary.md",
-      "sha256": "8892b202808b96c726191068343a8461f622c962d2778f76b5c29775d8df88bb",
+      "sha256": "b7832cbbd46d754d933330693bfc79eb2b889cc48c2fa3b3e85e441eb6b05743",
       "needs_human_content": false
   },
   "test_vba": {
