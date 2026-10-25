@@ -15,10 +15,11 @@ metadata:
 # dysflow-protocol — retired
 
 This skill is retired by #1871. Its hard rules now live in `dysflow-arnes`, and
-its tool, flag and error facts live in `dysflow-usage`.
+its tool, flag and error facts live in `dysflow-usage`. This file holds no rules.
 
-The directory is kept so that existing user-global symlinks to it keep
-resolving. Remove the symlink once the agent has loaded the two replacements.
+The directory stays only so that user-global symlinks created by earlier installs
+keep resolving. `dysflow install` still names it in `plugin-refresher.ts` and its
+tests. Removing the directory and that installer link is tracked by #1860.
 
 - Rules: `skills/dysflow-arnes/SKILL.md`
 - Facts: `skills/dysflow-usage/SKILL.md`

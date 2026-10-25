@@ -7,10 +7,10 @@ The order in which a call finds its project, and the parameters each tool still 
 Each call uses the first source that applies:
 
 1. **Explicit parameters on the call**: `projectRoot`, then `cwd`, then `projectId`.
-2. **The project fixed by `resolve_project` for this MCP session.** It is set when `resolve_project` returns `outcome: "resolved"` and cleared by `resolve_project({ clearResolution: true })`.
+2. **The fallback kept from `resolve_project` (#1867).** Set when `resolve_project` returns `outcome: "resolved"` and cleared by `resolve_project({ clearResolution: true })`. It is a fallback only: pass `cwd` on every call instead of relying on it.
 3. **The MCP startup cwd**: the fallback for everything else.
 
-The session project applies only to calls with no `cwd`, `projectRoot` or `projectId`.
+The fallback applies only to calls with no `cwd`, `projectRoot` or `projectId`.
 
 An explicit `projectId` never falls back to the session project.
 

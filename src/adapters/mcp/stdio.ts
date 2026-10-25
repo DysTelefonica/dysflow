@@ -86,7 +86,7 @@ const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 
 /** Short bootstrap guidance returned in the MCP initialize result. */
 export const INITIALIZE_INSTRUCTIONS =
-  "Bootstrap: call get_capabilities({ compact: true }), then schema({ view: 'index' }) to choose a tool and describe_tool({ name: '<tool>', sections: ['parameters'] }) for one-tool details.";
+  "Bootstrap: call get_capabilities({ view: 'compact' }), then schema({ view: 'index' }) to choose a tool and describe_tool({ name: '<tool>', sections: ['parameters'] }) for one-tool details.";
 
 // MCP protocol version this server targets.
 //

@@ -23,7 +23,7 @@ Load `dysflow-usage` first for tool names, flags and error codes. Call
 `bootstrap({})` before any static diagnosis or config change. The live runtime
 wins over any document; if they disagree, follow the runtime and report the drift.
 
-- **HR-1 — The human compiles.** Never call `compile_vba` or pass `compile:true`. After `import_modules` (plan, then apply), ask the human to compile in Access and wait for confirmation before `test_vba`.
+- **HR-1 — The human compiles, after RED.** Run the RED test without compiling; a RED that fails on a compile or syntax error does not count. Only the GREEN run needs the human to compile in Access first: ask, then wait for confirmation. Dysflow never compiles VBA. Do not trust `humanCompilePending:false` when its scope is `no-project-in-scope`.
 - **HR-2 — Confirm destructive operations.** Pass `implements_check` and `confirmedRequiresConfirmation:true` only after the human approves the risk. Never kill `MSACCESS.EXE` by name; clean up through `list_access_operations` and the dysflow cleanup tools.
 - **HR-3 — Never write to a production backend.** Test data goes only through `m_TestingMode=True`. If the sandbox is unreachable, report "TESTS BLOCKED" and do not touch data.
 - **HR-4 — Preflight before every write.** Check `writesProcess.enabled`, `writesProject.allowWrites`, `effectiveDryRunDefault`, and `humanCompilePending`. Pass `apply` explicitly. The procedure gate is `procedureStrictMode`, never `allowedProcedures` alone. Stop and report any failed check.

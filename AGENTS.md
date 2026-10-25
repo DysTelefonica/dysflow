@@ -18,7 +18,7 @@ Load `dysflow-usage` first for tool names, flags and error codes. Call
 `bootstrap({})` before any static diagnosis or config change. The live runtime
 wins over any document; if they disagree, follow the runtime and report the drift.
 
-- **HR-1 — The human compiles.** Never call `compile_vba` or pass `compile:true`. After `import_modules` (plan, then apply), ask the human to compile in Access and wait for confirmation before `test_vba`.
+- **HR-1 — The human compiles, after RED.** Run the RED test without compiling; a RED that fails on a compile or syntax error does not count. Only the GREEN run needs the human to compile in Access first: ask, then wait for confirmation. Dysflow never compiles VBA. Do not trust `humanCompilePending:false` when its scope is `no-project-in-scope`.
 - **HR-2 — Confirm destructive operations.** Pass `implements_check` and `confirmedRequiresConfirmation:true` only after the human approves the risk. Never kill `MSACCESS.EXE` by name; clean up through `list_access_operations` and the dysflow cleanup tools.
 - **HR-3 — Never write to a production backend.** Test data goes only through `m_TestingMode=True`. If the sandbox is unreachable, report "TESTS BLOCKED" and do not touch data.
 - **HR-4 — Preflight before every write.** Check `writesProcess.enabled`, `writesProject.allowWrites`, `effectiveDryRunDefault`, and `humanCompilePending`. Pass `apply` explicitly. The procedure gate is `procedureStrictMode`, never `allowedProcedures` alone. Stop and report any failed check.
@@ -113,12 +113,13 @@ Nothing else catches a stale claim — see [documentation quality gates](./docs/
 
 **Anchor against the runtime, not against a string.** A test that greps for a literal sentence only catches deletion. A test that compares the doc against the live surface catches drift.
 
-Thirteen anchors do the second kind today:
+Fourteen anchors do the second kind today:
 
 - `add-a-tool-checklist-1493.test.ts` imports every hand-maintained tool registry and compares each against the live advertised surface, so a tool registered in one place and forgotten in another fails the suite.
 - `agent-friction-examples-1614.test.ts` derives the callable MCP surface from the runtime and checks that each friction family links concrete live tools and complete examples.
 - `architecture-doc.test.ts` imports the VBA import orchestrator and proves the documented rollback and save-only decisions against the live core service.
 - `dysflow-usage-examples-1611.test.ts` derives the advertised MCP tool set from the runtime and proves each tool has a canonical example file.
+- `dysflow-usage-recipes-1871.test.ts` checks every recipe in the `dysflow-usage` Recipes table against the live input schemas: each named tool exists and each passed parameter is a schema property.
 - `example-input-properties-contract.test.ts` derives advertised tool schemas from the runtime and checks exact scaffold input-property parity.
 - `form-noise-keys-docstring-1686.test.ts` iterates the live `FORM_NOISE_KEYS` set and requires the `stripFormSerializationNoise` docstring to strip every member and retain none of them, so a key added to the set without revising the prose fails here.
 - `mcp-readme-tool-surface.test.ts` imports `createDysflowMcpTools` and compares the inventory against the live `tools/list` surface.

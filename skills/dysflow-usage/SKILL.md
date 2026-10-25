@@ -18,6 +18,31 @@ metadata:
 
 # dysflow — consultation source
 
+## Recipes
+
+Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to every tool whose schema takes it.
+
+| Action | Call |
+| --- | --- |
+| Bootstrap the session | `bootstrap({cwd})`, then `schema({view:"index"})` |
+| Check source against binary | `verify_code({cwd})`; decide on `actionableOk`, `bulkImportable`, `bulkExportable` |
+| Plan an import of changed modules | `import_modules({cwd, moduleNames:["<Module>"], apply:false})`; then the same call with `apply:true` |
+| Plan a whole-tree import | `import_all({cwd, apply:false})` |
+| Export a module into the project source | `export_modules({cwd, moduleNames:["<Module>"], destinationRoot:"<worktree>/src", mutateBinary:false, apply:true})` |
+| Export a module to a folder outside the project | `export_modules({cwd, moduleNames:["<Module>"], exportPath:"<folder>", mutateBinary:false, apply:true})` |
+| Validate a test manifest | `validate_manifest({cwd, testsPath:"tests/tests.vba.json"})` |
+| Run the tests | `test_vba({cwd, testsPath:"tests/tests.vba.json"})` |
+| Lint a module before import | `lint_module({cwd, module:"<Module>"})` |
+| Lint form code | `lint_form_code({cwd, destinationRoot:"<worktree>/src", moduleNames:["<Form_Name>"]})` |
+| Inspect a form read-only | `analyze_form_ui({cwd, sourcePath:"<worktree>/src/forms/<Form_Name>.form.txt"})` |
+| Regenerate the schema diagram | `generate_erd({cwd})` |
+| Find the references to a symbol | `find_references({cwd, symbol:"<Name>", scope:"source"})` |
+| Free a stuck Access process | `list_access_operations({})`, then `cleanup_access_operation({cwd, operationId:"<id>"})` |
+
+The parameter names above are checked against the live tool schemas by `test/docs/dysflow-usage-recipes-1871.test.ts`.
+
+## Scope
+
 **Load this skill before a dysflow call** when the cwd holds `.dysflow/project.json`
 or Access, VBA, form or test artifacts. It answers *what the runtime accepts*.
 It does not say *what you must do*: the rules are in `dysflow-arnes`, which
@@ -52,7 +77,7 @@ Details and every field: `references/bootstrap-and-capabilities.md`.
 | Write policy `developer` vs `safe-by-default` | `references/write-policy.md` |
 | Response envelope and `structuredContent` | `references/transport-and-envelopes.md` |
 | `verify_code` fields and the committed ERD | `references/schema-and-verify.md` |
-| Form UI tools and `sync_binary` | `references/form-ui-and-sync.md` |
+| Form UI tools and source and binary sync | `references/form-ui-and-sync.md` |
 | Facts to confirm before a call | `references/call-checks.md` |
 | A typed error code | `references/error-codes.md` |
 | Functionality-by-functionality friction | `references/agent-friction-map.md` |
@@ -77,10 +102,9 @@ Every response carries `schemaVersion: "dysflow.result/v1"`. A failure carries
 
 ## Context in one line
 
-A call resolves its project from an explicit `cwd`, then from the project that
-`resolve_project` fixed for the session, then from the MCP startup cwd.
-`references/context-resolution.md` lists the order and the parameters each tool
-still requires.
+Pass `cwd`, the worktree root, on every call. Without it a call falls back to
+the MCP startup cwd. `references/context-resolution.md` lists the order and the
+parameters each tool still requires.
 
 ## Cross-reference
 
