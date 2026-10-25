@@ -892,8 +892,18 @@ export async function compareVbaSourceTrees(
       diffs.push({
         ...entry,
         ...controlPropertyFields,
-        sourceSnippet: firstDifferentLineSnippet(sourceText, binaryText, "source"),
-        binarySnippet: firstDifferentLineSnippet(binaryText, sourceText, "binary"),
+        sourceSnippet: functionalLineSnippet(
+          sourceText,
+          binaryText,
+          "source",
+          classification.firstUniqueSourceLine,
+        ),
+        binarySnippet: functionalLineSnippet(
+          binaryText,
+          sourceText,
+          "binary",
+          classification.firstUniqueBinaryLine,
+        ),
         // Additive semantic fields
         classification: classification.classification,
         reason: classification.reason,
@@ -1348,6 +1358,27 @@ function sortDiffEntries(entries: VbaSourceDiffEntry[]): VbaSourceDiffEntry[] {
   return entries.sort((left, right) =>
     `${left.moduleName}\0${left.fileType}`.localeCompare(`${right.moduleName}\0${right.fileType}`),
   );
+}
+
+/**
+ * Issue #1866 item 4 — point the snippet at the first line that counts toward the
+ * functional diff. `functionalLine` is the normalized text the classifier reported;
+ * the raw line is matched case-insensitively. Falls back to the first raw
+ * difference when the side has no functional line or no raw line matches.
+ */
+function functionalLineSnippet(
+  leftText: string,
+  rightText: string,
+  label: string,
+  functionalLine: string | undefined,
+): string {
+  if (functionalLine !== undefined) {
+    const key = functionalLine.trim().toLowerCase();
+    const lines = leftText.split("\n");
+    const index = lines.findIndex((line) => line.trim().toLowerCase() === key);
+    if (index >= 0) return `${label}:${index + 1}: ${(lines[index] ?? "").trimEnd()}`;
+  }
+  return firstDifferentLineSnippet(leftText, rightText, label);
 }
 
 function firstDifferentLineSnippet(leftText: string, rightText: string, label: string): string {

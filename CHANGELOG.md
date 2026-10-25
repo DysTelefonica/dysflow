@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(test-vba): an atom whose output carries text read from files no longer turns the whole `test_vba` call into `MCP_TOOL_ERROR` "Expected double-quoted property name in JSON" (#1850). Error details were serialized, path-stripped as one string and parsed back; the path patterns consumed escaping backslashes and spanned `","` boundaries, and HRESULT advice was appended after the closing brace. `error.details` is now redacted leaf by leaf (`src/core/utils/sanitize-error.ts`, `src/adapters/mcp/result-translation.ts`), and a JSON leaf such as `returnValue` stays valid JSON, byte-for-byte unless redaction changed it. An atom whose JSON-object envelope (`{"`/`{}`) does not parse now fails on its own with `cause.code: "ATOM_OUTPUT_UNPARSABLE"` and a bounded `outputExcerpt` instead of passing silently, while the rest of the run is still reported (`src/core/services/vba-atom-output.ts`, `src/adapters/vba-sync/vba-execution-adapter.ts`). Documented in `docs/api/mcp-tools.md` and `skills/dysflow-usage/references/error-codes.md`.
 
 ## [v4.4.14] - 2026-10-06
@@ -108,6 +110,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `fix(mcp)`: make discovery metadata match accepted inputs and procedure enforcement (#1833).
   - `test_vba.filter` now declares its real shape union in the inputSchema (`anyOf`: a string, or `{ tag }` with a non-empty string and no other keys). The `schema` and `describe_tool` parameter projections report `type: "union"` with the same `anyOf` instead of collapsing it to `string`. Enforcement is unchanged: the boundary validator still skips the property and `parseTestFilter` remains the single shape check; `export_modules`, `export_all`, `list_objects` and `harvest_form_catalog` keep their string-only `filter`.
   - The catalog's `MCP_WRITES_DISABLED` recovery hint is derived per tool from its inputSchema: `apply:false` when the tool accepts `apply`, `dryRun:true` only for a tool that declares `dryRun` without `apply`, and no plan flag otherwise. It previously recommended `dryRun:true` to every write-class tool, including `test_vba` and `run_vba`, whose schemas reject it. The strict-mode `MCP_ALLOWLIST_NOT_CONFIGURED` remediation and its explain tree now recommend `apply:false` too.
@@ -162,6 +166,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `docs(agents)`: correct the path to the release version stamper in `AGENTS.md`. The release section named `scripts/set-release-package-version.mjs`; the file is at `.github/scripts/set-release-package-version.mjs`, which is what `release.yml` and `release-package-version.test.ts` both use.
 
 ## [v4.4.7] - 2026-09-21
@@ -175,6 +181,8 @@
 > [the migration guide](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`run_vba` is now subject to the write gate on MCP.** As an alias tool it
   never passed through `createDispatchTool`, the seam where every other
@@ -227,6 +235,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `fix(ci)`: re-pin `pnpm/action-setup` before `actions/setup-node` in `.github/workflows/release.yml`'s `Build & Release Artifacts` job (#1739 regression that broke v4.4.4). `actions/setup-node` v5 now auto-enables `package-manager-cache` whenever it detects a `pnpm-lock.yaml` in the workspace (registry-url is no longer required); without pnpm on PATH, `Setup Node.js` fails with `Unable to locate executable file: pnpm`, so the `v4.4.4` run failed and no GitHub Release was published. #1755 removed this pre-step when it stopped npm publication ("ship only through this GitHub Release"); setup-node v5's auto-detection default was the regression. Restore `Enable pnpm` with `run_install: false` and re-release as `v4.4.5`; nothing publishes to a package registry — the release stays GitHub-Release-only.
 
 ## [v4.4.4] - 2026-09-19
@@ -241,6 +251,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `fix(ci)`: switch `npmjs-publish` in `.github/workflows/release.yml` from npm Trusted Publishing (OIDC, `id-token: write`) to a `NPM_TOKEN` automation-token secret (#1741, #1742). Trusted Publishing would have required an out-of-repo setup on `npmjs.com` for the `@aroman22/dysflow-pi` package and a maintainer action every time the publishing identity rotated; with `NPM_TOKEN` the only rotation surface is the repo's GitHub Actions secret. The job now requires the secret at the gate step and surfaces a typed remediation message (URL + intent) when it is missing. The npm CLI's trusted-publishing bootstrap is gone, so the `Verify npm trusted-publishing client` step (which pinned `npm >= 11.5.1`) was replaced by `Require NPM_TOKEN`.
 - `fix(ci)`: pin `pnpm/action-setup` before `actions/setup-node` in the `npmjs-publish` job (#1739, fixes `Unable to locate executable file: pnpm` on `ubuntu-latest`). `actions/setup-node` v5 auto-enables `package-manager-cache` whenever `registry-url` is set, and that flag requires `pnpm` / `npm` / `yarn` on `PATH`. The other three jobs in this workflow already install `pnpm` via `pnpm/action-setup` first; this job previously went straight to `setup-node` and tripped the cache check. The new pre-step uses `run_install: false` (the publish job runs `pnpm build` itself; it does not need `action-setup` to install dependencies).
 
@@ -248,11 +260,15 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `fix(plugin-pi)`: `resolveDysflowCommand` now accepts Windows-style absolute paths (`C:\...` / `C:/...`) regardless of the host platform (#1736). Previously the function used `path.isAbsolute` for the runtime-directory check, which is OS-specific: on Linux it returns `false` for a drive-letter path, even when the caller intentionally passed one. The `release.yml` workflow's `Exact-SHA quality authority` job runs on `ubuntu-latest` and `test/quality-gates/pi-native-package-1723.test.ts` exercises a Windows-style path through the same helper, so the regression blocked the last three tag-triggered releases from being published automatically. The check now uses `looksLikeAbsolute(p)` (a portable `path.isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p)` predicate) and the launcher filename pin follows the same rule — `dysflow.cmd` whenever the runtime directory is Windows-style, even on non-Windows hosts. Windows behaviour is unchanged.
 
 ## [v4.4.1] - 2026-09-15
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `fix(sync-binary)`: propagate `apply:true` into every chunk dispatch (#1733). The bridge was listing `apply` as a sync-binary-owned key in `stripSyncBinaryOwnParams`, so the `forward` payload the orchestrator passed to each `import_modules` / `export_modules` chunk dropped `apply`. With `direction:'binary-to-src'` and `apply:true`, the nested `export_modules` therefore ran plan-only and surfaced `mode:'plan'`, `exportedPaths:[]` while the top-level `sync_binary` result still reported `ok:true` — a silent corruption. The orchestrator now forwards `apply:willExecute` verbatim into every chunk and, as defence-in-depth, rejects any nested plan-only envelope under `willExecute` with a typed `SYNC_BINARY_CHUNK_REMAINED_PLAN` error. Symmetric fix applies to `direction:'src-to-binary'` and `direction:'both'`. New RED coverage at `test/adapters/vba-sync/sync-binary-apply-forwarding-1733.test.ts` (AC1–AC4).
 
@@ -753,6 +769,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fix: verify_form_bindings fails with RESULT_CONTRACT_VIOLATION because the generic vba-read contract required `controls` as an array; added a route-scoped contract that accepts the actual numeric count. (#1409)
 - Fix: map_form_behavior autoFetchCodeGraph falls back to form-declared events due to codegraph-vba CLI rejecting --json flag; adapter now drops --json and parses the fork's text output (**calls:** / **Dynamic-dispatch links**) into real call-path evidence (#1408)
 - Fix: analyze_form_layout fails with opaque RESULT_CONTRACT_VIOLATION; result envelope now includes actualShape/expectedShape and remediation hint (#1407)
@@ -818,6 +836,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - Expose plan-by-default `setup_project` through MCP, sharing the CLI's atomic project-config publication path so pure-MCP clients can bootstrap fresh worktrees (#1312).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Strengthen MCP diagnostics, human-safety gates, structured error and plan-mode contracts, orphan visibility, safe implicit defaults, and schema/runtime alignment (#1258, #1259, #1260, #1261, #1262, #1263, #1268).
 - Improve Access form/report detection and localized section resolution, and make newly added controls and document-module identities safe across Access round trips (#1267, #1290, #1301, #1302).
@@ -906,6 +926,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Resolve an absolute compatible PowerShell executable when the MCP host PATH is degraded, and retry Windows `EBUSY`/`EPERM` cleanup for disposable export databases (#1233).
 
 ## [v2.26.0] - 2026-07-27
@@ -939,6 +961,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - A database password Access rejects is reported as the typed `ACCESS_PASSWORD_INVALID` error instead of a generic runner failure carrying raw, host-locale-dependent Access text. The remediation names the environment variable actually consulted, and the original Access diagnostic is preserved as evidence, so a wrong password no longer reads like a runtime defect.
 - `run_vba` resolves procedures identically whether the call plans or commits, so a preview can no longer disagree with the write it previewed.
 - `query_execute` rejects a missing `mode` with a structured error naming the absent parameter, instead of an opaque generic input error.
@@ -962,6 +986,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1156 — `chore(openspec): archive the two verified completed changes` (PR #1160)
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Pull-request dependency audits now fail when the audit command cannot be executed, while genuine registry unavailability retains its warning policy.
 - The declared Node.js support range is bounded by versions exercised in CI, preventing unverified future major versions from being advertised as supported.
@@ -987,6 +1013,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1135 — `docs(changelog): document the abort/timeout semantics change in v2.24.1` (PR #1142)
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Stale-lock eviction recovers from a leaked eviction claim instead of being disabled for good. Previously, a single failed cleanup of the `<lockPath>.evicting` marker — the documented trigger is a concurrent release leaving the directory in Windows `DELETE_PENDING`, surfacing as `EACCES`/`EPERM` — permanently and silently stopped that lock from ever being evicted again. Every later acquirer burned its full timeout and threw `RunnerLockTimeoutError` with nothing in the logs to explain it. Recovery is now three-part: the claim carries an owner record; a claim older than the stale window whose owner process is gone (or that carries no readable owner record) is treated as leaked, removed, and re-taken once; and a claim older than the recovery ceiling is reclaimed even when its pid still resolves, because recycled pids make liveness alone insufficient. A claim younger than the stale window is still a genuine concurrent eviction and still backs off, so contended-lock behavior is unchanged.
 - Eviction no longer trusts the claim alone. The lock's owner record is re-read under the claim and removal is refused unless it still matches the instance observed as stale, so a lock already replaced by a new acquirer survives even if claim exclusivity is defeated. Locks written before owner records existed remain evictable.
@@ -1023,6 +1051,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Explicit `AbortSignal` cancellation and execution timeout are now reported separately. An aborted run reports `aborted: true` and `timedOut: false`; before this release, the same aborted run reported `timedOut: true`.
 
 ### Migration notes
@@ -1056,6 +1086,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1092 — `fix(config): anchor frontend/source to active worktree` (PR #1093). Persistent config stores only the frontend filename (canonical `frontendFile`, backward-compatible basename-only `accessPath`); the effective frontend path is `join(actualConfigOwningWorktreeRoot, frontendFilename)`; `projectRoot` derives from the physical owner of `.dysflow/project.json`; cross-worktree operations require explicit per-call target; legacy absolute paths are rejected with migration guidance; five typed errors (`FRONTEND_TARGET_MISSING`, `FRONTEND_TARGET_AMBIGUOUS`, `FRONTEND_PATH_NOT_BASENAME`, `INHERITED_WORKTREE_MISMATCH`, `PROJECT_ID_COLLISION`).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `fix(config): normalize path separators before matching project config basename` (commit `a90b8171`). On Windows, `node:path.join` returns native `\` separators, so `info.path.endsWith(".dysflow/project.json")` never matched and `discoverWorktreeProjectConfigs` returned the `.dysflow/` folder as the project root. Normalize to forward slashes before the comparison.
 - `test(e2e): pass timeoutMs in args for vba_inline_execution` (commit `8940c93e`). The harness-level `timeoutMs` only caps how long the harness waits for a tool response — it is NOT propagated to the tool call. Mirror the `export_all` pattern.
@@ -1129,6 +1161,8 @@ Homogeneous MCP contract epic (#1081) — Dysflow now exposes one coherent, mach
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(installer): runtime refreshes force dependency relinking, preventing missing transitive packages such as `fast-uri` after an in-place update (#1069).
 - test(vba-diff): make semantic-classifier fixtures independent of checkout directory names (#1066).
 
@@ -1149,6 +1183,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(mcp): `MCP_INPUT_INVALID` unknown-key rejections now list the schema's valid params and suggest the nearest match — `delete_module({ module })` answers `module is not allowed. Valid params: … Did you mean 'moduleName'?` instead of the bare rejection. Covers the F1 naming friction (`module` vs `moduleName` vs `moduleNames`) at the validator, for every tool at once (#1057 F1 F4)
 - fix(mcp): contradictory `apply` + `dryRun` combinations (`apply === dryRun` as booleans, e.g. `apply:true, dryRun:true`) are rejected as mutually exclusive instead of one flag silently winning; consistent redundancy (`apply:true, dryRun:false`) keeps the #977 precedence contract. `export_modules`/`export_all` schemas now declare `dryRun` (and `diff` on `export_modules`) so the #1055 no-write routing is reachable through MCP: `dryRun:true` ≡ `apply:false` (plan) on every write tool (#1057 F8)
 
@@ -1162,11 +1198,15 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(form-bind): `import_modules` and `form_set_property` preserve ComboBox/ListBox control properties, verify newly-added properties after the guarded import, and annotate source/binary control-property mismatches in `verify_code` (#1053).
 
 ## [v2.21.0] - 2026-07-21
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - fix(dysflow-vba-manager): Auto-mode `import_modules` with full-form source (`.cls` + `.form.txt` together) no longer silently renames the legacy `Form_<base>` form to `Form_TempSccObjN`; fail-closed with the new typed error code `FORM_VBNAME_PREFIX_MISMATCH` whenever the binary already has a legacy prefixed form and the sibling `.cls` declares `Attribute VB_Name` without the `Form_`/`Report_` prefix (#1040). Regression of #1020 round-3 — the round-3 fix only covered the `.cls`-only / `.form.txt`-only paths; the Auto path with both files together was unfixed because `LoadFromText` runs before `AddFromFile` and the pre-existing form was renamed without a subsequent re-bind. Consumer can resolve by renaming the source files to use the prefixed form name (`Form_<base>`) or deleting the legacy prefixed form from the binary before retrying.
 - fix(dysflow-vba-manager): per-module postcondition on the import path — the typed-error envelope `error.code` now carries `FORM_VBNAME_PREFIX_MISMATCH` (mapped in `Invoke-ImportAction`'s catch block, mirroring the `VB_NAME_MISMATCH` / `FORM_NAME_RESOLUTION_FAILED` / `FORM_SOURCE_MALFORMED` pattern from #752 / #951 / #958). No more silent `status:"ok"` returns when the binary was left in an invalid state.
@@ -1189,6 +1229,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(vba-sync): keep MSACCESS handles released on the failure path of binary-mutating tools — `form_set_properties` (plural) and `cleanup_access_operation` previously left orphaned `MSACCESS.EXE` processes (4 PIDs unkillable via MCP) when the failure was not a timeout. Adds a part-A "reap on non-timeout failure" path in `vba-sync-adapter.ts`, a part-B `CLEANUP_KILL_UNVERIFIED` after post-kill re-inspection in `access-operation-cleanup.ts`, and a part-C relaxation of the orphan-cleanup command-line gate to accept `-Embedding` / `/automation` COM child markers in `access-orphan-cleanup.ts`. Pre-existing `try { ... } catch { /* ignore */ }` envelopes keep all paths best-effort. The single-write/single-import atomic gate from #951 remains intact (#1016, lifecycle regression)
 - fix(codegraph-vba): resolve Windows `ENOENT` spawn for `map_form_behavior autoFetchCodeGraph` — the invoker now resolves the `codegraph-vba` binary through a multi-extension fallback (`.cmd` → `.bat` → `.ps1` → `.exe`) instead of hard-coding one extension. Existing refusal paths preserved when the resolved binary is non-empty and not a COM child marker. The `codegraph-vba` runtime's behaviour on `--json` argparse remains out of scope (tracked in `ardelperal/codegraph-vba#200`) (#1015)
 - fix(dysflow-vba-manager): preserve `Form_` / `Report_` prefix on `Attribute VB_Name` when the inbound `ModuleName` lacks the prefix — round-3 of an intermittent regression. Single-line surgical change: `Import-DocumentCodeBehind` now passes the resolved `$componentName` (which carries the prefix) to `Ensure-VbNameAttributeAtTop` instead of the basename `$ModuleName`. Two latent BeforeEach infrastructure bugs surfaced (broken scriptblock wrapper for the helper, and `function script:` scope shadowing) and were repaired in the same commit because the round-3 RED tests could not pass without them; the production behaviour change is strictly the one-line fix (#1020)
@@ -1207,6 +1249,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(runner): `test_vba` runner now executes against a fresh snapshot of the configured `.accdb` taken at the moment the test run is prepared (`Get-TestSandboxPath` byte-exact copy under the OS temp tree, cleaned up by `Remove-TestSandbox` in the `finally` block). Previously the runner opened the source binary directly, which could surface stale compiled-bytecode or in-memory helper state and let the consumer observe helper output that did not match what `vba_inline_execution` produced against the same binary (#1013)
 
 ### Notes
@@ -1221,6 +1265,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(vba-sync): preserve `WithEvents` member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
 - fix(vba-sync): avoid false `IMPORT_TRUNCATED` for `WithEvents` member-level attributes — `Convert-VbaTextForCodeModuleString` now strips member-level metadata so the post-import truncation guard compares apples to apples and the `WithEvents` re-import path returns `status:"ok"` with all member-level attrs preserved on re-export (#1010, follow-up to #1007/#1008)
 
@@ -1232,11 +1278,15 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(vba-sync): avoid false IMPORT_TRUNCATED for WithEvents member-level `Attribute <var>.VB_VarHelpID` lines — `Convert-VbaTextForCodeModuleString` now strips member-level metadata (matching what VBE strips from `CodeModule.AddFromString`), so the post-import truncation guard compares apples to apples and the WithEvents re-import path returns `status:"ok"` (#1010, follow-up to #1007/#1008)
 
 ## [v2.18.0] - 2026-07-20
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - fix(vba-sync): preserve WithEvents member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the existing post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
 
@@ -1251,6 +1301,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.16.0] - 2026-07-19
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - fix(e2e): use mcp-e2e sandbox for per-issue scripts; sandbox isolation proven against the stale repo-root F16 config that triggered the original failure (#1001, closes #1003)
 - fix(vba-sync): chunk-recursion guard for verify_code — `compareSourceAgainstBinary` no longer re-enters itself through `chunkSize` / `parallelChunks` / `onChunkTimeout` (chunk-control strip before single-flight comparison, 14 new regression assertions, #1001)
@@ -1274,6 +1326,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(release): stamp the packaged runtime version from the immutable release tag and reject malformed tags (#946, closes #945)
 - fix(mcp): resolve the diagnostics documentation bundle from the packaged runtime when long-lived clients retain a stale `DYSFLOW_HOME` (#947, closes #944)
 - fix(release): make the diagnostics bundle quality gate deterministic on Windows while retaining real archive inspection on non-Windows runners (#949, closes #948)
@@ -1283,6 +1337,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.14.1] - 2026-07-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - fix(form): pre-validate property name and value type in `form_set_property` (#942, closes #941)
 - fix(install): ship `references/error-codes.md`, `docs/diagnostics/hresult-guide.md`, and `docs/diagnostics/form-import-gate-failures.md` in the actual install, and expose a `documentationBundle` field on `get_capabilities` so consumers can detect missing diagnostics up-front (#943, closes #940)
@@ -1301,6 +1357,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 - refactor(mcp): decompose read tools through #917-#921 and retire the barrel while preserving contracts and single snapshots (closes #897, #913, #914, #915, #916)
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - fix(forms): preserve FormIR string encoding (#899, commit 76b02551)
 - fix(forms): recognize the AutoResize root marker (#904, closes #902)
@@ -1371,6 +1429,8 @@ tools (`list_objects`, `verify_code`, `export_modules`, …) all go through
 `executeMappedTool` and attach the env explicitly.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **vba-sync: forward `ACCESS_VBA_PASSWORD` / `DYSFLOW_ACCESS_PASSWORD` to the
   child PowerShell process when the raw-executor caller omits `env`
@@ -1520,6 +1580,8 @@ Patch release. Closes the four-PR chain for #718 (`projectId Form Source Resolut
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **resolve-project-tool (#718)**: previously the tool read `parsed[SOURCE_ROOT_FIELD]` and returned `sourceRoot: null` whenever the project's `.dysflow/project.json` used the canonical `destinationRoot` key (default after the dysflow-config migration). It now reads `destinationRoot` first and falls back to legacy `sourceRoot` for configs that still use the old key. Output field name stays `sourceRoot` so the MCP response shape is unchanged.
 - **vba-forms-clone-tools (#718, Group C)**: the projectRoot fallback (`resolveMutationPath(projectRoot, 'forms/{name}')`) now delegates to the pure resolver against `destinationRoot` instead. The bench-cache tier is untouched. Fixes a real split-project-layout miss where the source form lived under `destinationRoot/forms/` but the tool was looking under `projectRoot/forms/`.
 - **vba-forms-lint-adapter (cross-platform)**: the raw-path fallback branch (no `projectId`) used `node:path.resolve` which prepends the platform-specific drive root to Windows-style path strings (`C:\` on Windows, `/c/` on Linux). The fallback's intent is "use the path as-given", so it's now `node:path.join`. On Windows the result is byte-identical to `resolve` for absolute Windows-style inputs; on Linux the test fixture (and any cross-platform caller) now sees a consistent path. Latent defect from PR 3 of the chain, exposed by PR 4 CI on ubuntu-latest.
@@ -1591,6 +1653,8 @@ Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-v
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **runtime** (#806): PowerShell parser errors broke all VBA tools in v2.3.0. `Invoke-ExportAction`'s WARN message at line 4026 had a UTF-8 em-dash that was being misread by the runtime. The single-character fix (em-dash → hyphen) restores the runtime. Tests at `scripts/tests/dysflow-vba-manager.Tests.ps1` (block #804) still pass (4/4); the message text reads identically. pnpm test: 2820 passed, 0 regressions. CI: both jobs green.
 
 ## [v2.3.0] - 2026-07-09
@@ -1598,6 +1662,8 @@ Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-v
 Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `export_all` (via `Invoke-ExportAction` in the PowerShell runner) no longer abort the entire call when one of the requested modules is missing from the binary. The pre-validation step is now **total over the input list** — a missing module is a per-module result, not a call-level error. It surfaces in the structured `warnings[]` payload with the stable error code `VBA_MODULE_NOT_FOUND` and the export continues with the modules that DO exist (#804). The TS compare phase (`vba-source-comparison.ts:666-668`) then naturally places the missing modules in `missingInBinary` because no file was written to the temp dir.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **verify_code / export_all / export_modules** (#804): pre-validation no longer throws on the first missing module. `Invoke-ExportAction` collects missing module names into `warnings[]` and continues. The `verify_code` response shape (`matched` / `different` / `missingInSource` / `missingInBinary` / `nonActionableDifferent` / `hasFunctionalDifferences` / `actionableOk` / `recommendedAction`) is unchanged — only the contract that `missingInBinary` is correctly populated for comprehensive input lists is now honored. Tests at `scripts/tests/dysflow-vba-manager.Tests.ps1` (new `Invoke-ExportAction — missing module pre-validation (#804, total over input)` block, 4 tests) pin the contract from the outside: a mixed list does not throw and the missing module surfaces in `warnings[].error="VBA_MODULE_NOT_FOUND"`; an all-missing list is total and emits every name in `warnings[]`.
 
@@ -1610,6 +1676,8 @@ Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `exp
 Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })` are now rejected at the dispatch seam with the typed error `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). The previous behavior silently wrote to the source tree — the diff flag was documented as read-only but the adapter never honored it (the PowerShell runner has no `$Diff` parameter and the `MODULE_MAPPINGS.export_all.extra` mapping only forwards `verbose`), causing partial writes on `VBA_MANAGER_TIMEOUT`. Callers that want a real read-only compare should use `verify_code({ strict, moduleNames })`.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **export_all / export_modules** (#802): `diff:true` no longer silently writes to the source tree. The flag is refused at the adapter level with `DIFF_MODE_REQUIRES_VERIFY_CODE` and the public docstring (`tool-parity-registry.ts:109`) now matches runtime behavior. Tests at `test/adapters/vba-sync/vba-modules-adapter-diff-flag.test.ts` pin the contract from the outside: typed refusal for `export_all(diff:true)` and `export_modules(diff:true)`, plus a regression guard that the normal export path is unchanged when `diff` is absent.
 
@@ -1630,6 +1698,8 @@ Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })`
 Patch release. Inverts the default severity of the `identifier-safety` lint rule's non-ASCII check from `error` to `warning` and adds an explicit opt-in for the historical strict contract. Closes #789.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **lint** (#789): `identifier-safety` no longer rejects valid VBA identifiers with non-ASCII characters as `error` by default. Spanish / Portuguese / French / German / Italian identifiers (e.g. `EnumSiNo.Sí`, `AñoActual()`) are first-class VBA citizens — VBA compiles them natively, `import_modules` with sha256 match works, and the human-compile in Access completes without errors. The check now emits `warning` by default; `isClean: true` reflects this when no other defect is present. The `._` dot-underscore and reserved-word findings stay at `error` always (real syntactic defects).
 - **lint** (#789): removed the false-positive alert fatigue in cross-fleet consumers (HPS, gestion_riesgos, no_conformidades, condor, cadete, ...) where Spanish-language identifiers were being flagged as errors despite compiling and shipping in production.
@@ -1653,6 +1723,8 @@ Patch release. Internal consolidation with no behavior change: collapses the dup
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **mcp** (#790): removed the inert `_registryCoversAllContracts` type pin in `mcp-tool-risks.ts` — it performed no real check; the `_everyContractCovered` IIFE is the genuine build-time guard that throws when a contract tool lacks a risk entry.
 - **vba-modules** (#790): `auditOrphans` no longer casts the `list_objects` result to `any`; it uses a narrow local `VbeObjectList` shape, dropping the `biome-ignore`.
 
@@ -1665,6 +1737,8 @@ Patch release. Internal consolidation with no behavior change: collapses the dup
 Patch release. Wires the v2.1.0 risk-based write execution policy into the MCP dispatch path and enforces the export-source guard at runtime. Closes #785; delivers the runtime half of #783.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **mcp** (#785): dispatch seam was advertising `effectiveDryRunDefault` in `get_capabilities` (v2.1.0) but never consulting it at the call path. The `writeExecutionPolicy` value is now threaded from `createDysflowMcpTools` through `registerMcpTools` and `createDispatchTool`; the new helper `resolveEffectiveDryRunInput(name, mode, input)` runs at the dispatch boundary AFTER the deprecation strip and schema validation. With `capabilities.writeExecutionPolicy: "developer"` set, `import_modules` and `test_vba` reach the runner without explicit flags; `safe-by-default` projects keep the historical `dryRun: true` default byte-for-byte.
 - **mcp** (#785 / #783 partial): `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` is now live at runtime. In `developer` mode, `export_modules` / `export_all` whose destination overlaps the active source root is refused at the dispatch seam with a structured envelope (`code`, `destination`, `sourceRoot`, `remediation`). `confirmOverwriteSource: true` bypasses the guard. Source-root resolution prefers the MCP access-context resolver, falling back to the caller's own `destinationRoot` only when the resolver is unavailable.
@@ -1695,6 +1769,8 @@ Patch release. Fixes `vba_inline_execution`, which failed on every call with
 `no encuentra el procedimiento '__dysflow_inline__.ExecuteInline'`.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **mcp**: `vba_inline_execution` failed with "procedure not found" (`#786`). Root cause was the module-qualified procedure name passed to `Application.Run`: Access reads a dotted prefix as a **project** qualifier, so `__dysflow_inline__.ExecuteInline` resolved to a non-existent project. The inline path now runs the snippet by its **bare** procedure name. Verified end-to-end against real Access. This was NOT a missing-compile issue — save-only import is sufficient; no compile machinery was reintroduced (`feat-759-no-compile` is preserved, `compile_vba` stays removed).
 - **mcp**: inline snippets can now **return a value**. The snippet is wrapped in a `Function` that returns a bare `result` variable (previously a `Sub`, which silently discarded it), so read-only introspection like `result = "Attrs=" & fld.Attributes` surfaces via `returnValue`. Makes `vba_inline_execution` usable for reading runtime-only DAO metadata without opening Access.
@@ -1732,6 +1808,8 @@ Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **orphan-cleanup** (#781 P2): dedupe headless-gate + revalidate-before-kill sequence. `scanAndCleanOrphans` y `retireUnownedRecord` ya no duplican la coreografía; se extrajo un helper privado `killIfHeadlessAccess` con los mismos diagnostic codes (`CLEANUP_RACE_PID_REUSED`).
 - **powershell** (#781 P2): `spawnPowerShellProcess` ahora distingue "pwsh no encontrado / spawn ENOENT" de un timeout-kill. El resultado lleva un campo `spawnError?: string` y los call-sites en `vba-sync-adapter` lo surfacing con un diagnostic code `POWERSHELL_SPAWN_FAILED`.
 - **mcp** (#781 P3): `createDysflowMcpTools` pasa de 9 parámetros posicionales a un options object. Renames: `writesEnabled` → `writes`, `lintRulesOverride` → `lintOverrides`. Comportamiento idéntico para call-sites que omiten campos opcionales.
@@ -1747,6 +1825,8 @@ Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos
 - **config**: Top-level `allowWrites` and `allowedProcedures` fields in `project.json` are now rejected with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`. Migrate to the `capabilities` block. (T18)
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **config**: Reject deprecated top-level config fields with clear migration guidance (T18)
 - **orphan-cleanup**: Require positive ownership proof for PWSH.EXE cleanup (T16)
@@ -2547,6 +2627,8 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`exists` / `delete_module` single-name forwarding (`ea9c0af`, RED `7c2a344`).** `VbaSyncAdapter.execute("exists", { moduleName:"Foo" })` and `("delete_module", { moduleName:"Foo", force:true })` now correctly forward `["Foo"]` to the runner. Root cause: `moduleNamesProvided` was derived from `Object.hasOwn(params, "moduleNames")`, which only saw the literal plural key. Now `(import_all && Object.hasOwn(params, "moduleNames")) || moduleNames.length > 0`, preserving R4 for `import_all` explicit-empty while making the single-name path visible.
 - **WU-F descendant walker missing implementation (`640c173`).** The `fix(e2e): watch suite-owned descendant tree (W5-F)` commit (`90f4867`) imported `isPidOrDescendantAlive` from `_helpers/mcp-e2e-record.mjs` but never implemented the helper. Without this fix, the entire mcp-e2e suite would fail to import. Restores `walkDescendantsPids` (WMIC parent→children BFS) and `isPidOrDescendantAlive` (fast-path `process.kill(pid,0)` plus walker fallback), with fail-open semantics so a missing `wmic` degrades to parent-only detection rather than crashing the suite.
 - **ESM `require("node:fs")` lazy fallback (`58412f1`).** `resolveMcpE2eCommand`'s default `existsSync` was a lazy `require("node:fs")` inside an ESM module. On Windows that binding silently answers false for every path, so every consumer invoking the helper from real ESM (the only shape `mcp-e2e.mjs` has) hit `MCP_E2E_OVERRIDE_NOT_FOUND` / `MCP_E2E_NO_RUNTIME_AVAILABLE` even when the runtime was present on disk. Hoists the import to a top-level static import; preserves the test injection surface (`options.fs.existsSync`).
@@ -2576,6 +2658,8 @@ Hotfix for PowerShell 7+ (`pwsh`) script-load order in `dysflow-vba-manager.ps1`
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`Set-ScriptOutputEncodingUtf8` used before defined under `pwsh` 7+ (`678a67d`).** The script invoked `Set-ScriptOutputEncodingUtf8` at line 116 but defined it at line 135. Windows PowerShell 5.1 tolerated the order; `pwsh` 7+ raises `CommandNotFoundException` and the `trap` block returned `VBA_MANAGER_UNEXPECTED_EXIT` with `trap_kind: CommandNotFoundException`, blocking every downstream action (test_vba, compile_vba, etc.). The helper is now defined in an explicit early-helpers block placed before the first call site. `Set-VbComponentNameSafe` and `Write-DysflowOperationMarker` are moved alongside for the same reason.
 
 ### Tests
@@ -2588,6 +2672,8 @@ Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and cl
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`dysflow_test_vba` manifest path resolution (`f7e47ac`).** When neither `proceduresJson` nor `procedureName`+`argsJson` was provided, `VbaExecutionAdapter.resolveTestProceduresJson` used `resolve(undefined, "tests.vba.json")` and produced degenerate paths surfaced externally as `ENOENT: open '[PATH]<\projectRoot>\tests.vba.json'`. The adapter now resolves a sensible base directory (`params.projectRoot` → `orchestrator.cwd`) with a guardrail, builds an ordered candidate list for the manifest across `projectRoot`, `destinationRoot`, and `cwd` (with `tests/tests.vba.json` and `tests.vba.json`), iterates them safely, and on failure returns `VBA_INVALID_TEST_PLAN` with `details.candidates` plus an actionable hint to pass `proceduresJson`, `procedureName`+`argsJson`, or an absolute `testsPath`.
 
 ### Changed
@@ -2597,6 +2683,8 @@ Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and cl
 Hotfix release for MCP Access path resolution and signed update hardening.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **MCP `accessPath` override precedence (`0b3d985`).** Explicit `accessPath` / `databasePath` values passed to MCP tools now win over `.dysflow/project.json` when a `projectId` is also provided, fixing false `CONFIG_TARGET_NOT_FOUND` failures for existing Access databases in consumer projects such as `gestion_riesgos`.
 - **Relative project config path diagnostics (`0b3d985`).** Missing-target errors now carry structured diagnostic details (`accessDbPath`, `configPath`, `projectRoot`) for internal/debug consumers while preserving external sanitization.
@@ -2617,6 +2705,8 @@ Per-module VBA import reporting, Unicode preservation on PowerShell 7, pre-impor
 - **MCP write-gate for orphan process cleanup (`495cf5b`).** `dysflow_access_force_cleanup_orphaned` now refuses to kill a PID when MCP writes are disabled, returning `MCP_WRITES_DISABLED`. The list-only branch remains read-only (closes #564).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Unicode preservation in import round-trip on PowerShell 7 (`3fbd60a`).** `Normalize-VbaImportText` and `Split-CodeBehindSection` use default `-split` (no `-1` limit) which had a regression on PS7, silently dropping non-ASCII codepoints (S, í, ó, ñ) and the Windows-1252 byte sequence on multi-line imports.
 - **`Fix-EncodingInSrc` bulk mode coverage for `.report.txt` and `.form.txt`.** Restored BOM stripping for managed source extensions after a Pester test isolation regression (`13b2228`).
@@ -2647,6 +2737,8 @@ VBA manager hardening: active-lock verification on deletion, arity-0 run_vba fix
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Active-lock verification on delete_module (#601).** Verified post-deletion check prevents false success reporting when VBA components are locked by active databases.
 - **Arity-0 run_vba execution without ref requirement (#606).** Parameterless procedure calls bypass PowerShell dynamic ByRef wrapping, allowing direct invocation.
 - **Stable module name for inline executions (#602).** Inline compilation uses a single stable module name (`__dysflow_inline__`) and purges previous runs instead of leaving unique random module structures.
@@ -2661,6 +2753,8 @@ VBA inline execution sanitization, standardized dryRun defaults, size-limit stre
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **VBA inline execution regex sanitization.** `vba_inline_execution` now validates the input code parameter using a case-insensitive word-boundary check (`\bDeclare\b`, `\bShell\b`, `\bCreateObject\b`, `\bGetObject\b`, `\bLib\b`), rejecting unsafe command injection attempts with `INVALID_INPUT`.
 - **Standardized dryRun defaults.** Writing tools (`import_modules`, `import_all`, and `generateForm`) now consistently default to plan mode (`dryRun: true`) unless `apply === true` or `dryRun === false` is explicitly supplied.
 - **Immediate stream termination on limit violations.** The stdio size guard (`SizeLimitTransform`) now explicitly closes and destroys the stream via `this.destroy()` immediately after sending the `id: null` error frame, preventing client hangs.
@@ -2671,6 +2765,8 @@ VBA inline execution sanitization, standardized dryRun defaults, size-limit stre
 Filesystem write-gates for forms/catalog tooling, PowerShell security hardening against path traversal, and core dependency refactoring (issues #565, #566, #568, #569, #570, #577, #579).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **VBA form generation dry-run honors write-gates (#565, #566).** `generate_form` and `catalog_add_control` are now classified under a new `mutatesFilesystem: true` route property in the MCP tool route registry. When writes are disabled, `generate_form` no longer touches the disk, honoring the `dryRun` flag. `VbaFormService` was updated to support `dryRun: true` natively on form generation.
 - **PowerShell import/fix_encoding script path-traversal prevention (#569).** Added `Assert-SafeVbaModuleName` to block module names containing path traversal sequences (`..`, `/`, `\`) or drive qualifiers, protecting local file imports and encoding fixes.
@@ -2691,6 +2787,8 @@ Filesystem write-gates for forms/catalog tooling, PowerShell security hardening 
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Reworded null-PID close warning to prevent false-alarm unsafe reports.** The previous console message "OwnedPid is null; cannot kill by path/CommandLine. Running ROT/lock fallback only" was misread by downstream agents as an unsafe multi-instance process kill. The notice has been extracted into `Get-NullPidCloseNotice` and clearly states that dysflow kills nothing on this path and other Access instances are unaffected.
 
 ## [v1.9.0] - 2026-06-26
@@ -2698,6 +2796,8 @@ Filesystem write-gates for forms/catalog tooling, PowerShell security hardening 
 Forms/reports semantic-diff and sync correctness pass, plus consuming-agent ergonomics on `verify_code` and `list_access_operations` (issues #549–#554, #559, #561).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`verify_code` now strips report code-behind from `.report.txt` comparisons (#549).** The semantic classifier hard-coded the `CodeBehindForm` marker, so for a `.report.txt` (which Access serializes with `CodeBehindReport`) the code-behind section was never stripped and was compared, double-counting report VBA code that the sibling `.cls` already owns and producing false `actionableDifferent` results. The marker match now covers both forms and reports (`stripCodeBehindSection`), mirroring the PowerShell `Split-CodeBehindSection`.
 - **`fix_encoding` now repairs `.report.txt` files in bulk mode (#550).** `Fix-EncodingInSrc`'s bulk glob included `*.bas`/`*.cls`/`*.frm`/`*.form.txt` but not `*.report.txt`, so a BOM-corrupted report source was silently skipped and later failed to import with an opaque `LoadFromText` error.
@@ -2720,6 +2820,8 @@ Consuming-agent ergonomics pass over the MCP surface (issues #543, #533, #544, #
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Headless compile failures are now detected instead of reported as success (#543).** `RunCommand(126)` (`acCmdCompileAndSaveAllModules`) returns normally even when modules fail to compile, so the previous catch-only detection reported `compileResult.ok: true` on broken code (false green). The runner now reads `Application.IsCompiled` after compiling and surfaces a structured `VBA_COMPILE_ERROR` (with a non-zero exit) when the project does not compile, so `import … compile:true` and `compile_vba` fail loudly. The signal is reliable for standard/class modules; for form/report **document** modules — which Access cannot bring to a compiled state headless — the result reports `compileResult.verified: false` rather than a spurious failure (the headless document-module limitation is tracked in #547). Verified with a real-Access E2E repro.
 
 ### Added
@@ -2736,6 +2838,8 @@ Consuming-agent ergonomics pass over the MCP surface (issues #543, #533, #544, #
 ## [v1.7.9] - 2026-06-25
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`compact_repair` can now compact a password-protected database.** The runner passed the password only as DAO `CompactDatabase`'s 3rd argument (`DstConnect`, which sets the *output* password), never the 5th (`SrcConnect`) that *opens* a protected source — so compacting a password-protected `.accdb` always failed with `No es una contraseña válida`, even with the correct password. (Verified empirically against `DAO.DBEngine.120`: 3rd-arg-only fails to open a protected source; 3rd + 5th succeeds.) The password is now supplied in both args, so the protected source opens and the compacted output stays protected. The password-selection fix in v1.7.3 was correct — only the DAO call site was wrong, and the MCP E2E only exercised the dry-run path, so it was not caught earlier. Added a real-DAO integration test that compacts a password-protected database end to end.
 
@@ -2759,6 +2863,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **VBA-sync operations resolve the manager script independent of the working directory.** Without `DYSFLOW_HOME`, the default `dysflow-vba-manager.ps1` path was the bare relative `scripts/dysflow-vba-manager.ps1`, which failed (`-File ... no existe`) when an operation spawned PowerShell with a project-directory `cwd` — surfaced by the real-Access E2E as `list_objects` failing. It now resolves to an absolute path from the package root (new `findPackageRootNear` helper) and is cwd-independent. Production (where `DYSFLOW_HOME` is set) is unaffected.
 
 ### Tests
@@ -2769,6 +2875,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`compact_repair` no longer wedges on a leftover target file.** DAO `CompactDatabase` throws if the target already exists; a run killed between compaction and the final `Move-Item` left a stale `<base>.compacted` file that made every subsequent `compact_repair` on that database fail. A new Pester-tested `Clear-CompactTarget` removes a leftover target before compacting.
 - **`compact_repair` now honors `backupFirst`.** The MCP schema accepted `backupFirst` but it was silently ignored — the field was never forwarded from the request mapper to the PowerShell payload, so the runner could not see it. `backupFirst` is now wired through `AccessQueryRequest` + `buildMaintenanceRequest`; when set, the runner backs the source up via `Backup-AccessFile` before compacting and returns the `backupPath` in the result (`null` when no backup was taken).
 
@@ -2776,17 +2884,23 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Lock acquisition no longer fails intermittently with "Access is denied" on Windows.** Directory deletion is not synchronous on Windows: a concurrent lock *release* leaves the lock directory in `DELETE_PENDING` state while a handle (or the indexer/antivirus) still touches it, so a competing `mkdir` returns `EACCES` (`ERROR_ACCESS_DENIED`) or `EPERM` instead of `EEXIST`. Both lock acquirers — the cross-process execution lock (`cross-process-lock.ts`) and the operation-registry mutation lock (`access-operation-registry.ts`) — only retried on `EEXIST` and **threw** on `EACCES`/`EPERM`, causing intermittent failures under contention. A shared `isTransientLockContentionError` helper now treats `EEXIST`/`EACCES`/`EPERM` as transient and backs off + retries; stale-lock eviction still runs only for `EEXIST`, and `EACCES`/`EPERM` retries are logged so a genuinely permanent permission error (bounded by the acquire deadline) stays observable.
 
 ## [v1.7.3] - 2026-06-24
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`compact_repair` now compacts a password-protected frontend with the correct password.** The runner's only env-sourced compaction password was `$BackendPassword`, but the configured frontend (`accessPath`) is protected with the **access** password — so compacting a password-protected project database failed with the DAO error `No es una contraseña válida` even though `query_execute` / `test_vba` (which use the access password) opened the same binary fine. Raw payload passwords are stripped before reaching PowerShell for security (#498), so the env-sourced `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_BACKEND_PASSWORD` are the real source. A new pure, Pester-tested `Resolve-CompactPassword` selects the password by the database being compacted: the configured frontend uses the access password, a separate/backend file uses the backend password, with cross-fallback. Explicit `passwordEnv` payload overrides still win.
 
 ## [v1.7.2] - 2026-06-24
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`compact_repair` can now compact a project's own configured database.** The runner rejected any source whose resolved path equaled `-AccessDbPath` with `compact_repair cannot rewrite the currently open database safely. Use a separate databasePath`, which made compacting the project's own `.accdb` from the MCP impossible — the primary use case. The guard protected against nothing real: `compact_repair` is early-dispatched **before** MSACCESS opens, runs pure DAO `CompactDatabase` into a **distinct** temp target, then atomically `Move-Item`s it over the source while holding the cross-process execution lock (the same operation a direct `Access.Application.CompactRepair` performs safely). The source/target planning was extracted into a pure, Pester-tested `Get-CompactRepairPlan` and the guard removed. DAO still surfaces a real error if the source is genuinely open.
 
@@ -2815,6 +2929,8 @@ surface; default runtime behavior is unchanged (the signature gate ships inert).
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Runner lock no longer deadlocks after a cross-process lock timeout.** When acquiring the cross-process file lock threw (e.g. `RunnerLockTimeoutError` under contention), the throw happened before the `try/finally` that releases the in-process serialized lock, so `releaseCurrent()` never ran. The chained promise stayed pending forever and every later same-key operation deadlocked on `await previous`. The cross-process acquisition now lives inside a `try/finally` that always releases the in-process lock and cleans the `lockState` map (`src/core/runner/cross-process-lock.ts`).
 - **Lock heartbeat failures are no longer swallowed silently.** A persistent non-ENOENT `utimes` failure (e.g. `EPERM`) stopped refreshing the lock mtime, letting a concurrent acquirer declare a live lock stale and steal it — breaking mutual exclusion invisibly. Non-ENOENT heartbeat errors are now routed to an observable sink; ENOENT stays benign (the lock was already released).
 
@@ -2832,6 +2948,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 - **Config loading moved behind an injected `ConfigFileSystemPort`.** `src/core/config/dysflow-config.ts` no longer touches the filesystem directly; the node-backed default now lives in `src/adapters/config/dysflow-config-node.ts`, so config resolution is unit-testable with an in-memory fake. A new `core-boundary` architecture test ratchets against any new direct `node:fs`/network import in `src/core` (existing direct-I/O files are an explicit, shrink-only allow-list).
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Deterministic test runs on Windows.** Real-Access integration tests were included in the parallel unit pool and intermittently threw `spawn UNKNOWN (errno -4094)` when spawning MSACCESS/PowerShell concurrently. They now run single-fork via `vitest.integration.config.ts` (new `test:integration` script); the default `pnpm test` run is Access-free by construction and no longer races on process spawning.
 
@@ -2858,6 +2976,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`import_modules` mangled non-ASCII VBComponent names (e.g. `Módulo1` → `Mód×lo1`)**: `DoCmd.CopyObject` is not Unicode-safe — when creating a new VBA component from a seed, it silently corrupts non-ASCII characters in the new-object name via the system's ANSI codepage. The fix forces the correct name via the `VBComponent.Name` COM property setter immediately after `CopyObject`; this setter follows the same Unicode-safe path as the VBE F4 → Name rename and is a no-op when `CopyObject` happened to produce the right name. This affected the create path only (re-importing an existing module used `DeleteLines + AddFromFile` and was unaffected).
 - **Non-ASCII module names corrupted in `list_objects` and tool output**: `powershell.exe` 5.1 defaults its stdout to the active console code page (e.g. CP1252). Node.js reads the child process stdout as UTF-8, so non-ASCII bytes (e.g. `ó` = 0xF3 in CP1252) were invalid UTF-8 start bytes and were replaced with U+FFFD in any JSON response — including `list_objects`, `import_modules`, and `export_all` output. The fix adds `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at PowerShell script startup so all stdout is valid UTF-8 end-to-end.
 
@@ -2871,11 +2991,15 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`import_modules` with `importMode="Auto"` silently dropped a form/report's code-behind**: for a form/report exported as both a `.form.txt` (layout + an embedded copy of the code-behind) and a `.cls` (the canonical code), `Resolve-ImportFileForModule` in `Auto` mode resolved to the `.form.txt` first and imported it via `LoadFromText`, never reading the `.cls`. Because `verify_binary` compares a form's code through the `.cls` (the `formtxt-codebehind-split` rule), editing the canonical `.cls` and importing with `Auto` returned `ok:true` while the binary kept the stale embedded code-behind, so `verify_binary` reported the form as `sourceNewer` forever. `Auto`/`Code` now sync the `.cls` into the freshly loaded document module after `LoadFromText` (reusing the `importMode=Code` `DeleteLines` + `AddFromFile` path); `importMode=Form` stays layout-only. If the code-behind cannot be synced the import now fails loudly instead of reporting a false `ok:true`. Verified against real Access with a negative/positive control (a marker added only to the `.cls` round-trips through the binary after `Auto` only with the fix).
 
 ## [v1.4.0] - 2026-06-20
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`run_vba` / `vba_inline_execution` with no arguments failed with `VBA_MANAGER_FAILED`**: `Invoke-RunProcedureAction` declared `$ProcedureArgsJson` as a `Mandatory [string]`, which PowerShell rejects when empty (`cannot bind argument … because it is an empty string`) before the body ran. Running a procedure with no args passed `""` and hit the binding error. `[AllowEmptyString()]` now lets the empty case reach `Convert-ProcedureArgsJson`, which already maps it to no args.
 - **A VBA-manager timeout leaked an orphaned Access process**: on timeout the PowerShell process is killed, but the Access COM process it spawned is a separate process that survived as an orphan until the next operation's preflight cleanup. Both timeout paths (the `verify_binary` / `reconcile_binary` export and `executeMappedTool`) now re-run the path/lock cleanup immediately so a timeout never leaks an Access process. The cleanup is guarded — if it throws, it degrades to a warning diagnostic instead of masking the original timeout.
@@ -2887,6 +3011,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.3.3] - 2026-06-19
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`test_vba` `spawn ENAMETOOLONG` on large test plans**: the full test plan was serialized into an inline `-ProceduresJson` command-line argument, so a plan with enough tests/args overflowed the Windows ~32K command-line limit and Node's `spawn` failed with `ENAMETOOLONG` before Access ever started (`import_modules` was unaffected — it only passes a short module-name list). Plans over 8K chars are now written to a temp file passed via `-ProceduresJsonFile` (already supported by the PowerShell runner), keeping the command line bounded; the temp file is cleaned up even on timeout/error. Small plans stay inline.
 
@@ -2913,6 +3039,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Config resolution (#535)**: an explicitly-passed `destinationRoot`/`backendPath` was overridden by the discovered `.dysflow/project.json`. Without an explicit `accessPath`, resolution walked up from the MCP startup cwd, found the startup project, and its `src/` collapsed onto the caller's target — so `export_all` from a worktree could overwrite the wrong `src/` (a real incident broke 186 staging files). `accessPath` appeared to work only because it routes through the explicit-config branch. The caller's explicit override now wins; the discovered repo config is a default, not an authority.
 
 ### Security
@@ -2934,6 +3062,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - HRESULT `0x800ADEB9` remediation was silently dropped when .NET rendered the COMException as a signed decimal — the lookup used the wrong decimal (`-2146824519`); corrected to `-2146771271`.
 
 ### Security
@@ -2944,6 +3074,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.59] - 2026-06-15
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - An Access operation interrupted while still in `starting` (before its Access process spawned and a PID was recorded) no longer stays stuck forever as `status: "starting"` with `accessPid: null`. Root cause: the record is persisted as `starting` before the process is spawned, and the finalizing state transition only runs after the runner returns — a hard interruption (client abort / kill) in that window skips it.
 - The pre-flight cleanup that runs before every Access operation now transitions a **stale** `starting`/no-PID record (idle past an in-flight grace window) to `failed`, stamping `metadata.interruptedReason`. This is registry-only bookkeeping — it inspects and kills no process, because no PID was ever owned.
@@ -2968,6 +3100,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `test_vba` no longer collapses a failing run into the opaque `N VBA test(s) failed.` summary. The PowerShell runner already returns a per-procedure report (`ok`, `procedure`, `error`, `logs`, `payload`, `durationMs`); the adapter now preserves it. On failure the result stays `ok: false` with code `VBA_TESTS_FAILED` (no compatibility break), the message names the failing procedures, and `error.details` carries the structured report `{ failedCount, failures[], results[] }` — each `failures[]` entry keeping `procedure`, `error`, `logs`, `durationMs`, and `payload`. Consuming agents can now see exactly which procedure failed and why.
 - Documented the `RunAll` limitation: Dysflow can only surface inner failures of an aggregate entry point when that procedure itself returns them in its JSON payload; Dysflow does not parse VBA assertion output on its own.
 
@@ -2975,12 +3109,16 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `verify_binary`/`reconcile_binary` no longer compare a form's code-behind inside its `.form.txt`. A form's code-behind lives canonically in `forms/*.cls` (dysflow's export writes it from `CodeModule.Lines`, and import syncs it back into the document module), and the same code is also serialized — through a different path, `SaveAsText` — into the `.form.txt` `CodeBehindForm` section. Comparing it there only double-counted the code and re-introduced serialization noise (encoding, attribute headers, casing) the `.cls` comparison already owns. The classifier now strips everything from the `CodeBehindForm` marker onward and verifies a form's **code via its `.cls`** and its **UI/layout via its `.form.txt`**. A real UI change (control/property/layout) stays actionable; code-behind churn in the `.form.txt` is non-actionable.
 - Bumped `classifierRules` to `2026-06-14.r5-formtxt-codebehind-split`.
 
 ## [v1.2.55] - 2026-06-13
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Reduced `verify_binary`/`reconcile_binary` false positives in the VBA semantic classifier against the real `00_NO_CONFORMIDADES_staging` acceptance corpus: `actionableDifferent` now drops from 14 to 6 when comparing the current source tree to a fresh Access binary export, while the remaining actionable entries are real code/module-identity differences.
 - Classified additional Access export churn as non-actionable: `.form.txt` `NameMap`/toggle/property-event ordering noise, lossy codepage replacements in log/comment-like strings, leading VBA indentation drift, and explicit `enumSiNo.Sí` optional-default arguments exported as omitted defaults.
@@ -2994,6 +3132,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Top-level `dysflowVersion` in `verify_code`/`verify_binary`/`reconcile_binary` results now correctly reflects the actual runtime/package version instead of falling back to `0.0.0`.
 
 ## [v1.2.53] - 2026-06-13
@@ -3006,12 +3146,16 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Normalized module/class header boilerplate in the VBA semantic classifier so it stops counting as a functional difference. An Access binary export may emit the `VERSION x.x CLASS` + `BEGIN…END` instancing block and the `Attribute VB_*` lines on one side only (notably form code-behind, where the export omits the whole header). These are now stripped for code modules **and** for the `CodeBehindForm` section embedded in `.form.txt`/`.report.txt`, resolving false-positive `sourceNewer`/`bothChanged` results (e.g. `ModuloCacheIndicadores.bas`) and unblocking `caseOnly` detection for form code-behind whose only real difference was property casing (e.g. `Form_Form0BDOpcionesAuditorias.cls`).
 - `VB_Name` is now treated as functional only when **both** sides name the module and the names differ (a real rename like `MigracionIssue18` vs `ModuloMigracionIssue18` stays actionable); a one-sided header presence is non-functional. `.frm` control trees (`VERSION 5.00` + `Begin…End`) are never stripped.
 
 ## [v1.2.51] - 2026-06-13
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Further reduced false positives in the VBA semantic classifier's `actionableDifferent` bucket:
   - **Leading BOM / mojibake-BOM** (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side is now stripped before comparison and classified `encodingOnly`. This also unblocked downstream `caseOnly` detection for files whose only real difference was identifier casing but that carried a BOM on the source side. A `VB_Name` **value** change (e.g. `MigracionIssue18` vs `ModuloMigracionIssue18`) still stays actionable — only the leading marker is stripped.
@@ -3020,6 +3164,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.50] - 2026-06-13
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed the VBA semantic classifier inflating `actionableDifferent` with non-functional differences (a real project reported 155 actionable but only ~6 were genuine). Added a `caseOnly` category: VBA identifier/keyword casing is folded **outside string literals and comments** (the VBE re-cases identifiers on import), so `Me.Name` vs `Me.name` is no longer actionable while runtime-visible string content stays functional. Extended `.form.txt` serialization noise keys with `LayoutCachedLeft/Top/Width/Height`, `PublishOption`, and `NoSaveCTIWhenDisabled`. Added lossy out-of-codepage detection so glyphs replaced by `?` on export (e.g. `►` → `?`) classify as `encodingOnly` outside string literals. Case-fold and lossy-neutralization are also applied in the functional diff so counts are not inflated when noise accompanies a real change.
 
@@ -3035,6 +3181,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 - Added parity schemas, registry entries, and MCP verification tests for the new `compare_module` route.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed integration test discovery of Access database objects by mapping `list_objects` output category categories dynamically.
 - Fixed form noise injection matching in integration tests to be case-insensitive and support both CRLF and LF line endings.
@@ -3053,11 +3201,15 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Resolved an issue where some VBA/object export-family MCP calls (such as `export_modules`, `export_all`, and `export_queries`) would incorrectly return `CONFIG_MISSING_ACCESS_PATH` even when `accessPath` was passed explicitly. Fixed by making `vbaSyncToolService` try to resolve the configuration dynamically from the input before falling back to the static unavailable service representation, and updating `resolveConfigForInput` to fall back to `databasePath` or `accessDbPath` when `accessPath` is not explicitly defined in the adapted query request. (#530)
 
 ## [v1.2.46] - 2026-06-12
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed `verify_binary` and `reconcile_binary` failing with `VBA_MANAGER_FAILED` ("...`NormalizedModules` ... matriz vacía") on any populated database when called without `moduleNames`. The PowerShell `Invoke-ExportAction` declared `NormalizedModules` as a mandatory `[string[]]` without `[AllowEmptyCollection()]`, so an empty array (the "verify the whole project" signal) was rejected at parameter-binding time before the export-all branch could run. Added `[AllowEmptyCollection()]` to match the Import/Delete/Fix-Encoding actions. Covered by a new Pester test for the export-all branch and an MCP-stdio E2E regression asserting both tools succeed with no `moduleNames`.
 
@@ -3071,6 +3223,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.44] - 2026-06-12
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Resolved a critical race condition in cross-process locking (`evictStaleLock`) under concurrent execution on Windows: swapped `rename` (which is not exclusive on Windows) for `mkdir` (which atomically returns `EEXIST`).
 - Fixed a chunk-boundary buffer fragment bug in the PowerShell executor (`onStderr`): added a line buffer to accumulate partial data chunks before parsing the `DYSFLOW_ACCESS_PROCESS` PID marker and `DYSFLOW_PROGRESS` telemetries.
@@ -3226,6 +3380,8 @@ that locks the regression class in.
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`Write-DysflowResult` writer in `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` now preserves the underlying exception** (dbaf585, 57b3e18). The `try/catch` captures `$script:LastSerializationError`, emits a `Write-Warning` on stderr with the exception text, and includes the captured exception in a `diagnostics[]` field of the fallback envelope (truncated to 4 KB to keep the sentinel line bounded). The fallback code is now a subclass (`VBA_MANAGER_SERIALIZATION_FAILED` / `RUNNER_SERIALIZATION_FAILED`) so callers can branch on which adapter dropped the payload.
 - **`Invoke-ImportAction` happy path converts `List[object>` to `object[]` before passing to `Write-DysflowResult`** (dbaf585), matching the sad-path pattern that was already in v1.2.30. The 100+-module import case is now serializable cleanly.
 - **VBE exception messages are coerced defensively to strings** (dbaf585). When the VBE raises a COM error (e.g. `0x800A09D5`), `.Exception.Message` may be a COM property reference rather than a string. The `try/catch` at `Invoke-ImportAction` line 3114 now coerces with `if -is [string] else [string]`, falling back to `"<empty VBE error>"` when the message is null.
@@ -3275,6 +3431,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Issue 18 root cause: PowerShell runner's `earlyTargetPath` resolved `-AccessDbPath` (frontend) ahead of `Payload.backendPath`, silently opening the frontend for `list_tables`/`get_schema`/`query_sql`**: When the MCP caller passed a `projectId` (or a payload with `backendPath` set), the TypeScript adapter v1.2.32 already defaulted `request.backendPath = config.backendPath` on the runner payload. But the runner's `earlyTargetPath` resolution at line 1438 of `scripts/dysflow-access-runner.ps1` had this order: `Payload.databasePath` -> `Payload.sourcePath` -> `-AccessDbPath` (frontend from the config) -> `Payload.backendPath`. The `-AccessDbPath` fallback was checked BEFORE `Payload.backendPath`, so any read action that did not pass `databasePath` or `sourcePath` explicitly opened the frontend's CurrentDb and returned only the frontend's 2 local tables (`TbConfiguracionBackends` + `TbTipologiaAux`) instead of the backend's 39. `get_schema` and `query_sql` then threw "table not found" without emitting the `DYSFLOW_RESULT` sentinel, surfacing as `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. The fix swaps the order: `Payload.databasePath` -> `Payload.sourcePath` -> `Payload.backendPath` -> `-AccessDbPath` (frontend fallback). This is the bug the user reported against `00_NO_CONFORMIDADES_staging` (issue 18): the AI on the user's other PC saw the frontend's 2 tables and the opaque `RUNNER_INVALID_JSON` because the runner silently opened the frontend despite the TS adapter having passed the correct `backendPath` in the payload.
 - **Issue 18 companion fix: `findRepoProjectConfigPath` now walks up the directory tree from `cwd` looking for `.dysflow/project.json`**: The TypeScript adapter used to look at `cwd` only, not climb parent directories. The MCP server is spawned by opencode with an arbitrary cwd (the cwd of the host, not the cwd of the project), so a single-level lookup missed the project and the adapter fell through to `CONFIG_MISSING_TARGET_PATH` or used an empty config. v1.2.33 mirrors `git`-style discovery: walk up from `cwd` to the filesystem root, returning the closest `.dysflow/project.json` (or the legacy `dysflow.project.json`) that exists.
 
@@ -3297,6 +3455,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Query actions now fail fast with structured `CONFIG_TARGET_NOT_FOUND` / `CONFIG_MISSING_TARGET_PATH` errors instead of `RUNNER_INVALID_JSON`**: When a query action (`list_tables`, `get_schema`, `query_sql`, `count_rows`, `distinct_values`, `list_linked_tables`, `get_relationships`, `compare_backends`, `list_access_files`, etc.) was invoked from a project whose `.dysflow/project.json` had a missing/relative `accessPath` (e.g. `E2E_testing/Expedientes.accdb` when `E2E_testing` had no `Expedientes.accdb`) or whose `backendPath` did not exist on disk, the PowerShell runner used to throw "Access database not found" mid-execution, the MCP layer would lose the `DYSFLOW_RESULT` sentinel, and the caller only ever saw the opaque `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. v1.2.32 fails fast in `src/core/runner/access-runner.ts` with two structured errors before the PowerShell runner is even invoked: `CONFIG_MISSING_TARGET_PATH` when neither the request nor the project config can resolve a target (no `databasePath`, no `backendPath`, and no fallback to `config.accessDbPath`), and `CONFIG_TARGET_NOT_FOUND` when the resolved `config.accessDbPath` points at a `.accdb` that does not exist on disk. The runner now refuses to spawn the PowerShell process in both cases, so the failure is observable at the adapter boundary instead of buried in the runner. The fix also surfaces the real cause: a typo in `.dysflow/project.json`, a missing backend file, or a project opened from the wrong cwd. This is what the AI in the user's report was hitting on `00_NO_CONFORMIDADES_staging` (and what the AI reproduced against a stale `.dysflow/project.json` here on this PC); the user now sees `CONFIG_TARGET_NOT_FOUND: Configured accessPath does not exist on disk: [PATH]. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.` instead of the misleading `RUNNER_INVALID_JSON`.
 
 ### Verified
@@ -3316,6 +3476,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **dysflow-mock-com.ps1: `Add-Member` collisions on `ArrayList` builtin members**: The mock COM module tried to add `Item`, `Append`, and `Delete` ScriptMethods to a `[System.Collections.ArrayList]`, which already has those members built-in. PowerShell refused the second addition with `Cannot add a member with the name "Item" because a member with that name already exists`, breaking any code path that tried to load the mock under pwsh 7.x. Added `-Force` to the three `Add-Member` calls so the overrides stick. No behavior change for callers; this unblocks the mock for both CI and local runs.
 
 ### Verified
@@ -3330,6 +3492,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.30] - 2026-06-09
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`Invoke-ImportAction` all-failure payload serialization**: The vba-manager's `Invoke-ImportAction` builds a `[ordered]@{}` DYSFLOW_RESULT payload that contained `modules = @($moduleResults)` where `$moduleResults` is a `List[object]`. Under PowerShell 7.x (the version the Windows CI smoke job runs on), wrapping a `List[object]` with `@()` and binding it inside an `OrderedDictionary` triggers `System.ArgumentException: Argument types do not match` before the function can emit its sentinel, so all-failure imports surfaced as opaque Pester failures. The action now converts the list to a plain `object[]` first and the `Write-DysflowResult` writer wraps its payload in `@($Result)` plus a `try/catch` that emits a structured `VBA_MANAGER_SERIALIZATION_FAILED` fallback if serialization ever fails again, so a malformed payload can never again take down the sentinel path.
 - **All-failure Pester test contract**: The "throws consolidated all-failure detail" Pester test in `scripts/tests/dysflow-vba-manager.Tests.ps1` described a contract the action never had — it assumed `Invoke-ImportAction` would `throw` a Spanish-language `Exception.Message` and that the sentinel would be captured via a `Write-Host` mock. The real action reports failure via the `DYSFLOW_RESULT` sentinel and returns with `HasErrors = $true`; the test now mocks `Write-DysflowResult` (the only reliable seam under pwsh) and asserts the actual contract: no exception is thrown, the returned object has `HasErrors = $true` and the expected `ErrorMessage`, and the captured payload has `ok = $false`, `error.code = "VBA_IMPORT_FAILED"`, the expected `error.message`, and per-module `status`/`error` fields.
@@ -3347,6 +3511,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Access runner result sentinel emission**: Changed the Access/query PowerShell runner `DYSFLOW_RESULT` writer to bypass the PowerShell pipeline, preventing `query_sql`, `get_schema`, and other Access runner actions from losing the sentinel when action results are assigned before emission.
 - **Global PowerShell result-writer guard**: Added a test that covers every PowerShell script with `Write-DysflowResult`, requiring direct process stdout writes and forbidding `Write-Output` for protocol sentinel output.
 
@@ -3361,6 +3527,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **VBA import success sentinel emission**: Changed the PowerShell `DYSFLOW_RESULT` writer to bypass the success-output pipeline so `Import` actions still emit the sentinel when `Invoke-ImportAction` is assigned to `$importResult`. This fixes the real `import_modules` acceptance case where Access imported modules successfully but MCP saw no sentinel.
 - **Lowercase import mode aliases**: Accepted and normalized lowercase `auto`, `form`, and `code` import modes at the MCP/schema and adapter layers, matching the E2E suite and preserving the existing `replace` alias.
 
@@ -3373,6 +3541,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **VBA import runner output contract**: Hardened `import_modules` and `import_all` so malformed, missing, duplicate, or interrupted `DYSFLOW_RESULT` output is reported as structured runner failure diagnostics instead of `VBA_MANAGER_INVALID_OUTPUT`. This preserves sanitized `exitCode`, `stdout`, `stderr`, and parse details for real Access/VBA failures.
 - **Import mode compatibility**: Normalized the `replace` import-mode alias to the runner's `Auto` mode and moved PowerShell import-mode validation inside the script body so invalid modes can emit structured `DYSFLOW_RESULT` errors.
 
@@ -3384,6 +3554,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **MCP E2E timeout handling (#485)**: Fixed the timeout path so long-running MCP tool calls fail predictably instead of leaving ambiguous runner state. The full MCP E2E release gate passed after the fix with all advertised tools available and no lingering Access processes.
 
 ### Added
@@ -3393,6 +3565,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.25] - 2026-06-08
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Surface underlying parse error in `RUNNER_INVALID_JSON` (#474)**: The catch block at `src/core/runner/access-runner.ts:290` no longer swallows the original `parseError`; the `RUNNER_INVALID_JSON` failure message now includes the underlying cause verbatim (e.g. `RunnerResultChannelError("No DYSFLOW_RESULT line in runner output")` or the `SyntaxError` from malformed JSON). A truncated, secret-scrubbed stdout preview (first 200 chars, sanitized via the existing `sanitizeSecrets`) is appended to the diagnostics array so operators can diagnose the root cause without adding temporary debug logs.
 
@@ -3431,6 +3605,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Guard destructive runtime delete (#434)**: The runtime delete path now verifies a path-safety check before removing files.
 - **Stop silent config data loss on corrupt JSON (#435)**: `readJson` rejects non-object JSON payloads instead of silently coercing them.
 - **Kill spawned child process on timeout (#438)**: `runCommandWithTimeout` now kills the spawned child on timeout to release file locks.
@@ -3443,11 +3619,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **PowerShell sentinel output contract hardening**: Added `Write-DysflowResult` calls to the end of `Export`, `Fix-Encoding`, and `Generate-ERD` actions in `dysflow-vba-manager.ps1`. This ensures these tools always write the structured `DYSFLOW_RESULT` JSON line on stdout, preventing E2E failures when parsed by the MCP adapter.
 
 ## [v1.2.18] - 2026-06-05
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Robust MCP JSON response parsing**: Added JSON substring extraction in `parseRunnerData` and `parseOutput` to gracefully isolate tool responses from ambient warning output or text written to stdout by PowerShell. Ensures full E2E test parity.
 
@@ -3461,6 +3641,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Stub hidden state single source of truth (#433)**: Consolidated tool stub availability checks by removing `HIDDEN_STUB_TOOL_NAMES` and querying `isHiddenStubTool()` derived directly from the `TOOL_PARITY_REGISTRY`. Added invariant tests.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **MCP error path secret leakage (#429)**: Folded connection string password redaction into MCP error reporting, matching HTTP adapter security parity.
 
@@ -3492,6 +3674,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **E2E test harness zombie check.** Solved E2E test suite race conditions and false positives by awaiting child process close events and tracking descendant PIDs using `wmic`.
 
 ## [v1.2.14] - 2026-06-03
@@ -3502,6 +3686,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Node.js execution support for Linux environments.** Updated `powershell-executor.ts` to automatically execute `pwsh` on non-Windows platforms and inject `DYSFLOW_MOCK_COM=1` environment variable.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **WMI test characterization bypass.** Bypassed the mock COM interceptor in `Get-MsAccessProcessesBounded` if a custom `WmiScriptBlock` is supplied, allowing behavioral Pester tests to run correctly.
 - **Mock PID kill blocks.** Gated `Stop-AccessPidAndWait` to return `$true` immediately when `DYSFLOW_MOCK_COM=1` to prevent fake PIDs from causing long timeouts.
@@ -3519,11 +3705,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Documentation alignment.** Documentation alignment after v1.2.11 tag was prepared.
 
 ## [v1.2.11] - 2026-06-02
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Access cleanup fix.** Restrict MSACCESS cleanup to owned processes.
 
@@ -3537,6 +3727,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **MSACCESS.EXE zombies, `RUNNER_TIMEOUT`/RPC failures, and uncleanable stale operations under WMI hang.** When Access COM operations left a hung MSACCESS.EXE (observed in CONDOR staging), the recovery paths themselves could hang because WMI/CIM enumeration — the very thing that stalls under a zombie/network-I/O condition — sat on the cleanup path. Symptoms: `RUNNER_TIMEOUT` after `test_vba`/`doctor`, `RUNNER_FAILED` with RPC unavailable `0x800706BA`, cleanup refused with `CLEANUP_PROCESS_START_TIME_MISMATCH`, and `timed_out` records with `accessPid:null`/`processStartTime:null` that could never be retired because `Get-CimInstance Win32_Process` timed out. Hardened across the runtime: (A) `windows-processes.ts` now runs every CIM query inside a bounded PowerShell `Start-Job`/`Wait-Job -Timeout` and falls back to `Get-Process -Name MSACCESS`, returning partial process info instead of hanging — the scanner only reports, it never kills by name. (B) both `dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1` route every Access-PID lookup/fallback through a reusable bounded-WMI helper (no bare `Get-CimInstance Win32_Process` left on a cleanup path); `hWndAccessApp` → `GetWindowThreadProcessId` stays the primary PID capture and the `DYSFLOW_ACCESS_PROCESS` marker is now emitted from that primary path (no WMI on the success path) so the registry records the exact PID as early as possible. (C) `powershell-executor.ts` no longer fire-and-forgets `taskkill` on timeout/abort — it awaits the kill (bounded so a stuck `taskkill` cannot hang the executor). (D) `cleanup(force:true)` now retires a `timed_out` null-PID record even when the process scanner fails, emitting a "registry retired only; process ownership unknown" diagnostic, while still never killing a process it does not own and still refusing to kill on a genuine owned-PID start-time mismatch. (E) the start-time guard that produced false `CLEANUP_PROCESS_START_TIME_MISMATCH` (the PowerShell side wrote 7 fractional digits via `.ToString('o')` while the inspector emitted 3, and the two capture sources — WMI `CreationDate` vs `Get-Process.StartTime` — can differ at sub-second precision for the same process) is replaced by a tolerant whole-second comparison (`sameProcessStartTime`), with the PowerShell scripts normalized to millisecond ISO and the `Get-Process` fallback corrected to emit UTC. No new dependencies; registry JSON shape and PowerShell 5.1 compatibility preserved. Closes #376.
 
 ## [v1.2.8] - 2026-06-01
@@ -3549,11 +3741,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **CI E2E gate restored to green (test drift).** `test/scripts-access-runner.test.ts` asserted on a literal PowerShell source string (`$rs = $readDb.Database.OpenRecordset(...)`) that no longer existed after the read path was refactored into the `Invoke-QuerySqlReadAction` / `Resolve-ReadActionDatabase` helpers. The assertion was re-pointed to the current code (verified present in the script). No product/runtime change vs v1.2.6. Verified green: integration vitest (`scripts-access-runner` + `access-relink-directory*` = 16 tests), Pester (98 passed / 0 failed / 4 COM-skips), and the MCP E2E (104/104, 0 zombies). Note: `test/e2e/access-fixture.e2e.test.ts` skips in CI (its `*.accdb` fixtures are gitignored); it only runs where real fixtures are present and currently expects sanitized fixtures (hardcoded backend password) rather than the password-protected production copies.
 
 ## [v1.2.6] - 2026-05-31
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **MSACCESS.EXE zombies leaked by every Access.Application operation (migration regression).** Operations that open the Access COM Application — link_tables, relink_tables, localize_backend_links, relink_directory, create_table, export_modules/export_all, compile_vba, test_vba, verify_code, delete_module, fix_encoding, harvest_form_catalog, run_vba — left a lingering MSACCESS.EXE process. Under a heavy run (e.g. a VBA test battery) these accumulated, locked the database, and caused subsequent `compile_vba`/`import` to hang. Root cause: the migrated PowerShell scripts had lost the deterministic process-ID capture the pre-migration skill used. `dysflow-access-runner.ps1` had no `hWndAccessApp` capture at all; `dysflow-vba-manager.ps1` captured it but then overwrote it unconditionally with an ambiguous process-diff that failed when multiple instances existed (emitting "se detectaron varias instancias … no se pudo identificar"). Restored the deterministic capture in both scripts: immediately after creating `Access.Application`, the exact owning PID is read via `$access.hWndAccessApp` → Win32 `GetWindowThreadProcessId`; the process-diff/command-line heuristic is now only a last-resort fallback. Validated by the real MCP E2E against the live runtime: **104/104 pass, 0 zombie-check failures** (was 88/104 with 16 zombie failures).
 
@@ -3567,11 +3763,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Stale "running" operations with a dead PID could never be cleaned and blocked new operations.** `dysflow_access_cleanup` returned `CLEANUP_PROCESS_NOT_FOUND` (even with `force: true`) when the recorded Access PID no longer existed, and pre-flight cleanup skipped `running` records entirely (`running` was not in its eligible set). A registry entry left `running` after a manually-killed or crashed Access process — common after a heavy VBA test battery — therefore stuck forever and blocked subsequent `compile_vba` / `test_vba`. Now, when the recorded PID is verifiably gone, gated cleanup retires the entry as `cleaned` (there is nothing to kill), and pre-flight reconciles dead-PID `running` entries — while never terminating a genuinely-live matching Access process (alive + `MSACCESS.EXE` + matching start time is left untouched).
 
 ## [v1.2.3] - 2026-05-31
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Version string stuck at 1.1.0**: `package.json` was never bumped past 1.1.0 despite the v1.2.0–v1.2.2 releases, so `dysflow update` version comparison and the MCP `serverInfo.version` reported a stale 1.1.0 even when the v1.2.2 code (including the MSACCESS zombie-cleanup fix) was installed. Bumped to 1.2.3 so update detection and diagnostics report the real version.
 - **CRLF formatting errors**: `src/cli/commands/install/extractor.ts` and `test/core/runner/access-runner.test.ts` had CRLF line endings that failed `biome check`. Reformatted to restore a green lint gate.
@@ -3583,6 +3783,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.2] - 2026-05-30
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`dysflow update` / `dysflow install` crashed on npm 11.7.0**: Replaced `npm install` with `pnpm install --prod --ignore-scripts` for runtime dependency installation. npm 11.7.0 crashes with `--omit=dev` and `--legacy-peer-deps` due to a null-pointer in the peer-dependency resolver.
 
@@ -3616,6 +3818,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **MCP `compare_backends` tool failure**: Resolved a critical RCW COM exception (`InvalidComObjectException`) that occurred because the helper script closed the shared `DAO.DBEngine` instance singleton, separating the active database RCW wrapper from its COM peer. Also added a fallback in `dysflow-access-runner.ps1` to resolve the target database to `$AccessDbPath` when inputs do not specify it, allowing the early dispatch path to correctly locate the frontend and backend without duplicating connections.
 
 ### Changed
@@ -3628,11 +3832,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Runtime install: `npm install --prefer-offline` caused `ETARGET` error**: The `--prefer-offline` flag made npm try to resolve the full lockfile including dev dependencies, failing on `@vitest/utils@4.1.7` which is not published separately. Removed the flag — npm now resolves production dependencies fresh from the registry.
 
 ## [1.0.1] - 2026-05-29
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **Runtime install: missing production dependencies**: `dysflow install` and `dysflow update` only copied `dist/` and `package.json` to the runtime directory but never ran `npm install`. With v1.0.0 introducing `@modelcontextprotocol/sdk` as the first true runtime dependency, the MCP server crashed with `ERR_MODULE_NOT_FOUND` on startup. The installer now runs `npm install --omit=dev --ignore-scripts` in the runtime app directory after copying `package.json`, ensuring all production dependencies are available. `--ignore-scripts` prevents the `prepare`/`prepack` build hooks from running in the production environment.
 
@@ -3662,6 +3870,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Fixed checksum fallback scope**: `dysflow update` was falling back to git clone on any error during artifact download (including HTTP 500, 403, and checksum mismatches). The fallback now only triggers on HTTP 404. All other errors throw immediately, preventing silent installs of potentially corrupted artifacts.
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **`VbaOperationsAdapter.execute()` was a stub**: `list_access_operations` and `cleanup_access_operation` returned `TOOL_NOT_IMPLEMENTED` when routed through the adapter directly. Tools only worked because legacy alias handlers intercepted them first. Real logic now delegates to `operationRegistry` and `cleanupService` respectively.
 
@@ -3724,11 +3934,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed `Close-TargetAccessDbIfOpen` hanging indefinitely when zombie MSACCESS processes are stuck on unreachable network I/O (e.g. UNC paths): replaced bare `Get-CimInstance Win32_Process` with a `Start-Job` + `Wait-Job -Timeout 4` guard; if WMI does not respond within 4 seconds, falls back to `Get-Process` (no WMI) and kills all MSACCESS instances to release the lock.
 
 ## [0.9.9] - 2026-05-26
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed four Access automation hang bugs in `dysflow-vba-manager.ps1` that caused MSACCESS.exe to never close and MCP tool calls to timeout:
   - `hWndAccessApp()` was called as a property instead of a method, silently failing PID capture via HWND.
@@ -3740,11 +3954,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed MCP generic SQL tools so `dysflow_query_execute` and legacy `query_sql` expose and forward explicit backend/database targets, and the Access runner executes generic reads/writes against the selected database instead of the frontend. Closes #370.
 
 ## [0.9.7] - 2026-05-26
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed OpenCode MCP startup on Windows by generating a direct Node runtime entrypoint instead of direct `.cmd` spawning. Closes #361.
 - Fixed MCP `tools/call` hangs from Access project contexts by settling runner timeout/abort paths, preserving `timed_out` metadata, and returning terminal client-safe tool responses. Closes #362, #364, #365.
@@ -3754,17 +3972,23 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Added safe recovery for stale `pid_unknown` Access operations after timeouts: forced cleanup and preflight can now retire unknown-PID records only when no matching `MSACCESS.EXE` process is found for the registered database path, while refusing to kill unowned Access processes. Closes #360.
 
 ## [0.9.5] - 2026-05-25
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **`run_script` DDL compatibility**: strip `--` line comments from SQL scripts before executing DDL statements, allowing scripts authored with standard SQL comment syntax to run without parse errors. Closes #348.
 
 ## [0.9.4] - 2026-05-25
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - **MCP backend DDL targeting**: write/DDL tools now honor explicit `databasePath`/`backendPath` targets and can run directly against the requested backend instead of opening the configured frontend first. Closes #347.
 - **Project-scoped MCP write gate**: calls that include explicit paths still resolve `allowWrites` from the matching repo `.dysflow/project.json`, preventing false `MCP_WRITES_DISABLED` failures for allowed projects.
@@ -3773,6 +3997,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **MCP E2E stability**: fixed `dysflow access` dry-run execution path in `Update-LinkTables` to avoid PowerShell non-operational failures during smoke tests and CI (`#346`).
 - **Legacy schema compatibility**: restored acceptance of legacy form-catalog payload aliases (`spec`/`specPath`) for `catalog_add_control`.
 - **Smoke harness correctness**: updated the MCP smoke harness expectations to the current tool count (`48`) and aligned form-catalog test input to include a valid empty spec payload.
@@ -3780,6 +4006,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.9.1] - 2026-05-25
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed `Close-TargetAccessDbIfOpen` failing during VBA import/export preflight because PowerShell `Write-Debug` catch bodies were accidentally embedded inside the C# `RotManager` `Add-Type` block (#342).
 
@@ -3808,6 +4036,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Password propagation**: `Open-DatabaseWithPassword` helper in PS runner; `Invoke-RelinkDirectory` and `Resolve-LinkChain` now use `$AccessPassword`/`$BackendPassword` (#317)
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed MCP modern tool naming: exported `MODERN_TOOL_NAMES` constant as single source of truth; regression test asserts no dots (#321)
 
@@ -3840,6 +4070,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - **Config Sync/Async Dedup**: Unified config parsing, routing, and error formatting under `loadDysflowConfigShared` and `loadProjectConfigCore` to prevent routing duplication.
 - **VBA Service Split**: Extracted `VbaFormService` (form & catalog operations) and `vba-source-comparison.ts` (pure binary/source tree comparison helpers) from `VbaSyncLegacyService` while keeping stable backwards-compatible exports.
 - **Install CLI Utils**: Decoupled `uninstall.ts` from `install.ts` by extracting filesystem and execution helpers to `install-utils.ts` and resolved Pester/PMR dependencies.
@@ -3850,12 +4082,16 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Renamed modern MCP tools to underscore-separated names (`dysflow_vba_execute`, `dysflow_query_execute`, `dysflow_doctor`, `dysflow_access_operations_list`, `dysflow_access_cleanup`) so PI/Codex clients that enforce `^[a-zA-Z0-9_-]+$` can load Dysflow tools. Closes #296.
 - Updated installation instructions in `README.md` to reference the correct v0.7.6 release tag.
 
 ## [0.7.5] - 2026-05-22
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Resolved Node `DEP0190` security/deprecation warning on Windows during installation runner tasks.
 - Enhanced password propagation in `relink-directory` to correctly authenticate frontend databases with the frontend password while fallback-authenticating links, and fall back to the backend password during root directory scanning.
@@ -3870,11 +4106,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed `relink-directory` PowerShell execution so protected databases are opened with `DYSFLOW_BACKEND_PASSWORD`, relinked `Connect` strings preserve `;PWD=...`, and existing linked TableDefs are refreshed without mutating immutable `SourceTableName`.
 
 ## [0.7.3] - 2026-05-22
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Resolved quality audit blockers: aligned `LinkClassification` contract and fixed E2E and unit test types to ensure `pnpm lint` passes cleanly.
 - Added dynamic backend database password propagation to `relink-directory` command via `--password-env`.
@@ -3885,11 +4125,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed `spawn EINVAL` error on Windows during `dysflow update` when executing pnpm/npm update scripts. Closes #289.
 
 ## [0.7.1] - 2026-05-22
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Fixed PowerShell parsing error (`InvalidVariableReferenceWithDrive`) in the Access runner script (`dysflow-access-runner.ps1`) when deleting unresolved links. Closes #287.
 
@@ -3907,12 +4151,16 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Resolved path resolution bugs where global dysflow installed via pnpm symlinks exited silently without console output.
 - Resolved spawn ENOENT errors when running update/install scripts on Windows (added pnpm.cmd/npm.cmd support).
 
 ## [0.6.8] - 2026-05-21
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `test_vba` now returns `VBA_TESTS_FAILED` when any individual VBA test result has `ok: false`, instead of propagating a success result with failing tests in the payload. Closes #273.
 - `export_modules` pre-validates that every requested module name exists in VBProject before starting the export loop; returns `VBA_MODULE_NOT_FOUND` if any is missing. Closes #274.
@@ -3940,6 +4188,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `dysflow install` and `dysflow update` now copy the PowerShell runtime scripts required by MCP/Access/VBA tools into `app/scripts`, preventing missing `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` failures. Closes #251.
 - Generated Windows launchers now escape the `ProgramFiles\nodejs` PATH segment correctly instead of writing a newline into the launcher.
 - Legacy VBA sync now fails fast with `CONFIG_MISSING_ACCESS_PATH` when no explicit Access path or repo config can be resolved. Closes #230.
@@ -3953,6 +4203,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.6.3] - 2026-05-20
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `dysflow update` now reuses the runtime directory persisted by `dysflow install --runtime-dir`, so updates keep targeting the installed MCP runtime instead of silently falling back to the current Windows user's `%LOCALAPPDATA%\\dysflow`. Closes #250.
 
@@ -3970,6 +4222,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - `loadDysflowConfig` and `loadDysflowConfigAsync` now return `CONFIG_AMBIGUOUS_PROJECT_FILE` when both `.dysflow/project.json` and `dysflow.project.json` coexist in the same directory, instead of silently preferring one. Closes #61.
 
 ## [0.6.0] - 2026-05-19
@@ -3980,11 +4234,15 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Added pre-flight Access cleanup before modern and legacy Access operations. Dysflow now cleans stale registry-tracked operations and safely terminates orphaned `MSACCESS.EXE` processes only when their command line matches the current `.accdb` exactly. Closes #245.
 
 ## [0.5.4] - 2026-05-19
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Rollback release: restored the runtime behavior from `v0.5.3` after unreleased security-hardening changes on `main` caused MCP project resolution and write-gating regressions in Access/VBA worktrees.
 - This release intentionally preserves the stable `v0.5.3` functionality while giving `dysflow update` a newer version to reinstall cleanly.
@@ -3992,6 +4250,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.3] - 2026-05-19
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `test_vba` now honors explicit `proceduresJson` payloads instead of always resolving from a manifest.
 - Relative `testsPath` values now resolve from the project root, so `tests/tests.vba.json` works when `destinationRoot` is `src`.
@@ -4001,6 +4261,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.2] - 2026-05-19
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Hardened config and VBA sync error handling: malformed project JSON is returned as `CONFIG_PROJECT_FILE_INVALID`, `parseArgsJson` no longer leaks uncaught exceptions, and catalog write failures propagate as `VBA_CATALOG_WRITE_FAILED`. Closes #192, #193, #194.
 - Removed cross-adapter HTTP→MCP coupling, made MCP write gating explicit at tool construction, and removed the dead legacy schema fallback behind a parity-tested schema map. Closes #196, #197, #200.
@@ -4020,6 +4282,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Extracted shared PowerShell execution for Access runner and legacy VBA manager paths, reducing duplicated timeout/stdout/stderr process handling. Closes #180.
 - Added async project configuration loading for production CLI, HTTP, MCP, and legacy VBA paths while keeping the existing sync API for compatibility. Closes #181.
 - Added Windows CI smoke coverage for PowerShell/Access-facing integration paths. Closes #182.
@@ -4028,6 +4292,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.0] - 2026-05-18
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - `WindowsMsAccessProcessInspector` now converts WMI DMTF datetime to ISO 8601 before returning, preventing false `CLEANUP_PROCESS_START_TIME_MISMATCH` rejections during cleanup. Closes #172.
 - `isReadOnlySql` rewritten with a token-aware parser that strips string literals before checking for top-level statement separators, so valid queries with semicolons in literals are accepted. Closes #173.
@@ -4052,6 +4318,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Legacy VBA sync tools (`test_vba`, `compile_vba`, `import_modules`, etc.) now honour `timeoutMs` from `.dysflow/project.json` instead of always using the service-level 30 000 ms default. Explicit per-call `timeoutMs` in tool params still takes precedence.
 
 ### Added
@@ -4061,6 +4329,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.4.4] - 2026-05-18
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Closed the v0.4.3 security audit by hardening secret redaction, password transport, Windows command/path validation, MCP write gates, HTTP response headers, release tag validation, and Access query export boundaries. Closes #167, #168, #169, #170, #171.
 
@@ -4072,12 +4342,16 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - HTTP server no longer returns raw config error (with internal filesystem paths) to callers when starting in degraded mode — now returns a generic `SERVICE_UNAVAILABLE` and logs the original error to stderr. Closes #159.
 - CLI setup command no longer includes the registry file path in the malformed-JSON error message. Closes #160.
 
 ## [0.4.2] - 2026-05-18
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Hardened audit findings around malformed JSON handling, Windows CLI entrypoint URLs, TUI close/default selection safety, and degraded HTTP startup.
 - Removed fragile package-version `createRequire` lookups and moved shared version comparison out of install command internals.
@@ -4089,6 +4363,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.4.1] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Allowed `dysflow update` to resolve GitHub releases in authenticated/private-repo contexts via `GH_TOKEN`/`GITHUB_TOKEN` headers or authenticated `gh` CLI fallback.
 
@@ -4102,6 +4378,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.3.1] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Made TUI dashboard Enter actions execute the selected option: integration selection opens/applies selected agents and Doctor runs diagnostics.
 
@@ -4117,6 +4395,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Serialized file-backed Access operation registry updates to avoid losing records under concurrent requests.
 - Recorded resolved project and destination roots in Access operation metadata instead of the process working directory.
 - Reported runtime fallback config source truthfully when no repo project config is loaded.
@@ -4125,17 +4405,23 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Allowed registered-project import dry-runs to resolve by `projectId`/`contextId` even when the MCP server starts outside a Dysflow repo.
 
 ## [0.2.3] - 2026-05-17
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed the generated PowerShell launcher so custom `--runtime-dir` installs set `DYSFLOW_HOME` to the selected runtime directory.
 
 ## [0.2.2] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Clarified `projectId` as the canonical Engram-aligned project identity and `contextId` as optional run context.
 - Added `dysflow setup --set-project-id <id>` to update `.dysflow/project.json` trace identity.
@@ -4145,6 +4431,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.2.1] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Kept the default TUI dashboard open in interactive terminals so arrow-key navigation works until the user exits.
 
@@ -4160,17 +4448,23 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed self-reinstall from the profile runtime launcher by skipping runtime copy operations whose source and destination are the same path.
 
 ## [0.1.3] - 2026-05-17
 
 ### Fixed
 
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - Fixed `dysflow install` package-root detection so a globally/profile-installed Dysflow can reinstall from any current working directory instead of looking for `./dist`.
 
 ## [0.1.2] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Hardened MCP tool schemas so every array declares `items`, including legacy `rows` and VBA `arguments`, preventing OpenCode schema-load failures.
 - Returned thrown tool-call failures as MCP `isError` tool results instead of JSON-RPC internal errors, keeping the AI session informed and connected.
@@ -4179,6 +4473,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.1.1] - 2026-05-17
 
 ### Fixed
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
 
 - Corrected the OpenCode MCP installer output to use the current local-server schema with `enabled`, `type`, and argv-array `command`.
 

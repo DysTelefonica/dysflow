@@ -65,6 +65,13 @@ export interface SemanticClassification {
    * canonicalizer may extend it later without changing the surface.
    */
   normalizationReasons?: readonly NormalizationReason[];
+  /**
+   * Normalized text of the first line that counts toward `srcUniqueFunctionalLines`
+   * (functional verdicts only). Used to point diff snippets at the functional line.
+   */
+  firstUniqueSourceLine?: string;
+  /** Same as `firstUniqueSourceLine`, for the binary side. */
+  firstUniqueBinaryLine?: string;
 }
 
 export interface ClassifyVbaPairInput {
@@ -1064,7 +1071,13 @@ export function lcsLength(a: string[], b: string[]): { lcs: number; capped: bool
 function computeFunctionalDiff(
   srcText: string,
   binText: string,
-): { srcUnique: number; binUnique: number; capped: boolean } {
+): {
+  srcUnique: number;
+  binUnique: number;
+  capped: boolean;
+  firstUniqueSource?: string;
+  firstUniqueBinary?: string;
+} {
   const srcLines = srcText.split("\n").filter((l) => l.trim() !== "");
   const binLines = binText.split("\n").filter((l) => l.trim() !== "");
 
@@ -1074,7 +1087,27 @@ function computeFunctionalDiff(
     srcUnique: srcLines.length - lcs,
     binUnique: binLines.length - lcs,
     capped,
+    firstUniqueSource: firstUnmatchedLine(srcLines, binLines),
+    firstUniqueBinary: firstUnmatchedLine(binLines, srcLines),
   };
+}
+
+/**
+ * First line of `lines` that has no remaining occurrence in `others` (multiset
+ * match). Approximates the LCS-unique line, which is what the counts report.
+ */
+function firstUnmatchedLine(
+  lines: readonly string[],
+  others: readonly string[],
+): string | undefined {
+  const remaining = new Map<string, number>();
+  for (const line of others) remaining.set(line, (remaining.get(line) ?? 0) + 1);
+  for (const line of lines) {
+    const count = remaining.get(line) ?? 0;
+    if (count === 0) return line;
+    remaining.set(line, count - 1);
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -1166,6 +1199,21 @@ export function selectNormalizationReasons(
 // ---------------------------------------------------------------------------
 
 function fromFunctionalDiff(
+  srcUnique: number,
+  binUnique: number,
+  capped: boolean,
+  firstUnique: { source?: string; binary?: string } = {},
+): SemanticClassification {
+  const result = fromFunctionalDiffCore(srcUnique, binUnique, capped);
+  if (!result.actionable) return result;
+  return {
+    ...result,
+    ...(firstUnique.source === undefined ? {} : { firstUniqueSourceLine: firstUnique.source }),
+    ...(firstUnique.binary === undefined ? {} : { firstUniqueBinaryLine: firstUnique.binary }),
+  };
+}
+
+function fromFunctionalDiffCore(
   srcUnique: number,
   binUnique: number,
   capped: boolean,
@@ -1610,6 +1658,10 @@ export function classifyVbaPair(input: ClassifyVbaPairInput): SemanticClassifica
     );
   }
 
-  const { srcUnique, binUnique, capped } = computeFunctionalDiff(srcFull, binFull);
-  return fromFunctionalDiff(srcUnique, binUnique, capped);
+  const { srcUnique, binUnique, capped, firstUniqueSource, firstUniqueBinary } =
+    computeFunctionalDiff(srcFull, binFull);
+  return fromFunctionalDiff(srcUnique, binUnique, capped, {
+    source: firstUniqueSource,
+    binary: firstUniqueBinary,
+  });
 }
