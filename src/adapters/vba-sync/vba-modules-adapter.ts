@@ -31,6 +31,7 @@ import {
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
+  type ImportPlanModuleClassification,
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
 import {
@@ -65,6 +66,21 @@ import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 // are gone with them. Save-only persistence (acCmdSaveAllModules = 280) is
 // the canonical mutation path per openspec/specs/vba-manager-actions/spec.md.
 // ========================================================================
+
+// Issue #1866 item 3 — plan-side mapping from a verify_code classification to the
+// action an import/export would take. Mirrors the recommendations verify_code emits.
+const ACTIONABLE_PLAN_CLASSIFICATIONS: ReadonlySet<string> = new Set([
+  "sourceNewer",
+  "binaryNewer",
+  "bothChanged",
+]);
+const PLAN_RECOMMENDATION_BY_CLASSIFICATION: Readonly<Record<string, string>> = {
+  sourceNewer: "import_to_binary",
+  binaryNewer: "export_to_src",
+  bothChanged: "manual_merge",
+  missingInBinary: "import_to_binary",
+  missingInSource: "export_to_src",
+};
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
@@ -1644,16 +1660,86 @@ export class VbaModulesAdapter {
       importMode: normalizeImportMode(stringValue(params.importMode)),
     };
 
+    // Issue #1866 item 3 — say what would change per module before apply:true.
+    const moduleClassifications = await this.classifyPlannedModules(
+      params,
+      modulesPlanned,
+      warnings,
+    );
+
     return successResult(
       buildImportPlanResult({
         toolName,
         params: effectiveParams,
         target: target.data,
         modulesPlanned,
+        moduleClassifications,
         warnings,
         errors,
       }),
     );
+  }
+
+  /**
+   * Issue #1866 item 3 — classify each planned module against the binary with the
+   * verify_code comparison. A failed comparison leaves the plan usable: it adds a
+   * warning and omits the classifications rather than failing the dry run.
+   */
+  private async classifyPlannedModules(
+    params: Record<string, unknown>,
+    modulesPlanned: readonly string[],
+    warnings: string[],
+  ): Promise<readonly ImportPlanModuleClassification[] | undefined> {
+    if (modulesPlanned.length === 0) return undefined;
+    const comparison = await compareSourceAgainstBinary(
+      { ...params, moduleNames: [...modulesPlanned] },
+      this.getComparisonContext(),
+      this.fileSystem,
+    );
+    if (!comparison.ok) {
+      warnings.push(
+        `Module classification unavailable (${comparison.error.code}); the plan lists modules without comparing them to the binary.`,
+      );
+      return undefined;
+    }
+    const data = comparison.data;
+    const entries = [...(data.actionableDifferent ?? []), ...(data.nonActionableDifferent ?? [])];
+    const byModule = new Map(entries.map((entry) => [entry.moduleName, entry]));
+    const classifications = modulesPlanned.map((module): ImportPlanModuleClassification => {
+      const entry = byModule.get(module);
+      if (entry !== undefined) {
+        const classification = entry.classification ?? "matched";
+        if (classification === "binaryNewer" || classification === "bothChanged") {
+          warnings.push(
+            `Module ${module} is ${classification}: the binary has changes that an import would overwrite. Review before apply:true.`,
+          );
+        }
+        return {
+          module,
+          classification,
+          actionable: ACTIONABLE_PLAN_CLASSIFICATIONS.has(classification),
+          recommendation: PLAN_RECOMMENDATION_BY_CLASSIFICATION[classification] ?? "no_action",
+        };
+      }
+      if (data.missingInBinary.some((e) => e.moduleName === module)) {
+        return {
+          module,
+          classification: "missingInBinary",
+          actionable: false,
+          recommendation: "import_to_binary",
+        };
+      }
+      if (data.missingInSource.some((e) => e.moduleName === module)) {
+        return {
+          module,
+          classification: "missingInSource",
+          actionable: false,
+          recommendation: "export_to_src",
+        };
+      }
+      return { module, classification: "matched", actionable: false, recommendation: "no_action" };
+    });
+    return classifications;
   }
 
   /**
