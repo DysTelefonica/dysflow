@@ -4377,6 +4377,9 @@ function Export-DataStructure {
         11 = "OLE"; 12 = "Memo"; 15 = "GUID"; 16 = "BigInt"
         17 = "VarBinary"; 18 = "Char"; 19 = "Numeric"; 20 = "Decimal"
     }
+    # Built from a code point so Windows PowerShell 5.1 (ANSI script decoding)
+    # writes the same UTF-8 text as PowerShell 7.
+    $enye = [string][char]0x00F1
 
     try {
         $dbEngine = New-DaoDbEngine
@@ -4385,35 +4388,66 @@ function Export-DataStructure {
         $connect = if (-not [string]::IsNullOrEmpty($Password)) { ";PWD=$Password" } else { "" }
         $database = $dbEngine.OpenDatabase($DatabasePath, $false, $true, $connect)
 
-        $sb = [System.Text.StringBuilder]::new()
-        $dbName = [System.IO.Path]::GetFileNameWithoutExtension($DatabasePath)
-        [void]$sb.AppendLine("# ERD - $dbName")
-        [void]$sb.AppendLine("")
-        [void]$sb.AppendLine("Generado: $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
-        [void]$sb.AppendLine("")
+        # Issue #1861 - the schema body is built apart from the header so the
+        # fingerprint covers tables, fields, types, sizes, required flags, keys
+        # and relations only; the generation date never changes it.
+        $body = [System.Text.StringBuilder]::new()
 
         $tableDefs = $database.TableDefs
-        $tables = @()
+        $tableIndexByName = @{}
         for ($i = 0; $i -lt $tableDefs.Count; $i++) {
             $td = $tableDefs[$i]
             try {
                 if ($td.Name -notmatch "^MSys" -and $td.Name -notmatch "^~") {
-                    $tables += $td.Name
+                    $tableIndexByName[[string]$td.Name] = $i
                 }
             } catch { Write-Debug "Diagnostics: $_" }
         }
-        $tables = $tables | Sort-Object
+        $tables = @($tableIndexByName.Keys | Sort-Object)
 
-        [void]$sb.AppendLine("## Tablas ($($tables.Count))")
-        [void]$sb.AppendLine("")
+        # Relations are read once: they feed the per-field FK column and the
+        # relations table. Every field pair of a multi-field relation is kept.
+        $relationRows = [System.Collections.Generic.List[object]]::new()
+        $foreignKeys = @{}
+        try {
+            $relations = $database.Relations
+            for ($i = 0; $i -lt $relations.Count; $i++) {
+                try {
+                    $rel = $relations[$i]
+                    $originFields = [System.Collections.Generic.List[string]]::new()
+                    $foreignFields = [System.Collections.Generic.List[string]]::new()
+                    for ($j = 0; $j -lt $rel.Fields.Count; $j++) {
+                        $rf = $rel.Fields[$j]
+                        $originFields.Add([string]$rf.Name)
+                        $foreignFields.Add([string]$rf.ForeignName)
+                        $fkKey = "$($rel.ForeignTable)|$($rf.ForeignName)"
+                        $fkTarget = "$($rel.Table).$($rf.Name)"
+                        if (-not $foreignKeys.ContainsKey($fkKey)) {
+                            $foreignKeys[$fkKey] = [System.Collections.Generic.List[string]]::new()
+                        }
+                        if (-not $foreignKeys[$fkKey].Contains($fkTarget)) { $foreignKeys[$fkKey].Add($fkTarget) }
+                    }
+                    $relationRows.Add([PSCustomObject]@{
+                        Name = [string]$rel.Name
+                        Table = [string]$rel.Table
+                        Fields = ($originFields -join ", ")
+                        ForeignTable = [string]$rel.ForeignTable
+                        ForeignFields = ($foreignFields -join ", ")
+                    })
+                } catch { Write-Debug "Diagnostics: $_" }
+            }
+        } catch { Write-Debug "Diagnostics: $_" }
+
+        [void]$body.AppendLine("## Tablas ($($tables.Count))")
+        [void]$body.AppendLine("")
 
         foreach ($tableName in $tables) {
             try {
-                $td = $database.TableDefs[$tableName]
-                [void]$sb.AppendLine("### $tableName")
-                [void]$sb.AppendLine("")
-                [void]$sb.AppendLine("| Campo | Tipo | Tamaño | Requerido | PK |")
-                [void]$sb.AppendLine("|---|---|---|---|---|")
+                $td = $tableDefs[$tableIndexByName[$tableName]]
+                [void]$body.AppendLine("### $tableName")
+                [void]$body.AppendLine("")
+                [void]$body.AppendLine("| Campo | Tipo | Tama$($enye)o | Requerido | PK | FK |")
+                [void]$body.AppendLine("|---|---|---|---|---|---|")
 
                 $pkFields = @()
                 try {
@@ -4435,40 +4469,49 @@ function Export-DataStructure {
                         $size = if ($field.Size -gt 0) { $field.Size } else { "-" }
                         $required = if ($field.Required) { "Si" } else { "No" }
                         $isPk = if ($pkFields -contains $field.Name) { "PK" } else { "" }
-                        [void]$sb.AppendLine("| $($field.Name) | $typeName | $size | $required | $isPk |")
+                        $fkKey = "$tableName|$($field.Name)"
+                        $fk = if ($foreignKeys.ContainsKey($fkKey)) { $foreignKeys[$fkKey] -join ", " } else { "" }
+                        [void]$body.AppendLine("| $($field.Name) | $typeName | $size | $required | $isPk | $fk |")
                     } catch { Write-Debug "Diagnostics: $_" }
                 }
-                [void]$sb.AppendLine("")
+                [void]$body.AppendLine("")
             } catch {
-                [void]$sb.AppendLine("_Error leyendo tabla: $tableName - $($_.Exception.Message)_")
-                [void]$sb.AppendLine("")
+                [void]$body.AppendLine("_Error leyendo tabla: $tableName - $($_.Exception.Message)_")
+                [void]$body.AppendLine("")
             }
         }
 
-        try {
-            $relations = $database.Relations
-            if ($relations.Count -gt 0) {
-                [void]$sb.AppendLine("## Relaciones")
-                [void]$sb.AppendLine("")
-                [void]$sb.AppendLine("| Nombre | Tabla origen | Campo origen | Tabla destino | Campo destino |")
-                [void]$sb.AppendLine("|---|---|---|---|---|")
-
-                for ($i = 0; $i -lt $relations.Count; $i++) {
-                    try {
-                        $rel = $relations[$i]
-                        $originField = ""
-                        $foreignField = ""
-                        if ($rel.Fields.Count -gt 0) {
-                            $rf = $rel.Fields[0]
-                            $originField = $rf.Name
-                            $foreignField = $rf.ForeignName
-                        }
-                        [void]$sb.AppendLine("| $($rel.Name) | $($rel.Table) | $originField | $($rel.ForeignTable) | $foreignField |")
-                    } catch { Write-Debug "Diagnostics: $_" }
-                }
-                [void]$sb.AppendLine("")
+        if ($relationRows.Count -gt 0) {
+            [void]$body.AppendLine("## Relaciones")
+            [void]$body.AppendLine("")
+            [void]$body.AppendLine("| Nombre | Tabla origen | Campo origen | Tabla destino | Campo destino |")
+            [void]$body.AppendLine("|---|---|---|---|---|")
+            foreach ($row in @($relationRows | Sort-Object -Property Name)) {
+                [void]$body.AppendLine("| $($row.Name) | $($row.Table) | $($row.Fields) | $($row.ForeignTable) | $($row.ForeignFields) |")
             }
-        } catch { Write-Debug "Diagnostics: $_" }
+            [void]$body.AppendLine("")
+        }
+
+        $schemaBody = $body.ToString()
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $normalizedBody = $schemaBody -replace "`r`n", "`n"
+            $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($normalizedBody))
+        } finally {
+            $sha.Dispose()
+        }
+        $fingerprint = -join ($hashBytes | ForEach-Object { $_.ToString("x2") })
+
+        $sb = [System.Text.StringBuilder]::new()
+        $dbName = [System.IO.Path]::GetFileNameWithoutExtension($DatabasePath)
+        [void]$sb.AppendLine("# ERD - $dbName")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("Generado: $(Get-Date -Format 'yyyy-MM-dd')")
+        [void]$sb.AppendLine("Fingerprint: sha256:$fingerprint")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("> Fuente de esquema del proyecto. El fingerprint cubre tablas, campos, tipos, tama$($enye)os, requeridos, claves y relaciones. Regenere con generate_erd cuando falte o el esquema del backend cambie.")
+        [void]$sb.AppendLine("")
+        [void]$sb.Append($schemaBody)
 
         # FIX: renombrada $tdConnect para no sobreescribir $connect del scope exterior
         $linkedSources = @{}
@@ -5484,7 +5527,9 @@ function Invoke-GenerateErdAction {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $false)][string]$BackendPath,
-        [Parameter(Mandatory = $true)][string]$DestinationRoot,
+        # Issue #1861 - accepted for call-shape compatibility only; the ERD
+        # location never depends on the source destination root.
+        [Parameter(Mandatory = $false)][string]$DestinationRoot,
         [Parameter(Mandatory = $false)][string]$ErdPath,
         [Parameter(Mandatory = $false)][string]$Password,
         [switch]$Json
@@ -5509,11 +5554,11 @@ function Invoke-GenerateErdAction {
     $BackendPath = (Resolve-Path -Path $BackendPath).Path
     Write-Status -Message ("Backend: {0}" -f $BackendPath) -Color Yellow
 
-    $backendName = [System.IO.Path]::GetFileNameWithoutExtension($BackendPath)
     if ([string]::IsNullOrWhiteSpace($ErdPath)) {
-        $parent = Split-Path -Parent $DestinationRoot
-        $erdDirectory = Join-Path -Path $parent -ChildPath "ERD"
-        $mdFile = Join-Path -Path $erdDirectory -ChildPath ($backendName + ".md")
+        # Issue #1861 - default to the committed project ERD. The runner
+        # starts in the resolved project root.
+        $erdDirectory = Join-Path -Path (Get-Location).Path -ChildPath "docs\erd"
+        $mdFile = Join-Path -Path $erdDirectory -ChildPath "ERD.md"
     } else {
         # Issue #1256 — erdPath is an output FILE, not a directory. Preserve
         # the friendly extension-less call by appending .md explicitly.
@@ -5827,7 +5872,11 @@ function Invoke-ImportAction {
 $session = $null
 
 try {
-    $DestinationRoot = Resolve-DestinationRoot -DestinationRoot $DestinationRoot
+    # Issue #1861 - Generate-ERD writes only its Markdown file, so it must not
+    # create the source destination root as a side effect.
+    if ($Action -ne "Generate-ERD") {
+        $DestinationRoot = Resolve-DestinationRoot -DestinationRoot $DestinationRoot
+    }
 
     if ($Action -ne "Generate-ERD") {
         $AccessPath = Resolve-AccessPath -AccessPath $AccessPath

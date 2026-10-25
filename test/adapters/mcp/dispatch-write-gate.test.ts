@@ -1,4 +1,6 @@
+import { win32 } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { ProjectConfigDiagnostic } from "../../../src/adapters/config/project-config-diagnostic";
 import { createDysflowMcpTools, MCP_TOOL_ROUTES } from "../../../src/adapters/mcp/tools";
 import { successResult } from "../../../src/core/contracts/index";
 
@@ -114,14 +116,17 @@ describe("vba-sync filesystem write-gate derives from MCP_TOOL_ROUTES", () => {
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
-  it("blocks generate_erd when writes are disabled (regression #665)", async () => {
+  // #1861 contract change — #665 blocked every generate_erd call when writes
+  // were disabled. The ERD is now a documentation export: only a target
+  // outside the project root keeps being refused (see the #1861 suite below).
+  it("blocks generate_erd outside the project root when writes are disabled (#665, #1861)", async () => {
     const { tool, vbaSyncToolService } = toolByName("generate_erd", false);
     const result = await tool.handler({
-      erdPath: "C:/project/docs/schema.html",
+      erdPath: "C:/elsewhere/docs/schema.md",
       projectRoot: "C:/project",
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
+    expect(result.content[0]?.text).toContain("OUTSIDE_PROJECT_ROOT");
     expect(vbaSyncToolService.requests).toEqual([]);
   });
 
@@ -530,5 +535,126 @@ describe("DELTA-007 — catalog_add_control dry-run dispatch parity", () => {
     expect(result.isError).toBe(false);
     expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
     expect(vbaSyncToolService.requests).toHaveLength(1);
+  });
+});
+
+// #1861 — generate_erd is a documentation export. With writes disabled
+// (process and project), a call whose resolved output file lands inside the
+// project root succeeds; any other target is refused with OUTSIDE_PROJECT_ROOT.
+describe("generate_erd documentation-export gate (#1861)", () => {
+  const projectRoot = "C:/project";
+
+  function erdTool(
+    options: {
+      writes?: boolean;
+      writeExecutionPolicy?: "safe-by-default" | "developer";
+      projectConfigResolver?: () => ProjectConfigDiagnostic;
+    } = {},
+  ) {
+    const localServices = makeServices();
+    const tools = createDysflowMcpTools({
+      services: localServices,
+      writes: options.writes ?? false,
+      writeAccessResolver: async () => false,
+      accessContextResolver: async () =>
+        successResult({
+          accessPath: `${projectRoot}/app.accdb`,
+          projectRoot,
+          destinationRoot: `${projectRoot}/src`,
+        }),
+      ...(options.writeExecutionPolicy !== undefined
+        ? { writeExecutionPolicy: options.writeExecutionPolicy }
+        : {}),
+      ...(options.projectConfigResolver !== undefined
+        ? { projectConfigResolver: options.projectConfigResolver }
+        : {}),
+    });
+    const tool = tools.find((candidate) => candidate.name === "generate_erd");
+    if (!tool) throw new Error("Tool not registered: generate_erd");
+    return { tool, vbaSyncToolService: localServices.vbaSyncToolService };
+  }
+
+  function forwardedRequest(service: FakeVbaService): Record<string, unknown> {
+    expect(service.requests).toHaveLength(1);
+    return service.requests[0] as Record<string, unknown>;
+  }
+
+  it("generate_erd({}) succeeds with writes disabled and targets docs/erd/ERD.md", async () => {
+    const { tool, vbaSyncToolService } = erdTool();
+    const result = await tool.handler({});
+    expect(result.isError).toBe(false);
+    const request = forwardedRequest(vbaSyncToolService);
+    expect(request.erdPath).toBe(win32.resolve(projectRoot, "docs/erd/ERD.md"));
+    // S12 — the zero-argument call never depends on destinationRoot.
+    expect(request).not.toHaveProperty("destinationRoot");
+  });
+
+  it("accepts an explicit erdPath inside the project root with writes disabled", async () => {
+    const { tool, vbaSyncToolService } = erdTool();
+    const result = await tool.handler({ erdPath: "docs/schema" });
+    expect(result.isError).toBe(false);
+    expect(forwardedRequest(vbaSyncToolService).erdPath).toBe(
+      win32.resolve(projectRoot, "docs/schema.md"),
+    );
+  });
+
+  it.each([
+    ["an absolute path outside the root", "D:/elsewhere/ERD.md"],
+    ["a relative path escaping the root", "../sibling/ERD.md"],
+  ])("refuses %s with OUTSIDE_PROJECT_ROOT", async (_label, erdPath) => {
+    const { tool, vbaSyncToolService } = erdTool();
+    const result = await tool.handler({ erdPath });
+    expect(result.isError).toBe(true);
+    expect(result.error?.code).toBe("OUTSIDE_PROJECT_ROOT");
+    expect(vbaSyncToolService.requests).toEqual([]);
+  });
+
+  it("succeeds in developer policy even when the project config disallows writes", async () => {
+    const disallowed: ProjectConfigDiagnostic = {
+      status: "capabilities-disallow-write",
+      cwd: projectRoot,
+      configPath: `${projectRoot}/.dysflow/project.json`,
+      projectRoot,
+      projectId: "demo",
+      accessPath: `${projectRoot}/app.accdb`,
+      backendPath: null,
+      destinationRoot: `${projectRoot}/src`,
+      writeReady: false,
+      diagnostics: [
+        {
+          code: "CAPABILITIES_DISALLOW_WRITE",
+          severity: "error",
+          message: "Project 'demo' has capabilities.allowWrites = false.",
+        },
+      ],
+      remediation: null,
+    };
+    const { tool, vbaSyncToolService } = erdTool({
+      writeExecutionPolicy: "developer",
+      projectConfigResolver: () => disallowed,
+    });
+    const result = await tool.handler({});
+    expect(result.isError).toBe(false);
+    expect(forwardedRequest(vbaSyncToolService).erdPath).toBe(
+      win32.resolve(projectRoot, "docs/erd/ERD.md"),
+    );
+  });
+
+  it("keeps the established behaviour for outside targets when writes are enabled", async () => {
+    const { tool, vbaSyncToolService } = erdTool({ writes: true });
+    const result = await tool.handler({ erdPath: "D:/elsewhere/ERD.md" });
+    expect(result.isError).toBe(false);
+    expect(forwardedRequest(vbaSyncToolService).erdPath).toBe("D:/elsewhere/ERD.md");
+  });
+
+  it("does not extend the exemption to other filesystem writers", async () => {
+    const { tool } = toolByName("generate_form", false);
+    const result = await tool.handler({
+      spec: { name: "frmDemo", controls: [] },
+      projectRoot,
+      apply: true,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
   });
 });

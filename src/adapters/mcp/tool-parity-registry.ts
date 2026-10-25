@@ -78,7 +78,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   delete_module:
     'Delete a module/object from the Access binary (DESTRUCTIVE; write-gated). apply:true also requires implements_check:"delete_module_precheck" and confirmedRequiresConfirmation:true. force:true removes it even when a corruption HRESULT is raised. Edits the binary only — sync the source tree separately.',
   generate_erd:
-    "Generate an entity-relationship Markdown document of the database schema to the erdPath file. An extension-less erdPath is normalized by appending .md; erdPath is never interpreted as a directory. Read-only.",
+    "Generate the project ERD: one Markdown file with every table, field, type, size, required flag, primary and foreign key, and relation, stamped with `Generado: YYYY-MM-DD` and `Fingerprint: sha256:<hex>` over the schema body. With no arguments it writes docs/erd/ERD.md in the project root. erdPath is an optional output file resolved against the project root; an extension-less value gets .md and it is never a directory. Documentation export: a target inside the project root runs with writes disabled; with writes disabled any other target is refused with OUTSIDE_PROJECT_ROOT. Writes only that file.",
   fix_encoding:
     "Normalize a leading UTF-8 BOM on source files (and round-trip module encoding in the binary). It ONLY removes BOMs — it does NOT restore lossy '?' characters left by mojibake; restore those by editing the source and confirm with verify_code.",
   // VBA sync — forms
@@ -305,7 +305,7 @@ export const TOOL_DESCRIPTIONS: Record<DysflowMcpToolName, string> = {
   list_linked_tables:
     "List tables linked into the frontend, with their connection sources. Frontend-only: target may only be 'frontend' and omission resolves to the configured accessPath. Read-only.",
   get_schema:
-    "Return a table schema. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
+    "Return a table schema. Read the committed ERD (docs/erd/ERD.md, produced by generate_erd) first; use get_schema only for a property the ERD lacks. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
   count_rows:
     "Count rows. Names allow Unicode letters/digits, spaces, hyphens, underscores, or reserved words; no brackets. target: frontend/backend/auto. Read-only.",
   distinct_values:

@@ -5820,3 +5820,160 @@ Describe "Import-VbaModule — FORM_VBNAME_PREFIX_MISMATCH guard (issue #1040)" 
             -Because "issue #1020 (round-3): Ensure-VbNameAttributeAtTop must be idempotent when ModuleName already matches the canonical `Form_<base>` value; if Import-DocumentCodeBehind ever regressed to passing the bare basename, this would rewrite the .cls and break the .cls <-> form-instance link"
     }
 }
+
+# ===========================================================================
+# Issue #1861 — the ERD is the single schema source. Export-DataStructure
+# runs against an in-memory DAO double; the assertions read the written file.
+# ===========================================================================
+
+Describe "Export-DataStructure — ERD stamp and schema completeness (#1861)" {
+    BeforeAll {
+        # Earlier Describes stub these cmdlets with script-scoped functions;
+        # drop any leaked stub so the real filesystem cmdlets run here.
+        foreach ($stub in @('Resolve-Path', 'Test-Path', 'New-Item', 'Get-ChildItem', 'Export-DataStructure', 'Write-Status', 'New-DaoDbEngine')) {
+            # Bounded: a leaked Test-Path stub cannot be trusted to answer here.
+            for ($attempt = 0; $attempt -lt 5; $attempt++) {
+                if (-not (Get-Command -Name $stub -CommandType Function -ErrorAction SilentlyContinue)) { break }
+                Remove-Item -LiteralPath "function:$stub" -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        $script:VbaManagerPath = Join-Path $PSScriptRoot ".." "dysflow-vba-manager.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
+        )
+        foreach ($fnName in @('Export-DataStructure', 'Invoke-GenerateErdAction')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $fnName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) { throw "$fnName not found in $($script:VbaManagerPath)" }
+            Invoke-Expression $fnAst.Extent.Text
+        }
+
+        function script:Write-Status { param([string]$Message, $Color) }
+        function script:Write-DysflowResult { param($Result, $Depth) }
+        function script:New-DaoDbEngine { return $script:FakeEngine }
+
+        function script:New-FakeSchema {
+            param([switch]$WithExtraField)
+            $clienteFields = @(
+                [PSCustomObject]@{ Name = 'IdCliente'; Type = 4; Size = 4; Required = $true },
+                [PSCustomObject]@{ Name = 'Nombre'; Type = 10; Size = 100; Required = $true },
+                [PSCustomObject]@{ Name = 'Notas'; Type = 12; Size = 0; Required = $false }
+            )
+            if ($WithExtraField) {
+                $clienteFields += [PSCustomObject]@{ Name = 'Email'; Type = 10; Size = 255; Required = $false }
+            }
+            $tables = @(
+                [PSCustomObject]@{
+                    Name = 'TbPedidos'; Connect = ''
+                    Fields = @(
+                        [PSCustomObject]@{ Name = 'IdPedido'; Type = 4; Size = 4; Required = $true },
+                        [PSCustomObject]@{ Name = 'IdCliente'; Type = 4; Size = 4; Required = $true },
+                        [PSCustomObject]@{ Name = 'Fecha'; Type = 8; Size = 8; Required = $false }
+                    )
+                    Indexes = @([PSCustomObject]@{ Primary = $true; Fields = @([PSCustomObject]@{ Name = 'IdPedido' }) })
+                },
+                [PSCustomObject]@{
+                    Name = 'TbClientes'; Connect = ''
+                    Fields = $clienteFields
+                    Indexes = @([PSCustomObject]@{ Primary = $true; Fields = @([PSCustomObject]@{ Name = 'IdCliente' }) })
+                },
+                [PSCustomObject]@{
+                    Name = 'MSysObjects'; Connect = ''
+                    Fields = @([PSCustomObject]@{ Name = 'Id'; Type = 4; Size = 4; Required = $true })
+                    Indexes = @()
+                }
+            )
+            $relations = @(
+                [PSCustomObject]@{
+                    Name = 'TbClientesTbPedidos'; Table = 'TbClientes'; ForeignTable = 'TbPedidos'
+                    Fields = @([PSCustomObject]@{ Name = 'IdCliente'; ForeignName = 'IdCliente' })
+                }
+            )
+            $database = [PSCustomObject]@{ TableDefs = $tables; Relations = $relations }
+            $database | Add-Member -MemberType ScriptMethod -Name Close -Value { }
+            $engine = [PSCustomObject]@{ Database = $database }
+            $engine | Add-Member -MemberType ScriptMethod -Name OpenDatabase -Value {
+                param($Path, $Exclusive, $ReadOnly, $Connect)
+                return $this.Database
+            }
+            return $engine
+        }
+
+        function script:Get-ErdFingerprint {
+            param([string]$Text)
+            $match = [regex]::Match($Text, '(?m)^Fingerprint: sha256:([0-9a-f]{64})\r?$')
+            if (-not $match.Success) { return $null }
+            return $match.Groups[1].Value
+        }
+    }
+
+    BeforeEach {
+        $script:FakeEngine = New-FakeSchema
+    }
+
+    It "stamps the generation date and a sha256 schema fingerprint in the header" {
+        $out = Join-Path $TestDrive "stamp.md"
+        Export-DataStructure -DatabasePath "C:\db\Demo_Datos.accdb" -OutputPath $out
+        $text = Get-Content -LiteralPath $out -Raw
+
+        $text | Should -Match '(?m)^Generado: \d{4}-\d{2}-\d{2}\r?$'
+        Get-ErdFingerprint -Text $text | Should -Not -BeNullOrEmpty
+    }
+
+    It "lists every column with type, size, required flag, PK and FK, plus the relations" {
+        $out = Join-Path $TestDrive "body.md"
+        Export-DataStructure -DatabasePath "C:\db\Demo_Datos.accdb" -OutputPath $out
+        $text = Get-Content -LiteralPath $out -Raw
+
+        $text | Should -Match '(?m)^\| Campo \| Tipo \| Tamaño \| Requerido \| PK \| FK \|\r?$'
+        $text | Should -Match '(?m)^\| IdCliente \| Long \| 4 \| Si \| PK \|  \|\r?$'
+        $text | Should -Match '(?m)^\| Notas \| Memo \| - \| No \|  \|  \|\r?$'
+        $text | Should -Match '(?m)^\| IdPedido \| Long \| 4 \| Si \| PK \|  \|\r?$'
+        $text | Should -Match '(?m)^\| IdCliente \| Long \| 4 \| Si \|  \| TbClientes\.IdCliente \|\r?$'
+        $text | Should -Match '(?m)^\| Fecha \| Date/Time \| 8 \| No \|  \|  \|\r?$'
+        $text | Should -Match '(?m)^\| TbClientesTbPedidos \| TbClientes \| IdCliente \| TbPedidos \| IdCliente \|\r?$'
+        $text | Should -Not -Match 'MSysObjects'
+    }
+
+    It "keeps the fingerprint stable for an identical schema and changes it when the schema changes" {
+        $first = Join-Path $TestDrive "first.md"
+        $second = Join-Path $TestDrive "second.md"
+        $changed = Join-Path $TestDrive "changed.md"
+        Export-DataStructure -DatabasePath "C:\db\Demo_Datos.accdb" -OutputPath $first
+        Export-DataStructure -DatabasePath "C:\db\Demo_Datos.accdb" -OutputPath $second
+        $script:FakeEngine = New-FakeSchema -WithExtraField
+        Export-DataStructure -DatabasePath "C:\db\Demo_Datos.accdb" -OutputPath $changed
+
+        $a = Get-ErdFingerprint -Text (Get-Content -LiteralPath $first -Raw)
+        $b = Get-ErdFingerprint -Text (Get-Content -LiteralPath $second -Raw)
+        $c = Get-ErdFingerprint -Text (Get-Content -LiteralPath $changed -Raw)
+        $a | Should -Not -BeNullOrEmpty
+        $b | Should -Be $a
+        $c | Should -Not -Be $a
+    }
+
+    It "writes only docs/erd/ERD.md under the project root when no erdPath or destinationRoot is given" {
+        $projectRoot = Join-Path $TestDrive "project"
+        $backendDir = Join-Path $TestDrive "backend"
+        New-Item -ItemType Directory -Path $projectRoot, $backendDir -Force | Out-Null
+        $backend = Join-Path $backendDir "Demo_Datos.accdb"
+        Set-Content -LiteralPath $backend -Value "fake"
+
+        Push-Location $projectRoot
+        try {
+            Invoke-GenerateErdAction -BackendPath $backend
+        } finally {
+            Pop-Location
+        }
+
+        $written = @(Get-ChildItem -LiteralPath $projectRoot -Recurse -File |
+            ForEach-Object { $_.FullName.Substring($projectRoot.Length + 1) -replace '\\', '/' })
+        $written | Should -Be @('docs/erd/ERD.md')
+        Get-ErdFingerprint -Text (Get-Content -LiteralPath (Join-Path $projectRoot 'docs/erd/ERD.md') -Raw) |
+            Should -Not -BeNullOrEmpty
+    }
+}
