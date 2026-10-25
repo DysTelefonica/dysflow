@@ -122,6 +122,15 @@ export async function readFormContext(
     return readFormCandidateContext(fileSystem, targetData, formName, projectId);
   }
 
+  // Issue #1867 — `formName` with the context the caller already gave (`cwd`, or the
+  // session's resolved project) derives the source from the config destinationRoot.
+  if (!sourcePath && formName && orchestrator !== undefined) {
+    const target = await orchestrator.resolveExecutionTarget({ ...params, formName });
+    if (!target.ok) return target;
+    const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+    return readFormCandidateContext(fileSystem, targetData, formName, projectId ?? "");
+  }
+
   if (!sourcePath) {
     return failureResult(
       createDysflowError(

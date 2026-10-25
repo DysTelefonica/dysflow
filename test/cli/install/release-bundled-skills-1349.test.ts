@@ -19,7 +19,10 @@ import {
   RELEASE_SKILL_NAMES,
   tarForceLocalArgs,
 } from "../../../.github/scripts/create-release-archive.mjs";
-import { DYSSKILL_NAMES } from "../../../src/cli/commands/install/skills-installer.js";
+import {
+  CONSUMER_SKILL_NAMES,
+  DYSSKILL_NAMES,
+} from "../../../src/cli/commands/install/skills-installer.js";
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -187,7 +190,8 @@ describe("release bundled skills (#1349)", () => {
     );
     expect(install.stderr).toBe("");
 
-    for (const name of DYSSKILL_NAMES) {
+    // #1860 2014 the default install writes the consumer skills; maintainers need the opt-in.
+    for (const name of CONSUMER_SKILL_NAMES) {
       const sourceRoot = path.join(extractedRoot, "skills", name);
       const files = await listFiles(sourceRoot);
       expect(files).toContain("SKILL.md");

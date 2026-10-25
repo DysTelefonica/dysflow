@@ -32,7 +32,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 /** Canonical instructions injected into the agent's system prompt. */
 const DYSFLOW_PROTOCOL = `## Dysflow Canonical Workflow — MUST READ
 
-You are operating on a Microsoft Access / VBA project via the dysflow MCP. The runtime gives you primitives; this section gives you the workflow. Full rules: skills/dysflow-protocol/SKILL.md.
+You are operating on a Microsoft Access / VBA project via the dysflow MCP. The runtime gives you primitives; this section gives you the workflow. Full rules: skills/dysflow-arnes/SKILL.md (facts: skills/dysflow-usage/SKILL.md).
 
 ### Hard rules (NEVER violate)
 

@@ -60,9 +60,11 @@ describe("bundled Dysflow skill installation (#1323)", () => {
     const skillsDir = join(root, "consumer", "skills");
     await seedBundle(bundleRoot);
 
+    // #1860 — the maintainer skills are written only with the opt-in.
     const report = await installBundledSkills({
       bundleRoot,
       targets: [{ agentId: "codex", skillsDir }],
+      includeMaintainerSkills: true,
     });
 
     expect(report.installed).toHaveLength(1);

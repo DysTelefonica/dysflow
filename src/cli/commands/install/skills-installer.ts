@@ -15,14 +15,19 @@ import path from "node:path";
 import { readPackageVersionNear } from "../../../core/utils/package-info.js";
 import { resolvePiAgentDir } from "./agent-config.js";
 
-export const DYSSKILL_NAMES = [
-  "access-form-ui-builder",
-  "dysflow-arnes",
-  "dysflow-usage",
+/**
+ * #1860 — the skills an agent receives from `dysflow install`. The two consumer
+ * skills are installed by default. The maintainer skills are for working on
+ * dysflow itself and need an explicit opt-in. `access-form-ui-builder` is not
+ * shipped: the team keeps its own copy in the catalog.
+ */
+export const CONSUMER_SKILL_NAMES = ["dysflow-arnes", "dysflow-usage"] as const;
+export const MAINTAINER_SKILL_NAMES = [
   "dysflow-codegraph-update",
   "dysflow-examples-sync",
   "dysflow-pointer-rollout",
 ] as const;
+export const DYSSKILL_NAMES = [...CONSUMER_SKILL_NAMES, ...MAINTAINER_SKILL_NAMES] as const;
 
 export type DysflowSkillName = (typeof DYSSKILL_NAMES)[number];
 export const SKILL_AGENT_IDS = ["opencode", "claude", "codex", "cursor", "pi"] as const;
@@ -54,6 +59,8 @@ export type SkillInstallReport = {
 
 export type SkillDoctorStatus = SkillTarget & {
   skillsDirExists: boolean;
+  /** #1860 — the release channel the install record names ("stable", "beta", "main"). */
+  channel?: string;
   versionMatch: boolean;
   hashesMatch: boolean;
   installedVersion?: string;
@@ -356,11 +363,44 @@ export async function assertBundledSkillsAvailable(bundleRoot: string): Promise<
   await readBundle(bundleRoot);
 }
 
-function metadataContent(hashes: Record<DysflowSkillName, string>, harnessVersion: string): string {
+/** #1860 — hashes of the skills this install writes, keyed by name. */
+function pickHashes(
+  hashes: Record<DysflowSkillName, string>,
+  names: readonly DysflowSkillName[],
+): Record<DysflowSkillName, string> {
+  return Object.fromEntries(names.map((name) => [name, hashes[name]])) as Record<
+    DysflowSkillName,
+    string
+  >;
+}
+
+/** #1860 — the skill hashes recorded by an earlier install in `skillsDir`, if any. */
+async function readRecordedSkillHashes(skillsDir: string): Promise<Record<string, string>> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(childPath(skillsDir, HARNESS_METADATA_FILE), "utf8"),
+    ) as { skills?: unknown };
+    if (typeof parsed.skills !== "object" || parsed.skills === null) return {};
+    return Object.fromEntries(
+      Object.entries(parsed.skills as Record<string, unknown>).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function metadataContent(
+  hashes: Record<DysflowSkillName, string>,
+  harnessVersion: string,
+  channel: string | undefined,
+): string {
   return `${JSON.stringify(
     {
       schemaVersion: HARNESS_METADATA_SCHEMA_VERSION,
       mcpHarnessVersion: harnessVersion,
+      ...(channel === undefined ? {} : { channel }),
       skills: hashes,
     },
     null,
@@ -377,8 +417,18 @@ function metadataContent(hashes: Record<DysflowSkillName, string>, harnessVersio
 export async function installBundledSkills(options: {
   bundleRoot: string;
   targets: readonly SkillTarget[];
+  /** #1860 — maintainer skills are written only when explicitly requested. */
+  includeMaintainerSkills?: boolean;
+  /** #1860 — the release channel this install came from, recorded for doctor. */
+  channel?: string;
 }): Promise<SkillInstallReport> {
   const bundle = await readBundle(options.bundleRoot);
+  // The environment switch is the opt-in until the install and update commands take a flag.
+  const maintainerOptIn =
+    options.includeMaintainerSkills ?? process.env.DYSFLOW_MAINTAINER_SKILLS === "1";
+  const selected: readonly DysflowSkillName[] = maintainerOptIn
+    ? DYSSKILL_NAMES
+    : CONSUMER_SKILL_NAMES;
   const files: FileSnapshot[] = [];
   const directories: DirectorySnapshot[] = [];
   const links: LinkSnapshot[] = [];
@@ -397,7 +447,7 @@ export async function installBundledSkills(options: {
       await mkdir(skillsDir, { recursive: true });
       const writtenFiles: string[] = [];
 
-      for (const name of DYSSKILL_NAMES) {
+      for (const name of selected) {
         const skillDir = childPath(skillsDir, name);
         const skillDirExisted = await pathExists(skillDir);
         await replaceManagedLink(skillDir, links);
@@ -427,11 +477,32 @@ export async function installBundledSkills(options: {
         );
       }
 
+      // #1860 — remove an unedited skill this install record owns but this version
+      // no longer ships. An edited copy stays, as in removeOwnedBundledSkills.
+      const recorded = await readRecordedSkillHashes(skillsDir);
+      for (const [stale, expected] of Object.entries(recorded)) {
+        if (selected.includes(stale as DysflowSkillName)) continue;
+        const staleDir = childPath(skillsDir, stale);
+        if (!(await pathExists(staleDir))) continue;
+        const actual = await readSkillTree(staleDir)
+          .then((files) => skillTreeHash(files))
+          .catch(() => undefined);
+        if (actual === expected) await rm(staleDir, { recursive: true, force: true });
+      }
+
       const metadataFile = childPath(skillsDir, HARNESS_METADATA_FILE);
       await replaceManagedLink(metadataFile, links);
       const previousMetadata = await readFile(metadataFile).catch(() => undefined);
       files.push({ path: metadataFile, previous: previousMetadata });
-      await writeFile(metadataFile, metadataContent(bundle.hashes, bundle.harnessVersion), "utf8");
+      await writeFile(
+        metadataFile,
+        metadataContent(
+          pickHashes(bundle.hashes, selected),
+          bundle.harnessVersion,
+          options.channel,
+        ),
+        "utf8",
+      );
       writtenFiles.push(metadataFile);
       installed.push({ agentId: target.agentId, skillsDir, writtenFiles });
     }
@@ -455,18 +526,29 @@ export async function diagnoseBundledSkills(options: {
     const skillsDir = assertSafeSkillsDir(target);
     const skillsDirExists = await pathExists(skillsDir);
     let installedVersion: string | undefined;
+    let installedChannel: string | undefined;
+    let recordedNames: string[] = [];
     try {
       const metadata = JSON.parse(
         await readFile(childPath(skillsDir, HARNESS_METADATA_FILE), "utf8"),
-      ) as { mcpHarnessVersion?: unknown };
+      ) as { mcpHarnessVersion?: unknown; skills?: unknown };
       if (typeof metadata.mcpHarnessVersion === "string") {
         installedVersion = metadata.mcpHarnessVersion;
+      }
+      const recordedChannel = (metadata as { channel?: unknown }).channel;
+      if (typeof recordedChannel === "string") installedChannel = recordedChannel;
+      if (typeof metadata.skills === "object" && metadata.skills !== null) {
+        recordedNames = Object.keys(metadata.skills);
       }
     } catch {
       installedVersion = undefined;
     }
+    // #1860 — check the skills this install owns; a default install owns the consumer pair only.
+    const owned = (recordedNames.length > 0 ? recordedNames : CONSUMER_SKILL_NAMES).filter(
+      (name): name is DysflowSkillName => (DYSSKILL_NAMES as readonly string[]).includes(name),
+    );
     const staleSkills: DysflowSkillName[] = [];
-    for (const name of DYSSKILL_NAMES) {
+    for (const name of owned) {
       const installedFiles = await readSkillTree(childPath(skillsDir, name)).catch(() => undefined);
       if (
         installedFiles === undefined ||
@@ -481,6 +563,7 @@ export async function diagnoseBundledSkills(options: {
       skillsDir,
       skillsDirExists,
       installedVersion,
+      channel: installedChannel,
       versionMatch: installedVersion === bundle.harnessVersion,
       hashesMatch: staleSkills.length === 0,
       expectedHashes: bundle.hashes,

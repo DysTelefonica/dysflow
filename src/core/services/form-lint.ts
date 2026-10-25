@@ -227,6 +227,8 @@ function isIntrinsicAccessFormReportMember(name: string): boolean {
 function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   const controlNames = new Set(collectControls(input.ir.root).map((control) => control.name));
+  // VBA identifiers are case-insensitive (#1866 item 2): `Me.Descripcion` binds to `DESCRIPCION`.
+  const controlNamesLower = new Set([...controlNames].map((name) => name.toLowerCase()));
   const lines = input.clsSource.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i++) {
@@ -234,7 +236,7 @@ function ruleFormControlBinding(input: LintFormInput): LintDiagnostic[] {
     for (const match of line.matchAll(/\bMe\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
       const name = match[1];
       if (!name) continue;
-      if (controlNames.has(name)) continue;
+      if (controlNamesLower.has(name.toLowerCase())) continue;
       if (isIntrinsicAccessFormReportMember(name)) continue;
       const column = (match.index ?? 0) + 1;
       const suggestion = suggestClosestControlName(name, [...controlNames]);

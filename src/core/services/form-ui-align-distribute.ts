@@ -118,7 +118,7 @@ export function alignControls(
       );
     }
     const newAxisValue = computeAxisValueAfterAlign(entry, edge, target);
-    upsertScalar(liveNode, axisKeyFor(edge), String(newAxisValue));
+    writeAxisValue(liveNode, axisKeyFor(edge), newAxisValue);
   }
 
   return {
@@ -219,7 +219,7 @@ export function distributeControls(
     if (item === undefined || position === undefined) continue;
     const liveNode = nextByName.get(item.name);
     if (liveNode === undefined) continue;
-    upsertScalar(liveNode, axisFormKey, String(position));
+    writeAxisValue(liveNode, axisFormKey, position);
   }
 
   return {
@@ -385,6 +385,20 @@ function cloneIr(ir: FormIR): FormIR {
     root: cloneNode(ir.root),
     codeBehind: ir.codeBehind,
   };
+}
+
+/**
+ * Issue #1868 — Access stores positions as whole twips. Write the rounded
+ * value to the primary key and to its LayoutCached copy, when the control
+ * carries one, so the form file stays internally consistent.
+ */
+function writeAxisValue(node: FormNode, key: string, value: number): void {
+  const whole = String(Math.round(value));
+  upsertScalar(node, key, whole);
+  const cached = `LayoutCached${key}`;
+  if (node.entries.some((entry) => entry.kind === "scalar" && entry.key === cached)) {
+    upsertScalar(node, cached, whole);
+  }
 }
 
 function upsertScalar(node: FormNode, key: string, value: string): void {

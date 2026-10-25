@@ -20,6 +20,7 @@ const RUNTIME_ANCHORS = [
   "agent-friction-examples-1614.test.ts",
   "architecture-doc.test.ts",
   "dysflow-usage-examples-1611.test.ts",
+  "dysflow-usage-recipes-1871.test.ts",
   "example-input-properties-contract.test.ts",
   "form-noise-keys-docstring-1686.test.ts",
   "mcp-readme-tool-surface.test.ts",
