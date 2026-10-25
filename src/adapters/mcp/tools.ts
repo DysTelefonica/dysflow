@@ -294,15 +294,13 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
       // names) are REMOVED entirely; the alias is the sole source.
       name: "access_force_cleanup_orphaned",
       resultContract: orphanCleanupResultContract,
-      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one selected by pid after confirmedRequiresConfirmation is accepted. Listing is read-only; cleanup is write-gated, returns MCP_WRITES_DISABLED when writes are off, and still refuses non-headless, wrong-path, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
+      description: `List orphaned headless MSACCESS processes and pwsh.exe worker processes holding the project's accessPath, or kill exactly one selected by pid after confirmedRequiresConfirmation is accepted. Listing needs no allowWrites. Retire needs implements_check and confirmedRequiresConfirmation; it refuses non-headless, wrong-path, non-MSACCESS, or Dysflow-owned processes. ${MCP_TOOL_CONTRACTS.access_force_cleanup_orphaned.summary}`,
       inputSchema: ORPHAN_CLEANUP_SCHEMA,
       handler: async (input) =>
         handleMcpAccessOrphanCleanup(
           input,
           ORPHAN_CLEANUP_SCHEMA,
           services,
-          writesEnabled,
-          writeAccessResolver,
           async (validatedInput) => {
             const request = validatedInput as { pid?: number | null };
             const context = await accessContextResolver(validatedInput);
