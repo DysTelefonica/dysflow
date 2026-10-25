@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- chore(deps): bump GitHub Actions pins: setup-node v7.1.0, codeql-action v4.39.0, upload-artifact v7.0.2
+
 - fix(mcp): a call with no `cwd` after `resolve_project` resolves the project that was fixed for the session, instead of the startup cwd (#1867)
 
 - fix(forms): `form_list_controls`, `inspect_form`, `form_get_geometry` and the other form readers accept `cwd` + `formName`, deriving the source from the resolved project (#1867)
