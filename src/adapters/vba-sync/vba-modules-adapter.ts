@@ -67,9 +67,21 @@ import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
 // the canonical mutation path per openspec/specs/vba-manager-actions/spec.md.
 // ========================================================================
 
-/** Issue #1863 — one-line description of a lint finding. */
+/** Issue #1863 — one-line description of a lint finding, marked new or inherited. */
 function formatLintFinding(finding: ImportLintFinding): string {
-  return `LINT_FINDING: ${finding.file}:${finding.line} [${finding.rule}] ${finding.severity}: ${finding.message}`;
+  const status = finding.inherited ? "inherited" : "new";
+  return `LINT_FINDING: ${finding.file}:${finding.line} [${finding.rule}] ${finding.severity} ${status}: ${finding.message}`;
+}
+
+/** Issue #1863 — an inherited finding as a success-result warning. */
+function lintDiagnostic(finding: ImportLintFinding): Diagnostic {
+  return {
+    level: "warning",
+    source: "import-lint",
+    code: "LINT_INHERITED",
+    path: finding.file,
+    message: formatLintFinding(finding),
+  };
 }
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
@@ -585,7 +597,46 @@ export class VbaModulesAdapter {
     );
   }
 
+  /**
+   * Issue #1863 — import_modules / import_all lint gate. A real import (not a
+   * dry run) is refused when a module it would load has a NEW error-severity
+   * finding. Inherited findings never block; they are returned as diagnostics
+   * on a successful import.
+   */
   async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const isImport = toolName === "import_all" || toolName === "import_modules";
+    const dryRun = params.dryRun === true || params.apply === false;
+    if (!isImport || dryRun) return this.executeCore(toolName, params);
+
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return this.executeCore(toolName, params);
+    const findings = await this.collectImportLint(toolName, params, target.data);
+    const newErrors = findings.filter((f) => f.severity === "error" && !f.inherited);
+    if (newErrors.length > 0) {
+      const listing = newErrors.map(formatLintFinding).join(" | ");
+      return failureResult(
+        createDysflowError(
+          "LINT_FINDINGS_ERROR",
+          `Refused import: ${newErrors.length} new lint error(s) in the modules to import: ${listing}`,
+          {
+            details: { findings: newErrors },
+            remediation:
+              "Fix the new findings in the source and retry. Findings that the committed version already had are reported as warnings and do not block. Run the same call with apply:false to see every finding, marked new or inherited.",
+          },
+        ),
+      );
+    }
+
+    const result = await this.executeCore(toolName, params);
+    const inherited = findings.filter((f) => f.inherited).map(lintDiagnostic);
+    if (!result.ok || inherited.length === 0) return result;
+    return { ...result, diagnostics: [...result.diagnostics, ...inherited] };
+  }
+
+  private async executeCore(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
@@ -698,9 +749,6 @@ export class VbaModulesAdapter {
     if (toolName === "import_all" || toolName === "import_modules") {
       const gate = await this.gateImportFormSources(toolName, params);
       if (!gate.ok) return gate;
-      // Issue #1863 — error-severity lint findings refuse the apply.
-      const lintGate = await this.gateImportLint(toolName, params);
-      if (!lintGate.ok) return lintGate;
     }
 
     // Issue #807 (Feature 2) — import_modules bulk by directory. When
@@ -1591,34 +1639,6 @@ export class VbaModulesAdapter {
           details: { defects },
           remediation:
             "Repair the listed .form.txt/.report.txt files (or re-export them from a healthy binary with export_modules/export_all) and retry. Metadata-only legacy defects are self-healed during import; this gate only rejects structural damage the importer cannot repair.",
-        },
-      ),
-    );
-  }
-
-  /**
-   * Issue #1863 — refuse apply:true when a module an import would load has an
-   * error-severity lint finding. Refused before the runner is spawned.
-   */
-  private async gateImportLint(
-    toolName: "import_all" | "import_modules",
-    params: Record<string, unknown>,
-  ): Promise<OperationResult<undefined>> {
-    const target = await this.orchestrator.resolveExecutionTarget(params);
-    if (!target.ok) return target;
-    const errors = (await this.collectImportLint(toolName, params, target.data)).filter(
-      (finding) => finding.severity === "error",
-    );
-    if (errors.length === 0) return successResult(undefined);
-    const listing = errors.map(formatLintFinding).join(" | ");
-    return failureResult(
-      createDysflowError(
-        "LINT_FINDINGS_ERROR",
-        `Refused import: ${errors.length} lint error(s) in the modules to import: ${listing}`,
-        {
-          details: { findings: errors },
-          remediation:
-            "Fix the listed findings in the source and retry. Run the same call with apply:false to see every finding, warnings included, without writing.",
         },
       ),
     );
