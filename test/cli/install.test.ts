@@ -14,6 +14,11 @@ import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+// These tests run a real `pnpm install --prod` for the runtime (extractor.ts has a
+// 120 s budget for it). The global 15 s test budget fails them on a loaded runner, so
+// this file gets the same budget as the runtime install. Issue #1891.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 let isolatedProcessHome: string;
 const originalUserProfile = process.env.USERPROFILE;
 const originalHome = process.env.HOME;
