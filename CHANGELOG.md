@@ -1,5 +1,14 @@
 # Changelog
 
+## [v4.5.1] - 2026-10-25
+
+v4.5.0 was tagged but its GitHub Release was not published: its end-to-end battery failed on the #1817 fixture when the import gate of #1865 refused it (#1895). The fix is #1896. v4.5.1 is the first published release of this content.
+
+### Changes
+
+- fix(forms): ignore Attribute header lines in the code-behind guard; sync_binary acknowledges the divergence (#1896)
+
+
 ## [v4.5.0] - 2026-10-25
 
 ### Changes
@@ -3394,10 +3403,13 @@ Hardening and maintenance pass from a code-quality review of the MCP runtime.
 - A proposal to migrate MCP input validation to Zod was investigated and
   **closed without changes**: an audit proved the existing validator already
   enforces every constraint the current schemas use (string enums, types,
-  numeric bounds, `additionalProperties`). The only unsupported constructs
-  (numeric enums, integer distinction, `oneOf`/`anyOf`) are unused, so a
-  migration would have added a dependency and ~700 lines for zero behavior
-  change. Revisit if a future schema needs those constructs.
+  numeric bounds, `additionalProperties`).
+
+  The only unsupported constructs (numeric enums, integer distinction,
+  `oneOf`/`anyOf`) are unused, so a migration would have added a dependency
+  and ~700 lines for zero behavior change.
+
+  Revisit if a future schema needs those constructs.
 
 ## [v1.2.35] - 2026-06-09
 
