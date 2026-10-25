@@ -22,6 +22,8 @@ use `diff` only when reported as a compatibility alias. `apply_form_design_plan`
 
 ## Source and binary sync
 
+A form's code lives in `forms/<Name>.cls`; a copy sits in the `CodeBehindForm` section of `forms/Form_<Name>.form.txt`. Importing the `.cls` overwrites a functional edit made only in the copy, so `import_modules` / `import_all` refuse that case with `FORM_CODE_BEHIND_DIVERGES` (see `error-codes.md`). Case, whitespace and encoding differences are not divergences. Pass `acknowledgeCodeBehindWins:true` only when the `.cls` must win. `lint_form_code` reports the same condition as the `code-behind-divergence` warning.
+
 Use the three primitives directly. Do not script a whole-project round trip through a single workflow tool.
 
 1. **Compare:** `verify_code({cwd})`. Gate on `actionableOk`. Read `bulkImportable` and `bulkExportable` for the module lists; read `actionableDifferent[]` only with `diagnostic:true`.

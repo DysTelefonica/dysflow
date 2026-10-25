@@ -13,6 +13,7 @@
  * from "info" to "warning" / "error" must do it on solid signal.
  */
 
+import { compareCodeBehindText } from "./form-code-behind-guard.js";
 import { collectControls } from "./form-ir-service.js";
 import {
   ALL_LINT_RULE_IDS,
@@ -58,6 +59,9 @@ export function lintFormCode(input: LintFormInput, options: LintFormOptions = {}
         break;
       case "control-property-support":
         diagnostics.push(...ruleControlPropertySupport(input));
+        break;
+      case "code-behind-divergence":
+        diagnostics.push(...ruleCodeBehindDivergence(input));
         break;
     }
   }
@@ -593,6 +597,28 @@ function stripStringLiteralsAndComments(line: string): string {
  * emit an `info` saying the rule is not yet implemented (so callers see that
  * the rule fires, not a silent gap).
  */
+/**
+ * Issue #1865 — the CodeBehindForm copy and the .cls must agree functionally;
+ * import_modules lets the .cls win and would drop a copy-only edit. Noise
+ * (case, whitespace, encoding) is filtered by the verify_code classifier.
+ */
+function ruleCodeBehindDivergence(input: LintFormInput): LintDiagnostic[] {
+  // No sibling .cls (empty clsSource): nothing can overwrite the copy on import.
+  if (input.ir.codeBehind === null || input.clsSource.trim() === "") return [];
+  const comparison = compareCodeBehindText(input.ir.codeBehind, input.clsSource);
+  if (!comparison.diverges) return [];
+  return [
+    {
+      severity: "warning",
+      rule: "code-behind-divergence",
+      file: input.clsPath,
+      line: 0,
+      column: 0,
+      message: `The CodeBehindForm copy in ${input.formTxtPath} differs from ${input.clsPath}; import lets the .cls win and drops the copy edit (${comparison.firstDifferences.join(" | ")}).`,
+    },
+  ];
+}
+
 function ruleControlPropertySupport(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   const controlTypes = new Map<string, string>(); // name -> blockType
