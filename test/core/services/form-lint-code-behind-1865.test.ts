@@ -47,7 +47,7 @@ describe("lint_form_code — code-behind-divergence (#1865)", () => {
 
     const hits = result.diagnostics.filter((d) => d.rule === "code-behind-divergence");
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.file).toBe("forms/Form_Sana.form.txt");
+    expect(hits[0]?.file).toBe("forms/Sana.cls");
     expect(hits[0]?.message).toContain("edited only in the form");
   });
 
