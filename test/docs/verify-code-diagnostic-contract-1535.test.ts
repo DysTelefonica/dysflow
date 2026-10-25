@@ -72,7 +72,11 @@ describe("verify_code diagnostic documentation contract (#1535)", () => {
       "skills/dysflow-usage/assets/examples/verify-code.md",
       "utf8",
     );
-    const usageSkill = await readFile("skills/dysflow-usage/SKILL.md", "utf8");
+    // #1871 — the verify_code decision fields moved to the usage reference.
+    const usageSkill = await readFile(
+      "skills/dysflow-usage/references/schema-and-verify.md",
+      "utf8",
+    );
     const harnessSkill = await readFile("skills/dysflow-arnes/SKILL.md", "utf8");
 
     for (const surface of [
