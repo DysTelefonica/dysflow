@@ -130,7 +130,12 @@ export type LintRuleId =
   | "logical-short-circuit"
   | "implicit-variant"
   | "missing-exit-handler"
-  | "invalid-static-class-call";
+  | "invalid-static-class-call"
+  // Issue #1863 — p_Error propagation (methods that declare p_Error only).
+  | "error-param-last"
+  | "error-propagation-check"
+  | "error-handler-writes-perror"
+  | "test-ignores-perror";
 
 export type LintRuleOverride = {
   enabled: boolean;
@@ -1501,6 +1506,10 @@ const KNOWN_LINT_RULE_IDS: readonly LintRuleId[] = [
   "implicit-variant",
   "missing-exit-handler",
   "invalid-static-class-call",
+  "error-param-last",
+  "error-propagation-check",
+  "error-handler-writes-perror",
+  "test-ignores-perror",
 ];
 
 /**

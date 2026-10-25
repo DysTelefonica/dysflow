@@ -65,6 +65,14 @@ const MALFORMED_FORM_TXT = [
   "",
 ].join("\r\n");
 
+/** A module with the declarations the default lint rules expect (#1863 gate). */
+const MODULE_A = [
+  'Attribute VB_Name = "ModA"',
+  "Option Compare Database",
+  "Option Explicit",
+  "",
+].join("\r\n");
+
 function buildAdapter(executor: VbaManagerExecutor, destinationRoot: string) {
   return new VbaSyncAdapter({
     preflightCleanup: noopPreflightCleanup(),
@@ -106,7 +114,7 @@ describe("import_all / import_modules — form source quality gate (#958)", () =
 
   it("import_all fails with FORM_SOURCE_MALFORMED and never spawns the runner when a .form.txt is structurally broken", async () => {
     await writeFile(join(tmpRoot, "forms", "Form_Rota.form.txt"), MALFORMED_FORM_TXT, "utf8");
-    await writeFile(join(tmpRoot, "modules", "ModA.bas"), 'Attribute VB_Name = "ModA"\r\n', "utf8");
+    await writeFile(join(tmpRoot, "modules", "ModA.bas"), MODULE_A, "utf8");
     const calls = { count: 0 };
     const adapter = buildAdapter(okExecutor(calls), tmpRoot);
 
@@ -121,7 +129,7 @@ describe("import_all / import_modules — form source quality gate (#958)", () =
 
   it("import_all proceeds to the runner when every form source is structurally valid", async () => {
     await writeFile(join(tmpRoot, "forms", "Form_Sana.form.txt"), VALID_FORM_TXT, "utf8");
-    await writeFile(join(tmpRoot, "modules", "ModA.bas"), 'Attribute VB_Name = "ModA"\r\n', "utf8");
+    await writeFile(join(tmpRoot, "modules", "ModA.bas"), MODULE_A, "utf8");
     const calls = { count: 0 };
     const adapter = buildAdapter(okExecutor(calls), tmpRoot);
 
@@ -148,7 +156,7 @@ describe("import_all / import_modules — form source quality gate (#958)", () =
 
   it("import_modules gates only the targeted modules: a broken untargeted form does not block a .bas import", async () => {
     await writeFile(join(tmpRoot, "forms", "Form_Rota.form.txt"), MALFORMED_FORM_TXT, "utf8");
-    await writeFile(join(tmpRoot, "modules", "ModA.bas"), 'Attribute VB_Name = "ModA"\r\n', "utf8");
+    await writeFile(join(tmpRoot, "modules", "ModA.bas"), MODULE_A, "utf8");
     const calls = { count: 0 };
     const adapter = buildAdapter(okExecutor(calls), tmpRoot);
 

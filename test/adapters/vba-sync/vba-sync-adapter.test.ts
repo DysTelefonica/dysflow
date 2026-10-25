@@ -22,6 +22,12 @@ const spawnMock = vi.hoisted(() => vi.fn());
 
 vi.mock("node:child_process", () => ({
   spawn: spawnMock,
+  // The import lint reads the committed version through git (#1863). This
+  // fixture has no git work tree, so the read reports failure.
+  execFile: (...args: unknown[]) => {
+    const callback = args[args.length - 1] as (err: Error) => void;
+    callback(new Error("no git in this test"));
+  },
 }));
 
 describe("VbaSyncAdapter Orchestrator", () => {
