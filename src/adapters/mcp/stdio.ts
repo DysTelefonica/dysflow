@@ -778,7 +778,7 @@ export function createDynamicServices(
       // Issue #1867 — a call with no project context fails by naming that cause.
       const missingContext = projectContextMissingError(input, {
         sessionCwd: () => undefined,
-        startupConfigured: startupError === undefined,
+        startupError: startupError === undefined ? undefined : { code: startupError.code },
       });
       if (missingContext !== undefined) return { ok: false, error: missingContext };
       if (startupError !== undefined) {

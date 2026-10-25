@@ -16,7 +16,7 @@ describe("PROJECT_CONTEXT_MISSING (#1867)", () => {
       { module: "Constantes" },
       {
         sessionCwd: noSession,
-        startupConfigured: false,
+        startupError: { code: "CONFIG_MISSING_ACCESS_PATH" },
       },
     );
 
@@ -28,7 +28,10 @@ describe("PROJECT_CONTEXT_MISSING (#1867)", () => {
   it("does not replace the error when the call names a context", () => {
     for (const input of [{ cwd: "C:/repo" }, { projectRoot: "C:/repo" }, { projectId: "bench" }]) {
       expect(
-        projectContextMissingError(input, { sessionCwd: noSession, startupConfigured: false }),
+        projectContextMissingError(input, {
+          sessionCwd: noSession,
+          startupError: { code: "CONFIG_MISSING_ACCESS_PATH" },
+        }),
       ).toBeUndefined();
     }
   });
@@ -37,7 +40,7 @@ describe("PROJECT_CONTEXT_MISSING (#1867)", () => {
     expect(
       projectContextMissingError(
         { module: "Constantes" },
-        { sessionCwd: () => "C:/repo", startupConfigured: false },
+        { sessionCwd: () => "C:/repo", startupError: { code: "CONFIG_MISSING_ACCESS_PATH" } },
       ),
     ).toBeUndefined();
   });
@@ -48,7 +51,7 @@ describe("PROJECT_CONTEXT_MISSING (#1867)", () => {
         { module: "Constantes" },
         {
           sessionCwd: noSession,
-          startupConfigured: true,
+          startupError: { code: "STARTUP_ERR" },
         },
       ),
     ).toBeUndefined();
