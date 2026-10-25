@@ -138,6 +138,11 @@ export async function applyGuardedFormWrite(
             cause,
             rollback: rollbackOutcome,
             rollbackApplied: rollbackOutcome.applied,
+            // Issue #1868 — say what happened to each side. The source is
+            // unchanged only when the restore was applied. The binary is not
+            // verified by this envelope; a caller must run verify_code to prove it.
+            sourceUnchanged: rollbackOutcome.applied,
+            binaryState: "unverified",
           },
           remediation:
             "Inspect details.cause and details.rollback, then follow references/error-codes.md#form_import_gate_failed before retrying.",
