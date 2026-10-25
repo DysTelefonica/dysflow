@@ -300,7 +300,7 @@ export const SCHEMA_PROPS = {
   erdPath: {
     type: "string",
     description:
-      "ERD Markdown output file, resolved against the project root. Defaults to docs/erd/ERD.md. When the path has no extension, Dysflow appends .md; it is never interpreted as a directory. With writes disabled, a target outside the project root is refused with OUTSIDE_PROJECT_ROOT.",
+      "ERD Markdown output file. When the path has no extension, Dysflow appends .md; it is never interpreted as a directory.",
   } as JsonSchemaProperty,
   catalogPath: { type: "string", description: "Form control catalog path." } as JsonSchemaProperty,
   specPath: {

@@ -356,7 +356,7 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   test_vba: ["#621", "#746", "#1556"],
   verify_code: ["#701", "#959"],
   delete_module: ["#619"],
-  generate_erd: ["#1256", "#1861"],
+  generate_erd: [],
   fix_encoding: ["#958"],
   validate_form_spec: ["#616"],
   generate_form: ["#616"],
