@@ -92,6 +92,8 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   },
   rm: (path, options) => rm(path, options),
   tmpdir: () => tmpdir(),
+  // Issue #1866 item 1 — verify_code exports from a disposable copy of the .accdb.
+  copyFile: (src, dest) => copyFile(src, dest),
   // Issue #807 (Feature 2) — `exists` lets the bulk import walker probe
   // the sourceDir before recursion. Adding it on the runtime port keeps
   // the core walker free of direct filesystem imports (architectural
