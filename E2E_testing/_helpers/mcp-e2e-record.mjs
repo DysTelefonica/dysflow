@@ -7,6 +7,7 @@
 
 import { execSync, spawnSync } from "node:child_process";
 import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
+import { formatZombieReport } from "./zombie-process-dump.mjs";
 //
 // The hard rules pinned here:
 //   1. REFUSE-START before every tool — refuse to start a new tool when
@@ -385,20 +386,28 @@ export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsP
     return false;
   }
 }
-
-// Prints the process table entries that matter for zombie attribution (#1899).
+// Prints the zombie-owner report (#1899). Reads the full process table so the
+// formatter sees the child's ancestors; the formatter selects what to print.
 // Never kills anything.
 function dumpZombieDiagnostics(tool, childPid) {
-  const script =
-    "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(MSACCESS|powershell|pwsh|node|cmd).exe$' } " +
-    "| Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress";
-  const ps = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 20000,
-  });
-  console.log(
-    `ZOMBIE tool=${tool} childPid=${childPid} ps-status=${ps.status} ps-error=${ps.error?.code ?? "none"}`,
+  const ps = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress -Depth 2",
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 20000, maxBuffer: 64 * 1024 * 1024 },
   );
-  console.log(`ZOMBIE table=${(ps.stdout || ps.stderr || "").trim().slice(0, 12000)}`);
+  if (ps.status !== 0 || !ps.stdout) {
+    console.log(
+      `ZOMBIE tool=${tool} childPid=${childPid} process-table-unavailable status=${ps.status} error=${ps.error?.code ?? ps.stderr?.trim() ?? "none"}`,
+    );
+    return;
+  }
+  const parsed = JSON.parse(ps.stdout);
+  const rows = Array.isArray(parsed) ? parsed : [parsed];
+  console.log(`ZOMBIE tool=${tool} childPid=${childPid} rows=${rows.length}`);
+  for (const line of formatZombieReport({ rows, childPid })) console.log(line);
 }
