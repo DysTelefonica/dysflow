@@ -118,11 +118,14 @@ export async function runIssue1817SyncJourney({
           const binaryToSource = operation === "export_modules" || operation === "sync_binary";
           const applyOperation = async () => {
             if (operation === "export_modules") return await exportTo(source);
+            // The code lives only in the .cls; the CodeBehindForm copy is created by the
+            // fixture, not by a user edit. Acknowledge the divergence so the .cls wins
+            // (#1895), and the marker assertion below checks that it did.
             if (operation === "import_modules") return payload(await callTool(operation, {
-              ...common, destinationRoot: source,
+              ...common, destinationRoot: source, acknowledgeCodeBehindWins: true,
             }));
             return payload(await callTool("sync_binary", {
-              ...common, destinationRoot: source, includeForms: true,
+              ...common, destinationRoot: source, includeForms: true, acknowledgeCodeBehindWins: true,
               direction: binaryToSource ? "binary-to-src" : "src-to-binary",
               acceptBothChanged: true,
               implements_check: "export_overwrites_source_precheck", confirmedRequiresConfirmation: true,

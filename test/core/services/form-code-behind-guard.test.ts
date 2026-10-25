@@ -71,3 +71,36 @@ describe("compareFormCodeBehind (#1865)", () => {
     ).toBe(false);
   });
 });
+
+// Issue #1895 — `Attribute VB_*` lines are module header noise, never a code
+// divergence. They must not trigger the guard nor appear in firstDifferences.
+describe("compareFormCodeBehind ignores Attribute VB_* header lines (#1895)", () => {
+  it("does not diverge when the copy differs only in Attribute VB_* lines", () => {
+    const formText = formWithCodeBehind(
+      CLS.replace(
+        'Attribute VB_Name = "Form_Sana"',
+        'Attribute VB_Name = "Form_Sana"\r\nAttribute VB_Exposed = False',
+      ),
+    );
+    expect(compareFormCodeBehind({ formText, clsText: CLS }).diverges).toBe(false);
+  });
+
+  it("still diverges on a functional line and omits Attribute lines from firstDifferences", () => {
+    const formText = formWithCodeBehind(
+      [
+        'Attribute VB_Name = "Form_Sana"',
+        "Attribute VB_Exposed = False",
+        "Option Compare Database",
+        "Private Sub Form_Load()",
+        '    Debug.Print "edited only in the form"',
+        "End Sub",
+        "",
+      ].join("\r\n"),
+    );
+    const result = compareFormCodeBehind({ formText, clsText: CLS });
+    expect(result.diverges).toBe(true);
+    if (!result.diverges) throw new Error("expected a divergence");
+    expect(result.firstDifferences.join("\n")).toContain("edited only in the form");
+    expect(result.firstDifferences.some((line) => /^Attribute VB_/i.test(line))).toBe(false);
+  });
+});

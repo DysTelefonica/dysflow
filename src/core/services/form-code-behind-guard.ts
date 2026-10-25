@@ -26,6 +26,16 @@ function codeBehindOf(formText: string): string | undefined {
   return lines.slice(index + 1).join("\n");
 }
 
+/** Module header attributes are not code (#1895). */
+const ATTRIBUTE_LINE = /^\s*Attribute\s+VB_/i;
+
+function withoutAttributeLines(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !ATTRIBUTE_LINE.test(line))
+    .join("\n");
+}
+
 function linesNotIn(text: string, other: string): string[] {
   const otherLines = new Set(
     other
@@ -42,9 +52,11 @@ function linesNotIn(text: string, other: string): string[] {
 
 /** Compare an already extracted CodeBehindForm text with the sibling .cls. */
 export function compareCodeBehindText(codeBehind: string, clsText: string): CodeBehindComparison {
+  const code = withoutAttributeLines(codeBehind);
+  const cls = withoutAttributeLines(clsText);
   const verdict = classifyVbaPair({
-    sourceText: clsText,
-    binaryText: codeBehind,
+    sourceText: cls,
+    binaryText: code,
     fileType: "cls",
     mode: "semantic",
   });
@@ -53,7 +65,7 @@ export function compareCodeBehindText(codeBehind: string, clsText: string): Code
   return {
     diverges: true,
     classification: verdict.classification,
-    firstDifferences: linesNotIn(codeBehind, clsText),
+    firstDifferences: linesNotIn(code, cls),
   };
 }
 
