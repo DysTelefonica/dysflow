@@ -1079,7 +1079,7 @@ describe("VbaSyncAdapter Orchestrator", () => {
   it("resolveExecutionTarget loads config from disk when accessPath is undefined and repo config exists", async () => {
     const { mkdir, writeFile, mkdtemp, rm } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
+    const { join, basename } = await import("node:path");
     const root = await mkdtemp(join(tmpdir(), "dysflow-adapter-config-"));
     try {
       await mkdir(join(root, ".dysflow"), { recursive: true });
@@ -1114,7 +1114,11 @@ describe("VbaSyncAdapter Orchestrator", () => {
       expect(result.ok).toBe(true);
       expect(capturedRequest).toBeDefined();
       // migrated to #1092 contract on 2026-07-24
-      expect(capturedRequest?.accessPath?.replace(/\\/g, "/")).toBe(
+      // Issue #1866 item 1 — verify_code exports from a disposable copy of the
+      // resolved database, so the runner receives the copy's path, not the original.
+      const exportedPath = capturedRequest?.accessPath ?? "";
+      expect(basename(exportedPath)).toBe("project.accdb");
+      expect(exportedPath.replace(/\\/g, "/")).not.toBe(
         `${root.replace(/\\/g, "/")}/project.accdb`,
       );
     } finally {

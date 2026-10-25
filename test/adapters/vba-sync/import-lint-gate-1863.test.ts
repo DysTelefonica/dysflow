@@ -90,10 +90,20 @@ describe("import_modules — lint gate (#1863)", () => {
     expect(calls.count).toBe(0);
   });
 
-  it("apply:false previews the lint findings as warnings and spawns nothing", async () => {
+  it("apply:false previews the lint findings as warnings and never runs a write", async () => {
     await writeFile(join(tmpRoot, "modules", "ModBad.bas"), BAD_MODULE, "utf8");
-    const calls = { count: 0 };
-    const adapter = buildAdapter(okExecutor(calls), tmpRoot);
+    // The dry run may read through a read-only export (#1878): only Import is a write.
+    const actions: string[] = [];
+    const adapter = buildAdapter(async (request) => {
+      actions.push(String(request.action));
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT []",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    }, tmpRoot);
 
     const result = await adapter.execute("import_modules", {
       destinationRoot: tmpRoot,
@@ -103,7 +113,7 @@ describe("import_modules — lint gate (#1863)", () => {
 
     expect(result.ok).toBe(true);
     expect(JSON.stringify(result)).toContain("error-param-last");
-    expect(calls.count).toBe(0);
+    expect(actions).not.toContain("Import");
   });
 
   it("imports a module with no error-severity finding", async () => {

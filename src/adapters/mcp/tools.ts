@@ -37,6 +37,7 @@ import {
 } from "./project-resolution-recovery.js";
 import { createResolveProjectTool } from "./resolve-project-tool.js";
 import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
+import type { SessionProjectRoot } from "./session-project-root.js";
 import { createSetupProjectTool } from "./setup-project-tool.js";
 import { createStateTool } from "./state-tool.js";
 import { createWorktreeCacheTools } from "./worktree-cache-tools.js";
@@ -114,6 +115,8 @@ export {
  */
 export type CreateDysflowMcpToolsOptions = {
   services: DysflowMcpServices;
+  /** Issue #1867 — the session project that resolve_project sets and clears. */
+  sessionProjectRoot?: SessionProjectRoot;
   writes?: boolean;
   writeAccessResolver?: McpWriteAccessResolver;
   env?: Record<string, string | undefined>;
@@ -388,6 +391,7 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     createResolveProjectTool({
       cwd,
       recovery: projectResolutionRecovery,
+      sessionProjectRoot: options.sessionProjectRoot,
       cachedProjectConfigResolver: (effectiveCwd) =>
         worktreeCache.peekContext(effectiveCwd, effectiveCwd === cwd ? "startup" : "cwd-param")
           ?.projectConfig ?? null,

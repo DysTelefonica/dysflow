@@ -13,7 +13,8 @@
  * self-heals them (`Normalize-AccessDocumentTextForLoadFromText`), which is
  * how pre-v2.14.0 exports get progressively repaired.
  */
-import { join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
+import { compareFormCodeBehind } from "../../core/services/form-code-behind-guard.js";
 import { parseFormTxt } from "../../core/services/form-ir-service.js";
 import type { ComparisonFileSystemPort } from "../../core/services/vba-source-comparison.js";
 
@@ -112,10 +113,15 @@ export type CollectFormSourceDefectsInput = {
   sourcePath?: string;
 };
 
-export async function collectFormSourceDefects(
+/**
+ * Issue #1865 — the form documents an import would touch. Shared by the
+ * structural gate (#958) and the code-behind divergence guard so both select
+ * exactly the same sources.
+ */
+export async function formSourceCandidates(
   input: CollectFormSourceDefectsInput,
   fileSystem: FormSourceQualityFileSystem,
-): Promise<FormSourceDefect[]> {
+): Promise<Set<string>> {
   const candidates = new Set<string>();
 
   if (
@@ -137,6 +143,22 @@ export async function collectFormSourceDefects(
       candidates.add(file);
     }
   }
+
+  return candidates;
+}
+
+/** Root-relative display path with forward slashes (#958 error envelopes). */
+export function displayPathFor(file: string, root: string | undefined): string {
+  const rel = root !== undefined ? relative(root, file) : file;
+  const chosen = rel !== "" && !rel.startsWith("..") ? rel : (file.split(/[\\/]/).pop() ?? file);
+  return chosen.replace(/\\/g, "/");
+}
+
+export async function collectFormSourceDefects(
+  input: CollectFormSourceDefectsInput,
+  fileSystem: FormSourceQualityFileSystem,
+): Promise<FormSourceDefect[]> {
+  const candidates = await formSourceCandidates(input, fileSystem);
 
   // Report root-relative paths (forward slashes): absolute Windows paths in
   // an error envelope both leak machine layout and break the MCP error-path
@@ -177,4 +199,66 @@ export async function collectFormSourceDefects(
     }
   }
   return defects;
+}
+
+export type FormCodeBehindDivergence = {
+  /** Root-relative path of the .form.txt whose CodeBehindForm copy diverges. */
+  file: string;
+  /** Root-relative path of the sibling .cls that would win on import. */
+  clsFile: string;
+  classification: string;
+  firstDifferences: string[];
+};
+
+/**
+ * Sibling .cls of a Form_<Name>.form.txt: <dir>/<Name>.cls, or the full
+ * document base name when the .cls keeps the Form_ prefix.
+ */
+function siblingClsCandidates(formFile: string): string[] {
+  const dir = dirname(formFile);
+  const base = documentModuleBase(basename(formFile)) ?? "";
+  const bare = base.replace(/^Form_/i, "");
+  return [...new Set([join(dir, `${bare}.cls`), join(dir, `${base}.cls`)])];
+}
+
+/**
+ * Issue #1865 — every planned form whose CodeBehindForm copy functionally
+ * differs from its sibling .cls. Case, whitespace and encoding noise are
+ * filtered by the verify_code classifier inside compareFormCodeBehind.
+ */
+export async function collectFormCodeBehindDivergences(
+  input: CollectFormSourceDefectsInput,
+  fileSystem: FormSourceQualityFileSystem,
+): Promise<FormCodeBehindDivergence[]> {
+  const divergences: FormCodeBehindDivergence[] = [];
+  for (const file of await formSourceCandidates(input, fileSystem)) {
+    if (!FORM_EXT.test(basename(file))) continue;
+    let formText: string;
+    try {
+      formText = await fileSystem.readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    let clsFile: string | undefined;
+    let clsText: string | undefined;
+    for (const candidate of siblingClsCandidates(file)) {
+      try {
+        clsText = await fileSystem.readFile(candidate, "utf8");
+        clsFile = candidate;
+        break;
+      } catch {
+        // Try the next naming convention.
+      }
+    }
+    if (clsFile === undefined || clsText === undefined) continue;
+    const comparison = compareFormCodeBehind({ formText, clsText });
+    if (!comparison.diverges) continue;
+    divergences.push({
+      file: displayPathFor(file, input.root),
+      clsFile: displayPathFor(clsFile, input.root),
+      classification: comparison.classification,
+      firstDifferences: comparison.firstDifferences,
+    });
+  }
+  return divergences;
 }

@@ -26,6 +26,28 @@
 
 ### Fixed
 
+- fix(mcp): a call that names no project context fails with `PROJECT_CONTEXT_MISSING` and a remediation; `resolve_project` reports one project root (#1867)
+
+- feat(install): `dysflow install` and `dysflow update` take `--maintainer-skills` (the `DYSFLOW_MAINTAINER_SKILLS=1` variable still works); doctor reports the release channel; the retired `dysflow-protocol` link is removed (#1860)
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
+- chore(deps): bump GitHub Actions pins: setup-node v7.1.0, codeql-action v4.39.0, upload-artifact v7.0.2
+
+- fix(mcp): a call with no `cwd` after `resolve_project` resolves the project that was fixed for the session, instead of the startup cwd (#1867)
+
+- fix(forms): `form_list_controls`, `inspect_form`, `form_get_geometry` and the other form readers accept `cwd` + `formName`, deriving the source from the resolved project (#1867)
+
+- feat(import): `import_modules` and `import_all` dry runs classify each module against the binary, so an import over a binary-newer module is visible before `apply:true` (#1866)
+
+- feat(diagnose): bootstrap and doctor warn when `projectRoot` in `.dysflow/project.json` points at another worktree (`CONFIG_PROJECT_ROOT_STALE`) (#1866)
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
+- fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
+
+- fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
+
+- fix(verify): `verify_code` exports from a disposable copy of the `.accdb`, so the committed database stays byte-identical (#1866)
 - fix(test-vba): an atom whose output carries text read from files no longer turns the whole `test_vba` call into `MCP_TOOL_ERROR` "Expected double-quoted property name in JSON" (#1850). Error details were serialized, path-stripped as one string and parsed back; the path patterns consumed escaping backslashes and spanned `","` boundaries, and HRESULT advice was appended after the closing brace. `error.details` is now redacted leaf by leaf (`src/core/utils/sanitize-error.ts`, `src/adapters/mcp/result-translation.ts`), and a JSON leaf such as `returnValue` stays valid JSON, byte-for-byte unless redaction changed it. An atom whose JSON-object envelope (`{"`/`{}`) does not parse now fails on its own with `cause.code: "ATOM_OUTPUT_UNPARSABLE"` and a bounded `outputExcerpt` instead of passing silently, while the rest of the run is still reported (`src/core/services/vba-atom-output.ts`, `src/adapters/vba-sync/vba-execution-adapter.ts`). Documented in `docs/api/mcp-tools.md` and `skills/dysflow-usage/references/error-codes.md`.
 
 ## [v4.4.14] - 2026-10-06

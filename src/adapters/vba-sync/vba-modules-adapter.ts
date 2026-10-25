@@ -31,6 +31,7 @@ import {
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
+  type ImportPlanModuleClassification,
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
 import {
@@ -54,7 +55,12 @@ import {
   type DestinationRootOrchestratorLike,
   withResolvedDestinationRoot,
 } from "./destination-root-override.js";
-import { collectFormSourceDefects, type FormSourceDefect } from "./form-source-quality.js";
+import {
+  collectFormCodeBehindDivergences,
+  collectFormSourceDefects,
+  type FormCodeBehindDivergence,
+  type FormSourceDefect,
+} from "./form-source-quality.js";
 import { collectImportLintFindings, type ImportLintFinding } from "./import-lint-gate.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
@@ -83,6 +89,20 @@ function lintDiagnostic(finding: ImportLintFinding): Diagnostic {
     message: formatLintFinding(finding),
   };
 }
+// Issue #1866 item 3 — plan-side mapping from a verify_code classification to the
+// action an import/export would take. Mirrors the recommendations verify_code emits.
+const ACTIONABLE_PLAN_CLASSIFICATIONS: ReadonlySet<string> = new Set([
+  "sourceNewer",
+  "binaryNewer",
+  "bothChanged",
+]);
+const PLAN_RECOMMENDATION_BY_CLASSIFICATION: Readonly<Record<string, string>> = {
+  sourceNewer: "import_to_binary",
+  binaryNewer: "export_to_src",
+  bothChanged: "manual_merge",
+  missingInBinary: "import_to_binary",
+  missingInSource: "export_to_src",
+};
 
 const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   mkdtemp: (prefix) => mkdtemp(prefix),
@@ -94,6 +114,8 @@ const nodeComparisonFileSystem: ComparisonFileSystemPort = {
   },
   rm: (path, options) => rm(path, options),
   tmpdir: () => tmpdir(),
+  // Issue #1866 item 1 — verify_code exports from a disposable copy of the .accdb.
+  copyFile: (src, dest) => copyFile(src, dest),
   // Issue #807 (Feature 2) — `exists` lets the bulk import walker probe
   // the sourceDir before recursion. Adding it on the runtime port keeps
   // the core walker free of direct filesystem imports (architectural
@@ -370,6 +392,12 @@ const COMBOBOX_LISTBOX_NAMES: readonly string[] = [
   "ListRows",
   "ListWidth",
 ];
+
+/** Issue #1865 — one-line description of a code-behind divergence. */
+function formatCodeBehindWarning(divergence: FormCodeBehindDivergence): string {
+  const differences = divergence.firstDifferences.join(" | ");
+  return `FORM_CODE_BEHIND_DIVERGES: ${divergence.file} has a CodeBehindForm copy that differs from ${divergence.clsFile} (${differences}). On import ${divergence.clsFile} wins and the copy edit is lost.`;
+}
 
 export class VbaModulesAdapter {
   constructor(
@@ -749,6 +777,12 @@ export class VbaModulesAdapter {
     if (toolName === "import_all" || toolName === "import_modules") {
       const gate = await this.gateImportFormSources(toolName, params);
       if (!gate.ok) return gate;
+      // Issue #1865 — a code-behind edit made only in the .form.txt copy would
+      // be overwritten by the .cls. Refuse unless the caller acknowledges it.
+      if (params.acknowledgeCodeBehindWins !== true) {
+        const divergences = await this.gateCodeBehindDivergences(toolName, params);
+        if (!divergences.ok) return divergences;
+      }
     }
 
     // Issue #807 (Feature 2) — import_modules bulk by directory. When
@@ -1657,6 +1691,52 @@ export class VbaModulesAdapter {
     return collectImportLintFindings({ root, moduleNames, fileSystem: this.fileSystem });
   }
 
+  /**
+   * Issue #1865 — refuse apply:true when a form's CodeBehindForm copy
+   * diverges from its sibling .cls: the .cls would win and drop the copy's edit.
+   */
+  private async gateCodeBehindDivergences(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<undefined>> {
+    const target = await this.orchestrator.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const divergences = await this.collectImportCodeBehindDivergences(
+      toolName,
+      params,
+      target.data,
+    );
+    if (divergences.length === 0) return successResult(undefined);
+    const listing = divergences.map(formatCodeBehindWarning).join(" | ");
+    return failureResult(
+      createDysflowError(
+        "FORM_CODE_BEHIND_DIVERGES",
+        `Refused import: ${divergences.length} form(s) have a CodeBehindForm copy that differs from the .cls, and the .cls would overwrite that edit: ${listing}`,
+        {
+          details: { divergences },
+          remediation:
+            "Move the edit into the .cls (the single source of code), or re-run with acknowledgeCodeBehindWins:true to let the .cls win.",
+        },
+      ),
+    );
+  }
+
+  private async collectImportCodeBehindDivergences(
+    toolName: "import_all" | "import_modules",
+    params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
+  ): Promise<FormCodeBehindDivergence[]> {
+    if (params.includeForms === false) return [];
+    return collectFormCodeBehindDivergences(
+      {
+        root: stringValue(params.sourceDir) ?? target.destinationRoot,
+        moduleNames: toolName === "import_modules" ? stringArray(params.moduleNames) : [],
+        sourcePath: stringValue(params.sourcePath),
+      },
+      this.fileSystem,
+    );
+  }
+
   private async collectImportFormDefects(
     toolName: "import_all" | "import_modules",
     params: Record<string, unknown>,
@@ -1707,6 +1787,15 @@ export class VbaModulesAdapter {
     for (const finding of await this.collectImportLint(toolName, params, target.data)) {
       warnings.push(formatLintFinding(finding));
     }
+    // Issue #1865 — preview the divergences that an apply would refuse.
+    const divergences = await this.collectImportCodeBehindDivergences(
+      toolName,
+      params,
+      target.data,
+    );
+    for (const divergence of divergences) {
+      warnings.push(formatCodeBehindWarning(divergence));
+    }
     if (target.data.accessPath !== undefined) {
       await stat(target.data.accessPath).catch(() =>
         errors.push(`accessPath not found: ${target.data.accessPath}`),
@@ -1718,16 +1807,86 @@ export class VbaModulesAdapter {
       importMode: normalizeImportMode(stringValue(params.importMode)),
     };
 
+    // Issue #1866 item 3 — say what would change per module before apply:true.
+    const moduleClassifications = await this.classifyPlannedModules(
+      params,
+      modulesPlanned,
+      warnings,
+    );
+
     return successResult(
       buildImportPlanResult({
         toolName,
         params: effectiveParams,
         target: target.data,
         modulesPlanned,
+        moduleClassifications,
         warnings,
         errors,
       }),
     );
+  }
+
+  /**
+   * Issue #1866 item 3 — classify each planned module against the binary with the
+   * verify_code comparison. A failed comparison leaves the plan usable: it adds a
+   * warning and omits the classifications rather than failing the dry run.
+   */
+  private async classifyPlannedModules(
+    params: Record<string, unknown>,
+    modulesPlanned: readonly string[],
+    warnings: string[],
+  ): Promise<readonly ImportPlanModuleClassification[] | undefined> {
+    if (modulesPlanned.length === 0) return undefined;
+    const comparison = await compareSourceAgainstBinary(
+      { ...params, moduleNames: [...modulesPlanned] },
+      this.getComparisonContext(),
+      this.fileSystem,
+    );
+    if (!comparison.ok) {
+      warnings.push(
+        `Module classification unavailable (${comparison.error.code}); the plan lists modules without comparing them to the binary.`,
+      );
+      return undefined;
+    }
+    const data = comparison.data;
+    const entries = [...(data.actionableDifferent ?? []), ...(data.nonActionableDifferent ?? [])];
+    const byModule = new Map(entries.map((entry) => [entry.moduleName, entry]));
+    const classifications = modulesPlanned.map((module): ImportPlanModuleClassification => {
+      const entry = byModule.get(module);
+      if (entry !== undefined) {
+        const classification = entry.classification ?? "matched";
+        if (classification === "binaryNewer" || classification === "bothChanged") {
+          warnings.push(
+            `Module ${module} is ${classification}: the binary has changes that an import would overwrite. Review before apply:true.`,
+          );
+        }
+        return {
+          module,
+          classification,
+          actionable: ACTIONABLE_PLAN_CLASSIFICATIONS.has(classification),
+          recommendation: PLAN_RECOMMENDATION_BY_CLASSIFICATION[classification] ?? "no_action",
+        };
+      }
+      if (data.missingInBinary.some((e) => e.moduleName === module)) {
+        return {
+          module,
+          classification: "missingInBinary",
+          actionable: false,
+          recommendation: "import_to_binary",
+        };
+      }
+      if (data.missingInSource.some((e) => e.moduleName === module)) {
+        return {
+          module,
+          classification: "missingInSource",
+          actionable: false,
+          recommendation: "export_to_src",
+        };
+      }
+      return { module, classification: "matched", actionable: false, recommendation: "no_action" };
+    });
+    return classifications;
   }
 
   /**

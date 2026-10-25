@@ -24,7 +24,9 @@ export type LintRuleId =
   | "bare-function-call-with-parens"
   | "named-and-positional-args-mixing"
   | "unicode-sensitive-executable-tokens"
-  | "control-property-support";
+  | "control-property-support"
+  // Issue #1865 — CodeBehindForm copy diverges from the sibling .cls.
+  | "code-behind-divergence";
 
 export const ALL_LINT_RULE_IDS: readonly LintRuleId[] = [
   "form-control-binding",
@@ -33,6 +35,7 @@ export const ALL_LINT_RULE_IDS: readonly LintRuleId[] = [
   "named-and-positional-args-mixing",
   "unicode-sensitive-executable-tokens",
   "control-property-support",
+  "code-behind-divergence",
 ];
 
 export type LintDiagnostic = {

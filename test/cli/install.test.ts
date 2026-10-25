@@ -198,6 +198,7 @@ describe("install arg parsing", () => {
         verbose: false,
         onlySkills: [],
         excludeSkills: [],
+        maintainerSkills: false,
         requestedChannel: { source: "unset" },
       },
     });
@@ -213,6 +214,7 @@ describe("install arg parsing", () => {
         verbose: true,
         onlySkills: [],
         excludeSkills: [],
+        maintainerSkills: false,
         requestedChannel: { source: "unset" },
       },
     });
@@ -227,6 +229,7 @@ describe("install arg parsing", () => {
         skipChecksum: false,
         onlySkills: [],
         excludeSkills: [],
+        maintainerSkills: false,
         requestedChannel: { source: "unset" },
       },
     });
@@ -1838,6 +1841,7 @@ describe("update arg parsing with skip-checksum", () => {
         skipChecksum: true,
         onlySkills: [],
         excludeSkills: [],
+        maintainerSkills: false,
         requestedChannel: { source: "unset" },
       },
     });

@@ -114,6 +114,8 @@ export type InstallOptions = {
   verbose: boolean;
   onlySkills: SkillAgentId[];
   excludeSkills: SkillAgentId[];
+  /** `--maintainer-skills` (#1860): also install the maintainer skills. */
+  maintainerSkills: boolean;
   /** `--channel` / `DYSFLOW_CHANNEL`; install state is layered in by the command. */
   requestedChannel: RequestedChannel;
 };
@@ -124,6 +126,8 @@ type UpdateOptions = {
   skipChecksum: boolean;
   onlySkills: SkillAgentId[];
   excludeSkills: SkillAgentId[];
+  /** `--maintainer-skills` (#1860): also install the maintainer skills. */
+  maintainerSkills: boolean;
   /** `--channel` / `DYSFLOW_CHANNEL`; install state is layered in by the command. */
   requestedChannel: RequestedChannel;
 };
@@ -206,6 +210,7 @@ export function parseInstallArgs(
       { name: "--only", type: "string" },
       { name: "--exclude", type: "string" },
       { name: "--channel", type: "string" },
+      { name: "--maintainer-skills", type: "boolean" },
     ],
     args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported install option: ${arg}`,
@@ -254,6 +259,7 @@ export function parseInstallArgs(
       verbose: parsed.values["--verbose"] === true,
       onlySkills: skillFilters.onlySkills,
       excludeSkills: skillFilters.excludeSkills,
+      maintainerSkills: parsed.values["--maintainer-skills"] === true,
       requestedChannel: channel.requested,
     },
   };
@@ -275,6 +281,7 @@ export function parseUpdateArgs(
       { name: "--only", type: "string" },
       { name: "--exclude", type: "string" },
       { name: "--channel", type: "string" },
+      { name: "--maintainer-skills", type: "boolean" },
     ],
     args: expandEqualsOptions(args),
     onUnknown: (arg) => `Unsupported update option: ${arg}`,
@@ -297,6 +304,7 @@ export function parseUpdateArgs(
       skipChecksum: parsed.values["--skip-checksum"] === true,
       onlySkills: skillFilters.onlySkills,
       excludeSkills: skillFilters.excludeSkills,
+      maintainerSkills: parsed.values["--maintainer-skills"] === true,
       requestedChannel: channel.requested,
     },
   };
@@ -474,6 +482,8 @@ export async function handleUpdateCommand(
       const skillInstall = await installBundledSkills({
         bundleRoot: localPackageRoot,
         targets: skillTargets,
+        channel: resolvedChannel.channel,
+        includeMaintainerSkills: parsed.options.maintainerSkills,
       });
       const pointerRollout = await installBundledPointerBlocks({
         bundleRoot: localPackageRoot,
@@ -549,6 +559,8 @@ export async function handleUpdateCommand(
     const skillInstall = await installBundledSkills({
       bundleRoot: preparedPackage.packageRoot,
       targets: skillTargets,
+      channel: resolvedChannel.channel,
+      includeMaintainerSkills: parsed.options.maintainerSkills,
     });
     const pointerRollout = await installBundledPointerBlocks({
       bundleRoot: preparedPackage.packageRoot,

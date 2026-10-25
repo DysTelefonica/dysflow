@@ -175,7 +175,7 @@ outside the mirrored plugin directory.
 - Keep the MCP server key `dysflow` and private metadata under `_dysflow_*`.
 - Point portable bundles at `npx -y dysflow mcp --tools=agent`.
 - Treat hook input as host-owned and validate any fields you consume.
-- Keep the canonical operating guidance in `skills/dysflow-protocol/SKILL.md`.
+- Keep the canonical operating guidance in `skills/dysflow-arnes/SKILL.md` (rules) and `skills/dysflow-usage/SKILL.md` (facts). `skills/dysflow-protocol` is retired (#1871) and kept only as a redirect stub.
 - Restart the host, invoke `get_capabilities({})`, and verify the expected
   `adapterVersion` and `toolsVisible`.
 - Run the repository checks before publishing:

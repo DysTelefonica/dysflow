@@ -18,6 +18,15 @@ const LIVE_MODULE_SRC = [
   "Option Explicit",
   "",
 ].join("\r\n");
+// Issue #1866 item 3 — dry-run plans read the binary through a read-only export.
+// Tests without an Access fixture answer that export with an empty success.
+const planOnlyExecutor: VbaManagerExecutor = async () => ({
+  exitCode: 0,
+  stdout: "DYSFLOW_RESULT []",
+  stderr: "",
+  durationMs: 1,
+  timedOut: false,
+});
 
 describe("VbaModulesAdapter", () => {
   it("handles module tools", () => {
@@ -589,6 +598,7 @@ describe("VbaModulesAdapter", () => {
     await writeFile(join(develop, "front.accdb"), "", "utf8");
     await writeFile(join(develop, "src", "modules", "Variables Globales.bas"), "", "utf8");
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: staging,
       env: {},
@@ -615,6 +625,7 @@ describe("VbaModulesAdapter", () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-fallback-source-adapter-"));
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
@@ -639,6 +650,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
@@ -680,6 +692,7 @@ describe("VbaModulesAdapter", () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "front.accdb"), "", "utf8");
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       accessPath: join(root, "front.accdb"),
@@ -724,6 +737,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
@@ -823,6 +837,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
@@ -1630,6 +1645,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},
@@ -1660,6 +1676,7 @@ describe("VbaModulesAdapter", () => {
       "utf8",
     );
     const service = new VbaSyncAdapter({
+      executor: planOnlyExecutor,
       preflightCleanup: noopPreflightCleanup(),
       cwd: root,
       env: {},

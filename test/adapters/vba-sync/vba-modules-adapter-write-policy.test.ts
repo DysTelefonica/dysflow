@@ -70,7 +70,7 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     expect(calls[0]).toMatchObject({ action: "Import" });
   });
 
-  it("import_modules with dryRun:true → planImport (no runner)", async () => {
+  it("import_modules with dryRun:true → planImport (no write runner)", async () => {
     const calls: unknown[] = [];
     const service = new VbaSyncAdapter({
       preflightCleanup: noopPreflightCleanup(),
@@ -101,7 +101,8 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
       dryRun: true,
       willModifyAccess: false,
     });
-    expect(calls).toHaveLength(0);
+    // Issue #1866 item 3 — the plan may read the binary (read-only Export), never import.
+    expect((calls as Array<{ action?: string }>).every((c) => c.action === "Export")).toBe(true);
   });
 
   it("import_all with dryRun:false forwarded → runner invoked", async () => {
@@ -360,7 +361,8 @@ describe("VbaModulesAdapter — write-policy truth table (#785, capa 2)", () => 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected plan success");
     expect(result.data).toMatchObject({ dryRun: true, willModifyAccess: false });
-    expect(calls).toHaveLength(0);
+    // Issue #1866 item 3 — the plan may read the binary (read-only Export), never import.
+    expect((calls as Array<{ action?: string }>).every((c) => c.action === "Export")).toBe(true);
   });
 
   it("apply:true && dryRun:false → runner invoked (commit wins)", async () => {
@@ -525,10 +527,11 @@ describe("VbaModulesAdapter — direct adapter truth table (#785, capa 2)", () =
     expect(runnerCalls).toBeGreaterThanOrEqual(1);
   });
 
-  it("import_modules with dryRun:true short-circuits to planImport (no runner)", async () => {
+  it("import_modules with dryRun:true short-circuits to planImport (no write runner)", async () => {
     let runnerCalls = 0;
-    const adapter = buildAdapter(async () => {
-      runnerCalls += 1;
+    const adapter = buildAdapter(async (request) => {
+      // Issue #1866 item 3 — the plan's binary read is an Export; only writes are counted.
+      if (request.action !== "Export") runnerCalls += 1;
       return {
         exitCode: 0,
         stdout: 'DYSFLOW_RESULT {"ok":true}',

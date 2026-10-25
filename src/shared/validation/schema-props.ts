@@ -296,6 +296,11 @@ export const SCHEMA_PROPS = {
   } as JsonSchemaProperty,
   replace: { type: "boolean", description: "Replace existing resources." } as JsonSchemaProperty,
   strict_write: { type: "boolean", description: "Use strict write guards." } as JsonSchemaProperty,
+  // Form code-behind guard (#1865): the .cls wins over a diverging copy.
+  acknowledgeCodeBehindWins: {
+    type: "boolean",
+    description: "Let the .cls win over a diverging CodeBehindForm copy (#1865).",
+  } as JsonSchemaProperty,
   // ERD / form
   erdPath: {
     type: "string",

@@ -64,8 +64,10 @@ import {
   resolveInvocationWriteIntent,
 } from "./invocation-telemetry.js";
 import { MCP_TOOL_CONTRACTS } from "./mcp-tool-contracts.js";
+import { projectContextMissingError } from "./project-context-missing.js";
 import { withWireResponseEnvelope } from "./response-envelope.js";
 import { type McpToolResult, withSchemaVersion } from "./result-translation.js";
+import { createSessionProjectRoot } from "./session-project-root.js";
 import { DEFAULT_MAX_REQUEST_BYTES, SizeLimitTransform } from "./stdio-size-guard.js";
 import {
   buildHiddenToolRegistry,
@@ -86,7 +88,7 @@ const MAX_UNAVAILABLE_SERVICE_CACHE_ENTRIES = 16;
 
 /** Short bootstrap guidance returned in the MCP initialize result. */
 export const INITIALIZE_INSTRUCTIONS =
-  "Bootstrap: call get_capabilities({ compact: true }), then schema({ view: 'index' }) to choose a tool and describe_tool({ name: '<tool>', sections: ['parameters'] }) for one-tool details.";
+  "Bootstrap: call get_capabilities({ view: 'compact' }), then schema({ view: 'index' }) to choose a tool and describe_tool({ name: '<tool>', sections: ['parameters'] }) for one-tool details.";
 
 // MCP protocol version this server targets.
 //
@@ -146,9 +148,14 @@ export async function startMcpStdioAdapter(
 ): Promise<void> {
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
+  // Issue #1867 — the project resolve_project fixes for this session. The tool
+  // surface sets it; every per-input resolver reads it as the fallback cwd.
+  const sessionProjectRoot = createSessionProjectRoot();
+  const sessionOptions = { sessionCwd: sessionProjectRoot.get };
   const services = createDynamicServices(
     configResult.ok ? configResult.data : undefined,
     configResult.ok ? undefined : configResult.error,
+    sessionOptions,
   );
   const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
@@ -160,7 +167,9 @@ export async function startMcpStdioAdapter(
     services,
     writes: writesEnabled,
     toolSurface, // Issue #1492 — propagate to bootstrap + tools/list filter
-    writeAccessResolver: async (input) => resolveMcpWriteAccessForInput(input, startupConfig),
+    sessionProjectRoot,
+    writeAccessResolver: async (input) =>
+      resolveMcpWriteAccessForInput(input, startupConfig, sessionOptions),
     env: process.env,
     // #674 — per-input allowedProcedures resolution. The MCP gate (see
     // canonical-handlers.ts:ensureProcedureAllowed) now sees the allowlist
@@ -168,7 +177,7 @@ export async function startMcpStdioAdapter(
     // a caller could pass the gate with project A's allowlist and execute
     // against project B's binary.
     allowedProcedures: async (input) => {
-      const configResult = await resolveConfigForInput(input);
+      const configResult = await resolveConfigForInput(input, sessionOptions);
       if (!configResult.ok) return undefined;
       return configResult.data.allowedProcedures;
     },
@@ -177,11 +186,12 @@ export async function startMcpStdioAdapter(
     // resolver reads that flag from the config of the project the input
     // targets, for the same cross-project reason as the allowlist above.
     procedureStrictMode: async (input) => {
-      const configResult = await resolveConfigForInput(input);
+      const configResult = await resolveConfigForInput(input, sessionOptions);
       if (!configResult.ok) return undefined;
       return configResult.data.procedureStrictMode;
     },
-    accessContextResolver: async (input) => resolveMcpAccessContextForInput(input, startupConfig),
+    accessContextResolver: async (input) =>
+      resolveMcpAccessContextForInput(input, startupConfig, sessionOptions),
     projectConfigResolver: (input, cwd = process.cwd()) =>
       diagnoseProjectConfig(
         cwd,
@@ -621,10 +631,18 @@ function reportResultContractViolationToStderr(
   process.stderr.write(`[dysflow] ${JSON.stringify(diagnostic)}\n`);
 }
 
+/** Options shared by the per-input config resolvers (#1867 session fallback). */
+export type ResolveConfigOptions = {
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+  /** The project fixed by resolve_project for this session, if any. */
+  sessionCwd?: () => string | undefined;
+};
+
 export async function resolveMcpWriteAccessForInput(
   input: unknown,
   _startupConfig?: DysflowConfig,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: ResolveConfigOptions = {},
 ): Promise<boolean> {
   const configResult = await resolveConfigForInput(input, options, { preferProjectConfig: true });
   return configResult.ok ? configResult.data.allowWrites : false;
@@ -633,7 +651,7 @@ export async function resolveMcpWriteAccessForInput(
 export async function resolveMcpAccessContextForInput(
   input: unknown,
   _startupConfig?: DysflowConfig,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: ResolveConfigOptions = {},
 ) {
   const configResult = await resolveConfigForInput(input, options);
   if (!configResult.ok) return configResult;
@@ -754,9 +772,7 @@ export function createConfiguredServices(
 export function createDynamicServices(
   startupConfig?: DysflowConfig,
   startupError?: DysflowError,
-  options: {
-    cwd?: string;
-    env?: Record<string, string | undefined>;
+  options: ResolveConfigOptions & {
     serviceFactory?: (config: DysflowConfig) => DysflowMcpServices;
   } = {},
 ): DysflowMcpServices {
@@ -774,6 +790,12 @@ export function createDynamicServices(
   ): Promise<{ ok: true; services: DysflowMcpServices } | { ok: false; error: DysflowError }> => {
     const configResult = await resolveConfigForInput(input, options);
     if (!configResult.ok) {
+      // Issue #1867 — a call with no project context fails by naming that cause.
+      const missingContext = projectContextMissingError(input, {
+        sessionCwd: () => undefined,
+        startupError: startupError === undefined ? undefined : { code: startupError.code },
+      });
+      if (missingContext !== undefined) return { ok: false, error: missingContext };
       if (startupError !== undefined) {
         return { ok: false, error: startupError };
       }
@@ -1015,12 +1037,20 @@ export function createUnavailableServices(
 
 async function resolveConfigForInput(
   input: unknown,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: ResolveConfigOptions = {},
   resolutionOptions: { preferProjectConfig?: boolean } = {},
 ) {
   const params = isRecord(input) ? input : {};
   const projectRoot = stringOrUndefined(params.projectRoot);
   const cwd = stringOrUndefined(params.cwd);
+  // Issue #1867 — without an explicit cwd, a call with no projectId follows the
+  // project the session fixed with resolve_project, before the startup cwd.
+  const sessionCwd =
+    cwd === undefined &&
+    projectRoot === undefined &&
+    stringOrUndefined(params.projectId) === undefined
+      ? options.sessionCwd?.()
+      : undefined;
   const preferProjectConfig = resolutionOptions.preferProjectConfig === true;
   const timeoutMs =
     typeof params.timeoutMs === "number"
@@ -1030,7 +1060,7 @@ async function resolveConfigForInput(
         : undefined;
 
   return await loadDysflowConfigAsync({
-    cwd: projectRoot ?? cwd ?? options.cwd,
+    cwd: projectRoot ?? cwd ?? sessionCwd ?? options.cwd,
     env: options.env,
     projectId: stringOrUndefined(params.projectId),
     contextId: stringOrUndefined(params.contextId),
