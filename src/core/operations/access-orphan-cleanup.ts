@@ -56,10 +56,16 @@ function isTerminalOrphanStatus(status: string): boolean {
  * Match is case-insensitive (PowerShell's WMI column is not stable across
  * OS versions, and `wmic` historically lowercases).
  */
+// Issue #1862 — a process that names any Access database on its command
+// line is a user-opened instance, never the COM child: refuse it so the
+// PATH_MISMATCH check decides instead of the -Embedding flag alone.
+const ACCESS_DATABASE_ON_COMMAND_LINE = /\.(accdb|accde|mdb|mde)\b/i;
+
 function looksLikeDysflowComChild(proc: OsProcessInfo): boolean {
   if (proc.commandLine === undefined || proc.commandLine.length === 0) {
     return false;
   }
+  if (ACCESS_DATABASE_ON_COMMAND_LINE.test(proc.commandLine)) return false;
   const lower = proc.commandLine.toLowerCase();
   if (lower.includes("-embedding") || lower.includes("/embedding")) return true;
   if (lower.includes("/automation")) return true;
