@@ -73,6 +73,12 @@ type ProjectConfigDiagnosticEntry = ProjectConfigDiagnostic["diagnostics"][numbe
 
 export type ProjectConfigRequest = {
   operation?: string;
+  /**
+   * Issue #1862 — the PID a `access_force_cleanup_orphaned` retire names.
+   * Only a numeric PID on that operation lifts the project-level
+   * `capabilities.allowWrites` refusal; every other readiness check still runs.
+   */
+  pid?: number | null;
   projectId?: string;
   accessPath?: string;
   accessDbPath?: string;
@@ -130,6 +136,15 @@ function worktreeRoot(cwd: string): string | null {
     if (parent === cursor) return null;
     cursor = parent;
   }
+}
+
+/**
+ * Issue #1862 — a numeric-PID retire of a verified orphan is the one operation
+ * that may run with project-level `capabilities.allowWrites: false`. The
+ * ownership guards in AccessOrphanCleanupService still decide the kill.
+ */
+function isOrphanRetire(request: ProjectConfigRequest): boolean {
+  return request.operation === "access_force_cleanup_orphaned" && typeof request.pid === "number";
 }
 
 export function diagnoseProjectConfig(
@@ -544,7 +559,8 @@ export function diagnoseProjectConfig(
     capabilities !== null &&
     typeof capabilities === "object" &&
     !Array.isArray(capabilities) &&
-    (capabilities as Record<string, unknown>).allowWrites === false
+    (capabilities as Record<string, unknown>).allowWrites === false &&
+    !isOrphanRetire(request)
   )
     return failWith(
       base,
