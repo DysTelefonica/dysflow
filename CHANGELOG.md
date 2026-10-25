@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(mcp): a call with no `cwd` after `resolve_project` resolves the project that was fixed for the session, instead of the startup cwd (#1867)
+
 - fix(forms): `form_list_controls`, `inspect_form`, `form_get_geometry` and the other form readers accept `cwd` + `formName`, deriving the source from the resolved project (#1867)
 
 - feat(import): `import_modules` and `import_all` dry runs classify each module against the binary, so an import over a binary-newer module is visible before `apply:true` (#1866)
