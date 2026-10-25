@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(mcp): a call that names no project context fails with `PROJECT_CONTEXT_MISSING` and a remediation; `resolve_project` reports one project root (#1867)
+
 - feat(install): `dysflow install` and `dysflow update` take `--maintainer-skills` (the `DYSFLOW_MAINTAINER_SKILLS=1` variable still works); doctor reports the release channel; the retired `dysflow-protocol` link is removed (#1860)
 - fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
