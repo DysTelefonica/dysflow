@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(verify): `verify_code` exports from a disposable copy of the `.accdb`, so the committed database stays byte-identical (#1866)
@@ -111,6 +113,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `fix(mcp)`: make discovery metadata match accepted inputs and procedure enforcement (#1833).
@@ -167,6 +171,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `docs(agents)`: correct the path to the release version stamper in `AGENTS.md`. The release section named `scripts/set-release-package-version.mjs`; the file is at `.github/scripts/set-release-package-version.mjs`, which is what `release.yml` and `release-package-version.test.ts` both use.
@@ -182,6 +188,8 @@
 > [the migration guide](./docs/archive/MIGRATION_2026-09-20_strict-mode-opt-in.md).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -236,6 +244,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `fix(ci)`: re-pin `pnpm/action-setup` before `actions/setup-node` in `.github/workflows/release.yml`'s `Build & Release Artifacts` job (#1739 regression that broke v4.4.4). `actions/setup-node` v5 now auto-enables `package-manager-cache` whenever it detects a `pnpm-lock.yaml` in the workspace (registry-url is no longer required); without pnpm on PATH, `Setup Node.js` fails with `Unable to locate executable file: pnpm`, so the `v4.4.4` run failed and no GitHub Release was published. #1755 removed this pre-step when it stopped npm publication ("ship only through this GitHub Release"); setup-node v5's auto-detection default was the regression. Restore `Enable pnpm` with `run_install: false` and re-release as `v4.4.5`; nothing publishes to a package registry — the release stays GitHub-Release-only.
@@ -252,6 +262,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `fix(ci)`: switch `npmjs-publish` in `.github/workflows/release.yml` from npm Trusted Publishing (OIDC, `id-token: write`) to a `NPM_TOKEN` automation-token secret (#1741, #1742). Trusted Publishing would have required an out-of-repo setup on `npmjs.com` for the `@aroman22/dysflow-pi` package and a maintainer action every time the publishing identity rotated; with `NPM_TOKEN` the only rotation surface is the repo's GitHub Actions secret. The job now requires the secret at the gate step and surfaces a typed remediation message (URL + intent) when it is missing. The npm CLI's trusted-publishing bootstrap is gone, so the `Verify npm trusted-publishing client` step (which pinned `npm >= 11.5.1`) was replaced by `Require NPM_TOKEN`.
@@ -261,6 +273,8 @@
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `fix(plugin-pi)`: `resolveDysflowCommand` now accepts Windows-style absolute paths (`C:\...` / `C:/...`) regardless of the host platform (#1736). Previously the function used `path.isAbsolute` for the runtime-directory check, which is OS-specific: on Linux it returns `false` for a drive-letter path, even when the caller intentionally passed one. The `release.yml` workflow's `Exact-SHA quality authority` job runs on `ubuntu-latest` and `test/quality-gates/pi-native-package-1723.test.ts` exercises a Windows-style path through the same helper, so the regression blocked the last three tag-triggered releases from being published automatically. The check now uses `looksLikeAbsolute(p)` (a portable `path.isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p)` predicate) and the launcher filename pin follows the same rule — `dysflow.cmd` whenever the runtime directory is Windows-style, even on non-Windows hosts. Windows behaviour is unchanged.
@@ -268,6 +282,8 @@
 ## [v4.4.1] - 2026-09-15
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -770,6 +786,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fix: verify_form_bindings fails with RESULT_CONTRACT_VIOLATION because the generic vba-read contract required `controls` as an array; added a route-scoped contract that accepts the actual numeric count. (#1409)
@@ -837,6 +855,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - Expose plan-by-default `setup_project` through MCP, sharing the CLI's atomic project-config publication path so pure-MCP clients can bootstrap fresh worktrees (#1312).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -927,6 +947,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Resolve an absolute compatible PowerShell executable when the MCP host PATH is degraded, and retry Windows `EBUSY`/`EPERM` cleanup for disposable export databases (#1233).
@@ -962,6 +984,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - A database password Access rejects is reported as the typed `ACCESS_PASSWORD_INVALID` error instead of a generic runner failure carrying raw, host-locale-dependent Access text. The remediation names the environment variable actually consulted, and the original Access diagnostic is preserved as evidence, so a wrong password no longer reads like a runtime defect.
@@ -987,6 +1011,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1156 — `chore(openspec): archive the two verified completed changes` (PR #1160)
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1014,6 +1040,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1135 — `docs(changelog): document the abort/timeout semantics change in v2.24.1` (PR #1142)
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1052,6 +1080,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Explicit `AbortSignal` cancellation and execution timeout are now reported separately. An aborted run reports `aborted: true` and `timedOut: false`; before this release, the same aborted run reported `timedOut: true`.
@@ -1087,6 +1117,8 @@ This release was yank-ed before consumers could update. The `gh release create` 
 - #1092 — `fix(config): anchor frontend/source to active worktree` (PR #1093). Persistent config stores only the frontend filename (canonical `frontendFile`, backward-compatible basename-only `accessPath`); the effective frontend path is `join(actualConfigOwningWorktreeRoot, frontendFilename)`; `projectRoot` derives from the physical owner of `.dysflow/project.json`; cross-worktree operations require explicit per-call target; legacy absolute paths are rejected with migration guidance; five typed errors (`FRONTEND_TARGET_MISSING`, `FRONTEND_TARGET_AMBIGUOUS`, `FRONTEND_PATH_NOT_BASENAME`, `INHERITED_WORKTREE_MISMATCH`, `PROJECT_ID_COLLISION`).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1162,6 +1194,8 @@ Homogeneous MCP contract epic (#1081) — Dysflow now exposes one coherent, mach
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(installer): runtime refreshes force dependency relinking, preventing missing transitive packages such as `fast-uri` after an in-place update (#1069).
@@ -1184,6 +1218,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(mcp): `MCP_INPUT_INVALID` unknown-key rejections now list the schema's valid params and suggest the nearest match — `delete_module({ module })` answers `module is not allowed. Valid params: … Did you mean 'moduleName'?` instead of the bare rejection. Covers the F1 naming friction (`module` vs `moduleName` vs `moduleNames`) at the validator, for every tool at once (#1057 F1 F4)
@@ -1199,6 +1235,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(form-bind): `import_modules` and `form_set_property` preserve ComboBox/ListBox control properties, verify newly-added properties after the guarded import, and annotate source/binary control-property mismatches in `verify_code` (#1053).
@@ -1206,6 +1244,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.21.0] - 2026-07-21
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1230,6 +1270,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(vba-sync): keep MSACCESS handles released on the failure path of binary-mutating tools — `form_set_properties` (plural) and `cleanup_access_operation` previously left orphaned `MSACCESS.EXE` processes (4 PIDs unkillable via MCP) when the failure was not a timeout. Adds a part-A "reap on non-timeout failure" path in `vba-sync-adapter.ts`, a part-B `CLEANUP_KILL_UNVERIFIED` after post-kill re-inspection in `access-operation-cleanup.ts`, and a part-C relaxation of the orphan-cleanup command-line gate to accept `-Embedding` / `/automation` COM child markers in `access-orphan-cleanup.ts`. Pre-existing `try { ... } catch { /* ignore */ }` envelopes keep all paths best-effort. The single-write/single-import atomic gate from #951 remains intact (#1016, lifecycle regression)
@@ -1250,6 +1292,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(runner): `test_vba` runner now executes against a fresh snapshot of the configured `.accdb` taken at the moment the test run is prepared (`Get-TestSandboxPath` byte-exact copy under the OS temp tree, cleaned up by `Remove-TestSandbox` in the `finally` block). Previously the runner opened the source binary directly, which could surface stale compiled-bytecode or in-memory helper state and let the consumer observe helper output that did not match what `vba_inline_execution` produced against the same binary (#1013)
@@ -1266,6 +1310,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(vba-sync): preserve `WithEvents` member-level `Attribute <var>.VB_VarHelpID = -1` lines through the import path by short-circuiting the AddFromString F16 fallback when source contains `WithEvents` declarations; AddFromFile carries the import and, if it also truncates, the post-import check surfaces `IMPORT_TRUNCATED` instead of silent VBE-level attr stripping (#1007)
@@ -1279,6 +1325,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(vba-sync): avoid false IMPORT_TRUNCATED for WithEvents member-level `Attribute <var>.VB_VarHelpID` lines — `Convert-VbaTextForCodeModuleString` now strips member-level metadata (matching what VBE strips from `CodeModule.AddFromString`), so the post-import truncation guard compares apples to apples and the WithEvents re-import path returns `status:"ok"` (#1010, follow-up to #1007/#1008)
@@ -1286,6 +1334,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.18.0] - 2026-07-20
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1302,6 +1352,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.16.0] - 2026-07-19
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1327,6 +1379,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(release): stamp the packaged runtime version from the immutable release tag and reject malformed tags (#946, closes #945)
@@ -1338,6 +1392,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 ## [v2.14.1] - 2026-07-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1358,6 +1414,8 @@ Round-15 UX frictions (#1057) — 10 consumer-verified friction points from a lo
 - refactor(mcp): decompose read tools through #917-#921 and retire the barrel while preserving contracts and single snapshots (closes #897, #913, #914, #915, #916)
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1430,6 +1488,8 @@ tools (`list_objects`, `verify_code`, `export_modules`, …) all go through
 `executeMappedTool` and attach the env explicitly.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1581,6 +1641,8 @@ Patch release. Closes the four-PR chain for #718 (`projectId Form Source Resolut
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **resolve-project-tool (#718)**: previously the tool read `parsed[SOURCE_ROOT_FIELD]` and returned `sourceRoot: null` whenever the project's `.dysflow/project.json` used the canonical `destinationRoot` key (default after the dysflow-config migration). It now reads `destinationRoot` first and falls back to legacy `sourceRoot` for configs that still use the old key. Output field name stays `sourceRoot` so the MCP response shape is unchanged.
@@ -1654,6 +1716,8 @@ Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-v
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **runtime** (#806): PowerShell parser errors broke all VBA tools in v2.3.0. `Invoke-ExportAction`'s WARN message at line 4026 had a UTF-8 em-dash that was being misread by the runtime. The single-character fix (em-dash → hyphen) restores the runtime. Tests at `scripts/tests/dysflow-vba-manager.Tests.ps1` (block #804) still pass (4/4); the message text reads identically. pnpm test: 2820 passed, 0 regressions. CI: both jobs green.
@@ -1663,6 +1727,8 @@ Patch release. **Critical regression fix.** The v2.3.0 fix at `scripts/dysflow-v
 Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `export_all` (via `Invoke-ExportAction` in the PowerShell runner) no longer abort the entire call when one of the requested modules is missing from the binary. The pre-validation step is now **total over the input list** — a missing module is a per-module result, not a call-level error. It surfaces in the structured `warnings[]` payload with the stable error code `VBA_MODULE_NOT_FOUND` and the export continues with the modules that DO exist (#804). The TS compare phase (`vba-source-comparison.ts:666-668`) then naturally places the missing modules in `missingInBinary` because no file was written to the temp dir.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1677,6 +1743,8 @@ Minor release. `verify_code({ moduleNames: [...] })` and `export_modules` / `exp
 Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })` are now rejected at the dispatch seam with the typed error `DIFF_MODE_REQUIRES_VERIFY_CODE` (#802). The previous behavior silently wrote to the source tree — the diff flag was documented as read-only but the adapter never honored it (the PowerShell runner has no `$Diff` parameter and the `MODULE_MAPPINGS.export_all.extra` mapping only forwards `verbose`), causing partial writes on `VBA_MANAGER_TIMEOUT`. Callers that want a real read-only compare should use `verify_code({ strict, moduleNames })`.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1699,6 +1767,8 @@ Minor release. `export_all({ diff: true })` and `export_modules({ diff: true })`
 Patch release. Inverts the default severity of the `identifier-safety` lint rule's non-ASCII check from `error` to `warning` and adds an explicit opt-in for the historical strict contract. Closes #789.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1724,6 +1794,8 @@ Patch release. Internal consolidation with no behavior change: collapses the dup
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **mcp** (#790): removed the inert `_registryCoversAllContracts` type pin in `mcp-tool-risks.ts` — it performed no real check; the `_everyContractCovered` IIFE is the genuine build-time guard that throws when a contract tool lacks a risk entry.
@@ -1738,6 +1810,8 @@ Patch release. Internal consolidation with no behavior change: collapses the dup
 Patch release. Wires the v2.1.0 risk-based write execution policy into the MCP dispatch path and enforces the export-source guard at runtime. Closes #785; delivers the runtime half of #783.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1770,6 +1844,8 @@ Patch release. Fixes `vba_inline_execution`, which failed on every call with
 `no encuentra el procedimiento '__dysflow_inline__.ExecuteInline'`.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -1809,6 +1885,8 @@ Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **orphan-cleanup** (#781 P2): dedupe headless-gate + revalidate-before-kill sequence. `scanAndCleanOrphans` y `retireUnownedRecord` ya no duplican la coreografía; se extrajo un helper privado `killIfHeadlessAccess` con los mismos diagnostic codes (`CLEANUP_RACE_PID_REUSED`).
@@ -1826,6 +1904,8 @@ Patch release. Closes #781 — auditoría externa detectó 4 hallazgos técnicos
 - **config**: Top-level `allowWrites` and `allowedProcedures` fields in `project.json` are now rejected with `CONFIG_TOP_LEVEL_FIELDS_REMOVED`. Migrate to the `capabilities` block. (T18)
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2628,6 +2708,8 @@ Implementation commits (PR #751): `7a95687`, `a215b93`, `47e7d1c`, `1ac39d9`, `8
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`exists` / `delete_module` single-name forwarding (`ea9c0af`, RED `7c2a344`).** `VbaSyncAdapter.execute("exists", { moduleName:"Foo" })` and `("delete_module", { moduleName:"Foo", force:true })` now correctly forward `["Foo"]` to the runner. Root cause: `moduleNamesProvided` was derived from `Object.hasOwn(params, "moduleNames")`, which only saw the literal plural key. Now `(import_all && Object.hasOwn(params, "moduleNames")) || moduleNames.length > 0`, preserving R4 for `import_all` explicit-empty while making the single-name path visible.
@@ -2659,6 +2741,8 @@ Hotfix for PowerShell 7+ (`pwsh`) script-load order in `dysflow-vba-manager.ps1`
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`Set-ScriptOutputEncodingUtf8` used before defined under `pwsh` 7+ (`678a67d`).** The script invoked `Set-ScriptOutputEncodingUtf8` at line 116 but defined it at line 135. Windows PowerShell 5.1 tolerated the order; `pwsh` 7+ raises `CommandNotFoundException` and the `trap` block returned `VBA_MANAGER_UNEXPECTED_EXIT` with `trap_kind: CommandNotFoundException`, blocking every downstream action (test_vba, compile_vba, etc.). The helper is now defined in an explicit early-helpers block placed before the first call site. `Set-VbComponentNameSafe` and `Write-DysflowOperationMarker` are moved alongside for the same reason.
@@ -2673,6 +2757,8 @@ Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and cl
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`dysflow_test_vba` manifest path resolution (`f7e47ac`).** When neither `proceduresJson` nor `procedureName`+`argsJson` was provided, `VbaExecutionAdapter.resolveTestProceduresJson` used `resolve(undefined, "tests.vba.json")` and produced degenerate paths surfaced externally as `ENOENT: open '[PATH]<\projectRoot>\tests.vba.json'`. The adapter now resolves a sensible base directory (`params.projectRoot` → `orchestrator.cwd`) with a guardrail, builds an ordered candidate list for the manifest across `projectRoot`, `destinationRoot`, and `cwd` (with `tests/tests.vba.json` and `tests.vba.json`), iterates them safely, and on failure returns `VBA_INVALID_TEST_PLAN` with `details.candidates` plus an actionable hint to pass `proceduresJson`, `procedureName`+`argsJson`, or an absolute `testsPath`.
@@ -2684,6 +2770,8 @@ Hotfix for `dysflow_test_vba` manifest path resolution with safe defaults and cl
 Hotfix release for MCP Access path resolution and signed update hardening.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2706,6 +2794,8 @@ Per-module VBA import reporting, Unicode preservation on PowerShell 7, pre-impor
 - **MCP write-gate for orphan process cleanup (`495cf5b`).** `dysflow_access_force_cleanup_orphaned` now refuses to kill a PID when MCP writes are disabled, returning `MCP_WRITES_DISABLED`. The list-only branch remains read-only (closes #564).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2738,6 +2828,8 @@ VBA manager hardening: active-lock verification on deletion, arity-0 run_vba fix
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Active-lock verification on delete_module (#601).** Verified post-deletion check prevents false success reporting when VBA components are locked by active databases.
@@ -2754,6 +2846,8 @@ VBA inline execution sanitization, standardized dryRun defaults, size-limit stre
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **VBA inline execution regex sanitization.** `vba_inline_execution` now validates the input code parameter using a case-insensitive word-boundary check (`\bDeclare\b`, `\bShell\b`, `\bCreateObject\b`, `\bGetObject\b`, `\bLib\b`), rejecting unsafe command injection attempts with `INVALID_INPUT`.
@@ -2766,6 +2860,8 @@ VBA inline execution sanitization, standardized dryRun defaults, size-limit stre
 Filesystem write-gates for forms/catalog tooling, PowerShell security hardening against path traversal, and core dependency refactoring (issues #565, #566, #568, #569, #570, #577, #579).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2788,6 +2884,8 @@ Filesystem write-gates for forms/catalog tooling, PowerShell security hardening 
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Reworded null-PID close warning to prevent false-alarm unsafe reports.** The previous console message "OwnedPid is null; cannot kill by path/CommandLine. Running ROT/lock fallback only" was misread by downstream agents as an unsafe multi-instance process kill. The notice has been extracted into `Get-NullPidCloseNotice` and clearly states that dysflow kills nothing on this path and other Access instances are unaffected.
@@ -2797,6 +2895,8 @@ Filesystem write-gates for forms/catalog tooling, PowerShell security hardening 
 Forms/reports semantic-diff and sync correctness pass, plus consuming-agent ergonomics on `verify_code` and `list_access_operations` (issues #549–#554, #559, #561).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2821,6 +2921,8 @@ Consuming-agent ergonomics pass over the MCP surface (issues #543, #533, #544, #
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Headless compile failures are now detected instead of reported as success (#543).** `RunCommand(126)` (`acCmdCompileAndSaveAllModules`) returns normally even when modules fail to compile, so the previous catch-only detection reported `compileResult.ok: true` on broken code (false green). The runner now reads `Application.IsCompiled` after compiling and surfaces a structured `VBA_COMPILE_ERROR` (with a non-zero exit) when the project does not compile, so `import … compile:true` and `compile_vba` fail loudly. The signal is reliable for standard/class modules; for form/report **document** modules — which Access cannot bring to a compiled state headless — the result reports `compileResult.verified: false` rather than a spurious failure (the headless document-module limitation is tracked in #547). Verified with a real-Access E2E repro.
@@ -2839,6 +2941,8 @@ Consuming-agent ergonomics pass over the MCP surface (issues #543, #533, #544, #
 ## [v1.7.9] - 2026-06-25
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2864,6 +2968,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **VBA-sync operations resolve the manager script independent of the working directory.** Without `DYSFLOW_HOME`, the default `dysflow-vba-manager.ps1` path was the bare relative `scripts/dysflow-vba-manager.ps1`, which failed (`-File ... no existe`) when an operation spawned PowerShell with a project-directory `cwd` — surfaced by the real-Access E2E as `list_objects` failing. It now resolves to an absolute path from the package root (new `findPackageRootNear` helper) and is cwd-independent. Production (where `DYSFLOW_HOME` is set) is unaffected.
@@ -2876,6 +2982,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`compact_repair` no longer wedges on a leftover target file.** DAO `CompactDatabase` throws if the target already exists; a run killed between compaction and the final `Move-Item` left a stale `<base>.compacted` file that made every subsequent `compact_repair` on that database fail. A new Pester-tested `Clear-CompactTarget` removes a leftover target before compacting.
@@ -2885,6 +2993,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Lock acquisition no longer fails intermittently with "Access is denied" on Windows.** Directory deletion is not synchronous on Windows: a concurrent lock *release* leaves the lock directory in `DELETE_PENDING` state while a handle (or the indexer/antivirus) still touches it, so a competing `mkdir` returns `EACCES` (`ERROR_ACCESS_DENIED`) or `EPERM` instead of `EEXIST`. Both lock acquirers — the cross-process execution lock (`cross-process-lock.ts`) and the operation-registry mutation lock (`access-operation-registry.ts`) — only retried on `EEXIST` and **threw** on `EACCES`/`EPERM`, causing intermittent failures under contention. A shared `isTransientLockContentionError` helper now treats `EEXIST`/`EACCES`/`EPERM` as transient and backs off + retries; stale-lock eviction still runs only for `EEXIST`, and `EACCES`/`EPERM` retries are logged so a genuinely permanent permission error (bounded by the acquire deadline) stays observable.
@@ -2893,6 +3003,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`compact_repair` now compacts a password-protected frontend with the correct password.** The runner's only env-sourced compaction password was `$BackendPassword`, but the configured frontend (`accessPath`) is protected with the **access** password — so compacting a password-protected project database failed with the DAO error `No es una contraseña válida` even though `query_execute` / `test_vba` (which use the access password) opened the same binary fine. Raw payload passwords are stripped before reaching PowerShell for security (#498), so the env-sourced `DYSFLOW_ACCESS_PASSWORD` / `DYSFLOW_BACKEND_PASSWORD` are the real source. A new pure, Pester-tested `Resolve-CompactPassword` selects the password by the database being compacted: the configured frontend uses the access password, a separate/backend file uses the backend password, with cross-fallback. Explicit `passwordEnv` payload overrides still win.
@@ -2900,6 +3012,8 @@ Test-only release — the shipped runtime (`dist` + `scripts`) is identical to v
 ## [v1.7.2] - 2026-06-24
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2930,6 +3044,8 @@ surface; default runtime behavior is unchanged (the signature gate ships inert).
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Runner lock no longer deadlocks after a cross-process lock timeout.** When acquiring the cross-process file lock threw (e.g. `RunnerLockTimeoutError` under contention), the throw happened before the `try/finally` that releases the in-process serialized lock, so `releaseCurrent()` never ran. The chained promise stayed pending forever and every later same-key operation deadlocked on `await previous`. The cross-process acquisition now lives inside a `try/finally` that always releases the in-process lock and cleans the `lockState` map (`src/core/runner/cross-process-lock.ts`).
@@ -2949,6 +3065,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 - **Config loading moved behind an injected `ConfigFileSystemPort`.** `src/core/config/dysflow-config.ts` no longer touches the filesystem directly; the node-backed default now lives in `src/adapters/config/dysflow-config-node.ts`, so config resolution is unit-testable with an in-memory fake. A new `core-boundary` architecture test ratchets against any new direct `node:fs`/network import in `src/core` (existing direct-I/O files are an explicit, shrink-only allow-list).
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -2977,6 +3095,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`import_modules` mangled non-ASCII VBComponent names (e.g. `Módulo1` → `Mód×lo1`)**: `DoCmd.CopyObject` is not Unicode-safe — when creating a new VBA component from a seed, it silently corrupts non-ASCII characters in the new-object name via the system's ANSI codepage. The fix forces the correct name via the `VBComponent.Name` COM property setter immediately after `CopyObject`; this setter follows the same Unicode-safe path as the VBE F4 → Name rename and is a no-op when `CopyObject` happened to produce the right name. This affected the create path only (re-importing an existing module used `DeleteLines + AddFromFile` and was unaffected).
@@ -2992,6 +3112,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`import_modules` with `importMode="Auto"` silently dropped a form/report's code-behind**: for a form/report exported as both a `.form.txt` (layout + an embedded copy of the code-behind) and a `.cls` (the canonical code), `Resolve-ImportFileForModule` in `Auto` mode resolved to the `.form.txt` first and imported it via `LoadFromText`, never reading the `.cls`. Because `verify_binary` compares a form's code through the `.cls` (the `formtxt-codebehind-split` rule), editing the canonical `.cls` and importing with `Auto` returned `ok:true` while the binary kept the stale embedded code-behind, so `verify_binary` reported the form as `sourceNewer` forever. `Auto`/`Code` now sync the `.cls` into the freshly loaded document module after `LoadFromText` (reusing the `importMode=Code` `DeleteLines` + `AddFromFile` path); `importMode=Form` stays layout-only. If the code-behind cannot be synced the import now fails loudly instead of reporting a false `ok:true`. Verified against real Access with a negative/positive control (a marker added only to the `.cls` round-trips through the binary after `Auto` only with the fix).
@@ -2999,6 +3121,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.4.0] - 2026-06-20
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3012,6 +3136,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.3.3] - 2026-06-19
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3040,6 +3166,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Config resolution (#535)**: an explicitly-passed `destinationRoot`/`backendPath` was overridden by the discovered `.dysflow/project.json`. Without an explicit `accessPath`, resolution walked up from the MCP startup cwd, found the startup project, and its `src/` collapsed onto the caller's target — so `export_all` from a worktree could overwrite the wrong `src/` (a real incident broke 186 staging files). `accessPath` appeared to work only because it routes through the explicit-config branch. The caller's explicit override now wins; the discovered repo config is a default, not an authority.
@@ -3063,6 +3191,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - HRESULT `0x800ADEB9` remediation was silently dropped when .NET rendered the COMException as a signed decimal — the lookup used the wrong decimal (`-2146824519`); corrected to `-2146771271`.
@@ -3075,6 +3205,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.59] - 2026-06-15
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3101,6 +3233,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `test_vba` no longer collapses a failing run into the opaque `N VBA test(s) failed.` summary. The PowerShell runner already returns a per-procedure report (`ok`, `procedure`, `error`, `logs`, `payload`, `durationMs`); the adapter now preserves it. On failure the result stays `ok: false` with code `VBA_TESTS_FAILED` (no compatibility break), the message names the failing procedures, and `error.details` carries the structured report `{ failedCount, failures[], results[] }` — each `failures[]` entry keeping `procedure`, `error`, `logs`, `durationMs`, and `payload`. Consuming agents can now see exactly which procedure failed and why.
@@ -3110,6 +3244,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `verify_binary`/`reconcile_binary` no longer compare a form's code-behind inside its `.form.txt`. A form's code-behind lives canonically in `forms/*.cls` (dysflow's export writes it from `CodeModule.Lines`, and import syncs it back into the document module), and the same code is also serialized — through a different path, `SaveAsText` — into the `.form.txt` `CodeBehindForm` section. Comparing it there only double-counted the code and re-introduced serialization noise (encoding, attribute headers, casing) the `.cls` comparison already owns. The classifier now strips everything from the `CodeBehindForm` marker onward and verifies a form's **code via its `.cls`** and its **UI/layout via its `.form.txt`**. A real UI change (control/property/layout) stays actionable; code-behind churn in the `.form.txt` is non-actionable.
@@ -3118,6 +3254,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.55] - 2026-06-13
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3133,6 +3271,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Top-level `dysflowVersion` in `verify_code`/`verify_binary`/`reconcile_binary` results now correctly reflects the actual runtime/package version instead of falling back to `0.0.0`.
@@ -3147,6 +3287,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Normalized module/class header boilerplate in the VBA semantic classifier so it stops counting as a functional difference. An Access binary export may emit the `VERSION x.x CLASS` + `BEGIN…END` instancing block and the `Attribute VB_*` lines on one side only (notably form code-behind, where the export omits the whole header). These are now stripped for code modules **and** for the `CodeBehindForm` section embedded in `.form.txt`/`.report.txt`, resolving false-positive `sourceNewer`/`bothChanged` results (e.g. `ModuloCacheIndicadores.bas`) and unblocking `caseOnly` detection for form code-behind whose only real difference was property casing (e.g. `Form_Form0BDOpcionesAuditorias.cls`).
@@ -3155,6 +3297,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.51] - 2026-06-13
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3165,6 +3309,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.50] - 2026-06-13
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3182,6 +3328,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 - Added parity schemas, registry entries, and MCP verification tests for the new `compare_module` route.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3202,6 +3350,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Resolved an issue where some VBA/object export-family MCP calls (such as `export_modules`, `export_all`, and `export_queries`) would incorrectly return `CONFIG_MISSING_ACCESS_PATH` even when `accessPath` was passed explicitly. Fixed by making `vbaSyncToolService` try to resolve the configuration dynamically from the input before falling back to the static unavailable service representation, and updating `resolveConfigForInput` to fall back to `databasePath` or `accessDbPath` when `accessPath` is not explicitly defined in the adapted query request. (#530)
@@ -3209,6 +3359,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.46] - 2026-06-12
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3224,6 +3376,8 @@ Internal hardening only — no change to the MCP/CLI surface or runtime behavior
 ## [v1.2.44] - 2026-06-12
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3381,6 +3535,8 @@ that locks the regression class in.
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`Write-DysflowResult` writer in `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` now preserves the underlying exception** (dbaf585, 57b3e18). The `try/catch` captures `$script:LastSerializationError`, emits a `Write-Warning` on stderr with the exception text, and includes the captured exception in a `diagnostics[]` field of the fallback envelope (truncated to 4 KB to keep the sentinel line bounded). The fallback code is now a subclass (`VBA_MANAGER_SERIALIZATION_FAILED` / `RUNNER_SERIALIZATION_FAILED`) so callers can branch on which adapter dropped the payload.
@@ -3432,6 +3588,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Issue 18 root cause: PowerShell runner's `earlyTargetPath` resolved `-AccessDbPath` (frontend) ahead of `Payload.backendPath`, silently opening the frontend for `list_tables`/`get_schema`/`query_sql`**: When the MCP caller passed a `projectId` (or a payload with `backendPath` set), the TypeScript adapter v1.2.32 already defaulted `request.backendPath = config.backendPath` on the runner payload. But the runner's `earlyTargetPath` resolution at line 1438 of `scripts/dysflow-access-runner.ps1` had this order: `Payload.databasePath` -> `Payload.sourcePath` -> `-AccessDbPath` (frontend from the config) -> `Payload.backendPath`. The `-AccessDbPath` fallback was checked BEFORE `Payload.backendPath`, so any read action that did not pass `databasePath` or `sourcePath` explicitly opened the frontend's CurrentDb and returned only the frontend's 2 local tables (`TbConfiguracionBackends` + `TbTipologiaAux`) instead of the backend's 39. `get_schema` and `query_sql` then threw "table not found" without emitting the `DYSFLOW_RESULT` sentinel, surfacing as `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. The fix swaps the order: `Payload.databasePath` -> `Payload.sourcePath` -> `Payload.backendPath` -> `-AccessDbPath` (frontend fallback). This is the bug the user reported against `00_NO_CONFORMIDADES_staging` (issue 18): the AI on the user's other PC saw the frontend's 2 tables and the opaque `RUNNER_INVALID_JSON` because the runner silently opened the frontend despite the TS adapter having passed the correct `backendPath` in the payload.
@@ -3456,6 +3614,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Query actions now fail fast with structured `CONFIG_TARGET_NOT_FOUND` / `CONFIG_MISSING_TARGET_PATH` errors instead of `RUNNER_INVALID_JSON`**: When a query action (`list_tables`, `get_schema`, `query_sql`, `count_rows`, `distinct_values`, `list_linked_tables`, `get_relationships`, `compare_backends`, `list_access_files`, etc.) was invoked from a project whose `.dysflow/project.json` had a missing/relative `accessPath` (e.g. `E2E_testing/Expedientes.accdb` when `E2E_testing` had no `Expedientes.accdb`) or whose `backendPath` did not exist on disk, the PowerShell runner used to throw "Access database not found" mid-execution, the MCP layer would lose the `DYSFLOW_RESULT` sentinel, and the caller only ever saw the opaque `RUNNER_INVALID_JSON: No DYSFLOW_RESULT line in runner output`. v1.2.32 fails fast in `src/core/runner/access-runner.ts` with two structured errors before the PowerShell runner is even invoked: `CONFIG_MISSING_TARGET_PATH` when neither the request nor the project config can resolve a target (no `databasePath`, no `backendPath`, and no fallback to `config.accessDbPath`), and `CONFIG_TARGET_NOT_FOUND` when the resolved `config.accessDbPath` points at a `.accdb` that does not exist on disk. The runner now refuses to spawn the PowerShell process in both cases, so the failure is observable at the adapter boundary instead of buried in the runner. The fix also surfaces the real cause: a typo in `.dysflow/project.json`, a missing backend file, or a project opened from the wrong cwd. This is what the AI in the user's report was hitting on `00_NO_CONFORMIDADES_staging` (and what the AI reproduced against a stale `.dysflow/project.json` here on this PC); the user now sees `CONFIG_TARGET_NOT_FOUND: Configured accessPath does not exist on disk: [PATH]. Update .dysflow/project.json (accessPath/backendPath) or pass databasePath in the request.` instead of the misleading `RUNNER_INVALID_JSON`.
@@ -3477,6 +3637,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **dysflow-mock-com.ps1: `Add-Member` collisions on `ArrayList` builtin members**: The mock COM module tried to add `Item`, `Append`, and `Delete` ScriptMethods to a `[System.Collections.ArrayList]`, which already has those members built-in. PowerShell refused the second addition with `Cannot add a member with the name "Item" because a member with that name already exists`, breaking any code path that tried to load the mock under pwsh 7.x. Added `-Force` to the three `Add-Member` calls so the overrides stick. No behavior change for callers; this unblocks the mock for both CI and local runs.
@@ -3493,6 +3655,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.30] - 2026-06-09
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3512,6 +3676,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Access runner result sentinel emission**: Changed the Access/query PowerShell runner `DYSFLOW_RESULT` writer to bypass the PowerShell pipeline, preventing `query_sql`, `get_schema`, and other Access runner actions from losing the sentinel when action results are assigned before emission.
@@ -3528,6 +3694,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **VBA import success sentinel emission**: Changed the PowerShell `DYSFLOW_RESULT` writer to bypass the success-output pipeline so `Import` actions still emit the sentinel when `Invoke-ImportAction` is assigned to `$importResult`. This fixes the real `import_modules` acceptance case where Access imported modules successfully but MCP saw no sentinel.
@@ -3542,6 +3710,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **VBA import runner output contract**: Hardened `import_modules` and `import_all` so malformed, missing, duplicate, or interrupted `DYSFLOW_RESULT` output is reported as structured runner failure diagnostics instead of `VBA_MANAGER_INVALID_OUTPUT`. This preserves sanitized `exitCode`, `stdout`, `stderr`, and parse details for real Access/VBA failures.
@@ -3555,6 +3725,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **MCP E2E timeout handling (#485)**: Fixed the timeout path so long-running MCP tool calls fail predictably instead of leaving ambiguous runner state. The full MCP E2E release gate passed after the fix with all advertised tools available and no lingering Access processes.
@@ -3566,6 +3738,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.25] - 2026-06-08
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3606,6 +3780,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Guard destructive runtime delete (#434)**: The runtime delete path now verifies a path-safety check before removing files.
@@ -3620,6 +3796,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **PowerShell sentinel output contract hardening**: Added `Write-DysflowResult` calls to the end of `Export`, `Fix-Encoding`, and `Generate-ERD` actions in `dysflow-vba-manager.ps1`. This ensures these tools always write the structured `DYSFLOW_RESULT` JSON line on stdout, preventing E2E failures when parsed by the MCP adapter.
@@ -3627,6 +3805,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.18] - 2026-06-05
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3642,6 +3822,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Stub hidden state single source of truth (#433)**: Consolidated tool stub availability checks by removing `HIDDEN_STUB_TOOL_NAMES` and querying `isHiddenStubTool()` derived directly from the `TOOL_PARITY_REGISTRY`. Added invariant tests.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3675,6 +3857,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **E2E test harness zombie check.** Solved E2E test suite race conditions and false positives by awaiting child process close events and tracking descendant PIDs using `wmic`.
@@ -3687,6 +3871,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Node.js execution support for Linux environments.** Updated `powershell-executor.ts` to automatically execute `pwsh` on non-Windows platforms and inject `DYSFLOW_MOCK_COM=1` environment variable.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3706,6 +3892,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Documentation alignment.** Documentation alignment after v1.2.11 tag was prepared.
@@ -3713,6 +3901,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.11] - 2026-06-02
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3728,6 +3918,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **MSACCESS.EXE zombies, `RUNNER_TIMEOUT`/RPC failures, and uncleanable stale operations under WMI hang.** When Access COM operations left a hung MSACCESS.EXE (observed in CONDOR staging), the recovery paths themselves could hang because WMI/CIM enumeration — the very thing that stalls under a zombie/network-I/O condition — sat on the cleanup path. Symptoms: `RUNNER_TIMEOUT` after `test_vba`/`doctor`, `RUNNER_FAILED` with RPC unavailable `0x800706BA`, cleanup refused with `CLEANUP_PROCESS_START_TIME_MISMATCH`, and `timed_out` records with `accessPid:null`/`processStartTime:null` that could never be retired because `Get-CimInstance Win32_Process` timed out. Hardened across the runtime: (A) `windows-processes.ts` now runs every CIM query inside a bounded PowerShell `Start-Job`/`Wait-Job -Timeout` and falls back to `Get-Process -Name MSACCESS`, returning partial process info instead of hanging — the scanner only reports, it never kills by name. (B) both `dysflow-access-runner.ps1` and `dysflow-vba-manager.ps1` route every Access-PID lookup/fallback through a reusable bounded-WMI helper (no bare `Get-CimInstance Win32_Process` left on a cleanup path); `hWndAccessApp` → `GetWindowThreadProcessId` stays the primary PID capture and the `DYSFLOW_ACCESS_PROCESS` marker is now emitted from that primary path (no WMI on the success path) so the registry records the exact PID as early as possible. (C) `powershell-executor.ts` no longer fire-and-forgets `taskkill` on timeout/abort — it awaits the kill (bounded so a stuck `taskkill` cannot hang the executor). (D) `cleanup(force:true)` now retires a `timed_out` null-PID record even when the process scanner fails, emitting a "registry retired only; process ownership unknown" diagnostic, while still never killing a process it does not own and still refusing to kill on a genuine owned-PID start-time mismatch. (E) the start-time guard that produced false `CLEANUP_PROCESS_START_TIME_MISMATCH` (the PowerShell side wrote 7 fractional digits via `.ToString('o')` while the inspector emitted 3, and the two capture sources — WMI `CreationDate` vs `Get-Process.StartTime` — can differ at sub-second precision for the same process) is replaced by a tolerant whole-second comparison (`sameProcessStartTime`), with the PowerShell scripts normalized to millisecond ISO and the `Get-Process` fallback corrected to emit UTC. No new dependencies; registry JSON shape and PowerShell 5.1 compatibility preserved. Closes #376.
@@ -3742,6 +3934,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **CI E2E gate restored to green (test drift).** `test/scripts-access-runner.test.ts` asserted on a literal PowerShell source string (`$rs = $readDb.Database.OpenRecordset(...)`) that no longer existed after the read path was refactored into the `Invoke-QuerySqlReadAction` / `Resolve-ReadActionDatabase` helpers. The assertion was re-pointed to the current code (verified present in the script). No product/runtime change vs v1.2.6. Verified green: integration vitest (`scripts-access-runner` + `access-relink-directory*` = 16 tests), Pester (98 passed / 0 failed / 4 COM-skips), and the MCP E2E (104/104, 0 zombies). Note: `test/e2e/access-fixture.e2e.test.ts` skips in CI (its `*.accdb` fixtures are gitignored); it only runs where real fixtures are present and currently expects sanitized fixtures (hardcoded backend password) rather than the password-protected production copies.
@@ -3749,6 +3943,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.6] - 2026-05-31
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3764,6 +3960,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Stale "running" operations with a dead PID could never be cleaned and blocked new operations.** `dysflow_access_cleanup` returned `CLEANUP_PROCESS_NOT_FOUND` (even with `force: true`) when the recorded Access PID no longer existed, and pre-flight cleanup skipped `running` records entirely (`running` was not in its eligible set). A registry entry left `running` after a manually-killed or crashed Access process — common after a heavy VBA test battery — therefore stuck forever and blocked subsequent `compile_vba` / `test_vba`. Now, when the recorded PID is verifiably gone, gated cleanup retires the entry as `cleaned` (there is nothing to kill), and pre-flight reconciles dead-PID `running` entries — while never terminating a genuinely-live matching Access process (alive + `MSACCESS.EXE` + matching start time is left untouched).
@@ -3771,6 +3969,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.3] - 2026-05-31
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3784,6 +3984,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [v1.2.2] - 2026-05-30
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3819,6 +4021,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **MCP `compare_backends` tool failure**: Resolved a critical RCW COM exception (`InvalidComObjectException`) that occurred because the helper script closed the shared `DAO.DBEngine` instance singleton, separating the active database RCW wrapper from its COM peer. Also added a fallback in `dysflow-access-runner.ps1` to resolve the target database to `$AccessDbPath` when inputs do not specify it, allowing the early dispatch path to correctly locate the frontend and backend without duplicating connections.
@@ -3833,6 +4037,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Runtime install: `npm install --prefer-offline` caused `ETARGET` error**: The `--prefer-offline` flag made npm try to resolve the full lockfile including dev dependencies, failing on `@vitest/utils@4.1.7` which is not published separately. Removed the flag — npm now resolves production dependencies fresh from the registry.
@@ -3840,6 +4046,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [1.0.1] - 2026-05-29
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3871,6 +4079,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Fixed checksum fallback scope**: `dysflow update` was falling back to git clone on any error during artifact download (including HTTP 500, 403, and checksum mismatches). The fallback now only triggers on HTTP 404. All other errors throw immediately, preventing silent installs of potentially corrupted artifacts.
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3935,6 +4145,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed `Close-TargetAccessDbIfOpen` hanging indefinitely when zombie MSACCESS processes are stuck on unreachable network I/O (e.g. UNC paths): replaced bare `Get-CimInstance Win32_Process` with a `Start-Job` + `Wait-Job -Timeout 4` guard; if WMI does not respond within 4 seconds, falls back to `Get-Process` (no WMI) and kills all MSACCESS instances to release the lock.
@@ -3942,6 +4154,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.9.9] - 2026-05-26
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3955,6 +4169,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed MCP generic SQL tools so `dysflow_query_execute` and legacy `query_sql` expose and forward explicit backend/database targets, and the Access runner executes generic reads/writes against the selected database instead of the frontend. Closes #370.
@@ -3962,6 +4178,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.9.7] - 2026-05-26
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3973,6 +4191,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Added safe recovery for stale `pid_unknown` Access operations after timeouts: forced cleanup and preflight can now retire unknown-PID records only when no matching `MSACCESS.EXE` process is found for the registered database path, while refusing to kill unowned Access processes. Closes #360.
@@ -3981,6 +4201,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **`run_script` DDL compatibility**: strip `--` line comments from SQL scripts before executing DDL statements, allowing scripts authored with standard SQL comment syntax to run without parse errors. Closes #348.
@@ -3988,6 +4210,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.9.4] - 2026-05-25
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -3998,6 +4222,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **MCP E2E stability**: fixed `dysflow access` dry-run execution path in `Update-LinkTables` to avoid PowerShell non-operational failures during smoke tests and CI (`#346`).
@@ -4007,6 +4233,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.9.1] - 2026-05-25
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4037,6 +4265,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 - **Password propagation**: `Open-DatabaseWithPassword` helper in PS runner; `Invoke-RelinkDirectory` and `Resolve-LinkChain` now use `$AccessPassword`/`$BackendPassword` (#317)
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4071,6 +4301,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - **Config Sync/Async Dedup**: Unified config parsing, routing, and error formatting under `loadDysflowConfigShared` and `loadProjectConfigCore` to prevent routing duplication.
@@ -4083,6 +4315,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Renamed modern MCP tools to underscore-separated names (`dysflow_vba_execute`, `dysflow_query_execute`, `dysflow_doctor`, `dysflow_access_operations_list`, `dysflow_access_cleanup`) so PI/Codex clients that enforce `^[a-zA-Z0-9_-]+$` can load Dysflow tools. Closes #296.
@@ -4091,6 +4325,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.7.5] - 2026-05-22
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4107,6 +4343,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed `relink-directory` PowerShell execution so protected databases are opened with `DYSFLOW_BACKEND_PASSWORD`, relinked `Connect` strings preserve `;PWD=...`, and existing linked TableDefs are refreshed without mutating immutable `SourceTableName`.
@@ -4114,6 +4352,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.7.3] - 2026-05-22
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4126,6 +4366,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed `spawn EINVAL` error on Windows during `dysflow update` when executing pnpm/npm update scripts. Closes #289.
@@ -4133,6 +4375,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.7.1] - 2026-05-22
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4152,6 +4396,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Resolved path resolution bugs where global dysflow installed via pnpm symlinks exited silently without console output.
@@ -4160,6 +4406,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.6.8] - 2026-05-21
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4189,6 +4437,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `dysflow install` and `dysflow update` now copy the PowerShell runtime scripts required by MCP/Access/VBA tools into `app/scripts`, preventing missing `dysflow-vba-manager.ps1` and `dysflow-access-runner.ps1` failures. Closes #251.
@@ -4204,6 +4454,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.6.3] - 2026-05-20
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4223,6 +4475,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - `loadDysflowConfig` and `loadDysflowConfigAsync` now return `CONFIG_AMBIGUOUS_PROJECT_FILE` when both `.dysflow/project.json` and `dysflow.project.json` coexist in the same directory, instead of silently preferring one. Closes #61.
@@ -4235,6 +4489,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Added pre-flight Access cleanup before modern and legacy Access operations. Dysflow now cleans stale registry-tracked operations and safely terminates orphaned `MSACCESS.EXE` processes only when their command line matches the current `.accdb` exactly. Closes #245.
@@ -4242,6 +4498,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.4] - 2026-05-19
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4251,6 +4509,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.3] - 2026-05-19
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4262,6 +4522,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.2] - 2026-05-19
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4283,6 +4545,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Extracted shared PowerShell execution for Access runner and legacy VBA manager paths, reducing duplicated timeout/stdout/stderr process handling. Closes #180.
@@ -4293,6 +4557,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.5.0] - 2026-05-18
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4319,6 +4585,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Legacy VBA sync tools (`test_vba`, `compile_vba`, `import_modules`, etc.) now honour `timeoutMs` from `.dysflow/project.json` instead of always using the service-level 30 000 ms default. Explicit per-call `timeoutMs` in tool params still takes precedence.
@@ -4330,6 +4598,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.4.4] - 2026-05-18
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4343,6 +4613,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - HTTP server no longer returns raw config error (with internal filesystem paths) to callers when starting in degraded mode — now returns a generic `SERVICE_UNAVAILABLE` and logs the original error to stderr. Closes #159.
@@ -4351,6 +4623,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.4.2] - 2026-05-18
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4364,6 +4638,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.4.1] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4379,6 +4655,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.3.1] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4396,6 +4674,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Serialized file-backed Access operation registry updates to avoid losing records under concurrent requests.
@@ -4406,6 +4686,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Allowed registered-project import dry-runs to resolve by `projectId`/`contextId` even when the MCP server starts outside a Dysflow repo.
@@ -4414,6 +4696,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed the generated PowerShell launcher so custom `--runtime-dir` installs set `DYSFLOW_HOME` to the selected runtime directory.
@@ -4421,6 +4705,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.2.2] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4432,6 +4718,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.2.1] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4449,6 +4737,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed self-reinstall from the profile runtime launcher by skipping runtime copy operations whose source and destination are the same path.
@@ -4457,6 +4747,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 
 ### Fixed
 
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - Fixed `dysflow install` package-root detection so a globally/profile-installed Dysflow can reinstall from any current working directory instead of looking for `./dist`.
@@ -4464,6 +4756,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.1.2] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
@@ -4474,6 +4768,8 @@ restructure (#494) and the `processTimeoutMs` consolidation (#493) remain deferr
 ## [0.1.1] - 2026-05-17
 
 ### Fixed
+
+- fix(install): `dysflow install` writes the two consumer skills by default; maintainer skills need `DYSFLOW_MAINTAINER_SKILLS=1`; an unedited skill an earlier install wrote and this version no longer ships is removed (#1860)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
