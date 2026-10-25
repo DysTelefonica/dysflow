@@ -142,10 +142,22 @@ describe("import_modules — form code-behind divergence guard (#1865)", () => {
     expect(calls.count).toBe(1);
   });
 
-  it("apply:false reports the divergence as a warning and spawns nothing", async () => {
+  it("apply:false reports the divergence as a warning and never runs a write", async () => {
     await seed(DIVERGENT_CODE);
-    const calls = { count: 0 };
-    const adapter = buildAdapter(okExecutor(calls), tmpRoot);
+    // The dry run may read the binary through a read-only export (#1878), so the
+    // contract is that no write action (Import) reaches the runner.
+    const actions: string[] = [];
+    const executor: VbaManagerExecutor = async (request) => {
+      actions.push(String(request.action));
+      return {
+        exitCode: 0,
+        stdout: "DYSFLOW_RESULT []",
+        stderr: "",
+        durationMs: 1,
+        timedOut: false,
+      };
+    };
+    const adapter = buildAdapter(executor, tmpRoot);
 
     const result = await adapter.execute("import_modules", {
       destinationRoot: tmpRoot,
@@ -156,6 +168,6 @@ describe("import_modules — form code-behind divergence guard (#1865)", () => {
     expect(result.ok).toBe(true);
     expect(JSON.stringify(result)).toContain("FORM_CODE_BEHIND_DIVERGES");
     expect(JSON.stringify(result)).toContain("edited only in the form");
-    expect(calls.count).toBe(0);
+    expect(actions).not.toContain("Import");
   });
 });
