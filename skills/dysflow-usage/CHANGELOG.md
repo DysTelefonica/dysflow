@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Split the skill into a consultation source (`SKILL.md`, facts and tables) and `references/` pages. The always-on rules moved to `dysflow-arnes` (#1871); `dysflow-protocol` is retired to a redirect stub.
+- Document the project-context order and the parameter matrix in `references/context-resolution.md` (#1867).
 - Document external `query_execute` reads and their write-mode rejection boundary.
 - Clarify that compact `verify_code` category maps are aggregate artifact counts,
   not module membership, and require `diagnostic:true` for classified entries.
