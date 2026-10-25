@@ -610,7 +610,7 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
     expect(services.orphanCleanupService.cleanupRequests).toHaveLength(0);
   });
 
-  it("developer mode + confirmed pid + writes disabled → MCP_WRITES_DISABLED", async () => {
+  it("developer mode + confirmed pid + writes disabled → retire runs without allowWrites (#1862)", async () => {
     const services = makeServices();
     const tools = createDysflowMcpTools({
       services,
@@ -628,9 +628,10 @@ describe("AC7 — access_force_cleanup_orphaned per-call gating unchanged (#783)
       confirmedRequiresConfirmation: true,
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("MCP_WRITES_DISABLED");
-    expect(services.orphanCleanupService.cleanupRequests).toHaveLength(0);
+    // Issue #1862 — a confirmed retire of a verified orphan needs no allowWrites.
+    // The ownership guards in the service still decide whether the PID dies.
+    expect(result.content[0]?.text).not.toContain("MCP_WRITES_DISABLED");
+    expect(services.orphanCleanupService.cleanupRequests).toHaveLength(1);
   });
 });
 

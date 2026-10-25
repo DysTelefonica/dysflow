@@ -1,4 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { diagnoseProjectConfig } from "../../../src/adapters/config/project-config-diagnostic.js";
 import { createDysflowMcpTools } from "../../../src/adapters/mcp/tools.js";
 import { successResult } from "../../../src/core/contracts/index.js";
 import type {
@@ -121,5 +125,42 @@ describe("access_force_cleanup_orphaned without allowWrites (#1862)", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("CONFIRMATION_REQUIRED");
     expect(killed).toEqual([]);
+  });
+});
+
+describe("project-level capabilities.allowWrites:false and the orphan retire (#1862)", () => {
+  function projectWithAllowWritesOff(): string {
+    const root = mkdtempSync(join(tmpdir(), "dysflow-1862-allowwrites-off-"));
+    writeFileSync(join(root, ".git"), "gitdir: fixture");
+    mkdirSync(join(root, ".dysflow"));
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "app.accdb"), "");
+    writeFileSync(
+      join(root, ".dysflow", "project.json"),
+      JSON.stringify({
+        id: "app",
+        accessPath: "app.accdb",
+        destinationRoot: "src",
+        capabilities: { allowWrites: false },
+      }),
+    );
+    return root;
+  }
+
+  it("lifts the allowWrites:false refusal for a numeric-PID retire only", () => {
+    const root = projectWithAllowWritesOff();
+    try {
+      const retire = diagnoseProjectConfig(root, {
+        operation: "access_force_cleanup_orphaned",
+        pid: 20_824,
+      });
+      expect(retire.status).not.toBe("capabilities-disallow-write");
+      expect(retire.diagnostics.map((d) => d.code)).not.toContain("CAPABILITIES_DISALLOW_WRITE");
+
+      const importing = diagnoseProjectConfig(root, { operation: "import_modules" });
+      expect(importing.status).toBe("capabilities-disallow-write");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

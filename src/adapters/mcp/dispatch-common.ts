@@ -199,10 +199,13 @@ export async function requestRequiresWriteReady(
   // the common apply/dryRun pair.
   if (toolName === "query_execute") return request.mode === "write" && !resolveIsDryRun(request);
   if (toolName === "cleanup_access_operation") return request.force === true;
-  // Issue #1862 — the listing and a retire of a verified project orphan are
-  // not write-gated. The retire path keeps the HR-2 confirmation (#1537) and
+  // Issue #1862 — the listing (pid omitted or null) is not write-gated. A
+  // retire keeps the project-config readiness check (it lifts only the
+  // project-level allowWrites refusal), the HR-2 confirmation (#1537), and
   // the ownership guards in AccessOrphanCleanupService.
-  if (toolName === "access_force_cleanup_orphaned") return false;
+  if (toolName === "access_force_cleanup_orphaned") {
+    return request.pid !== undefined && request.pid !== null;
+  }
   // Issue #1861 — a project-relative ERD target always resolves inside the
   // project root, so it is a documentation export, not a project write. The
   // dispatch seam still verifies containment against the resolved root.
