@@ -26,6 +26,18 @@
 
 ### Fixed
 
+- chore(deps): bump GitHub Actions pins: setup-node v7.1.0, codeql-action v4.39.0, upload-artifact v7.0.2
+
+- fix(mcp): a call with no `cwd` after `resolve_project` resolves the project that was fixed for the session, instead of the startup cwd (#1867)
+
+- fix(forms): `form_list_controls`, `inspect_form`, `form_get_geometry` and the other form readers accept `cwd` + `formName`, deriving the source from the resolved project (#1867)
+
+- feat(import): `import_modules` and `import_all` dry runs classify each module against the binary, so an import over a binary-newer module is visible before `apply:true` (#1866)
+
+- feat(diagnose): bootstrap and doctor warn when `projectRoot` in `.dysflow/project.json` points at another worktree (`CONFIG_PROJECT_ROOT_STALE`) (#1866)
+
+- fix(verify): the `verify_code` diff snippet shows the first functional line instead of a case-only line (#1866)
+
 - fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
