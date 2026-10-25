@@ -14,7 +14,7 @@ import {
   resolvePiFacadeDir,
   resolvePiPackageOwnershipPath,
 } from "../../../../src/cli/commands/install/pi-package-manager.js";
-import { DYSSKILL_NAMES } from "../../../../src/cli/commands/install/skills-installer.js";
+import { CONSUMER_SKILL_NAMES } from "../../../../src/cli/commands/install/skills-installer.js";
 import { handleInstallCommand, handleUpdateCommand } from "../../../../src/cli/commands/install.js";
 import { handleUninstallCommand } from "../../../../src/cli/commands/uninstall.js";
 import { useHermeticTmpdir } from "../../../_helpers/hermetic-tmpdir.js";
@@ -136,7 +136,8 @@ async function expectProfileAligned(agentDir: string, runtimeDir: string, bundle
     Record<string, unknown>
   >;
   expect(servers.dysflow?.command).toBe(launcher(runtimeDir));
-  for (const skill of DYSSKILL_NAMES) {
+  // #1860 2014 a default install carries the consumer skills only.
+  for (const skill of CONSUMER_SKILL_NAMES) {
     expect(await treeHashes(join(agentDir, "skills", skill))).toEqual(
       await treeHashes(join(bundleRoot, "skills", skill)),
     );
