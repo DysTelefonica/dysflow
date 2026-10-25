@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
+
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)
 
 - fix(verify): `verify_code` exports from a disposable copy of the `.accdb`, so the committed database stays byte-identical (#1866)
