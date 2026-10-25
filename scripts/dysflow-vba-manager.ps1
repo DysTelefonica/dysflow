@@ -815,7 +815,12 @@ function Write-Utf8NoBom {
     Param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$Text,
-        [switch]$SkipUnchanged
+        [switch]$SkipUnchanged,
+        # #1902: Access regenerates the `Checksum =` serialization line on every
+        # SaveAsText. When that line is the only difference from the existing file,
+        # skip the write so the file and its mtime stay unchanged. Any other difference
+        # (including line endings) still writes.
+        [switch]$SkipChecksumOnlyChanges
     )
 
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -823,6 +828,22 @@ function Write-Utf8NoBom {
         $existing = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Path))
         $requested = [Convert]::ToBase64String($utf8NoBom.GetBytes($Text))
         if ($existing -ceq $requested) { return }
+    }
+    if ($SkipChecksumOnlyChanges -and [System.IO.File]::Exists($Path)) {
+        # Split on LF only so a CR difference stays a real difference.
+        $existingLines = $utf8NoBom.GetString([System.IO.File]::ReadAllBytes($Path)) -split "`n"
+        $requestedLines = $Text -split "`n"
+        if ($existingLines.Count -eq $requestedLines.Count) {
+            $onlyChecksum = $true
+            for ($i = 0; $i -lt $existingLines.Count; $i++) {
+                if ($existingLines[$i] -ceq $requestedLines[$i]) { continue }
+                if ($existingLines[$i] -notmatch '^\s*Checksum\s*=' -or $requestedLines[$i] -notmatch '^\s*Checksum\s*=') {
+                    $onlyChecksum = $false
+                    break
+                }
+            }
+            if ($onlyChecksum) { return }
+        }
     }
     [System.IO.File]::WriteAllText($Path, $Text, $utf8NoBom)
 }
@@ -2650,7 +2671,7 @@ function Export-VbaModule {
                 $formTxtContent = Ensure-AccessFormAutoResizeMarker -DocumentText $formTxtContent
             }
             $formTxtContent = Ensure-CodeBehindFormVbName -Text $formTxtContent -ModuleName $actualName
-            Write-Utf8NoBom -Path $finalPath -Text $formTxtContent -SkipUnchanged
+            Write-Utf8NoBom -Path $finalPath -Text $formTxtContent -SkipUnchanged -SkipChecksumOnlyChanges
         } else {
             if (-not $component) {
                 throw ("Componente no encontrado en VBProject para '{0}' y no es un documento Form/Report." -f $actualName)
