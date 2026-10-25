@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.5.1] - 2026-10-25
+
+### Changes
+
+- fix(forms): ignore Attribute header lines in the code-behind guard; sync_binary acknowledges the divergence (#1896)
+
+
 ## [v4.5.0] - 2026-10-25
 
 ### Changes
