@@ -692,7 +692,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - Parameters: `accessPath`, `backendPath`, `databasePath`, `sourcePath`, `target` (optional) — see [`target`](#common-input-parameters) for the projectId-first path
 * **`list_linked_tables`**: List only frontend linked tables. The role is explicitly frontend-only; omit `target` or pass `target="frontend"`.
   - Parameters: `accessPath`, `backendPath`, `target` (optional)
-* **`get_schema`**: Retrieve column types, sizes, and properties for a table.
+* **`get_schema`**: Retrieve column types, sizes, and properties for a table. Read the committed ERD (`docs/erd/ERD.md`, see `generate_erd`) first; it already carries every table, field, type, size, required flag, key and relation. Use `get_schema` only for a property the ERD lacks.
   - Parameters: `tableName` (string, optional), explicit path aliases, and `target="frontend" | "backend" | "auto"`. With `projectId`/`contextId`, `auto` probes backend then frontend by table identity and fails on ambiguity instead of guessing.
 * **`count_rows`**: Get row count for a table or SQL query.
   - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
@@ -700,8 +700,12 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - Parameters: `tableName` (string, optional), `columnName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
 * **`compare_backends`**: Compare structural differences between two backends.
   - Parameters: `accessPath`, `backendPath`, `comparePath` (string, optional), `target` (optional)
-* **`generate_erd`**: Generate an entity-relationship document for the database schema.
-  - Parameters: `erdPath` (Markdown output file; `.md` is appended when omitted), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional)
+* **`generate_erd`** (#1861): Generate the project ERD, the single schema source for agents. The Markdown file lists every table with its fields, types, sizes, required flags, primary keys and foreign keys (`Tabla.Campo`), plus a relations table.
+  - The header carries `Generado: YYYY-MM-DD` and `Fingerprint: sha256:<64 hex>`. The fingerprint is a SHA-256 over the schema body only, so an unchanged schema keeps the same value.
+  - Read the committed ERD first; regenerate it when it is missing or stale; call `get_schema` only for gaps.
+  - `generate_erd({})` resolves the project and writes `<projectRoot>/docs/erd/ERD.md`. It needs no `destinationRoot` and writes nothing else.
+  - It is a documentation export: when the resolved output file is inside the project root, the call runs with writes disabled. With writes disabled, any other target is refused with `OUTSIDE_PROJECT_ROOT`; with writes enabled an outside target keeps working as before.
+  - Parameters: `erdPath` (optional Markdown output file resolved against the project root; default `docs/erd/ERD.md`; `.md` is appended when omitted; never a directory), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional; `destinationRoot` never selects the ERD location).
 * **`get_relationships`**: List foreign keys and relation constraints.
   - Parameters: `accessPath` (optional), `target` (optional)
 * **`list_access_files`**: Search for `.accdb` files recursively in a directory.

@@ -240,6 +240,19 @@ silently picking one intent — always read
 See `assets/examples/` for the canonical per-tool index. Every advertised MCP
 tool has a kebab-case `.md` example file there.
 
+## Schema questions — read the committed ERD first
+
+1. Read `docs/erd/ERD.md` before writing SQL or fixtures. It lists every
+   table, field, type, size, required flag, primary key, foreign key, and
+   relation.
+2. Regenerate it with `generate_erd({})` only when the file is missing or
+   stale. The header stamp `Generado: YYYY-MM-DD` plus
+   `Fingerprint: sha256:<hex>` tells you which schema it describes.
+3. Call `get_schema` only for a property the ERD does not carry.
+
+`generate_erd` is a documentation export: with the output inside the project
+root it runs with writes disabled. See `assets/examples/generate-erd.md`.
+
 ## `verify_code` decision contract
 
 Use `actionableOk` and `recommendedAction` as the sync gate. Raw `ok` means

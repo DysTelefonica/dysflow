@@ -8,6 +8,7 @@ import { structureRemediation } from "../../core/contracts/remediation.js";
 import { resolveIsDryRun } from "../../core/mapping/access-query-request-mapper.js";
 import { commitFlagFor, noWriteAliasFor } from "../../core/runtime/commit-flag-registry.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
+import { isPathInside, resolvePathForContainment } from "../../core/utils/path-containment.js";
 import {
   APPLY_DRYRUN_CONTRADICTION_PREFIX,
   validateInput,
@@ -20,6 +21,7 @@ import {
 } from "./destructive-tool-confirmation.js";
 import { buildExplainObject, relatedIssueNumbersForCode } from "./explain-builder.js";
 import {
+  type McpAccessContextResolver,
   type McpToolError,
   type McpToolResult,
   type McpWriteAccessResolver,
@@ -198,6 +200,10 @@ export async function requestRequiresWriteReady(
   if (toolName === "query_execute") return request.mode === "write" && !resolveIsDryRun(request);
   if (toolName === "cleanup_access_operation") return request.force === true;
   if (toolName === "access_force_cleanup_orphaned") return request.pid !== undefined;
+  // Issue #1861 — a project-relative ERD target always resolves inside the
+  // project root, so it is a documentation export, not a project write. The
+  // dispatch seam still verifies containment against the resolved root.
+  if (toolName === "generate_erd" && isProjectRelativeErdPath(request.erdPath)) return false;
 
   // Load the policy seam only when a concrete request needs it. A static import
   // here creates an initialization cycle through risks -> contracts -> tools,
@@ -1425,6 +1431,105 @@ export function destinationRootRequired(
         missingFields: [...missingFields],
         remediation,
         details: { toolName, missingFields: [...missingFields] },
+      },
+      options,
+    ),
+  });
+}
+
+// ─── generate_erd documentation export (#1861) ────────────────────────────────────
+
+/** Committed ERD location, relative to the project root. */
+export const DEFAULT_ERD_RELATIVE_PATH = "docs/erd/ERD.md" as const;
+
+/** `erdPath` names an output FILE (#1256): an extension-less value gets `.md`. */
+function erdPathWithExtension(erdPath: string): string {
+  return path.extname(erdPath) === "" ? `${erdPath}.md` : erdPath;
+}
+
+function requestedErdPath(erdPath: unknown): string {
+  return typeof erdPath === "string" && erdPath.trim().length > 0
+    ? erdPath
+    : DEFAULT_ERD_RELATIVE_PATH;
+}
+
+/**
+ * Whether an `erdPath` input is relative and never climbs out of the root it
+ * resolves against. An omitted value selects {@link DEFAULT_ERD_RELATIVE_PATH}.
+ */
+export function isProjectRelativeErdPath(erdPath: unknown): boolean {
+  const requested = requestedErdPath(erdPath);
+  if (path.win32.isAbsolute(requested) || path.posix.isAbsolute(requested)) return false;
+  const normalized = path.posix.normalize(requested.replaceAll("\\", "/"));
+  return normalized !== ".." && !normalized.startsWith("../");
+}
+
+export type GenerateErdTarget =
+  | { kind: "inside"; erdPath: string; projectRoot: string }
+  | { kind: "outside"; erdPath: string; projectRoot: string }
+  | { kind: "unresolved" };
+
+/**
+ * Issue #1861 — resolve where `generate_erd` writes. The project root comes
+ * from the MCP access-context resolver (the loaded project config), falling
+ * back to an explicit `projectRoot` input. The returned `erdPath` is absolute.
+ */
+export async function resolveGenerateErdTarget(
+  input: unknown,
+  accessContextResolver: McpAccessContextResolver | undefined,
+): Promise<GenerateErdTarget> {
+  const request =
+    typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  let projectRoot: string | undefined;
+  if (accessContextResolver !== undefined) {
+    try {
+      const context = await accessContextResolver(request);
+      if (context.ok && context.data.projectRoot.trim().length > 0) {
+        projectRoot = context.data.projectRoot;
+      }
+    } catch {
+      // Fall through to the input-declared root.
+    }
+  }
+  if (
+    projectRoot === undefined &&
+    typeof request.projectRoot === "string" &&
+    request.projectRoot.trim().length > 0
+  ) {
+    projectRoot = request.projectRoot;
+  }
+  if (projectRoot === undefined) return { kind: "unresolved" };
+  const erdPath = resolvePathForContainment(
+    erdPathWithExtension(requestedErdPath(request.erdPath)),
+    projectRoot,
+  );
+  return isPathInside(erdPath, projectRoot)
+    ? { kind: "inside", erdPath, projectRoot }
+    : { kind: "outside", erdPath, projectRoot };
+}
+
+/** Structured refusal for a `generate_erd` target outside the project root. */
+export function erdOutsideProjectRoot(
+  args: { toolName: string; erdPath: string; projectRoot: string },
+  options: { explain?: boolean } = {},
+): McpToolResult {
+  const { toolName, erdPath, projectRoot } = args;
+  const remediation =
+    `Omit erdPath to write ${DEFAULT_ERD_RELATIVE_PATH}, or pass an erdPath inside ${projectRoot}. ` +
+    `A target outside the project root needs writes enabled ("allowWrites": true in .dysflow/project.json).`;
+  const message =
+    `Refusing ${toolName}: ERD target ${erdPath} is outside the project root ${projectRoot}. ` +
+    `Only an ERD inside the project root is a documentation export that runs with writes disabled. ${remediation}`;
+  return withSchemaVersion({
+    content: [{ type: "text", text: `${OUTSIDE_PROJECT_ROOT}: ${message}` }],
+    isError: true,
+    ok: false,
+    error: applyUniformEnvelope(
+      {
+        code: OUTSIDE_PROJECT_ROOT,
+        message,
+        remediation,
+        details: { toolName, erdPath, projectRoot },
       },
       options,
     ),

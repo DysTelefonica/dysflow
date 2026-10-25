@@ -15,6 +15,7 @@ import {
   destinationRootRequired,
   enforceRequiresConfirmation,
   enrichmentForValidationMessage,
+  erdOutsideProjectRoot,
   exportSourceGuardRefused,
   internalError,
   invalidInput,
@@ -22,6 +23,7 @@ import {
   mcpSchemaFor,
   normalizeLegacyReadToolDetails,
   remapLegacyReadToolCode,
+  resolveGenerateErdTarget,
   writesDisabled,
 } from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -260,7 +262,9 @@ export function createDispatchTool(
       // ambiguously. Binary-mutating tools (compile_vba, delete_module, ...)
       // are gated by MCP_WRITES_DISABLED instead — the binary IS the startup
       // binary, so empty input is still meaningful there.
-      if (isWriteGated && isFilesystemWrite) {
+      // Issue #1861 — generate_erd({}) is meaningful: it targets the
+      // committed project ERD, so it is exempt from the empty-input guard.
+      if (isWriteGated && isFilesystemWrite && name !== "generate_erd") {
         const inputRecord = isRecord(normalizedInput) ? normalizedInput : {};
         if (Object.keys(inputRecord).length === 0) {
           return invalidInput(
@@ -269,9 +273,34 @@ export function createDispatchTool(
         }
       }
       const isDryRun = isAlwaysGatedWrite ? false : resolveIsDryRun(normalizedInput);
+      // Issue #1861 — the ERD is a documentation export. When its resolved
+      // output file lies inside the project root it runs without write
+      // permission; any other target keeps the write gate, and with writes
+      // disabled an outside target is refused as OUTSIDE_PROJECT_ROOT.
+      let isProjectDocumentationExport = false;
+      if (name === "generate_erd") {
+        const erdTarget = await resolveGenerateErdTarget(normalizedInput, accessContextResolver);
+        if (erdTarget.kind === "inside") {
+          isProjectDocumentationExport = true;
+          normalizedInput = {
+            ...(isRecord(normalizedInput) ? normalizedInput : {}),
+            erdPath: erdTarget.erdPath,
+          };
+        } else if (
+          erdTarget.kind === "outside" &&
+          !(await isWriteAllowed(normalizedInput, writesEnabled, writeAccessResolver))
+        ) {
+          return erdOutsideProjectRoot({
+            toolName: name,
+            erdPath: erdTarget.erdPath,
+            projectRoot: erdTarget.projectRoot,
+          });
+        }
+      }
       if (
         isWriteGated &&
         !isDryRun &&
+        !isProjectDocumentationExport &&
         !(await isWriteAllowed(normalizedInput, writesEnabled, writeAccessResolver))
       ) {
         return writesDisabled(name);
