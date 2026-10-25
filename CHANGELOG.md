@@ -3403,10 +3403,12 @@ Hardening and maintenance pass from a code-quality review of the MCP runtime.
 - A proposal to migrate MCP input validation to Zod was investigated and
   **closed without changes**: an audit proved the existing validator already
   enforces every constraint the current schemas use (string enums, types,
-  numeric bounds, `additionalProperties`). The only unsupported constructs
-  (numeric enums, integer distinction, `oneOf`/`anyOf`) are unused, so a
-  migration would have added a dependency and ~700 lines for zero behavior
-  change. Revisit if a future schema needs those constructs.
+  numeric bounds, `additionalProperties`).
+
+  The only unsupported constructs (numeric enums, integer distinction,
+  `oneOf`/`anyOf`) are unused, so a migration would have added a dependency
+  and ~700 lines for zero behavior change. Revisit if a future schema needs
+  those constructs.
 
 ## [v1.2.35] - 2026-06-09
 
