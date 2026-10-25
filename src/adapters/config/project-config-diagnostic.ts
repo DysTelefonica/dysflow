@@ -830,6 +830,17 @@ export function diagnoseProjectConfig(
       "WRITE_LOCKED_BY_RUNNING_OP",
       warnings,
     );
+  // Issue #1866 item 6 — a `projectRoot` copied from another worktree is stale. The
+  // runtime resolves the real cwd, so the config still works; say so explicitly.
+  if (typeof parsed.projectRoot === "string" && parsed.projectRoot !== "") {
+    if (identity(resolve(projectRootNative, parsed.projectRoot)) !== identity(projectRootNative)) {
+      warnings.push({
+        code: "CONFIG_PROJECT_ROOT_STALE",
+        severity: "warning",
+        message: `Project config projectRoot '${parsed.projectRoot}' does not match the resolved worktree '${projectRoot}'. Calls use the resolved worktree; remove or correct projectRoot in ${base.configPath}.`,
+      });
+    }
+  }
   return {
     ...base,
     status: "valid",
