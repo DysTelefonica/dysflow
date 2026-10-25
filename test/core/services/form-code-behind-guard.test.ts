@@ -47,12 +47,16 @@ describe("compareFormCodeBehind (#1865)", () => {
   });
 
   it("ignores case-only differences in the code-behind copy", () => {
-    const formText = formWithCodeBehind(CLS.replace("Private Sub Form_Load()", "PRIVATE SUB FORM_LOAD()"));
+    const formText = formWithCodeBehind(
+      CLS.replace("Private Sub Form_Load()", "PRIVATE SUB FORM_LOAD()"),
+    );
     expect(compareFormCodeBehind({ formText, clsText: CLS }).diverges).toBe(false);
   });
 
   it("ignores whitespace-only differences in the code-behind copy", () => {
-    const formText = formWithCodeBehind(CLS.replace('    Debug.Print "cls"', '        Debug.Print "cls"'));
+    const formText = formWithCodeBehind(
+      CLS.replace('    Debug.Print "cls"', '        Debug.Print "cls"'),
+    );
     expect(compareFormCodeBehind({ formText, clsText: CLS }).diverges).toBe(false);
   });
 
@@ -62,8 +66,8 @@ describe("compareFormCodeBehind (#1865)", () => {
   });
 
   it("reports nothing when both copies are identical", () => {
-    expect(compareFormCodeBehind({ formText: formWithCodeBehind(CLS), clsText: CLS }).diverges).toBe(
-      false,
-    );
+    expect(
+      compareFormCodeBehind({ formText: formWithCodeBehind(CLS), clsText: CLS }).diverges,
+    ).toBe(false);
   });
 });
