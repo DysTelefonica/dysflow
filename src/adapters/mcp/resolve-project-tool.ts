@@ -40,6 +40,7 @@ import {
 } from "./project-resolution-recovery.js";
 import type { DysflowMcpTool } from "./result-translation.js";
 import { translateCoreResultToMcpContent } from "./result-translation.js";
+import type { SessionProjectRoot } from "./session-project-root.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -248,6 +249,8 @@ export const RESOLVE_PROJECT_SCHEMA = {
 export function createResolveProjectTool(opts: {
   cwd: string;
   recovery?: ProjectResolutionRecovery;
+  /** Issue #1867 — records the resolved project for later calls without a cwd. */
+  sessionProjectRoot?: SessionProjectRoot;
   cachedProjectConfigResolver?: (
     cwd: string,
   ) => ProjectConfigDiagnostic | null | Promise<ProjectConfigDiagnostic | null>;
@@ -278,7 +281,10 @@ export function createResolveProjectTool(opts: {
       if (!cwdResolution.ok) return cwdResolution.error;
       const effectiveCwd = cwdResolution.cwd;
 
-      if (params.clearResolution === true) recovery.clear();
+      if (params.clearResolution === true) {
+        recovery.clear();
+        opts.sessionProjectRoot?.clear();
+      }
 
       const hasRecoveryField =
         params.projectChoiceReason !== undefined || params.recoveryToken !== undefined;
@@ -445,6 +451,10 @@ export function createResolveProjectTool(opts: {
         result.outcome === "resolved" && typeof projectConfig.projectRoot === "string"
           ? projectConfig.projectRoot
           : result.projectRoot;
+      // Issue #1867 — a resolved outcome fixes the project for the session, at the same root.
+      if (result.outcome === "resolved" && typeof projectRoot === "string") {
+        opts.sessionProjectRoot?.set(projectRoot);
+      }
       const opResult: OperationResult<
         ResolvedProjectResult & { projectConfig: ProjectConfigDiagnostic }
       > = successResult({ ...result, projectRoot, projectConfig } as ResolvedProjectResult & {
