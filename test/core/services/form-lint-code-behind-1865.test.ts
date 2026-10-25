@@ -16,9 +16,14 @@ const CLS = [
 ].join("\r\n");
 
 function formWithCodeBehind(code: string): string {
-  return ["Version =21", "Begin Form", "    AutoResize = NotDefault", "End", "CodeBehindForm", code].join(
-    "\r\n",
-  );
+  return [
+    "Version =21",
+    "Begin Form",
+    "    AutoResize = NotDefault",
+    "End",
+    "CodeBehindForm",
+    code,
+  ].join("\r\n");
 }
 
 function lintWith(codeBehind: string) {
