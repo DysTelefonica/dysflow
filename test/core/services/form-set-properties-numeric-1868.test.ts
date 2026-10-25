@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFormTxt } from "../../../src/core/services/form-ir-service.js";
-import { setProperties } from "../../../src/core/services/form-ir-service.js";
+import { parseFormTxt, setProperties } from "../../../src/core/services/form-ir-service.js";
 
 // Issue #1868 item 1 — form_set_properties wrote a numeric property as quoted
 // text (`Width ="7400"`), which Access rejects. Each value is written by the
@@ -17,7 +16,7 @@ const FORM = [
   "            Top =1000",
   "            Width =7477",
   "            Height =300",
-  "            Caption =\"Nombre\"",
+  '            Caption ="Nombre"',
   "        End",
   "    End",
   "End",
