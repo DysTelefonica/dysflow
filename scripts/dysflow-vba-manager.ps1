@@ -4003,8 +4003,8 @@ function Import-VbaModule {
                     $loadFromTextRecoveryDiagnostic.outcome = 'recovered'
                 } else {
                 $detail = $null
-                if ($importErrorsPath -and (Test-Path -LiteralPath $importErrorsPath)) {
-                    try { $detail = [System.IO.File]::ReadAllText($importErrorsPath, [System.Text.Encoding]::GetEncoding(1252)) } catch { Write-Debug "Diagnostics: $_" }
+                if ($importErrorsPath) {
+                    $detail = Read-AndRemoveImportErrorsFile -Path $importErrorsPath
                 }
                 if ($detail) {
                     throw ("LoadFromText falló para '{0}'. Detalle de errors.txt: {1}" -f $objectName, ($detail.Trim()))
@@ -4358,6 +4358,26 @@ function Fix-EncodingInSrc {
         }
     }
     return $fixed
+}
+
+function Read-AndRemoveImportErrorsFile {
+    # Issue #1868 — Access writes errors.txt next to the database when an import
+    # fails. Read its text for the error envelope, then remove it so the failed
+    # import never leaves a file in the user's repository.
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = $null
+    try {
+        $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::GetEncoding(1252))
+    } catch { Write-Debug "Diagnostics: $_" }
+    try {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch { Write-Debug "Diagnostics: $_" }
+    return $text
 }
 
 function Export-DataStructure {

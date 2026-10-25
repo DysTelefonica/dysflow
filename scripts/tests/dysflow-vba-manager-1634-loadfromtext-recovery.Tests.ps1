@@ -6,6 +6,7 @@ Describe 'Import-VbaModule LoadFromText transient recovery (#1634)' {
         )
         $functionNames = @(
             'Import-VbaModule',
+            'Read-AndRemoveImportErrorsFile',
             'Test-AccessDocumentSnapshotEquivalent',
             'Get-ProvenTransientLoadFromTextCancellationEvidence',
             'Resolve-ImportFileForModule',
