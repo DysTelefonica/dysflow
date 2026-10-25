@@ -35,9 +35,10 @@ describe("error-propagation lint rules (#1863)", () => {
 
   it("error-param-last: flags a last p_Error that is not Optional ByRef As String", async () => {
     const { findings } = await lint(
-      ["Public Function Load(ByVal x As Long, ByRef p_Error As String) As String", "End Function"].join(
-        "\n",
-      ),
+      [
+        "Public Function Load(ByVal x As Long, ByRef p_Error As String) As String",
+        "End Function",
+      ].join("\n"),
     );
     expect(findings.some((f) => f.rule === "error-param-last")).toBe(true);
   });
@@ -55,7 +56,7 @@ describe("error-propagation lint rules (#1863)", () => {
       "End Sub",
       "",
       "Public Sub Outer(Optional ByRef p_Error As String)",
-      '    Dim e As String',
+      "    Dim e As String",
       "    Inner e",
       '    Debug.Print "after"',
       "End Sub",
