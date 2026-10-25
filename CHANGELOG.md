@@ -1,5 +1,33 @@
 # Changelog
 
+## [v4.5.0] - 2026-10-25
+
+### Changes
+
+- test(install): give the install end-to-end file the runtime install budget (#1892)
+- feat(lint): p_Error propagation rules and a new-errors-only import lint gate (#1877)
+- feat(forms): refuse an import that would overwrite a diverging code-behind edit (#1882)
+- fix(mcp): name the missing project context and report one project root (#1889)
+- feat(install): consumer skills by default; --maintainer-skills; channel in doctor; retired protocol link removed (#1887)
+- docs(skills): split dysflow-usage into facts and references; rules in dysflow-arnes (#1886)
+- chore(deps): bump Biome, typebox and @types/node (#1885)
+- chore(deps): bump @modelcontextprotocol/sdk and zod (#1884)
+- chore(deps): bump setup-node, codeql-action and upload-artifact pins (#1880)
+- fix(mcp): keep the resolve_project project for calls without cwd (#1881)
+- fix(forms): resolve formName through the cwd project context (#1879)
+- feat(import): classify each module in the import dry run (#1878)
+- feat(diagnose): warn when projectRoot points at another worktree (#1876)
+- fix(verify): point the diff snippet at the first functional line (#1875)
+- docs(changelog): remove duplicated release notes from a merge (#1888)
+- fix(mcp): keep verify_code ok identical in text and structuredContent (#1874)
+- test(verify): pin form serialization keys as non-functional lines (#1873)
+- fix(lint): match Me.<name> to form controls case-insensitively (#1872)
+- fix(verify): export verify_code from a snapshot copy of the accdb (#1870)
+- fix(forms): form write tools write typed values, whole twips, and report the failed-import state (#1883)
+- fix(access_force_cleanup_orphaned): retire a verified orphan without allowWrites (#1869)
+- feat(generate_erd): write the project ERD without allowWrites (#1864)
+
+
 ## [v4.4.15] - 2026-10-22
 
 ### Changes
