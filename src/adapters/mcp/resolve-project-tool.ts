@@ -439,9 +439,17 @@ export function createResolveProjectTool(opts: {
         > = successResult({ ...ambiguous, projectConfig });
         return translateCoreResultToMcpContent(opResult);
       }
+      // Issue #1867 — one project root per response. A projectRoot copied from another
+      // worktree in the config is stale; the resolved worktree is authoritative.
+      const projectRoot =
+        result.outcome === "resolved" && typeof projectConfig.projectRoot === "string"
+          ? projectConfig.projectRoot
+          : result.projectRoot;
       const opResult: OperationResult<
         ResolvedProjectResult & { projectConfig: ProjectConfigDiagnostic }
-      > = successResult({ ...result, projectConfig });
+      > = successResult({ ...result, projectRoot, projectConfig } as ResolvedProjectResult & {
+        projectConfig: ProjectConfigDiagnostic;
+      });
       return translateCoreResultToMcpContent(opResult);
     },
   };

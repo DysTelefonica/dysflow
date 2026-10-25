@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- fix(mcp): a call that names no project context fails with `PROJECT_CONTEXT_MISSING` and a remediation; `resolve_project` reports one project root (#1867)
+
 - fix(verify): the `verify_code` `ok` field is the same in the text payload and in `structuredContent` (#1866)
 
 - fix(lint): `lint_form_code` resolves `Me.<name>` against control names case-insensitively, as VBA does (#1866)

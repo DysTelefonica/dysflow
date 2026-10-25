@@ -731,7 +731,8 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     const result = await services.diagnosticsService.run({});
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected error");
-    expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+    // Issue #1867 — a call that names no context fails by naming that cause.
+    expect(result.error.code).toBe("PROJECT_CONTEXT_MISSING");
   });
 
   it("createUnavailableServices vba service returns a failure result when config cannot be resolved", async () => {
@@ -749,7 +750,7 @@ describe("stdio-services / createUnavailableServices / resolves path", () => {
     });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected error");
-    expect(result.error.code).toBe("CONFIG_MISSING_ACCESS_PATH");
+    expect(result.error.code).toBe("PROJECT_CONTEXT_MISSING");
   });
 
   it("derives the targeted MCP protocol version from the SDK's negotiated default", () => {
