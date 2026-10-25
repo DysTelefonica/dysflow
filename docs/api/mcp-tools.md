@@ -160,7 +160,7 @@ Public dispatch regression coverage lives in
 List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
-  - `confirmPid` (number, optional): When omitted, the tool lists candidates only. When provided, killing is write-gated and still refuses non-headless, wrong-path, or Dysflow-owned processes.
+  - `pid` (number, optional): When omitted or `null`, the tool lists candidates only and needs no `allowWrites`. When a listed positive PID is given, the tool retires that one process without `allowWrites` (#1862) once `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` are passed. It still refuses non-headless, wrong-path, non-MSACCESS, or Dysflow-owned processes, and a process that names an Access database outside the project.
 
 ### `bootstrap`
 Minimal first-call read-only surface. Returns adapter version, write-gate state,

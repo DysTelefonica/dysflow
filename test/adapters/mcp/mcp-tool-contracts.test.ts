@@ -121,7 +121,10 @@ describe("MCP tool contract metadata", () => {
     expect(descriptions.access_force_cleanup_orphaned).toContain("confirmPid");
     expect(descriptions.access_force_cleanup_orphaned).toContain("list");
     expect(descriptions.access_force_cleanup_orphaned).toContain("headless");
-    expect(descriptions.access_force_cleanup_orphaned).toContain("MCP_WRITES_DISABLED");
+    // Issue #1862 — the listing and a confirmed retire need no allowWrites, so
+    // the description no longer advertises the write-gate refusal.
+    expect(descriptions.access_force_cleanup_orphaned).toContain("needs no allowWrites");
+    expect(descriptions.access_force_cleanup_orphaned).not.toContain("MCP_WRITES_DISABLED");
   });
 });
 
