@@ -565,6 +565,7 @@ function Open-CanonicalAccess {
                 }
             } catch { Write-Debug "Open-CanonicalAccess: AutomationSecurity restore after failed open threw: $_" }
 
+            Write-ComCloseTrace -Step "OpenFailedQuit" -OwnedPid $ownedPid
             try { $access.Quit(2) } catch { Write-Debug "Open-CanonicalAccess: Quit after failed open threw: $_" }
             try {
                 if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
@@ -719,6 +720,11 @@ function Close-CanonicalAccess {
     $pidAttributed = $Session.PidAttributed
 
     $ownedPidKilled = $false
+
+    # #1918: "Begin" marks the moment the teardown entered. Without it, a missing
+    # "CloseCurrentDatabase" line is ambiguous: the step was never reached, or the
+    # teardown hung before it could be recorded.
+    Write-ComCloseTrace -Step "Begin" -OwnedPid $ownedPid
 
     try {
         # Step 2: close the database (ignore if no db was opened or already closed)
