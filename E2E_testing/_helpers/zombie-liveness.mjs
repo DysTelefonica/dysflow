@@ -61,3 +61,16 @@ export function formatTerminationLine({
     `samples=${liveness.sampleCount}`,
   ].join(" ");
 }
+
+/**
+ * Verdict for the zombie-check (#1899). A child that answers at the check and stops within
+ * the sampling window is a late exit, not a leak; only a child that still answers at the end
+ * of the window is a zombie.
+ * @param {{ aliveAtCheck: boolean, liveness: { aliveAtEnd: boolean } | null }} input
+ * @returns {"pass" | "late-exit" | "zombie"}
+ */
+export function zombieVerdict({ aliveAtCheck, liveness }) {
+  if (!aliveAtCheck) return "pass";
+  if (liveness && liveness.aliveAtEnd === false) return "late-exit";
+  return "zombie";
+}

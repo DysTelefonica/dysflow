@@ -11,6 +11,7 @@ import {
   classifyChildLiveness,
   formatTerminationLine,
   summarizeLiveness,
+  zombieVerdict,
 } from "./zombie-liveness.mjs";
 import { formatZombieReport } from "./zombie-process-dump.mjs";
 //
@@ -147,11 +148,16 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // Filter the result to the child of THIS tool only (so we don't keep
   // pre-existing watch entries alive forever).
   const toolChildAlive = result.childPid ? await childStillOwned(ctx, result.childPid) : false;
-  const zombiePass = !toolChildAlive;
-  // #1899: only on the failing path, sample the child's own liveness until it stops
-  // answering (bounded), so the log shows whether it was still exiting. Verdict unchanged.
+  // #1899: a child that answers at the check but stops within the bounded window is a late
+  // exit, not a leak. The verdict waits for that window before it fails the battery.
+  let liveness = null;
+  // Sample with the same predicate as the check, so a lingering descendant is not read as a late exit.
   if (toolChildAlive && result.childPid) {
-    const liveness = await sampleDirectLiveness(result.childPid);
+    liveness = await sampleLiveness(() => ctx.isOwnPidAlive(result.childPid));
+  }
+  const verdict = zombieVerdict({ aliveAtCheck: toolChildAlive, liveness });
+  const zombiePass = verdict !== "zombie";
+  if (toolChildAlive && result.childPid) {
     consoleLog(
       formatTerminationLine({
         tool,
@@ -170,16 +176,19 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
     pass: zombiePass,
     expected: "no suite-owned MSACCESS.EXE child after tool",
     ms: postToolZombie.elapsed,
-    summary: toolChildAlive
-      ? `Suite-owned MSACCESS.EXE pid=${result.childPid} lingered after ${tool}`
-      : "clean",
+    summary:
+      verdict === "zombie"
+        ? `Suite-owned MSACCESS.EXE pid=${result.childPid} lingered after ${tool}`
+        : verdict === "late-exit"
+          ? `child pid=${result.childPid} exited within the window after ${tool}`
+          : "clean",
     ...(!zombiePass ? { failureClass: "safety-critical" } : {}),
   });
   consoleLog(
     `${zombiePass ? "PASS" : "FAIL"}\t${zombieTool}\t${postToolZombie.elapsed}ms\t${ctx.rows.at(-1).summary}`,
   );
 
-  if (!toolChildAlive && result.childPid) {
+  if (verdict !== "zombie" && result.childPid) {
     ctx.suiteOwnPids.delete(result.childPid);
   }
 
@@ -436,17 +445,12 @@ function dumpZombieDiagnostics(tool, childPid) {
 // every 50 ms for at most 3 s, and stops at the first death (#1899).
 const LIVENESS_WINDOW_MS = 3000;
 const LIVENESS_STEP_MS = 50;
-async function sampleDirectLiveness(pid) {
+async function sampleLiveness(isAlive) {
   const samples = [];
   const started = Date.now();
   for (;;) {
     const atMs = Date.now() - started;
-    let alive = true;
-    try {
-      process.kill(pid, 0);
-    } catch {
-      alive = false;
-    }
+    const alive = isAlive();
     samples.push({ atMs, alive });
     if (!alive || atMs >= LIVENESS_WINDOW_MS) break;
     await new Promise((resolve) => setTimeout(resolve, LIVENESS_STEP_MS));

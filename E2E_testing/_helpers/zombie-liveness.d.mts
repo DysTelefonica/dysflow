@@ -24,3 +24,8 @@ export declare function classifyChildLiveness(input: {
   alive: boolean;
   imageName: string | null | undefined;
 }): "dead" | "alive" | "reused";
+
+export declare function zombieVerdict(input: {
+  aliveAtCheck: boolean;
+  liveness: { aliveAtEnd: boolean } | null;
+}): "pass" | "late-exit" | "zombie";
