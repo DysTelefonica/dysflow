@@ -11,6 +11,7 @@ import {
   classifyChildLiveness,
   formatTerminationLine,
   summarizeLiveness,
+  zombieVerdict,
 } from "./zombie-liveness.mjs";
 import { formatZombieReport } from "./zombie-process-dump.mjs";
 //
@@ -150,7 +151,10 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // #1899: a child that answers at the check but stops within the bounded window is a late
   // exit, not a leak. The verdict waits for that window before it fails the battery.
   let liveness = null;
-  if (toolChildAlive && result.childPid) liveness = await sampleDirectLiveness(result.childPid);
+  // Sample with the same predicate as the check, so a lingering descendant is not read as a late exit.
+  if (toolChildAlive && result.childPid) {
+    liveness = await sampleLiveness(() => ctx.isOwnPidAlive(result.childPid));
+  }
   const verdict = zombieVerdict({ aliveAtCheck: toolChildAlive, liveness });
   const zombiePass = verdict !== "zombie";
   if (toolChildAlive && result.childPid) {
@@ -441,17 +445,12 @@ function dumpZombieDiagnostics(tool, childPid) {
 // every 50 ms for at most 3 s, and stops at the first death (#1899).
 const LIVENESS_WINDOW_MS = 3000;
 const LIVENESS_STEP_MS = 50;
-async function sampleDirectLiveness(pid) {
+async function sampleLiveness(isAlive) {
   const samples = [];
   const started = Date.now();
   for (;;) {
     const atMs = Date.now() - started;
-    let alive = true;
-    try {
-      process.kill(pid, 0);
-    } catch {
-      alive = false;
-    }
+    const alive = isAlive();
     samples.push({ atMs, alive });
     if (!alive || atMs >= LIVENESS_WINDOW_MS) break;
     await new Promise((resolve) => setTimeout(resolve, LIVENESS_STEP_MS));
