@@ -379,6 +379,8 @@ describe("VbaModulesAdapter", () => {
   });
 
   it("maps export_modules to a product-owned PowerShell runner invocation", async () => {
+    // A real folder: an explicit destinationRoot is the spawn cwd, so it must exist (#1914).
+    const destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-export-map-"));
     const calls: unknown[] = [];
     const executor: VbaManagerExecutor = async (request) => {
       calls.push(request);
@@ -401,7 +403,7 @@ describe("VbaModulesAdapter", () => {
     await expect(
       service.execute("export_modules", {
         moduleNames: ["Module1"],
-        destinationRoot: "C:/repo/src",
+        destinationRoot,
         apply: true,
       }),
     ).resolves.toMatchObject({
@@ -414,7 +416,7 @@ describe("VbaModulesAdapter", () => {
       expect.objectContaining({
         action: "Export",
         accessPath: "C:/db/front.accdb",
-        destinationRoot: "C:/repo/src",
+        destinationRoot,
         moduleNames: ["Module1"],
       }),
     ]);
