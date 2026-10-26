@@ -19,7 +19,7 @@ const plannedCommandCases = [
 ] as const;
 
 const missingAccessError =
-  "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.";
+  "CONFIG_MISSING_ACCESS_PATH: Access database path is required. Define .dysflow/project.json with frontendFile in the repository or pass accessPath explicitly.";
 
 function createRepoConfigWorkspace(): { root: string; cleanup(): void } {
   const root = mkdtempSync(join(tmpdir(), "dysflow-cli-"));
