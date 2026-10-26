@@ -694,6 +694,7 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
     accessPath: config.accessDbPath,
     projectRoot: config.projectRoot ?? cwd,
     destinationRoot: config.destinationRoot,
+    backendPath: config.backendPath,
   });
 }
 

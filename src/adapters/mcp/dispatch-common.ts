@@ -1471,14 +1471,17 @@ export function isProjectRelativeErdPath(erdPath: unknown): boolean {
 }
 
 export type GenerateErdTarget =
-  | { kind: "inside"; erdPath: string; projectRoot: string }
-  | { kind: "outside"; erdPath: string; projectRoot: string }
+  | { kind: "inside"; erdPath: string; projectRoot: string; backendPath?: string }
+  | { kind: "outside"; erdPath: string; projectRoot: string; backendPath?: string }
   | { kind: "unresolved" };
 
 /**
  * Issue #1861 — resolve where `generate_erd` writes. The project root comes
  * from the MCP access-context resolver (the loaded project config), falling
  * back to an explicit `projectRoot` input. The returned `erdPath` is absolute.
+ *
+ * Issue #1913 — the same resolution yields the backend the ERD documents: the
+ * explicit `backendPath` input, else the project config's `backendPath`.
  */
 export async function resolveGenerateErdTarget(
   input: unknown,
@@ -1487,11 +1490,15 @@ export async function resolveGenerateErdTarget(
   const request =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
   let projectRoot: string | undefined;
+  let backendPath: string | undefined;
   if (accessContextResolver !== undefined) {
     try {
       const context = await accessContextResolver(request);
       if (context.ok && context.data.projectRoot.trim().length > 0) {
         projectRoot = context.data.projectRoot;
+      }
+      if (context.ok && typeof context.data.backendPath === "string") {
+        backendPath = context.data.backendPath;
       }
     } catch {
       // Fall through to the input-declared root.
@@ -1509,9 +1516,41 @@ export async function resolveGenerateErdTarget(
     erdPathWithExtension(requestedErdPath(request.erdPath)),
     projectRoot,
   );
+  const backend = backendPath !== undefined && backendPath.trim().length > 0 ? { backendPath } : {};
   return isPathInside(erdPath, projectRoot)
-    ? { kind: "inside", erdPath, projectRoot }
-    : { kind: "outside", erdPath, projectRoot };
+    ? { kind: "inside", erdPath, projectRoot, ...backend }
+    : { kind: "outside", erdPath, projectRoot, ...backend };
+}
+
+/** Worker failure text when neither -BackendPath nor a `*_Datos.accdb` resolves. */
+const ERD_NO_BACKEND_MARKER = "-BackendPath";
+
+/**
+ * Issue #1913 — when `generate_erd` ran with no resolved backend and the
+ * worker reports its current-directory scan failed, name the missing
+ * `backendPath` parameter and config key instead of only that scan.
+ */
+export function withGenerateErdBackendRemediation<T>(
+  result: OperationResult<T>,
+  forwardedInput: unknown,
+): OperationResult<T> {
+  if (result.ok || !result.error.message.includes(ERD_NO_BACKEND_MARKER)) return result;
+  const forwarded =
+    typeof forwardedInput === "object" && forwardedInput !== null
+      ? (forwardedInput as Record<string, unknown>).backendPath
+      : undefined;
+  if (typeof forwarded === "string" && forwarded.trim().length > 0) return result;
+  const remediation =
+    'Pass backendPath, or declare "backendPath" in .dysflow/project.json for this project.';
+  return {
+    ...result,
+    error: {
+      ...result.error,
+      message: `generate_erd could not resolve a backend: no backendPath argument and no backendPath in .dysflow/project.json. ${remediation} Worker output: ${result.error.message}`,
+      remediation,
+      details: { ...(result.error.details ?? {}), missingField: "backendPath" },
+    },
+  };
 }
 
 /** Structured refusal for a `generate_erd` target outside the project root. */

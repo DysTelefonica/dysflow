@@ -412,6 +412,8 @@ export type McpAccessContext = {
   accessPath: string;
   projectRoot: string;
   destinationRoot?: string;
+  /** Resolved Access backend (explicit input, else project config) — #1913. */
+  backendPath?: string;
 };
 
 export type McpAccessContextResolver = (

@@ -24,6 +24,7 @@ import {
   normalizeLegacyReadToolDetails,
   remapLegacyReadToolCode,
   resolveGenerateErdTarget,
+  withGenerateErdBackendRemediation,
   writesDisabled,
 } from "./dispatch-common.js";
 import type { GeneratedDispatchToolName } from "./dispatch-routes.js";
@@ -280,6 +281,19 @@ export function createDispatchTool(
       let isProjectDocumentationExport = false;
       if (name === "generate_erd") {
         const erdTarget = await resolveGenerateErdTarget(normalizedInput, accessContextResolver);
+        // Issue #1913 — forward the resolved backend so Generate-ERD never
+        // falls back to scanning the current directory when the project
+        // config already names it. An explicit backendPath input wins.
+        if (
+          erdTarget.kind !== "unresolved" &&
+          erdTarget.backendPath !== undefined &&
+          !(isRecord(normalizedInput) && typeof normalizedInput.backendPath === "string")
+        ) {
+          normalizedInput = {
+            ...(isRecord(normalizedInput) ? normalizedInput : {}),
+            backendPath: erdTarget.backendPath,
+          };
+        }
         if (erdTarget.kind === "inside") {
           isProjectDocumentationExport = true;
           normalizedInput = {
@@ -467,6 +481,9 @@ export function createDispatchTool(
                   },
                 };
               }
+            }
+            if (name === "generate_erd") {
+              coreResult = withGenerateErdBackendRemediation(coreResult, serviceInput);
             }
             const resultForWire =
               name === "verify_code" && coreResult.ok

@@ -706,6 +706,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - The header carries `Generado: YYYY-MM-DD` and `Fingerprint: sha256:<64 hex>`. The fingerprint is a SHA-256 over the schema body only, so an unchanged schema keeps the same value.
   - Read the committed ERD first; regenerate it when it is missing or stale; call `get_schema` only for gaps.
   - `generate_erd({})` resolves the project and writes `<projectRoot>/docs/erd/ERD.md`. It needs no `destinationRoot` and writes nothing else.
+  - The documented backend is the explicit `backendPath` argument, else the project config's `backendPath` (#1913), even when it lives outside the project root. When neither resolves, the worker scans its working directory for `*_Datos.accdb`/`.mdb`; if that also fails, the error names the missing `backendPath` parameter and `.dysflow/project.json` key.
   - It is a documentation export: when the resolved output file is inside the project root, the call runs with writes disabled. With writes disabled, any other target is refused with `OUTSIDE_PROJECT_ROOT`; with writes enabled an outside target keeps working as before.
   - Parameters: `erdPath` (optional Markdown output file resolved against the project root; default `docs/erd/ERD.md`; `.md` is appended when omitted; never a directory), `accessPath`/`backendPath`/`destinationRoot`/`projectRoot` (optional; `destinationRoot` never selects the ERD location).
 * **`get_relationships`**: List foreign keys and relation constraints.
