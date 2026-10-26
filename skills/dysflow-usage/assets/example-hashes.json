@@ -276,7 +276,7 @@
   "form_move_control": { "path": "assets/examples/form-move-control.md", "sha256": "e4e6bd3d4ab2d1ab8a2f4b28cab73fc3156b1af6f4ed9752a43cf63dad8bfe2c", "needs_human_content": true },
   "form_rename_control": { "path": "assets/examples/form-rename-control.md", "sha256": "59eec16a755c7053e72954d28bb436e6ba930efc32f7266b6c9f3680d4b4b928", "needs_human_content": true },
   "form_serialize": { "path": "assets/examples/form-serialize.md", "sha256": "81d8e0ea30781b51be5631a3ea8b67c6460f0a4ac0c3c93e2fb21d299417fac9", "needs_human_content": true },
-  "generate_erd": { "path": "assets/examples/generate-erd.md", "sha256": "83b599763be458bd8c51260af72116ab45c92f4e4ffed712e9d3500b29c07513", "needs_human_content": false },
+  "generate_erd": { "path": "assets/examples/generate-erd.md", "sha256": "22caba1b7a7d6d4795faeb5e9e2591368b7639107f5215c8888f2a002daee20b", "needs_human_content": false },
   "generate_form": { "path": "assets/examples/generate-form.md", "sha256": "dd67b9e8c0e1a7545f6733c95aacec7cd730ba4d9baadb60f1051c77ce3c8df4", "needs_human_content": true },
   "get_relationships": { "path": "assets/examples/get-relationships.md", "sha256": "683d14507f11e7dc41da55a3c67c5265cd7d188196d1c4bb457c24c74db73721", "needs_human_content": true },
   "get_schema": { "path": "assets/examples/get-schema.md", "sha256": "e672da66e87b10eabd0daaf574cbcd167367c62a38fe7a9c63df50a51499003f", "needs_human_content": true },

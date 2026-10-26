@@ -18,6 +18,9 @@ Markdown file.
   `OUTSIDE_PROJECT_ROOT`.
 - `erdPath` is optional and resolves against the project root. An
   extension-less value gets `.md`; it is never a directory.
+- The backend is the explicit `backendPath` argument, else the project
+  config's `backendPath`, even outside the project root. When neither
+  resolves, the error names the missing `backendPath`.
 
 ## Step 1 — regenerate the committed ERD (zero arguments)
 
