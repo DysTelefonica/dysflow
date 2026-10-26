@@ -140,6 +140,48 @@ describe("spawnPowerShellProcess — child env construction", () => {
     expect(spawnOptions().env?.DYSFLOW_ACCESS_PASSWORD).toBe("secret-pass");
   });
 
+  // #1918: the COM shutdown trace is written by the PowerShell side, so the
+  // variable has to survive the child env construction. Without the allowlist
+  // entry the trace file stays empty and the whole diagnosis is blind.
+  it("forwards the #1918 COM close trace variable to the child process when it is set", async () => {
+    const saved = process.env.DYSFLOW_TRACE_COM_CLOSE;
+    process.env.DYSFLOW_TRACE_COM_CLOSE = "C:\\Temp\\com-close-trace.log";
+
+    try {
+      await spawnPowerShellProcess({
+        args: ["-Command", "exit 0"],
+        timeoutMs: 5_000,
+      });
+
+      expect(spawnOptions().env?.DYSFLOW_TRACE_COM_CLOSE).toBe("C:\\Temp\\com-close-trace.log");
+    } finally {
+      if (saved === undefined) {
+        delete process.env.DYSFLOW_TRACE_COM_CLOSE;
+      } else {
+        process.env.DYSFLOW_TRACE_COM_CLOSE = saved;
+      }
+    }
+  });
+
+  it("does not forward the #1918 COM close trace variable when it is unset", async () => {
+    const saved = process.env.DYSFLOW_TRACE_COM_CLOSE;
+    delete process.env.DYSFLOW_TRACE_COM_CLOSE;
+
+    try {
+      await spawnPowerShellProcess({
+        args: ["-Command", "exit 0"],
+        timeoutMs: 5_000,
+      });
+
+      expect(spawnOptions().env).toBeDefined();
+      expect(spawnOptions().env?.DYSFLOW_TRACE_COM_CLOSE).toBeUndefined();
+    } finally {
+      if (saved !== undefined) {
+        process.env.DYSFLOW_TRACE_COM_CLOSE = saved;
+      }
+    }
+  });
+
   it("does not inject undefined string values for allowlisted keys absent from process.env", async () => {
     const saved = process.env.COMPUTERNAME;
     delete process.env.COMPUTERNAME;

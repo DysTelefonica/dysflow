@@ -565,6 +565,7 @@ function Open-CanonicalAccess {
                 }
             } catch { Write-Debug "Open-CanonicalAccess: AutomationSecurity restore after failed open threw: $_" }
 
+            Write-ComCloseTrace -Step "OpenFailedQuit" -OwnedPid $ownedPid
             try { $access.Quit(2) } catch { Write-Debug "Open-CanonicalAccess: Quit after failed open threw: $_" }
             try {
                 if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
@@ -686,6 +687,19 @@ function Get-NullPidCloseNotice {
         "handle via the Running Object Table; other Access instances and other dysflow operations are unaffected."
 }
 
+# #1918: optional shutdown trace. Active only when DYSFLOW_TRACE_COM_CLOSE names a file;
+# it records step order and the owned PID, and never changes what the teardown does.
+function Write-ComCloseTrace {
+    [CmdletBinding()]
+    Param([string]$Step, $OwnedPid)
+    $tracePath = $env:DYSFLOW_TRACE_COM_CLOSE
+    if ([string]::IsNullOrEmpty($tracePath)) { return }
+    try {
+        $line = "{0} pid={1} step={2}" -f [DateTime]::UtcNow.ToString("o"), $OwnedPid, $Step
+        Add-Content -LiteralPath $tracePath -Value $line -Encoding utf8
+    } catch { Write-Debug "Write-ComCloseTrace: $_" }
+}
+
 function Close-CanonicalAccess {
     [CmdletBinding()]
     Param(
@@ -707,11 +721,18 @@ function Close-CanonicalAccess {
 
     $ownedPidKilled = $false
 
+    # #1918: "Begin" marks the moment the teardown entered. Without it, a missing
+    # "CloseCurrentDatabase" line is ambiguous: the step was never reached, or the
+    # teardown hung before it could be recorded.
+    Write-ComCloseTrace -Step "Begin" -OwnedPid $ownedPid
+
     try {
         # Step 2: close the database (ignore if no db was opened or already closed)
+        Write-ComCloseTrace -Step "CloseCurrentDatabase" -OwnedPid $ownedPid
         try { $access.CloseCurrentDatabase() } catch { Write-Debug "Close-CanonicalAccess: CloseCurrentDatabase threw: $_" }
 
         # Step 3: quit the application
+        Write-ComCloseTrace -Step "Quit" -OwnedPid $ownedPid
         try { $access.Quit(2) } catch { Write-Debug "Close-CanonicalAccess: Quit threw: $_" }
     } finally {
         # Restore AutomationSecurity regardless of Quit outcome
@@ -724,12 +745,14 @@ function Close-CanonicalAccess {
         # Step 4: release the COM callable wrapper
         try {
             if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
+                Write-ComCloseTrace -Step "FinalReleaseComObject" -OwnedPid $ownedPid
                 [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access) | Out-Null
             }
         } catch { Write-Debug "Close-CanonicalAccess: FinalReleaseComObject threw: $_" }
 
         # Step 5: GC BEFORE kill — release RCWs so Quit can complete and file handles free
         try {
+            Write-ComCloseTrace -Step "GC" -OwnedPid $ownedPid
             [GC]::Collect()
             [GC]::WaitForPendingFinalizers()
         } catch { Write-Debug "Close-CanonicalAccess: GC threw: $_" }
@@ -737,6 +760,7 @@ function Close-CanonicalAccess {
         # --- Kill logic ---------------------------------------------------
         if ($null -ne $ownedPid) {
             # Owned PID: kill synchronously (Stop-AccessPidAndWait has taskkill last-resort).
+            Write-ComCloseTrace -Step "KillOwnedPid" -OwnedPid $ownedPid
             $killed = & $KillPidAction $ownedPid
             $ownedPidKilled = [bool]$killed
         } else {

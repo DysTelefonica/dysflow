@@ -133,6 +133,10 @@ export const POWERSHELL_SYSTEM_ENV_KEYS = [
   "HOMEPATH",
   "HOME",
   "USER",
+  // #1918: opt-in diagnostic. When the parent process sets it, the child
+  // PowerShell writes a COM shutdown trace to that path. Unset means no trace,
+  // so the default behaviour of every runtime is unchanged.
+  "DYSFLOW_TRACE_COM_CLOSE",
 ] as const;
 
 function buildChildEnv(override?: Record<string, string | undefined>) {

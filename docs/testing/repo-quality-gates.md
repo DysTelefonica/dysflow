@@ -60,6 +60,21 @@ cancelling an active Access operation.
 A maintainer can also start the same battery with `workflow_dispatch`, for
 example to prove a fix against real Access on `main` before tagging.
 
+The same run also collects the crash evidence of that run (#1918).
+
+Every COM session teardown appends its step order and its owned PID to
+`%RUNNER_TEMP%\dysflow-com-close-trace.log`.
+
+`scripts/collect-access-crash-events.ps1` exports the Application log entries
+(event id 1000) of the crashed processes as normalized lines, with a UTC
+timestamp and a decimal PID.
+
+Both files are uploaded as the `access-com-crash-evidence-<run id>` artifact,
+so a teardown trace and the crash of the same process join on that PID.
+
+The trace is off unless `DYSFLOW_TRACE_COM_CLOSE` names a file, so every other
+run and every other runtime is unaffected.
+
 The job stays restricted to `refs/heads/main`, so pull-request and fork code
 never reaches the self-hosted runner of this public repository.
 
