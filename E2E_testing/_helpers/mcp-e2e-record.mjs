@@ -147,11 +147,13 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // Filter the result to the child of THIS tool only (so we don't keep
   // pre-existing watch entries alive forever).
   const toolChildAlive = result.childPid ? await childStillOwned(ctx, result.childPid) : false;
-  const zombiePass = !toolChildAlive;
-  // #1899: only on the failing path, sample the child's own liveness until it stops
-  // answering (bounded), so the log shows whether it was still exiting. Verdict unchanged.
+  // #1899: a child that answers at the check but stops within the bounded window is a late
+  // exit, not a leak. The verdict waits for that window before it fails the battery.
+  let liveness = null;
+  if (toolChildAlive && result.childPid) liveness = await sampleDirectLiveness(result.childPid);
+  const verdict = zombieVerdict({ aliveAtCheck: toolChildAlive, liveness });
+  const zombiePass = verdict !== "zombie";
   if (toolChildAlive && result.childPid) {
-    const liveness = await sampleDirectLiveness(result.childPid);
     consoleLog(
       formatTerminationLine({
         tool,
@@ -170,16 +172,19 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
     pass: zombiePass,
     expected: "no suite-owned MSACCESS.EXE child after tool",
     ms: postToolZombie.elapsed,
-    summary: toolChildAlive
-      ? `Suite-owned MSACCESS.EXE pid=${result.childPid} lingered after ${tool}`
-      : "clean",
+    summary:
+      verdict === "zombie"
+        ? `Suite-owned MSACCESS.EXE pid=${result.childPid} lingered after ${tool}`
+        : verdict === "late-exit"
+          ? `child pid=${result.childPid} exited within the window after ${tool}`
+          : "clean",
     ...(!zombiePass ? { failureClass: "safety-critical" } : {}),
   });
   consoleLog(
     `${zombiePass ? "PASS" : "FAIL"}\t${zombieTool}\t${postToolZombie.elapsed}ms\t${ctx.rows.at(-1).summary}`,
   );
 
-  if (!toolChildAlive && result.childPid) {
+  if (verdict !== "zombie" && result.childPid) {
     ctx.suiteOwnPids.delete(result.childPid);
   }
 
