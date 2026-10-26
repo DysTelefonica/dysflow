@@ -42,7 +42,7 @@ External database reads require `allowExternalAccessPath:true`; source/FormIR to
 | `toolsVisible` | Legacy advertised count for the active `toolSurface`. |
 | `toolInventory` | Unambiguous `{ callable, advertised, surface }` counts. |
 | `preferredAgentWorkflows` | Phase routing, optionally filtered by `phase`. |
-| `humanCompilePending` | Manual compile gate. |
+| `humanCompilePending` | Compile reminder. It refuses no call. |
 
 `get_capabilities({ view: "compact" })` always carries the base identity/gates,
 `toolInventory`, and by default compact `tools`, `sharedBlockSupport`,
@@ -65,7 +65,7 @@ The full/selective capability response carries:
 | `documentationBundle` | Installed diagnostic-doc availability (`errorCodesMd`, `hresultGuideMd`) and the bundle version. Treat missing or version-skewed diagnostics as an installation defect before following local remediation docs. |
 | `writeClassToolsPermitted` | The allowlist of tools capable of mutating state. Cross-reference before documenting any tool name. |
 | `procedureStrictMode` | Whether the procedure gate actually enforces `allowedProcedures`. The gate is default-allow, so a populated `allowedProcedures` with `procedureStrictMode: false` is documentation, not a boundary — `run_vba` and stdio `test_vba` will run a procedure outside the list. Never infer enforcement from a non-empty `allowedProcedures` alone. `undefined` means the value is resolved per input and the startup snapshot cannot state it; treat that as "unknown here", never as `false`. HTTP ignores the flag and always enforces a populated list. |
-| `humanCompilePending` | Whether the human has compiled the project since last persistence. Test runs block on it. |
+| `humanCompilePending` | A reminder, not a gate. It turns `true` after a save-only persistence (`import_modules`, `import_all`, `delete_module`) and back to `false` after a `verify_code` with `actionableOk:true` on the same frontend. Dysflow cannot observe a compile in Access, so `false` never proves the project was compiled. The state is per MCP process. While it is `true`, successful `import_*`, `delete_module`, `test_vba` and `run_vba` results carry a `humanCompileReminder` field; no tool refuses a call because of it (`src/adapters/mcp/result-translation.ts`, `withHumanCompileReminder`). Compiling before a GREEN run is a team convention (HR-1 of `dysflow-arnes`). |
 | `writeExecutionPolicy` | Active risk-based write execution policy. `"safe-by-default"` (default) or `"developer"` (zero-friction routine dev loop). Resolved from `.dysflow/project.json` `capabilities.writeExecutionPolicy`. |
 | `effectiveDryRunDefault` | Per-tool effective plan default under the active policy. Keys are contract tool names; values are booleans. Check it with `canonicalCommitFlag` and pass explicit `apply` intent. |
 | `projectIdResolution` | Resolved project identity for the current `cwd`: `{ projectId, outcome }`. `outcome` is `"resolved"` when a unique project config was found, otherwise `"unresolved"`. Use this together with `projectConfig` to confirm the active target before any write-class call. |

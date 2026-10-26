@@ -78,9 +78,9 @@ documentation: every compiled procedure the write gate permits will run.
 
 The write gate is the authoritative protection: `writesProcess.enabled`,
 `writesProject.allowWrites`, and `writeExecutionPolicy` decide whether a
-write-class call executes at all, and `humanCompilePending` covers stale
-p-code. `run_vba` was the one exception — as an alias tool it never reached
-`createDispatchTool`, where that gate lives, so it ran compiled VBA with writes
+write-class call executes at all, and the `humanCompilePending` reminder flags
+stale p-code without refusing the call. `run_vba` was the one exception — as an
+alias tool it never reached `createDispatchTool`, where that gate lives, so it ran compiled VBA with writes
 disabled and its allowlist was the only backend control. That is fixed in the
 same change that made the procedure gate opt-in: `run_vba` now runs the write
 gate ahead of the procedure gate. Relaxing the allowlist is only safe because
