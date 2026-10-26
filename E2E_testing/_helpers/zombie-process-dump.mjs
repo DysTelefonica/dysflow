@@ -70,8 +70,9 @@ export function formatZombieReport({ rows, childPid }) {
     const parent = r ? r.ParentProcessId : "?";
     const name = r ? r.Name : "missing";
     const cmd = r && r.CommandLine ? r.CommandLine : "";
+    const created = r && r.CreationDate ? r.CreationDate : "unknown";
     lines.push(
-      `ZOMBIE pid=${pid} parent=${parent} name=${name} role=${role} chain=${chainOf(pid)} cmd=${cmd}`,
+      `ZOMBIE pid=${pid} parent=${parent} name=${name} role=${role} chain=${chainOf(pid)} created=${created} cmd=${cmd}`,
     );
   }
   return lines;

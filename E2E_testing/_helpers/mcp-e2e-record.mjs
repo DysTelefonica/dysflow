@@ -7,7 +7,11 @@
 
 import { execSync, spawnSync } from "node:child_process";
 import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
-import { formatTerminationLine, summarizeLiveness } from "./zombie-liveness.mjs";
+import {
+  classifyChildLiveness,
+  formatTerminationLine,
+  summarizeLiveness,
+} from "./zombie-liveness.mjs";
 import { formatZombieReport } from "./zombie-process-dump.mjs";
 //
 // The hard rules pinned here:
@@ -142,7 +146,7 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   const postToolZombie = await ctx.waitForNoOwnPids(1000, 100);
   // Filter the result to the child of THIS tool only (so we don't keep
   // pre-existing watch entries alive forever).
-  const toolChildAlive = result.childPid ? ctx.isOwnPidAlive(result.childPid) : false;
+  const toolChildAlive = result.childPid ? await childStillOwned(ctx, result.childPid) : false;
   const zombiePass = !toolChildAlive;
   // #1899: only on the failing path, sample the child's own liveness until it stops
   // answering (bounded), so the log shows whether it was still exiting. Verdict unchanged.
@@ -412,7 +416,7 @@ function dumpZombieDiagnostics(tool, childPid) {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress -Depth 2",
+      "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress -Depth 2",
     ],
     { encoding: "utf8", windowsHide: true, timeout: 20000, maxBuffer: 64 * 1024 * 1024 },
   );
@@ -448,4 +452,34 @@ async function sampleDirectLiveness(pid) {
     await new Promise((resolve) => setTimeout(resolve, LIVENESS_STEP_MS));
   }
   return summarizeLiveness(samples);
+}
+
+// #1899: a live PID is the call's child only if its image is the wrapper or the MCP
+// node process. Probe the PID directly first; the image lookup runs only when it answers
+// (the failing path), so the healthy path pays nothing extra.
+async function childStillOwned(ctx, pid) {
+  let answers = true;
+  try {
+    process.kill(pid, 0);
+  } catch {
+    answers = false;
+  }
+  if (!answers) return ctx.isOwnPidAlive(pid);
+  const imageName = imageNameOfPid(pid);
+  return classifyChildLiveness({ alive: true, imageName }) === "alive";
+}
+
+function imageNameOfPid(pid) {
+  const ps = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `(Get-CimInstance Win32_Process -Filter "ProcessId=${Number(pid)}").Name`,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 10000 },
+  );
+  const name = (ps.stdout || "").trim();
+  return ps.status === 0 && name.length > 0 ? name : null;
 }

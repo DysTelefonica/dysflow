@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyChildLiveness,
   formatTerminationLine,
   summarizeLiveness,
 } from "../../E2E_testing/_helpers/zombie-liveness.mjs";
+
+describe("issue #1899: a live PID counts as the call's child only if its image is the call's wrapper", () => {
+  it("reports dead when the probe fails, whatever the image", () => {
+    expect(classifyChildLiveness({ alive: false, imageName: "conhost.exe" })).toBe("dead");
+  });
+
+  it("reports alive for the shell wrapper and the MCP node process the harness spawns", () => {
+    expect(classifyChildLiveness({ alive: true, imageName: "cmd.exe" })).toBe("alive");
+    expect(classifyChildLiveness({ alive: true, imageName: "node.exe" })).toBe("alive");
+  });
+
+  it("reports reused for a live PID whose image is not the wrapper (PID reuse, run 40286564767)", () => {
+    expect(classifyChildLiveness({ alive: true, imageName: "conhost.exe" })).toBe("reused");
+  });
+
+  it("stays alive when the image cannot be read (fail closed)", () => {
+    expect(classifyChildLiveness({ alive: true, imageName: null })).toBe("alive");
+  });
+});
 
 describe("issue #1899: liveness samples and termination record for a failing zombie-check", () => {
   it("reports the first instant the child stops answering", () => {
