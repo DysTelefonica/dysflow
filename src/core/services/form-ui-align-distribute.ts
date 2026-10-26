@@ -389,16 +389,33 @@ function cloneIr(ir: FormIR): FormIR {
 
 /**
  * Issue #1868 — Access stores positions as whole twips. Write the rounded
- * value to the primary key and to its LayoutCached copy, when the control
- * carries one, so the form file stays internally consistent.
+ * value to the primary key and to the LayoutCached copies the control
+ * carries, so the form file stays internally consistent. LayoutCachedLeft /
+ * LayoutCachedTop cache the position itself; LayoutCachedWidth /
+ * LayoutCachedHeight cache the far edge (Left + Width, Top + Height).
  */
-function writeAxisValue(node: FormNode, key: string, value: number): void {
-  const whole = String(Math.round(value));
-  upsertScalar(node, key, whole);
-  const cached = `LayoutCached${key}`;
-  if (node.entries.some((entry) => entry.kind === "scalar" && entry.key === cached)) {
-    upsertScalar(node, cached, whole);
+function writeAxisValue(node: FormNode, key: "Left" | "Top", value: number): void {
+  const whole = Math.round(value);
+  upsertScalar(node, key, String(whole));
+  if (hasScalar(node, `LayoutCached${key}`)) {
+    upsertScalar(node, `LayoutCached${key}`, String(whole));
   }
+  const extentKey = key === "Left" ? "Width" : "Height";
+  const extent = Number(scalarValue(node, extentKey));
+  if (hasScalar(node, `LayoutCached${extentKey}`) && Number.isFinite(extent)) {
+    upsertScalar(node, `LayoutCached${extentKey}`, String(whole + Math.round(extent)));
+  }
+}
+
+function hasScalar(node: FormNode, key: string): boolean {
+  return scalarValue(node, key) !== undefined;
+}
+
+function scalarValue(node: FormNode, key: string): string | undefined {
+  const entry = node.entries.find(
+    (candidate): candidate is ScalarEntry => candidate.kind === "scalar" && candidate.key === key,
+  );
+  return entry?.value.trim();
 }
 
 function upsertScalar(node: FormNode, key: string, value: string): void {

@@ -58,6 +58,33 @@ describe("align / distribute write integer twips (#1868)", () => {
     expect(result.source).not.toMatch(/LayoutCachedLeft =1425\b/);
   });
 
+  it("moves LayoutCachedWidth with Left, since it caches the right edge (Left + Width)", () => {
+    const ir = parseFormTxt(
+      FORM.replaceAll(
+        /LayoutCachedLeft =(\d+)\r\n/g,
+        (_line, left: string) =>
+          `LayoutCachedLeft =${left}\r\n            LayoutCachedWidth =${Number(left) + 1200}\r\n`,
+      ),
+    );
+    const result = alignControls(ir, ["Nombre", "DESCRIPCION"], "left");
+
+    expect(result.source.match(/LayoutCachedWidth =2627\b/g)).toHaveLength(2);
+  });
+
+  it("moves LayoutCachedHeight with Top, since it caches the bottom edge (Top + Height)", () => {
+    const ir = parseFormTxt(
+      FORM.replaceAll(
+        /LayoutCachedTop =(\d+)\r\n/g,
+        (_line, top: string) =>
+          `LayoutCachedTop =${top}\r\n            LayoutCachedHeight =${Number(top) + 300}\r\n`,
+      ),
+    );
+    const result = alignControls(ir, ["Nombre", "DESCRIPCION"], "top");
+
+    expect(result.source.match(/LayoutCachedTop =1250\b/g)).toHaveLength(2);
+    expect(result.source.match(/LayoutCachedHeight =1550\b/g)).toHaveLength(2);
+  });
+
   it("distribute writes integer Left values and keeps LayoutCachedLeft in step", () => {
     // Gap of 7 twips across 3 controls leaves a non-integer middle start.
     const three = parseFormTxt(
