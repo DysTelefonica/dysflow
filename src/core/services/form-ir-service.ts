@@ -27,7 +27,8 @@ import type {
 import {
   KNOWN_ADDABLE_PROPERTY_NAMES,
   KNOWN_FORM_PROPERTY_TYPES,
-  RAW_TOKEN_PROPERTY_NAMES,
+  RAW_NUMBER_PROPERTY_NAMES,
+  RAW_TOGGLE_PROPERTY_NAMES,
   runtimeKindOf,
   validateFormPropertyValue,
 } from "./form-ir-property-types.js";
@@ -604,12 +605,16 @@ function isQuotedLiteral(value: string): boolean {
   return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
 }
 
+function isNumericToken(value: string): boolean {
+  return /^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|&h[0-9a-f]+)$/i.test(value.trim());
+}
+
+function isNotDefaultToken(value: string): boolean {
+  return /^notdefault$/i.test(value.trim());
+}
+
 function isRawToken(value: string): boolean {
-  const trimmed = value.trim();
-  return (
-    /^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|&h[0-9a-f]+)$/i.test(trimmed) ||
-    /^(?:notdefault|true|false)$/i.test(trimmed)
-  );
+  return isNumericToken(value) || /^(?:notdefault|true|false)$/i.test(value.trim());
 }
 
 function normalizeMutationValue(value: string | number | boolean, preserveTokens = false): string {
@@ -621,21 +626,27 @@ function normalizeMutationValue(value: string | number | boolean, preserveTokens
 }
 
 /**
- * Issue #1868 — how a property's value is written: as a raw `token`
- * (numbers, toggles, enums, colours) or as quoted `text`. The type table
- * decides first; a property it does not list takes the shape of the value
- * the control already stores. `undefined` means neither source can tell.
+ * Issue #1868 — how a property's value is written: as a raw `number`
+ * (twips, integers, enums, colours), a raw `toggle` (`NotDefault` or a
+ * number), or quoted `text`. The type tables decide first; a property they
+ * do not list takes the shape of the value the control already stores.
+ * `undefined` means no source can tell.
  */
-function valueShapeOf(node: FormNode, key: string): "token" | "text" | "date" | undefined {
+function valueShapeOf(
+  node: FormNode,
+  key: string,
+): "number" | "toggle" | "text" | "date" | undefined {
   const known = KNOWN_FORM_PROPERTY_TYPES.get(key);
   if (known === "date") return "date";
   if (known === "string") return "text";
-  if (known !== undefined || RAW_TOKEN_PROPERTY_NAMES.has(key)) return "token";
+  if (known === "boolean" || RAW_TOGGLE_PROPERTY_NAMES.has(key)) return "toggle";
+  if (known !== undefined || RAW_NUMBER_PROPERTY_NAMES.has(key)) return "number";
   const existing = node.entries.find(
     (entry): entry is ScalarEntry => entry.kind === "scalar" && entry.key === key,
   );
   if (existing === undefined) return undefined;
-  return isQuotedLiteral(existing.value) ? "text" : "token";
+  if (isQuotedLiteral(existing.value)) return "text";
+  return isNotDefaultToken(existing.value) ? "toggle" : "number";
 }
 
 /**
@@ -671,9 +682,18 @@ function serializeTypedValue(
   }
   if (typeof value !== "string") return normalizeMutationValue(value);
 
-  if (shape === "token") {
-    if (!isRawToken(value)) {
-      reject(expectedTypeOf(key), "the property takes a number or toggle token, not text.");
+  // A bare true/false is not a SaveAsText value: LoadFromText rejects it
+  // ("Esperado: Valor"), and an enum rejects NotDefault as unsuitable.
+  if (shape === "toggle") {
+    if (isNotDefaultToken(value)) return normalizeMutationValue(true);
+    if (!isNumericToken(value)) {
+      reject(expectedTypeOf(key), "the property takes NotDefault or a number.");
+    }
+    return value.trim();
+  }
+  if (shape === "number") {
+    if (!isNumericToken(value)) {
+      reject(expectedTypeOf(key), "the property takes a number.");
     }
     if (wholeTwips && !/^[+-]?\d+$/.test(value.trim())) {
       reject(expectedTypeOf(key), "the property takes a whole number.");

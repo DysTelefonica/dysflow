@@ -114,7 +114,36 @@ describe("setProperties writes each value by its property type (#1868)", () => {
     });
 
     expect(result.source).toMatch(/ListRows =8\b/);
-    expect(result.source).toMatch(/FontItalic =NotDefault\b/);
+    expect(result.source).toMatch(/FontItalic = ?NotDefault\b/);
+  });
+
+  // A real LoadFromText run rejected `TextAlign =true` ("Esperado: Valor")
+  // and `TextAlign =NotDefault` ("Valor no adecuado para esta propiedad").
+  it.each(["true", "NotDefault"])("rejects the toggle token %s for an enum property", (value) => {
+    expect(() =>
+      setProperties(parseFormTxt(FORM), {
+        controlName: "Nombre",
+        properties: { TextAlign: value },
+      }),
+    ).toThrow(expect.objectContaining({ code: "FORM_PROPERTY_VALUE_INVALID" }));
+  });
+
+  it("rejects a bare true for a toggle property, since Access cannot parse it", () => {
+    expect(() =>
+      setProperties(parseFormTxt(FORM), {
+        controlName: "Nombre",
+        properties: { Visible: "true" },
+      }),
+    ).toThrow(expect.objectContaining({ code: "FORM_PROPERTY_VALUE_INVALID" }));
+  });
+
+  it("writes NotDefault for a toggle property", () => {
+    const result = setProperties(parseFormTxt(FORM), {
+      controlName: "Nombre",
+      properties: { Visible: "NotDefault" },
+    });
+
+    expect(result.source).toMatch(/Visible = ?NotDefault\b/);
   });
 
   it("quotes plain text for a property the file does not carry yet", () => {
