@@ -84,7 +84,9 @@ The script turns them into `### Changes` notes and preserves one physical bullet
 
 A non-resume `release-prepare` run (`-Bump` or `-Version`) requires a JSON report
 produced by `skills/dysflow-codegraph-update/assets/scripts/Invoke-DysflowSemanticAudit.ps1`
-for the commit you are releasing. Without it the script stops before changing any file.
+for the commit you are releasing.
+
+Without it the script stops before changing any file.
 
 1. Start from a clean working tree on the commit to release. The report is bound to
    that HEAD and to a clean repository, so any later commit makes it stale; generate it
@@ -95,8 +97,10 @@ for the commit you are releasing. Without it the script stops before changing an
 
    `-Refresh` re-captures the runtime through the MCP (it needs a working dysflow
    runtime). `-CapturesDir` keeps the captures out of the tree; without it they go to
-   `%TEMP%\dysflow-semantic-audit`. `-OutputJson` writes the report. `-FailOnRuntimeGap`
-   makes a runtime gap exit with code 2. Exit code 1 means drift.
+   `%TEMP%\dysflow-semantic-audit`.
+
+   `-OutputJson` writes the report. `-FailOnRuntimeGap` makes a runtime gap exit with
+   code 2. Exit code 1 means drift.
 3. Check the report before using it: `repositoryHead` equals `git rev-parse HEAD`,
    `repositoryClean` is `true`, and `DRIFT` and `findings` are empty.
 4. Pass the report to the preparation run:
