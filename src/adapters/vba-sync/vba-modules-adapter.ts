@@ -28,6 +28,7 @@ import {
   transactionalWrite,
 } from "../../core/services/transactional-write.js";
 import {
+  buildDeleteApplyResult,
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
@@ -973,6 +974,15 @@ export class VbaModulesAdapter {
       resolvedExportTarget?.ok ? resolvedExportTarget.data : undefined,
     );
     if (!importResult.ok) return importResult;
+
+    // Issue #1920 — shape the applied delete into its contract envelope; the
+    // raw runner payload varies with the batch size.
+    if (toolName === "delete_module") {
+      importResult = {
+        ...importResult,
+        data: buildDeleteApplyResult(importResult.data, mapping.moduleNames(effectiveParams)),
+      };
+    }
 
     // REQ-003 (issue #1053) — wire the curated ComboBox/ListBox control-property
     // allow-list into the export pipeline. After Access writes each `.form.txt`

@@ -137,6 +137,47 @@ export function buildDeletePlanResult(options: BuildDeletePlanResultOptions): De
   };
 }
 
+/**
+ * Issue #1920 — applied-result shape for `delete_module`. The runner emits one
+ * entry per module (`{module, status, deleted, kind}`), where `deleted` is the
+ * removed object NAME, and `ConvertTo-Json` unwraps a one-module batch into a
+ * bare object. Returned as-is, that bare object put `deleted: "<name>"` at the
+ * top level and broke the `deleted: string[]` result contract after Access had
+ * already been mutated. This builder gives every batch size one envelope:
+ * `deleted` lists the requested module names (matching `modulesPlanned` on the
+ * plan path) and `results` keeps the runner's per-module evidence verbatim.
+ */
+export type DeleteApplyResult = {
+  operation: "delete_module";
+  dryRun: false;
+  willModifyAccess: true;
+  deleted: string[];
+  modulesCount: number;
+  results: Record<string, unknown>[];
+};
+
+export function buildDeleteApplyResult(
+  runnerPayload: unknown,
+  requestedModules: readonly string[],
+): DeleteApplyResult {
+  const entries = (Array.isArray(runnerPayload) ? runnerPayload : [runnerPayload]).filter(
+    (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
+  );
+  const deletedFromRunner = entries
+    .filter((entry) => entry.status === "ok")
+    .map((entry) => stringValue(entry.module) ?? stringValue(entry.deleted))
+    .filter((name): name is string => name !== undefined);
+  const deleted = deletedFromRunner.length > 0 ? deletedFromRunner : [...requestedModules];
+  return {
+    operation: "delete_module",
+    dryRun: false,
+    willModifyAccess: true,
+    deleted,
+    modulesCount: deleted.length,
+    results: entries,
+  };
+}
+
 type ParseArgsJsonResult = { ok: true; value: unknown[] } | { ok: false; error: string };
 
 export function parseArgsJson(value: unknown): ParseArgsJsonResult {
