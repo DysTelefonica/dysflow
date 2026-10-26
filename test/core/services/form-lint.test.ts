@@ -376,6 +376,85 @@ describe("Rule C: bare-function-call-with-parens", () => {
     const diag = result.diagnostics.find((d) => d.rule === "bare-function-call-with-parens");
     expect(diag).toBeUndefined();
   });
+
+  // Issue #1915 — the rule evaluates logical lines: a physical line that
+  // continues the previous one (previous line ends with ` _`) is part of an
+  // expression, never a bare call statement.
+  function bareCallLines(cls: string): number[] {
+    const ir = parseFormTxt("Version = 21.00\nBegin Form\nEnd\n", { name: "Form_Test" });
+    return lintFormCode({
+      formName: "Form_Test",
+      formTxtPath: "forms/Form_Test.form.txt",
+      ir,
+      clsSource: cls,
+      clsPath: "forms/Form_Test.cls",
+    })
+      .diagnostics.filter((d) => d.rule === "bare-function-call-with-parens")
+      .map((d) => d.line);
+  }
+
+  it("does NOT diagnose continuation lines of a multi-line concatenation (#1915)", () => {
+    const cls = [
+      "Private Sub Fill()",
+      '    lst.AddItem "a" & _',
+      '        Replace(x, ";", ":") & _',
+      '        Nz(y, "")',
+      "End Sub",
+    ].join("\r\n");
+
+    expect(bareCallLines(cls)).toEqual([]);
+  });
+
+  it("does NOT diagnose continuation lines of a multi-line If condition (#1915)", () => {
+    const cls = [
+      "Private Sub Check()",
+      '    If Nz(Me.ComboCodigo, "") = "" And Nz(Me.IDExpediente, "") = "" _',
+      '                    And Nz(Me.EstadoNC, "") = "" And Nz(Me.Descripcion, "") = "" _',
+      "                    And _",
+      '                    Nz(Me.Notas, "") = "" Then',
+      "        Exit Sub",
+      "    End If",
+      "End Sub",
+    ].join("\n");
+
+    expect(bareCallLines(cls)).toEqual([]);
+  });
+
+  it("still diagnoses a true bare call on its own logical line next to a multi-line statement (#1915)", () => {
+    const cls = [
+      "Private Sub Fill()",
+      '    lst.AddItem "a" & _',
+      '        Replace(x, ";", ":")',
+      '    Replace(x, ";", ":")',
+      "End Sub",
+    ].join("\n");
+
+    expect(bareCallLines(cls)).toEqual([4]);
+  });
+
+  it("still diagnoses a bare call that is the first line of a multi-line statement (#1915)", () => {
+    const cls = [
+      "Private Sub Fill()",
+      '    FormInteraction_Mensaje("hola", _',
+      "        1)",
+      "End Sub",
+    ].join("\n");
+
+    expect(bareCallLines(cls)).toEqual([2]);
+  });
+
+  it("does NOT treat ' _' inside a string literal as a line continuation (#1915)", () => {
+    const cls = [
+      "Private Sub Fill()",
+      '    s = "ends with _"',
+      '    Replace(x, ";", ":")',
+      '    t = "a _" ',
+      '    Nz(y, "")',
+      "End Sub",
+    ].join("\n");
+
+    expect(bareCallLines(cls)).toEqual([3, 5]);
+  });
 });
 
 // ---------------------------------------------------------------------------

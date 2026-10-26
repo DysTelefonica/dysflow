@@ -355,13 +355,20 @@ function looksLikeListBoxName(name: string): boolean {
  *   - Lines containing `=` before the identifier (assignment / `If … =` / `Debug.Print … =`).
  *   - Property accesses `Foo.Bar(args)` (matched by `.` between identifier and `(`).
  *   - `Debug.Print`, `MsgBox`, `Print` (intrinsics used as statements).
+ *   - Continuation lines (#1915): a physical line whose predecessor ends with
+ *     ` _` is part of an expression, never the start of a statement. The first
+ *     physical line of a multi-line statement is still evaluated.
  */
 function ruleBareFunctionCallWithParens(input: LintFormInput): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   const intrinsics = new Set(["Debug.Print", "MsgBox", "Print", "Debug.Assert"]);
   const lines = input.clsSource.split(/\r?\n/);
+  let continuesPrevious = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i] ?? "";
+    const isContinuation = continuesPrevious;
+    continuesPrevious = endsWithLineContinuation(raw);
+    if (isContinuation) continue;
     const line = raw.trim();
     if (line === "" || line.startsWith("'")) continue;
     if (line.startsWith("Call ")) continue;
@@ -392,6 +399,24 @@ function ruleBareFunctionCallWithParens(input: LintFormInput): LintDiagnostic[] 
     });
   }
   return diagnostics;
+}
+
+/**
+ * True when a physical VBA line ends with the ` _` line-continuation marker.
+ * String-aware: a `_` inside a string literal is text, not a continuation
+ * (VBA string literals never span physical lines). A comment that ends with
+ * ` _` continues the comment, so the marker counts there too.
+ */
+function endsWithLineContinuation(raw: string): boolean {
+  const line = raw.trimEnd();
+  if (!/(?:^|\s)_$/.test(line)) return false;
+  let inString = false;
+  for (let i = 0; i < line.length - 1; i++) {
+    const ch = line[i];
+    if (ch === '"') inString = !inString;
+    else if (ch === "'" && !inString) return true;
+  }
+  return !inString;
 }
 
 // ---------------------------------------------------------------------------
