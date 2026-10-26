@@ -78,6 +78,7 @@ Details and every field: `references/bootstrap-and-capabilities.md`.
 | Response envelope and `structuredContent` | `references/transport-and-envelopes.md` |
 | `verify_code` fields and the committed ERD | `references/schema-and-verify.md` |
 | Form UI tools and source and binary sync | `references/form-ui-and-sync.md` |
+| Import order, retries, saves and exit codes; `Tag` values | `references/form-ui-and-sync.md` |
 | Facts to confirm before a call | `references/call-checks.md` |
 | What `test_vba` opens, and what `humanCompilePending` means | `references/test-runs.md` |
 | A typed error code | `references/error-codes.md` |

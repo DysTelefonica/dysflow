@@ -33,3 +33,28 @@ Use the three primitives directly. Do not script a whole-project round trip thro
 3. **Binary to source:** `export_modules({cwd, moduleNames, destinationRoot, mutateBinary:false, apply:true})` writes inside the project. For a folder outside the project, use `exportPath`: an external `destinationRoot` is refused with `OUTSIDE_PROJECT_ROOT`.
 
 Read the committed `.form.txt` and `.cls` files as evidence, never the database hashes.
+
+## `Tag` values in `.form.txt`
+
+`Tag` is an ordinary Access property. FormIR keeps it like any other property (`src/core/services/form-ir-property-types.ts`), and `lint_form_code` accepts `Me.Tag`. No dysflow tool reads a `Tag` value: the runner takes no marker such as `dryRun`, category or priority from it. The older team-skills `vba-access` partial said otherwise; that claim is stale (#1859). Test metadata lives in the manifest (`tests/*.json`), and `test_vba` selects by it through `filter`.
+
+The one place dysflow edits a JSON-looking `Tag` is the `dysflow migrate-dryrun --cwd <repo> (--dry-run | --apply | --undo <manifest>)` command. It rewrites the removed `dryRun` key to `apply` with the inverted value in `.bas`, `.cls` and `.form.txt` files (`src/core/services/dryrun-migration.ts`):
+
+```text
+Tag ="{""dryRun"": shouldPlan}"   ->   Tag ="{""apply"": Not (shouldPlan)}"
+```
+
+Inside a `.form.txt` string, `""` is the SaveAsText escape for one `"`.
+
+## Import orchestration contract
+
+`import_modules` and `import_all` follow one contract. The TypeScript core decides the passes, retries and saves (`src/core/services/vba-import-orchestration.ts`); PowerShell runs them against Access (`scripts/lib/dysflow-vba-import-transport.psm1`). The case matrix is `docs/architecture/vba-import-orchestration.md`.
+
+1. **Caller order is kept.** `modules[]` lists one entry per requested module, in the order of `moduleNames`.
+2. **Partial retry only after progress.** Only a multi-module import retries, only its failed modules, and only when the previous pass imported at least one module, up to `max(2, n)` passes. A single module, or a pass that imports nothing, ends at once with no retry.
+3. **Save-only persistence, never a compile.** The save runs once, after every module succeeds; a failed import saves nothing. A new standard or class module is saved by name with `DoCmd.Save`. A re-imported form or report is saved with `RunCommand(280)` (`acCmdSaveAllModules`), with a per-module `DoCmd.Save` fallback (`Save-VbaProjectModules` in `scripts/dysflow-vba-manager.ps1`). Stale: the old partial said `RunCommand(280)` also runs after a new module.
+4. **A save failure does not demote an `ok` module.** When the form or report save fails, every module keeps `status:"ok"` and `error:null`. The warning appears only as a runner status line; the MCP result has no field for it. Exception: when the named save of a new module fails, the whole call fails with `VBA_MANAGER_FAILED` and the `VBA_CREATED_MODULE_SAVE_FAILED:` prefix in `error.message`. Stale: the old partial said an `ok` module with a non-null `error` signals a save failure.
+5. **Typed codes at two levels.** A failed import returns `VBA_IMPORT_FAILED` as `error.code`. Each failed module carries its own code, such as `VB_NAME_MISMATCH` or the default `VBA_IMPORT_PHASE_FAILED`, with `phase` and `remediation`. Over MCP, the per-module entries are in the runner's `DYSFLOW_RESULT` line inside `error.details.stdout`. The codes are in `error-codes.md`.
+6. **Exit codes `0` and `1` only.** The runner exits `0` when the import succeeds and `1` when it fails; `error.details.exitCode` carries the value. Stale: the old partial also listed `2` (environment error) and `>2` (wrapper fault); the import path emits neither. Branch on `error.code`, not on the exit code.
+
+On success the result is `{ok:true, modules:[...]}`; `moduleNames:[]` returns an empty `modules` array.
