@@ -1,5 +1,13 @@
 name: CI
 
+# Cheap gate for every pull request and every push to main: lint, build and
+# the unit/spec suite on a hosted Linux runner. The Access E2E battery runs
+# only when a release tag is pushed (.github/workflows/release.yml).
+#
+# The job name `CI` is the single required status check on main.
+# scripts/release-prepare.ps1 polls this workflow (ci.yml) on the release SHA
+# before it pushes a tag.
+
 on:
   pull_request:
   push:
@@ -7,166 +15,16 @@ on:
       - main
 
 permissions:
-  actions: read
   contents: read
-  pull-requests: read
 
-# A superseded pull-request run proves nothing: the commit it validated will
-# never be merged. Cancelling it frees a Windows runner (billed at 2x) that
-# would otherwise finish a ~13-minute gate nobody reads. Pushes to main are
-# NOT cancelled — scripts/release-prepare.ps1 polls the CI conclusion for one
-# specific release SHA and refuses to tag on anything but `success`, so a
-# cancelled main run would abort a legitimate release.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  changes:
-    name: Classify changes
+  ci:
+    name: CI
     runs-on: ubuntu-latest
-    outputs:
-      code_required: ${{ steps.classify.outputs.code_required }}
-      windows_smoke_required: ${{ steps.classify.outputs.windows_smoke_required }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - id: classify
-        env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: node scripts/check-documentation-quality.mjs classify --base "$BASE" --head "$HEAD" --github-output "$GITHUB_OUTPUT"
-      # #1776: the branch-protection required context is the `quality` job's
-      # literal display name, and GitHub drops the matrix suffix when that job is
-      # skipped — so a docs-only pull request reports a name branch protection
-      # does not require, with every visible check green. This step runs on every
-      # pull request, including the ones that skip `quality`, and fails loudly
-      # when that name drifts from engines.node instead of breaking protection
-      # silently.
-      - name: Guard the required context against drift
-        run: node scripts/check-quality-gate-context.mjs
-
-  # A pull_request run checks GitHub's synthetic merge ref, not merely the
-  # branch head. When the eventual main commit identifies that same base/head
-  # pair and the PR's CI run is green, repeating the full Windows suite proves
-  # the same tree twice. Keep one cheap exact-main-SHA signal for releases,
-  # dependency freshness, and merge provenance instead.
-  #
-  # No branch protection or ruleset currently guards main (#1571), so every
-  # direct, ambiguous, or API-unverifiable push falls back to the full quality
-  # job below. An unavailable API saves no work; it never weakens the gate.
-  main-integrity:
-    name: Main integrity
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    outputs:
-      validated_pr_merge: ${{ steps.provenance.outputs.validated_pr_merge }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - id: provenance
-        name: Verify merged PR already passed CI
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -u
-          echo "validated_pr_merge=false" >> "$GITHUB_OUTPUT"
-
-          if ! commit_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA")"; then
-            echo "GitHub commit lookup unavailable; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          mapfile -t parents < <(jq -r '.parents[].sha' <<< "$commit_json")
-          if test "${#parents[@]}" -ne 2; then
-            echo "Direct or non-two-parent push; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if ! prs_json="$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls")"; then
-            echo "GitHub PR lookup unavailable; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          candidate="$(jq -c \
-            --arg merge "$GITHUB_SHA" \
-            --arg base "${parents[0]}" \
-            --arg head "${parents[1]}" \
-            '[.[] | select(
-              .merged_at != null and
-              .merge_commit_sha == $merge and
-              .base.ref == "main" and
-              .base.sha == $base and
-              .head.sha == $head
-            )] | if length == 1 then .[0] else empty end' <<< "$prs_json")"
-          if test -z "$candidate"; then
-            echo "No unique PR matches the merge/base/head identities; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          head_sha="$(jq -r '.head.sha' <<< "$candidate")"
-          pr_number="$(jq -r '.number' <<< "$candidate")"
-          if ! runs_json="$(gh api --method GET \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
-            -f event=pull_request -f head_sha="$head_sha" -f status=completed -f per_page=100)"; then
-            echo "GitHub Actions lookup unavailable; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          latest="$(jq -c --arg head "$head_sha" \
-            '[.workflow_runs[] | select(
-              .name == "CI" and
-              .event == "pull_request" and
-              .head_sha == $head
-            )] | sort_by(.created_at) | reverse | first // empty' <<< "$runs_json")"
-          if test -z "$latest" || test "$(jq -r '.conclusion' <<< "$latest")" != success; then
-            echo "PR #$pr_number has no latest successful CI run; full quality is required." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          echo "validated_pr_merge=true" >> "$GITHUB_OUTPUT"
-          echo "PR #$pr_number already proved this merge's base/head pair; full quality will not repeat." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Enable pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          package-manager-cache: false
-
-      - name: Audit dependencies
-        env:
-          AUDIT_SOURCE: https://registry.npmjs.org
-          AUDIT_UNAVAILABLE_POLICY: fail
-        run: node scripts/dependency-audit-evidence.mjs
-
-  quality:
-    # The display name carries the Node major so the branch-protection required
-    # context (`Quality gates (26)`) is reported identically when the job runs
-    # and when a docs-only pull request skips it (#1776). A matrix job reports
-    # its bare name when skipped, so a matrix here could never satisfy the
-    # required context.
-    name: Quality gates (26)
-    needs: [changes, main-integrity]
-    if: >-
-      always() &&
-      needs.changes.result == 'success' &&
-      (
-        (github.event_name == 'pull_request' && needs.changes.outputs.code_required == 'true') ||
-        (github.event_name == 'push' && needs.main-integrity.outputs.validated_pr_merge != 'true')
-      )
-    runs-on: windows-latest
-    # Fixed Node, no matrix (#1776): engines.node claims one major, and the
-    # required context must exist even when this job is skipped.
-    # test/quality-gates/ci-workflow.test.ts derives the version from
-    # engines.node, so widening support forces a deliberate rename here.
-
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -188,143 +46,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      # Build once, and before anything reads `dist/`.
-      #
-      # The build used to run twice per leg: the root `prepare` lifecycle during
-      # `pnpm install`, then this step (#1506 shows `tsc` at log lines 208 and
-      # 984 of run 32597834437). `prepare` is the half that was removed, not
-      # this step: pnpm skips lifecycle scripts when an install is a no-op, so
-      # relying on it means the build can silently not happen — and
-      # release-bundled-skills-1349 then fails with a bare ENOENT from its
-      # unguarded `access(dist/cli/index.js)`. An explicit step ordered ahead of
-      # its consumers cannot skip.
       - name: Build
         run: pnpm build
 
-      # `pnpm coverage` is `vitest run --coverage`: the same suite `pnpm test`
-      # runs, plus instrumentation and thresholds. Keep only the superset so
-      # the suite runs exactly once per pull request (#1506).
-      - name: Test with coverage
-        run: pnpm coverage
-
-      - name: Public test suite (#979)
-        run: pnpm test:public
-
-      - name: MCP context budget (shrink-only)
-        run: pnpm mcp:context-budget
-
-  windows-integration-smoke:
-    name: Windows PowerShell/Access smoke
-    needs: changes
-    # The PR proves these integration paths before merge. The main-push
-    # integrity receipt remains the exact-SHA authority used by releases.
-    # Documentation and skill-catalog-only changes retain the bounded #1763
-    # exemption. Mixed source/script changes require smoke on every branch.
-    if: >-
-      github.event_name == 'pull_request' &&
-      needs.changes.outputs.windows_smoke_required == 'true'
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Enable pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify Windows PowerShell host
-        shell: pwsh
-        run: |
-          Get-Command powershell.exe
-          powershell.exe -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()'
-
-      # One explicit build, same reasoning as the quality job: the Pester and
-      # Access steps below load the compiled core bridge, and `prepare` is no
-      # longer there to build it implicitly (#1506).
-      - name: Build TypeScript core bridge
-        run: pnpm build
-
-      - name: Run PowerShell Pester tests
-        shell: pwsh
-        run: |
-          $pesterVersion = '5.7.1'
-          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object Version -EQ ([version]$pesterVersion))) {
-            Install-Module Pester -RequiredVersion $pesterVersion -Force -Scope CurrentUser
-          }
-          $pester = Import-Module Pester -RequiredVersion $pesterVersion -Force -PassThru
-          Write-Host "Loaded Pester $($pester.Version)"
-          $result = Invoke-Pester -Path scripts/tests -PassThru -Output Minimal
-          if ($result.FailedCount -gt 0) { exit 1 }
-
-      - name: Run Access/PowerShell integration tests
-        shell: pwsh
-        run: |
-          $report = Join-Path $env:RUNNER_TEMP "windows-access-smoke-vitest.json"
-          pnpm vitest run --config vitest.integration.config.ts --reporter=default --reporter=json --outputFile=$report `
-            test/e2e/access-fixture.e2e.test.ts `
-            test/e2e/access-relink-directory.test.ts `
-            test/e2e/access-relink-directory-apply.test.ts `
-            test/integration/form-ir-mutation-preservation.test.ts `
-            test/integration/mcp-harness-process-tree.test.ts `
-            test/integration/vba-manager-sentinel-trap.test.ts
-          $vitestExit = $LASTEXITCODE
-          node scripts/access-smoke-evidence.mjs $report
-          $evidenceExit = $LASTEXITCODE
-          if ($vitestExit -ne 0) { exit $vitestExit }
-          if ($evidenceExit -ne 0) { exit $evidenceExit }
-  ci-result:
-    name: CI result
-    if: always()
-    needs: [changes, main-integrity, quality, windows-integration-smoke]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate routed jobs
-        env:
-          EVENT: ${{ github.event_name }}
-          CODE_REQUIRED: ${{ needs.changes.outputs.code_required }}
-          WINDOWS_SMOKE_REQUIRED: ${{ needs.changes.outputs.windows_smoke_required }}
-          CHANGES_RESULT: ${{ needs.changes.result }}
-          INTEGRITY_RESULT: ${{ needs.main-integrity.result }}
-          VALIDATED_PR_MERGE: ${{ needs.main-integrity.outputs.validated_pr_merge }}
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          SMOKE_RESULT: ${{ needs.windows-integration-smoke.result }}
-        shell: bash
-        run: |
-          test "$CHANGES_RESULT" = success
-          if test "$EVENT" = push; then
-            test "$INTEGRITY_RESULT" = success
-            test "$SMOKE_RESULT" = skipped
-            if test "$VALIDATED_PR_MERGE" = true; then
-              echo "validated PR merge: full quality already passed before merge"
-              test "$QUALITY_RESULT" = skipped
-            else
-              echo "direct or unverifiable push: full quality required"
-              test "$QUALITY_RESULT" = success
-            fi
-          else
-            test "$INTEGRITY_RESULT" = skipped
-            if test "$CODE_REQUIRED" = true; then
-              test "$QUALITY_RESULT" = success
-            else
-              echo "docs-only: code quality jobs intentionally skipped"
-              test "$QUALITY_RESULT" = skipped
-              test "$SMOKE_RESULT" = skipped
-            fi
-            if test "$WINDOWS_SMOKE_REQUIRED" = false; then
-              test "$SMOKE_RESULT" = skipped
-            else
-              test "$WINDOWS_SMOKE_REQUIRED" = true
-              test "$SMOKE_RESULT" = success
-            fi
-          fi
+      - name: Test
+        run: pnpm test

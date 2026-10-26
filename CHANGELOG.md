@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- ci: CI is one cheap hosted Linux job, `CI` (`.github/workflows/ci.yml`: `pnpm lint`, `pnpm build`, `pnpm test`), on every pull request and every push to `main`; it is the only required check on `main`
+- ci: the release workflow keeps its own lint/build/test (`quality-authority`) and the Access E2E battery (`e2e-validation`, `pnpm test:e2e:mcp:release`) before publication; the CI-receipt skip and `force_full_validation` input are gone
+- ci: removed the Windows PR smoke job, the `main-integrity` provenance and dependency-audit job, the documentation-quality workflow, the nightly Access E2E workflow and the receipt-skip verification workflow; CodeQL runs weekly and on demand, not on pull requests
+- test: removed the workflow-shape tests that pinned the old CI layout (`ci-workflow`, `codeql-workflow`, nightly budget, Pester version, Windows smoke applicability, release receipt skip) and the CI-wiring assertions in `e2e-suite-authority`, `mcp-context-budget` and `dependency-audit-evidence`
+- docs: `docs/testing/repo-quality-gates.md`, `docs/testing/documentation-quality-gates.md`, `docs/release-checklist.md`, `docs/tech-debt/TRACKING.md` and `AGENTS.md` describe the single `CI` check; the Windows and real-Access suites and the docs check run manually
+
 ## [v4.5.1] - 2026-10-25
 
 v4.5.0 was tagged but its GitHub Release was not published: its end-to-end battery failed on the #1817 fixture when the import gate of #1865 refused it (#1895). The fix is #1896. v4.5.1 is the first published release of this content.

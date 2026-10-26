@@ -33,8 +33,13 @@
 > reason: it is `it.skip`-ped in `test/core/runner/access-runner.test.ts` and its read-only contract
 > is covered by the static, unit, and E2E tests listed at that skip.
 
+> **Correction — 2026-10-26.** The 2026-07-26 correction is stale too. CI is back to one hosted
+> Linux job, `CI` in `.github/workflows/ci.yml` (`pnpm lint`, `pnpm build`, `pnpm test`), and it is
+> the only required check on `main`. No Windows job runs per change; the Access E2E battery runs
+> only on the release tag (`.github/workflows/release.yml`).
+
 > **Process notes for remaining issues** (learned the hard way on #417):
-> - Sub-agents do NOT run biome → CI `Quality gates` fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
+> - Sub-agents do NOT run biome → the `CI` check fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
 > - The live diagnostics test in `test/core/runner/access-runner.test.ts` spawns REAL Access on Windows (only early-returns on non-win32). A failure there is a genuine signal, NOT environmental noise — investigate before dismissing.
 
 ---
