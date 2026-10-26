@@ -266,6 +266,11 @@ const PROCESS_TABLE_SNAPSHOT_TTL_MS = 750;
 /** @type {{ table: string, takenAt: number } | null} */
 let processTableSnapshot = null;
 
+// #1899: drop the cached process table so the zombie verdict reads the current one.
+export function resetProcessTableSnapshot() {
+  processTableSnapshot = null;
+}
+
 /** @type {string | null} First reason the probe was unavailable this run. */
 let descendantWalkUnavailableReason = null;
 
@@ -468,7 +473,11 @@ async function childStillOwned(ctx, pid) {
   } catch {
     answers = false;
   }
-  if (!answers) return ctx.isOwnPidAlive(pid);
+  // #1899: a dead direct PID is judged on a fresh process table, not a cached one.
+  if (!answers) {
+    resetProcessTableSnapshot();
+    return ctx.isOwnPidAlive(pid);
+  }
   const imageName = imageNameOfPid(pid);
   return classifyChildLiveness({ alive: true, imageName }) === "alive";
 }
