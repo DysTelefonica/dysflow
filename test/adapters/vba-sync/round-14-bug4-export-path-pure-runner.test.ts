@@ -66,7 +66,7 @@ describe("Round-14 bug 4 — exportPath routes through the pure runner (#1228)",
   }
 
   it("wires destinationRoot through the real production export executor seam", async () => {
-    const destinationRoot = join(await mkdtemp(join(tmpdir(), "dysflow-destination-")), "src");
+    const destinationRoot = await mkdtemp(join(tmpdir(), "dysflow-destination-"));
     const { result, calls } = await executeProductionExport({ destinationRoot });
 
     expect(result.ok).toBe(true);
@@ -75,7 +75,7 @@ describe("Round-14 bug 4 — exportPath routes through the pure runner (#1228)",
   });
 
   it("wires legacy exportPath through the same real production export executor seam", async () => {
-    const exportPath = join(await mkdtemp(join(tmpdir(), "dysflow-export-path-")), "src");
+    const exportPath = await mkdtemp(join(tmpdir(), "dysflow-export-path-"));
     const { result, calls } = await executeProductionExport({ exportPath });
 
     expect(result.ok).toBe(true);
