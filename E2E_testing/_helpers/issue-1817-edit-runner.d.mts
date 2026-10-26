@@ -15,6 +15,7 @@ export interface RunAccessEditOptions {
   env: Record<string, string | undefined>;
   command?: string;
   attempts?: number;
+  action?: string;
 }
 
 export declare function resolveEditTimeoutMs(env: Record<string, string | undefined>): number;

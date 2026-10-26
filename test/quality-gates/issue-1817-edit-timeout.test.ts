@@ -59,6 +59,13 @@ describe("issue #1898: Access edit timeout and bounded retry", () => {
     expect(calls.every((c) => c.timeout === DEFAULT_EDIT_TIMEOUT_MS)).toBe(true);
   });
 
+  it("never retries the create action after a timeout, because the database may already exist", () => {
+    const { spawn, calls } = fakeSpawn([timedOut, saved]);
+    const result = runAccessEdit({ spawn, args: [], env: {}, action: "create" });
+    expect(result.error?.code).toBe("ETIMEDOUT");
+    expect(calls).toHaveLength(1);
+  });
+
   it("does not retry a non-timeout failure", () => {
     const failed: Outcome = { status: 1, stdout: "", stderr: "boom" };
     const { spawn, calls } = fakeSpawn([failed]);
