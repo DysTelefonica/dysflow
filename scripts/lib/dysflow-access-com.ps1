@@ -16,6 +16,8 @@
     Get-MsAccessProcessesBounded — WMI query in a background job with timeout guard
     Get-MsAccessProcesses        — Thin alias over Get-MsAccessProcessesBounded
     Stop-AccessPidAndWait        — Kill an owned Access PID and wait until it exits
+    Test-ComHResult              — #1917: match a COM error (or a wrapped one) against an HRESULT
+    Test-AccessProcessAlive      — #1917: read-only liveness probe of an Access PID
     Open-CanonicalAccess         — Canonical COM open: spawn Access.Application + 3-layer PID ladder
     Close-CanonicalAccess        — Canonical COM close: fixed teardown + synchronous kill of owned PID
 
@@ -42,10 +44,14 @@
 
     Shape contract for Close-CanonicalAccess (Result)
     -------------------------------------------------
-    Returns a PSCustomObject with three properties:
+    Returns a PSCustomObject with these properties:
         OwnedPidKilled          [bool]     — $true if the owned PID was killed synchronously
         PidWasAttributed        [bool]     — mirrors Session.PidAttributed
         UnattributedKilled      [bool]     — INVARIANT: always $false; unattributed processes are never killed
+        QuitFailed              [bool]     — #1917: $true if Quit threw (never rethrown)
+        QuitErrorCode           [string]   — the Quit HRESULT as "0xXXXXXXXX", $null if Quit succeeded
+        QuitErrorMessage        [string]   — the Quit exception message, $null if Quit succeeded
+        QuitFailureTolerated    [bool]     — $true only for 0x800706BA with Session.EditSaved = $true
 #>
 
 # Auto-detect Linux/macOS and activate mock COM environment
@@ -468,6 +474,60 @@ public class RotManager {
 # go through here — they do not spawn MSACCESS.EXE.
 # ---------------------------------------------------------------------------
 
+# #1917: true when the error record (or any exception it wraps) carries the given HRESULT.
+# A COM failure surfaces HResult as a SIGNED Int32, so both sides are compared in their
+# unsigned form. The mask needs the L suffix: a bare 0xFFFFFFFF is Int32 -1.
+function Test-ComHResult {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$ErrorRecord,
+        [Parameter(Mandatory = $true)][int64]$HResult
+    )
+    $expected = $HResult -band 0xFFFFFFFFL
+    $exception = if ($ErrorRecord -is [System.Exception]) { $ErrorRecord } else { $ErrorRecord.Exception }
+    $depth = 0
+    while ($null -ne $exception -and $depth -lt 8) {
+        if ((([int64]$exception.HResult) -band 0xFFFFFFFFL) -eq $expected) { return $true }
+        $exception = $exception.InnerException
+        $depth++
+    }
+    return $false
+}
+
+# #1917: true while the process with this id is running. Read-only; it never signals the
+# process. -ProcessProbeAction is an injectable seam returning the process or $null.
+function Test-AccessProcessAlive {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][int]$AccessPid,
+        [scriptblock]$ProcessProbeAction = { param([int]$ProbePid) Get-Process -Id $ProbePid -ErrorAction SilentlyContinue }
+    )
+    $process = $null
+    try { $process = & $ProcessProbeAction $AccessPid } catch { $process = $null }
+    if ($null -eq $process) { return $false }
+    try { if ($process.PSObject.Properties['HasExited'] -and $process.HasExited) { return $false } } catch { Write-Debug "Test-AccessProcessAlive: $_" }
+    return $true
+}
+
+# #1917: wait, bounded and read-only, until no MSACCESS process exists beyond the pre-open
+# snapshot. Returns $true when the table settled, $false when the bound expired first.
+function Wait-AccessInstancesBeyondSnapshotExit {
+    [CmdletBinding()]
+    Param(
+        [object[]]$PreOpenPids = @(),
+        [int]$TimeoutMs = 5000,
+        [int]$PollMs = 250,
+        [Parameter(Mandatory = $true)][scriptblock]$WmiSnapshotAction
+    )
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        $extra = @(@(& $WmiSnapshotAction) | Where-Object { $_.ProcessId -notin $PreOpenPids })
+        if ($extra.Count -eq 0) { return $true }
+        if ($watch.ElapsedMilliseconds -ge $TimeoutMs) { return $false }
+        Start-Sleep -Milliseconds ([Math]::Max(1, $PollMs))
+    }
+}
+
 <#
 .SYNOPSIS
     Spawn Access.Application and capture the owned PID via a 3-layer ladder.
@@ -491,6 +551,13 @@ public class RotManager {
     -ComSpawnAction      — creates and returns the COM object (default: New-Object -ComObject Access.Application)
     -HwndToPidAction     — resolves an hWnd to a PID (default: Get-ProcessIdFromHwnd)
     -WmiSnapshotAction   — returns the current list of MSACCESS processes (default: Get-MsAccessProcessesBounded)
+    -SpawnRetryTimeoutMs — bound of the wait before the single 0x80080005 launch retry (default: 5000)
+    -SpawnRetryPollMs    — poll interval of that wait (default: 250)
+
+    #1917: a launch that fails with 0x80080005 (CO_E_SERVER_EXEC_FAILURE) right after an
+    Access crash is retried EXACTLY ONCE, after waiting (bounded, read-only) until no
+    MSACCESS process exists beyond the pre-open snapshot. Any other launch error is rethrown
+    unchanged. When the retry fails too, the FIRST error is rethrown with the retry noted.
 
     These seams are intended for testing only.  Production callers omit them and receive the defaults.
 
@@ -515,15 +582,46 @@ function Open-CanonicalAccess {
         # Resolves an hWnd ([IntPtr]) to a PID ([int]).  Default: Get-ProcessIdFromHwnd
         [scriptblock]$HwndToPidAction   = { param([IntPtr]$Hwnd) Get-ProcessIdFromHwnd -Hwnd $Hwnd },
         # Returns the current list of MSACCESS processes.  Default: Get-MsAccessProcessesBounded
-        [scriptblock]$WmiSnapshotAction = { Get-MsAccessProcessesBounded }
+        [scriptblock]$WmiSnapshotAction = { Get-MsAccessProcessesBounded },
+        # #1917: bound and poll interval of the wait before the single 0x80080005 retry.
+        [int]$SpawnRetryTimeoutMs = 5000,
+        [int]$SpawnRetryPollMs    = 250
     )
 
     # --- layer 3 pre-open snapshot (only used if layers 1+2 both fail) ----
     $preOpenProcs = @(& $WmiSnapshotAction)
     $preOpenPids  = @($preOpenProcs | ForEach-Object { $_.ProcessId })
 
-    # --- spawn the COM object ---------------------------------------------
-    $access = & $ComSpawnAction
+    # --- spawn the COM object (#1917: one retry on 0x80080005) ------------
+    $access = $null
+    try {
+        $access = & $ComSpawnAction
+    } catch {
+        $spawnError = $_
+        if (-not (Test-ComHResult -ErrorRecord $spawnError -HResult 0x80080005L)) { throw }
+
+        # The previous instance is still exiting after a crash. Only READ the process table;
+        # nothing is ever killed here.
+        $settled = Wait-AccessInstancesBeyondSnapshotExit -PreOpenPids $preOpenPids `
+            -TimeoutMs $SpawnRetryTimeoutMs -PollMs $SpawnRetryPollMs -WmiSnapshotAction $WmiSnapshotAction
+        Write-Debug "Open-CanonicalAccess: launch failed with 0x80080005; retrying once (previous instance exited: $settled)."
+
+        try {
+            $access = & $ComSpawnAction
+        } catch {
+            Write-Debug "Open-CanonicalAccess: launch retry failed: $_"
+            $note = " [dysflow #1917: the launch was retried once after 0x80080005" +
+                $(if ($settled) { ", once the previous Access instance had exited" } else { ", after a ${SpawnRetryTimeoutMs} ms wait for the previous Access instance to exit" }) +
+                "; the retry failed too. This is the error of the first attempt.]"
+            $first = $spawnError.Exception
+            $exception = [System.Runtime.InteropServices.COMException]::new($first.Message + $note, [int]$first.HResult)
+            if (-not ($first -is [System.Runtime.InteropServices.COMException])) {
+                $exception = [System.Runtime.InteropServices.COMException]::new($first.Message + $note, -2146959355)
+            }
+            $PSCmdlet.ThrowTerminatingError([System.Management.Automation.ErrorRecord]::new(
+                $exception, "DYSFLOW_ACCESS_LAUNCH_FAILED", [System.Management.Automation.ErrorCategory]::ResourceUnavailable, $DbPath))
+        }
+    }
 
     # --- capture OriginalAutomationSecurity and optionally set to Low -----
     $originalAutomationSecurity = [int]$access.AutomationSecurity
@@ -672,7 +770,8 @@ function Open-CanonicalAccess {
     If not provided, the fallback only emits a WARN and checks the lock file.
 
 .OUTPUTS
-    PSCustomObject { OwnedPidKilled([bool]), PidWasAttributed([bool]), UnattributedKilled([bool]=always $false) }
+    PSCustomObject { OwnedPidKilled([bool]), PidWasAttributed([bool]), UnattributedKilled([bool]=always $false),
+                     QuitFailed([bool]), QuitErrorCode([string]), QuitErrorMessage([string]), QuitFailureTolerated([bool]) }
 #>
 function Get-NullPidCloseNotice {
     # Human/agent-facing notice for the null-PID close path. Worded so the SAFE
@@ -721,6 +820,15 @@ function Close-CanonicalAccess {
 
     $ownedPidKilled = $false
 
+    # #1917: a failed Quit is reported, never thrown (this runs inside the caller's finally).
+    # EditSaved is optional on the session; absent means the edit was not saved.
+    $editSaved = $false
+    if ($Session.PSObject.Properties['EditSaved']) { $editSaved = [bool]$Session.EditSaved }
+    $quitFailed           = $false
+    $quitErrorCode        = $null
+    $quitErrorMessage     = $null
+    $quitFailureTolerated = $false
+
     # #1918: "Begin" marks the moment the teardown entered. Without it, a missing
     # "CloseCurrentDatabase" line is ambiguous: the step was never reached, or the
     # teardown hung before it could be recorded.
@@ -733,7 +841,22 @@ function Close-CanonicalAccess {
 
         # Step 3: quit the application
         Write-ComCloseTrace -Step "Quit" -OwnedPid $ownedPid
-        try { $access.Quit(2) } catch { Write-Debug "Close-CanonicalAccess: Quit threw: $_" }
+        try {
+            $access.Quit(2)
+        } catch {
+            Write-Debug "Close-CanonicalAccess: Quit threw: $_"
+            $quitFailed = $true
+            $comException = $_.Exception
+            while ($null -ne $comException -and -not ($comException -is [System.Runtime.InteropServices.COMException])) {
+                $comException = $comException.InnerException
+            }
+            if ($null -eq $comException) { $comException = $_.Exception }
+            $quitErrorCode    = "0x{0:X8}" -f (([int64]$comException.HResult) -band 0xFFFFFFFFL)
+            $quitErrorMessage = [string]$comException.Message
+            # 0x800706BA after a saved edit: Access is already dead and the edit is persisted.
+            # Any other HRESULT, or an unsaved edit, stays a failure the caller must learn about.
+            $quitFailureTolerated = $editSaved -and (Test-ComHResult -ErrorRecord $_ -HResult 0x800706BAL)
+        }
     } finally {
         # Restore AutomationSecurity regardless of Quit outcome
         try {
@@ -785,8 +908,12 @@ function Close-CanonicalAccess {
     }
 
     return [PSCustomObject]@{
-        OwnedPidKilled     = $ownedPidKilled
-        PidWasAttributed   = $pidAttributed
-        UnattributedKilled = $false   # INVARIANT: never $true
+        OwnedPidKilled       = $ownedPidKilled
+        PidWasAttributed     = $pidAttributed
+        UnattributedKilled   = $false   # INVARIANT: never $true
+        QuitFailed           = $quitFailed
+        QuitErrorCode        = $quitErrorCode
+        QuitErrorMessage     = $quitErrorMessage
+        QuitFailureTolerated = $quitFailureTolerated
     }
 }
