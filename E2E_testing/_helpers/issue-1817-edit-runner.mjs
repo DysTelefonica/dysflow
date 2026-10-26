@@ -24,10 +24,15 @@ export function runAccessEdit({
   env,
   command = "powershell.exe",
   attempts = DEFAULT_EDIT_ATTEMPTS,
+  action,
 }) {
   const timeout = resolveEditTimeoutMs(env);
+  // `create` is not idempotent: a timed-out first attempt may already have created the
+  // database, so a retry fails with "already exists" (seen in run 40281030424). Only the
+  // value-setting actions are retried.
+  const maxAttempts = action === "create" ? 1 : attempts;
   let result;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     result = spawn(command, args, { encoding: "utf8", windowsHide: true, timeout });
     if (result.error?.code !== "ETIMEDOUT") return result;
   }

@@ -23,6 +23,7 @@ function edit(root, action, marker) {
   const result = runAccessEdit({
     spawn: spawnSync,
     env: process.env,
+    action,
     args: [
       "-NoProfile", "-NonInteractive", "-File", editor,
       "-Root", root, "-Action", action, "-Marker", marker,
