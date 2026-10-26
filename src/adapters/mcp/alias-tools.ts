@@ -1,5 +1,9 @@
 import type { AccessQueryRequest, AccessVbaRequest } from "../../core/contracts/index.js";
-import { buildWriteFixtureRequest } from "../../core/mapping/access-query-request-mapper.js";
+import {
+  buildWriteFixtureRequest,
+  pickOverrides,
+  pickQueryExecutionTarget,
+} from "../../core/mapping/access-query-request-mapper.js";
 import { parseProcedureName } from "../../core/services/vba-procedure-name-parser.js";
 import { resolveAllowedProceduresFor } from "./allowed-procedures-resolver.js";
 import {
@@ -178,52 +182,17 @@ export function buildQuerySqlRequest(input: unknown): AccessQueryRequest | McpTo
     return invalidInput("query_sql requires sql or query.");
   }
 
-  const accessPath = typeof input.accessPath === "string" ? input.accessPath : undefined;
-  const target =
-    input.target === "frontend" || input.target === "backend" || input.target === "auto"
-      ? input.target
-      : undefined;
-  // Explicit `databasePath` / `sourcePath` from the caller is the strongest
-  // signal — when the caller passes BOTH `accessPath` (as a config target)
-  // and `databasePath` (as a per-call override), the override MUST win.
-  // Falling back to `accessPath` only when the caller did not pass an
-  // explicit `databasePath`/`sourcePath` preserves the alias contract
-  // (#882, "accessPath means 'execute against this database'") while
-  // restoring the pre-#882 behavior for the explicit-override case
-  // (the E2E harness sends both to run read-only SQL against the backend
-  // without losing the configured accessPath).
-  const explicitDatabasePath =
-    typeof input.databasePath === "string"
-      ? input.databasePath
-      : typeof input.sourcePath === "string"
-        ? input.sourcePath
-        : undefined;
-  const databasePath = explicitDatabasePath ?? accessPath;
-
+  // #1921 — the project selectors (`cwd`, `projectId`, `projectRoot`, ...)
+  // come from the core `pickOverrides` the HTTP `query_sql` route uses, and the
+  // target precedence from the picker `query_execute` uses, so the legacy
+  // alias cannot resolve a different project for the same input. An explicit
+  // `databasePath`/`sourcePath` wins; `accessPath` is the fallback database
+  // (#882).
   return {
+    ...pickOverrides(input),
+    ...pickQueryExecutionTarget(input),
     sql,
     mode: "read",
-    // query_sql is an alias whose accessPath means "execute against this
-    // database" when the caller did not pass an explicit `databasePath`.
-    // Project it onto the runner's databasePath so the configured backend
-    // cannot win later — UNLESS the caller passed an explicit `databasePath`,
-    // in which case the override (set above) wins.
-    backendPath: typeof input.backendPath === "string" ? input.backendPath : undefined,
-    databasePath,
-    ...(target === undefined ? {} : { target }),
-    projectId: typeof input.projectId === "string" ? input.projectId : undefined,
-    contextId: typeof input.contextId === "string" ? input.contextId : undefined,
-    accessPath,
-    destinationRoot: typeof input.destinationRoot === "string" ? input.destinationRoot : undefined,
-    projectRoot: typeof input.projectRoot === "string" ? input.projectRoot : undefined,
-    timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
-    strictContext: input.strictContext === true ? true : undefined,
-    expectedAccessPath:
-      typeof input.expectedAccessPath === "string" ? input.expectedAccessPath : undefined,
-    expectedProjectRoot:
-      typeof input.expectedProjectRoot === "string" ? input.expectedProjectRoot : undefined,
-    expectedDestinationRoot:
-      typeof input.expectedDestinationRoot === "string" ? input.expectedDestinationRoot : undefined,
   };
 }
 

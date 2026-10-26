@@ -355,7 +355,11 @@ export function loadDysflowConfigShared<
   return failureResult(
     createDysflowError(
       "CONFIG_MISSING_ACCESS_PATH",
-      "Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+      "Access database path is required. Define .dysflow/project.json with frontendFile in the repository or pass accessPath explicitly.",
+      {
+        remediation:
+          "Pass cwd set to the worktree root that holds .dysflow/project.json (with frontendFile), or pass accessPath explicitly.",
+      },
     ),
   ) as T;
 }

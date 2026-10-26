@@ -162,9 +162,9 @@ describe("dysflow configuration", () => {
         error: {
           code: "CONFIG_MISSING_ACCESS_PATH",
           message:
-            "Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+            "Access database path is required. Define .dysflow/project.json with frontendFile in the repository or pass accessPath explicitly.",
           remediation:
-            "Review the error message and correct the reported condition before retrying.",
+            "Pass cwd set to the worktree root that holds .dysflow/project.json (with frontendFile), or pass accessPath explicitly.",
           retryable: false,
         },
         diagnostics: [],
@@ -184,9 +184,9 @@ describe("dysflow configuration", () => {
         error: {
           code: "CONFIG_MISSING_ACCESS_PATH",
           message:
-            "Access database path is required. Define .dysflow/project.json in the repository or pass accessDbPath explicitly.",
+            "Access database path is required. Define .dysflow/project.json with frontendFile in the repository or pass accessPath explicitly.",
           remediation:
-            "Review the error message and correct the reported condition before retrying.",
+            "Pass cwd set to the worktree root that holds .dysflow/project.json (with frontendFile), or pass accessPath explicitly.",
           retryable: false,
         },
         diagnostics: [],
