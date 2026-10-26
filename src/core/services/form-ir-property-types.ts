@@ -231,6 +231,30 @@ function buildTypeMap(): ReadonlyMap<string, FormPropertyType> {
 export const KNOWN_FORM_PROPERTY_TYPES: ReadonlyMap<string, FormPropertyType> = buildTypeMap();
 
 /**
+ * Issue #1868 — properties Access serializes as a raw token (a number or
+ * `NotDefault`) that the type table above does not list. They only decide
+ * how a string value is written (`FontSize: "12"` → `FontSize =12`); they
+ * do not feed {@link validateFormPropertyValue}, so adding a key here never
+ * rejects a value that passes today.
+ */
+export const RAW_TOKEN_PROPERTY_NAMES: ReadonlySet<string> = new Set([
+  "FontSize",
+  "FontWeight",
+  "FontItalic",
+  "FontUnderline",
+  "DecimalPlaces",
+  "BorderWidth",
+  "ColumnCount",
+  "BoundColumn",
+  "ColumnHeads",
+  "ListRows",
+  "ListWidth",
+  "HelpContextId",
+  "TimerInterval",
+  "KeepTogether",
+]);
+
+/**
  * Type of the result of {@link validateFormPropertyValue}. Three shapes:
  *   - `{ kind: "<expected-type>" }` — value matches; caller may proceed.
  *   - `{ kind: "unknown" }` — key has no type entry (defaults to "string"

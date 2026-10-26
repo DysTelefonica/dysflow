@@ -105,6 +105,18 @@ describe("setProperties writes each value by its property type (#1868)", () => {
     expect((error as FormMutationError).message).toMatch(/ControlTipText/);
   });
 
+  it("writes a known numeric property raw even when the control does not carry it yet", () => {
+    // The MCP schema declares the map values as strings, so a caller can only
+    // send "8"; the serializer must know ListRows takes a number.
+    const result = setProperties(parseFormTxt(FORM), {
+      controlName: "Nombre",
+      properties: { ListRows: "8", FontItalic: "NotDefault" },
+    });
+
+    expect(result.source).toMatch(/ListRows =8\b/);
+    expect(result.source).toMatch(/FontItalic =NotDefault\b/);
+  });
+
   it("quotes plain text for a property the file does not carry yet", () => {
     const result = setProperties(parseFormTxt(FORM), {
       controlName: "Nombre",

@@ -27,6 +27,7 @@ import type {
 import {
   KNOWN_ADDABLE_PROPERTY_NAMES,
   KNOWN_FORM_PROPERTY_TYPES,
+  RAW_TOKEN_PROPERTY_NAMES,
   runtimeKindOf,
   validateFormPropertyValue,
 } from "./form-ir-property-types.js";
@@ -629,7 +630,7 @@ function valueShapeOf(node: FormNode, key: string): "token" | "text" | "date" | 
   const known = KNOWN_FORM_PROPERTY_TYPES.get(key);
   if (known === "date") return "date";
   if (known === "string") return "text";
-  if (known !== undefined) return "token";
+  if (known !== undefined || RAW_TOKEN_PROPERTY_NAMES.has(key)) return "token";
   const existing = node.entries.find(
     (entry): entry is ScalarEntry => entry.kind === "scalar" && entry.key === key,
   );
@@ -684,7 +685,7 @@ function serializeTypedValue(
   if (!isQuotedLiteral(value) && isRawToken(value)) {
     reject(
       "unknown",
-      `the property type is unknown and the control does not carry it yet, so the value could be a number or text. Pass a JSON number for a numeric value, or wrap text in double quotes ('"${value}"').`,
+      `the property type is unknown and the control does not carry it yet, so the value could be a number or text. Wrap text in double quotes ('"${value}"'); a numeric value for this property can only be written once the control carries it.`,
     );
   }
   return normalizeMutationValue(value);
