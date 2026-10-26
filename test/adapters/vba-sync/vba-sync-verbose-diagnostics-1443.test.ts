@@ -1,11 +1,21 @@
 import { execFileSync } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter.js";
 import { noopPreflightCleanup } from "../../_helpers/noop-preflight-cleanup.js";
 
 const SOURCE = ["Option Explicit", "Public Sub Run()", '  MsgBox "Hello"', "End Sub", ""].join(
   "\n",
 );
+
+// An explicit destinationRoot is the worker's spawn cwd, so it must exist (#1914).
+const PROJECT_SRC = mkdtempSync(join(tmpdir(), "dysflow-1443-src-"));
+
+afterAll(() => {
+  rmSync(PROJECT_SRC, { recursive: true, force: true });
+});
 
 function snapshot(lines: number, bytes: number, sha256: string) {
   return { lines, bytes, sha256 };
@@ -26,7 +36,7 @@ function service(stdoutPayload: unknown) {
     preflightCleanup: noopPreflightCleanup(),
     executor: runner(stdoutPayload),
     accessPath: "C:/project/frontend.accdb",
-    destinationRoot: "C:/project/src",
+    destinationRoot: PROJECT_SRC,
     env: {},
   });
 }
@@ -56,7 +66,7 @@ function powershellService(stdoutPayload: unknown, exitCode = 0) {
       timedOut: false,
     }),
     accessPath: "C:/project/frontend.accdb",
-    destinationRoot: "C:/project/src",
+    destinationRoot: PROJECT_SRC,
     env: {},
   });
 }
@@ -79,7 +89,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
       },
     }).execute("import_modules", {
       moduleNames: ["Module1"],
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
       verbose: true,
     });
@@ -115,7 +125,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
       },
     }).execute("import_modules", {
       moduleNames: ["Module1"],
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
       verbose: true,
     });
@@ -162,7 +172,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
     ];
     const result = await service(entries).execute("import_modules", {
       moduleNames: entries.map((entry) => entry.module),
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
       verbose: true,
     });
@@ -197,7 +207,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
       };
       const result = await service(payload).execute(toolName, {
         ...(toolName === "export_modules" ? { moduleNames: ["Module1"] } : {}),
-        destinationRoot: "C:/project/src",
+        destinationRoot: PROJECT_SRC,
         apply: true,
         verbose: true,
       });
@@ -221,7 +231,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
   it("keeps verbose payload absent when export verbose is omitted", async () => {
     const result = await service({ ok: true, exported: ["Module1"] }).execute("export_modules", {
       moduleNames: ["Module1"],
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
     });
 
@@ -246,7 +256,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
       ],
     }).execute("export_modules", {
       moduleNames: ["Module1"],
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
       verbose: true,
     });
@@ -284,7 +294,7 @@ describe("VBA sync verbose diagnostics (#1443)", () => {
       ],
     }).execute("import_modules", {
       moduleNames: ["SuccessfulModule", "FailedModule"],
-      destinationRoot: "C:/project/src",
+      destinationRoot: PROJECT_SRC,
       apply: true,
       verbose: true,
     });

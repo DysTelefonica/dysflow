@@ -1,3 +1,4 @@
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,7 +28,8 @@ describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => 
       preflightCleanup: noOpPreflightCleanup,
     });
 
-    const exportPath = join(tmpdir(), "nc_export_check");
+    // The export target is the worker's spawn cwd, so it must exist (#1914).
+    const exportPath = mkdtempSync(join(tmpdir(), "nc_export_check-"));
     await service.execute("export_modules", {
       exportPath,
       moduleNames: ["TestModule"],
@@ -76,7 +78,7 @@ describe("VbaSyncAdapter export_modules exportPath routing (issue #185)", () => 
       preflightCleanup: noOpPreflightCleanup,
     });
 
-    const tempExportPath = join(tmpdir(), "opencode", "nc_export_check");
+    const tempExportPath = mkdtempSync(join(tmpdir(), "nc_export_check-"));
     await service.execute("export_modules", { exportPath: tempExportPath, apply: true });
 
     expect(capturedRequests).toHaveLength(1);

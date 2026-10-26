@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
@@ -669,6 +669,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
     };
     const extraValidation = validateVbaManagerExtra(request.extra);
     if (!extraValidation.ok) return extraValidation;
+    const missingDestination = await missingExplicitDestinationRoot(params, request.cwd);
+    if (missingDestination !== undefined) return missingDestination;
 
     const preflightStart = Date.now();
     const preflightDiagnostics = diagnosticsFromPreflightCleanup(
@@ -1086,6 +1088,41 @@ function validateVbaManagerExtra(
     }
   }
   return successResult(undefined);
+}
+
+/**
+ * Issue #1914 — an explicit `exportPath` / `destinationRoot` override also
+ * becomes the worker's spawn cwd (#1169), and Node reports a missing cwd as
+ * `spawn <exe> ENOENT`. Name the missing folder before spawning so it never
+ * surfaces as `POWERSHELL_SPAWN_FAILED`.
+ */
+async function missingExplicitDestinationRoot(
+  params: Record<string, unknown>,
+  cwd: string | undefined,
+): Promise<OperationResult<never> | undefined> {
+  if (cwd === undefined || stringValue(params.projectRoot) !== undefined) return undefined;
+  const parameterName =
+    stringValue(params.exportPath) !== undefined
+      ? "exportPath"
+      : stringValue(params.destinationRoot) !== undefined
+        ? "destinationRoot"
+        : undefined;
+  if (parameterName === undefined) return undefined;
+  const isDirectory = await stat(cwd).then(
+    (entry) => entry.isDirectory(),
+    () => false,
+  );
+  if (isDirectory) return undefined;
+  return failureResult(
+    createDysflowError(
+      "DESTINATION_ROOT_NOT_FOUND",
+      `${parameterName} directory does not exist: ${cwd}.`,
+      {
+        details: { [parameterName]: cwd },
+        remediation: `Create the folder (mkdir '${cwd}') or point ${parameterName} at an existing directory, then retry.`,
+      },
+    ),
+  );
 }
 
 // ─── sync_binary helpers (#809) ────────────────────────────────────────────
