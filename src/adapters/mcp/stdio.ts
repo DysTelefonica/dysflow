@@ -55,6 +55,7 @@ import {
   resolveResultValidationPolicy,
   validateToolResult,
 } from "./contracts/result-validation.js";
+import { MCP_TOOL_ROUTES, type McpToolRoute } from "./dispatch-routes.js";
 import {
   buildInvocationTelemetryEntry,
   createInvocationTelemetryContextResolver,
@@ -584,7 +585,13 @@ function validateMcpResultBeforeSerialization(
 
   const message = `Result from ${tool.name} did not satisfy its executable result contract.`;
   const schemaPaths = validation.diagnostic.issues.map((issue) => issue.path);
+  const binaryMutated = binaryMutatedBySuccessfulResult(tool.name, payload);
+  const mutationNote =
+    binaryMutated === true
+      ? "The handler reported success, so the Access binary WAS mutated: re-read it (list_vba_modules / verify_code) before retrying. "
+      : "";
   const remediation =
+    mutationNote +
     `Inspect the actualShape/expectedShape fields and schemaPaths below to identify which keys differ. ` +
     `The handler payload does not satisfy the resultContract at ${schemaPaths.join(", ") || "$"}. ` +
     "Adjust the handler to emit a payload matching the contract, or adjust the contract schema if the new payload is intentional. See test/adapters/mcp/result-contract-violation-shape.test.ts for the synthetic repro.";
@@ -608,9 +615,11 @@ function validateMcpResultBeforeSerialization(
       },
       actualShape: validation.diagnostic.actualShape,
       expectedShape: validation.diagnostic.expectedShape,
+      ...(binaryMutated === undefined ? {} : { binaryMutated }),
       details: {
         toolName: validation.diagnostic.toolName,
         schemaPaths,
+        ...(binaryMutated === undefined ? {} : { binaryMutated }),
       },
       diagnostics: [
         {
@@ -623,6 +632,28 @@ function validateMcpResultBeforeSerialization(
       relatedIssueNumbers: ["#1096"],
     },
   });
+}
+
+/**
+ * Issue #1920 — a contract violation is only ever raised on a SUCCESSFUL
+ * handler result, so for a binary-mutating route the write already happened
+ * unless the payload is a plan. Returns `undefined` for tools outside the
+ * generated route table (aliases), whose mutation cannot be derived here.
+ */
+function binaryMutatedBySuccessfulResult(toolName: string, payload: unknown): boolean | undefined {
+  const route = (MCP_TOOL_ROUTES as Partial<Record<string, McpToolRoute>>)[toolName];
+  if (route === undefined) return undefined;
+  const mutatesBinary =
+    (route.kind === "vba-sync" && route.mutatesBinary) ||
+    (route.kind === "query-maintenance" && route.queryMode === "write");
+  if (!mutatesBinary) return false;
+  if (
+    isRecord(payload) &&
+    (payload.dryRun === true || payload.mode === "plan" || payload.willModifyAccess === false)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function reportResultContractViolationToStderr(
