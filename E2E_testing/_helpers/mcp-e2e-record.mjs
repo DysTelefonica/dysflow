@@ -7,6 +7,7 @@
 
 import { execSync, spawnSync } from "node:child_process";
 import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
+import { formatTerminationLine, summarizeLiveness } from "./zombie-liveness.mjs";
 import { formatZombieReport } from "./zombie-process-dump.mjs";
 //
 // The hard rules pinned here:
@@ -143,6 +144,21 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   // pre-existing watch entries alive forever).
   const toolChildAlive = result.childPid ? ctx.isOwnPidAlive(result.childPid) : false;
   const zombiePass = !toolChildAlive;
+  // #1899: only on the failing path, sample the child's own liveness until it stops
+  // answering (bounded), so the log shows whether it was still exiting. Verdict unchanged.
+  if (toolChildAlive && result.childPid) {
+    const liveness = await sampleDirectLiveness(result.childPid);
+    consoleLog(
+      formatTerminationLine({
+        tool,
+        childPid: result.childPid,
+        taskkillExit: result.termination?.taskkillExit ?? null,
+        guardExpired: result.termination?.guardExpired ?? false,
+        terminationMs: result.termination?.terminationMs ?? 0,
+        liveness,
+      }),
+    );
+  }
   const zombieTool = `${tool}:zombie-check`;
   ctx.rows.push({
     area,
@@ -410,4 +426,26 @@ function dumpZombieDiagnostics(tool, childPid) {
   const rows = Array.isArray(parsed) ? parsed : [parsed];
   console.log(`ZOMBIE tool=${tool} childPid=${childPid} rows=${rows.length}`);
   for (const line of formatZombieReport({ rows, childPid })) console.log(line);
+}
+
+// Samples only the child's own liveness with kill(pid, 0) (no descendant walk),
+// every 50 ms for at most 3 s, and stops at the first death (#1899).
+const LIVENESS_WINDOW_MS = 3000;
+const LIVENESS_STEP_MS = 50;
+async function sampleDirectLiveness(pid) {
+  const samples = [];
+  const started = Date.now();
+  for (;;) {
+    const atMs = Date.now() - started;
+    let alive = true;
+    try {
+      process.kill(pid, 0);
+    } catch {
+      alive = false;
+    }
+    samples.push({ atMs, alive });
+    if (!alive || atMs >= LIVENESS_WINDOW_MS) break;
+    await new Promise((resolve) => setTimeout(resolve, LIVENESS_STEP_MS));
+  }
+  return summarizeLiveness(samples);
 }

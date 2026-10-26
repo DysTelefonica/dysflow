@@ -29,22 +29,34 @@ async function terminateHarnessChild(child) {
     } catch {
       /* best-effort */
     }
-    return;
+    return { taskkillExit: null, guardExpired: false, terminationMs: 0 };
   }
 
+  // #1899: record how the tree kill ended so a failing zombie-check can tell a
+  // child that was still exiting from one that really lingered.
+  const startedAt = Date.now();
   const taskkill = spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
     stdio: "ignore",
     windowsHide: true,
   });
+  let taskkillExit = null;
+  let guardExpired = false;
   await new Promise((resolve) => {
-    const guard = setTimeout(resolve, PROCESS_TREE_KILL_BOUND_MS);
+    const guard = setTimeout(() => {
+      guardExpired = true;
+      resolve();
+    }, PROCESS_TREE_KILL_BOUND_MS);
     const settle = () => {
       clearTimeout(guard);
       resolve();
     };
-    taskkill.once("close", settle);
+    taskkill.once("close", (code) => {
+      taskkillExit = code;
+      settle();
+    });
     taskkill.once("error", settle);
   });
+  return { taskkillExit, guardExpired, terminationMs: Date.now() - startedAt };
 }
 
 /**
@@ -123,9 +135,9 @@ export function runMcpHarness(options) {
       } catch {
         /* best-effort */
       }
-      await startTermination();
+      const termination = await startTermination();
       settled = true;
-      resolve({ ...result, childPid: child.pid });
+      resolve({ ...result, childPid: child.pid, termination });
     };
 
     primaryTimer = setTimeout(() => {
