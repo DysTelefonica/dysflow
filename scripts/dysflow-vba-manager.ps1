@@ -125,7 +125,8 @@ $script:ExportVerbose = [bool]$VerboseContract
 # zero diagnostic information and the operator has to attach a debugger to
 # find the cause. See issue #484.
 trap {
-    if ($script:HasDysflowResultEmitted) { exit 1 }
+    # #1917: a result held for the top-level close (Write-DysflowResult) must still reach stdout.
+    if ($script:HasDysflowResultEmitted) { if ($script:PendingDysflowResult) { try { [Console]::Out.WriteLine("DYSFLOW_RESULT " + ((@($script:PendingDysflowResult.Result) | ConvertTo-Json -Compress -Depth $script:PendingDysflowResult.Depth) -replace "[\r\n]+", " ")) } catch { } }; exit 1 }
     $trapErr = $_.Exception
     $trapKind = if ($trapErr) { $trapErr.GetType().Name } else { "Unknown" }
     $trapMsg = if ($trapErr) { $trapErr.Message } else { [string]$_ }
@@ -259,6 +260,8 @@ function Write-DysflowOperationMarker {
 Set-ScriptOutputEncodingUtf8
 $script:QuietOutput = [bool]$Json
 $script:HasDysflowResultEmitted = $false
+$script:DeferDysflowResult = $false
+$script:PendingDysflowResult = $null
 
 # Load the shared COM helpers (Get-ProcessIdFromHwnd, Get-MsAccessProcesses*,
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
@@ -316,6 +319,13 @@ function Write-DysflowResult {
         [Parameter(Mandatory = $true)] [object] $Result,
         [Parameter(Mandatory = $false)] [int] $Depth = 20
     )
+    # #1917: while the operation's Access session is open, hold the result until the
+    # top-level close (Complete-AccessSessionClose) knows the Quit outcome.
+    if ($script:DeferDysflowResult) {
+        $script:PendingDysflowResult = [pscustomobject]@{ Result = $Result; Depth = $Depth }
+        $script:HasDysflowResultEmitted = $true
+        return
+    }
     try {
         $payload = @($Result)
         $json = ($payload | ConvertTo-Json -Compress -Depth $Depth) -replace "[\r\n]+"," "
@@ -2359,6 +2369,9 @@ function Open-AccessDatabase {
         # hWnd layer-1 (pre-open), OpenCurrentDatabase, hWnd layer-2 (post-open retry),
         # WMI diff layer-3 (fallback, bounded, never overwrites a stronger layer).
         $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password
+        # #1917: set to $true once the edit is saved, so the close can tolerate a
+        # 0x800706BA Quit of an Access that already died with the edit persisted.
+        $canonical | Add-Member -NotePropertyName EditSaved -NotePropertyValue $false -Force
         $access = $canonical.AccessApplication
 
         # Visible/UserControl are forced to $false inside Open-CanonicalAccess BEFORE
@@ -2518,6 +2531,87 @@ function Close-AccessDatabase {
             }
         }
     }
+
+    # #1917: the caller decides the operation outcome from the Quit outcome.
+    return $closeResult
+}
+
+# Top-level close of the operation's Access session (the script's finally).
+# #1917: the operation's DYSFLOW_RESULT line is held (see Write-DysflowResult) until the
+# close finished, because the result channel accepts exactly ONE line and the Quit outcome
+# can change it:
+#   - the operation already failed  -> keep ITS error, append the close failure to its message;
+#   - the operation succeeded, Quit failed and the failure is not tolerated (edit not saved,
+#     or an HRESULT other than 0x800706BA) -> ACCESS_QUIT_FAILED_EDIT_NOT_SAVED, exit code 1;
+#   - otherwise the held result is emitted unchanged.
+# Returns the exit code the script must end with, or $null to keep the current one.
+function Complete-AccessSessionClose {
+    [CmdletBinding()]
+    Param(
+        $Session,
+        [string]$AccessPath,
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
+        [string]$Password,
+        # Injectable seams forwarded to Close-AccessDatabase — for testing only.
+        [scriptblock]$KillPidAction  = $null,
+        [scriptblock]$LockFileAction = $null
+    )
+
+    $closeResult = $null
+    if ($Session) {
+        $closeArgs = @{ Session = $Session; AccessPath = $AccessPath; Password = $Password }
+        if ($KillPidAction)  { $closeArgs['KillPidAction']  = $KillPidAction }
+        if ($LockFileAction) { $closeArgs['LockFileAction'] = $LockFileAction }
+        try { $closeResult = Close-AccessDatabase @closeArgs } catch { Write-Debug "Diagnostics: $_" }
+    }
+
+    $pending = $script:PendingDysflowResult
+    $script:PendingDysflowResult = $null
+    $script:DeferDysflowResult = $false
+    if ($null -eq $pending) { return $null }
+
+    $result = $pending.Result
+    $depth = $pending.Depth
+    $exitCode = $null
+    $quitFailed = $null -ne $closeResult -and $closeResult.PSObject.Properties['QuitFailed'] -and [bool]$closeResult.QuitFailed
+    if ($quitFailed) {
+        $editSaved = $false
+        if ($Session.PSObject.Properties['CanonicalSession'] -and $Session.CanonicalSession -and
+            $Session.CanonicalSession.PSObject.Properties['EditSaved']) {
+            $editSaved = [bool]$Session.CanonicalSession.EditSaved
+        }
+        $closeFailure = "Access Quit failed during close ({0}: {1}); edit saved: {2}." -f
+            $closeResult.QuitErrorCode, $closeResult.QuitErrorMessage, $editSaved.ToString().ToLowerInvariant()
+
+        $ok = if ($result -is [System.Collections.IDictionary]) { $result['ok'] }
+              elseif ($null -ne $result -and $result.PSObject.Properties['ok']) { $result.ok }
+              else { $null }
+
+        if ($ok -eq $false) {
+            # Keep the ORIGINAL error; the close failure is appended, never substituted.
+            $errorObject = if ($result -is [System.Collections.IDictionary]) { $result['error'] } else { $result.error }
+            if ($errorObject -is [System.Collections.IDictionary]) {
+                $errorObject['message'] = [string]$errorObject['message'] + " | close: " + $closeFailure
+            } elseif ($null -ne $errorObject -and $errorObject.PSObject.Properties['message']) {
+                $errorObject.message = [string]$errorObject.message + " | close: " + $closeFailure
+            }
+        } elseif (-not $closeResult.QuitFailureTolerated) {
+            $result = [ordered]@{
+                ok    = $false
+                error = [ordered]@{
+                    code             = "ACCESS_QUIT_FAILED_EDIT_NOT_SAVED"
+                    message          = "The operation finished, but Access failed to quit and the edit was not confirmed as saved, so it may be lost. " + $closeFailure
+                    quitErrorCode    = $closeResult.QuitErrorCode
+                    quitErrorMessage = $closeResult.QuitErrorMessage
+                }
+            }
+            $depth = [Math]::Max($depth, 6)
+            $exitCode = 1
+        }
+    }
+
+    Write-DysflowResult -Result $result -Depth $depth
+    return $exitCode
 }
 
 function Get-ComponentFolder {
@@ -5151,8 +5245,50 @@ function Invoke-ExportAction {
         # adapter): resolve targets, write nothing, report planned[].
         [switch]$ReadOnly
     )
+    # #1917: a session whose Access died must fail at once with ACCESS_SESSION_DIED instead of
+    # hanging until the PowerShell timeout. $stopIfSessionDied fails the operation when the
+    # owned Access PID is gone (-Stage only) or when -Failure is an RPC-unavailable
+    # (0x800706BA) COM error; otherwise it returns and the caller proceeds. A session without
+    # an attributed PID cannot be probed and only the 0x800706BA rule applies to it.
+    $sessionPid = $null
+    if ($Session.PSObject.Properties['CanonicalSession'] -and $Session.CanonicalSession -and
+        $Session.CanonicalSession.PSObject.Properties['OwnedPid'] -and $null -ne $Session.CanonicalSession.OwnedPid) {
+        $sessionPid = [int]$Session.CanonicalSession.OwnedPid
+    } elseif ($Session.PSObject.Properties['ProcessId'] -and $null -ne $Session.ProcessId) {
+        $sessionPid = [int]$Session.ProcessId
+    }
+    $stopIfSessionDied = {
+        param([string]$Stage, $Failure = $null)
+        $detail = $null
+        if ($null -ne $Failure) {
+            $inner = $Failure.Exception
+            while ($null -ne $inner) {
+                if ((([int64]$inner.HResult) -band 0xFFFFFFFFL) -eq 0x800706BAL) {
+                    $detail = "{0} failed with 0x800706BA: {1}" -f $Stage, $Failure.Exception.Message
+                    break
+                }
+                $inner = $inner.InnerException
+            }
+        } elseif ($sessionPid -gt 0 -and -not (Test-AccessProcessAlive -AccessPid $sessionPid)) {
+            $detail = "the process exited before {0}." -f $Stage
+        }
+        if ($null -eq $detail) { return }
+        $message = "ACCESS_SESSION_DIED: the Access process (PID {0}) of this session is no longer available; {1}" -f $sessionPid, $detail
+        Write-DysflowResult -Result ([ordered]@{
+            ok    = $false
+            error = [ordered]@{ code = "ACCESS_SESSION_DIED"; message = $message; accessPid = $sessionPid }
+        }) -Depth 6
+        throw $message
+    }
+
     $vbProject  = $Session.VbProject
-    $components = $vbProject.VBComponents
+    & $stopIfSessionDied "the first VBComponents access"
+    try {
+        $components = $vbProject.VBComponents
+    } catch {
+        & $stopIfSessionDied "VBComponents" $_
+        throw
+    }
 
     # WU-4 export-manifest (Refs #1724) — reset the in-memory accumulator so a
     # second Invoke-ExportAction call in the same Pester Runspace / MCP session
@@ -5282,11 +5418,15 @@ function Invoke-ExportAction {
             continue
         }
         Write-Status -Message ("[{0}/{1}] Exportando: {2}" -f $idx, $total, $name) -Color Cyan
+        & $stopIfSessionDied ("exporting '{0}'" -f $name)
         try {
             $moduleVerbose = Export-VbaModule -VbProject $vbProject -ModuleName $name -ModulesPath $ModulesPath -AccessApplication $Session.AccessApplication -AccessObjectName $accessObjectName -VbComponentName $vbComponentName
             $exported += $name
             if ($script:ExportVerbose -and $moduleVerbose) { $verboseResults += $moduleVerbose }
         } catch {
+            # #1917: an RPC-unavailable COM failure means the session's Access died; it is
+            # the operation's failure, never a per-module warning.
+            & $stopIfSessionDied ("exporting '{0}'" -f $name) $_
             if ($Json) {
                 $errMsg = $_.Exception.Message
                 Write-Status -Message ("WARN: No se pudo exportar '{0}': {1}" -f $name, $errMsg) -Color Yellow
@@ -5889,6 +6029,9 @@ function Invoke-ImportAction {
         param($moduleNames)
         try {
             Save-VbaProjectModules -AccessApplication $Session.AccessApplication -VbProject $Session.VbProject -ModuleNames @($moduleNames | Select-Object -Unique)
+            if ($Session.PSObject.Properties['CanonicalSession'] -and $Session.CanonicalSession) {
+                $Session.CanonicalSession | Add-Member -NotePropertyName EditSaved -NotePropertyValue $true -Force
+            }
             return $null
         } catch {
             $saveError = [string]$_.Exception.Message
@@ -5911,6 +6054,8 @@ function Invoke-ImportAction {
 }
 
 $session = $null
+# #1917: hold the single DYSFLOW_RESULT line until the session's close is known.
+$script:DeferDysflowResult = $true
 
 try {
     # Issue #1861 - Generate-ERD writes only its Markdown file, so it must not
@@ -6059,7 +6204,6 @@ try {
     }
     exit 1
 } finally {
-    if ($session) {
-        try { Close-AccessDatabase -Session $session -AccessPath $AccessPath -Password $Password } catch { Write-Debug "Diagnostics: $_" }
-    }
+    $closeExitCode = Complete-AccessSessionClose -Session $session -AccessPath $AccessPath -Password $Password
+    if ($null -ne $closeExitCode) { exit $closeExitCode }
 }
