@@ -83,7 +83,9 @@ The script turns them into `### Changes` notes and preserves one physical bullet
 ## Semantic-audit evidence (required by `release-prepare`)
 
 A non-resume `release-prepare` run (`-Bump` or `-Version`) requires a JSON report
-for the commit you are releasing. The report is produced by
+for the commit you are releasing.
+
+The report is produced by
 `skills/dysflow-codegraph-update/assets/scripts/Invoke-DysflowSemanticAudit.ps1`.
 
 Without it the script stops before changing any file.
