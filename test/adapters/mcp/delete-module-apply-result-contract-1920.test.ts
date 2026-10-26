@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineResultContract } from "../../../src/adapters/mcp/contracts/result-contract.js";
 import { startWithSdkServer } from "../../../src/adapters/mcp/stdio.js";
@@ -27,7 +30,9 @@ type PublicResult = {
 };
 
 const ACCESS_PATH = "C:/project/front.accdb";
-const SOURCE_ROOT = "C:/project/src";
+// A real folder: an explicit destinationRoot is the spawn cwd, so it must exist (#1914).
+const SOURCE_ROOT = mkdtempSync(join(tmpdir(), "dysflow-delete-apply-1920-"));
+afterAll(() => rmSync(SOURCE_ROOT, { recursive: true, force: true }));
 
 const APPLY_ARGS = {
   accessPath: ACCESS_PATH,
