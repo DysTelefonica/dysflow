@@ -46,6 +46,22 @@ describe("issue #1899: zombie dump keeps the owner chain and never truncates the
     expect(text).toContain("<-777(missing)");
   });
 
+  it("prints each row's creation time so a reused PID can be told from the call's child", () => {
+    const rows = [
+      {
+        ProcessId: 48280,
+        ParentProcessId: 46028,
+        Name: "conhost.exe",
+        CreationDate: "2026-10-26T01:00:00Z",
+        CommandLine: null,
+      },
+    ];
+
+    const text = formatZombieReport({ rows, childPid: 48280 }).join("\n");
+
+    expect(text).toContain("created=2026-10-26T01:00:00Z");
+  });
+
   it("terminates on a parent cycle", () => {
     const rows = [row(10, 20, "MSACCESS.EXE"), row(20, 10, "node.exe")];
 

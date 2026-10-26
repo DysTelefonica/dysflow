@@ -19,3 +19,8 @@ export declare function formatTerminationLine(input: {
   terminationMs: number;
   liveness: LivenessSummary;
 }): string;
+
+export declare function classifyChildLiveness(input: {
+  alive: boolean;
+  imageName: string | null | undefined;
+}): "dead" | "alive" | "reused";
