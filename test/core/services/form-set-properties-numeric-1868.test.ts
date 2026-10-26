@@ -94,7 +94,7 @@ describe("setProperties writes each value by its property type (#1868)", () => {
     try {
       setProperties(parseFormTxt(FORM), {
         controlName: "Nombre",
-        properties: { ControlTipText: "42" },
+        properties: { AllowAutoCorrect: "42" },
       });
     } catch (caught) {
       error = caught;
@@ -102,7 +102,7 @@ describe("setProperties writes each value by its property type (#1868)", () => {
 
     expect(error).toBeInstanceOf(FormMutationError);
     expect((error as FormMutationError).code).toBe("FORM_PROPERTY_VALUE_INVALID");
-    expect((error as FormMutationError).message).toMatch(/ControlTipText/);
+    expect((error as FormMutationError).message).toMatch(/AllowAutoCorrect/);
   });
 
   it("writes a known numeric property raw even when the control does not carry it yet", () => {

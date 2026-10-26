@@ -27,6 +27,7 @@ import type {
 import {
   KNOWN_ADDABLE_PROPERTY_NAMES,
   KNOWN_FORM_PROPERTY_TYPES,
+  QUOTED_TEXT_PROPERTY_NAMES,
   RAW_NUMBER_PROPERTY_NAMES,
   RAW_TOGGLE_PROPERTY_NAMES,
   runtimeKindOf,
@@ -638,7 +639,7 @@ function valueShapeOf(
 ): "number" | "toggle" | "text" | "date" | undefined {
   const known = KNOWN_FORM_PROPERTY_TYPES.get(key);
   if (known === "date") return "date";
-  if (known === "string") return "text";
+  if (known === "string" || QUOTED_TEXT_PROPERTY_NAMES.has(key)) return "text";
   if (known === "boolean" || RAW_TOGGLE_PROPERTY_NAMES.has(key)) return "toggle";
   if (known !== undefined || RAW_NUMBER_PROPERTY_NAMES.has(key)) return "number";
   const existing = node.entries.find(
@@ -1013,16 +1014,25 @@ export function addControl(ir: FormIR, input: AddControlInput): FormMutationResu
 
   const properties = input.control.properties ?? {};
   const geometryDefaults = { Left: 0, Top: 0, Width: 1440, Height: 300 } as const;
-  const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: quoteName(name) }];
+  const control: FormNode = {
+    blockType: type,
+    entries: [{ kind: "scalar", key: "Name", value: quoteName(name) }],
+    children: [],
+  };
+  const push = (key: string, value: string | number | boolean) =>
+    control.entries.push({
+      kind: "scalar",
+      key,
+      value: serializeTypedValue(control, name, key, value),
+    });
   for (const [key, defaultValue] of Object.entries(geometryDefaults)) {
-    const value = properties[key] ?? defaultValue;
-    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
+    push(key, properties[key] ?? defaultValue);
   }
   for (const [key, value] of Object.entries(properties)) {
     if (key === "Name" || Object.hasOwn(geometryDefaults, key)) continue;
-    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
+    push(key, value);
   }
-  target.children.push({ blockType: type, entries, children: [] });
+  target.children.push(control);
   return mutationResult(ir, next, name);
 }
 

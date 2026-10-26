@@ -250,6 +250,27 @@ export const RAW_NUMBER_PROPERTY_NAMES: ReadonlySet<string> = new Set([
   "TimerInterval",
 ]);
 
+/** Issue #1868 — text properties Access always serializes quoted (`Caption ="7400"`). */
+export const QUOTED_TEXT_PROPERTY_NAMES: ReadonlySet<string> = new Set([
+  "Caption",
+  "ControlSource",
+  "RecordSource",
+  "RowSource",
+  "DefaultValue",
+  "ValidationRule",
+  "ValidationText",
+  "StatusBarText",
+  "ControlTipText",
+  "InputMask",
+  "Tag",
+  "ColumnWidths",
+  "FontName",
+  "LinkChildFields",
+  "LinkMasterFields",
+  "SourceObject",
+  "EventProcPrefix",
+]);
+
 /** Issue #1868 — toggles outside the type table, written as `NotDefault` or a number. */
 export const RAW_TOGGLE_PROPERTY_NAMES: ReadonlySet<string> = new Set([
   "FontItalic",
