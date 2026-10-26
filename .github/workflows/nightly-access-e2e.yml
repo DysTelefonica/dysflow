@@ -84,6 +84,8 @@ jobs:
         shell: pwsh
         env:
           ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+          # #1918: shutdown trace of each COM session (off for every other run).
+          DYSFLOW_TRACE_COM_CLOSE: ${{ runner.temp }}\dysflow-com-close-trace.log
         run: pnpm test:e2e:mcp:release
 
       - name: Run classified Access Vitest suite
