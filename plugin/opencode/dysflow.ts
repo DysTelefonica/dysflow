@@ -1,6 +1,6 @@
 /**
- * Dysflow — OpenCode plugin adapter v2.31.0
- * =========================================
+ * Dysflow — OpenCode plugin adapter
+ * ==================================
  *
  * This file is the OPENCODE side of the dysflow plugin. The Claude Code /
  * Codex sides live in `plugin/claude-code/` and `plugin/codex/` (shell
@@ -23,6 +23,7 @@
  *            plugin loader fires both)
  */
 
+import { createHash } from "node:crypto"
 import type { Plugin } from "@opencode-ai/plugin"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -93,10 +94,16 @@ RED: run \`test_vba\` without asking for a compile; it must fail on the expected
 | Writing/reviewing VBA | \`vba-access\` |
 | Implementing TDD feature | \`access-vba-tdd-loop\` |
 | Working on forms | \`access-form-ui-builder\` |
-| Syncing source <-> binary | \`vba-binary-sync\` |
+| Syncing source <-> binary | \`vba-workflow\` |
+| Auditing source vs binary drift | \`vba-binary-drift\` |
 `
 
-const DYSFLOW_PROTOCOL_MARKER = "[dysflow-plugin v2.31.0]"
+/**
+ * Identifies the injected protocol by a hash of its text, so a changed
+ * protocol always yields a new marker. The plugin is installed as a lone
+ * `.ts` file with no package.json beside it, so it cannot stamp a version.
+ */
+const DYSFLOW_PROTOCOL_MARKER = `[dysflow-plugin protocol:${createHash("sha256").update(DYSFLOW_PROTOCOL).digest("hex").slice(0, 12)}]`
 
 /** Detect if cwd looks like a dysflow project. */
 function isDysflowProject(directory: string): boolean {

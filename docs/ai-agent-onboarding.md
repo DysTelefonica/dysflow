@@ -119,7 +119,7 @@ dysflow clean_stale_markers --older-than-minutes 30 --confirm
 | Tool names, write-flags, error codes | `dysflow-usage` skill (`references/error-codes.md`) |
 | The full hard-rule harness | `dysflow-arnes` skill |
 | TDD loop for VBA tests | `access-vba-tdd` skill + sub-skills |
-| Sync source ⇄ binary | `vba-binary-drift` → `vba-binary-sync` skills |
+| Sync source ⇄ binary | `vba-binary-drift` (audit drift) → `vba-workflow` (sync) skills |
 | Form changes | `access-form-ui-builder` skill |
 | SQL / schema impact | `vba-sql-impact` skill |
 | Diagnose "is this project healthy?" | `dysflow.diagnose` tool — one call returns `projectConfig + filesystem + runtime` |

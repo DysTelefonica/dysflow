@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# dysflow-plugin:subagent-stop (Codex) v2.31.0
+# dysflow-plugin:subagent-stop (Codex)
 # =====================================================================
 # Noop (placeholder for future subagent-traffic capture).
 # DO NOT EDIT MANUALLY — replaced on plugin update.

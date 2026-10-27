@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# dysflow-plugin:session-stop (Codex) v2.31.0
+# dysflow-plugin:session-stop (Codex)
 # =====================================================================
 # DO NOT EDIT MANUALLY — replaced on plugin update.
 # =====================================================================

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# dysflow-plugin:session-start (Codex) v2.31.0
+# dysflow-plugin:session-start (Codex)
 # =====================================================================
 # Mirror of plugin/claude-code/scripts/session-start.sh with the Codex
 # env-var convention (CODEX_PLUGIN_ROOT instead of CLAUDE_PLUGIN_ROOT).
@@ -12,7 +12,7 @@ set -euo pipefail
 PLUGIN_ROOT="${CODEX_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 cat <<'EOF'
-[dysflow-plugin v2.31.0] Loading canonical workflow.
+[dysflow-plugin] Loading canonical workflow.
 
 First calls:
   1. bootstrap({cwd}) -- the only mandatory first call; humanCompilePending is a reminder, never a block (HR-1)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# dysflow-plugin:user-prompt-submit (Codex) v2.31.0
+# dysflow-plugin:user-prompt-submit (Codex)
 # =====================================================================
 # DO NOT EDIT MANUALLY — replaced on plugin update.
 # =====================================================================
@@ -22,7 +22,7 @@ for path in ../*/.dysflow; do
 done
 
 if [ -n "$sibling" ]; then
-    echo "[dysflow-plugin v2.31.0] Detected git worktree without .dysflow/."
+    echo "[dysflow-plugin] Detected git worktree without .dysflow/."
     echo "  Sibling:   $sibling"
     echo "  Bootstrap: dysflow setup --cwd $(pwd) --apply --access-path <sibling-accessPath>"
 fi
