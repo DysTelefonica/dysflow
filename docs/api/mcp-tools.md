@@ -644,7 +644,9 @@ A third state breaks that tie: the state both sides last provably agreed on.
 
 The base is local, unversioned state in `<project>/.dysflow/runtime/verify-base/`, which is gitignored. It is written only when a `.dysflow/` folder exists in the project root.
 
-A failed base write never fails `verify_code` or the export; it adds a `verify-base` warning diagnostic. `verify_code` never writes Access or source files; the base is its only write. Deleting the folder only falls back to the two-text direction.
+A failed base write never fails `verify_code` or the export; it adds a `verify-base` warning diagnostic.
+
+`verify_code` never writes Access or source files; the base is its only write. Deleting the folder only falls back to the two-text direction.
 
 A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt`.**
 
