@@ -10,6 +10,8 @@ import { resolveMcpE2eToolName } from "./mcp-e2e-tool-aliases.mjs";
 import {
   classifyChildLiveness,
   formatTerminationLine,
+  isSameProcess,
+  SPAWN_IDENTITY_SLACK_MS,
   summarizeLiveness,
   zombieVerdict,
 } from "./zombie-liveness.mjs";
@@ -36,6 +38,7 @@ import { formatZombieReport } from "./zombie-process-dump.mjs";
 /**
  * @typedef {Object} CallMcpResult
  * @property {number} [childPid]
+ * @property {number} [spawnedAtMs] - Date.now() taken right after spawn() returned (#1899)
  * @property {boolean} timedOut
  * @property {boolean} isError
  * @property {string} [text]
@@ -49,7 +52,7 @@ import { formatZombieReport } from "./zombie-process-dump.mjs";
  * @property {Set<number>} suiteOwnPids
  * @property {RecordRow[]} rows
  * @property {(timeoutMs?: number, pollMs?: number) => Promise<{found: boolean, pids?: number[], elapsed: number}>} waitForNoOwnPids
- * @property {(pid: number) => boolean} isOwnPidAlive
+ * @property {(pid: number, options?: { spawnedAtMs?: number, verifyIdentity?: boolean }) => boolean} isOwnPidAlive
  * @property {(text: unknown) => string} [normalize]
  * @property {{exitCode: number | null}} [processObj]
  * @property {(...args: unknown[]) => void} [consoleLog]
@@ -147,13 +150,18 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
   const postToolZombie = await ctx.waitForNoOwnPids(1000, 100);
   // Filter the result to the child of THIS tool only (so we don't keep
   // pre-existing watch entries alive forever).
-  const toolChildAlive = result.childPid ? await childStillOwned(ctx, result.childPid) : false;
+  const toolChildAlive = result.childPid
+    ? await childStillOwned(ctx, result.childPid, result.spawnedAtMs)
+    : false;
   // #1899: a child that answers at the check but stops within the bounded window is a late
   // exit, not a leak. The verdict waits for that window before it fails the battery.
   let liveness = null;
-  // Sample with the same predicate as the check, so a lingering descendant is not read as a late exit.
+  // Sample with the same identity-aware predicate as the check, so neither a lingering
+  // descendant is read as a late exit nor a reused PID as a lingering child.
   if (toolChildAlive && result.childPid) {
-    liveness = await sampleLiveness(() => ctx.isOwnPidAlive(result.childPid));
+    liveness = await sampleLiveness(() =>
+      ctx.isOwnPidAlive(result.childPid, { spawnedAtMs: result.spawnedAtMs, verifyIdentity: true }),
+    );
   }
   const verdict = zombieVerdict({ aliveAtCheck: toolChildAlive, liveness });
   const zombiePass = verdict !== "zombie";
@@ -240,9 +248,13 @@ export async function record(ctx, { area, tool, args = {}, options = {} }) {
  * keeps it from ever blocking on a prompt; stderr is piped rather than
  * inherited so a failing probe cannot pollute the suite log.
  */
+// #1899: the projection also carries Name and the creation time (Unix ms), so the same
+// snapshot tells a reused PID and a stale ParentProcessId link from the call's own processes.
 const DESCENDANT_PROBE_COMMAND =
   "powershell -NoProfile -NonInteractive -Command " +
-  '"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation"';
+  '"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,' +
+  "@{n='CreationMs';e={if ($_.CreationDate) {([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}}}" +
+  ' | ConvertTo-Csv -NoTypeInformation"';
 
 /**
  * How long one process-table snapshot may serve consecutive walks.
@@ -321,21 +333,36 @@ function parseCsvRow(line) {
  * @param {number} rootPid
  * @param {() => string} [probeFn] - injection point so tests can supply a
  *   fixed process table or force the unavailable path.
+ * @param {{ spawnedAtMs?: number }} [options] - when the root's spawn time is
+ *   known, links that cannot belong to the spawned root are dropped (#1899).
  * @returns {number[]}
  */
-export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
+export function walkDescendantsPids(rootPid, probeFn = probeProcessTable, options = {}) {
   if (!rootPid || rootPid <= 0) return [];
-  let stdout;
+  const table = readProcessTable(probeFn);
+  if (table === null) return [];
+  return descendantsFromTable(parseProcessTable(table), rootPid, options.spawnedAtMs);
+}
+
+/**
+ * Read the process table through the shared snapshot. Returns null when the
+ * probe is unavailable; the reason is recorded in `getDescendantWalkDiagnostics()`.
+ *
+ * @param {() => string} probeFn
+ * @returns {string | null}
+ */
+function readProcessTable(probeFn) {
   const now = Date.now();
   if (
     processTableSnapshot !== null &&
     now - processTableSnapshot.takenAt < PROCESS_TABLE_SNAPSHOT_TTL_MS
   ) {
-    return descendantsFromTable(processTableSnapshot.table, rootPid);
+    return processTableSnapshot.table;
   }
   try {
-    stdout = probeFn();
-    processTableSnapshot = { table: String(stdout), takenAt: now };
+    const table = String(probeFn());
+    processTableSnapshot = { table, takenAt: now };
+    return table;
   } catch (error) {
     // Record the FIRST reason only: the suite reports the degradation once per
     // run, and a later identical failure must not churn the message.
@@ -343,50 +370,92 @@ export function walkDescendantsPids(rootPid, probeFn = probeProcessTable) {
       descendantWalkUnavailableReason =
         error instanceof Error ? error.message : String(error ?? "unknown probe failure");
     }
-    return [];
+    return null;
   }
-  return descendantsFromTable(stdout, rootPid);
 }
 
 /**
- * BFS the descendants of `rootPid` out of one raw process-table snapshot.
- * Pure: the same table always yields the same answer, which is what makes the
- * snapshot shareable across a poll burst.
+ * Parse one raw process-table snapshot into rows keyed by pid. Pure.
+ *
+ * `ConvertTo-Csv -NoTypeInformation` emits a quoted header row followed by
+ * one row per process. Resolve the columns BY NAME: the previous wmic parser
+ * hard-coded positional indexes and would have inverted parent and child if
+ * the projection ever changed. Name and CreationMs are optional columns; a
+ * missing or empty cell reads as unknown.
  *
  * @param {string} table - raw `ConvertTo-Csv` output.
- * @param {number} rootPid
- * @returns {number[]}
+ * @returns {Map<number, { pid: number, parent: number, name: string | null, creationMs: number | null }>}
  */
-function descendantsFromTable(table, rootPid) {
-  // `ConvertTo-Csv -NoTypeInformation` emits a quoted header row followed by
-  // one row per process. Resolve the columns BY NAME: the previous wmic parser
-  // hard-coded positional indexes and would have inverted parent and child if
-  // the projection ever changed.
-  const childrenOf = new Map();
+function parseProcessTable(table) {
+  const rows = new Map();
   const lines = String(table).trim().split(/\r?\n/).filter(Boolean);
   const header = lines.length > 0 ? parseCsvRow(lines[0]) : [];
   const pidColumn = header.indexOf("ProcessId");
   const parentColumn = header.indexOf("ParentProcessId");
-  if (pidColumn === -1 || parentColumn === -1) return [];
+  const nameColumn = header.indexOf("Name");
+  const creationColumn = header.indexOf("CreationMs");
+  if (pidColumn === -1 || parentColumn === -1) return rows;
 
   for (const line of lines.slice(1)) {
     const cells = parseCsvRow(line);
     const pid = Number.parseInt(cells[pidColumn] ?? "", 10);
     const parent = Number.parseInt(cells[parentColumn] ?? "", 10);
     if (!Number.isFinite(parent) || !Number.isFinite(pid)) continue;
-    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
-    childrenOf.get(parent).push(pid);
+    const name = nameColumn === -1 ? "" : (cells[nameColumn] ?? "");
+    const creationMs =
+      creationColumn === -1 ? Number.NaN : Number.parseInt(cells[creationColumn] ?? "", 10);
+    rows.set(pid, {
+      pid,
+      parent,
+      name: name.length > 0 ? name : null,
+      creationMs: Number.isFinite(creationMs) ? creationMs : null,
+    });
   }
+  return rows;
+}
+
+/**
+ * BFS the descendants of `rootPid` out of parsed process rows. Pure: the same
+ * table always yields the same answer, which is what makes the snapshot
+ * shareable across a poll burst.
+ *
+ * #1899: Windows never clears ParentProcessId, so a row naming a parent is a
+ * candidate link, not proof. A link is kept only when the child was created no
+ * earlier than its parent (for the root: no earlier than the spawn minus the
+ * slack) and, when the root PID is now held by a later process, before that
+ * holder was created. A row without a creation time is kept (fail closed).
+ *
+ * @param {Map<number, { pid: number, parent: number, creationMs: number | null }>} rows
+ * @param {number} rootPid
+ * @param {number | undefined} spawnedAtMs
+ * @returns {number[]}
+ */
+function descendantsFromTable(rows, rootPid, spawnedAtMs) {
+  const childrenOf = new Map();
+  for (const row of rows.values()) {
+    if (!childrenOf.has(row.parent)) childrenOf.set(row.parent, []);
+    childrenOf.get(row.parent).push(row);
+  }
+  const rootRow = rows.get(rootPid);
+  const rootReused = isSameProcess({ spawnedAtMs, row: rootRow }) === "reused";
+  const rootWindow = {
+    from: Number.isFinite(spawnedAtMs) ? spawnedAtMs - SPAWN_IDENTITY_SLACK_MS : -Infinity,
+    until: rootReused ? rootRow.creationMs : Infinity,
+  };
   const descendants = [];
-  const queue = [rootPid];
+  const queue = [{ pid: rootPid, window: rootWindow }];
   while (queue.length > 0) {
     const current = queue.shift();
     if (current === undefined) break;
-    const children = childrenOf.get(current);
+    const children = childrenOf.get(current.pid);
     if (children === undefined) continue;
     for (const child of children) {
-      descendants.push(child);
-      queue.push(child);
+      const created = child.creationMs;
+      if (created !== null && (created < current.window.from || created >= current.window.until)) {
+        continue;
+      }
+      descendants.push(child.pid);
+      queue.push({ pid: child.pid, window: { from: created ?? -Infinity, until: Infinity } });
     }
   }
   return descendants;
@@ -397,28 +466,47 @@ function descendantsFromTable(table, rootPid) {
  * Fast path: `process.kill(pid, 0)` succeeds → return true (no probe at all).
  * Slow path: parent is gone → walk descendants and `process.kill` each.
  *
+ * #1899: with `spawnedAtMs` or `verifyIdentity`, an answering PID is first
+ * matched against the process table. A process created after the spawn, or one
+ * whose image the harness never spawns, took the PID over after the child
+ * exited, so only the descendants are checked. An identity that cannot be read
+ * keeps the PID counted as alive: the unknown case keeps the pre-#1899
+ * behaviour, because a missed leak is worse than a false stop.
+ *
  * @param {number} pid
- * @param {(rootPid: number) => number[]} [walkDescendantsFn] - injection
- *   point so tests can replace the process-table walk with a fake.
+ * @param {(rootPid: number, probeFn?: () => string, options?: { spawnedAtMs?: number }) => number[]} [walkDescendantsFn] -
+ *   injection point so tests can replace the process-table walk with a fake.
+ * @param {{ spawnedAtMs?: number, verifyIdentity?: boolean, probeFn?: () => string }} [options]
  * @returns {boolean}
  */
-export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsPids) {
+export function isPidOrDescendantAlive(pid, walkDescendantsFn = walkDescendantsPids, options = {}) {
   if (!pid || pid <= 0) return false;
+  const { spawnedAtMs, verifyIdentity = false, probeFn = probeProcessTable } = options;
+  let answers = true;
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
-    const descendants = walkDescendantsFn(pid);
-    for (const d of descendants) {
-      try {
-        process.kill(d, 0);
-        return true;
-      } catch {
-        /* descendant also gone — keep checking */
-      }
-    }
-    return false;
+    answers = false;
   }
+  if (answers) {
+    if (!verifyIdentity && !Number.isFinite(spawnedAtMs)) return true;
+    const table = readProcessTable(probeFn);
+    const row = table === null ? undefined : parseProcessTable(table).get(pid);
+    const reused =
+      isSameProcess({ spawnedAtMs, row }) === "reused" ||
+      classifyChildLiveness({ alive: true, imageName: row?.name }) === "reused";
+    if (!reused) return true;
+  }
+  const descendants = walkDescendantsFn(pid, probeFn, { spawnedAtMs });
+  for (const d of descendants) {
+    try {
+      process.kill(d, 0);
+      return true;
+    } catch {
+      /* descendant also gone — keep checking */
+    }
+  }
+  return false;
 }
 // Prints the zombie-owner report (#1899). Reads the full process table so the
 // formatter sees the child's ancestors; the formatter selects what to print.
@@ -446,8 +534,8 @@ function dumpZombieDiagnostics(tool, childPid) {
   for (const line of formatZombieReport({ rows, childPid })) console.log(line);
 }
 
-// Samples only the child's own liveness with kill(pid, 0) (no descendant walk),
-// every 50 ms for at most 3 s, and stops at the first death (#1899).
+// Samples the child's liveness with the zombie-check's own predicate every 50 ms for
+// at most 3 s, and stops at the first death (#1899).
 const LIVENESS_WINDOW_MS = 3000;
 const LIVENESS_STEP_MS = 50;
 async function sampleLiveness(isAlive) {
@@ -463,36 +551,11 @@ async function sampleLiveness(isAlive) {
   return summarizeLiveness(samples);
 }
 
-// #1899: a live PID is the call's child only if its image is the wrapper or the MCP
-// node process. Probe the PID directly first; the image lookup runs only when it answers
-// (the failing path), so the healthy path pays nothing extra.
-async function childStillOwned(ctx, pid) {
-  let answers = true;
-  try {
-    process.kill(pid, 0);
-  } catch {
-    answers = false;
-  }
-  // #1899: a dead direct PID is judged on a fresh process table, not a cached one.
-  if (!answers) {
-    resetProcessTableSnapshot();
-    return ctx.isOwnPidAlive(pid);
-  }
-  const imageName = imageNameOfPid(pid);
-  return classifyChildLiveness({ alive: true, imageName }) === "alive";
-}
-
-function imageNameOfPid(pid) {
-  const ps = spawnSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `(Get-CimInstance Win32_Process -Filter "ProcessId=${Number(pid)}").Name`,
-    ],
-    { encoding: "utf8", windowsHide: true, timeout: 10000 },
-  );
-  const name = (ps.stdout || "").trim();
-  return ps.status === 0 && name.length > 0 ? name : null;
+// #1899: the zombie-check reads a fresh process table and judges an answering PID by
+// its identity (creation time against the spawn, image name), not by the answer alone.
+// The table is read only when the PID answers or is gone, so the healthy path pays one
+// probe as before.
+async function childStillOwned(ctx, pid, spawnedAtMs) {
+  resetProcessTableSnapshot();
+  return ctx.isOwnPidAlive(pid, { spawnedAtMs, verifyIdentity: true });
 }

@@ -366,6 +366,19 @@ const existingModuleName = "Funciones Generales";
 // records the `childPid` returned by every `callMcp` and the zombie
 // checks verify only those PIDs — never a global MSACCESS.EXE scan.
 const suiteOwnPids = new Set();
+// #1899: Date.now() taken right after each suite-owned spawn returned, keyed by PID. Liveness
+// checks use it to tell the call's child from a later process that reused its PID. A PID
+// without an entry (e.g. one read back from a resume checkpoint) has an unknown identity
+// and is judged as before.
+const ownPidSpawnTimes = new Map();
+function trackOwnPidSpawn(pid) {
+  if (pid) ownPidSpawnTimes.set(pid, Date.now());
+}
+// Wraps spawn() so the spawn time is recorded the moment spawn() returns (#1899).
+function tracked(child) {
+  trackOwnPidSpawn(child.pid);
+  return child;
+}
 const runIdentity = await hashRunIdentity([
   ...runtimeIdentityPaths(cliCommand),
   fileURLToPath(import.meta.url),
@@ -467,7 +480,7 @@ function extractMcpErrorCode(text) {
 }
 
 async function callMcp(method, params = {}, options = {}) {
-  const child = spawn(cliCommand, mcpCliArgs, {
+  const child = tracked(spawn(cliCommand, mcpCliArgs, {
     cwd: tempRoot,
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
@@ -477,7 +490,7 @@ async function callMcp(method, params = {}, options = {}) {
       DYSFLOW_ACCESS_PASSWORD: password,
       DYSFLOW_BACKEND_PASSWORD: password,
     },
-  });
+  }));
   const childPid = child.pid;
   if (childPid) {
     suiteOwnPids.add(childPid);
@@ -491,7 +504,7 @@ async function callMcp(method, params = {}, options = {}) {
       params,
       timeoutMs: options.timeoutMs ?? timeoutMs,
       closeWatchdogMs: options.closeWatchdogMs ?? closeWatchdogMs,
-    });
+    }).then((result) => ({ ...result, spawnedAtMs: ownPidSpawnTimes.get(childPid) }));
   } finally {
     if (childPid && !isOwnPidAlive(childPid)) {
       suiteOwnPids.delete(childPid);
@@ -568,6 +581,7 @@ async function recordRecoveryTokenTrioJourney() {
       },
     });
     childPid = child.pid;
+    trackOwnPidSpawn(childPid);
     if (childPid) {
       suiteOwnPids.add(childPid);
       await resumeController.registerOwnedPid(childPid);
@@ -1704,6 +1718,7 @@ try {
     command: cliCommand, args: mcpCliArgs, shell: true,
     env: { ...process.env, ACCESS_VBA_PASSWORD: "", DYSFLOW_ACCESS_PASSWORD: "" },
     onChild: async (pid) => {
+      trackOwnPidSpawn(pid);
       if (pid) {
         suiteOwnPids.add(pid);
         await resumeController.registerOwnedPid(pid);
@@ -3568,8 +3583,13 @@ addResult({
 // process is gone. We never scan global MSACCESS.EXE — only the PIDs this
 // E2E itself spawned. The descendant walk is delegated to the helper so
 // vitest tests and the E2E suite share the same implementation.
-function isOwnPidAlive(pid) {
-  return isPidOrDescendantAlive(pid);
+// #1899: the PID's recorded spawn time makes every caller identity-aware, so a
+// PID reused by a later process is not read as the call's child.
+function isOwnPidAlive(pid, options = {}) {
+  return isPidOrDescendantAlive(pid, undefined, {
+    ...options,
+    spawnedAtMs: options.spawnedAtMs ?? ownPidSpawnTimes.get(pid),
+  });
 }
 
 async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {

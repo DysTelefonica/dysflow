@@ -16,6 +16,7 @@ import { spawn } from "node:child_process";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   getDescendantWalkDiagnostics,
+  isPidOrDescendantAlive,
   resetDescendantWalkDiagnostics,
   walkDescendantsPids,
 } from "../../E2E_testing/_helpers/mcp-e2e-record.mjs";
@@ -122,5 +123,65 @@ describe("descendant walk probe (#1690)", () => {
     );
 
     expect(walkDescendantsPids(100, () => table)).toEqual([200]);
+  });
+});
+
+// #1899: Windows never clears ParentProcessId. Once the call's wrapper exits and its PID is
+// reused, processes spawned by the new holder (or left over by an older holder) still name
+// the root as their parent. Creation times decide which of them can belong to the call.
+describe("descendant walk ignores stale ParentProcessId links (#1899)", () => {
+  const T = 1_700_000_000_000;
+  const header = '"ProcessId","ParentProcessId","Name","CreationMs"';
+  const row = (pid: number, parent: number, name: string, creationMs: number | "") =>
+    `"${pid}","${parent}","${name}","${creationMs}"`;
+
+  beforeEach(() => {
+    resetDescendantWalkDiagnostics();
+  });
+
+  it("keeps only processes created between the spawn and the root PID's reuse", () => {
+    const table = [
+      header,
+      row(100, 1, "conhost.exe", T + 10_000), // the root PID, now held by a later process
+      row(200, 100, "node.exe", T + 500), // the call's real child, created before the reuse
+      row(500, 200, "MSACCESS.EXE", T + 600), // its grandchild
+      row(300, 100, "cmd.exe", T + 12_000), // spawned by the PID's new holder
+      row(400, 100, "svchost.exe", T - 60_000), // left by an older holder of the PID
+      row(600, 200, "cmd.exe", T + 100), // created before its listed parent: stale link
+    ].join("\r\n");
+
+    expect(walkDescendantsPids(100, () => table, { spawnedAtMs: T }).sort()).toEqual([200, 500]);
+  });
+
+  it("keeps a process whose creation time is unknown (fail closed)", () => {
+    const table = [header, row(100, 1, "conhost.exe", T + 10_000), row(200, 100, "x", "")].join(
+      "\r\n",
+    );
+
+    expect(walkDescendantsPids(100, () => table, { spawnedAtMs: T })).toEqual([200]);
+  });
+
+  it("does not count a live PID created after the spawn as the call's child", () => {
+    const table = [header, row(process.pid, 1, "node.exe", T + 10_000)].join("\r\n");
+
+    expect(
+      isPidOrDescendantAlive(process.pid, undefined, { spawnedAtMs: T, probeFn: () => table }),
+    ).toBe(false);
+  });
+
+  it("still counts a live PID created before the spawn as the call's child", () => {
+    const table = [header, row(process.pid, 1, "node.exe", T - 10)].join("\r\n");
+
+    expect(
+      isPidOrDescendantAlive(process.pid, undefined, { spawnedAtMs: T, probeFn: () => table }),
+    ).toBe(true);
+  });
+
+  it("counts a live PID whose identity cannot be read as the call's child (fail closed)", () => {
+    const table = [header, row(4, 0, "System", "")].join("\r\n");
+
+    expect(
+      isPidOrDescendantAlive(process.pid, undefined, { spawnedAtMs: T, probeFn: () => table }),
+    ).toBe(true);
   });
 });
