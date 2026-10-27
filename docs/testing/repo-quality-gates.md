@@ -48,9 +48,10 @@ outside every Git checkout (currently `C:\actions-runner\_fixtures\dysflow`).
 
 On demand, the same battery runs through the manual workflow
 `.github/workflows/access-e2e-manual.yml` ("Access E2E (manual)",
-`workflow_dispatch` only) on any branch. It builds from source, records the
-#1918 COM shutdown trace and Access crash events by default, can also run the
-real-Access Vitest suite, and is never a required check.
+`workflow_dispatch` only) on any branch, and is never a required check.
+
+It builds from source and records the #1918 COM shutdown trace and Access crash
+events by default. It can also run the real-Access Vitest suite.
 
 CodeQL runs weekly and on `workflow_dispatch` (`.github/workflows/codeql.yml`),
 not on pull requests.
