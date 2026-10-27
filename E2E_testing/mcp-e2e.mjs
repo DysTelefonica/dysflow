@@ -3046,6 +3046,8 @@ if (formRoundTripBaselinePass) {
     if (scenario.binaryValues !== undefined) {
       const { control, properties } = scenario.binaryValues;
       await rm(formRoundTripExportPath, { recursive: true, force: true });
+      // export_modules refuses a missing exportPath folder (#1914), so recreate it empty.
+      await mkdir(formRoundTripExportPath, { recursive: true });
       await record("forms", "export_modules:form-round-trip", {
         ...ctx,
         moduleNames: [FORM_ROUND_TRIP_MODULE],
