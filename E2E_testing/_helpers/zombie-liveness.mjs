@@ -30,6 +30,26 @@ export function classifyChildLiveness({ alive, imageName }) {
   return CHILD_IMAGES.has(imageName.toLowerCase()) ? "alive" : "reused";
 }
 
+// Tolerance between the harness's Date.now() and a process CreationDate. The harness takes
+// `spawnedAtMs` right after `spawn()` returns, so the wrapper was created at or before it;
+// the slack only absorbs clock rounding. A wrapper that exits and loses its PID within this
+// window is still read as the child: the conservative, pre-#1899 outcome.
+export const SPAWN_IDENTITY_SLACK_MS = 1000;
+
+/**
+ * Whether the process now holding a PID is the one the harness spawned (#1899). A process
+ * created after the spawn returned took the PID over once the child exited. Without a
+ * creation time or a spawn time the answer is "unknown", and callers keep treating the PID
+ * as the child.
+ * @param {{ spawnedAtMs: number | null | undefined, row: { creationMs?: number | null } | null | undefined }} input
+ * @returns {"same" | "reused" | "unknown"}
+ */
+export function isSameProcess({ spawnedAtMs, row }) {
+  const creationMs = row?.creationMs;
+  if (!Number.isFinite(spawnedAtMs) || !Number.isFinite(creationMs)) return "unknown";
+  return creationMs > spawnedAtMs + SPAWN_IDENTITY_SLACK_MS ? "reused" : "same";
+}
+
 /**
  * @param {{
  *   tool: string,

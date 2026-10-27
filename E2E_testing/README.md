@@ -95,7 +95,8 @@ The helper enforces three invariants that make the suite safe to run unattended:
 2. **Suite-owned PID tracking**: every tool's child PID is added to the watchlist so the post-tool
    zombie check knows what to look for.
 3. **Post-tool `:zombie-check` row**: automatically appended after every record. Verifies the
-   child process exited cleanly within 1 second.
+   child process and its descendants exited; a child still answering gets a 3-second window.
+   A PID held by a process created after the spawn is a reused PID, not the child (#1899).
 
 If you bypass `record()`, you lose all three. Don't.
 

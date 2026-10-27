@@ -27,7 +27,11 @@
 // @ts-nocheck — the imported `record` helper has no .d.mts yet; the
 // runtime contract is exercised by vitest and pinned by these tests.
 import { describe, expect, it } from "vitest";
-import { record } from "../../E2E_testing/_helpers/mcp-e2e-record.mjs";
+import {
+  isPidOrDescendantAlive,
+  record,
+  resetDescendantWalkDiagnostics,
+} from "../../E2E_testing/_helpers/mcp-e2e-record.mjs";
 
 interface FakeOptions {
   childPid?: number;
@@ -257,6 +261,48 @@ describe("mcp-e2e record() — extracted helper exercises the real driver", () =
     expect(suiteOwnPids.has(9999)).toBe(true);
     expect(rows[1]?.tool).toBe("list_access_operations:zombie-check");
     expect(rows[1]?.pass).toBe(false);
+  });
+
+  // #1899 (run 40286564767): the call's wrapper exited and Windows handed its PID to a later
+  // process, so `kill(pid, 0)` kept answering for the whole sampling window. Only the process
+  // table is faked here; the PID answers for real (it is this test process).
+  describe("H7d — a reused child PID is judged by its identity (#1899)", () => {
+    const spawnedAtMs = 1_700_000_000_000;
+    const tableWith = (creationMs: number) =>
+      [
+        '"ProcessId","ParentProcessId","Name","CreationMs"',
+        `"${process.pid}","1","node.exe","${creationMs}"`,
+      ].join("\r\n");
+    const identityAwareCtx = (creationMs: number) => {
+      resetDescendantWalkDiagnostics();
+      const made = makeCtx({ harness: { childPid: process.pid, text: "ok" } });
+      made.ctx.callMcp = async () => ({ ...made.harness, spawnedAtMs });
+      made.ctx.isOwnPidAlive = (pid: number, options: Record<string, unknown> = {}) =>
+        isPidOrDescendantAlive(pid, undefined, {
+          ...options,
+          probeFn: () => tableWith(creationMs),
+        });
+      return made;
+    };
+
+    it("passes clean when the answering PID was created after the spawn", async () => {
+      const { ctx, rows } = identityAwareCtx(spawnedAtMs + 60_000);
+
+      await record(ctx, { area: "operations", tool: "list_access_operations" });
+
+      expect(rows[1]?.tool).toBe("list_access_operations:zombie-check");
+      expect(rows[1]?.pass).toBe(true);
+      expect(rows[1]?.summary).toBe("clean");
+    });
+
+    it("still stops when the answering PID is the call's own child", async () => {
+      const { ctx, rows } = identityAwareCtx(spawnedAtMs - 10);
+
+      await expect(
+        record(ctx, { area: "operations", tool: "list_access_operations" }),
+      ).rejects.toThrow(/UNSAFE-STOP/);
+      expect(rows[1]?.pass).toBe(false);
+    }, 15_000);
   });
 
   it("H7c — leaked PID detected at preflight throws REFUSE-START before any tool runs", async () => {

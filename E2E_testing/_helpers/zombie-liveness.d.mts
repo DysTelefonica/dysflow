@@ -25,6 +25,13 @@ export declare function classifyChildLiveness(input: {
   imageName: string | null | undefined;
 }): "dead" | "alive" | "reused";
 
+export declare const SPAWN_IDENTITY_SLACK_MS: number;
+
+export declare function isSameProcess(input: {
+  spawnedAtMs: number | null | undefined;
+  row: { creationMs?: number | null } | null | undefined;
+}): "same" | "reused" | "unknown";
+
 export declare function zombieVerdict(input: {
   aliveAtCheck: boolean;
   liveness: { aliveAtEnd: boolean } | null;
