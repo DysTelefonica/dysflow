@@ -1,9 +1,8 @@
 name: CodeQL
 
+# Weekly, non-blocking SAST. Not a required check on main.
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
   schedule:
     - cron: '0 4 * * 1'
 
