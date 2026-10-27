@@ -7,7 +7,7 @@ import type { DysflowError } from "../contracts/index.js";
  *
  * When a caller invokes a write-tool (`import_modules`, `export_modules`,
  * `sync_binary`) with `transactional: true`, the binary is copied to a
- * staging directory under `<projectRoot>/.dysflow/runtime/transactional/<uuid>/`,
+ * staging directory under `<binaryDir>/.dysflow-transactional/<uuid>/`,
  * the actual write runs against the copy, a post-write verification step
  * runs (if supplied), and on success the copy is atomically renamed back
  * to the original binary. On ANY failure the copy is deleted and the
@@ -65,7 +65,7 @@ export type TransactionalWriteInput<T> = {
   fileSystem: TransactionalFileSystemPort;
   /**
    * Directory under which staging subdirectories are created, e.g.
-   * `<projectRoot>/.dysflow/runtime/transactional`. Must already exist
+   * `<binaryDir>/.dysflow-transactional`. Must already exist
    * or be creatable via `mkdir({ recursive: true })`.
    */
   stagingRoot: string;
