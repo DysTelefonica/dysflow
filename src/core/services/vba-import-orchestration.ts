@@ -1,3 +1,5 @@
+import { ACCESS_DATABASE_LOCKED_REMEDIATION } from "../contracts/index.js";
+
 export type VbaImportScope = "explicit" | "all";
 
 export type VbaImportRawSuccess = {
@@ -118,8 +120,7 @@ const ERROR_REMEDIATION: Readonly<Record<string, string>> = {
     "Rename the source files to use the prefixed form name (Form_<base> or Report_<base>) or delete the legacy prefixed form from the binary before retrying.",
   FORM_SOURCE_MALFORMED:
     "Repair the malformed form/report source before retrying; the binary was not mutated.",
-  ACCESS_DATABASE_LOCKED:
-    "Close the verified lock owner or reconcile the tracked Access operation before retrying.",
+  ACCESS_DATABASE_LOCKED: ACCESS_DATABASE_LOCKED_REMEDIATION,
   VBA_IMPORT_PHASE_FAILED:
     "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
 };
@@ -319,7 +320,19 @@ function classifyError(attempt: VbaImportRawFailure): string {
   for (const prefix of TYPED_PREFIXES) {
     if (attempt.message.startsWith(`${prefix}:`)) return prefix;
   }
-  return attempt.databaseLocked === true ? "ACCESS_DATABASE_LOCKED" : "VBA_IMPORT_PHASE_FAILED";
+  return attempt.databaseLocked === true || isExclusiveAccessLossMessage(attempt.message)
+    ? "ACCESS_DATABASE_LOCKED"
+    : "VBA_IMPORT_PHASE_FAILED";
+}
+
+/**
+ * #1912 — Access reports a missing exclusive access in the host UI language
+ * ("You do not have exclusive access to the database..." /
+ * "No tiene acceso exclusivo a la base de datos..."). It is a lock condition,
+ * never a parser rejection, whether or not the runner tagged the attempt.
+ */
+function isExclusiveAccessLossMessage(message: string): boolean {
+  return /exclusive access|acceso exclusivo/i.test(message);
 }
 
 function orderedResults(state: VbaImportOrchestrationState): VbaImportModuleResult[] {

@@ -2199,7 +2199,9 @@ function Test-IsAccessDatabaseLockedError {
         -or $msg -match 'already in use' `
         -or $msg -match 'cannot be opened or locked' `
         -or $msg -match 'placed in a state by another' `
-        -or $msg -match 'opened exclusively by')
+        -or $msg -match 'opened exclusively by' `
+        -or $msg -match 'exclusive access' `
+        -or $msg -match 'acceso exclusivo')
 }
 
 function Get-AccessDatabaseLockedOwner {
@@ -6190,7 +6192,7 @@ try {
                 if ($locked.user) { $bits += "user '$($locked.user)'" }
                 $remediation += ($bits -join ", ") + ")"
             }
-            $remediation += ", then retry."
+            $remediation += ", then retry. Use list_access_operations and access_force_cleanup_orphaned to find a dysflow-tracked or orphaned holder."
             Write-DysflowResult -Result ([ordered]@{
                 ok = $false
                 error = [ordered]@{

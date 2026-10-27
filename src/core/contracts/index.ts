@@ -390,9 +390,18 @@ export {
 } from "./result-writer.js";
 
 /**
+ * #1912 — Access cannot save VBA changes while another process holds the
+ * database open. The remediation names that lock and the dysflow recovery
+ * tools; it never suggests killing MSACCESS.EXE by name.
+ */
+export const ACCESS_DATABASE_LOCKED_REMEDIATION =
+  "Another process holds the Access database open, so Access has no exclusive access and cannot save VBA changes. Run list_access_operations to reconcile a tracked Access operation and access_force_cleanup_orphaned to list orphaned Access processes; release the lock holder only after verifying its pid, then retry.";
+
+/**
  * Creates a normalized Dysflow error for failed operation results.
  */
 const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
+  ACCESS_DATABASE_LOCKED: ACCESS_DATABASE_LOCKED_REMEDIATION,
   FORM_CONTROL_NOT_FOUND:
     "Run dysflow.form_list_controls to enumerate existing controls in the form.",
   FORM_IMPORT_GATE_FAILED:
