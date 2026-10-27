@@ -34,7 +34,7 @@ Dysflow releases are cut from `main` via `scripts/release-prepare.ps1`. `main` i
 
 The release workflow then builds the tarball, signs `SHA256SUMS` with Ed25519, and publishes the GitHub Release.
 
-The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md). Heavy MCP E2E (`pnpm test:e2e:mcp:release`) runs only in the tag-triggered release workflow.
+The full pre-release checklist lives in [`docs/release-checklist.md`](./docs/release-checklist.md). Heavy MCP E2E (`pnpm test:e2e:mcp:release`) runs automatically only in the tag-triggered release workflow; on demand via the manual `Access E2E (manual)` workflow.
 
 Its structural contracts are pinned by cheap vitest tests in `test/quality-gates/mcp-e2e-*`.
 

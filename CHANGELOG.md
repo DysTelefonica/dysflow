@@ -9,6 +9,7 @@
 - ci: removed the Windows PR smoke job, the `main-integrity` provenance and dependency-audit job, the documentation-quality workflow, the nightly Access E2E workflow and the receipt-skip verification workflow; CodeQL runs weekly and on demand, not on pull requests
 - test: removed the workflow-shape tests that pinned the old CI layout (`ci-workflow`, `codeql-workflow`, nightly budget, Pester version, Windows smoke applicability, release receipt skip) and the CI-wiring assertions in `e2e-suite-authority`, `mcp-context-budget` and `dependency-audit-evidence`
 - docs: `docs/testing/repo-quality-gates.md`, `docs/testing/documentation-quality-gates.md`, `docs/release-checklist.md`, `docs/tech-debt/TRACKING.md` and `AGENTS.md` describe the single `CI` check; the Windows and real-Access suites and the docs check run manually
+- ci: new `Access E2E (manual)` workflow (`.github/workflows/access-e2e-manual.yml`, `workflow_dispatch` only) runs the release battery on demand on the `dysflow-e2e` runner, with the #1918 COM close trace and crash-event collection; it is not a required check and gates nothing
 
 ## [v4.5.1] - 2026-10-25
 

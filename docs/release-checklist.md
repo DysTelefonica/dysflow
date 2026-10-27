@@ -205,8 +205,11 @@ publication on failure.
 Agents must not run it locally as a pre-tag gate.
 
 Every pull request and every push to `main` runs only the cheap `CI` job
-(`pnpm lint`, `pnpm build`, `pnpm test`); the Access E2E battery runs only on
-the release tag.
+(`pnpm lint`, `pnpm build`, `pnpm test`). The Access E2E battery runs
+automatically only on the release tag.
+
+On demand it runs through the manual `Access E2E (manual)` workflow
+(`.github/workflows/access-e2e-manual.yml`), which gates nothing.
 
 ### Cheap e2e-suite contract tests (run in <100ms total, in CI)
 
