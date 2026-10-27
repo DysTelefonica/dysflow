@@ -12,12 +12,18 @@ The executable matrix is `test/fixtures/vba-import-orchestration-contract.json`.
 | Case | Pass sequencing | Persistence | Observable result |
 |---|---|---|---|
 | Explicit `moduleNames: []` | No pass and no directory expansion | None | Empty successful module array |
-| One existing module succeeds | One pass | None beyond the existing Access mutation path | One `status: "ok"` entry |
+| Another process holds the `.accdb` open (#1912) | No pass; refused before Access is opened | None | `ACCESS_DATABASE_LOCKED` with a lock remediation; no module is reported `ok` |
+| One existing module succeeds | One pass | Named save of the modified component (#1912) | One `status: "ok"` entry |
 | A new component succeeds | One pass | Save-only `RunCommand(280)` after all modules succeed | One `status: "ok"` entry |
 | An existing form or report is re-imported | One pass | Save-only `RunCommand(280)` after all modules succeed | One `status: "ok"` entry |
 | A multi-module pass makes progress | Retry only the failed names, preserving caller order | Save only after the terminal successful pass | Latest result for each requested module |
 | A pass makes no progress or a single module fails | Stop; do not save partial terminal failure state | None | `VBA_IMPORT_FAILED` plus typed per-module errors |
-| Save-only persistence fails after all modules succeed | Do not retry the import | Warning only | The successful module array remains authoritative |
+| A save reports the exclusive-access lock (#1912) | Stop | The whole call fails | `ACCESS_DATABASE_LOCKED`; every module of the batch is an error, none `ok` |
+| Save-only persistence fails for another reason after all modules succeed | Do not retry the import | Warning only | The successful module array remains authoritative |
+
+Before #1912 a re-imported existing standard module had no explicit save. Its persistence depended
+on the Access close, which silently drops the change when the database is not held exclusively,
+while the module was already reported `ok`.
 
 ## Stable boundaries
 
