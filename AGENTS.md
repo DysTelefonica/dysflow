@@ -204,6 +204,10 @@ Agents plan sync from the bulk lists (`bulkImportable` → `import_modules.modul
   `.github/workflows/release.yml` runs `pnpm test:e2e:mcp:release` in its
   tag-triggered `e2e-validation` job. Publication depends on that job.
 
+  The battery runs automatically only at release; on demand it runs through the
+  manual workflow `.github/workflows/access-e2e-manual.yml` ("Access E2E (manual)",
+  `workflow_dispatch` only), which is not a required check and gates nothing.
+
   Agents must not run it locally as a pre-tag gate. That duplicates the same
   expensive authority without controlling whether the GitHub Release publishes.
 - Conventional commits. No AI co-author / attribution lines in commit messages.

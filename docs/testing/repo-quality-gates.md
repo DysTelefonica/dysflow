@@ -35,7 +35,7 @@ Pull requests prove adapter-level contracts through the in-process MCP protocol
 E2E tests listed in `UNIT_E2E_TESTS` (`test/e2e-suite-authority.ts`), which run
 inside `pnpm test`.
 
-The Access E2E battery runs only when a release tag is pushed.
+The Access E2E battery runs automatically only when a release tag is pushed.
 `.github/workflows/release.yml` repeats lint, build, and test in its
 `quality-authority` job and runs `pnpm test:e2e:mcp:release` in its
 `e2e-validation` job on the self-hosted `dysflow-e2e` runner. The GitHub Release
@@ -45,6 +45,12 @@ That job uses pre-staged fixture copies, `ACCESS_VBA_PASSWORD`, and a
 repository-local `test-runtime`; it never falls back to the production runtime.
 Configure `DYSFLOW_FIXTURES_SOURCE` with the runner-owned fixture directory
 outside every Git checkout (currently `C:\actions-runner\_fixtures\dysflow`).
+
+On demand, the same battery runs through the manual workflow
+`.github/workflows/access-e2e-manual.yml` ("Access E2E (manual)",
+`workflow_dispatch` only) on any branch. It builds from source, records the
+#1918 COM shutdown trace and Access crash events by default, can also run the
+real-Access Vitest suite, and is never a required check.
 
 CodeQL runs weekly and on `workflow_dispatch` (`.github/workflows/codeql.yml`),
 not on pull requests.

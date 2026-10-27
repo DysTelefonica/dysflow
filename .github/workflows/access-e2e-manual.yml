@@ -1,0 +1,150 @@
+# yamllint disable rule:line-length
+name: Access E2E (manual)
+
+# On-demand run of the full Access E2E battery against any branch or main,
+# without cutting a release. The battery runs automatically ONLY at release
+# (.github/workflows/release.yml, job e2e-validation); this workflow never
+# runs on its own, is not a required check and gates nothing.
+#
+# The job mirrors release.yml's e2e-validation, except that it builds from
+# the checked-out source instead of downloading the release build artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      trace_com_close:
+        description: Record the COM shutdown trace and the Access crash events (#1918)
+        required: false
+        type: boolean
+        default: true
+      include_access_vitest:
+        description: Also run the classified real-Access Vitest suite (vitest.nightly-access.config.ts)
+        required: false
+        type: boolean
+        default: false
+
+# One physical Access runner serves the repository. Queue a second dispatch
+# instead of cancelling an active database operation or overlapping two runs.
+concurrency:
+  group: access-e2e-manual
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-battery:
+    name: Access E2E battery (manual)
+    runs-on: dysflow-e2e
+    # Same budget as release.yml e2e-validation.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pre-stage E2E fixtures
+        # The gitignored Access fixtures are copied from the runner-owned
+        # directory configured through DYSFLOW_FIXTURES_SOURCE, never fetched
+        # from production storage. A checkout or worktree is never fixture storage.
+        shell: pwsh
+        env:
+          FIXTURES_SOURCE: ${{ vars.DYSFLOW_FIXTURES_SOURCE }}
+        run: |
+          $source = $env:FIXTURES_SOURCE
+          if ([string]::IsNullOrWhiteSpace($source)) {
+            Write-Error "::error::DYSFLOW_FIXTURES_SOURCE is required and must point to the runner-owned test fixture directory."
+            exit 1
+          }
+          $db1 = Join-Path $source 'NoConformidades.accdb'
+          $db2 = Join-Path $source 'NoConformidades_Datos.accdb'
+          foreach ($db in @($db1, $db2)) {
+            if (-not (Test-Path -LiteralPath $db)) {
+              Write-Error "::error::E2E fixture not found: $db. Pre-stage it at the source path or set DYSFLOW_FIXTURES_SOURCE."
+              exit 1
+            }
+          }
+          New-Item -ItemType Directory -Path 'E2E_testing' -Force | Out-Null
+          Copy-Item -LiteralPath $db1 -Destination 'E2E_testing\NoConformidades.accdb' -Force
+          Copy-Item -LiteralPath $db2 -Destination 'E2E_testing\NoConformidades_Datos.accdb' -Force
+          Write-Host "Pre-staged E2E fixtures from $source"
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        # Disable setup-node's post-job cache save on the persistent runner,
+        # as release.yml does.
+        with:
+          node-version: 26
+          package-manager-cache: false
+
+      - name: Install dependencies
+        # Workspace-local store, as release.yml does, to avoid the runner's
+        # setup-pnpm store ENOENT quirk.
+        shell: pwsh
+        run: |
+          pnpm config set store-dir "$GITHUB_WORKSPACE/.pnpm-store"
+          pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install throwaway test runtime (Windows)
+        shell: pwsh
+        # MCP_E2E_REFUSES_PRODUCTION_RUNTIME keeps the harness off
+        # %LOCALAPPDATA%\dysflow; the battery uses this repository-local runtime.
+        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui
+
+      - name: Mark the start of the battery (#1918)
+        shell: pwsh
+        # The crash events are exported from this instant, so the window is
+        # exactly this run and not the whole Application log.
+        run: |
+          [System.IO.File]::WriteAllText(
+            (Join-Path $env:RUNNER_TEMP "battery-start.txt"),
+            (Get-Date).ToUniversalTime().ToString("o")
+          )
+
+      - name: Run full E2E battery
+        shell: pwsh
+        env:
+          ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+          # #1918: shutdown trace of each COM session; empty disables it.
+          DYSFLOW_TRACE_COM_CLOSE: ${{ inputs.trace_com_close && format('{0}\dysflow-com-close-trace.log', runner.temp) || '' }}
+        run: pnpm test:e2e:mcp:release
+
+      - name: Run classified Access Vitest suite
+        if: inputs.include_access_vitest
+        shell: pwsh
+        env:
+          ACCESS_VBA_PASSWORD: ${{ secrets.ACCESS_VBA_PASSWORD }}
+          DYSFLOW_RUN_ACCESS_RELINK_APPLY: '1'
+          DYSFLOW_ACCESS_TEST_ROOT: ${{ runner.temp }}
+          DYSFLOW_TRACE_COM_CLOSE: ${{ inputs.trace_com_close && format('{0}\dysflow-com-close-trace.log', runner.temp) || '' }}
+        run: pnpm vitest run --config vitest.nightly-access.config.ts
+
+      - name: Collect the Access crash events of this run (#1918)
+        # Always: the crash events are the evidence even when the battery fails.
+        if: always() && inputs.trace_com_close
+        shell: pwsh
+        run: |
+          $startFile = Join-Path $env:RUNNER_TEMP "battery-start.txt"
+          $since = if (Test-Path -LiteralPath $startFile) {
+            (Get-Content -LiteralPath $startFile -Raw).Trim()
+          } else {
+            (Get-Date).AddHours(-2).ToUniversalTime().ToString("o")
+          }
+          pwsh -NoProfile -NonInteractive -File scripts/collect-access-crash-events.ps1 `
+            -SinceUtc $since `
+            -OutputPath (Join-Path $env:RUNNER_TEMP "access-crash-events.log")
+
+      - name: Upload the COM close trace and the crash events (#1918)
+        if: always() && inputs.trace_com_close
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: access-com-crash-evidence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}\dysflow-com-close-trace.log
+            ${{ runner.temp }}\access-crash-events.log
+          if-no-files-found: warn
+          retention-days: 14

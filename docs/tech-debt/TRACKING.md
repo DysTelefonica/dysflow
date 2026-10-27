@@ -36,7 +36,8 @@
 > **Correction — 2026-10-26.** The 2026-07-26 correction is stale too. CI is back to one hosted
 > Linux job, `CI` in `.github/workflows/ci.yml` (`pnpm lint`, `pnpm build`, `pnpm test`), and it is
 > the only required check on `main`. No Windows job runs per change; the Access E2E battery runs
-> only on the release tag (`.github/workflows/release.yml`).
+> automatically only on the release tag (`.github/workflows/release.yml`); on demand via the manual
+> `Access E2E (manual)` workflow (`.github/workflows/access-e2e-manual.yml`).
 
 > **Process notes for remaining issues** (learned the hard way on #417):
 > - Sub-agents do NOT run biome → the `CI` check fails on format. Run `biome check --write` on ALL changed `.ts` files before pushing. Windows working tree is CRLF, so local `biome check` shows ~11 pre-existing false-positives; verify the real subset with `biome check <changed-files>`.
