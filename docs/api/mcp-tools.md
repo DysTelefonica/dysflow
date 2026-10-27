@@ -115,6 +115,23 @@ Run arbitrary SQL statements. Writes are guarded by the write-safety model.
   - `sql` (string, **required**): SQL query to run.
   - `mode` (string, **required**): Execution mode (`read` or `write`).
   - `projectId`, `contextId` (optional)
+  - `accessPath`, `backendPath`, `databasePath`/`sourcePath`, `target` (`frontend | backend | auto`) (optional)
+
+The database the SQL runs on is resolved the same way for `mode: "read"` and `mode: "write"` (#1942):
+
+1. An explicit `databasePath`/`sourcePath` wins.
+2. `target: "backend"` runs on `backendPath`, then the configured backend. `accessPath` names the frontend and is never used as the backend database.
+3. Otherwise `accessPath` is the database; without it, `target` and then the project config choose.
+
+A `databasePath`/`sourcePath` naming the configured backend is a backend selector. `accessPath: <frontend>` + `databasePath: <backend>` is accepted for a write as for a read.
+
+Two different frontend paths, or a `databasePath` naming any other file, still return `CONFLICTING_TARGET_ALIASES`.
+
+Evidence: `pickQueryExecutionTarget` in `src/core/mapping/access-query-request-mapper.ts` and `test/adapters/mcp/query-execute-backend-target-1942.test.ts`.
+
+The write gates are unchanged: without `apply: true` a write is a plan, and disabled writes return `MCP_WRITES_DISABLED`.
+
+The project-config write gate still applies. Writing to a production backend remains the caller's responsibility (HR-3).
 
 `allowTables` and `denyTables` are intentionally unsupported for arbitrary SQL. Supplying either returns `MCP_INPUT_INVALID`.
 
@@ -689,7 +706,7 @@ Pass `strict: true` to disable classification and fall back to byte/text-exact c
 ### 2. SQL Maintenance
 * **`query_sql`**: Legacy read-only SQL compatibility wrapper. New consumers use `query_execute({ mode: "read" })`; it remains callable throughout the v2.x line and cannot be removed without a documented deprecation window and migration release note.
   - Parameters: `sql` (string, optional), `query` (string, optional), `projectId`, `contextId`, `accessPath`, `databasePath`, `sourcePath`, `target` (`frontend | backend`)
-  - Resolution priority: an explicit `accessPath` is executed as the query database; otherwise an explicit `databasePath`/`sourcePath` wins, then `target` resolves through project config, and calls without an override keep the configured default. Raw SQL is not parsed to infer a table or database. Successful responses include `resolvedAccessPath` so callers can audit the selected database.
+  - Resolution priority: the same as `query_execute` — an explicit `databasePath`/`sourcePath` wins, `target: "backend"` resolves to `backendPath` or the configured backend, otherwise `accessPath` is the query database, and calls without an override keep the configured default. Raw SQL is not parsed to infer a table or database. Successful responses include `resolvedAccessPath` so callers can audit the selected database.
   - For a conservative simple `SELECT` against one table, Dysflow verifies the resolved database schema and returns `TABLE_NOT_IN_DATABASE` or `COLUMN_NOT_IN_TABLE` with `resolvedAccessPath` in `error.details`. Joins, subqueries, expressions, wildcards, and other complex SQL retain the database engine's existing generic error classification rather than guessing.
 * **`exec_sql`**: Legacy write SQL compatibility wrapper. New consumers use `query_execute({ mode: "write", apply: false | true })`; it remains callable throughout the v2.x line under the same documented deprecation policy.
   - Parameters: `sql` (string, optional), `query` (string, optional), `dryRun`, `apply`, `accessPath`/`backendPath` (optional)

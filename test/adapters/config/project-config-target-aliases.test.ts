@@ -155,3 +155,49 @@ describe("alias resolution under run_vba (#1044)", () => {
     }
   });
 });
+
+describe("SQL database selector naming the configured backend (#1942)", () => {
+  function splitProject(prefix: string): { root: string; frontend: string; backend: string } {
+    const root = worktreeFixture(prefix);
+    const frontend = join(root, "Expedientes.accdb");
+    const backend = join(root, "Expedientes_datos.accdb");
+    writeFileSync(frontend, "");
+    writeFileSync(backend, "");
+    writeProjectConfig(root, {
+      id: "expedientes",
+      accessPath: "Expedientes.accdb",
+      backendPath: "Expedientes_datos.accdb",
+      destinationRoot: "src",
+    });
+    return { root, frontend, backend };
+  }
+
+  it("accepts accessPath:<frontend> + databasePath:<configured backend> for query_execute", () => {
+    const { root, frontend, backend } = splitProject("dysflow-1942-sql-");
+    try {
+      const result = diagnoseProjectConfig(root, {
+        operation: "query_execute",
+        accessPath: frontend,
+        databasePath: backend,
+      });
+      expect(result.writeReady).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps databasePath a frontend alias for non-SQL tools", () => {
+    const { root, frontend, backend } = splitProject("dysflow-1942-vba-");
+    try {
+      const result = diagnoseProjectConfig(root, {
+        operation: "import_modules",
+        accessPath: frontend,
+        databasePath: backend,
+      });
+      expect(result.writeReady).toBe(false);
+      expect(gateEnvelope(result).error?.code).toBe("CONFLICTING_TARGET_ALIASES");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
