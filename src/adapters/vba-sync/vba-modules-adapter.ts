@@ -40,9 +40,12 @@ import {
   type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
-import type { VerifyBaseStorePort } from "../../core/services/vba-verify-base.js";
-import { recordVerifyBase } from "../../core/services/vba-verify-base-recording.js";
-import { isRecord, stringValue, truthy } from "../../core/utils/index.js";
+import {
+  invalidateVerifyBase,
+  type VerifyBaseStorePort,
+} from "../../core/services/vba-verify-base.js";
+import { verifyBaseWriteScope } from "../../core/services/vba-verify-base-recording.js";
+import { stringValue, truthy } from "../../core/utils/index.js";
 import {
   removeTemporaryDirectoryWithRetry,
   TemporaryDirectoryCleanupError,
@@ -663,6 +666,14 @@ export class VbaModulesAdapter {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
+    const result = await this.executeWithImportLint(toolName, params);
+    return this.invalidateVerifyBaseAfterWrite(toolName, params, result);
+  }
+
+  private async executeWithImportLint(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
     const isImport = toolName === "import_all" || toolName === "import_modules";
     const dryRun = params.dryRun === true || params.apply === false;
     if (!isImport || dryRun) return this.executeCore(toolName, params);
@@ -985,10 +996,7 @@ export class VbaModulesAdapter {
     }
 
     if (toolName === "export_all" && truthy(params.prune)) {
-      return this.recordVerifyBaseAfterWrite(
-        effectiveParams,
-        await this.exportAllWithPrune(effectiveParams, resolvedExportTarget),
-      );
+      return this.exportAllWithPrune(effectiveParams, resolvedExportTarget);
     }
 
     const importPruneResult =
@@ -1058,17 +1066,6 @@ export class VbaModulesAdapter {
           ],
         };
       }
-    }
-
-    // Issue #1890 — an export writes the source FROM the binary, so the files
-    // it wrote provably match the binary: record them as the last-synced base.
-    // Imports record nothing: the source text says what was sent, not what the
-    // binary kept (#1912), and a Code-mode import skips the layout files.
-    if (
-      (toolName === "export_modules" || toolName === "export_all") &&
-      effectiveExportReadOnly !== true
-    ) {
-      importResult = await this.recordVerifyBaseAfterWrite(effectiveParams, importResult);
     }
 
     // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
@@ -1676,35 +1673,35 @@ export class VbaModulesAdapter {
   }
 
   /**
-   * Issue #1890 — record the last-synced base for the modules a successful
-   * export listed in `exported[]`. A failed result records nothing.
-   * Best-effort: a store failure is appended as a warning and never changes the
-   * outcome of the export.
+   * Issue #1890 — a write invalidates the verify base of every module it may
+   * have touched, whatever its outcome: a failed or partial write can still
+   * have changed one side. The scope comes from the caller's request, so a
+   * staging copy never redirects the invalidation. Best-effort: a store failure
+   * is appended as a warning and never changes the outcome of the write.
    */
-  private async recordVerifyBaseAfterWrite(
+  private async invalidateVerifyBaseAfterWrite(
+    toolName: string,
     params: Record<string, unknown>,
     result: OperationResult<unknown>,
   ): Promise<OperationResult<unknown>> {
-    if (!result.ok) return result;
-    const moduleNames = exportedModuleNames(result.data);
-    if (moduleNames.length === 0) return result;
+    const scope = verifyBaseWriteScope(toolName, params);
+    if (scope === undefined) return result;
     let diagnostics: Diagnostic[];
     try {
       const target = await this.orchestrator.resolveExecutionTarget(params);
       if (!target.ok || target.data.accessPath === undefined) return result;
-      diagnostics = await recordVerifyBase({
-        store: this.verifyBaseStore,
-        fileSystem: this.fileSystem,
-        target: { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
-        sourceRoot: target.data.destinationRoot,
-        moduleNames,
-      });
+      diagnostics = await invalidateVerifyBase(
+        this.verifyBaseStore,
+        { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+        scope,
+        new Date(),
+      );
     } catch (error) {
       diagnostics = [
         {
           level: "warning",
           source: "verify-base",
-          message: `The last-synced base snapshot was not updated: ${error instanceof Error ? error.message : String(error)}`,
+          message: `The last-synced base snapshot could not be invalidated: ${error instanceof Error ? error.message : String(error)}`,
         },
       ];
     }
@@ -2158,22 +2155,6 @@ export class VbaModulesAdapter {
   // (feat-759-no-compile). compile + rollbackOnCompileFail leave the public
   // surface; the snapshot + rollback helpers above lived only to undo a
   // failed compile, so they are gone with it.
-}
-
-/**
- * Issue #1890 — the export payload lists only the modules it wrote. PowerShell
- * may collapse a one-entry list to a bare string, so both forms are accepted.
- */
-function exportedModuleNames(data: unknown): string[] {
-  if (!isRecord(data)) return [];
-  return asList(data.exported).filter(
-    (name): name is string => typeof name === "string" && name.length > 0,
-  );
-}
-
-function asList(value: unknown): unknown[] {
-  if (value === undefined || value === null) return [];
-  return Array.isArray(value) ? value : [value];
 }
 
 function normalizeImportMode(importMode: string | undefined): string | undefined {

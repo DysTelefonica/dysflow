@@ -104,6 +104,12 @@ must not be treated as completed synchronization.
 Choose an explicit direction and review the conflict before using
 `acceptBothChanged:true`; this is not automatic conflict acceptance.
 
+A module whose direction `verify_code` inferred from the last-synced base
+(`resolvedBy: "base"`, #1890) is planned like `bothChanged`. It is never
+applied automatically and always appears in `plan.skipped` with
+`reason: "baseResolved_unconfirmed"`. Confirm its `inferredDirection`, then use
+`acceptBothChanged:true` with that one-way `direction`.
+
 When a form's `CodeBehindForm` copy differs from its `.cls` (`FORM_CODE_BEHIND_DIVERGES`), pass `acknowledgeCodeBehindWins:true` only when the `.cls` must win. It is forwarded to every inner `import_modules` chunk.
 
 Evidence: `src/adapters/vba-sync/vba-sync-adapter.ts`,

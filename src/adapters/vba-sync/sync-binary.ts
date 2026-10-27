@@ -37,6 +37,7 @@
 
 import type { DysflowError, OperationResult } from "../../core/contracts/index.js";
 import { createDysflowError } from "../../core/contracts/index.js";
+import { BASE_RESOLVED_DETAIL } from "../../core/services/vba-verify-base.js";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -85,6 +86,16 @@ export type SyncVerifySummary = {
   sourceNewerEntries?: readonly { moduleName: string }[];
   binaryNewerEntries?: readonly { moduleName: string }[];
   bothChangedEntries?: readonly { moduleName: string }[];
+  /**
+   * Issue #1890 — modules whose direction verify_code inferred from the
+   * last-synced base. They are ALSO in `bothChangedEntries` and counted as
+   * bothChanged: an inferred direction is never applied without
+   * `acceptBothChanged`. This list only explains why.
+   */
+  baseResolvedEntries?: readonly {
+    moduleName: string;
+    inferredDirection: "import_to_binary" | "export_to_src";
+  }[];
 };
 
 /** Alias used by tests for the import-side summary projection. */
@@ -162,7 +173,15 @@ export type SyncBinaryInput = {
 /** A module the plan decided NOT to act on, with a typed reason. */
 export type SyncBinarySkippedEntry = {
   moduleName: string;
-  reason: "bothChanged_acknowledged" | "nonActionable_excluded" | "direction_filtered";
+  reason:
+    | "bothChanged_acknowledged"
+    | "nonActionable_excluded"
+    | "direction_filtered"
+    | "baseResolved_unconfirmed";
+  /** Issue #1890 — why a base-resolved module was not applied. */
+  detail?: string;
+  /** Issue #1890 — the direction the last-synced base inferred. */
+  inferredDirection?: "import_to_binary" | "export_to_src";
 };
 
 /**
@@ -287,6 +306,7 @@ function filterSummaryToModuleNames(
   const sourceNewerEntries = (summary.sourceNewerEntries ?? []).filter(inScope);
   const binaryNewerEntries = (summary.binaryNewerEntries ?? []).filter(inScope);
   const bothChangedEntries = (summary.bothChangedEntries ?? []).filter(inScope);
+  const baseResolvedEntries = (summary.baseResolvedEntries ?? []).filter(inScope);
   const sourceNewer = sourceNewerEntries.length;
   const binaryNewer = binaryNewerEntries.length;
   const bothChanged = bothChangedEntries.length;
@@ -307,6 +327,7 @@ function filterSummaryToModuleNames(
     sourceNewerEntries,
     binaryNewerEntries,
     bothChangedEntries,
+    baseResolvedEntries,
     hasFunctionalDifferences,
   };
   const recommendation = deriveSyncBinaryRecommendation(filtered);
@@ -372,6 +393,17 @@ export function buildSyncBinaryPlan(args: {
     for (const entry of summary.binaryNewerEntries ?? []) exportSet.add(entry.moduleName);
   }
 
+  // Issue #1890 — a module whose direction was inferred from the last-synced
+  // base is never applied automatically, not even through another of its files:
+  // an import or export moves the whole module.
+  const baseResolved = new Map(
+    (summary.baseResolvedEntries ?? []).map((entry) => [entry.moduleName, entry]),
+  );
+  for (const name of baseResolved.keys()) {
+    importSet.delete(name);
+    exportSet.delete(name);
+  }
+
   const bothChangedEntries = summary.bothChangedEntries ?? [];
   const acceptsConflictDirection =
     acceptBothChanged && (direction === "src-to-binary" || direction === "binary-to-src");
@@ -380,9 +412,19 @@ export function buildSyncBinaryPlan(args: {
     for (const entry of bothChangedEntries) {
       target.add(entry.moduleName);
     }
-  } else if (scope.includeBothChanged) {
+  } else {
     for (const entry of bothChangedEntries) {
-      skipped.push({ moduleName: entry.moduleName, reason: "bothChanged_acknowledged" });
+      const inferred = baseResolved.get(entry.moduleName);
+      if (inferred !== undefined) {
+        skipped.push({
+          moduleName: entry.moduleName,
+          reason: "baseResolved_unconfirmed",
+          detail: BASE_RESOLVED_DETAIL,
+          inferredDirection: inferred.inferredDirection,
+        });
+      } else if (scope.includeBothChanged) {
+        skipped.push({ moduleName: entry.moduleName, reason: "bothChanged_acknowledged" });
+      }
     }
   }
 

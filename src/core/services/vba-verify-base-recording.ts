@@ -1,73 +1,45 @@
 /**
- * Records the last-synced base snapshot after a successful export (#1890).
- * Kept apart from `vba-verify-base.ts` so the comparison service can depend on
- * the base logic without an import cycle through the source collector.
+ * Write-side bookkeeping for the `verify_code` last-synced base (#1890).
+ *
+ * Every write that can change a module on either side invalidates that
+ * module's base. This decides the scope from the caller's request, before any
+ * staging copy replaces `accessPath`, so the invalidation is keyed on the binary
+ * the caller named.
  */
 
-import type { Diagnostic } from "../contracts/index.js";
-import { type ComparisonFileSystemPort, collectVbaSourceFiles } from "./vba-source-comparison.js";
-import {
-  applyVerifyBaseWrite,
-  hashCanonicalVbaText,
-  VERIFY_BASE_CANON,
-  type VerifyBaseEntry,
-  type VerifyBaseRecord,
-  type VerifyBaseStorePort,
-  type VerifyBaseTarget,
-  verifyBasePathKey,
-} from "./vba-verify-base.js";
+/** Tools whose writes invalidate the verify base. */
+const BASE_INVALIDATING_TOOLS: ReadonlySet<string> = new Set([
+  "import_modules",
+  "import_all",
+  "delete_module",
+  "export_modules",
+  "export_all",
+]);
 
 /**
- * Records the base for the modules an export just wrote. Best-effort: any failure
- * becomes a warning diagnostic and never fails the export that triggered it.
+ * Returns the modules whose base a call invalidates: their names, `"all"` when
+ * the call cannot name them (whole-project writes, directory imports), or
+ * `undefined` when the call does not write. Over-invalidating is always safe.
  */
-export async function recordVerifyBase(input: {
-  store: VerifyBaseStorePort;
-  fileSystem: ComparisonFileSystemPort;
-  target: VerifyBaseTarget;
-  sourceRoot: string;
-  moduleNames: readonly string[];
-  now?: () => Date;
-}): Promise<Diagnostic[]> {
-  const { store, fileSystem, target, moduleNames } = input;
-  if (moduleNames.length === 0) return [];
-  try {
-    if (!(await store.available(target))) return [];
-    const sourceRoot = verifyBasePathKey(input.sourceRoot);
-    const filter = new Set(moduleNames.map((name) => name.toLowerCase()));
-    const files = await collectVbaSourceFiles(input.sourceRoot, filter, fileSystem);
-    const recordedAt = (input.now?.() ?? new Date()).toISOString();
-    const entries: VerifyBaseEntry[] = [];
-    for (const file of files) {
-      const text = await fileSystem.readFile(file.path, "utf8");
-      entries.push({
-        sourceRoot,
-        moduleName: file.moduleName,
-        fileType: file.fileType,
-        hash: hashCanonicalVbaText(text, file.fileType),
-        canon: VERIFY_BASE_CANON,
-        recordedAt,
-      });
-    }
-    const accessPath = verifyBasePathKey(target.accessPath);
-    const stored = await store.load(target);
-    const current: VerifyBaseRecord =
-      stored !== undefined && stored.accessPath === accessPath
-        ? stored
-        : { accessPath, entries: [] };
-    await store.save(target, applyVerifyBaseWrite(current, { sourceRoot, moduleNames, entries }));
-    return [];
-  } catch (error) {
-    return [
-      {
-        level: "warning",
-        source: "verify-base",
-        message: `The last-synced base snapshot was not updated; verify_code falls back to the two-text direction for ${moduleNames.join(", ")}: ${errorMessage(error)}`,
-      },
-    ];
-  }
+export function verifyBaseWriteScope(
+  toolName: string,
+  params: Record<string, unknown>,
+): readonly string[] | "all" | undefined {
+  if (!BASE_INVALIDATING_TOOLS.has(toolName)) return undefined;
+  if (params.dryRun === true || params.apply === false) return undefined;
+  const isExport = toolName === "export_modules" || toolName === "export_all";
+  // Exports are plan-only unless the caller commits (#1250).
+  if (isExport && params.apply !== true && params.dryRun !== false) return undefined;
+  if (toolName === "import_all" || toolName === "export_all") return "all";
+  const names = [
+    ...stringList(params.moduleNames),
+    ...stringList(params.moduleName === undefined ? [] : [params.moduleName]),
+  ];
+  return names.length > 0 ? names : "all";
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
 }

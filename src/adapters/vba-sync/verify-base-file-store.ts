@@ -1,10 +1,17 @@
 /**
  * Filesystem store for the `verify_code` last-synced base snapshot (#1890).
  *
- * Layout: `<projectRoot>/.dysflow/runtime/verify-base/<sha256(accessPath)>.json`,
- * one file per target binary. `.dysflow/runtime/` is gitignored: the base is
- * local, unversioned state, and losing it only falls back to the two-text
- * direction.
+ * Layout: `<projectRoot>/.dysflow/runtime/verify-base/<sha256(accessPath)>/`,
+ * one folder per target binary, holding one file per key:
+ * - `e-<sha256(sourceRoot, module, fileType)>.json` — one observed agreement;
+ * - `i-<sha256(module)>.json` / `i-all.json` — the latest invalidation.
+ *
+ * Each write replaces exactly one file through write-then-rename, so concurrent
+ * writers never drop each other's keys. Ordering between writers is settled at
+ * read time by the timestamps (see `vba-verify-base.ts`), not by write order.
+ *
+ * `.dysflow/runtime/` is gitignored: the base is local, unversioned state, and
+ * losing it only falls back to the two-text direction.
  *
  * The project folder is the first of the target's `projectRoot` and the
  * adapter's working directory that already holds a `.dysflow/` directory (a
@@ -15,22 +22,24 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   type VerifyBaseEntry,
-  type VerifyBaseRecord,
+  type VerifyBaseInvalidation,
   type VerifyBaseStorePort,
   type VerifyBaseTarget,
+  verifyBaseModuleKey,
   verifyBasePathKey,
 } from "../../core/services/vba-verify-base.js";
 
-const SCHEMA_VERSION = "dysflow.verify-base/v1";
+const SCHEMA_VERSION = "dysflow.verify-base/v2";
 
-type StoredFile = {
+type StoredEntry = { schemaVersion: string; accessPath: string; entry: VerifyBaseEntry };
+type StoredInvalidation = {
   schemaVersion: string;
   accessPath: string;
-  entries: VerifyBaseEntry[];
+  invalidation: VerifyBaseInvalidation;
 };
 
 export class FileVerifyBaseStore implements VerifyBaseStorePort {
@@ -40,43 +49,70 @@ export class FileVerifyBaseStore implements VerifyBaseStorePort {
     return (await this.projectRoot(target)) !== undefined;
   }
 
-  async load(target: VerifyBaseTarget): Promise<VerifyBaseRecord | undefined> {
-    const file = await this.filePath(target);
-    if (file === undefined) return undefined;
-    let text: string;
+  async list(
+    target: VerifyBaseTarget,
+  ): Promise<{ entries: VerifyBaseEntry[]; invalidations: VerifyBaseInvalidation[] }> {
+    const entries: VerifyBaseEntry[] = [];
+    const invalidations: VerifyBaseInvalidation[] = [];
+    const directory = await this.directory(target);
+    if (directory === undefined) return { entries, invalidations };
+    let names: string[];
     try {
-      text = await readFile(file, "utf8");
+      names = await readdir(directory);
     } catch (error) {
-      if (isMissing(error)) return undefined;
+      if (isMissing(error)) return { entries, invalidations };
       throw error;
     }
-    const parsed = parseStoredFile(text);
-    // A file that is unreadable, from another schema, or for another binary is
-    // treated as no base: the next successful write replaces it.
-    if (parsed === undefined || parsed.accessPath !== verifyBasePathKey(target.accessPath)) {
-      return undefined;
+    const accessPath = verifyBasePathKey(target.accessPath);
+    for (const name of names) {
+      if (!name.endsWith(".json")) continue;
+      const stored = await readJson(join(directory, name));
+      // Unreadable files, other schemas and other binaries count as no base.
+      if (stored === undefined || stored.schemaVersion !== SCHEMA_VERSION) continue;
+      if (stored.accessPath !== accessPath) continue;
+      if (name.startsWith("e-") && isEntry(stored.entry)) entries.push(stored.entry);
+      if (name.startsWith("i-") && isInvalidation(stored.invalidation)) {
+        invalidations.push(stored.invalidation);
+      }
     }
-    return { accessPath: parsed.accessPath, entries: parsed.entries };
+    return { entries, invalidations };
   }
 
-  async save(target: VerifyBaseTarget, record: VerifyBaseRecord): Promise<void> {
-    const file = await this.filePath(target);
-    if (file === undefined) return;
-    await mkdir(dirname(file), { recursive: true });
-    const stored: StoredFile = {
+  async put(target: VerifyBaseTarget, entry: VerifyBaseEntry): Promise<void> {
+    const directory = await this.directory(target);
+    if (directory === undefined) return;
+    const key = `${entry.sourceRoot}\0${verifyBaseModuleKey(entry.moduleName, entry.fileType)}`;
+    const file = join(directory, `e-${sha256(key)}.json`);
+    // A newer observation of the same key is never replaced by an older one.
+    const existing = await readJson(file);
+    if (isEntry(existing?.entry) && existing.entry.observedAt > entry.observedAt) return;
+    const stored: StoredEntry = {
       schemaVersion: SCHEMA_VERSION,
-      accessPath: record.accessPath,
-      entries: record.entries,
+      accessPath: verifyBasePathKey(target.accessPath),
+      entry,
     };
-    // Write then rename, so a reader never sees a half-written file.
-    const temporary = `${file}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, `${JSON.stringify(stored, null, 2)}\n`, "utf8");
-      await rename(temporary, file);
-    } catch (error) {
-      await rm(temporary, { force: true }).catch(() => undefined);
-      throw error;
+    await writeAtomically(directory, file, stored);
+  }
+
+  async invalidate(target: VerifyBaseTarget, invalidation: VerifyBaseInvalidation): Promise<void> {
+    const directory = await this.directory(target);
+    if (directory === undefined) return;
+    const scope =
+      invalidation.moduleName === null ? "all" : sha256(invalidation.moduleName.toLowerCase());
+    const file = join(directory, `i-${scope}.json`);
+    const existing = await readJson(file);
+    if (
+      isInvalidation(existing?.invalidation) &&
+      existing.invalidation.invalidatedAt >= invalidation.invalidatedAt
+    ) {
+      return;
     }
+    const stored: StoredInvalidation = {
+      schemaVersion: SCHEMA_VERSION,
+      accessPath: verifyBasePathKey(target.accessPath),
+      invalidation,
+    };
+    await writeAtomically(directory, file, stored);
   }
 
   private async projectRoot(target: VerifyBaseTarget): Promise<string | undefined> {
@@ -93,32 +129,46 @@ export class FileVerifyBaseStore implements VerifyBaseStorePort {
     return undefined;
   }
 
-  private async filePath(target: VerifyBaseTarget): Promise<string | undefined> {
+  private async directory(target: VerifyBaseTarget): Promise<string | undefined> {
     const root = await this.projectRoot(target);
     if (root === undefined) return undefined;
-    const id = createHash("sha256").update(verifyBasePathKey(target.accessPath)).digest("hex");
-    return join(root, ".dysflow", "runtime", "verify-base", `${id}.json`);
+    const id = sha256(verifyBasePathKey(target.accessPath));
+    return join(root, ".dysflow", "runtime", "verify-base", id);
   }
 }
 
-function parseStoredFile(text: string): StoredFile | undefined {
-  let value: unknown;
+async function writeAtomically(directory: string, file: string, value: unknown): Promise<void> {
+  await mkdir(directory, { recursive: true });
+  const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    value = JSON.parse(text);
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temporary, file);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function readJson(file: string): Promise<Record<string, unknown> | undefined> {
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    if (isMissing(error)) return undefined;
+    throw error;
+  }
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : undefined;
   } catch {
     return undefined;
   }
-  if (typeof value !== "object" || value === null) return undefined;
-  const candidate = value as Partial<StoredFile>;
-  if (candidate.schemaVersion !== SCHEMA_VERSION) return undefined;
-  if (typeof candidate.accessPath !== "string" || !Array.isArray(candidate.entries)) {
-    return undefined;
-  }
-  return {
-    schemaVersion: candidate.schemaVersion,
-    accessPath: candidate.accessPath,
-    entries: candidate.entries.filter(isEntry),
-  };
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
 function isEntry(value: unknown): value is VerifyBaseEntry {
@@ -130,7 +180,16 @@ function isEntry(value: unknown): value is VerifyBaseEntry {
     typeof entry.fileType === "string" &&
     typeof entry.hash === "string" &&
     typeof entry.canon === "string" &&
-    typeof entry.recordedAt === "string"
+    typeof entry.observedAt === "string"
+  );
+}
+
+function isInvalidation(value: unknown): value is VerifyBaseInvalidation {
+  if (typeof value !== "object" || value === null) return false;
+  const invalidation = value as Record<string, unknown>;
+  return (
+    (invalidation.moduleName === null || typeof invalidation.moduleName === "string") &&
+    typeof invalidation.invalidatedAt === "string"
   );
 }
 

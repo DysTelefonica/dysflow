@@ -100,6 +100,12 @@ function fixture(
             cpSync(join(source, file), join(binary, file));
           }
         }
+      } else if (request.action === "Delete") {
+        const names = request.moduleNames ?? [];
+        for (const file of readdirSync(binary)) {
+          if (names.includes(moduleOf(file))) rmSync(join(binary, file));
+        }
+        payload = { ok: true, deleted: names };
       } else throw new Error(`Unexpected action: ${request.action}`);
       return {
         exitCode: (payload as { ok?: unknown }).ok === false ? 1 : 0,
@@ -118,6 +124,7 @@ type VerifyData = {
   recommendedAction: string;
   bulkImportable: string[];
   bulkExportable: string[];
+  baseResolved: string[];
   summaryStructured: { actionable: Record<string, number> };
 };
 
@@ -154,22 +161,27 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
     expect(classificationOf(data)).toBe("sourceNewer");
     expect(data.recommendedAction).toBe("import_to_binary");
-    expect(data.bulkImportable).toEqual(["Probe"]);
-    expect(data.bulkExportable).toEqual([]);
     expect(data.summaryStructured.actionable).toMatchObject({ sourceNewer: 1, bothChanged: 0 });
+    // An inferred direction is reported, never bulk-applied.
+    expect(data.actionableDifferent[0]).toMatchObject({ resolvedBy: "base" });
+    expect(data.bulkImportable).toEqual([]);
+    expect(data.bulkExportable).toEqual([]);
+    expect(data.baseResolved).toEqual(["Probe"]);
   });
 
   it("the mirror case is binaryNewer (export_to_src)", async () => {
     const { adapter, binaryFile } = fixture();
-    await exportProbe(adapter);
+    await verify(adapter);
     writeFileSync(binaryFile, moduleText(2));
 
     const data = await verify(adapter);
 
     expect(classificationOf(data)).toBe("binaryNewer");
     expect(data.recommendedAction).toBe("export_to_src");
-    expect(data.bulkExportable).toEqual(["Probe"]);
+    expect(data.actionableDifferent[0]).toMatchObject({ resolvedBy: "base" });
+    expect(data.bulkExportable).toEqual([]);
     expect(data.bulkImportable).toEqual([]);
+    expect(data.baseResolved).toEqual(["Probe"]);
   });
 
   it("both sides changed from the base is bothChanged", async () => {
@@ -250,12 +262,13 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     expect(data.recommendedAction).toBe("import_to_binary");
   });
 
-  it("accepts a single-module export result that PowerShell collapsed to a string", async () => {
+  it("an export records no base and invalidates the one it found", async () => {
     const { adapter, binaryFile } = fixture({ collapseExported: true });
+    await verify(adapter);
     await exportProbe(adapter);
     writeFileSync(binaryFile, moduleText(2));
 
-    expect(classificationOf(await verify(adapter))).toBe("binaryNewer");
+    expect(classificationOf(await verify(adapter))).toBe("bothChanged");
   });
 
   it("a successful import records no base", async () => {
@@ -289,7 +302,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("a base recorded for one binary is never reused for another", async () => {
     const first = fixture();
-    await exportProbe(first.adapter);
+    await verify(first.adapter);
     const baseDir = join(first.root, ".dysflow", "runtime", "verify-base");
     expect(readdirSync(baseDir)).toHaveLength(1);
 
@@ -323,10 +336,11 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("keeps the base as local runtime state under .dysflow/runtime", async () => {
     const { root, adapter } = fixture();
-    await exportProbe(adapter);
+    await verify(adapter);
     const baseDir = join(root, ".dysflow", "runtime", "verify-base");
-    const [file] = readdirSync(baseDir);
-    const stored = readFileSync(join(baseDir, String(file)), "utf8");
+    const [binaryDir] = readdirSync(baseDir);
+    const [file] = readdirSync(join(baseDir, String(binaryDir)));
+    const stored = readFileSync(join(baseDir, String(binaryDir), String(file)), "utf8");
     // A hash of the normalized text, never the module source itself.
     expect(stored).not.toContain("Public Function Value");
     expect(stored).toMatch(/[0-9a-f]{64}/);
@@ -432,5 +446,115 @@ describe("issue 1890 — a base never points a sync at unsynced work", () => {
 
     expect(classificationOf(data)).not.toBe("binaryNewer");
     expect(data.bulkExportable).toEqual([]);
+  });
+});
+
+// Round 3: a direction inferred from the base is a hint, never an instruction.
+describe("issue 1890 — a base-resolved direction is never auto-applied", () => {
+  type Entry = { moduleName: string; classification: string; resolvedBy?: string };
+  type SyncData = {
+    plan: {
+      toImport: string[];
+      toExport: string[];
+      skipped: { moduleName: string; reason: string; detail?: string }[];
+    };
+    recommendation: string;
+  };
+  const probeEntry = (data: VerifyData) =>
+    (data.actionableDifferent as Entry[]).find((entry) => entry.moduleName === "Probe");
+
+  async function sync(adapter: VbaSyncAdapter, input: Record<string, unknown>) {
+    const result = await adapter.execute("sync_binary", input);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return result.data as SyncData;
+  }
+
+  it("N1: an import invalidates the base of the modules it touched", async () => {
+    const { adapter, sourceFile } = fixture();
+    await verify(adapter); // base A
+    writeFileSync(sourceFile, moduleText(2)); // source B
+    await importProbe(adapter); // binary B
+    writeFileSync(sourceFile, moduleText(1)); // source back to A
+
+    const data = await verify(adapter);
+
+    expect(probeEntry(data)).toMatchObject({ classification: "bothChanged" });
+    expect(probeEntry(data)?.resolvedBy).toBeUndefined();
+    expect(data.bulkExportable).toEqual([]);
+  });
+
+  it("N1: a delete invalidates the base of the module it removed", async () => {
+    const { adapter, binaryFile } = fixture();
+    await verify(adapter);
+    const deleted = await adapter.execute("delete_module", {
+      moduleName: "Probe",
+      apply: true,
+      confirmedRequiresConfirmation: true,
+    });
+    expect(deleted.ok, JSON.stringify(deleted)).toBe(true);
+    // The module comes back with other content (another import, a restore).
+    writeFileSync(binaryFile, moduleText(2));
+
+    expect(probeEntry(await verify(adapter))).toMatchObject({ classification: "bothChanged" });
+  });
+
+  it("P7: a restored backup is base-resolved, and sync_binary does not apply it unasked", async () => {
+    const { adapter, sourceFile, binaryFile } = fixture();
+    writeFileSync(sourceFile, moduleText(2));
+    writeFileSync(binaryFile, moduleText(2));
+    await verify(adapter); // both sides agree on B: base B
+    writeFileSync(binaryFile, moduleText(1)); // an old .accdb backup is restored
+
+    const data = await verify(adapter);
+    expect(probeEntry(data)).toMatchObject({ classification: "binaryNewer", resolvedBy: "base" });
+    expect(data.recommendedAction).toBe("export_to_src");
+    expect(data.bulkExportable).toEqual([]);
+    expect(data.baseResolved).toEqual(["Probe"]);
+
+    const applied = await sync(adapter, { apply: true, direction: "binary-to-src" });
+    expect(applied.plan.toExport).toEqual([]);
+    expect(applied.plan.skipped).toEqual([
+      expect.objectContaining({
+        moduleName: "Probe",
+        reason: "baseResolved_unconfirmed",
+        detail: expect.stringContaining("confirm before applying"),
+      }),
+    ]);
+    expect(applied.recommendation).toBe("manual_merge");
+    expect(readFileSync(sourceFile, "utf8")).toBe(moduleText(2));
+
+    const accepted = await sync(adapter, {
+      dryRun: true,
+      direction: "binary-to-src",
+      acceptBothChanged: true,
+    });
+    expect(accepted.plan.toExport).toEqual(["Probe"]);
+  });
+
+  it("N3: an export records no base for a draft file it did not write", async () => {
+    const { root, adapter } = fixture();
+    const source = join(root, "source", "modules");
+    const binary = join(root, "binary", "modules");
+    writeFileSync(join(binary, "frmProbe.form.txt"), "Version =21\r\nBegin Form\r\nEnd\r\n");
+    writeFileSync(
+      join(source, "frmProbe.cls"),
+      'Attribute VB_Name = "frmProbe"\nOption Compare Database\nOption Explicit\n\' draft\nPublic Sub Draft()\nEnd Sub\n',
+    );
+    const exported = await adapter.execute("export_modules", {
+      moduleNames: ["frmProbe"],
+      apply: true,
+    });
+    expect(exported.ok, JSON.stringify(exported)).toBe(true);
+    writeFileSync(
+      join(binary, "frmProbe.cls"),
+      'Attribute VB_Name = "frmProbe"\nOption Compare Database\nOption Explicit\nPublic Sub Other()\nEnd Sub\n',
+    );
+
+    const result = await adapter.execute("verify_code", { moduleNames: ["frmProbe"] });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    const cls = (result.data as VerifyData).actionableDifferent.find(
+      (entry) => (entry as Entry & { fileType?: string }).fileType === "cls",
+    );
+    expect(cls).toMatchObject({ classification: "bothChanged" });
   });
 });

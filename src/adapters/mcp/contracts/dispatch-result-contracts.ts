@@ -342,6 +342,8 @@ const CONTRACTS = {
         bulkImportableCount: z.number().int().nonnegative().optional(),
         bulkExportable: stringArray.optional(),
         bulkExportableCount: z.number().int().nonnegative().optional(),
+        baseResolved: stringArray.optional(),
+        baseResolvedCount: z.number().int().nonnegative().optional(),
         warnings: z.array(z.unknown()).optional(),
         vbeCacheNote: z.string(),
       })

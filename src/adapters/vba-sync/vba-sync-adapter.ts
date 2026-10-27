@@ -29,6 +29,10 @@ import type {
   VbaSourceDiffEntry,
   VbaVerifyResult,
 } from "../../core/services/vba-source-comparison.js";
+import {
+  invalidateVerifyBase,
+  type VerifyBaseStorePort,
+} from "../../core/services/vba-verify-base.js";
 import { isRecord, sanitizeSecrets, stringValue, truthy } from "../../core/utils/index.js";
 import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js";
 import { findPackageRootNear } from "../../core/utils/package-info.js";
@@ -57,6 +61,7 @@ import { VbaModulesAdapter } from "./vba-modules-adapter.js";
 import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
 import { VbaOperationsAdapter } from "./vba-operations-adapter.js";
 import type { DirectMapping } from "./vba-sync-types.js";
+import { FileVerifyBaseStore } from "./verify-base-file-store.js";
 
 export type {
   VbaSourceComparisonEntry,
@@ -390,6 +395,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
+  /** Issue #1890 — the verify base store shared by every writer in this adapter. */
+  private readonly verifyBaseStore: VerifyBaseStorePort;
 
   constructor(options: VbaSyncAdapterOptions = {}) {
     this.env = options.env ?? process.env;
@@ -427,6 +434,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
       options.procedureStrictMode, // opt-in enforcement switch for that gate
     );
+    this.verifyBaseStore = new FileVerifyBaseStore(this.cwd);
     this.formsAdapter = new VbaFormsAdapter(
       {
         executor: this.executor,
@@ -442,8 +450,14 @@ export class VbaSyncAdapter implements VbaSyncPort {
             params,
             target as { accessPath?: string; destinationRoot: string; projectRoot?: string },
           ),
-        executeMappedTool: (toolName, params, mapping) =>
-          this.executeMappedTool(toolName, params, mapping),
+        // Issue #1890 — form writes import through this seam directly, so the
+        // verify base of the modules they load is invalidated here.
+        executeMappedTool: async (toolName, params, mapping) =>
+          this.invalidateVerifyBaseAfterFormWrite(
+            params,
+            mapping,
+            await this.executeMappedTool(toolName, params, mapping),
+          ),
         // Issue #830 — one-way: dysflow → codegraph-vba. Threaded through
         // from the composition root (stdio.ts) when an invoker is wired.
         codeGraphVbaInvoker: options.codeGraphVbaInvoker,
@@ -453,21 +467,50 @@ export class VbaSyncAdapter implements VbaSyncPort {
         ? { codeGraphVbaInvoker: options.codeGraphVbaInvoker }
         : undefined,
     );
-    this.modulesAdapter = new VbaModulesAdapter({
-      scriptPath: this.scriptPath,
-      accessPassword: this.accessPassword,
-      cwd: this.cwd,
-      // Issue #1169 — the modules adapter needs the configured
-      // `destinationRoot` so the helper can tag the response with
-      // `destinationRootSource: "config"` when no override is supplied.
-      destinationRoot: this.destinationRoot,
-      resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
-      validateStrictContext: (params, target) => this.validateStrictContext(params, target),
-      runPreflightCleanup: (target) => this.runPreflightCleanup(target),
-      executor: this.executor,
-      executeMappedTool: (toolName, params, mapping) =>
-        this.executeMappedTool(toolName, params, mapping),
-    });
+    this.modulesAdapter = new VbaModulesAdapter(
+      {
+        scriptPath: this.scriptPath,
+        accessPassword: this.accessPassword,
+        cwd: this.cwd,
+        // Issue #1169 — the modules adapter needs the configured
+        // `destinationRoot` so the helper can tag the response with
+        // `destinationRootSource: "config"` when no override is supplied.
+        destinationRoot: this.destinationRoot,
+        resolveExecutionTarget: (params) => this.resolveExecutionTarget(params),
+        validateStrictContext: (params, target) => this.validateStrictContext(params, target),
+        runPreflightCleanup: (target) => this.runPreflightCleanup(target),
+        executor: this.executor,
+        executeMappedTool: (toolName, params, mapping) =>
+          this.executeMappedTool(toolName, params, mapping),
+      },
+      undefined,
+      undefined,
+      this.verifyBaseStore,
+    );
+  }
+
+  /**
+   * Issue #1890 — a form write that imports or deletes through the mapped-tool
+   * seam invalidates the verify base of the modules it loaded. Best-effort: a
+   * store failure is appended as a warning and never changes the outcome.
+   */
+  private async invalidateVerifyBaseAfterFormWrite(
+    params: Record<string, unknown>,
+    mapping: DirectMapping,
+    result: OperationResult<unknown>,
+  ): Promise<OperationResult<unknown>> {
+    if (mapping.action !== "Import" && mapping.action !== "Delete") return result;
+    const target = await this.resolveExecutionTarget(params);
+    if (!target.ok || target.data.accessPath === undefined) return result;
+    const moduleNames = mapping.moduleNames(params);
+    const diagnostics = await invalidateVerifyBase(
+      this.verifyBaseStore,
+      { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+      moduleNames.length > 0 ? moduleNames : "all",
+      new Date(),
+    );
+    if (diagnostics.length === 0) return result;
+    return { ...result, diagnostics: [...result.diagnostics, ...diagnostics] };
   }
 
   async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
@@ -1213,6 +1256,7 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
     actionableDifferent?: ReadonlyArray<{
       moduleName: string;
       classification?: string;
+      resolvedBy?: string;
     }>;
     nonActionableDifferent?: ReadonlyArray<unknown>;
     hasFunctionalDifferences?: boolean;
@@ -1237,21 +1281,44 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
   const missingInSource = dedupeByModuleName(result.missingInSource ?? []).map((entry) => ({
     moduleName: entry.moduleName,
   }));
-  const actionable = result.summaryStructured?.actionable ?? {
+  const reported = result.summaryStructured?.actionable ?? {
     total: 0,
     sourceNewer: 0,
     binaryNewer: 0,
     bothChanged: 0,
   };
   const nonActionable = result.summaryStructured?.nonActionable ?? { total: 0 };
-  const actionableEntries = result.actionableDifferent ?? [];
+  const allActionableEntries = result.actionableDifferent ?? [];
+  // Issue #1890 — a direction inferred from the last-synced base is a hint, not
+  // an instruction: it is planned and counted exactly like bothChanged, so it
+  // needs the same acknowledgement (acceptBothChanged) before it is applied.
+  const baseResolved = allActionableEntries.filter((entry) => entry.resolvedBy === "base");
+  const actionableEntries = allActionableEntries.filter((entry) => entry.resolvedBy !== "base");
+  const resolvedAs = (classification: string) =>
+    baseResolved.filter((entry) => entry.classification === classification).length;
+  const actionable = {
+    ...reported,
+    sourceNewer: Math.max(0, reported.sourceNewer - resolvedAs("sourceNewer")),
+    binaryNewer: Math.max(0, reported.binaryNewer - resolvedAs("binaryNewer")),
+    bothChanged: reported.bothChanged + baseResolved.length,
+  };
   const entriesFor = (classification: string) =>
     dedupeByModuleName(
       actionableEntries.filter((entry) => entry.classification === classification),
     ).map((entry) => ({ moduleName: entry.moduleName }));
   const sourceNewerEntries = entriesFor("sourceNewer");
   const binaryNewerEntries = entriesFor("binaryNewer");
-  const bothChangedEntries = entriesFor("bothChanged");
+  const baseResolvedEntries = dedupeByModuleName(baseResolved).map((entry) => ({
+    moduleName: entry.moduleName,
+    inferredDirection:
+      entry.classification === "sourceNewer"
+        ? ("import_to_binary" as const)
+        : ("export_to_src" as const),
+  }));
+  const bothChangedEntries = dedupeByModuleName([
+    ...actionableEntries.filter((entry) => entry.classification === "bothChanged"),
+    ...baseResolved,
+  ]).map((entry) => ({ moduleName: entry.moduleName }));
   return {
     ok: result.ok === true,
     missingInBinary,
@@ -1264,6 +1331,7 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
     sourceNewerEntries,
     binaryNewerEntries,
     bothChangedEntries,
+    baseResolvedEntries,
   };
 }
 

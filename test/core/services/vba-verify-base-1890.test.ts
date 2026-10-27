@@ -1,14 +1,12 @@
 // Issue #1890 — pure rules of the last-synced base: when it may change a
-// verdict, and how a write merges into the stored record.
+// verdict, and which writes invalidate it.
 import { describe, expect, it } from "vitest";
 import { classifyVbaPair } from "../../../src/core/services/vba-semantic-classifier.js";
 import {
-  applyVerifyBaseWrite,
   hashCanonicalVbaText,
   resolveDirectionAgainstBase,
-  VERIFY_BASE_CANON,
-  type VerifyBaseEntry,
 } from "../../../src/core/services/vba-verify-base.js";
+import { verifyBaseWriteScope } from "../../../src/core/services/vba-verify-base-recording.js";
 
 const code = (value: number) =>
   `Attribute VB_Name = "Probe"\nOption Explicit\nPublic Function V() As Long\nV = ${value}\nEnd Function\n`;
@@ -33,6 +31,7 @@ describe("resolveDirectionAgainstBase", () => {
     expect(result).toMatchObject({
       classification: "binaryNewer",
       recommendation: "export_to_src",
+      resolvedBy: "base",
     });
   });
 
@@ -68,34 +67,26 @@ describe("hashCanonicalVbaText", () => {
   });
 });
 
-describe("applyVerifyBaseWrite", () => {
-  const entry = (sourceRoot: string, moduleName: string, hash: string): VerifyBaseEntry => ({
-    sourceRoot,
-    moduleName,
-    fileType: "bas",
-    hash,
-    canon: VERIFY_BASE_CANON,
-    recordedAt: "2026-10-27T00:00:00.000Z",
-  });
-  const record = {
-    accessPath: "/db.accdb",
-    entries: [
-      entry("/a", "Probe", "old-a"),
-      entry("/b", "Probe", "old-b"),
-      entry("/a", "Other", "o"),
-    ],
-  };
-
-  it("an export replaces only the exported source root's base, case-insensitively", () => {
-    const next = applyVerifyBaseWrite(record, {
-      sourceRoot: "/a",
-      moduleNames: ["probe"],
-      entries: [entry("/a", "Probe", "new")],
-    });
-    expect(next.entries.map((e) => `${e.sourceRoot}:${e.moduleName}:${e.hash}`).sort()).toEqual([
-      "/a:Other:o",
-      "/a:Probe:new",
-      "/b:Probe:old-b",
+describe("verifyBaseWriteScope", () => {
+  it("invalidates the named modules of an applied import, delete or export", () => {
+    expect(verifyBaseWriteScope("import_modules", { moduleNames: ["A", "B"] })).toEqual(["A", "B"]);
+    expect(verifyBaseWriteScope("delete_module", { moduleName: "A" })).toEqual(["A"]);
+    expect(verifyBaseWriteScope("export_modules", { moduleNames: ["A"], apply: true })).toEqual([
+      "A",
     ]);
+  });
+
+  it("invalidates every module when the write cannot name them", () => {
+    expect(verifyBaseWriteScope("import_all", {})).toBe("all");
+    expect(verifyBaseWriteScope("import_modules", { sourceDir: "src" })).toBe("all");
+    expect(verifyBaseWriteScope("export_all", { apply: true })).toBe("all");
+  });
+
+  it("leaves the base alone for plans and read-only tools", () => {
+    expect(verifyBaseWriteScope("import_modules", { moduleNames: ["A"], dryRun: true })).toBe(
+      undefined,
+    );
+    expect(verifyBaseWriteScope("export_modules", { moduleNames: ["A"] })).toBe(undefined);
+    expect(verifyBaseWriteScope("verify_code", { moduleNames: ["A"] })).toBe(undefined);
   });
 });
