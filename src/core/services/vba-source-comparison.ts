@@ -30,6 +30,14 @@ import {
   type SnapshotArtifactFamily,
   type SnapshotRepresentation,
 } from "./vba-source-snapshot.js";
+import {
+  hashCanonicalVbaText,
+  loadVerifyBaseLookup,
+  resolveDirectionAgainstBase,
+  type VerifyBaseLookup,
+  type VerifyBaseStorePort,
+  verifyBaseModuleKey,
+} from "./vba-verify-base.js";
 
 /** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
 // DYSFLOW_VERSION is now embedded in RuntimeDiagnostics via buildRuntimeDiagnostics()
@@ -282,6 +290,11 @@ export type VbaComparisonContext = {
   ): OperationResult<undefined>;
   runPreflightCleanup(target: VbaExecutionTarget): Promise<AccessOperationPreflightCleanupResult>;
   runVbaManager(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
+  /**
+   * Issue #1890 — optional last-synced base snapshot. When present, semantic mode
+   * resolves the direction of an actionable difference against it.
+   */
+  verifyBaseStore?: VerifyBaseStorePort;
 };
 
 export interface ComparisonFileSystemEntry {
@@ -508,6 +521,17 @@ export async function compareSourceAgainstBinary(
     }
 
     const comparisonMode: VbaComparisonMode = truthy(params.strict) ? "strict" : "semantic";
+    // Issue #1890 — the base only refines semantic direction; strict mode and a
+    // target without a binary path compare the two texts exactly as before.
+    const base =
+      comparisonMode === "semantic" && target.data.accessPath !== undefined
+        ? await loadVerifyBaseLookup(
+            ctx.verifyBaseStore,
+            { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+            sourceRoot,
+          )
+        : { diagnostics: [] };
+    preflightDiagnostics.push(...base.diagnostics);
     const compareTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const comparison = await withPhaseTimeout(
       compareVbaSourceTrees(
@@ -517,6 +541,7 @@ export async function compareSourceAgainstBinary(
         truthy(params.diff),
         fileSystem,
         comparisonMode,
+        base.lookup,
       ),
       compareTimeoutMs,
       createVerifyCodePhaseTimeoutError({
@@ -805,6 +830,7 @@ export async function compareVbaSourceTrees(
   includeDiffs: boolean,
   fileSystem: ComparisonFileSystemPort,
   mode: VbaComparisonMode = "semantic",
+  baseLookup?: VerifyBaseLookup,
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
   const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
@@ -875,7 +901,7 @@ export async function compareVbaSourceTrees(
         ])
       : [undefined, undefined];
 
-    const classification = classifyVbaPair({
+    const pairClassification = classifyVbaPair({
       sourceText,
       binaryText,
       sourceBytes,
@@ -883,6 +909,19 @@ export async function compareVbaSourceTrees(
       fileType: sourceFile.fileType,
       mode: "semantic",
     });
+    // Issue #1890 — a changed value is one unique line per side, so the pair
+    // alone says `bothChanged`. The last-synced base names the side that moved.
+    const baseHash = baseLookup?.get(
+      verifyBaseModuleKey(sourceFile.moduleName, sourceFile.fileType),
+    );
+    const classification =
+      baseHash === undefined || !pairClassification.actionable
+        ? pairClassification
+        : resolveDirectionAgainstBase(pairClassification, {
+            base: baseHash,
+            source: hashCanonicalVbaText(sourceText, sourceFile.fileType),
+            binary: hashCanonicalVbaText(binaryText, sourceFile.fileType),
+          });
 
     // If classifier resolves to "matched" (e.g. normalization equalized), treat as matched
     if (classification.classification === "matched") {

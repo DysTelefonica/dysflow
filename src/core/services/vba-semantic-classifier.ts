@@ -24,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-09-14.r8-verify-code-v2-categories";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-10-27.r9-verify-base-direction";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -887,6 +887,39 @@ export function stripCodeBehindSection(text: string, fileType: string): string {
  */
 function normalizeKnownOptionalDefaultArguments(text: string): string {
   return text.replace(/\b(datosgeneralesok)\(\s*enumsino\.s(?:í|i|￿)?\s*\)/gi, "$1");
+}
+
+/**
+ * Single-side canonical text of one VBA artifact, used to compare a side against
+ * the last-synced base snapshot (#1890).
+ *
+ * `classifyVbaPair` normalizes a PAIR: a few of its folds depend on both sides
+ * (the VB_Name keep rule, raw-byte mojibake repair, the comment strip). A base is
+ * recorded from one side only, so this applies the same non-functional folds the
+ * functional diff uses, with every pair-dependent choice taken conservatively:
+ * VB_Name is kept, comments are kept verbatim, mojibake repair uses no bytes.
+ *
+ * Every fold here is one the classifier already treats as non-functional, so two
+ * texts with equal canonical forms never differ functionally. The converse does
+ * not hold: a missed fold only makes a side fail to match its base, which falls
+ * back to the two-text verdict — never a faked direction.
+ */
+export function canonicalizeVbaText(text: string, fileType: string): string {
+  const stripped = stripLeadingBom(text);
+  let canonical = normalizeLeadingWhitespace(
+    normalizeTrailingWhitespace(normalizeLineEndings(stripped)),
+    fileType,
+  );
+  canonical = applyStructuralStrips(canonical, fileType, true);
+  if (!stripped.includes("�")) {
+    const repaired = repairMojibake(canonical);
+    if (!repaired.includes("�")) canonical = repaired;
+    canonical = neutralizeLossyEncoding(canonical);
+  }
+  canonical = normalizeVbaCase(canonical, fileType);
+  canonical = normalizeKnownOptionalDefaultArguments(canonical);
+  canonical = foldInterTokenWhitespace(canonical);
+  return joinLineContinuations(canonical);
 }
 
 /**
