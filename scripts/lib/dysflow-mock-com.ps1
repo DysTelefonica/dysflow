@@ -4,6 +4,22 @@
 # Used on Linux/macOS or when $env:DYSFLOW_MOCK_COM = 1 to bypass
 # platform-specific COM registration and native Win32 library dependencies.
 
+# Issue #1944 — opt-in open recorder. When DYSFLOW_MOCK_OPEN_LOG names a file,
+# every mock open appends one line `<kind>|<readOnly>|<path>`. When
+# DYSFLOW_MOCK_SIMULATE_WRITES is '1', an open that is not read-only appends a
+# byte to the opened file, modelling an engine that may write a database it
+# holds read-write. Both are unset by default, so existing callers see no change.
+function Register-MockDatabaseOpen {
+    param([string]$Kind, [string]$DatabasePath, [bool]$ReadOnly)
+    if (-not [string]::IsNullOrWhiteSpace($env:DYSFLOW_MOCK_OPEN_LOG)) {
+        Add-Content -LiteralPath $env:DYSFLOW_MOCK_OPEN_LOG -Value "$Kind|$ReadOnly|$DatabasePath" -Encoding UTF8
+    }
+    if ($env:DYSFLOW_MOCK_SIMULATE_WRITES -eq '1' -and -not $ReadOnly -and (Test-Path -LiteralPath $DatabasePath -PathType Leaf)) {
+        $stream = [System.IO.File]::Open($DatabasePath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
+        try { $stream.WriteByte(0x2A) } finally { $stream.Dispose() }
+    }
+}
+
 function Get-MockAccessApplication {
     $mockDoCmd = [PSCustomObject]@{ }
     $mockDoCmd | Add-Member -MemberType ScriptMethod -Name SetWarnings -Value { param($val) }
@@ -21,7 +37,10 @@ function Get-MockAccessApplication {
         VbProject                  = $mockVbProject
     }
 
-    $mockAccess | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value { param($dbPath, $exclusive, $password) }
+    $mockAccess | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
+        param($dbPath, $exclusive, $password)
+        Register-MockDatabaseOpen -Kind 'access' -DatabasePath ([string]$dbPath) -ReadOnly $false
+    }
     $mockAccess | Add-Member -MemberType ScriptMethod -Name CloseCurrentDatabase -Value { }
     $mockAccess | Add-Member -MemberType ScriptMethod -Name Quit -Value { }
 
@@ -32,6 +51,7 @@ function Get-MockDaoDbEngine {
     $mockEngine = [PSCustomObject]@{ }
     $mockEngine | Add-Member -MemberType ScriptMethod -Name OpenDatabase -Value {
         param([string]$DatabasePath, [bool]$options, [bool]$readOnly, [string]$connect)
+        Register-MockDatabaseOpen -Kind 'dao' -DatabasePath $DatabasePath -ReadOnly $readOnly
         return Get-MockDatabase -DatabasePath $DatabasePath
     }
     $mockEngine | Add-Member -MemberType ScriptMethod -Name CompactDatabase -Value {

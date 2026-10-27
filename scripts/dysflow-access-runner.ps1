@@ -1754,13 +1754,40 @@ if ($Operation -eq 'query') {
     $earlyAction -in @('query_sql', 'list_tables', 'get_schema', 'count_rows', 'distinct_values', 'get_relationships', 'list_linked_tables', 'compare_backends')
   )
 
-  if ($isDirectTargetRead) {
+  # #1944 — list_links and export_queries are read-only tools that read the
+  # frontend's own catalog (TableDefs, QueryDefs). They used to reach it
+  # through startup suppression and Access.Application, both of which open
+  # the frontend read-write and change its bytes. A read-only DAO open of the
+  # same file (the one CurrentDb returned) with the frontend password reads
+  # the same catalog without writing.
+  $isFrontendCatalogRead = $earlyPayload.mode -eq 'read' -and $earlyAction -in @('list_links', 'export_queries')
+  if ($isFrontendCatalogRead) { $earlyTargetPath = $AccessDbPath }
+
+  if ($isDirectTargetRead -or $isFrontendCatalogRead) {
     $directDbEngine = $null
     $directDb = $null
     try {
       $directDbEngine = New-DaoDbEngine
-      $directDb = Open-DatabaseWithBackendPassword -DbEngine $directDbEngine -DatabasePath $earlyTargetPath -ReadOnly $true
+      if ($isFrontendCatalogRead) {
+        $directDb = Open-DatabaseWithPassword -DbEngine $directDbEngine -DatabasePath $AccessDbPath -ReadOnly $true -Password $AccessPassword
+      } else {
+        $directDb = Open-DatabaseWithBackendPassword -DbEngine $directDbEngine -DatabasePath $earlyTargetPath -ReadOnly $true
+      }
       Write-DysflowProgress -Percent 40 -Message "Executing operation"
+
+      if ($earlyAction -eq 'list_links') {
+        $links = @(Get-LinkInfo -Database $directDb)
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        Write-DysflowResult -Result ([ordered]@{ links = $links }) -Depth 20
+        $script:exitCode = 0; return
+      }
+
+      if ($earlyAction -eq 'export_queries') {
+        $result = Export-QueryDefinitions -Database $directDb -Payload $earlyPayload -AccessDbPath $AccessDbPath
+        Write-DysflowProgress -Percent 90 -Message "Finalizing"
+        Write-DysflowResult -Result $result -Depth 20
+        $script:exitCode = 0; return
+      }
 
       if ([string]::IsNullOrWhiteSpace($earlyAction) -or $earlyAction -eq 'query_sql') {
         $result = Invoke-QuerySqlReadAction -Database $directDb -Sql ([string]$earlyPayload.sql)
