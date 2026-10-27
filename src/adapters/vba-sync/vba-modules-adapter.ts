@@ -40,7 +40,9 @@ import {
   type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
-import { stringValue, truthy } from "../../core/utils/index.js";
+import type { VerifyBaseStorePort } from "../../core/services/vba-verify-base.js";
+import { recordVerifyBase } from "../../core/services/vba-verify-base-recording.js";
+import { isRecord, stringValue, truthy } from "../../core/utils/index.js";
 import {
   removeTemporaryDirectoryWithRetry,
   TemporaryDirectoryCleanupError,
@@ -65,6 +67,7 @@ import {
 import { collectImportLintFindings, type ImportLintFinding } from "./import-lint-gate.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
+import { FileVerifyBaseStore } from "./verify-base-file-store.js";
 
 // ========================================================================
 // #732 — compile-failure rollback types + constants REMOVED in v1.19.0
@@ -404,11 +407,18 @@ function formatCodeBehindWarning(divergence: FormCodeBehindDivergence): string {
 }
 
 export class VbaModulesAdapter {
+  private readonly verifyBaseStore: VerifyBaseStorePort;
+
   constructor(
     private readonly orchestrator: VbaModulesOrchestrator,
     private readonly fileSystem: ComparisonFileSystemPort = nodeComparisonFileSystem,
     private readonly controlPropertyReader: ControlPropertyReader = new NoopControlPropertyReader(),
-  ) {}
+    verifyBaseStore?: VerifyBaseStorePort,
+  ) {
+    // Issue #1890 — last-synced base snapshot, local state under the project's
+    // `.dysflow/runtime/verify-base/`.
+    this.verifyBaseStore = verifyBaseStore ?? new FileVerifyBaseStore(orchestrator.cwd);
+  }
 
   /**
    * Issue #975 — wrap a write-tool dispatch with the transactional copy /
@@ -814,7 +824,11 @@ export class VbaModulesAdapter {
       const moduleNames = stringArray(params.moduleNames);
       const hasSourceDir = typeof params.sourceDir === "string" && params.sourceDir.length > 0;
       if (moduleNames.length === 0 && hasSourceDir) {
-        return this.runBulkImportByDirectory(params);
+        const bulk = await this.runBulkImportByDirectory(params);
+        if (!bulk.ok || !isRecord(bulk.data) || bulk.data.willModifyAccess !== true) return bulk;
+        return this.recordVerifyBaseAfterWrite("import_modules", params, bulk, {
+          sourceRoot: stringValue(bulk.data.sourceDir),
+        });
       }
     }
 
@@ -975,7 +989,11 @@ export class VbaModulesAdapter {
     }
 
     if (toolName === "export_all" && truthy(params.prune)) {
-      return this.exportAllWithPrune(effectiveParams, resolvedExportTarget);
+      return this.recordVerifyBaseAfterWrite(
+        toolName,
+        effectiveParams,
+        await this.exportAllWithPrune(effectiveParams, resolvedExportTarget),
+      );
     }
 
     const importPruneResult =
@@ -1047,6 +1065,17 @@ export class VbaModulesAdapter {
       }
     }
 
+    // Issue #1890 — the modules this write synced now agree on both sides;
+    // record them as the base verify_code resolves direction against.
+    if (
+      toolName === "import_modules" ||
+      toolName === "import_all" ||
+      ((toolName === "export_modules" || toolName === "export_all") &&
+        effectiveExportReadOnly !== true)
+    ) {
+      importResult = await this.recordVerifyBaseAfterWrite(toolName, effectiveParams, importResult);
+    }
+
     // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
     // human-compile state cache so `get_capabilities` and the result
     // reminder surface know there is something for the human to compile.
@@ -1065,7 +1094,7 @@ export class VbaModulesAdapter {
     }
 
     const resultWithPrune: OperationResult<unknown> =
-      toolName === "import_all" && truthy(params.prune)
+      importResult.ok && toolName === "import_all" && truthy(params.prune)
         ? {
             ...importResult,
             data: {
@@ -1647,7 +1676,51 @@ export class VbaModulesAdapter {
       validateStrictContext: this.orchestrator.validateStrictContext.bind(this.orchestrator),
       runPreflightCleanup: this.orchestrator.runPreflightCleanup.bind(this.orchestrator),
       runVbaManager: this.orchestrator.executor.bind(this.orchestrator),
+      verifyBaseStore: this.verifyBaseStore,
     };
+  }
+
+  /**
+   * Issue #1890 — record the last-synced base for the modules a successful
+   * import/export reported as synced. Only per-module `ok` entries count; a
+   * failed result records nothing. Best-effort: a store failure is appended as
+   * a warning and never changes the outcome of the write.
+   */
+  private async recordVerifyBaseAfterWrite(
+    toolName: string,
+    params: Record<string, unknown>,
+    result: OperationResult<unknown>,
+    options: { sourceRoot?: string } = {},
+  ): Promise<OperationResult<unknown>> {
+    if (!result.ok) return result;
+    const isExport = toolName === "export_modules" || toolName === "export_all";
+    const moduleNames = isExport
+      ? exportedModuleNames(result.data)
+      : importedOkModuleNames(result.data);
+    if (moduleNames.length === 0) return result;
+    let diagnostics: Diagnostic[];
+    try {
+      const target = await this.orchestrator.resolveExecutionTarget(params);
+      if (!target.ok || target.data.accessPath === undefined) return result;
+      diagnostics = await recordVerifyBase({
+        store: this.verifyBaseStore,
+        fileSystem: this.fileSystem,
+        target: { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+        kind: isExport ? "export" : "import",
+        sourceRoot: options.sourceRoot ?? target.data.destinationRoot,
+        moduleNames,
+      });
+    } catch (error) {
+      diagnostics = [
+        {
+          level: "warning",
+          source: "verify-base",
+          message: `The last-synced base snapshot was not updated: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ];
+    }
+    if (diagnostics.length === 0) return result;
+    return { ...result, diagnostics: [...result.diagnostics, ...diagnostics] };
   }
 
   /**
@@ -2096,6 +2169,43 @@ export class VbaModulesAdapter {
   // (feat-759-no-compile). compile + rollbackOnCompileFail leave the public
   // surface; the snapshot + rollback helpers above lived only to undo a
   // failed compile, so they are gone with it.
+}
+
+/**
+ * Issue #1890 — names of the modules an import reported as `status:"ok"`. The
+ * runner payload is `{ ok, modules }` (wrapped under `result` by the runner
+ * bridge) or the bulk `{ modules }` shape; PowerShell may collapse a one-entry
+ * list to a bare object, so both forms are accepted.
+ */
+function importedOkModuleNames(data: unknown): string[] {
+  const payload = isRecord(data) && data.result !== undefined ? data.result : data;
+  if (isRecord(payload) && payload.ok === false) return [];
+  const list = Array.isArray(payload)
+    ? payload
+    : isRecord(payload)
+      ? payload.modules !== undefined
+        ? asList(payload.modules)
+        : payload.module !== undefined
+          ? [payload]
+          : []
+      : [];
+  return list
+    .filter(isRecord)
+    .filter((entry) => entry.status === "ok" && typeof entry.module === "string")
+    .map((entry) => String(entry.module));
+}
+
+/** Issue #1890 — the export payload lists only the modules it wrote. */
+function exportedModuleNames(data: unknown): string[] {
+  if (!isRecord(data)) return [];
+  return asList(data.exported).filter(
+    (name): name is string => typeof name === "string" && name.length > 0,
+  );
+}
+
+function asList(value: unknown): unknown[] {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 function normalizeImportMode(importMode: string | undefined): string | undefined {
