@@ -404,8 +404,18 @@ export const ACCESS_DATABASE_LOCKED_REMEDIATION =
 export const VBA_IMPORT_SAVE_FAILED_REMEDIATION =
   "The module was imported but its save did not complete, so the change may not be in the database. Fix the other failing modules of the batch, then import this module again.";
 
+/**
+ * #1945 — Access opened the database without exposing a VBA project for it,
+ * so the runner refused before reading or changing any module.
+ */
+export const VBA_PROJECT_UNAVAILABLE_REMEDIATION =
+  "Access opened the database without a VBA project, so no module was read or changed; it is safe to retry. Run list_access_operations to reconcile a leftover Access operation on this file (access_force_cleanup_orphaned lists orphaned Access processes), then retry the same call. If it persists, check that the file is an editable .accdb/.mdb (an .accde/.mde has no editable VBA project) and open it once in Access to confirm the VBA project loads.";
+
 /** Codes whose same call is expected to succeed once the reported condition clears. */
-const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set(["ACCESS_DATABASE_LOCKED"]);
+const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set([
+  "ACCESS_DATABASE_LOCKED",
+  "VBA_PROJECT_UNAVAILABLE",
+]);
 
 /**
  * Creates a normalized Dysflow error for failed operation results.
@@ -413,6 +423,7 @@ const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set(["ACCESS_DATABASE
 const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   ACCESS_DATABASE_LOCKED: ACCESS_DATABASE_LOCKED_REMEDIATION,
   VBA_IMPORT_SAVE_FAILED: VBA_IMPORT_SAVE_FAILED_REMEDIATION,
+  VBA_PROJECT_UNAVAILABLE: VBA_PROJECT_UNAVAILABLE_REMEDIATION,
   FORM_CONTROL_NOT_FOUND:
     "Run dysflow.form_list_controls to enumerate existing controls in the form.",
   FORM_IMPORT_GATE_FAILED:
