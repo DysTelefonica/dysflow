@@ -28,7 +28,7 @@ Propone 2-3 helpers extraíbles de un procedure VBA largo, respetando boundaries
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
 
 ## Hard Rules
 

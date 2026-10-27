@@ -46,7 +46,7 @@
 - apply con source cambiado desde el plan → hard-fail `SOURCE_CHANGED` con diff resumido.
 - apply con binario que no compila (v1.19.0+) → hard-fail `BINARY_NOT_COMPILED` + sugerencia de **compilar en Access** (Debug ▸ Compile) primero. Antes la sugerencia era `dysflow.compile_vba`; ya no existe.
 - apply con colisión (new_name ya existe) → hard-fail `NAME_COLLISION` sin aplicar nada.
-- Símbolo con drift binario vs source (`find_references scope=all` reporta discrepancia) → abortar y ejecutar `vba-binary-sync`.
+- Símbolo con drift binario vs source (`find_references scope=all` reporta discrepancia) → abortar y ejecutar `vba-workflow`.
 
 ## Failure modes tipados
 

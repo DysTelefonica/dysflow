@@ -28,7 +28,7 @@ Renombra un control de Access identificando todos los puntos de cambio antes de 
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
 
 ## Hard Rules
 
@@ -48,7 +48,7 @@ dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo
 | `new_name` usado en otros forms | Warning; `feasibility: risky` si son muchos |
 | Variable local VBA con el mismo nombre que el control (shadowing) | Marcar como probable falso positivo y warn |
 | Hits en strings (late-bound) | Warning `LATE_BOUND_RISK`; humano decide |
-| Drift binario vs source antes de aplicar | Abortar → `vba-binary-sync` |
+| Drift binario vs source antes de aplicar | Abortar → `vba-workflow` |
 
 ## Execution Steps
 
@@ -80,7 +80,7 @@ En apply, añadir: `applied: true`, `roundtrip_check: {serialize_diff_clean, com
 ## References
 
 - `references/examples-and-edge-cases.md` — ejemplo JSON completo, edge cases (shadowing, refactor masivo) y criterios v1.0.0.
-- Skills relacionados: `vba-symbol-rename` (símbolos de código, no controles), `vba-form-repair` (forms rotos/inconsistentes), `vba-binary-sync` (drift).
+- Skills relacionados: `vba-symbol-rename` (símbolos de código, no controles), `vba-form-repair` (forms rotos/inconsistentes), `vba-workflow` (drift).
 
 ## Anti-patterns
 

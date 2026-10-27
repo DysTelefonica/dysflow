@@ -32,7 +32,7 @@ Every Dysflow call returns an envelope. Read the envelope, not the prose:
 | `*_LOCKED_BY_RUNNING_OP` / `OPERATION_ALREADY_RUNNING` / `LACCDB_*` | Runtime contention | `list_access_operations` → `cleanup_access_operation` on the specific `operationId`. For stale markers: `clean_stale_markers` with `confirm: true`. |
 | `RUNNER_INVALID_JSON` / `CONFIG_TARGET_NOT_FOUND` / `VBA_MANAGER_TIMEOUT` | PowerShell runner | `dysflow doctor` → verify Access install + runner binary path. |
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` / `INVALID_INPUT` (prune + filter) | Export-source guard | Re-target export to a sibling directory or pass `confirmOverwriteSource: true` explicitly. |
-| `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | Source lint | `lint_module` first; then `vba-form-metadata-repair` for form files. |
+| `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | Source lint | `lint_module` first; then `vba-form-repair` for form files. |
 
 The full taxonomy is mirrored in the README `## Common pitfalls cheat-sheet` and lives canonically in `references/error-codes.md` of the `dysflow-usage` skill.
 

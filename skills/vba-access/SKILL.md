@@ -35,7 +35,7 @@ Load before writing or reviewing `.bas`, `.cls`, form code-behind, DAO access, A
   runtime guidance (`dysflow.import_modules { moduleNames: [...],
   apply: true }` + `dysflow.export_modules { moduleNames: [...],
   exportPath: <safe>, mutateBinary: false }`) instead of
-  duplicating operational flags here. `vba-binary-sync` y
+  duplicating operational flags here. `vba-binary-sync` (skill retirada) y
   `dysflow.sync` son legacy; ver la skill `vba-workflow` Gate 2
   para el flujo canonico.
 
@@ -89,7 +89,7 @@ Load before writing or reviewing `.bas`, `.cls`, form code-behind, DAO access, A
 | SQL assumes sibling tables share columns | Query each live table schema independently. |
 | `Dim first, second As Long` is treated as two `Long` values | Declare one variable per line with an explicit type. |
 | An object null-check and member access share one boolean expression | Split the checks because VBA does not short-circuit. |
-| Dysflow flags or tool inventories are copied into this skill | Reference `dysflow-usage`, `vba-binary-sync`, and live runtime discovery. |
+| Dysflow flags or tool inventories are copied into this skill | Reference `dysflow-usage`, `vba-workflow`, and live runtime discovery. |
 
 ## Procedencia y fuente canonica
 

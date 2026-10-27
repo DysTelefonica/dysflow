@@ -31,7 +31,7 @@ skills / la skill no coincide"; a `get_capabilities` value disagrees with a clai
 the AGENTS.md core, or a `rules/*.md`; a skill's `requires:` floor is older than the live
 `adapterVersion`; a user reports a tool "doesn't exist" or "behaves differently".
 
-Do NOT use for: a change internal to one VBA module/form (`sdd-apply` / `vba-binary-sync`), or a
+Do NOT use for: a change internal to one VBA module/form (`sdd-apply` / `vba-workflow`), or a
 doc fix in one skill unrelated to runtime behavior (`skill-improver` or a direct edit).
 
 ## §2 Hard Rules

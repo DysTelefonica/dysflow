@@ -35,7 +35,7 @@ Cargue esta skill cuando se cumpla **al menos uno** de:
 
 **No la cargue** para:
 
-- Cambios internos a un solo módulo/form VBA → use `sdd-apply` o `vba-binary-sync`.
+- Cambios internos a un solo módulo/form VBA → use `sdd-apply` o `vba-workflow`.
 - Cambios en una sola skill del catálogo que no tocan runtime → use `skill-improver`.
 - Verificar o adaptar tooling tras un fix del maintainer → use `maintainer-prompt-drafter` (con `vba-toolkit-evolve` solo como entrada de fricciones previas).
 - Re-alinear tooling tras un release → use `dysflow-codegraph-update` (que ya cubre la fase de mantenimiento; esta skill NO la duplica).

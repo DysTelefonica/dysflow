@@ -28,7 +28,7 @@ Reporte del estado de sincronización entre el source tree y el binario Access: 
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. La sonda de drift por símbolo es el tool de references del runtime Dysflow (current name per `dysflow-usage`).
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. La sonda de drift por símbolo es el tool de references del runtime Dysflow (current name per `dysflow-usage`).
 
 ## Hard Rules
 
@@ -49,9 +49,9 @@ HR-7. **`.dysflow/project.json` por worktree (hard gate, runtime-managed)**: cad
 | Target es un símbolo (no módulo/binario entero) | Usar la sonda de references (per `dysflow-usage`) con scope amplio en vez de export completo |
 | Drift detectado | Poblar `diff_summary` file-by-file y marcar `recompile_needed` si algún `.cls`/`.bas` cambió |
 | Drift puramente cosmético en `.form.txt` (sólo encoding, comentarios, geometría de controles) | Reportar pero NO bloquear entrega; `behavior_drift.kind: behavior-cosmetic` |
-| Drift funcional en `.cls` (helper call ausente, valor hardcodeado que source reemplaza, código viejo retenido) | Bloquear entrega; recomendar `vba-binary-sync` con re-import + read-back; `behavior_drift.kind: behavior-functional` |
+| Drift funcional en `.cls` (helper call ausente, valor hardcodeado que source reemplaza, código viejo retenido) | Bloquear entrega; recomendar `vba-workflow` con re-import + read-back; `behavior_drift.kind: behavior-functional` |
 | Repo/worktree sin `.dysflow/project.json`, con `projectId` faltante, o con config compartido entre worktrees | Warning; el reporte puede estar apuntando al binario equivocado; sugerir tool de resolución de proyecto (per `dysflow-usage`; o `setup_project` si no existe). NO escribir el config a mano. |
-| `import_modules` reciente devolvió `ok` pero el binario conserva código viejo | No reportado por este skill como éxito; requiere `vba-binary-sync` con read-back explícito |
+| `import_modules` reciente devolvió `ok` pero el binario conserva código viejo | No reportado por este skill como éxito; requiere `vba-workflow` con read-back explícito |
 
 ## Execution Steps
 
@@ -61,7 +61,7 @@ HR-7. **`.dysflow/project.json` por worktree (hard gate, runtime-managed)**: cad
 4. Si hay drift y necesitás evidencia por archivo: leer `summaryStructured`, `bulkImportable[]`, `bulkExportable[]`, y los `reason` por entrada del tool de drift; usar el filtro per-`moduleNames` solo si hace falta ampliar el diff file-by-file. **NO usar tools de export para inspeccionar drift**: usar el tool de drift. Para una preview de exportación, la forma canónica es `apply:false`; `diff:true` es el único alias legacy y solo para exportaciones cuando aparece en `legacyAliases[]`. Una exportación aplicada debe mantener `mutateBinary:false` y devolver `binaryMutated:false` salvo opt-in legacy explícito.
 5. **Config check**: ejecutar el tool de resolución de proyecto (current: `resolve_project`, per `dysflow-usage`) sobre el worktree target y leer `.dysflow/project.json` (vía `bootstrap.projectConfig` o `schema({view:"project-config"})` — NO leer el fichero a mano) para confirmar `outcome:"resolved"` y que `projectId`/`accessPath` corresponden al target. Si falta o colisiona, NO escribir el fichero a mano: ejecutar `setup_project` o `migrate_project_config` y volver al tool de resolución. Persistir el warning (`dysflow_project_config.present: false`) mientras los reportes siguientes pueden estar apuntando al binario equivocado.
 6. **Clasificar drift por archivo** (extensión de la evidencia del tool de drift + tool de references): por cada `.cls` → `behavior-functional` si cambia comportamiento (helper calls, asignaciones, eventos); `behavior-cosmetic` si sólo normalización. Por cada `.form.txt` → `layout` (no es comportamiento; reportar pero no clasificar como bloqueante). El segmento de código embebido en `.form.txt` es metadato y NO se usa como evidencia de comportamiento.
-7. **Read-back opcional para drift behavior-critical**: si el target incluye un `.cls` con cambios de comportamiento, exportar ese `.cls` desde el `target_binary` a un temp dir nuevo y comparar contenido funcional contra el source `.cls`; calcular `source_hash`/`export_hash`, ejecutar aserciones de símbolos críticos; poblar `readback_verified`. Si el read-back contradice el tool de drift (drift clean pero read-back muestra código viejo retenido) → elevar el hallazgo a hard-fail y recomendar `vba-binary-sync` con re-import + read-back.
+7. **Read-back opcional para drift behavior-critical**: si el target incluye un `.cls` con cambios de comportamiento, exportar ese `.cls` desde el `target_binary` a un temp dir nuevo y comparar contenido funcional contra el source `.cls`; calcular `source_hash`/`export_hash`, ejecutar aserciones de símbolos críticos; poblar `readback_verified`. Si el read-back contradice el tool de drift (drift clean pero read-back muestra código viejo retenido) → elevar el hallazgo a hard-fail y recomendar `vba-workflow` con re-import + read-back.
 8. Calcular `recompile_needed`: `true` si cualquier módulo de código cambió y el binario no se recompiló.
 
 ## Output Contract
@@ -83,7 +83,7 @@ Return an object with the following keys:
 | `summaryStructured` | object | Raw tool-of-drift summary block. |
 | `bulkImportable` | string[] | Modules eligible for the import tool. |
 | `bulkExportable` | string[] | Modules eligible for the export tool. |
-| `next_recommended` | `"vba-binary-sync" \| "compact_repair" \| "manual_review" \| "none"` | Next step when drift is detected. |
+| `next_recommended` | `"vba-workflow" \| "compact_repair" \| "manual_review" \| "none"` | Next step when drift is detected. |
 
 Example JSON shape (`binary_drift_json`):
 
@@ -129,5 +129,4 @@ Si `dysflow_project_config.present: false` o `matches_cwd: false` → el reporte
 - `dysflow-arnes` — operating harness for Dysflow; bootstrap, schema, capabilities.
 - `references/examples-and-failure-modes.md` — escenarios de aceptación y failure modes.
 - `references/examples.md` — ejemplos de uso del skill.
-- `vba-binary-sync/references/incident-readback-failure.md` — rationale del gate de read-back post-import; relevante acá porque este skill debe distinguir drift funcional vs cosmético para que la entrega no se apruebe con un binario que retiene código viejo.
-- Skills relacionados: `vba-source-impact` (mitad source del split de `access-vba-impact`), `vba-binary-sync` (resolver el drift detectado).
+- Skills relacionados: `vba-source-impact` (mitad source del split de la skill retirada `access-vba-impact`), `vba-workflow` (resolver el drift detectado: import/export selectivo y gate de drift antes de los tests).

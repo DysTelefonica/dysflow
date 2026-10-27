@@ -28,7 +28,7 @@ Renombra un símbolo VBA a través del proyecto con verificación de impacto ant
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
 
 ## Hard Rules
 
@@ -43,7 +43,7 @@ HR-5. Punto ciego conocido: referencias late-bound `CallByName obj, "Proc", VbMe
 | Situación | Acción |
 | --- | --- |
 | `find_references` devuelve typed error (símbolo no existe) | Abortar: `SYMBOL_NOT_FOUND` |
-| `scope=all` reporta drift binario vs source | Abortar y ejecutar `vba-binary-sync` primero |
+| `scope=all` reporta drift binario vs source | Abortar y ejecutar `vba-workflow` primero |
 | `new_name` ya referenciado en el mismo scope | Hard-fail `NAME_COLLISION` |
 | Hits de grep manual `"symbol"` en strings | Warning `LATE_BOUND_RISK`; decisión humana |
 | >50% de matches en strings/comments | Warning de falsos positivos (find_references ya los excluye; contrastar) |
@@ -96,4 +96,4 @@ HR-5. Punto ciego conocido: referencias late-bound `CallByName obj, "Proc", VbMe
 ## References
 
 - `references/examples-and-failure-modes.md` — ejemplos JSON completos de plan/apply, escenarios de aceptación y failure modes tipados.
-- Skills relacionados: `vba-source-impact` (impacto en source), `vba-control-rename-safe` (controles de forms), `vba-binary-sync` (resolver drift).
+- Skills relacionados: `vba-source-impact` (impacto en source), `vba-control-rename-safe` (controles de forms), `vba-workflow` (resolver drift).

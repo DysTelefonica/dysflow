@@ -363,9 +363,9 @@ VBA/Access y reglas que ya viven en skills del catalogo:
   `access-vba-capability-docs`, `access-vba-e2e-methodology`
   (TDD, runner contract, cardinalidad, sandbox, fixtures,
   capability docs).
-- `vba-binary-sync`, `vba-binary-drift`,
-  `vba-module-source-readback` (sync source-binario,
-  drift, readbacks).
+- `vba-binary-drift` (drift) y las skills
+  `vba-binary-sync` y `vba-module-source-readback`, retiradas
+  (sync source-binario, readbacks; su flujo vive ahora aqui).
 - `vba-toolkit-evolve`, `vba-form-repair`,
   `vba-extract-candidates`, `vba-symbol-rename`,
   `vba-control-rename-safe`, `vba-event-tracer`,

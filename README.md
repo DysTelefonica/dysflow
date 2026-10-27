@@ -810,7 +810,7 @@ Load the canonical skills before touching VBA, Access state, or write-class tool
 | TDD loop for VBA tests (manifest, fixtures, isolation) | `access-vba-tdd` + sub-skill | Pre-flight the manifest, write the atom, run the runner. |
 | Diagnose source ⇄ binary drift (`.cls` = behavior, `.form.txt` = UI) | `vba-binary-drift` | Read first, then sync; never edit both sides blind. |
 | Author forms (perceive → act → verify) | `access-form-ui-builder` | Generate / verify a `.form.txt` plan without opening Access. |
-| Sync source ⇄ binary in one shot | `vba-binary-sync` | `verify_code` → `import_modules` → `export_modules` → re-verify pipeline. |
+| Sync source ⇄ binary in one shot | `vba-workflow` | `verify_code` → `import_modules` → `export_modules` → re-verify pipeline. |
 | SQL impact / table change | `vba-sql-impact` | Tables, saved queries, RecordSource/RowSource lineage. |
 
 Onboarding companion: see [`docs/ai-agent-onboarding.md`](./docs/ai-agent-onboarding.md) for the 5-minute "what can go wrong" guide.
@@ -841,7 +841,7 @@ Every entry maps an error code to the fastest path back to a green build, and cr
 | `MCP_ALLOWLIST_NOT_CONFIGURED` / `MCP_PROCEDURE_NOT_ALLOWED` | On MCP, reachable only under `capabilities.procedures.strictMode: true`: no configured allowlist, or the requested procedure is outside it. HTTP `test_vba` emits the missing-list error regardless of `strictMode`; stdio `test_vba` never does. | Decide whether the project wants `strictMode` at all. If it does, add the procedure under `capabilities.procedures.allow`. If it does not, drop the flag and the gate stops refusing. | #962, #1556 |
 | `EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION` | An `export_modules` / `export_all` call in developer mode is about to overwrite the active source tree. | Re-target the export to a sibling directory (`<repo>/export/`) or pass `confirmOverwriteSource: true` after confirming the destination is intentional. `prune:true` + `filter:...` is always rejected (`INVALID_INPUT`). | #779, #619 |
 | `RUNNER_INVALID_JSON` / `CONFIG_TARGET_NOT_FOUND` | Dysflow launched PowerShell but the runner did not return structured JSON, or the target `.accdb` is missing. | Run `dysflow doctor` — it surfaces both the runner binary path and the Access install. Then verify `accessPath` resolves against `.dysflow/project.json` (do **not** assume a fresh `pwd` if you are inside a worktree). | #594, #962 |
-| `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | The `.form.txt`/`.report.txt`/`.bas`/`.cls` source the agent tried to import does not parse. | Run `lint_module` (or the form import gate's structural pre-flight) before re-importing; repair the metadata with the `vba-form-metadata-repair` skill. | #958 |
+| `FORM_SOURCE_MALFORMED` / `VBA_SOURCE_MALFORMED` | The `.form.txt`/`.report.txt`/`.bas`/`.cls` source the agent tried to import does not parse. | Run `lint_module` (or the form import gate's structural pre-flight) before re-importing; repair the source with the `vba-form-repair` skill. | #958 |
 
 ### Failure patterns that have nothing to do with the error code
 
