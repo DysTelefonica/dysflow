@@ -41,7 +41,7 @@ The Access E2E battery runs automatically only when a release tag is pushed.
 `e2e-validation` job on the self-hosted `dysflow-e2e` runner. The GitHub Release
 is published only after both succeed.
 
-That job uses pre-staged fixture copies, `ACCESS_VBA_PASSWORD`, and a
+The `e2e-validation` job uses pre-staged fixture copies, `ACCESS_VBA_PASSWORD`, and a
 repository-local `test-runtime`; it never falls back to the production runtime.
 Configure `DYSFLOW_FIXTURES_SOURCE` with the runner-owned fixture directory
 outside every Git checkout (currently `C:\actions-runner\_fixtures\dysflow`).
@@ -62,16 +62,20 @@ not on pull requests.
 exactly once; `test/quality-gates/e2e-suite-authority.test.ts` pins that.
 
 - `UNIT_E2E_TESTS` — in-process tests included in `pnpm test`.
-- `PR_SMOKE_TESTS` — Windows smoke tests without real Access.
+- `PR_SMOKE_TESTS` — Windows smoke tests without real Access. The name is
+  historical: no pull-request job runs them any more.
 - `NIGHTLY_ACCESS_TESTS` — real-Access tests; run only this subset with
-  `vitest run -c vitest.nightly-access.config.ts`.
+  `vitest run -c vitest.nightly-access.config.ts`, or through the manual
+  workflow's `include_access_vitest` input. The name is historical: nothing
+  schedules them.
 - `E2E_EXEMPTIONS` — the manual template-clone benchmark, which needs a
   gitignored fixture.
 
 `pnpm test:integration` runs both Windows subsets on a Windows host.
 
-No workflow schedules the Windows or real-Access suites. Run them by hand when
-a change touches Access COM, PowerShell, or form import paths.
+No workflow schedules the Windows or real-Access suites. Run them by hand, or
+through the manual workflow, when a change touches Access COM, PowerShell, or
+form import paths.
 
 ## Coverage thresholds
 

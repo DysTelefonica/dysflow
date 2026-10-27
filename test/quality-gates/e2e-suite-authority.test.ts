@@ -41,7 +41,7 @@ describe("#1547 E2E suite execution authority", () => {
     expect(config).toContain("...UNIT_E2E_TESTS");
   });
 
-  it("wires nightly Access tests into their manual config", () => {
+  it("wires the real-Access tests into their manual config", () => {
     const nightlyConfig = readFileSync("vitest.nightly-access.config.ts", "utf8");
     expect(nightlyConfig).toContain("...NIGHTLY_ACCESS_TESTS");
   });
