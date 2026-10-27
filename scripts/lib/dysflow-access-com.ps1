@@ -225,6 +225,32 @@ function Stop-AccessPidAndWait {
     return $false
 }
 
+# #1918: wait (bounded) for an owned Access to exit on its own after Quit(2).
+# Killing an Access that is still tearing down its COM session is the suspected
+# cause of the combase.dll crashes (0xc0000005) of the NEXT instance. Only a live
+# MSACCESS process counts as still running: a PID that is gone or now belongs to
+# another program is reported as exited, so the caller never kills a reused PID.
+# Returns $true when the owned Access exited within the window, $false otherwise.
+function Wait-AccessPidExit {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][int]$AccessPid,
+        [int]$TimeoutMs = 5000,
+        [int]$PollMs = 100,
+        # Testing seam: returns the process holding the PID, or $null. Default: Get-Process.
+        [scriptblock]$ProcessLookup = { param([int]$AccessPid) Get-Process -Id $AccessPid -ErrorAction SilentlyContinue }
+    )
+    $elapsed = 0
+    while ($true) {
+        $process = $null
+        try { $process = & $ProcessLookup $AccessPid } catch { $process = $null }
+        if ($null -eq $process -or [string]$process.ProcessName -ne 'MSACCESS') { return $true }
+        if ($elapsed -ge $TimeoutMs) { return $false }
+        if ($PollMs -gt 0 -and $env:DYSFLOW_MOCK_COM -ne '1') { Start-Sleep -Milliseconds $PollMs }
+        $elapsed += $PollMs
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Lock-file path helper
 # ---------------------------------------------------------------------------
@@ -802,6 +828,8 @@ function Open-CanonicalAccess {
 
     Injectable seams (for testing):
     -KillPidAction   — kills the owned PID and returns bool (default: Stop-AccessPidAndWait)
+    -ExitWaitAction  — waits for the owned PID to exit on its own after Quit (default: Wait-AccessPidExit, 5 s);
+                       skipped when -KillPidAction is injected without it
     -LockFileAction  — checks whether the lock file exists (default: Test-Path)
 
 .PARAMETER Session
@@ -857,6 +885,8 @@ function Close-CanonicalAccess {
         # --- Injectable seams (testing only; production callers omit these) ---
         # Kills the owned PID and returns $true/$false.  Default: Stop-AccessPidAndWait
         [scriptblock]$KillPidAction  = { param([int]$AccessPid) Stop-AccessPidAndWait -AccessPid $AccessPid -TimeoutMs 20000 },
+        # #1918: waits for the owned PID to exit on its own; returns $true when it did.  Default: Wait-AccessPidExit
+        [scriptblock]$ExitWaitAction = { param([int]$AccessPid, [int]$TimeoutMs) Wait-AccessPidExit -AccessPid $AccessPid -TimeoutMs $TimeoutMs },
         # Checks whether a path exists (for lock-file verification).  Default: Test-Path
         [scriptblock]$LockFileAction = { param([string]$LockPath) Test-Path -LiteralPath $LockPath -ErrorAction SilentlyContinue }
     )
@@ -929,10 +959,25 @@ function Close-CanonicalAccess {
 
         # --- Kill logic ---------------------------------------------------
         if ($null -ne $ownedPid) {
-            # Owned PID: kill synchronously (Stop-AccessPidAndWait has taskkill last-resort).
-            Write-ComCloseTrace -Step "KillOwnedPid" -OwnedPid $ownedPid
-            $killed = & $KillPidAction $ownedPid
-            $ownedPidKilled = [bool]$killed
+            # #1918: give Access up to 5 s to finish its own COM teardown after Quit(2)
+            # before force-killing it. An Access that exits on its own is not killed.
+            # A caller that injects its own KillPidAction without an ExitWaitAction owns the
+            # whole termination policy (test seams); production binds neither and always waits.
+            $waitForExit = -not ($PSBoundParameters.ContainsKey('KillPidAction') -and -not $PSBoundParameters.ContainsKey('ExitWaitAction'))
+            $exited = $false
+            if ($waitForExit) {
+                Write-ComCloseTrace -Step "WaitOwnedPidExit" -OwnedPid $ownedPid
+                try { $exited = [bool](& $ExitWaitAction $ownedPid 5000) } catch { Write-Debug "Close-CanonicalAccess: ExitWaitAction threw: $_" }
+            }
+            if ($exited) {
+                Write-ComCloseTrace -Step "OwnedPidExited" -OwnedPid $ownedPid
+                $ownedPidKilled = $true
+            } else {
+                # Owned PID: kill synchronously (Stop-AccessPidAndWait has taskkill last-resort).
+                Write-ComCloseTrace -Step "KillOwnedPid" -OwnedPid $ownedPid
+                $killed = & $KillPidAction $ownedPid
+                $ownedPidKilled = [bool]$killed
+            }
         } else {
             # No attributed PID: NEVER kill by path/name/CommandLine.
             # UnattributedKilled is an INVARIANT $false.

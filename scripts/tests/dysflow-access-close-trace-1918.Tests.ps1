@@ -39,17 +39,17 @@ Describe "Close-CanonicalAccess shutdown trace (#1918)" {
     }
 
     It "writes one line per shutdown step, in order, tagged with the owned PID" {
-        Close-CanonicalAccess -Session $script:Session -KillPidAction { param([int]$AccessPid) $true } | Out-Null
+        Close-CanonicalAccess -Session $script:Session -KillPidAction { param([int]$AccessPid) $true } -ExitWaitAction { param([int]$AccessPid, [int]$TimeoutMs) $false } | Out-Null
 
         Test-Path -LiteralPath $script:TracePath | Should -BeTrue
         $steps = @(Get-Content -LiteralPath $script:TracePath | ForEach-Object { ($_ -split ' step=')[1] })
-        $steps | Should -Be @("Begin", "CloseCurrentDatabase", "Quit", "FinalReleaseComObject", "GC", "KillOwnedPid")
+        $steps | Should -Be @("Begin", "CloseCurrentDatabase", "Quit", "FinalReleaseComObject", "GC", "WaitOwnedPidExit", "KillOwnedPid")
         @(Get-Content -LiteralPath $script:TracePath | Where-Object { $_ -notmatch ' pid=4242 ' }).Count | Should -Be 0
     }
 
     It "writes nothing when DYSFLOW_TRACE_COM_CLOSE is unset" {
         Remove-Item Env:\DYSFLOW_TRACE_COM_CLOSE -ErrorAction SilentlyContinue
-        Close-CanonicalAccess -Session $script:Session -KillPidAction { param([int]$AccessPid) $true } | Out-Null
+        Close-CanonicalAccess -Session $script:Session -KillPidAction { param([int]$AccessPid) $true } -ExitWaitAction { param([int]$AccessPid, [int]$TimeoutMs) $false } | Out-Null
 
         Test-Path -LiteralPath $script:TracePath | Should -BeFalse
     }
