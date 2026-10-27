@@ -2,10 +2,11 @@
 
 ## [v4.5.3] - 2026-10-27
 
+v4.5.2 was tagged but its GitHub Release was not published: its end-to-end battery failed in the new form round-trip baseline, because the committed `Form_FormPECAL` fixture predates the current Access serialization. The fix is #1975. v4.5.3 is the first published release of the v4.5.2 content.
+
 ### Changes
 
 - test(e2e): normalize the form round-trip fixture before its baseline verify (#1868)
-
 
 ## [v4.5.2] - 2026-10-27
 
