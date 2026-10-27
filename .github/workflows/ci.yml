@@ -1,8 +1,9 @@
 name: CI
 
-# Cheap gate for every pull request and every push to main: lint, build and
-# the unit/spec suite on a hosted Linux runner. The Access E2E battery runs
-# only when a release tag is pushed (.github/workflows/release.yml).
+# Cheap gate for every pull request and every push to main: lint, build, the
+# shrink-only MCP context budget and the unit/spec suite on a hosted Linux
+# runner. The Access E2E battery runs automatically only when a release tag is
+# pushed (.github/workflows/release.yml).
 #
 # The job name `CI` is the single required status check on main.
 # scripts/release-prepare.ps1 polls this workflow (ci.yml) on the release SHA
@@ -48,6 +49,12 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Shrink-only budget of the advertised MCP surface (#1950). Reads the
+      # built runtime, so it runs after Build; a growth must refresh
+      # scripts/baselines/mcp-context-budget.json in the same change.
+      - name: MCP context budget
+        run: pnpm mcp:context-budget
 
       - name: Test
         run: pnpm test

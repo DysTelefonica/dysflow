@@ -205,7 +205,7 @@ publication on failure.
 Agents must not run it locally as a pre-tag gate.
 
 Every pull request and every push to `main` runs only the cheap `CI` job
-(`pnpm lint`, `pnpm build`, `pnpm test`). The Access E2E battery runs
+(`pnpm lint`, `pnpm build`, `pnpm mcp:context-budget`, `pnpm test`). The Access E2E battery runs
 automatically only on the release tag.
 
 On demand it runs through the manual `Access E2E (manual)` workflow

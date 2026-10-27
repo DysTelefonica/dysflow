@@ -500,7 +500,7 @@ El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren 
 
 ### Excepción: releases (branch protection en `main`)
 
-`main` tiene branch protection activa con `enforce_admins: true` y un único status check requerido antes de aceptar cualquier push: `CI` (`.github/workflows/ci.yml`: `pnpm lint`, `pnpm build`, `pnpm test` en Linux). El E2E de Access solo corre al publicar el tag. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
+`main` tiene branch protection activa con `enforce_admins: true` y un único status check requerido antes de aceptar cualquier push: `CI` (`.github/workflows/ci.yml`: `pnpm lint`, `pnpm build`, `pnpm mcp:context-budget`, `pnpm test` en Linux). El E2E de Access solo corre al publicar el tag. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
 
 Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica a releases**. El patrón real, comprobado en v4.4.5 (PR #1759, run `35466013339`):
 

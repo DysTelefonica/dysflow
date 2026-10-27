@@ -28,7 +28,8 @@ Owner: repo-engineering-hardening
 
 Every pull request and every push to `main` runs one job, `CI`, in
 `.github/workflows/ci.yml` on a hosted Linux runner: `pnpm lint`,
-`pnpm build`, and `pnpm test`. `CI` is the single required status check on
+`pnpm build`, `pnpm mcp:context-budget` (shrink-only budget of the advertised
+MCP surface), and `pnpm test`. `CI` is the single required status check on
 `main`. No Windows, Access, or documentation-quality job runs per change.
 
 Pull requests prove adapter-level contracts through the in-process MCP protocol
