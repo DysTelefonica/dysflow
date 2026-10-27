@@ -2320,7 +2320,9 @@ function Open-AccessDatabase {
         [Parameter(Mandatory = $true)][string]$AccessPath,
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "", Justification = "Requerido por especificacion del proyecto.")]
         [string]$Password,
-        [switch]$AllowStartupExecution
+        [switch]$AllowStartupExecution,
+        # #1912 - refuse before any open when another process holds the database.
+        [switch]$RequireExclusive
     )
 
     $canonical = $null
@@ -2332,7 +2334,16 @@ function Open-AccessDatabase {
 
     try {
         # Cerrar SOLO la instancia COM que tenga esta BD abierta, sin tocar otras instancias de Access
-        Close-TargetAccessDbIfOpen -AccessPath $AccessPath
+        # Discard its result: the stale-.laccdb branch returns $true (#844), which
+        # would otherwise be emitted ahead of the session this function returns.
+        $null = Close-TargetAccessDbIfOpen -AccessPath $AccessPath
+
+        # #1912 - probe for a live holder BEFORE dysflow opens its own DAO or
+        # Access handle, so the probe never sees dysflow itself. Without
+        # exclusive access Access accepts VBA edits but cannot save them.
+        if ($RequireExclusive -and -not (Test-AccessDatabaseExclusiveAvailable -AccessPath $AccessPath)) {
+            throw ("ACCESS_DATABASE_LOCKED: another process holds '{0}' open, so Access would have no exclusive access and could not save VBA changes. Nothing was imported." -f $AccessPath)
+        }
 
         $originalBypass = Get-AllowBypassKeyState -AccessPath $AccessPath -Password $Password
         $bypassOk = Enable-AllowBypassKey -AccessPath $AccessPath -Password $Password
@@ -2526,7 +2537,7 @@ function Close-AccessDatabase {
     if ($lockPath) {
         Start-Sleep -Milliseconds 300
         if (Test-Path -LiteralPath $lockPath) {
-            try { Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
+            try { $null = Close-TargetAccessDbIfOpen -AccessPath $AccessPath } catch { Write-Debug "Diagnostics: $_" }
             Start-Sleep -Milliseconds 300
             if (Test-Path -LiteralPath $lockPath) {
                 Write-Status -Message ("WARN: el archivo de lock sigue presente tras cerrar '{0}': {1}" -f $AccessPath, $lockPath) -Color DarkYellow
@@ -3640,7 +3651,7 @@ function Save-VbaProjectModules {
         }
     }
     if ($namedSaveFailures.Count -gt 0) {
-        throw ("VBA_CREATED_MODULE_SAVE_FAILED: Named non-interactive save failed for newly created module(s): {0}" -f ([string]::Join("; ", $namedSaveFailures)))
+        throw ("VBA_CREATED_MODULE_SAVE_FAILED: Named non-interactive save failed for created or modified module(s): {0}" -f ([string]::Join("; ", $namedSaveFailures)))
     }
     if ($documentModuleNames.Count -eq 0) { return }
 
@@ -6049,6 +6060,11 @@ function Invoke-ImportAction {
             if ($saveError.StartsWith('VBA_CREATED_MODULE_SAVE_FAILED:') -or $saveError.StartsWith('VBA_SAVE_CANDIDATE_CLASSIFICATION_FAILED:')) {
                 throw
             }
+            # #1912 - without exclusive access nothing of this batch was saved;
+            # a warning would leave every module reported ok.
+            if ((Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) -and (Test-IsAccessDatabaseLockedError -Message $saveError)) {
+                throw
+            }
             return $saveError
         }
     }
@@ -6130,7 +6146,7 @@ try {
         Invoke-ExportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -Json:$Json -ReadOnly:$ReadOnly
 
     } elseif ($Action -eq "Import") {
-        $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        $session = Open-AccessDatabase -AccessPath $AccessPath -Password $Password -AllowStartupExecution:$AllowStartupExecution -RequireExclusive
         $importResult = Invoke-ImportAction -Session $session -NormalizedModules $normalizedModules -ModulesPath $ModulesPath -ImportMode $ImportMode -ModuleNamesExplicit:$moduleNamesExplicit -Json:$Json
         if ($importResult.HasErrors) { exit 1 }
         Write-Status -Message ("OK Import completado ({0})" -f $importResult.Total) -Color Green

@@ -72,6 +72,7 @@ function Invoke-VbaImportPrimitivePass {
             $importResult = & $ImportModule $Session $name $ModulesPath $ImportMode $RollbackOnMutationFailure
             $createdComponentName = $null
             $modifiedDocumentName = $null
+            $modifiedComponentName = $null
             if (-not $beforeExists) {
                 $afterExists = & $ResolveExisting $Session.VbProject $name
                 if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
@@ -79,6 +80,11 @@ function Invoke-VbaImportPrimitivePass {
                 }
             } elseif ($importResult -and $importResult.PSObject.Properties['ReimportedDocument'] -and [bool]$importResult.ReimportedDocument) {
                 $modifiedDocumentName = [string]$name
+            } elseif ($beforeExists) {
+                # #1912 - replaced code of an existing component is only in the
+                # session until it is saved; request a named save so a lost
+                # save surfaces as an error instead of a silent drop on close.
+                $modifiedComponentName = [string]$beforeExists
             }
             $stopwatch.Stop()
             $attempt = [ordered]@{
@@ -90,6 +96,7 @@ function Invoke-VbaImportPrimitivePass {
             }
             if ($createdComponentName) { $attempt.createdComponentName = $createdComponentName }
             if ($modifiedDocumentName) { $attempt.modifiedDocumentName = $modifiedDocumentName }
+            if ($modifiedComponentName) { $attempt.modifiedComponentName = $modifiedComponentName }
             if ($importResult -and $importResult.PSObject.Properties['Verbose'] -and $importResult.Verbose) {
                 $attempt.verbose = $importResult.Verbose
             }

@@ -8,6 +8,8 @@ export type VbaImportRawSuccess = {
   durationMs: number;
   createdComponentName?: string;
   modifiedDocumentName?: string;
+  /** #1912 — an existing standard/class module whose code was replaced; it needs a named save. */
+  modifiedComponentName?: string;
   fallbackUsed?: boolean;
   fallbackReason?: string | null;
   verbose?: unknown;
@@ -65,6 +67,7 @@ export type VbaImportOrchestrationState = {
   lastResults: Record<string, VbaImportModuleResult>;
   createdComponentNames: string[];
   modifiedDocumentNames: string[];
+  modifiedComponentNames?: string[];
 };
 
 export type VbaImportCompletion = {
@@ -169,9 +172,26 @@ export function advanceVbaImportAfterPass(
       progress = true;
       addUnique(next.createdComponentNames, attempt.createdComponentName);
       addUnique(next.modifiedDocumentNames, attempt.modifiedDocumentName);
+      next.modifiedComponentNames = next.modifiedComponentNames ?? [];
+      addUnique(next.modifiedComponentNames, attempt.modifiedComponentName);
     } else {
       failed.push(attempt.module);
     }
+  }
+
+  // #1912 — without exclusive access Access cannot save any module of the
+  // session, so a lock on one module means no module of the batch persists.
+  const lockFailure = attempts
+    .map((attempt) => next.lastResults[attempt.module])
+    .find((result) => result?.error?.code === "ACCESS_DATABASE_LOCKED");
+  if (lockFailure !== undefined) {
+    for (const moduleName of next.targets) {
+      if (next.lastResults[moduleName]?.status !== "error") {
+        next.lastResults[moduleName] = lockedBatchResult(moduleName, lockFailure);
+      }
+    }
+    next.pendingTargets = [...next.targets];
+    return completeFailure(next);
   }
 
   next.pendingTargets = failed;
@@ -180,7 +200,11 @@ export function advanceVbaImportAfterPass(
   }
   if (failed.length > 0) return completeFailure(next);
 
-  const saveNames = unique([...next.createdComponentNames, ...next.modifiedDocumentNames]);
+  const saveNames = unique([
+    ...next.createdComponentNames,
+    ...(next.modifiedComponentNames ?? []),
+    ...next.modifiedDocumentNames,
+  ]);
   return saveNames.length > 0
     ? { kind: "save", state: next, moduleNames: saveNames }
     : completeSuccess(next);
@@ -316,6 +340,35 @@ function mapAttempt(attempt: VbaImportRawAttempt): VbaImportModuleResult {
   };
 }
 
+function lockedBatchResult(
+  moduleName: string,
+  lockFailure: VbaImportModuleResult,
+): VbaImportModuleResult {
+  const lockError = lockFailure.error;
+  return {
+    module: moduleName,
+    status: "error",
+    phase: "save",
+    error: {
+      code: "ACCESS_DATABASE_LOCKED",
+      message: `Not saved: module '${lockFailure.module}' of the same batch reported that Access has no exclusive access to the database (${lockError?.message ?? "lock"}).`,
+      data: null,
+      remediation: ACCESS_DATABASE_LOCKED_REMEDIATION,
+      machine: lockError?.machine ?? null,
+      user: lockError?.user ?? null,
+      rollbackAttempted: false,
+      rollbackApplied: false,
+      rollbackError: null,
+      fallbackUsed: false,
+      fallbackReason: null,
+    },
+    durationMs: 0,
+    rollbackApplied: false,
+    fallbackUsed: false,
+    fallbackReason: null,
+  };
+}
+
 function classifyError(attempt: VbaImportRawFailure): string {
   for (const prefix of TYPED_PREFIXES) {
     if (attempt.message.startsWith(`${prefix}:`)) return prefix;
@@ -373,6 +426,7 @@ function cloneState(state: VbaImportOrchestrationState): VbaImportOrchestrationS
     lastResults: { ...state.lastResults },
     createdComponentNames: [...state.createdComponentNames],
     modifiedDocumentNames: [...state.modifiedDocumentNames],
+    modifiedComponentNames: [...(state.modifiedComponentNames ?? [])],
   };
 }
 

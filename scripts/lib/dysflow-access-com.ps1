@@ -467,6 +467,32 @@ public class RotManager {
     }
 }
 
+# #1912 - Access opens a database shared even when another process already
+# holds it; VBA edits then succeed in memory but every save fails with "You do
+# not have exclusive access" and the change is silently lost on close. Probe
+# for a LIVE holder by opening the .accdb itself with FileShare.None: only an
+# open handle makes that fail, so a leftover .laccdb never blocks (#844).
+# Must run before dysflow opens its own session, so it never sees itself.
+function Test-AccessDatabaseExclusiveAvailable {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    Param(
+        [Parameter(Mandatory = $true)][string]$AccessPath
+    )
+    $handle = $null
+    try {
+        $handle = [System.IO.File]::Open($AccessPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        return $true
+    } catch [System.IO.FileNotFoundException], [System.IO.DirectoryNotFoundException], [System.UnauthorizedAccessException] {
+        # Not a lock (missing or read-only file): let the Access open report it.
+        return $true
+    } catch [System.IO.IOException] {
+        return $false
+    } finally {
+        if ($handle) { $handle.Dispose() }
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Canonical Access COM open/close — single entry and exit point for all paths
 # that spawn Access.Application (used by dysflow-access-runner.ps1 and
@@ -893,7 +919,7 @@ function Close-CanonicalAccess {
 
             # Optional ROT close injected by the caller
             if ($null -ne $RotCloseAction -and $DbPath) {
-                try { & $RotCloseAction $DbPath } catch { Write-Debug "Close-CanonicalAccess: RotCloseAction threw: $_" }
+                try { $null = & $RotCloseAction $DbPath } catch { Write-Debug "Close-CanonicalAccess: RotCloseAction threw: $_" }
             }
 
             # Lock-file verification: report if .laccdb still exists
