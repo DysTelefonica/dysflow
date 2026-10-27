@@ -402,6 +402,12 @@ if ($Resume) {
 
 $packagePath = (Resolve-Path "package.json").Path
 $piPackagePath = (Resolve-Path "plugin/pi/package.json").Path
+# #1965: the Claude Code and Codex plugin manifests ship with the release and carry its version.
+$pluginManifestRelativePaths = @(
+    "plugin/claude-code/.claude-plugin/plugin.json",
+    "plugin/codex/.codex-plugin/codex.json"
+)
+$pluginManifestPaths = @($pluginManifestRelativePaths | ForEach-Object { (Resolve-Path $_).Path })
 $changelogPath = Join-Path (Get-Location).Path "CHANGELOG.md"
 $stampPaths = @(
     (Join-Path (Get-Location).Path "skills/dysflow-usage/references/error-codes.md"),
@@ -449,6 +455,10 @@ if ($Resume) {
 } else {
 $packageBefore = [IO.File]::ReadAllBytes($packagePath)
 $piPackageBefore = [IO.File]::ReadAllBytes($piPackagePath)
+$pluginManifestBytesBefore = @{}
+foreach ($pluginManifestPath in $pluginManifestPaths) {
+    $pluginManifestBytesBefore[$pluginManifestPath] = [IO.File]::ReadAllBytes($pluginManifestPath)
+}
 $changelogExisted = Test-Path $changelogPath
 $changelogBefore = if ($changelogExisted) { [IO.File]::ReadAllBytes($changelogPath) } else { $null }
 $stampBytesBefore = @{}
@@ -464,7 +474,7 @@ foreach ($skillPath in $skillPaths) {
 $preCommitSucceeded = $false
 try {
 # Update both package manifests while preserving their formatting.
-foreach ($manifestPath in @($packagePath, $piPackagePath)) {
+foreach ($manifestPath in @(@($packagePath, $piPackagePath) + $pluginManifestPaths)) {
 $pkgRaw = Get-Content $manifestPath -Raw
 $pkgRaw = $pkgRaw -replace '"version"\s*:\s*"[^"]+"', ('"version": "{0}"' -f $next)
 Set-Content $manifestPath -Value $pkgRaw -NoNewline
@@ -517,13 +527,16 @@ $releasePaths = @(
     "CHANGELOG.md",
     "skills/dysflow-usage/references/error-codes.md",
     "skills/dysflow-usage/assets/write-flags-matrix.md"
-) + $skillRelativePaths
+) + $pluginManifestRelativePaths + $skillRelativePaths
 git add @releasePaths
 $preCommitSucceeded = $true
 } finally {
     if (-not $preCommitSucceeded) {
         [IO.File]::WriteAllBytes($packagePath, $packageBefore)
         [IO.File]::WriteAllBytes($piPackagePath, $piPackageBefore)
+        foreach ($pluginManifestPath in $pluginManifestPaths) {
+            [IO.File]::WriteAllBytes($pluginManifestPath, $pluginManifestBytesBefore[$pluginManifestPath])
+        }
         if ($changelogExisted) {
             [IO.File]::WriteAllBytes($changelogPath, $changelogBefore)
         } elseif (Test-Path $changelogPath) {

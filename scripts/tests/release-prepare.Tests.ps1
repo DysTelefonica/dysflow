@@ -76,8 +76,12 @@ BeforeAll {
         New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/references") -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root "skills/dysflow-usage/assets") -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root "plugin/pi") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root "plugin/claude-code/.claude-plugin") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root "plugin/codex/.codex-plugin") -Force | Out-Null
         Set-Content (Join-Path $root "package.json") '{"version":"4.0.5"}' -NoNewline
         Set-Content (Join-Path $root "plugin/pi/package.json") '{"name":"@aroman22/dysflow-pi","version":"4.0.5"}' -NoNewline
+        Set-Content (Join-Path $root "plugin/claude-code/.claude-plugin/plugin.json") '{"name":"dysflow","version":"4.0.5"}' -NoNewline
+        Set-Content (Join-Path $root "plugin/codex/.codex-plugin/codex.json") '{"name":"dysflow","version":"4.0.5"}' -NoNewline
         Set-Content (Join-Path $root "CHANGELOG.md") $script:baseChangelog -NoNewline
         Set-Content (Join-Path $root "skills/dysflow-usage/references/error-codes.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this content." -NoNewline
         Set-Content (Join-Path $root "skills/dysflow-usage/assets/write-flags-matrix.md") "Verified for the v4.0.5 release on 2026-01-02.`nKeep this matrix." -NoNewline
@@ -360,6 +364,10 @@ Describe "release safety behavior" {
             Should -Match "Verified for the v4.0.6 release"
         Get-Content (Join-Path $script:fixtureRoot "skills/dysflow-usage/assets/write-flags-matrix.md") -Raw |
             Should -Match "Verified for the v4.0.6 release"
+        # #1965: the Claude Code and Codex plugin manifests carry the release version too.
+        foreach ($manifest in @("plugin/claude-code/.claude-plugin/plugin.json", "plugin/codex/.codex-plugin/codex.json")) {
+            (Get-Content (Join-Path $script:fixtureRoot $manifest) -Raw | ConvertFrom-Json).version | Should -Be "4.0.6" -Because $manifest
+        }
         foreach ($name in $script:skillNames) {
             $skillPath = Join-Path $script:fixtureRoot "skills/$name/SKILL.md"
             $before = $skillBytesBefore[$skillPath]
@@ -368,7 +376,7 @@ Describe "release safety behavior" {
             [Convert]::ToBase64String([IO.File]::ReadAllBytes($skillPath)) | Should -Be ([Convert]::ToBase64String($expected))
         }
         $script:gitCalls | Where-Object { $_ -match "^add " } | Should -Be @(
-            "add package.json plugin/pi/package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md skills/access-form-ui-builder/SKILL.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
+            "add package.json plugin/pi/package.json CHANGELOG.md skills/dysflow-usage/references/error-codes.md skills/dysflow-usage/assets/write-flags-matrix.md plugin/claude-code/.claude-plugin/plugin.json plugin/codex/.codex-plugin/codex.json skills/access-form-ui-builder/SKILL.md skills/dysflow-arnes/SKILL.md skills/dysflow-usage/SKILL.md skills/dysflow-codegraph-update/SKILL.md skills/dysflow-examples-sync/SKILL.md skills/dysflow-pointer-rollout/SKILL.md"
         )
     }
 

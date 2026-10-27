@@ -10,7 +10,13 @@ if (!match) {
 const packagePaths =
   requestedPackagePaths.length > 0
     ? requestedPackagePaths
-    : ["package.json", "plugin/pi/package.json"];
+    : [
+        "package.json",
+        "plugin/pi/package.json",
+        // #1965: the Claude Code and Codex plugin manifests ship in the same archive.
+        "plugin/claude-code/.claude-plugin/plugin.json",
+        "plugin/codex/.codex-plugin/codex.json",
+      ];
 
 async function readPackageJson(packagePath) {
   const raw = await readFile(packagePath, "utf8");

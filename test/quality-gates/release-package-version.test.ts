@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -8,7 +8,45 @@ import { describe, expect, it } from "vitest";
 const execFileAsync = promisify(execFile);
 const SCRIPT = ".github/scripts/set-release-package-version.mjs";
 
+const STAMPED_MANIFESTS = [
+  "package.json",
+  "plugin/pi/package.json",
+  "plugin/claude-code/.claude-plugin/plugin.json",
+  "plugin/codex/.codex-plugin/codex.json",
+];
+
 describe("release package version", () => {
+  it("stamps every shipped manifest by default, including the Claude Code and Codex plugins (#1965)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-release-manifests-"));
+    try {
+      for (const manifest of STAMPED_MANIFESTS) {
+        await mkdir(join(root, manifest, ".."), { recursive: true });
+        await writeFile(
+          join(root, manifest),
+          `${JSON.stringify({ name: "x", version: "2.31.0" })}\n`,
+        );
+      }
+
+      await execFileAsync(process.execPath, [join(process.cwd(), SCRIPT), "v9.8.7"], { cwd: root });
+
+      for (const manifest of STAMPED_MANIFESTS) {
+        const parsed = JSON.parse(await readFile(join(root, manifest), "utf8")) as {
+          version: string;
+        };
+        expect(parsed.version, manifest).toBe("9.8.7");
+      }
+
+      const workflow = await readFile(".github/workflows/release.yml", "utf8");
+      const releasePrepare = await readFile("scripts/release-prepare.ps1", "utf8");
+      for (const manifest of STAMPED_MANIFESTS.slice(2)) {
+        expect(workflow, `release.yml verifies ${manifest}`).toContain(manifest);
+        expect(releasePrepare, `release-prepare bumps ${manifest}`).toContain(manifest);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("stamps the release tag version into the package bundled by the workflow", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-release-version-"));
     const packagePath = join(root, "package.json");
