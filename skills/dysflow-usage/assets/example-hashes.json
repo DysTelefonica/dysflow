@@ -241,7 +241,7 @@
   },
   "verify_code": {
     "path": "assets/examples/verify-code.md",
-    "sha256": "3436e7f6eddf1c7d1615d5b87c55e223ad157c7f1d8078eb9e8fd779852615f3",
+    "sha256": "91eeab0a3fbe84abaff34c3ea06d8cd75cea69dff7198bd72dabb3734c4d028e",
     "needs_human_content": false
   },
   "verify_form_bindings": {

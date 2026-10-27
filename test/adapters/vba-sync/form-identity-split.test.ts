@@ -400,6 +400,85 @@ describe("a form is one module whatever its files are named", () => {
   });
 });
 
+describe("two files of one kind for one form block the whole form", () => {
+  type SyncData = { plan: { toImport: string[]; toExport: string[] } };
+  const formsDir = (root: string, side: string) => join(root, side, "modules", "forms");
+  const clientes = (value: number) => codeBehind(value).replace("Form_frmX", "Form_Clientes");
+
+  async function plan(adapter: VbaSyncAdapter): Promise<SyncData["plan"]> {
+    const result = await adapter.execute("sync_binary", { apply: false });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return (result.data as SyncData).plan;
+  }
+
+  async function verifyWithWarnings(adapter: VbaSyncAdapter) {
+    const result = await adapter.execute("verify_code", { diagnostic: true });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return result.data as VerifyData & { warnings?: { error?: string; message?: string }[] };
+  }
+
+  it.each(["Form_Clientes", "Clientes"])(
+    "a stale Form_Clientes.cls next to Clientes.cls never imports over an Access edit (binary %s.*)",
+    async (binaryName) => {
+      const { root, adapter, calls } = fixture();
+      const src = formsDir(root, "source");
+      const bin = formsDir(root, "binary");
+      writeFileSync(join(src, "Clientes.form.txt"), layout(false));
+      writeFileSync(join(src, "Clientes.cls"), clientes(9));
+      writeFileSync(join(src, "Form_Clientes.cls"), clientes(1));
+      writeFileSync(join(bin, `${binaryName}.form.txt`), layout(false));
+      writeFileSync(join(bin, `${binaryName}.cls`), clientes(10));
+
+      const data = await verifyWithWarnings(adapter);
+      expect(data.bulkImportable).toEqual([]);
+      expect(data.bulkExportable).toEqual([]);
+      const duplicate = (data.warnings ?? []).find((w) => w.error === "DUPLICATE_IDENTITY_KEY");
+      expect(duplicate?.message).toContain("forms/Clientes.cls");
+      expect(duplicate?.message).toContain("forms/Form_Clientes.cls");
+
+      expect(await plan(adapter)).toMatchObject({ toImport: [], toExport: [] });
+      const synced = await adapter.execute("sync_binary", { apply: true });
+      expect(synced.ok, JSON.stringify(synced)).toBe(true);
+      expect(calls.filter((call) => call.action === "Import")).toEqual([]);
+      expect(readFileSync(join(bin, `${binaryName}.cls`), "utf8")).toBe(clientes(10));
+    },
+  );
+
+  it("P7: a stale Form_frmX.cls next to frmX.cls is not imported", async () => {
+    const fx = fixture();
+    writeFileSync(fx.sourceCls, codeBehind(1));
+    writeFileSync(fx.binaryCls, codeBehind(9));
+    writeFileSync(join(formsDir(fx.root, "source"), "Form_frmX.cls"), codeBehind(2));
+    writeFileSync(fx.sourceLayout, layout(false));
+    writeFileSync(fx.binaryLayout, layout(false));
+
+    expect(await plan(fx.adapter)).toMatchObject({ toImport: [], toExport: [] });
+
+    // An accepted one-way direction still applies the group, like any conflict.
+    const accepted = await fx.adapter.execute("sync_binary", {
+      dryRun: true,
+      direction: "src-to-binary",
+      acceptBothChanged: true,
+    });
+    if (!accepted.ok) throw new Error(JSON.stringify(accepted.error));
+    expect((accepted.data as SyncData).plan.toImport).toEqual(["Form_frmX", "frmX"]);
+  });
+
+  it.each([
+    ["source", "toImport"],
+    ["binary", "toExport"],
+  ] as const)("a single-.cls form changed only on the %s side still syncs", async (side, list) => {
+    const fx = fixture();
+    const added = `${codeBehind(1)}Public Sub Added()\nEnd Sub\n`;
+    writeFileSync(fx.sourceCls, side === "source" ? added : codeBehind(1));
+    writeFileSync(fx.binaryCls, side === "binary" ? added : codeBehind(1));
+    writeFileSync(fx.sourceLayout, layout(false));
+    writeFileSync(fx.binaryLayout, layout(false));
+
+    expect((await plan(fx.adapter))[list]).toEqual(["frmX"]);
+  });
+});
+
 describe("a write invalidates the base of a form under either of its names", () => {
   it.each(["frmX", "Form_frmX"])(
     "import_modules([%s]) voids the base of the form's code-behind",

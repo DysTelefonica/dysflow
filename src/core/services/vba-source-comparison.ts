@@ -64,6 +64,8 @@ export type VbaSourceComparisonFile = {
    * shares it.
    */
   documentKey?: string;
+  /** True when one side holds two files of one kind for this document. */
+  ambiguousDocument?: boolean;
 };
 
 export type VbaSourceComparisonEntry = {
@@ -71,6 +73,13 @@ export type VbaSourceComparisonEntry = {
   fileType: string;
   sourcePath?: string;
   binaryPath?: string;
+  /**
+   * Set when one side holds two files of one kind (two `.cls`, or two layout
+   * files) for the same form/report, e.g. a stale `Form_X.cls` next to `X.cls`.
+   * Every file of that document is then a conflict: never bulk-synced or
+   * planned by sync_binary without `acceptBothChanged`.
+   */
+  ambiguousDocument?: true;
   // Additive semantic fields (populated in semantic mode for entries that land
   // in `actionableDifferent` or `nonActionableDifferent`). Strict-mode and
   // missing-* entries leave these undefined.
@@ -1154,7 +1163,10 @@ export async function compareVbaSourceTrees(
           hasFunctionalDifferences,
           actionableOk: !hasFunctionalDifferences,
           ...aggregateRecommendation(
-            countBaseResolvedAsConflicts(semanticSummary, actionableDifferent),
+            countUnconfirmedAsConflicts(semanticSummary, actionableDifferent, [
+              ...missingInSource,
+              ...missingInBinary,
+            ]),
             missingInSource.length,
             missingInBinary.length,
             hasFunctionalDifferences,
@@ -1188,16 +1200,25 @@ export async function compareVbaSourceTrees(
 /**
  * Issue #1890 — a direction inferred from the last-synced base needs the same
  * confirmation as a conflict, so the top-level recommendation counts it as
- * `bothChanged` (as sync_binary does). The reported summary keeps its counts.
+ * `bothChanged` (as sync_binary does). So does any file of a document with two
+ * files of one kind (`ambiguousDocument`). The reported summary keeps its counts.
  */
-function countBaseResolvedAsConflicts(
+function countUnconfirmedAsConflicts(
   summary: Record<string, number>,
   actionableDifferent: readonly VbaSourceComparisonEntry[],
+  missing: readonly VbaSourceComparisonEntry[],
 ): Record<string, number> {
   const counted = { ...summary };
   for (const entry of actionableDifferent) {
-    if (entry.resolvedBy !== "base" || entry.classification === undefined) continue;
+    const unconfirmed = entry.resolvedBy === "base" || entry.ambiguousDocument === true;
+    if (!unconfirmed || entry.classification === undefined) continue;
+    if (entry.classification === "bothChanged") continue;
     counted[entry.classification] = Math.max(0, (counted[entry.classification] ?? 0) - 1);
+    counted.bothChanged = (counted.bothChanged ?? 0) + 1;
+  }
+  // A document with two files of one kind is a conflict even when its files
+  // are only missing on one side.
+  if (missing.some((entry) => entry.ambiguousDocument === true)) {
     counted.bothChanged = (counted.bothChanged ?? 0) + 1;
   }
   return counted;
@@ -1282,7 +1303,9 @@ function aggregateRecommendation(
  * conflicted `.cls` into the binary. A module whose files point in opposite
  * directions (a `sourceNewer` `.form.txt` with a `binaryNewer` `.cls`) is a
  * conflict too: importing then exporting it would lose the newer code on both
- * sides. Module names are compared case-insensitively, as VBA does.
+ * sides. Every file of a document with two files of one kind on one side
+ * (`ambiguousDocument`) is a conflict as well. Module names are compared
+ * case-insensitively, as VBA does.
  */
 function deriveBulkLists(
   actionableDifferent: readonly VbaSourceComparisonEntry[],
@@ -1302,9 +1325,11 @@ function deriveBulkLists(
   const baseResolvedSet = new Map<string, string>();
   const conflictedSet = new Set<string>();
   const keyOf = (e: VbaSourceComparisonEntry) => e.moduleName.toLowerCase();
-  for (const e of actionableDifferent) {
+  for (const e of [...actionableDifferent, ...missingInBinary, ...missingInSource]) {
     if (e.resolvedBy === "base") baseResolvedSet.set(keyOf(e), e.moduleName);
-    if (e.classification === "bothChanged") conflictedSet.add(keyOf(e));
+    if (e.classification === "bothChanged" || e.ambiguousDocument === true) {
+      conflictedSet.add(keyOf(e));
+    }
   }
   for (const e of actionableDifferent) {
     if (e.classification === "sourceNewer") {
@@ -1447,10 +1472,15 @@ function unifyDocumentIdentities(
     }
   }
   for (const key of [...ambiguous].sort()) {
+    const listed = [sourceFiles, binaryFiles].flatMap((files, side) =>
+      files
+        .filter((file) => file.documentKey === key)
+        .map((file) => `${side === 0 ? "source" : "binary"}:${file.relativePath}`),
+    );
     warnings.push({
       module: "__collector__",
       error: "DUPLICATE_IDENTITY_KEY",
-      message: `Two form/report documents both resolve to the Access component '${key}' (one named with the Form_/Report_ prefix, one without); their files are compared by exact file name.`,
+      message: `More than one file of the same kind resolves to the Access component '${key}' (${listed.sort().join(", ")}). Every file of it is treated as a conflict and is never synced automatically; delete the stale file.`,
     });
   }
 
@@ -1479,6 +1509,7 @@ function unifyDocumentIdentities(
     }
     return {
       ...file,
+      ambiguousDocument: true,
       identityKey: buildArtifactIdentityKey(
         familyForFileType(file.fileType),
         // Not a valid VBA name, so it never meets a standard module or class.
@@ -1665,6 +1696,9 @@ function toComparisonEntry(
     fileType: file?.fileType ?? "",
     sourcePath: sourceFile?.relativePath,
     binaryPath: binaryFile?.relativePath,
+    ...(sourceFile?.ambiguousDocument === true || binaryFile?.ambiguousDocument === true
+      ? { ambiguousDocument: true as const }
+      : {}),
   };
 }
 
