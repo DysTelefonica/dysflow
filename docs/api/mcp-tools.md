@@ -129,6 +129,12 @@ Two different frontend paths, or a `databasePath` naming any other file, still r
 
 Evidence: `pickQueryExecutionTarget` in `src/core/mapping/access-query-request-mapper.ts` and `test/adapters/mcp/query-execute-backend-target-1942.test.ts`.
 
+`mode: "read"` opens only the resolved database, read-only through DAO, and never starts Access.
+
+When the SQL runs on another file, the `accessPath` frontend is not opened and its bytes stay unchanged (#1944).
+
+Evidence: the early read dispatch in `scripts/dysflow-access-runner.ps1` and `scripts/tests/dysflow-access-runner-read-frontend-untouched-1944.Tests.ps1`.
+
 The write gates are unchanged: without `apply: true` a write is a plan, and disabled writes return `MCP_WRITES_DISABLED`.
 
 The project-config write gate still applies. Writing to a production backend remains the caller's responsibility (HR-3).
@@ -774,6 +780,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
 * **`list_access_files`**: Search for `.accdb` files recursively in a directory.
   - Parameters: `rootPath` (string, optional), `directory` (string, optional)
 * **`list_links`**: Get target connections of all linked tables.
+  - Reads the frontend read-only through DAO, without starting Access; the frontend bytes stay unchanged (#1944).
   - Parameters: `accessPath` (optional), `target` (optional)
 * **`link_tables`**: Link tables to a backend file.
   - Parameters: `accessPath`, `backendPath` (optional), `dryRun`
@@ -784,6 +791,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
 * **`unlink_table`**: Delete a linked table definition.
   - Parameters: `tableName` (string, optional), `accessPath` (optional), `dryRun`
 * **`export_queries`**: Export Access QueryDefs.
+  - Reads the frontend read-only through DAO, without starting Access; the frontend bytes stay unchanged (#1944). Only the optional `exportPath` file is written.
   - Parameters: `exportPath`/`path`/`queryDefinitions` (optional), `accessPath` (optional), `dryRun`
 * **`import_queries`**: Bulk import Access QueryDefs.
   - Parameters: `queryDefinitions`/`queries` (optional), `accessPath` (optional), `dryRun`
