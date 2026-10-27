@@ -7,7 +7,7 @@ Owner: repo-engineering-hardening
 - `pnpm test` — Vitest unit suite (fast, no Access/PowerShell).
 - `pnpm test:integration` — Vitest integration suite (requires Access/PowerShell).
 - `pnpm test:e2e:mcp` — MCP E2E battery (`node E2E_testing/mcp-e2e.mjs`).
-- `pnpm test:ps1` — PowerShell/Pester contracts (`pwsh -Command "Invoke-Pester scripts/tests/"`).
+- `pnpm test:ps1` — PowerShell/Pester contracts (`scripts/tests/Invoke-OfflinePester.ps1`). The run refuses real Access and real process kills; see [offline Pester tests](../../scripts/tests/README.md).
 - `pnpm build` — TypeScript compile.
 - `pnpm lint` — three-stage check:
   1. `node scripts/check-core-adapter-boundary.mjs` — `src/core` must not import `src/adapters`.
