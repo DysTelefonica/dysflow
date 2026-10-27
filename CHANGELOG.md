@@ -2,13 +2,13 @@
 
 ## [v4.5.4] - 2026-10-27
 
+v4.5.3 was tagged but its GitHub Release was not published: its end-to-end battery stopped at the form round-trip export, whose export folder did not exist (refused by the #1914 check). The fix is #1980. v4.5.4 is the first published release of the v4.5.2 and v4.5.3 content.
+
 ### Changes
 
 - test(e2e): recreate the form round-trip export folder before export_modules (#1868)
 - fix(e2e): refuse foreign headless Access at battery start and recover a hung issue-1817 create (#1974)
 - fix(release): decode git log subjects as UTF-8 and de-duplicate them (#1973)
-
-
 
 ## [v4.5.3] - 2026-10-27
 
