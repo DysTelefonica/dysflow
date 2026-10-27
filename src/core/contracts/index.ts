@@ -447,6 +447,8 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   // test; this is the only producer. No test ran, so the fix is in the source.
   VBA_COMPILE_ERROR:
     "No test was run: the VBA project does not compile. Fix the module named in details.firstError.module (when present), import it, have the human compile in Access (Debug > Compile), then rerun test_vba.",
+  RUN_ARGUMENT_MARSHALING_FAILED:
+    "Access.Application.Run refused an argument before the procedure ran. The message names the argsJson position (1-based) and, when known, the parameter and its declared passing mode. Check that argument's JSON value and type against the VBA signature. Recompiling does not apply.",
 };
 const DEFAULT_ERROR_REMEDIATION =
   "Review the error message and correct the reported condition before retrying.";

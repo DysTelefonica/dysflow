@@ -267,6 +267,8 @@ $script:PendingDysflowResult = $null
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
 . (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+# Shared Application.Run argument marshaling, also used by the access runner (#1940).
+. (Join-Path $PSScriptRoot 'lib/dysflow-access-run.ps1')
 
 # Pin a deterministic culture before any Access/DAO/COM work so SQL date
 # literals, decimal and list separators do not depend on the host's Windows
@@ -5104,90 +5106,6 @@ function Get-VbaProcedureParameterMetadata {
     return @()
 }
 
-function Invoke-AccessApplicationRunByRefIndex {
-    [CmdletBinding()]
-    Param(
-        [Parameter(Mandatory = $true)]$AccessApplication,
-        [Parameter(Mandatory = $true)][string]$ProcedureName,
-        [object[]]$InvokeArgs = @(),
-        [AllowNull()][System.Nullable[int]]$ByRefIndex = $null
-    )
-
-    if ($null -eq $ByRefIndex -or $ByRefIndex -lt 0) {
-        switch ($InvokeArgs.Count) {
-            0 { return $AccessApplication.Run($ProcedureName) }
-            1 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0]) }
-            2 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1]) }
-            3 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2]) }
-            4 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3]) }
-            5 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4]) }
-            6 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4], $InvokeArgs[5]) }
-            7 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4], $InvokeArgs[5], $InvokeArgs[6]) }
-            8 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4], $InvokeArgs[5], $InvokeArgs[6], $InvokeArgs[7]) }
-            9 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4], $InvokeArgs[5], $InvokeArgs[6], $InvokeArgs[7], $InvokeArgs[8]) }
-            10 { return $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4], $InvokeArgs[5], $InvokeArgs[6], $InvokeArgs[7], $InvokeArgs[8], $InvokeArgs[9]) }
-        }
-    }
-
-    switch ($ByRefIndex) {
-        0 {
-            switch ($InvokeArgs.Count) {
-                1 { $arg0 = $InvokeArgs[0]; $r = $AccessApplication.Run($ProcedureName, [ref]$arg0); $InvokeArgs[0] = $arg0; return $r }
-                2 { $arg0 = $InvokeArgs[0]; $r = $AccessApplication.Run($ProcedureName, [ref]$arg0, $InvokeArgs[1]); $InvokeArgs[0] = $arg0; return $r }
-                3 { $arg0 = $InvokeArgs[0]; $r = $AccessApplication.Run($ProcedureName, [ref]$arg0, $InvokeArgs[1], $InvokeArgs[2]); $InvokeArgs[0] = $arg0; return $r }
-                4 { $arg0 = $InvokeArgs[0]; $r = $AccessApplication.Run($ProcedureName, [ref]$arg0, $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3]); $InvokeArgs[0] = $arg0; return $r }
-                5 { $arg0 = $InvokeArgs[0]; $r = $AccessApplication.Run($ProcedureName, [ref]$arg0, $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4]); $InvokeArgs[0] = $arg0; return $r }
-            }
-        }
-        1 {
-            switch ($InvokeArgs.Count) {
-                2 { $arg1 = $InvokeArgs[1]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], [ref]$arg1); $InvokeArgs[1] = $arg1; return $r }
-                3 { $arg1 = $InvokeArgs[1]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], [ref]$arg1, $InvokeArgs[2]); $InvokeArgs[1] = $arg1; return $r }
-                4 { $arg1 = $InvokeArgs[1]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], [ref]$arg1, $InvokeArgs[2], $InvokeArgs[3]); $InvokeArgs[1] = $arg1; return $r }
-                5 { $arg1 = $InvokeArgs[1]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], [ref]$arg1, $InvokeArgs[2], $InvokeArgs[3], $InvokeArgs[4]); $InvokeArgs[1] = $arg1; return $r }
-            }
-        }
-        2 {
-            switch ($InvokeArgs.Count) {
-                3 { $arg2 = $InvokeArgs[2]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], [ref]$arg2); $InvokeArgs[2] = $arg2; return $r }
-                4 { $arg2 = $InvokeArgs[2]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], [ref]$arg2, $InvokeArgs[3]); $InvokeArgs[2] = $arg2; return $r }
-                5 { $arg2 = $InvokeArgs[2]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], [ref]$arg2, $InvokeArgs[3], $InvokeArgs[4]); $InvokeArgs[2] = $arg2; return $r }
-            }
-        }
-        3 {
-            switch ($InvokeArgs.Count) {
-                4 { $arg3 = $InvokeArgs[3]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], [ref]$arg3); $InvokeArgs[3] = $arg3; return $r }
-                5 { $arg3 = $InvokeArgs[3]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], [ref]$arg3, $InvokeArgs[4]); $InvokeArgs[3] = $arg3; return $r }
-            }
-        }
-        4 {
-            if ($InvokeArgs.Count -eq 5) { $arg4 = $InvokeArgs[4]; $r = $AccessApplication.Run($ProcedureName, $InvokeArgs[0], $InvokeArgs[1], $InvokeArgs[2], $InvokeArgs[3], [ref]$arg4); $InvokeArgs[4] = $arg4; return $r }
-        }
-    }
-
-    throw "Run-Procedure no soporta fallback ByRef automático para $($InvokeArgs.Count) argumento(s) con ByRef en índice $ByRefIndex."
-}
-
-function Get-PSReferenceArgumentIndexFromError {
-    [CmdletBinding()]
-    Param(
-        [AllowNull()][string]$Message,
-        [int]$ArgumentCount
-    )
-
-    if ([string]::IsNullOrWhiteSpace($Message)) { return $null }
-    if ($Message -notmatch "PSReference" -and $Message -notmatch "Use\s+\[ref\]") { return $null }
-
-    $match = [regex]::Match($Message, "(?:Argumento|Argument)\s*:\s*'(?<index>\d+)'", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    if (-not $match.Success) { return $null }
-
-    $raw = [int]$match.Groups["index"].Value
-    $oneBased = $raw - 1
-    if ($oneBased -ge 0 -and $oneBased -lt 10) { return $oneBased }
-    if ($raw -ge 0 -and $raw -lt 10) { return $raw }
-    return $null
-}
-
 function Invoke-AccessProcedure {
     [CmdletBinding()]
     Param(
@@ -5200,8 +5118,8 @@ function Invoke-AccessProcedure {
     if ([string]::IsNullOrWhiteSpace($ProcedureName)) {
         throw "Run-Procedure requiere -ProcedureName."
     }
-    if ($ProcedureArgs.Count -gt 10) {
-        throw "Run-Procedure soporta hasta 10 argumentos simples."
+    if ($ProcedureArgs.Count -gt 30) {
+        throw "Run-Procedure: Access.Application.Run accepts at most 30 arguments; received $($ProcedureArgs.Count)."
     }
 
     try {
@@ -5247,11 +5165,9 @@ function Invoke-AccessProcedure {
             }
         }
 
-        # VBA permite omitir Optional ByRef desde la Ventana Inmediata, pero
-        # Access.Application.Run vía PowerShell COM necesita un PSReference real.
-        # Si la firma termina en Optional ByRef p_Error As String (patrón canónico),
-        # completamos automáticamente el argumento con "" para poder envolverlo
-        # luego con [ref]. Esto evita que test-vba falle por manifests sin args.
+        # Si la firma termina en Optional ByRef p_Error As String (patrón canónico)
+        # y el manifest no lo pasa, se completa con Missing para que el valor
+        # devuelto por la referencia aparezca en byref_values (#428).
         if ($metadata.Count -gt $ProcedureArgs.Count) {
             $effectiveArgs = New-Object System.Collections.Generic.List[object]
             foreach ($arg in @($ProcedureArgs)) { $effectiveArgs.Add($arg) | Out-Null }
@@ -5266,65 +5182,24 @@ function Invoke-AccessProcedure {
             $ProcedureArgs = [object[]]$effectiveArgs.ToArray()
         }
 
-        $invokeArgs = @()
-        $byRefArgs = @{}
-        $byRefIndexes = @()
-        for ($i = 0; $i -lt $ProcedureArgs.Count; $i++) {
-            $param = if ($i -lt $metadata.Count) { $metadata[$i] } else { $null }
-            if ($null -ne $param -and $param.byRef) {
-                $invokeArgs += $ProcedureArgs[$i]
-                $name = if (-not [string]::IsNullOrWhiteSpace($param.name)) { [string]$param.name } else { "arg$($i + 1)" }
-                $byRefIndexes += $i
-                $byRefArgs[$i] = [pscustomobject]@{ name = $name }
-            } else {
-                $invokeArgs += $ProcedureArgs[$i]
-            }
+        try {
+            $invocation = Invoke-AccessApplicationRun -AccessApplication $AccessApplication -ProcedureName $ProcedureName -InvokeArgs $ProcedureArgs
+        } catch {
+            $marshalingError = Format-AccessRunMarshalingError -Message $_.Exception.Message -ProcedureName $ProcedureName -Metadata $metadata
+            if ($null -ne $marshalingError) { throw $marshalingError }
+            throw
         }
-        foreach ($key in @($byRefArgs.Keys)) {
-            while ($invokeArgs.Count -le [int]$key) {
-                $invokeArgs += [System.Reflection.Missing]::Value
-            }
-        }
+        $result = $invocation.result
 
-        $result = $null
-        $ran = $false
-        for ($attempt = 0; $attempt -le $ProcedureArgs.Count; $attempt++) {
-            try {
-                if ($invokeArgs.Count -eq 3 -and $byRefArgs.ContainsKey(1) -and $byRefArgs.ContainsKey(2)) {
-                    [string]$arg0 = [string]$invokeArgs[0]
-                    [string]$arg1 = [string]$invokeArgs[1]
-                    [string]$arg2 = [string]$invokeArgs[2]
-                    $result = $AccessApplication.Run($ProcedureName, [ref]$arg0, [ref]$arg1, [ref]$arg2)
-                    $invokeArgs[0] = $arg0
-                    $invokeArgs[1] = $arg1
-                    $invokeArgs[2] = $arg2
-                } else {
-                    $currentByRefIndexes = @($byRefArgs.Keys)
-                    $byRefIndex = if ($currentByRefIndexes.Count -eq 1) { [int]$currentByRefIndexes[0] } else { $null }
-                    $result = Invoke-AccessApplicationRunByRefIndex -AccessApplication $AccessApplication -ProcedureName $ProcedureName -InvokeArgs $invokeArgs -ByRefIndex $byRefIndex
-                }
-                $ran = $true
-                break
-            } catch {
-                $retryIndex = Get-PSReferenceArgumentIndexFromError -Message $_.Exception.Message -ArgumentCount $ProcedureArgs.Count
-                if ($null -eq $retryIndex -or $byRefArgs.ContainsKey($retryIndex)) { throw }
-
-                $param = if ($retryIndex -lt $metadata.Count) { $metadata[$retryIndex] } else { $null }
-                $name = if ($null -ne $param -and -not [string]::IsNullOrWhiteSpace($param.name)) { [string]$param.name } elseif ($retryIndex -eq ($ProcedureArgs.Count - 1)) { "p_Error" } else { "arg$($retryIndex + 1)" }
-                $byRefArgs[$retryIndex] = [pscustomobject]@{ name = $name }
-                while ($invokeArgs.Count -le [int]$retryIndex) {
-                    $invokeArgs += [System.Reflection.Missing]::Value
-                }
-            }
-        }
-        if (-not $ran) {
-            throw "No se pudo ejecutar $ProcedureName tras reintentos ByRef."
-        }
-
+        # Only parameters the signature declares ByRef report a value back;
+        # a ByVal parameter keeps its by-value semantics even though Run
+        # receives every argument as a reference.
         $byRefValues = [ordered]@{}
-        foreach ($key in $byRefArgs.Keys) {
-            $entry = $byRefArgs[$key]
-            $byRefValues[$entry.name] = Convert-RunReturnValue -Value $invokeArgs[[int]$key]
+        for ($i = 0; $i -lt $ProcedureArgs.Count -and $i -lt $metadata.Count; $i++) {
+            $param = $metadata[$i]
+            if ($null -eq $param -or -not $param.byRef) { continue }
+            $name = if (-not [string]::IsNullOrWhiteSpace($param.name)) { [string]$param.name } else { "arg$($i + 1)" }
+            $byRefValues[$name] = Convert-RunReturnValue -Value $invocation.values[$i]
         }
 
         $returnType = if ($null -eq $result) { $null } else { $result.GetType().FullName }

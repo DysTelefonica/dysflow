@@ -318,6 +318,17 @@ function reclassifyRunnerFailure<T>(
   };
 
   const classification = classifyVbaRunnerFailure(message);
+  if (classification?.code === "RUN_ARGUMENT_MARSHALING_FAILED") {
+    // #1940 — Access.Application.Run refused an argument before the
+    // procedure was reached. The runner's message names the argument.
+    return failureResult(
+      createDysflowError(
+        "RUN_ARGUMENT_MARSHALING_FAILED",
+        `Procedure '${request.procedureName}' was not invoked: ${classification.detail}`,
+        { retryable: false, details: sharedDetails },
+      ),
+    ) as OperationResult<T>;
+  }
   if (classification?.code === "PROCEDURE_NOT_CALLABLE") {
     // #1787 / #1823 — WHO to blame is decided by the preflight outcome the
     // service already computed, never by looking for a `.` in the invoked
@@ -366,7 +377,17 @@ const NOT_CALLABLE_PATTERNS: readonly RegExp[] = [
 
 export type VbaRunnerFailureClassification =
   | { code: "PROCEDURE_NOT_CALLABLE"; retryable: true; remediation: string }
-  | { code: "VBA_RUNTIME_ERROR"; retryable: false; vbaMessage: string };
+  | { code: "VBA_RUNTIME_ERROR"; retryable: false; vbaMessage: string }
+  | { code: "RUN_ARGUMENT_MARSHALING_FAILED"; retryable: false; detail: string };
+
+/**
+ * #1940 — the runner's typed marshaling marker, or PowerShell's own refusal to
+ * bind a plain value to one of `Application.Run`'s `[in,out] VARIANT*`
+ * parameters. Either way the procedure was never reached, so this is checked
+ * before the `Run` invocation wrapper is read as a VBA runtime error.
+ */
+const MARSHALING_MARKER = /RUN_ARGUMENT_MARSHALING_FAILED:\s*([^\r\n]*)/;
+const PSREFERENCE_BINDING = /PSReference[\s\S]*Use\s+\[ref\]/i;
 
 /**
  * Classifies runner-visible Access invocation failures for both `run_vba` and
@@ -377,6 +398,14 @@ export type VbaRunnerFailureClassification =
 export function classifyVbaRunnerFailure(
   message: string,
 ): VbaRunnerFailureClassification | undefined {
+  const marker = MARSHALING_MARKER.exec(message);
+  if (marker !== null || PSREFERENCE_BINDING.test(message)) {
+    return {
+      code: "RUN_ARGUMENT_MARSHALING_FAILED",
+      retryable: false,
+      detail: marker?.[1]?.trim() || message,
+    };
+  }
   if (NOT_CALLABLE_PATTERNS.some((pattern) => pattern.test(message))) {
     return {
       code: "PROCEDURE_NOT_CALLABLE",

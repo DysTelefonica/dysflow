@@ -45,6 +45,8 @@ Set-ScriptOutputEncodingUtf8
 # Stop-AccessPidAndWait).  Dot-source keeps all functions in this script's scope
 # and allows the Add-Type Win32.NativeMethods guard to work correctly.
 . (Join-Path $PSScriptRoot 'lib/dysflow-access-com.ps1')
+# Shared Application.Run argument marshaling, also used by the VBA manager (#1940).
+. (Join-Path $PSScriptRoot 'lib/dysflow-access-run.ps1')
 Import-Module (Join-Path $PSScriptRoot 'lib/dysflow-relink-directory-transport.psm1') -Force
 
 # Pin a deterministic culture before any Access/DAO/COM work so SQL date
@@ -1968,10 +1970,18 @@ try {
 
   if ($Operation -eq 'vba') {
     $argsList = @()
-    if ($payload.arguments) { $argsList = @($payload.arguments) }
-    $runArgs = @($payload.procedureName) + $argsList
+    if ($null -ne $payload.arguments) { $argsList = @($payload.arguments) }
     Write-DysflowProgress -Percent 40 -Message "Executing operation"
-    $returnValue = $access.Run.Invoke($runArgs)
+    # #1940: every argument goes to Run as [ref]; no signature metadata on
+    # this path, so a binding failure names the 1-based argsJson position.
+    try {
+      $invocation = Invoke-AccessApplicationRun -AccessApplication $access -ProcedureName ([string]$payload.procedureName) -InvokeArgs $argsList
+    } catch {
+      $marshalingError = Format-AccessRunMarshalingError -Message $_.Exception.Message -ProcedureName ([string]$payload.procedureName)
+      if ($null -ne $marshalingError) { throw $marshalingError }
+      throw
+    }
+    $returnValue = $invocation.result
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
     Write-DysflowResult -Result ([ordered]@{ returnValue = $returnValue }) -Depth 10
     $script:exitCode = 0; return

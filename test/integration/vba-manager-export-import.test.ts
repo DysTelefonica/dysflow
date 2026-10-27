@@ -151,6 +151,8 @@ describe.skipIf(skipReason !== undefined)(
       $functions = $content.Substring(0, $index)
       $libPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-com.ps1").replace(/\\/g, "/")}'
       $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-com.ps1''', "'$libPath'"
+      $runLibPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-run.ps1").replace(/\\/g, "/")}'
+      $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-run.ps1''', "'$runLibPath'"
       $sb = [scriptblock]::Create($functions)
       
       # Dot-source the functions script block to define functions in this session
@@ -233,6 +235,8 @@ describe.skipIf(skipReason !== undefined)(
         $functions = $content.Substring(0, $index)
         $libPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-com.ps1").replace(/\\/g, "/")}'
         $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-com.ps1''', "'$libPath'"
+        $runLibPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-run.ps1").replace(/\\/g, "/")}'
+        $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-run.ps1''', "'$runLibPath'"
         $sb = [scriptblock]::Create($functions)
         . $sb -Action "List-Objects" -AccessPath "dummy" -DestinationRoot "dummy"
         
@@ -291,6 +295,8 @@ describe.skipIf(skipReason !== undefined)(
         $functions = $content.Substring(0, $index)
         $libPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-com.ps1").replace(/\\/g, "/")}'
         $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-com.ps1''', "'$libPath'"
+        $runLibPath = '${join(REPO_ROOT, "scripts", "lib", "dysflow-access-run.ps1").replace(/\\/g, "/")}'
+        $functions = $functions -replace 'Join-Path \\$PSScriptRoot ''lib/dysflow-access-run.ps1''', "'$runLibPath'"
         $sb = [scriptblock]::Create($functions)
         . $sb -Action "List-Objects" -AccessPath "dummy" -DestinationRoot "dummy"
         
