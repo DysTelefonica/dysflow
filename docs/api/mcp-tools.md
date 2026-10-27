@@ -672,6 +672,10 @@ A third state breaks that tie: the state both sides last provably agreed on.
 
 The base is local, unversioned state in `<project>/.dysflow/runtime/verify-base/`, which is gitignored. It is written only when a `.dysflow/` folder exists in the project root.
 
+Each observation and each invalidation is stored as its own new file, and older observations of the same artifact are pruned.
+
+Two writers racing on one artifact therefore never overwrite each other. Whatever order their files land in, the newest observation wins when the base is read (#1939).
+
 A failed base write never fails `verify_code` or the write that triggered it; it adds a `verify-base` warning diagnostic.
 
 `verify_code` never writes Access or source files; the base is its only write. Deleting the folder only falls back to the two-text direction.
