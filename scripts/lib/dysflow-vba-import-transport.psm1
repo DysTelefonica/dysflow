@@ -3,7 +3,7 @@ Set-StrictMode -Version 2.0
 function Invoke-VbaImportCoreDecision {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $true)][ValidateSet('start', 'pass-completed', 'save-completed')][string]$Event,
+        [Parameter(Mandatory = $true)][ValidateSet('start', 'pass-completed', 'save-completed', 'rollback-completed')][string]$Event,
         [Parameter(Mandatory = $true)]$Payload,
         [string]$CoreCliPath = (Join-Path -Path (Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent) -ChildPath 'dist/cli/vba-import-orchestration.js'),
         [string]$NodeCommand = 'node'
@@ -56,6 +56,7 @@ function Invoke-VbaImportPrimitivePass {
 
     $attempts = New-Object System.Collections.Generic.List[object]
     $rollbackActions = New-Object System.Collections.Generic.List[scriptblock]
+    $rollbackModules = New-Object System.Collections.Generic.List[string]
     $idx = 0
     foreach ($name in $ModuleNames) {
         $idx++
@@ -77,6 +78,10 @@ function Invoke-VbaImportPrimitivePass {
                 $afterExists = & $ResolveExisting $Session.VbProject $name
                 if ($afterExists -and $importResult -and $importResult.CreatedNewComponent -and $importResult.RequiresExplicitSave) {
                     $createdComponentName = [string]$afterExists
+                } elseif ($afterExists -and $importResult -and $importResult.CreatedNewComponent) {
+                    # #1912 - a CopyObject clone is already a saved object, but its
+                    # code was replaced in the session; it needs a named save too.
+                    $modifiedComponentName = [string]$afterExists
                 }
             } elseif ($importResult -and $importResult.PSObject.Properties['ReimportedDocument'] -and [bool]$importResult.ReimportedDocument) {
                 $modifiedDocumentName = [string]$name
@@ -103,6 +108,7 @@ function Invoke-VbaImportPrimitivePass {
             $attempts.Add([pscustomobject]$attempt) | Out-Null
             if ($importResult -and $importResult.PSObject.Properties['RollbackAction'] -and $importResult.RollbackAction) {
                 $rollbackActions.Add([scriptblock]$importResult.RollbackAction) | Out-Null
+                $rollbackModules.Add([string]$name) | Out-Null
             }
         } catch {
             $stopwatch.Stop()
@@ -131,6 +137,8 @@ function Invoke-VbaImportPrimitivePass {
     return [pscustomobject]@{
         Attempts = $attempts.ToArray()
         RollbackActions = $rollbackActions.ToArray()
+        # Parallel to RollbackActions: the module each action restores (#1912).
+        RollbackModules = $rollbackModules.ToArray()
     }
 }
 
@@ -147,14 +155,21 @@ function Invoke-VbaImportTransport {
     )
 
     $rollbackJournal = New-Object System.Collections.Generic.List[scriptblock]
+    # Parallel to the journal: the module each entry restores (#1912).
+    $rollbackJournalModules = New-Object System.Collections.Generic.List[string]
     $decision = & $CoreDecision 'start' ([ordered]@{ targets = @($Targets); scope = $Scope })
     while ([string]$decision.kind -ne 'complete') {
         if ([string]$decision.kind -eq 'run-pass') {
             $passResult = & $RunPass -moduleNames @($decision.moduleNames) -rollbackOnMutationFailure ([bool]$decision.rollbackOnMutationFailure) -pass ([int]$decision.state.pass + 1) -total ([int]$decision.state.targets.Count)
             if ($passResult.PSObject.Properties['Attempts']) {
                 $attempts = @($passResult.Attempts)
-                foreach ($action in @($passResult.RollbackActions)) {
-                    if ($action) { $rollbackJournal.Add([scriptblock]$action) | Out-Null }
+                $passActions = @($passResult.RollbackActions)
+                $passModules = @(if ($passResult.PSObject.Properties['RollbackModules']) { $passResult.RollbackModules })
+                for ($i = 0; $i -lt $passActions.Count; $i++) {
+                    if ($passActions[$i]) {
+                        $rollbackJournal.Add([scriptblock]$passActions[$i]) | Out-Null
+                        $rollbackJournalModules.Add($(if ($i -lt $passModules.Count) { [string]$passModules[$i] } else { '' })) | Out-Null
+                    }
                 }
             } else {
                 $attempts = @($passResult)
@@ -190,10 +205,36 @@ function Invoke-VbaImportTransport {
             continue
         }
         if ([string]$decision.kind -eq 'save') {
-            $warning = & $Save -moduleNames @($decision.moduleNames)
+            $saveOutcome = & $Save -moduleNames @($decision.moduleNames)
             $payload = [ordered]@{ state = $decision.state }
-            if (-not [string]::IsNullOrWhiteSpace([string]$warning)) { $payload.warning = [string]$warning }
+            # #1912 - a save that hit the exclusive-access lock persisted nothing;
+            # the Save port reports it as an object so the core can fail the batch.
+            if ($saveOutcome -and $saveOutcome.PSObject.Properties['lockError']) {
+                $payload.error = [string]$saveOutcome.lockError
+            } elseif (-not [string]::IsNullOrWhiteSpace([string]$saveOutcome)) {
+                $payload.warning = [string]$saveOutcome
+            }
             $decision = & $CoreDecision 'save-completed' $payload
+            continue
+        }
+        if ([string]$decision.kind -eq 'rollback') {
+            # #1912 - undo, newest first, the session mutations of the named modules.
+            $outcomes = @(foreach ($moduleName in @($decision.moduleNames)) {
+                $errors = New-Object System.Collections.Generic.List[string]
+                $ran = 0
+                for ($i = $rollbackJournal.Count - 1; $i -ge 0; $i--) {
+                    if ($rollbackJournalModules[$i] -ne [string]$moduleName) { continue }
+                    $ran++
+                    try { & $rollbackJournal[$i] } catch { $errors.Add([string]$_.Exception.Message) | Out-Null }
+                }
+                if ($ran -eq 0) { $errors.Add('No rollback action was recorded for this module.') | Out-Null }
+                [ordered]@{
+                    module = [string]$moduleName
+                    applied = ($errors.Count -eq 0)
+                    error = if ($errors.Count -eq 0) { $null } else { $errors -join '; ' }
+                }
+            })
+            $decision = & $CoreDecision 'rollback-completed' ([ordered]@{ state = $decision.state; outcomes = @($outcomes) })
             continue
         }
         throw "VBA import core returned unsupported decision '$($decision.kind)'."

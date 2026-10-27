@@ -87,5 +87,7 @@ describe("import lock remediation (#1912)", () => {
     expect(result.error.code).toBe("ACCESS_DATABASE_LOCKED");
     expect(result.error.remediation).not.toMatch(/parser/i);
     expect(result.error.remediation).toMatch(/access_force_cleanup_orphaned/);
+    // The same call succeeds once the holder is released.
+    expect(result.error.retryable).toBe(true);
   });
 });

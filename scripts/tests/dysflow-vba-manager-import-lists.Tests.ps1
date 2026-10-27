@@ -81,6 +81,11 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
             return [ordered]@{ code = "ACCESS_DATABASE_LOCKED"; message = $Message; machine = $null; user = $null }
         }
+        # #1912 - successful modules of a partially failed batch are saved by
+        # name before the failure completes; stub the Access save as succeeding.
+        function script:Save-VbaProjectModules {
+            param($AccessApplication, $VbProject, [string[]]$ModuleNames)
+        }
         function script:Import-VbaModule {
             param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication, [string]$ImportMode)
             $script:ImportCalls.Add([pscustomobject]@{

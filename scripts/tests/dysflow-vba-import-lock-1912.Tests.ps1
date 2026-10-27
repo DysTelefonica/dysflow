@@ -41,6 +41,15 @@ Describe "Test-IsAccessDatabaseLockedError - exclusive access (#1912)" {
     It "does not classify a parser rejection as a lock" {
         Test-IsAccessDatabaseLockedError -Message 'Expected: end of statement' | Should -BeFalse
     }
+
+    It "does not classify a compile error that merely quotes 'exclusive access' as a lock" {
+        Test-IsAccessDatabaseLockedError -Message "Compile error near 'exclusive access' text" | Should -BeFalse
+        Test-IsAccessDatabaseLockedError -Message "Error de compilación cerca de 'acceso exclusivo'" | Should -BeFalse
+    }
+
+    It "classifies the pre-flight refusal as a lock" {
+        Test-IsAccessDatabaseLockedError -Message "ACCESS_DATABASE_LOCKED: another process holds 'x.accdb' open." | Should -BeTrue
+    }
 }
 
 Describe "Test-AccessDatabaseExclusiveAvailable - live holder probe (#1912)" {
@@ -62,6 +71,19 @@ Describe "Test-AccessDatabaseExclusiveAvailable - live holder probe (#1912)" {
         try {
             Test-AccessDatabaseExclusiveAvailable -AccessPath $script:Db | Should -BeFalse
         } finally { $holder.Dispose() }
+    }
+
+    It "does not treat a read-only scanner that shares read and write as a lock" {
+        # Antivirus, indexers, backups and dysflow's own copy read the file and
+        # share it; Access can still open it shared and save, so no lock.
+        $reader = [IO.File]::Open($script:Db, 'Open', 'Read', 'ReadWrite, Delete')
+        try {
+            Test-AccessDatabaseExclusiveAvailable -AccessPath $script:Db | Should -BeTrue
+        } finally { $reader.Dispose() }
+    }
+
+    It "does not treat an invalid path as a lock" {
+        Test-AccessDatabaseExclusiveAvailable -AccessPath 'a|b.accdb' | Should -BeTrue
     }
 
     It "does not treat a leftover .laccdb without a live holder as a lock" {
@@ -163,17 +185,91 @@ Describe "Invoke-ImportAction - persistence of an existing module (#1912)" {
         @($script:Results[0].modules)[0].status | Should -Be 'ok'
     }
 
-    It "fails the call instead of reporting ok when the save hits the exclusive-access lock" {
+    It "reports every module as a lock error when the save hits the exclusive-access lock" {
         $script:SaveError = 'VBA_CREATED_MODULE_SAVE_FAILED: ModFoo: No tiene acceso exclusivo a la base de datos en este momento.'
-        { Invoke-ImportAction -Session $script:Session -NormalizedModules @('ModFoo', 'ModBar') -ModulesPath 'C:\none' -ImportMode 'Auto' -ModuleNamesExplicit } |
-            Should -Throw -ExpectedMessage '*acceso exclusivo*'
-        @($script:Results | Where-Object { $_.ok -eq $true }).Count | Should -Be 0
+        $summary = Invoke-ImportAction -Session $script:Session -NormalizedModules @('ModFoo', 'ModBar') -ModulesPath 'C:\none' -ImportMode 'Auto' -ModuleNamesExplicit
+        $summary.HasErrors | Should -BeTrue
+        $script:Results.Count | Should -Be 1
+        $script:Results[0].ok | Should -BeFalse
+        @($script:Results[0].modules | ForEach-Object { $_.status }) | Should -Be @('error', 'error')
+        @($script:Results[0].modules | ForEach-Object { $_.error.code }) | Should -Be @('ACCESS_DATABASE_LOCKED', 'ACCESS_DATABASE_LOCKED')
     }
 
-    It "fails the call when a document save hits the lock (no warning-only success)" {
+    It "reports a lock error when a document save hits the lock (no warning-only success)" {
         $script:SaveError = 'No se pudieron guardar explícitamente algunos módulos/clases nuevos: Form_X: You do not have exclusive access to the database at this time.'
-        { Invoke-ImportAction -Session $script:Session -NormalizedModules @('Form_X') -ModulesPath 'C:\none' -ImportMode 'Auto' -ModuleNamesExplicit } |
-            Should -Throw -ExpectedMessage '*exclusive access*'
-        $script:Results.Count | Should -Be 0
+        $summary = Invoke-ImportAction -Session $script:Session -NormalizedModules @('Form_X') -ModulesPath 'C:\none' -ImportMode 'Auto' -ModuleNamesExplicit
+        $summary.HasErrors | Should -BeTrue
+        @($script:Results[0].modules)[0].status | Should -Be 'error'
+        @($script:Results[0].modules)[0].error.code | Should -Be 'ACCESS_DATABASE_LOCKED'
+    }
+}
+
+Describe "Import transport - unsaved modules and lock rollback (#1912 review)" {
+    BeforeAll {
+        Import-Module (Join-Path $PSScriptRoot ".." "lib" "dysflow-vba-import-transport.psm1") -Force
+        $script:LockText = 'No tiene acceso exclusivo a la base de datos en este momento.'
+    }
+    BeforeEach {
+        $script:Rollbacks = [System.Collections.Generic.List[string]]::new()
+        $script:Results = [System.Collections.Generic.List[object]]::new()
+        $script:Saves = [System.Collections.Generic.List[string]]::new()
+    }
+
+    It "requests a named save for a new component cloned with CopyObject" {
+        $script:Resolved = 0
+        $pass = Invoke-VbaImportPrimitivePass -Session ([pscustomobject]@{ VbProject = 'p'; AccessApplication = 'a' }) `
+            -ModuleNames @('ModNew') -ModulesPath 'C:\src' -ImportMode 'Auto' -RollbackOnMutationFailure $true -Total 1 `
+            -ResolveExisting { param($project, $name) $script:Resolved++; if ($script:Resolved -eq 1) { $null } else { 'ModNew' } } `
+            -ImportModule { param($s, $n, $r, $m, $rb) [pscustomobject]@{ CreatedNewComponent = $true; RequiresExplicitSave = $false } } `
+            -ResetDiagnostics { } -ReadDiagnostics { [pscustomobject]@{} } `
+            -InspectLockOwner { [pscustomobject]@{ databaseLocked = $false; machine = $null; user = $null } } -WriteStatus { }
+        $attempt = @($pass.Attempts)[0]
+        @($attempt.createdComponentName, $attempt.modifiedComponentName) | Should -Contain 'ModNew'
+    }
+
+    It "rolls back the modules a lock-failed pass already imported and reports each as an error" {
+        $null = Invoke-VbaImportTransport -Targets @('ModA', 'ModB') -Scope explicit `
+            -CoreDecision { param($eventName, $payload) Invoke-VbaImportCoreDecision -Event $eventName -Payload $payload } `
+            -RunPass {
+                [pscustomobject]@{
+                    Attempts = @(
+                        [pscustomobject]@{ module = 'ModA'; ok = $true; durationMs = 1; modifiedComponentName = 'ModA' },
+                        [pscustomobject]@{ module = 'ModB'; ok = $false; durationMs = 1; phase = 'import'; message = $script:LockText; databaseLocked = $true }
+                    )
+                    RollbackActions = @({ $script:Rollbacks.Add('ModA') | Out-Null })
+                    RollbackModules = @('ModA')
+                }
+            } `
+            -Save { throw 'save must not run' } `
+            -WriteResult { param($result) $script:Results.Add($result) | Out-Null } -WriteStatus { }
+
+        @($script:Rollbacks) | Should -Be @('ModA')
+        $script:Results.Count | Should -Be 1
+        $modules = @($script:Results[0].modules)
+        @($modules.status) | Should -Be @('error', 'error')
+        @($modules | ForEach-Object { $_.error.code }) | Should -Be @('ACCESS_DATABASE_LOCKED', 'ACCESS_DATABASE_LOCKED')
+        $modules[0].error.rollbackAttempted | Should -BeTrue
+        $modules[0].error.rollbackApplied | Should -BeTrue
+    }
+
+    It "keeps modules[] and rolls back when the save reports the lock" {
+        $summary = Invoke-VbaImportTransport -Targets @('ModA') -Scope explicit `
+            -CoreDecision { param($eventName, $payload) Invoke-VbaImportCoreDecision -Event $eventName -Payload $payload } `
+            -RunPass {
+                [pscustomobject]@{
+                    Attempts = @([pscustomobject]@{ module = 'ModA'; ok = $true; durationMs = 1; modifiedComponentName = 'ModA' })
+                    RollbackActions = @({ $script:Rollbacks.Add('ModA') | Out-Null })
+                    RollbackModules = @('ModA')
+                }
+            } `
+            -Save { param($moduleNames) [pscustomobject]@{ lockError = $script:LockText } } `
+            -WriteResult { param($result) $script:Results.Add($result) | Out-Null } -WriteStatus { }
+
+        $summary.HasErrors | Should -BeTrue
+        @($script:Rollbacks) | Should -Be @('ModA')
+        $modules = @($script:Results[0].modules)
+        $modules[0].status | Should -Be 'error'
+        $modules[0].error.code | Should -Be 'ACCESS_DATABASE_LOCKED'
+        $modules[0].error.rollbackAttempted | Should -BeTrue
     }
 }

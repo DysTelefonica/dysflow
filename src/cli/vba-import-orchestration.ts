@@ -4,10 +4,12 @@ import { pathToFileURL } from "node:url";
 
 import {
   advanceVbaImportAfterPass,
+  advanceVbaImportAfterRollback,
   advanceVbaImportAfterSave,
   startVbaImportOrchestration,
   type VbaImportOrchestrationState,
   type VbaImportRawAttempt,
+  type VbaImportRollbackOutcome,
   type VbaImportScope,
 } from "../core/services/vba-import-orchestration.js";
 
@@ -16,7 +18,11 @@ const PAYLOAD_ARGV_LIMIT = 8 * 1024;
 
 type StartPayload = { targets: string[]; scope?: VbaImportScope };
 type PassPayload = { state: VbaImportOrchestrationState; attempts: VbaImportRawAttempt[] };
-type SavePayload = { state: VbaImportOrchestrationState; warning?: string };
+type SavePayload = { state: VbaImportOrchestrationState; warning?: string; error?: string };
+type RollbackPayload = {
+  state: VbaImportOrchestrationState;
+  outcomes: VbaImportRollbackOutcome[];
+};
 
 export function evaluateImportDecision(event: string, payload: unknown): unknown {
   if (event === "start") {
@@ -29,7 +35,11 @@ export function evaluateImportDecision(event: string, payload: unknown): unknown
   }
   if (event === "save-completed") {
     const save = payload as SavePayload;
-    return advanceVbaImportAfterSave(save.state, save.warning);
+    return advanceVbaImportAfterSave(save.state, save.warning, save.error);
+  }
+  if (event === "rollback-completed") {
+    const rollback = payload as RollbackPayload;
+    return advanceVbaImportAfterRollback(rollback.state, rollback.outcomes ?? []);
   }
   throw new Error(`Unsupported VBA import orchestration event: ${event}`);
 }

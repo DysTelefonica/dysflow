@@ -469,28 +469,41 @@ public class RotManager {
 
 # #1912 - Access opens a database shared even when another process already
 # holds it; VBA edits then succeed in memory but every save fails with "You do
-# not have exclusive access" and the change is silently lost on close. Probe
-# for a LIVE holder by opening the .accdb itself with FileShare.None: only an
-# open handle makes that fail, so a leftover .laccdb never blocks (#844).
+# not have exclusive access" and the change is silently lost on close.
+# A lock holder (Access or DAO) has the .accdb open WITH WRITE ACCESS. Probe by
+# opening it ReadWrite while denying others write (FileShare.Read): only a
+# handle that writes, or that refuses to share writing, makes that fail. A
+# reader that shares the file (antivirus, indexer, backup, a copy) does not,
+# and a leftover .laccdb never blocks (#844). Only a Win32 sharing violation
+# (32) or lock violation (33) that survives a short retry counts as a lock;
+# any other error is left to the normal Access open to report.
 # Must run before dysflow opens its own session, so it never sees itself.
 function Test-AccessDatabaseExclusiveAvailable {
     [CmdletBinding()]
     [OutputType([bool])]
     Param(
-        [Parameter(Mandatory = $true)][string]$AccessPath
+        [Parameter(Mandatory = $true)][string]$AccessPath,
+        [int]$Attempts = 3,
+        [int]$RetryDelayMilliseconds = 200
     )
-    $handle = $null
-    try {
-        $handle = [System.IO.File]::Open($AccessPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
-        return $true
-    } catch [System.IO.FileNotFoundException], [System.IO.DirectoryNotFoundException], [System.UnauthorizedAccessException] {
-        # Not a lock (missing or read-only file): let the Access open report it.
-        return $true
-    } catch [System.IO.IOException] {
-        return $false
-    } finally {
-        if ($handle) { $handle.Dispose() }
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        $handle = $null
+        try {
+            $handle = [System.IO.File]::Open($AccessPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::Read)
+            return $true
+        } catch {
+            $exception = $_.Exception
+            while ($exception -and -not ($exception -is [System.IO.IOException]) -and $exception.InnerException) {
+                $exception = $exception.InnerException
+            }
+            $win32 = if ($exception -is [System.IO.IOException]) { $exception.HResult -band 0xFFFF } else { 0 }
+            if ($win32 -ne 32 -and $win32 -ne 33) { return $true }
+        } finally {
+            if ($handle) { $handle.Dispose() }
+        }
+        if ($attempt -lt $Attempts) { Start-Sleep -Milliseconds $RetryDelayMilliseconds }
     }
+    return $false
 }
 
 # ---------------------------------------------------------------------------

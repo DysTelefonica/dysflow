@@ -2200,8 +2200,9 @@ function Test-IsAccessDatabaseLockedError {
         -or $msg -match 'cannot be opened or locked' `
         -or $msg -match 'placed in a state by another' `
         -or $msg -match 'opened exclusively by' `
-        -or $msg -match 'exclusive access' `
-        -or $msg -match 'acceso exclusivo')
+        -or $msg -match '^access_database_locked:' `
+        -or $msg -match 'you do not have exclusive access to the database' `
+        -or $msg -match 'no tiene acceso exclusivo a la base de datos')
 }
 
 function Get-AccessDatabaseLockedOwner {
@@ -6057,12 +6058,13 @@ function Invoke-ImportAction {
             return $null
         } catch {
             $saveError = [string]$_.Exception.Message
-            if ($saveError.StartsWith('VBA_CREATED_MODULE_SAVE_FAILED:') -or $saveError.StartsWith('VBA_SAVE_CANDIDATE_CLASSIFICATION_FAILED:')) {
-                throw
-            }
             # #1912 - without exclusive access nothing of this batch was saved;
-            # a warning would leave every module reported ok.
+            # a warning would leave every module reported ok. Hand the lock to
+            # the core, which fails the batch and rolls back its mutations.
             if ((Get-Command -Name Test-IsAccessDatabaseLockedError -ErrorAction SilentlyContinue) -and (Test-IsAccessDatabaseLockedError -Message $saveError)) {
+                return [pscustomobject]@{ lockError = $saveError }
+            }
+            if ($saveError.StartsWith('VBA_CREATED_MODULE_SAVE_FAILED:') -or $saveError.StartsWith('VBA_SAVE_CANDIDATE_CLASSIFICATION_FAILED:')) {
                 throw
             }
             return $saveError
