@@ -624,7 +624,12 @@ function Open-CanonicalAccess {
         [scriptblock]$WmiSnapshotAction = { Get-MsAccessProcessesBounded },
         # #1917: bound and poll interval of the wait before the single 0x80080005 retry.
         [int]$SpawnRetryTimeoutMs = 5000,
-        [int]$SpawnRetryPollMs    = 250
+        [int]$SpawnRetryPollMs    = 250,
+        # #1911: receives the owned PID as soon as it is known before OpenCurrentDatabase,
+        # which can block on a modal dialog until the run is killed. The caller records it
+        # so the PID of an Access that never finished opening is still attributable.
+        # Signature: { param([int]$AccessPid) }
+        [scriptblock]$OwnedPidAction = $null
     )
 
     # --- layer 3 pre-open snapshot (only used if layers 1+2 both fail) ----
@@ -686,6 +691,9 @@ function Open-CanonicalAccess {
     if ($hwnd1 -ne [IntPtr]0) {
         $pid1 = & $HwndToPidAction $hwnd1
         if ($pid1 -gt 0) { $ownedPid = $pid1 }
+    }
+    if ($null -ne $ownedPid -and $null -ne $OwnedPidAction) {
+        try { & $OwnedPidAction $ownedPid } catch { Write-Debug "Open-CanonicalAccess: OwnedPidAction threw: $_" }
     }
 
     # --- open database (unless caller skips it) ---------------------------

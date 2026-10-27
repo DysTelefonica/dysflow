@@ -10,6 +10,17 @@ During a run, `CurrentProject.Path` is the sandbox folder. Paths relative to the
 
 Changes the run makes to the copy are deleted with it. The copy keeps the frontend's table links, so it does not isolate backend data: HR-3 of `dysflow-arnes` still applies.
 
+## `test_vba` compiles the copy first
+
+Before it runs any test, `test_vba` compiles the sandbox copy: `RunCommand(126)` (`acCmdCompileAndSaveAllModules`), then `Application.IsCompiled`. A copy that is already compiled is not recompiled. This is the only compile Dysflow performs; it never compiles the user's binary (HR-1 of `dysflow-arnes`). Source: `Invoke-TestSandboxCompile` in `scripts/dysflow-vba-manager.ps1` (issue #1911).
+
+- Without it, `Application.Run` compiles on demand, and a compile error opens a modal VBE dialog that the COM call never returns from: the run hangs until it times out.
+- When the copy does not compile, the result is `VBA_COMPILE_ERROR` and no test runs. `error.details.firstError.module` names the module when Access reports it.
+- `Assert-TestSandboxCompileTarget` refuses to compile anything but a `dysflow-test-sandbox-*` copy directly under the temp directory that differs from the configured `.accdb` and is the database Access has open.
+- `run_vba`, imports and exports never compile.
+
+A compile error still fails the RED rule of HR-1: a RED counts only when it fails on the expected assertion.
+
 ## `run_vba` opens the real binary
 
 `run_vba` maps to the `Run-Procedure` action, which opens the configured `.accdb` itself (`Invoke-RunProcedureAction`). A green `run_vba` does not reproduce the sandbox condition, so the result of record for a test is the `test_vba` result.

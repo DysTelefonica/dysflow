@@ -11,6 +11,10 @@ import {
   successResult,
   type VbaSyncPort,
 } from "../../core/contracts/index.js";
+import type {
+  ProcessInspector,
+  ProcessKiller,
+} from "../../core/operations/access-operation-cleanup.js";
 import {
   type AccessOperationPreflightCleanup,
   type AccessOperationPreflightCleanupResult,
@@ -22,6 +26,10 @@ import {
   type AccessOperationRegistry,
   createAccessOperationId,
 } from "../../core/operations/access-operation-registry.js";
+import {
+  type RunOwnedAccessReapResult,
+  reapRunOwnedAccess,
+} from "../../core/operations/run-owned-access-reap.js";
 import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
 import type {
   VbaSourceComparisonEntry,
@@ -140,6 +148,13 @@ export type VbaSyncAdapterOptions = {
   destinationRoot?: string;
   accessPassword?: string;
   timeoutMs?: number;
+  /**
+   * Issue #1911 — process ports used to reap the Access a run recorded in its
+   * operation marker when the run ends with that Access still alive (timeout,
+   * crash, a close that did not terminate it). Defaults to the Windows process
+   * inspector/killer on win32 and to no reap elsewhere; tests inject fakes.
+   */
+  runOwnedAccessProcesses?: { processInspector: ProcessInspector; processKiller: ProcessKiller };
   /**
    * `allowedProcedures` is forwarded to `VbaExecutionAdapter` as the test_vba
    * whitelist. It is enforced only under `procedureStrictMode`; within strict
@@ -392,6 +407,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
 
   private readonly operationsAdapter: VbaOperationsAdapter;
   private readonly operationRegistry?: AccessOperationRegistry;
+  private readonly runOwnedAccessProcesses?: VbaSyncAdapterOptions["runOwnedAccessProcesses"];
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
@@ -409,6 +425,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       stringValue(options.accessPassword) ?? stringValue(this.env.DYSFLOW_ACCESS_PASSWORD);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.operationRegistry = options.operationRegistry;
+    this.runOwnedAccessProcesses = options.runOwnedAccessProcesses;
     this.allowedProcedures = options.allowedProcedures;
 
     // Sub-adapters instantiation delegating orchestrator context
@@ -775,7 +792,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       }
       throw error;
     }
-    await this.finishTrackedOperation(trackedOperation, {
+    const ownedAccessReap = await this.finishTrackedOperation(trackedOperation, {
       status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
     });
     // Issue #1016 Part A — on a non-timeout failure for a binary-mutating
@@ -858,8 +875,32 @@ export class VbaSyncAdapter implements VbaSyncPort {
           ],
         };
       }
+      // #1911 — the run's own recorded Access, reaped before the preflight.
+      if (ownedAccessReap?.outcome === "killed") {
+        cleanupResult = {
+          ...cleanupResult,
+          killed: [ownedAccessReap.pid, ...cleanupResult.killed],
+        };
+      } else if (
+        ownedAccessReap !== undefined &&
+        "reason" in ownedAccessReap &&
+        ownedAccessReap.reason !== undefined
+      ) {
+        cleanupResult = {
+          ...cleanupResult,
+          errors: [
+            ...cleanupResult.errors,
+            {
+              operationId: trackedOperation?.operationId ?? "run_owned_access",
+              message: `Access PID ${ownedAccessReap.pid} recorded by this run was not reaped (${ownedAccessReap.outcome}): ${ownedAccessReap.reason}`,
+            },
+          ],
+        };
+      }
       const timeoutCleanupDiagnostics = diagnosticsFromPreflightCleanup(cleanupResult);
-      const reapedProcessPids = [...cleanupResult.killed, ...cleanupResult.orphanedKilled];
+      const reapedProcessPids = [
+        ...new Set([...cleanupResult.killed, ...cleanupResult.orphanedKilled]),
+      ];
       const expectedLockFile = deriveExpectedLockFile(accessPath);
       // #757 (C3) — actionable timeout envelope. The new structured
       // surfaces (`lingeringProcesses`, `lingeringLockFiles`) sit ALONGSIDE
@@ -1068,19 +1109,63 @@ export class VbaSyncAdapter implements VbaSyncPort {
     return { operationId, operationFile, record };
   }
 
+  /**
+   * Stamps the terminal status from the run's operation marker. Issue #1911:
+   * first reaps the Access this run recorded when it is still alive — a
+   * timeout kills only the PowerShell tree, and a COM-activated MSACCESS.EXE
+   * is a DCOM child outside it. Only that PID is ever a kill target (see
+   * `reapRunOwnedAccess`). An Access that survived the reap keeps the record
+   * listed (`cleanup_pending` instead of a purged `completed`).
+   */
   private async finishTrackedOperation(
     operation: TrackedVbaManagerOperation | undefined,
     update: { status: AccessOperationRecord["status"] },
-  ): Promise<void> {
-    if (operation === undefined || this.operationRegistry === undefined) return;
+  ): Promise<RunOwnedAccessReapResult | undefined> {
+    if (operation === undefined || this.operationRegistry === undefined) return undefined;
     const marker = await readVbaManagerOperationMarker(operation.operationFile);
+    const reap = await this.reapRunOwnedAccess(marker);
+    const accessSurvived = reap?.outcome === "kill_failed" || reap?.outcome === "refused";
+    const status =
+      accessSurvived && update.status === "completed" ? "cleanup_pending" : update.status;
     await this.operationRegistry.update(operation.operationId, {
       accessPid: marker.accessPid ?? operation.record.accessPid,
       processStartTime: marker.processStartTime ?? operation.record.processStartTime,
-      status: update.status,
+      status,
+      ...(reap !== undefined && reap.outcome !== "not_recorded"
+        ? { metadata: { ...operation.record.metadata, runOwnedAccessReap: reap } }
+        : {}),
       updatedAt: new Date().toISOString(),
     });
     await rm(operation.operationFile, { force: true }).catch(() => undefined);
+    return reap;
+  }
+
+  private async reapRunOwnedAccess(
+    marker: VbaManagerOperationMarker,
+  ): Promise<RunOwnedAccessReapResult | undefined> {
+    if (marker.accessPid === undefined) return { outcome: "not_recorded" };
+    const ports = await this.resolveRunOwnedAccessProcesses();
+    if (ports === undefined) return undefined;
+    return reapRunOwnedAccess(marker, ports);
+  }
+
+  private async resolveRunOwnedAccessProcesses(): Promise<
+    VbaSyncAdapterOptions["runOwnedAccessProcesses"]
+  > {
+    if (this.runOwnedAccessProcesses !== undefined) return this.runOwnedAccessProcesses;
+    if (process.platform !== "win32") return undefined;
+    const { WindowsMsAccessProcessInspector, WindowsProcessKiller } = await import(
+      "../process/windows-processes.js"
+    );
+    const inspector = new WindowsMsAccessProcessInspector();
+    return {
+      // A PID that no longer exists needs no PowerShell process query: after a
+      // clean close (the common case) the reap costs one signal-0 probe.
+      processInspector: {
+        getProcess: async (pid) => (pidExists(pid) ? inspector.getProcess(pid) : undefined),
+      },
+      processKiller: new WindowsProcessKiller(),
+    };
   }
 
   /**
@@ -1699,6 +1784,16 @@ async function readVbaManagerOperationMarker(
   } catch (err) {
     logSwallowedIoError("vba-sync-adapter:operation-marker-parse", err);
     return {};
+  }
+}
+
+/** Signal-0 probe: `true` unless the OS reports that no process has this PID. */
+function pidExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return !(typeof err === "object" && err !== null && "code" in err && err.code === "ESRCH");
   }
 }
 

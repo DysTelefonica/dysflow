@@ -443,6 +443,10 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
     "Inspect details.failures[].outputExcerpt, fix the atom's JSON envelope builder (escape backslashes, quotes, and control characters; no trailing commas), then rerun the atom.",
   VBA_RUNTIME_ERROR:
     "The procedure executed and raised. Read details.vbaMessage for the error VBA emitted, then fix the procedure or the data it depends on. Recompiling does not apply.",
+  // #1911 — test_vba compiles its temporary sandbox copy before running any
+  // test; this is the only producer. No test ran, so the fix is in the source.
+  VBA_COMPILE_ERROR:
+    "No test was run: the VBA project does not compile. Fix the module named in details.firstError.module (when present), import it, have the human compile in Access (Debug > Compile), then rerun test_vba.",
 };
 const DEFAULT_ERROR_REMEDIATION =
   "Review the error message and correct the reported condition before retrying.";

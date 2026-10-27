@@ -2300,8 +2300,25 @@ function Remove-TestSandbox {
     )
     if ([string]::IsNullOrWhiteSpace($SandboxPath)) { return }
     try {
-        if (Test-Path -LiteralPath $SandboxPath) {
-            Remove-Item -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue
+        # #1911: Access leaves its lock file next to the copy; remove it too, or the
+        # per-call directory below is never empty and leaks. A handle released by a
+        # just-closed Access can lag briefly, so retry within a short bound.
+        $ext = [System.IO.Path]::GetExtension($SandboxPath)
+        $lockPath = $null
+        if ([string]::Equals($ext, ".accdb", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $lockPath = [System.IO.Path]::ChangeExtension($SandboxPath, ".laccdb")
+        } elseif ([string]::Equals($ext, ".mdb", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $lockPath = [System.IO.Path]::ChangeExtension($SandboxPath, ".ldb")
+        }
+        $targets = @($SandboxPath, $lockPath) | Where-Object { $_ }
+        for ($attempt = 0; $attempt -lt 10; $attempt++) {
+            foreach ($target in $targets) {
+                if (Test-Path -LiteralPath $target) {
+                    Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+                }
+            }
+            if (-not @($targets | Where-Object { Test-Path -LiteralPath $_ }).Count) { break }
+            Start-Sleep -Milliseconds 200
         }
         # Remove the per-call parent dir we created in Get-TestSandboxPath
         # when it is now empty. Best-effort; never throws.
@@ -2313,6 +2330,107 @@ function Remove-TestSandbox {
             }
         }
     } catch { Write-Debug "Remove-TestSandbox: $_" }
+}
+
+# ===========================================================================
+# Issue #1911 — test_vba compiles its sandbox copy before it runs any test.
+#
+# Application.Run compiles on demand, and a compile error opens a modal VBE
+# dialog the COM call never returns from: the run hangs until it times out.
+# Compiling first turns that hang into a typed VBA_COMPILE_ERROR. Dysflow
+# never compiles the user's binary, so the compile is guarded to target only
+# the temporary copy Get-TestSandboxPath made, and only Run-Tests calls it.
+# ===========================================================================
+
+function Assert-TestSandboxCompileTarget {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$SandboxPath,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$AccessPath,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$OpenProjectPath
+    )
+    $refuse = { param($reason) throw "Refusing to compile '$SandboxPath': $reason Dysflow compiles only test_vba's temporary sandbox copy." }
+    if ([string]::IsNullOrWhiteSpace($SandboxPath)) { & $refuse "no sandbox path." }
+    if ([string]::IsNullOrWhiteSpace($AccessPath)) { & $refuse "no accessPath to compare against." }
+
+    $separators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $sandboxFull = [System.IO.Path]::GetFullPath($SandboxPath)
+    $accessFull = [System.IO.Path]::GetFullPath($AccessPath)
+    if ([string]::Equals($sandboxFull, $accessFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        & $refuse "it is the user's accessPath."
+    }
+
+    # The exact layout Get-TestSandboxPath creates: <temp>\dysflow-test-sandbox-<guid>\<file>.
+    $sandboxDir = [System.IO.Path]::GetDirectoryName($sandboxFull)
+    $tempFull = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd($separators)
+    $dirName = [System.IO.Path]::GetFileName($sandboxDir)
+    $dirParent = [System.IO.Path]::GetDirectoryName($sandboxDir)
+    if ($dirName -notmatch '^dysflow-test-sandbox-[0-9a-fA-F]{32}$' -or
+        -not [string]::Equals(([string]$dirParent).TrimEnd($separators), $tempFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        & $refuse "it is not a dysflow-test-sandbox-* copy under '$tempFull'."
+    }
+
+    # The compile acts on whatever database Access has open, so that must be the copy too.
+    if ([string]::IsNullOrWhiteSpace($OpenProjectPath)) { & $refuse "the database Access has open could not be read." }
+    if (-not [string]::Equals([System.IO.Path]::GetFullPath($OpenProjectPath), $sandboxFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        & $refuse "Access has '$OpenProjectPath' open, not the sandbox copy."
+    }
+}
+
+function Invoke-TestSandboxCompile {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)]$AccessApplication,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$SandboxPath,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$AccessPath
+    )
+    $openProjectPath = ""
+    try { $openProjectPath = [string]$AccessApplication.CurrentProject.FullName } catch { Write-Debug "Invoke-TestSandboxCompile: $_" }
+    Assert-TestSandboxCompileTarget -SandboxPath $SandboxPath -AccessPath $AccessPath -OpenProjectPath $openProjectPath
+
+    $readComponent = {
+        try { [string]$AccessApplication.VBE.SelectedVBComponent.Name } catch { $null }
+    }
+    $failure = {
+        param($message)
+        $component = & $readComponent
+        [pscustomobject]@{
+            ok        = $false
+            phase     = "compile"
+            error     = [ordered]@{ code = "VBA_COMPILE_ERROR"; message = $message }
+            component = if ([string]::IsNullOrWhiteSpace($component)) { $null } else { $component }
+        }
+    }
+
+    # A copy of a binary the human already compiled needs no compile.
+    if ([bool]$AccessApplication.IsCompiled) { return [pscustomobject]@{ ok = $true } }
+
+    # acCmdCompileAndSaveAllModules = 126. It returns normally even when a module fails to
+    # compile, so Application.IsCompiled is the authoritative signal (#543). Access can leave
+    # programmatically edited document modules uncompiled after one pass, so a second pass runs
+    # before declaring a failure; a real compile error stays uncompiled across both.
+    for ($pass = 1; $pass -le 2; $pass++) {
+        try {
+            $AccessApplication.RunCommand(126)
+        } catch {
+            return & $failure ([string]$_.Exception.Message)
+        }
+        if ([bool]$AccessApplication.IsCompiled) { return [pscustomobject]@{ ok = $true } }
+    }
+    # Access cannot bring form/report code-behind (document modules, type 100) to a compiled
+    # state headless (#543/#547), so with document-module code an uncompiled copy is not proof
+    # of a compile error. Run the tests as before instead of failing every such project.
+    $hasDocumentCode = $false
+    try {
+        foreach ($component in @($AccessApplication.VBE.ActiveVBProject.VBComponents)) {
+            if ([int]$component.Type -eq 100 -and [int]$component.CodeModule.CountOfLines -gt 0) { $hasDocumentCode = $true; break }
+        }
+    } catch { Write-Debug "Invoke-TestSandboxCompile: $_" }
+    if ($hasDocumentCode) {
+        Write-Status -Message "ADVERTENCIA: la copia sandbox sigue sin compilar y tiene modulos de documento; no se puede confirmar un error de compilacion headless. Se ejecutan los tests." -Color Yellow
+        return [pscustomobject]@{ ok = $true; verified = $false }
+    }
+    return & $failure "The VBA project does not compile (Application.IsCompiled is False after acCmdCompileAndSaveAllModules). No test was run. Fix the compile error in Access (Debug > Compile), then rerun test_vba."
 }
 
 function Open-AccessDatabase {
@@ -2382,7 +2500,10 @@ function Open-AccessDatabase {
         # Visible/UserControl=$false (BEFORE OpenCurrentDatabase, see #730),
         # hWnd layer-1 (pre-open), OpenCurrentDatabase, hWnd layer-2 (post-open retry),
         # WMI diff layer-3 (fallback, bounded, never overwrites a stronger layer).
-        $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password
+        # #1911: the marker gets the PID before OpenCurrentDatabase, which can block on a
+        # modal dialog; a run killed during the open can then reap exactly its own Access.
+        $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password `
+            -OwnedPidAction { param([int]$AccessPid) Write-DysflowOperationMarker -Status "running" -AccessPid $AccessPid }
         # #1917: set to $true once the edit is saved, so the close can tolerate a
         # 0x800706BA Quit of an Access that already died with the edit persisted.
         $canonical | Add-Member -NotePropertyName EditSaved -NotePropertyValue $false -Force
@@ -2573,10 +2694,20 @@ function Complete-AccessSessionClose {
 
     $closeResult = $null
     if ($Session) {
-        $closeArgs = @{ Session = $Session; AccessPath = $AccessPath; Password = $Password }
+        # #1911: close and restore the database the session actually opened. test_vba opens
+        # a sandbox copy, so the source .accdb must not be the target of the close.
+        $closePath = $AccessPath
+        if ($Session.PSObject.Properties['DatabasePath'] -and $Session.DatabasePath) {
+            $closePath = [string]$Session.DatabasePath
+        }
+        $closeArgs = @{ Session = $Session; AccessPath = $closePath; Password = $Password }
         if ($KillPidAction)  { $closeArgs['KillPidAction']  = $KillPidAction }
         if ($LockFileAction) { $closeArgs['LockFileAction'] = $LockFileAction }
         try { $closeResult = Close-AccessDatabase @closeArgs } catch { Write-Debug "Diagnostics: $_" }
+        # #1911: the sandbox can only be deleted once Access released it.
+        if ($Session.PSObject.Properties['SandboxPath'] -and $Session.SandboxPath) {
+            Remove-TestSandbox -SandboxPath ([string]$Session.SandboxPath)
+        }
     }
 
     $pending = $script:PendingDysflowResult
@@ -5895,12 +6026,24 @@ function Invoke-RunTestsAction {
     # a temporary imported module produces against the same binary.
     #
     # The copy is opened in place of the source; Open-AccessDatabase
-    # therefore points at the sandbox path. The sandbox is removed in the
-    # finally block regardless of batch outcome so a throw from
-    # Invoke-AccessProcedureBatch never leaks the temp file.
+    # therefore points at the sandbox path. #1911: once Access is open the
+    # session owns the copy — the top-level close (Complete-AccessSessionClose)
+    # closes and restores the copy, not the source, and removes it after Access
+    # released it. Only when Access never opened is the copy removed here.
     $sandboxPath = Get-TestSandboxPath -AccessPath $AccessPath
+    $sandboxOwnedBySession = $false
     try {
         $Session.Value = Open-AccessDatabase -AccessPath $sandboxPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        $Session.Value | Add-Member -NotePropertyName DatabasePath -NotePropertyValue $sandboxPath -Force
+        $Session.Value | Add-Member -NotePropertyName SandboxPath -NotePropertyValue $sandboxPath -Force
+        $sandboxOwnedBySession = $true
+        # #1911: compile the copy first, so a compile error is reported instead of hanging
+        # Application.Run on a modal VBE dialog. A failure runs no test.
+        $compileResult = Invoke-TestSandboxCompile -AccessApplication $Session.Value.AccessApplication -SandboxPath $sandboxPath -AccessPath $AccessPath
+        if (-not $compileResult.ok) {
+            Write-DysflowResult -Result $compileResult -Depth 6
+            throw ("VBA_COMPILE_ERROR: " + $compileResult.error.message)
+        }
         $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
         if ($Json) {
             # The extra envelope layer needs one additional serialization depth
@@ -5908,7 +6051,7 @@ function Invoke-RunTestsAction {
             Write-DysflowResult -Result ([pscustomobject]@{ tests = @($batchResults) }) -Depth 7
         }
     } finally {
-        Remove-TestSandbox -SandboxPath $sandboxPath
+        if (-not $sandboxOwnedBySession) { Remove-TestSandbox -SandboxPath $sandboxPath }
     }
 }
 

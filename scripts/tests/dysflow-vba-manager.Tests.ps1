@@ -3330,6 +3330,12 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
             param([string]$SandboxPath)
             $script:SandboxRemovals += [pscustomobject]@{ SandboxPath = $SandboxPath }
         }
+
+        # #1911: the sandbox compile is pinned by its own suite; here it always succeeds.
+        function script:Invoke-TestSandboxCompile {
+            param($AccessApplication, [string]$SandboxPath, [string]$AccessPath)
+            return [pscustomobject]@{ ok = $true }
+        }
     }
 
     It "throws before opening Access or invoking the batch runner when procedures are missing" {
