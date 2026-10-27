@@ -32,6 +32,7 @@ import {
   buildDeletePlanResult,
   buildImportPlanResult,
   type DeletePlanResult,
+  deriveImportPlanClassificationTimeoutMs,
   type ImportPlanModuleClassification,
   type ImportPlanResult,
 } from "../../core/services/vba-import-plan.js";
@@ -244,6 +245,17 @@ export interface VbaModulesOrchestrator {
     target: VbaModulesExecutionTarget,
   ): Promise<AccessOperationPreflightCleanupResult>;
   executor: VbaManagerExecutor;
+  /**
+   * Issue #1908 — runs one runner request as a tracked Access operation scoped
+   * to `request.accessPath` (registered, visible to list_access_operations, its
+   * Access PID reaped on timeout or failure). Optional: without it, callers fall
+   * back to the untracked `executor`.
+   */
+  runTrackedVbaManager?(
+    toolName: string,
+    request: Parameters<VbaManagerExecutor>[0],
+    target: VbaModulesExecutionTarget,
+  ): ReturnType<VbaManagerExecutor>;
   executeMappedTool(
     toolName: string,
     params: Record<string, unknown>,
@@ -1848,6 +1860,7 @@ export class VbaModulesAdapter {
     toolName: "import_all" | "import_modules",
     params: Record<string, unknown>,
   ): Promise<OperationResult<ImportPlanResult>> {
+    const startedAt = Date.now();
     const target = await this.orchestrator.resolveExecutionTarget(params);
     if (!target.ok) return target;
     const strict = this.orchestrator.validateStrictContext(params, target.data);
@@ -1895,7 +1908,16 @@ export class VbaModulesAdapter {
 
     // Issue #1866 item 3 — say what would change per module before apply:true.
     const moduleClassifications = await this.classifyPlannedModules(
-      params,
+      toolName,
+      {
+        ...params,
+        timeoutMs: deriveImportPlanClassificationTimeoutMs({
+          callTimeoutMs: params.timeoutMs,
+          targetTimeoutMs: target.data.timeoutMs,
+          elapsedMs: Date.now() - startedAt,
+        }),
+      },
+      target.data,
       modulesPlanned,
       warnings,
     );
@@ -1919,14 +1941,27 @@ export class VbaModulesAdapter {
    * warning and omits the classifications rather than failing the dry run.
    */
   private async classifyPlannedModules(
+    toolName: "import_all" | "import_modules",
     params: Record<string, unknown>,
+    target: VbaModulesExecutionTarget,
     modulesPlanned: readonly string[],
     warnings: string[],
   ): Promise<readonly ImportPlanModuleClassification[] | undefined> {
     if (modulesPlanned.length === 0) return undefined;
+    // Issue #1908 — the export spawns Access against a snapshot; track it like
+    // any other Access run so a timeout reaps it.
+    const runTracked = this.orchestrator.runTrackedVbaManager?.bind(this.orchestrator);
+    const context =
+      runTracked === undefined
+        ? this.getComparisonContext()
+        : {
+            ...this.getComparisonContext(),
+            runVbaManager: (request: Parameters<VbaManagerExecutor>[0]) =>
+              runTracked(`${toolName}:classification`, request, target),
+          };
     const comparison = await compareSourceAgainstBinary(
       { ...params, moduleNames: [...modulesPlanned] },
-      this.getComparisonContext(),
+      context,
       this.fileSystem,
     );
     if (!comparison.ok) {

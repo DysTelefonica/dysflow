@@ -1775,7 +1775,15 @@ await record("vba-sync", "export_all", { ...ctx, exportPath: pruneExportPath, pr
 // feat-759-no-compile (v1.19.0) — `compile` parameter on import_tools
 // is gone. Callers passing it are rejected by Zod additionalProperties:false.
 await record("vba-sync", "import_modules", { ...ctx, moduleNames: ["DysflowMcpE2EMissing"], importMode: "code", apply: false });
-await record("vba-sync", "import_all", { ...ctx, importMode: "code", apply: false });
+// The import_all plan classifies every module with a whole-project Access export
+// (#1866). dysflow bounds that export below the call budget and reaps its own
+// Access on timeout (#1908), so the harness waits for the same budget.
+await record(
+  "vba-sync",
+  "import_all",
+  { ...ctx, importMode: "code", apply: false, timeoutMs: 180000 },
+  { timeoutMs: 180000 },
+);
 // feat-759-no-compile (v1.19.0) — the `compile_vba` MCP tool was removed.
 // The mojibake-state pin test was retired; compile is no longer a
 // runtime concern (the human compiles in Access). The fixture binary's
