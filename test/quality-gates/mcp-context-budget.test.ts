@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
-  neutralizeHostPaths,
   canonicalJson,
   compareBudget,
   extractPayload,
   measureLogicalBytes,
+  neutralizeHostPaths,
   summarizeContributors,
 } from "../../scripts/mcp-context-budget.mjs";
 
