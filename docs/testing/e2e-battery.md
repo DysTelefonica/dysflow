@@ -168,9 +168,25 @@ $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
 $env:DYSFLOW_E2E_PRE_MSACCESS_COUNT = "0"
 
 # Timeout de la edición externa de Access del escenario Issue 1817 (default 60000 ms).
-# Sólo se reintenta un ETIMEDOUT, como máximo dos intentos (#1898).
+# Sólo se reintenta un ETIMEDOUT, como máximo dos intentos (#1898). Un `create` que expira
+# borra la base parcial (solo dentro de la fixture marcada bajo %TEMP%) y se reintenta una vez;
+# si vuelve a expirar, el fallo nombra la acción, el intento y el tiempo transcurrido (#1974).
 $env:DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS = "120000"
+
+# Arrancar aunque haya MSACCESS.EXE headless ajenos vivos (lo registra como aviso, #1974).
+$env:DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS = "1"
 ```
+
+Antes del primer escenario, la fila `preflight/foreign-access-check` registra los
+`MSACCESS.EXE` headless ajenos a la ejecución, con PID, hora de inicio y línea de comandos (#1974).
+
+- Cuenta como headless `-Embedding`, `/Automation` o una línea de comandos ilegible.
+- Si hay alguno, la batería no arranca (`status=refused`).
+- Con `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS=1` arranca y lo registra como aviso (`status=allowed`).
+- El harness nunca los mata: verifique la propiedad con `list_access_operations`.
+- Elimínelos con `access_force_cleanup_orphaned` y `confirmPid`.
+
+La lógica vive en `E2E_testing/_helpers/access-preflight.mjs`.
 
 Si el harness aborta antes de la primera herramienta, el mensaje nombra el código de
 resolución: `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE` o

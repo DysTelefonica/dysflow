@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runAccessPreflight } from "./_helpers/access-preflight.mjs";
 import {
   EXPECTED_ADVERTISED_TOOL_COUNT,
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
@@ -1309,8 +1310,27 @@ async function recordContract(area, tool, args = {}, options = {}, coverage = []
   return executionResult;
 }
 
+// #1974: a stale foreign COM server can slow or hang the Access starts every scenario
+// depends on. List foreign headless MSACCESS.EXE before the first scenario and refuse to
+// start unless DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS=1. The harness never kills them.
+const accessPreflightStartedAt = Date.now();
+const accessPreflight = runAccessPreflight();
+console.error(`accessPreflight: status=${accessPreflight.status} ${accessPreflight.summary}`);
+appendUnchecked({
+  area: "preflight",
+  tool: "foreign-access-check",
+  pass: accessPreflight.pass,
+  expected: "no foreign headless MSACCESS.EXE alive before the first scenario",
+  ms: Date.now() - accessPreflightStartedAt,
+  summary: `status=${accessPreflight.status} ${accessPreflight.summary}`,
+  ...(accessPreflight.status === "refused" ? { failureClass: "safety-critical" } : {}),
+});
+
 let abortedDueToFailure = false;
 try {
+  if (accessPreflight.status === "refused") {
+    throw new Error(`Access preflight refused: ${accessPreflight.summary}`);
+  }
   await runBattery();
 } catch (err) {
   abortedDueToFailure = true;
