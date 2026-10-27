@@ -1,7 +1,7 @@
 {
   "name": "dysflow",
   "description": "Source-binary sync, TDD, and form UI operations on Microsoft Access / VBA projects via the dysflow MCP. Plugin entry point for Claude Code.",
-  "version": "4.5.2",
+  "version": "4.5.3",
   "namespace": "dysflow-plugin",
   "author": {
     "name": "Andrés Román (DysTelefonica)"
