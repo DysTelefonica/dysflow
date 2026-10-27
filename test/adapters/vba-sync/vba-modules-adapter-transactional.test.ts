@@ -172,7 +172,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       transactional: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     // The executor was redirected to a staging path (NOT the original).
     expect(executorAccessPath).not.toBe(binaryPath);
@@ -241,7 +242,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       apply: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     expect(result.metadata?.transactional).toBeUndefined();
     const afterContent = await readFile(realBinaryPath);
@@ -271,7 +273,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       transactional: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     expect(result.metadata?.transactional?.originalSha256).toBe(originalSha);
     const afterContent = await readFile(realBinaryPath);
