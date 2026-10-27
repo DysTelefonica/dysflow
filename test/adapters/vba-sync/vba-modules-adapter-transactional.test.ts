@@ -24,7 +24,7 @@ const MODULE_FOO = [
  * The pure helper tests (transactional-mode.test.ts) cover the wrapper's
  * behavior with a fake executor. These tests cover the wiring through the
  * adapter: when `params.transactional === true`, the adapter MUST copy the
- * binary to `<projectRoot>/.dysflow/runtime/transactional/<uuid>/<name>.accdb`,
+ * binary to `<binaryDir>/.dysflow-transactional/<uuid>/<name>.accdb`,
  * redirect the inner `executeMappedTool` call to the staging path, and
  * atomically rename back on success.
  */
@@ -178,8 +178,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
     // The executor was redirected to a staging path (NOT the original).
     expect(executorAccessPath).not.toBe(binaryPath);
     expect(executorAccessPath).not.toBe(realBinaryPath);
-    // The staging path is under the project's transactional staging root.
-    expect(executorAccessPath).toMatch(/[\\/].dysflow[\\/]runtime[\\/]transactional[\\/]/);
+    // The staging path is in the dedicated directory beside the binary.
+    expect(executorAccessPath).toMatch(/[\\/]\.dysflow-transactional[\\/]/);
     // The original now carries the mutated content (atomic commit).
     const afterContent = await readFile(realBinaryPath);
     expect(afterContent.toString("utf8")).toBe("mutated-by-runner");

@@ -1,6 +1,6 @@
-import { copyFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, join, parse, relative, resolve } from "node:path";
+import { dirname, extname, join, parse, relative, resolve } from "node:path";
 import packageJson from "../../../package.json" with { type: "json" };
 import {
   createDysflowError,
@@ -203,6 +203,9 @@ import type { ResolvedDestinationRoot } from "../../core/config/execution-target
 import type { AccessOperationPreflightCleanupResult } from "../../core/operations/access-operation-preflight.js";
 import type { VbaExecutionTarget } from "../../core/services/vba-source-comparison.js";
 import type { VbaManagerExecutor } from "./vba-sync-adapter.js";
+
+/** Dedicated staging directory created beside the binary for transactional writes. */
+const TRANSACTIONAL_STAGING_DIR = ".dysflow-transactional";
 
 export type VbaModulesExecutionTarget = VbaExecutionTarget &
   Pick<
@@ -414,7 +417,10 @@ export class VbaModulesAdapter {
    *   1. The target is resolved (if not pre-resolved) and validated against
    *      the strict context.
    *   2. The original binary is copied to
-   *      `<projectRoot>/.dysflow/runtime/transactional/<uuid>/<basename>`.
+   *      `<binaryDir>/.dysflow-transactional/<uuid>/<basename>`. Staging sits
+   *      beside the binary because the commit is a rename(2), which cannot
+   *      cross devices (EXDEV): a project on C: and a binary on D: or a
+   *      network share must still commit.
    *   3. The actual mutation runs against the staging copy (the orchestrator
    *      receives `accessPath: stagingPath` in the forwarded params).
    *   4. On any failure (pre-flight, gate, post-write verify), the staging
@@ -459,9 +465,16 @@ export class VbaModulesAdapter {
       );
     }
 
-    const projectRoot =
-      target.projectRoot ?? target.destinationRoot ?? this.orchestrator.cwd ?? process.cwd();
-    const stagingRoot = join(projectRoot, ".dysflow", "runtime", "transactional");
+    const stagingRoot = join(dirname(binaryPath), TRANSACTIONAL_STAGING_DIR);
+    // Staging used to live under the project root; keep sweeping that
+    // location so copies orphaned by older releases are still reclaimed.
+    const projectRoot = target.projectRoot ?? target.destinationRoot ?? this.orchestrator.cwd;
+    if (projectRoot !== undefined) {
+      await cleanupOrphanedTransactionalCopies({
+        fileSystem: nodeTransactionalFileSystem,
+        stagingRoot: join(projectRoot, ".dysflow", "runtime", "transactional"),
+      });
+    }
 
     // Issue #975 — orphan sweep. A process killed mid-transaction (SIGKILL /
     // power loss) leaves the staging copy behind; clean it on the next
@@ -490,6 +503,10 @@ export class VbaModulesAdapter {
         return { ok: true as const, data: innerResult.data };
       },
     });
+    // Remove the dedicated staging directory once it is empty, so no stray
+    // folder is left beside the user's binary. rmdir refuses a non-empty
+    // directory, so a concurrent transaction or a retained copy is safe.
+    await rmdir(stagingRoot).catch(() => undefined);
 
     if (!txResult.ok) {
       return failureResult(txResult.error, {

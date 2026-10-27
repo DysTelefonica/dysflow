@@ -254,7 +254,7 @@ export const SCHEMA_PROPS = {
       "Issue #1542 — opt-in for export_modules with explicit apply:false to preview an export into an existing external directory. Rejected for apply:true or omitted intent; it never authorizes a filesystem write outside the worktree.",
   } as JsonSchemaProperty,
   // Issue #975 — transactional mode for write-tools. When true, the binary
-  // is copied to `<projectRoot>/.dysflow/runtime/transactional/<uuid>/`,
+  // is copied to `<binaryDir>/.dysflow-transactional/<uuid>/`,
   // the write runs against the copy, post-write verification runs, and on
   // success the copy is atomically renamed back to the original. On any
   // failure the copy is deleted and the original is byte-for-byte
