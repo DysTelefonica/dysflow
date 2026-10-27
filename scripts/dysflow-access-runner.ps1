@@ -487,12 +487,10 @@ function Get-TableNames {
   return $names
 }
 
-function Get-TableSchema {
-  param($Database, [string] $TableName)
-  [void](Format-AccessIdentifier -Name $TableName -Label "table")
-  $table = $Database.TableDefs.Item($TableName)
+function Get-TableDefFieldSchema {
+  param($TableDef)
   $schema = New-Object System.Collections.ArrayList
-  foreach ($field in $table.Fields) {
+  foreach ($field in $TableDef.Fields) {
     [void]$schema.Add([ordered]@{
       name = [string]$field.Name
       type = [int]$field.Type
@@ -501,7 +499,77 @@ function Get-TableSchema {
       allowZeroLength = if ($field.Properties.Item("AllowZeroLength")) { [bool]$field.AllowZeroLength } else { $null }
     })
   }
-  return $schema
+  return ,$schema
+}
+
+# Issue #1943: a linked TableDef's Fields collection is the field list cached
+# when the link was created or last refreshed, not the source table's current
+# definition, while SQL through the same link sees the source's columns. Read
+# an Access link from the source database itself (read-only); fall back to the
+# cached link metadata only when the source cannot be opened, and say so.
+function Get-TableSchema {
+  param($Database, [string] $TableName, $DbEngine = $null)
+  [void](Format-AccessIdentifier -Name $TableName -Label "table")
+  $table = $Database.TableDefs.Item($TableName)
+  $connect = [string]$table.Connect
+  if ([string]::IsNullOrWhiteSpace($connect)) {
+    return [ordered]@{
+      schema = Get-TableDefFieldSchema -TableDef $table
+      schemaSource = [ordered]@{ kind = 'table-definition'; live = $true }
+    }
+  }
+
+  $sourceTableName = [string]$table.SourceTableName
+  if ([string]::IsNullOrWhiteSpace($sourceTableName)) { $sourceTableName = $TableName }
+  $sourceDatabase = $null
+  $isAccessLink = $connect -notmatch '^\s*ODBC;'
+  if ($isAccessLink -and $connect -match '(?i)(?:^|;)DATABASE=([^;]+)') {
+    $sourceDatabase = $Matches[1].Trim()
+  }
+
+  $openError = $null
+  if ($null -ne $DbEngine -and -not [string]::IsNullOrWhiteSpace($sourceDatabase)) {
+    $password = $BackendPassword
+    if ($connect -match '(?i)(?:^|;)PWD=([^;]*)') { $password = $Matches[1] }
+    $sourceDb = $null
+    try {
+      $sourceDb = Open-DatabaseWithPassword -DbEngine $DbEngine -DatabasePath $sourceDatabase -ReadOnly $true -Password $password
+      return [ordered]@{
+        schema = Get-TableDefFieldSchema -TableDef ($sourceDb.TableDefs.Item($sourceTableName))
+        schemaSource = [ordered]@{
+          kind = 'linked-source'
+          live = $true
+          sourceDatabase = $sourceDatabase
+          sourceTableName = $sourceTableName
+        }
+      }
+    } catch {
+      $openError = Remove-PasswordFromConnectString -Connect ([string]$_.Exception.Message)
+      if (-not [string]::IsNullOrWhiteSpace($password)) { $openError = $openError.Replace($password, '***') }
+    } finally {
+      if ($null -ne $sourceDb) {
+        try { $sourceDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+        try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($sourceDb) } catch { Write-Debug "Diagnostics: $_" }
+      }
+    }
+  }
+
+  $lastUpdated = $null
+  try { if ($null -ne $table.LastUpdated) { $lastUpdated = ([datetime]$table.LastUpdated).ToString('s') } } catch { Write-Debug "Diagnostics: $_" }
+  $warning = "Columns come from the link's cached metadata and may be stale; refresh the link with relink_tables, or read the source database directly with databasePath."
+  if ($null -ne $openError) { $warning = "The link source could not be opened ($openError). $warning" }
+  $source = [ordered]@{
+    kind = 'link-metadata'
+    live = $false
+    sourceTableName = $sourceTableName
+    linkLastUpdated = $lastUpdated
+    warning = $warning
+  }
+  if ($null -ne $sourceDatabase) { $source.sourceDatabase = $sourceDatabase }
+  return [ordered]@{
+    schema = Get-TableDefFieldSchema -TableDef $table
+    schemaSource = $source
+  }
 }
 
 function Get-Relationships {
@@ -550,9 +618,10 @@ function Invoke-ListTablesAction {
 }
 
 function Invoke-GetSchemaAction {
-  param($Database, $TableName)
+  param($Database, $TableName, $DbEngine = $null)
   if ([string]::IsNullOrWhiteSpace($TableName)) { throw "tableName is required for get_schema." }
-  return [ordered]@{ schema = @(Get-TableSchema -Database $Database -TableName ([string]$TableName)) }
+  $read = Get-TableSchema -Database $Database -TableName ([string]$TableName) -DbEngine $DbEngine
+  return [ordered]@{ schema = @($read.schema); schemaSource = $read.schemaSource }
 }
 
 function Invoke-CountRowsAction {
@@ -1706,7 +1775,7 @@ if ($Operation -eq 'query') {
       }
 
       if ($earlyAction -eq 'get_schema') {
-        $result = Invoke-GetSchemaAction -Database $directDb -TableName ([string]$earlyPayload.tableName)
+        $result = Invoke-GetSchemaAction -Database $directDb -TableName ([string]$earlyPayload.tableName) -DbEngine $directDbEngine
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         Write-DysflowResult -Result $result -Depth 20
         $script:exitCode = 0; return
@@ -1999,7 +2068,7 @@ try {
     if ($action -eq 'get_schema') {
       $readDb = Resolve-ReadActionDatabase -DbEngine $access.DBEngine -CurrentDb $db -Payload $payload
       try {
-        $result = Invoke-GetSchemaAction -Database $readDb.Database -TableName ([string]$payload.tableName)
+        $result = Invoke-GetSchemaAction -Database $readDb.Database -TableName ([string]$payload.tableName) -DbEngine $access.DBEngine
         Write-DysflowProgress -Percent 90 -Message "Finalizing"
         Write-DysflowResult -Result $result -Depth 20
       } finally {

@@ -30,6 +30,8 @@ export type AccessQueryResult = {
   links?: readonly Record<string, unknown>[];
   queries?: readonly Record<string, unknown>[];
   schema?: readonly Record<string, unknown>[];
+  /** Where `get_schema` read the columns from and whether they are live (#1943). */
+  schemaSource?: Record<string, unknown>;
   files?: readonly string[];
   relationships?: readonly Record<string, unknown>[];
   comparison?: Record<string, unknown>;
