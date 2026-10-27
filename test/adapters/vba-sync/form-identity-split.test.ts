@@ -261,6 +261,145 @@ describe("a form's layout and code-behind are one module identity", () => {
   });
 });
 
+describe("a form is one module whatever its files are named", () => {
+  type SyncData = { plan: { toImport: string[]; toExport: string[] }; recommendation: string };
+  const formsDir = (root: string, side: string) => join(root, side, "modules", "forms");
+  const clientes = (value: number) => codeBehind(value).replace("Form_frmX", "Form_Clientes");
+
+  async function sync(adapter: VbaSyncAdapter, input: Record<string, unknown>): Promise<SyncData> {
+    const result = await adapter.execute("sync_binary", input);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return result.data as SyncData;
+  }
+
+  it("B1: sync_binary moduleNames by bare name scopes an export_all-layout form", async () => {
+    const { root, adapter } = fixture();
+    for (const side of ["source", "binary"]) {
+      writeFileSync(join(formsDir(root, side), "Form_Clientes.cls"), clientes(1));
+    }
+    writeFileSync(join(formsDir(root, "source"), "Form_Clientes.form.txt"), layout(true));
+    writeFileSync(join(formsDir(root, "binary"), "Form_Clientes.form.txt"), layout(false));
+
+    for (const name of ["Clientes", "Form_Clientes"]) {
+      const data = await sync(adapter, {
+        moduleNames: [name],
+        scope: { moduleNamesOnly: true },
+      });
+      // Reported under the source layout file's name, which export rewrites in place.
+      expect(data.plan.toImport).toEqual(["Form_Clientes"]);
+      expect(data.recommendation).toBe("import_to_binary");
+    }
+  });
+
+  it.each(["Form_Clientes.cls", "FORM_CLIENTES.cls"])(
+    "B2: a conflicted %s blocks a sourceNewer Clientes.form.txt",
+    async (clsName) => {
+      const { root, adapter } = fixture();
+      writeFileSync(join(formsDir(root, "source"), clsName), clientes(1));
+      writeFileSync(join(formsDir(root, "binary"), "Form_Clientes.cls"), clientes(9));
+      writeFileSync(join(formsDir(root, "source"), "Clientes.form.txt"), layout(true));
+      writeFileSync(join(formsDir(root, "binary"), "Form_Clientes.form.txt"), layout(false));
+
+      const data = await verify(adapter);
+      expect(new Set(data.actionableDifferent.map((entry) => entry.moduleName))).toEqual(
+        new Set(["Clientes"]),
+      );
+      expect(data.bulkImportable).toEqual([]);
+      expect(data.recommendedAction).toBe("manual_merge");
+
+      const synced = await sync(adapter, { apply: true });
+      expect(synced.plan.toImport).toEqual([]);
+      expect(readFileSync(join(formsDir(root, "binary"), "Form_Clientes.cls"), "utf8")).toBe(
+        clientes(9),
+      );
+    },
+  );
+
+  it("B3: opposite directions on one form's files are not auto-synced", async () => {
+    const fx = fixture();
+    const accessSide = `${codeBehind(1)}Public Sub AccessSide()\nEnd Sub\n`;
+    writeFileSync(fx.sourceCls, codeBehind(1));
+    writeFileSync(fx.binaryCls, accessSide);
+    writeFileSync(fx.sourceLayout, layout(true));
+    writeFileSync(fx.binaryLayout, layout(false));
+
+    const data = await verify(fx.adapter);
+    expect(data.bulkImportable).toEqual([]);
+    expect(data.bulkExportable).toEqual([]);
+    expect(data.recommendedAction).toBe("manual_merge");
+
+    const synced = await sync(fx.adapter, { apply: true });
+    expect(synced.plan).toMatchObject({ toImport: [], toExport: [] });
+    expect(fx.calls.filter((call) => call.action === "Import")).toEqual([]);
+    expect(readFileSync(fx.binaryCls, "utf8")).toBe(accessSide);
+    expect(readFileSync(fx.sourceCls, "utf8")).toBe(codeBehind(1));
+
+    // A one-way direction the caller accepted is still applied.
+    const accepted = await sync(fx.adapter, {
+      dryRun: true,
+      direction: "binary-to-src",
+      acceptBothChanged: true,
+    });
+    expect(accepted.plan.toExport).toEqual(["frmX"]);
+  });
+
+  it("a class module and a form's code-behind with the same file name stay apart", async () => {
+    const { root, adapter } = fixture();
+    const classText = (value: number) => moduleText(value).replace('"Probe"', '"Clientes"');
+    for (const side of ["source", "binary"]) {
+      mkdirSync(join(root, side, "modules", "classes"), { recursive: true });
+      writeFileSync(join(root, side, "modules", "classes", "Clientes.cls"), classText(1));
+      writeFileSync(
+        join(formsDir(root, side), "Clientes.cls"),
+        clientes(side === "source" ? 1 : 9),
+      );
+    }
+
+    const result = await adapter.execute("verify_code", { diagnostic: true });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    const data = result.data as VerifyData & { warnings?: { error?: string }[] };
+
+    expect(data.actionableDifferent).toEqual([
+      expect.objectContaining({
+        moduleName: "Clientes",
+        fileType: "cls",
+        classification: "bothChanged",
+      }),
+    ]);
+    expect(data.warnings ?? []).not.toContainEqual(
+      expect.objectContaining({ error: "DUPLICATE_IDENTITY_KEY" }),
+    );
+  });
+
+  it("A1: two forms literally named X and Form_X are compared separately", async () => {
+    const { root, adapter } = fixture();
+    for (const side of ["source", "binary"]) {
+      // Access form "Clientes" changed binary-side; form "Form_Clientes" did not.
+      writeFileSync(
+        join(formsDir(root, side), "Clientes.cls"),
+        clientes(side === "source" ? 1 : 9),
+      );
+      writeFileSync(
+        join(formsDir(root, side), "Form_Clientes.cls"),
+        clientes(1).replace("Form_Clientes", "Form_Form_Clientes"),
+      );
+    }
+
+    const result = await adapter.execute("verify_code", { diagnostic: true });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    const data = result.data as VerifyData & { warnings?: { error?: string }[] };
+
+    expect(data.actionableDifferent).toEqual([
+      expect.objectContaining({ moduleName: "Clientes", classification: "bothChanged" }),
+    ]);
+    expect(data.recommendedAction).toBe("manual_merge");
+    // The ambiguity stays visible.
+    expect(data.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ error: "DUPLICATE_IDENTITY_KEY" })]),
+    );
+  });
+});
+
 describe("a write invalidates the base of a form under either of its names", () => {
   it.each(["frmX", "Form_frmX"])(
     "import_modules([%s]) voids the base of the form's code-behind",
