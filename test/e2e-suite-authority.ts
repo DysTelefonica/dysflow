@@ -12,7 +12,7 @@ export const UNIT_E2E_TESTS = [
   "test/integration/global-setup-temp-sweep.test.ts",
 ] as const;
 
-/** Hosted-Windows smoke tests that are useful before merge. */
+/** Windows smoke tests without real Access; run by hand (`pnpm test:integration`). */
 export const PR_SMOKE_TESTS = [
   "test/e2e/access-fixture.e2e.test.ts",
   "test/e2e/access-relink-directory-apply.test.ts",
@@ -22,7 +22,7 @@ export const PR_SMOKE_TESTS = [
   "test/integration/vba-manager-sentinel-trap.test.ts",
 ] as const;
 
-/** Real-Access tests serialized on the self-hosted nightly runner. */
+/** Real-Access tests, run by hand or by the manual Access E2E workflow (vitest.nightly-access.config.ts). */
 export const NIGHTLY_ACCESS_TESTS = [
   "test/e2e/access-runner-readlock.e2e.test.ts",
   "test/e2e/form-codebehind-stale-import.e2e.test.ts",
