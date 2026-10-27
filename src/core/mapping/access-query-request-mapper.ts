@@ -184,10 +184,16 @@ export function pickQueryTarget(params: Record<string, unknown>): QueryTarget | 
 }
 
 /**
- * Normalizes `query_execute` with the established `query_sql` precedence.
- * An explicit databasePath/sourcePath wins; accessPath is the fallback
- * database for SQL execution, while target remains available for semantic
- * project-config resolution.
+ * Normalizes `query_execute` with the established `query_sql` precedence:
+ *
+ * 1. An explicit `databasePath`/`sourcePath` wins.
+ * 2. `target: "backend"` resolves downstream to `backendPath`, then the
+ *    configured backend (#1942). `accessPath` names the frontend, so it is
+ *    never the fallback database for a backend target — filling
+ *    `databasePath` from it would outrank `backendPath` and run the SQL on
+ *    the frontend.
+ * 3. Otherwise `accessPath` is the fallback database, while `target` remains
+ *    available for semantic project-config resolution.
  */
 export function pickQueryExecutionTarget(
   params: Record<string, unknown>,
@@ -204,7 +210,7 @@ export function pickQueryExecutionTarget(
   return {
     accessPath,
     backendPath: typeof params.backendPath === "string" ? params.backendPath : undefined,
-    databasePath: explicitDatabasePath ?? accessPath,
+    databasePath: explicitDatabasePath ?? (target === "backend" ? undefined : accessPath),
     ...(target === undefined ? {} : { target }),
   };
 }

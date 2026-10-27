@@ -119,6 +119,13 @@ export type ProjectConfigRequest = {
   mutatesBinary?: boolean;
 };
 
+/**
+ * Operations whose `databasePath`/`sourcePath` names the database the SQL
+ * runs on (frontend OR backend), rather than an alias of the frontend
+ * `accessPath` (#1942).
+ */
+const SQL_DATABASE_PATH_OPERATIONS: ReadonlySet<string> = new Set(["query_execute", "query_sql"]);
+
 const normalize = (value: string): string => resolve(value).replaceAll("\\", "/");
 const identity = (value: string): string =>
   process.platform === "win32" ? normalize(value).toLowerCase() : normalize(value);
@@ -691,11 +698,26 @@ export function diagnoseProjectConfig(
   // (and when it is supplied alongside a frontend alias, the existing
   // `namesConfiguredBackend` exception in the target validation block
   // keeps the request consistent with the configured backend file).
+  //
+  // Issue #1942 — for the SQL tools, `databasePath`/`sourcePath` selects the
+  // database the SQL runs on, which may be the backend. One that names the
+  // configured backend is a backend selector, not a second frontend alias,
+  // so `accessPath:<frontend>` + `databasePath:<backend>` is accepted for a
+  // write exactly as it is for a read. Two different frontend aliases, or a
+  // `databasePath` naming any other file, still fail closed below.
+  const namesConfiguredBackendDatabase = (value: string | undefined): boolean =>
+    value !== undefined &&
+    backendPath !== null &&
+    request.operation !== undefined &&
+    SQL_DATABASE_PATH_OPERATIONS.has(request.operation) &&
+    identity(resolve(projectRootNative, value)) === identity(backendPath);
   const frontendAliases = [
     request.accessPath,
     request.accessDbPath,
-    request.databasePath,
-    ...(sourcePathTargetsDatabase ? [request.sourcePath] : []),
+    ...(namesConfiguredBackendDatabase(request.databasePath) ? [] : [request.databasePath]),
+    ...(sourcePathTargetsDatabase && !namesConfiguredBackendDatabase(request.sourcePath)
+      ? [request.sourcePath]
+      : []),
   ].filter((value): value is string => value !== undefined);
   const targets = new Set(
     frontendAliases.map((value) => identity(resolve(projectRootNative, value))),
