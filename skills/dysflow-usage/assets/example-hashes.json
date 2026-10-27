@@ -226,7 +226,7 @@
   },
   "test_vba": {
     "path": "assets/examples/test-vba.md",
-    "sha256": "4d2b3ef0e114ffecf0ed787354f1edc022b2593f80cbc5422c8027f81ac6ba15",
+    "sha256": "750170be2df9e1cdff8f2bf0e5db0fe58a76ad6938ceb947074353b75d1bddef",
     "needs_human_content": false
   },
   "validate_manifest": {

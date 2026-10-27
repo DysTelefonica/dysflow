@@ -60,6 +60,11 @@ BeforeAll {
         param([string]$AccessPath, [string]$Password, $RestoreInfo)
         $script:Observed.RestoredStartupPaths += $AccessPath
     }
+    # The sandbox compile is pinned by dysflow-vba-manager-test-vba-compile-1911; here it succeeds.
+    function Invoke-TestSandboxCompile {
+        param($AccessApplication, [string]$SandboxPath, [string]$AccessPath)
+        return [pscustomobject]@{ ok = $true }
+    }
 
     function New-FakeAccessSession {
         param($OwnedPid)

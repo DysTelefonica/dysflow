@@ -251,6 +251,12 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
             $script:RemoveSandboxCalls += [pscustomobject]@{ SandboxPath = $SandboxPath }
         }
 
+        # #1911: the sandbox compile is pinned by its own suite; here it always succeeds.
+        function script:Invoke-TestSandboxCompile {
+            param($AccessApplication, [string]$SandboxPath, [string]$AccessPath)
+            return [pscustomobject]@{ ok = $true }
+        }
+
         function script:Close-AccessDatabase {
             param($Session, [string]$AccessPath, [string]$Password, $KillPidAction, $LockFileAction)
             return $null

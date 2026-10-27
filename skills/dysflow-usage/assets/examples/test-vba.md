@@ -13,7 +13,7 @@ Execute the validated VBA test manifest on a temporary copy of the frontend.
 
 ## Sandbox copy
 
-The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and opens the copy (`Get-TestSandboxPath`, issue #1013). Paths relative to the `.accdb`, such as `src\` and `tests\`, do not exist during the run. `run_vba` opens the real binary. Details: `../../references/test-runs.md`.
+The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and opens the copy (`Get-TestSandboxPath`, issue #1013). Paths relative to the `.accdb`, such as `src\` and `tests\`, do not exist during the run. Before any test runs, the runner compiles the copy; when it does not compile the result is `VBA_COMPILE_ERROR` and no test runs (#1911). `run_vba` opens the real binary and never compiles. Details: `../../references/test-runs.md`.
 
 ## Required flags
 
