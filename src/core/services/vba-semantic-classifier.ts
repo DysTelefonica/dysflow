@@ -890,6 +890,38 @@ function normalizeKnownOptionalDefaultArguments(text: string): string {
 }
 
 /**
+ * Single-side canonical text of one VBA artifact, used to compare a side against
+ * the last-synced base snapshot (#1890).
+ *
+ * `classifyVbaPair` normalizes a PAIR: a few of its folds depend on both sides
+ * (the VB_Name keep rule, raw-byte mojibake repair, the comment strip). A base is
+ * recorded from one side only, so this applies the same non-functional folds the
+ * functional diff uses, with every pair-dependent choice taken conservatively:
+ * VB_Name is kept, comments are kept verbatim, and mojibake repair is skipped.
+ * Without raw bytes the repair rewrites string-literal content too (`"aÃ±o"`
+ * becomes `"año"`), which would fold more than the pair classifier does.
+ *
+ * Every fold here is one the classifier already treats as non-functional, so two
+ * texts with equal canonical forms never differ functionally. The converse does
+ * not hold: a missed fold only makes a side fail to match its base, which falls
+ * back to the two-text verdict — never a faked direction.
+ */
+export function canonicalizeVbaText(text: string, fileType: string): string {
+  const stripped = stripLeadingBom(text);
+  let canonical = normalizeLeadingWhitespace(
+    normalizeTrailingWhitespace(normalizeLineEndings(stripped)),
+    fileType,
+  );
+  canonical = applyStructuralStrips(canonical, fileType, true);
+  // Lossy neutralization only touches text outside string literals and comments.
+  if (!stripped.includes("�")) canonical = neutralizeLossyEncoding(canonical);
+  canonical = normalizeVbaCase(canonical, fileType);
+  canonical = normalizeKnownOptionalDefaultArguments(canonical);
+  canonical = foldInterTokenWhitespace(canonical);
+  return joinLineContinuations(canonical);
+}
+
+/**
  * Strips a leading byte-order-mark or its mojibake remnants from the start of a
  * VBA file.
  *

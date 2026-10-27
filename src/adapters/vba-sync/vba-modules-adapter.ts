@@ -40,6 +40,11 @@ import {
   type ComparisonFileSystemPort,
   compareSourceAgainstBinary,
 } from "../../core/services/vba-source-comparison.js";
+import {
+  invalidateVerifyBase,
+  type VerifyBaseStorePort,
+} from "../../core/services/vba-verify-base.js";
+import { verifyBaseWriteScope } from "../../core/services/vba-verify-base-recording.js";
 import { stringValue, truthy } from "../../core/utils/index.js";
 import {
   removeTemporaryDirectoryWithRetry,
@@ -65,6 +70,7 @@ import {
 import { collectImportLintFindings, type ImportLintFinding } from "./import-lint-gate.js";
 import { nodeTransactionalFileSystem } from "./node-transactional-file-system.js";
 import { type DirectMapping, mapping, stringArray } from "./vba-sync-types.js";
+import { FileVerifyBaseStore } from "./verify-base-file-store.js";
 
 // ========================================================================
 // #732 — compile-failure rollback types + constants REMOVED in v1.19.0
@@ -404,11 +410,18 @@ function formatCodeBehindWarning(divergence: FormCodeBehindDivergence): string {
 }
 
 export class VbaModulesAdapter {
+  private readonly verifyBaseStore: VerifyBaseStorePort;
+
   constructor(
     private readonly orchestrator: VbaModulesOrchestrator,
     private readonly fileSystem: ComparisonFileSystemPort = nodeComparisonFileSystem,
     private readonly controlPropertyReader: ControlPropertyReader = new NoopControlPropertyReader(),
-  ) {}
+    verifyBaseStore?: VerifyBaseStorePort,
+  ) {
+    // Issue #1890 — last-synced base snapshot, local state under the project's
+    // `.dysflow/runtime/verify-base/`.
+    this.verifyBaseStore = verifyBaseStore ?? new FileVerifyBaseStore(orchestrator.cwd);
+  }
 
   /**
    * Issue #975 — wrap a write-tool dispatch with the transactional copy /
@@ -650,6 +663,14 @@ export class VbaModulesAdapter {
    * on a successful import.
    */
   async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const result = await this.executeWithImportLint(toolName, params);
+    return this.invalidateVerifyBaseAfterWrite(toolName, params, result);
+  }
+
+  private async executeWithImportLint(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<OperationResult<unknown>> {
@@ -1065,7 +1086,7 @@ export class VbaModulesAdapter {
     }
 
     const resultWithPrune: OperationResult<unknown> =
-      toolName === "import_all" && truthy(params.prune)
+      importResult.ok && toolName === "import_all" && truthy(params.prune)
         ? {
             ...importResult,
             data: {
@@ -1647,7 +1668,45 @@ export class VbaModulesAdapter {
       validateStrictContext: this.orchestrator.validateStrictContext.bind(this.orchestrator),
       runPreflightCleanup: this.orchestrator.runPreflightCleanup.bind(this.orchestrator),
       runVbaManager: this.orchestrator.executor.bind(this.orchestrator),
+      verifyBaseStore: this.verifyBaseStore,
     };
+  }
+
+  /**
+   * Issue #1890 — a write invalidates the verify base of every module it may
+   * have touched, whatever its outcome: a failed or partial write can still
+   * have changed one side. The scope comes from the caller's request, so a
+   * staging copy never redirects the invalidation. Best-effort: a store failure
+   * is appended as a warning and never changes the outcome of the write.
+   */
+  private async invalidateVerifyBaseAfterWrite(
+    toolName: string,
+    params: Record<string, unknown>,
+    result: OperationResult<unknown>,
+  ): Promise<OperationResult<unknown>> {
+    const scope = verifyBaseWriteScope(toolName, params);
+    if (scope === undefined) return result;
+    let diagnostics: Diagnostic[];
+    try {
+      const target = await this.orchestrator.resolveExecutionTarget(params);
+      if (!target.ok || target.data.accessPath === undefined) return result;
+      diagnostics = await invalidateVerifyBase(
+        this.verifyBaseStore,
+        { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+        scope,
+        new Date(),
+      );
+    } catch (error) {
+      diagnostics = [
+        {
+          level: "warning",
+          source: "verify-base",
+          message: `The last-synced base snapshot could not be invalidated: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ];
+    }
+    if (diagnostics.length === 0) return result;
+    return { ...result, diagnostics: [...result.diagnostics, ...diagnostics] };
   }
 
   /**

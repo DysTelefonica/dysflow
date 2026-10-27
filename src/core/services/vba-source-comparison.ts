@@ -30,6 +30,17 @@ import {
   type SnapshotArtifactFamily,
   type SnapshotRepresentation,
 } from "./vba-source-snapshot.js";
+import {
+  type BaseAwareClassification,
+  hashCanonicalVbaText,
+  loadVerifyBaseLookup,
+  recordVerifyBaseAgreement,
+  resolveDirectionAgainstBase,
+  type VerifyBaseAgreement,
+  type VerifyBaseLookup,
+  type VerifyBaseStorePort,
+  verifyBaseModuleKey,
+} from "./vba-verify-base.js";
 
 /** Runtime package version, resolved once. Surfaced in verify/reconcile results. */
 // DYSFLOW_VERSION is now embedded in RuntimeDiagnostics via buildRuntimeDiagnostics()
@@ -64,6 +75,11 @@ export type VbaSourceComparisonEntry = {
   propertyName?: string;
   sourceValue?: string;
   binaryValue?: string;
+  /**
+   * Issue #1890 — `"base"` when the classifier saw `bothChanged` and the
+   * last-synced base inferred the direction. Never applied without confirmation.
+   */
+  resolvedBy?: "base";
 };
 
 export type VbaSourceDiffEntry = VbaSourceComparisonEntry & {
@@ -215,6 +231,14 @@ export type VbaVerifyResult = {
   /** Length of {@link bulkExportable}. Equal to `bulkExportable.length`. */
   bulkExportableCount?: number;
   /**
+   * Issue #1890 — modules with an entry whose direction was inferred from the
+   * last-synced base (`resolvedBy: "base"`). They are in neither bulk list:
+   * confirm the direction before importing or exporting them. Semantic mode only.
+   */
+  baseResolved?: readonly string[];
+  /** Length of {@link baseResolved}. */
+  baseResolvedCount?: number;
+  /**
    * Always-present caveat. verify_code compares on-disk source against the
    * on-disk binary only; it cannot observe the user's live Access/VBE in-memory
    * cache, which may hold a stale compiled image even when disk content matches.
@@ -282,6 +306,11 @@ export type VbaComparisonContext = {
   ): OperationResult<undefined>;
   runPreflightCleanup(target: VbaExecutionTarget): Promise<AccessOperationPreflightCleanupResult>;
   runVbaManager(request: VbaExecutionRequest): Promise<VbaExecutionResult>;
+  /**
+   * Issue #1890 — optional last-synced base snapshot. When present, semantic mode
+   * resolves the direction of an actionable difference against it.
+   */
+  verifyBaseStore?: VerifyBaseStorePort;
 };
 
 export interface ComparisonFileSystemEntry {
@@ -364,6 +393,9 @@ export async function compareSourceAgainstBinary(
   }
 
   const sourceRoot = target.data.destinationRoot;
+  // Issue #1890 — an agreement this run records is dated to its start, so any
+  // write that invalidates the base during the run voids it.
+  const observedAt = new Date();
   const tempExportRoot = await fileSystem.mkdtemp(
     resolve(fileSystem.tmpdir(), "dysflow-vba-verify-"),
   );
@@ -508,6 +540,23 @@ export async function compareSourceAgainstBinary(
     }
 
     const comparisonMode: VbaComparisonMode = truthy(params.strict) ? "strict" : "semantic";
+    // Issue #1890 — the base only refines semantic direction; strict mode and a
+    // target without a binary path compare the two texts exactly as before.
+    const base =
+      comparisonMode === "semantic" && target.data.accessPath !== undefined
+        ? await loadVerifyBaseLookup(
+            ctx.verifyBaseStore,
+            { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+            sourceRoot,
+          )
+        : { diagnostics: [] };
+    preflightDiagnostics.push(...base.diagnostics);
+    const agreed: VerifyBaseAgreement[] | undefined =
+      comparisonMode === "semantic" &&
+      target.data.accessPath !== undefined &&
+      ctx.verifyBaseStore !== undefined
+        ? []
+        : undefined;
     const compareTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const comparison = await withPhaseTimeout(
       compareVbaSourceTrees(
@@ -517,6 +566,7 @@ export async function compareSourceAgainstBinary(
         truthy(params.diff),
         fileSystem,
         comparisonMode,
+        { lookup: base.lookup, agreed },
       ),
       compareTimeoutMs,
       createVerifyCodePhaseTimeoutError({
@@ -560,6 +610,17 @@ export async function compareSourceAgainstBinary(
           ),
         );
       }
+    }
+    if (agreed !== undefined && agreed.length > 0 && target.data.accessPath !== undefined) {
+      preflightDiagnostics.push(
+        ...(await recordVerifyBaseAgreement(
+          ctx.verifyBaseStore,
+          { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+          sourceRoot,
+          agreed,
+          observedAt,
+        )),
+      );
     }
     return finalize(
       successResult(
@@ -805,6 +866,12 @@ export async function compareVbaSourceTrees(
   includeDiffs: boolean,
   fileSystem: ComparisonFileSystemPort,
   mode: VbaComparisonMode = "semantic",
+  base: {
+    /** Base hashes for this source root; breaks `bothChanged` ties. */
+    lookup?: VerifyBaseLookup;
+    /** Receives every pair whose two sides have identical canonical hashes. */
+    agreed?: VerifyBaseAgreement[];
+  } = {},
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
   const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
@@ -861,6 +928,22 @@ export async function compareVbaSourceTrees(
     }
 
     // --- Semantic mode: classify each differing pair ---
+    // Issue #1890 — both sides observed agreeing is the strongest evidence for
+    // a last-synced base: record it, keyed by the canonical hash.
+    const agreedHash =
+      base.agreed === undefined ? undefined : hashCanonicalVbaText(sourceText, sourceFile.fileType);
+    if (
+      agreedHash !== undefined &&
+      (sourceText === binaryText ||
+        agreedHash === hashCanonicalVbaText(binaryText, sourceFile.fileType))
+    ) {
+      base.agreed?.push({
+        moduleName: sourceFile.moduleName,
+        fileType: sourceFile.fileType,
+        hash: agreedHash,
+      });
+    }
+
     // Fast path: raw equality (no need to classify)
     if (sourceText === binaryText) {
       matched.push(entry);
@@ -875,7 +958,7 @@ export async function compareVbaSourceTrees(
         ])
       : [undefined, undefined];
 
-    const classification = classifyVbaPair({
+    const pairClassification = classifyVbaPair({
       sourceText,
       binaryText,
       sourceBytes,
@@ -883,6 +966,20 @@ export async function compareVbaSourceTrees(
       fileType: sourceFile.fileType,
       mode: "semantic",
     });
+    // Issue #1890 — a changed value is one unique line per side, so the pair
+    // alone says `bothChanged`. The last-synced base names the side that moved.
+    // Only that tie is resolved; a one-sided verdict is never overridden.
+    const baseHash = base.lookup?.get(
+      verifyBaseModuleKey(sourceFile.moduleName, sourceFile.fileType),
+    );
+    const classification: BaseAwareClassification =
+      baseHash === undefined || pairClassification.classification !== "bothChanged"
+        ? pairClassification
+        : resolveDirectionAgainstBase(pairClassification, {
+            base: baseHash,
+            source: hashCanonicalVbaText(sourceText, sourceFile.fileType),
+            binary: hashCanonicalVbaText(binaryText, sourceFile.fileType),
+          });
 
     // If classifier resolves to "matched" (e.g. normalization equalized), treat as matched
     if (classification.classification === "matched") {
@@ -918,6 +1015,7 @@ export async function compareVbaSourceTrees(
         controlPropertyFields.category === "control-property-mismatch"
           ? `${classification.reason}; control "${controlPropertyFields.controlName}" property "${controlPropertyFields.propertyName}" differs`
           : classification.reason,
+      ...(classification.resolvedBy === undefined ? {} : { resolvedBy: classification.resolvedBy }),
     };
     if (classification.actionable) {
       actionableDifferent.push(entryWithClassification);
@@ -949,6 +1047,9 @@ export async function compareVbaSourceTrees(
         recommendation: classification.recommendation,
         isActionable: classification.actionable,
         recommendedAction: classification.recommendation,
+        ...(classification.resolvedBy === undefined
+          ? {}
+          : { resolvedBy: classification.resolvedBy }),
         // WU-3 v2-categories: surface the canonicalizer-side reason list on
         // every diff entry so consumers can render "why this is non-actionable"
         // without re-parsing the reason string. Empty for actionable and
@@ -1141,6 +1242,12 @@ function aggregateRecommendation(
  * determinism across runs. `bothChanged` is filtered out of BOTH lists
  * by virtue of the per-entry classification check (its entry.classification
  * is neither 'sourceNewer' nor 'binaryNewer').
+ *
+ * Issue #1890 — a module with any entry whose direction was inferred from the
+ * last-synced base (`resolvedBy: "base"`) is in NEITHER bulk list, because an
+ * import or export moves the whole module. It is listed in `baseResolved`
+ * instead, so no consumer bulk-applies an inferred direction without
+ * confirmation.
  */
 function deriveBulkLists(
   actionableDifferent: readonly VbaSourceComparisonEntry[],
@@ -1151,10 +1258,17 @@ function deriveBulkLists(
   bulkImportableCount: number;
   bulkExportable: string[];
   bulkExportableCount: number;
+  baseResolved: string[];
+  baseResolvedCount: number;
 } {
   const importSet = new Set<string>();
   const exportSet = new Set<string>();
+  const baseResolvedSet = new Set<string>();
   for (const e of actionableDifferent) {
+    if (e.resolvedBy === "base") baseResolvedSet.add(e.moduleName);
+  }
+  for (const e of actionableDifferent) {
+    if (baseResolvedSet.has(e.moduleName)) continue;
     if (e.classification === "sourceNewer") {
       importSet.add(e.moduleName);
     } else if (e.classification === "binaryNewer") {
@@ -1164,13 +1278,16 @@ function deriveBulkLists(
   }
   for (const e of missingInBinary) importSet.add(e.moduleName);
   for (const e of missingInSource) exportSet.add(e.moduleName);
-  const bulkImportable = [...importSet].sort();
-  const bulkExportable = [...exportSet].sort();
+  const bulkImportable = [...importSet].filter((name) => !baseResolvedSet.has(name)).sort();
+  const bulkExportable = [...exportSet].filter((name) => !baseResolvedSet.has(name)).sort();
+  const baseResolved = [...baseResolvedSet].sort();
   return {
     bulkImportable,
     bulkImportableCount: bulkImportable.length,
     bulkExportable,
     bulkExportableCount: bulkExportable.length,
+    baseResolved,
+    baseResolvedCount: baseResolved.length,
   };
 }
 

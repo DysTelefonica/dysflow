@@ -102,6 +102,12 @@ export function shapeVerifyCodeResponse<T>(raw: T, options: VerifyCodeDiagnostic
     compact.bulkImportableCount = numberOrZero(raw.bulkImportableCount ?? bulkImportable.length);
     compact.bulkExportable = bulkExportable;
     compact.bulkExportableCount = numberOrZero(raw.bulkExportableCount ?? bulkExportable.length);
+    // Issue #1890 — modules whose direction was inferred from the last-synced
+    // base. They are in neither bulk list and need confirmation; keep them in
+    // the compact response so a consumer sees why the bulk lists are short.
+    const baseResolved = arrayOrEmpty(raw.baseResolved);
+    compact.baseResolved = baseResolved;
+    compact.baseResolvedCount = numberOrZero(raw.baseResolvedCount ?? baseResolved.length);
   }
 
   copyDefined(compact, raw, [
