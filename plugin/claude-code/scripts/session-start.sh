@@ -10,34 +10,32 @@
 # Owner:     Andrés Román (DysTelefonica) <dysflow>
 # Companion: engram-plugin (Gentleman-Programming/engram) — separate file
 # =====================================================================
-# Loads the canonical 8-step loop + dysflow-protocol skill context +
+# Loads the first-call reminders from the dysflow-arnes skill +
 # project state via `dysflow state` into the agent's working memory.
 # Fires on SessionStart with matchers "startup" or "clear".
 # =====================================================================
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SKILL_FILE="${PLUGIN_ROOT}/../../skills/dysflow-protocol/SKILL.md"
+SKILL_FILE="${PLUGIN_ROOT}/../../skills/dysflow-arnes/SKILL.md"
 
-# 1. Surface the canonical 8-step loop so the agent always sees it.
+# 1. Surface the first-call reminders so the agent always sees them.
 #    This is the "reminder" that prevents the agent from wandering.
 cat <<'EOF'
 [dysflow-plugin v2.31.0] Canonical workflow loaded.
 
-8-step canonical loop:
-  1. get_capabilities -> capture adapterVersion + humanCompilePending + toolsVisible
-  2. doctor          -> surface known issues
-  3. detect check_id for the mutating tool (DOCTOR_CHECK_METADATA)
-  4. determine confirmation policy (requires_confirmation: true|false)
-  5. plan first (apply: false) -- NEVER dryRun: true (removed in v2.31.0)
-  6. ask_user if confirmation needed
-  7. commit (apply: true) + confirmedRequiresConfirmation: true
-  8. verify_code -> check source<->binary drift
+First calls:
+  1. bootstrap({cwd}) -- the only mandatory first call; humanCompilePending is a reminder, never a block (HR-1)
+  2. schema({view:"index"}), then describe_tool for the tool you will call (HR-5)
+  3. writes: plan (apply: false), then commit (apply: true) -- NEVER dryRun: true (removed in v2.31.0)
+  4. destructive tools: implements_check + confirmedRequiresConfirmation: true after the human approves (HR-2)
+  5. verify_code after a sync; gate on actionableOk (HR-15)
 
-NEVER: kill MSACCESS generically. NEVER: write to production backend.
-NEVER: claim TDD-green without BOTH user-confirmed compile AND all-green test_vba.
+TDD (HR-1): run RED without asking for a compile; ask the human to compile once
+before GREEN. test_vba compiles only its temporary sandbox copy.
+NEVER: kill MSACCESS by name (HR-2). NEVER: write to a production backend (HR-3).
 
-Full hard rules + recovery matrix: skills/dysflow-protocol/SKILL.md
+Full hard rules: skills/dysflow-arnes/SKILL.md (facts: skills/dysflow-usage/SKILL.md)
 EOF
 
 # 2. Run dysflow state to inject live project context.
@@ -54,7 +52,7 @@ if [ -d .git ] || [ -f .git ]; then
     if [ ! -d .dysflow ]; then
         echo "[dysflow-plugin] WARNING: cwd is a git worktree without .dysflow/."
         echo "  Bootstrap:  dysflow setup --cwd $(pwd) --apply --access-path <path>"
-        echo "  See:        skills/dysflow-protocol/SKILL.md section 11 (Worktree workflow)"
+        echo "  See:        skills/dysflow-usage/references/worktrees-and-destinations.md"
     fi
 fi
 

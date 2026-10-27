@@ -14,15 +14,16 @@
 # =====================================================================
 set -euo pipefail
 
-# Re-surface the canonical loop (truncated — full text is in skills/dysflow-protocol).
+# Re-surface the first-call reminders (truncated — full text is in skills/dysflow-arnes).
 cat <<'EOF'
 [dysflow-plugin v2.31.0] Re-establishing context after compaction.
 
-Reminders (full rules in skills/dysflow-protocol/SKILL.md):
-  - 8-step canonical loop (get_capabilities -> doctor -> check_id -> policy -> plan -> ask -> commit -> verify)
-  - NEVER: dryRun: true, kill MSACCESS, write to production, claim TDD-green without compile
+Reminders (full rules in skills/dysflow-arnes/SKILL.md):
+  - bootstrap({cwd}) first; humanCompilePending is a reminder, never a block (HR-1)
+  - RED runs without a compile; the human compiles once before GREEN (HR-1)
+  - NEVER: dryRun: true, kill MSACCESS by name, write to production
   - apply: false for plan; apply: true for commit
-  - confirmedRequiresConfirmation: true when implements_check.requires_confirmation
+  - confirmedRequiresConfirmation: true only after the human approves (HR-2)
 EOF
 
 # Re-run dysflow state to refresh live project context.

@@ -59,7 +59,8 @@ const SAFETY_PARAMETER_DESCRIPTIONS: Record<string, string> = {
   allowedProcedures:
     "Execution is limited to the configured procedure allowlist and fails closed when unavailable.",
   apply: "apply:true writes; false or omitted plans.",
-  compile: "Compilation is human-owned; this flag never bypasses the manual compile gate.",
+  compile:
+    "Compilation is human-owned; this flag never compiles the user's binary (test_vba compiles only its sandbox copy).",
   confirm: "Required confirmation for a destructive filesystem transition.",
   confirmedRequiresConfirmation:
     "Required explicit approval for a destructive operation after safety checks.",

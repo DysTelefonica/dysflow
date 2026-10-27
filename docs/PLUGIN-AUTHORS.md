@@ -32,7 +32,9 @@ plugin/
     ├── dysflow-tool-chrome.ts
     └── package.json
 skills/
-└── dysflow-protocol/
+├── dysflow-arnes/
+│   └── SKILL.md
+└── dysflow-usage/
     └── SKILL.md
 ```
 
@@ -176,6 +178,7 @@ outside the mirrored plugin directory.
 - Point portable bundles at `npx -y dysflow mcp --tools=agent`.
 - Treat hook input as host-owned and validate any fields you consume.
 - Keep the canonical operating guidance in `skills/dysflow-arnes/SKILL.md` (rules) and `skills/dysflow-usage/SKILL.md` (facts). `skills/dysflow-protocol` is retired (#1871) and kept only as a redirect stub.
+- Inject rules only as the arnés states them. The OpenCode `DYSFLOW_PROTOCOL` embeds the arnés block verbatim, and the hook scripts cite only its `HR-n` numbers; `test/docs/plugin-protocol-arnes-alignment-1947.test.ts` fails on drift or a retired rule (#1947).
 - Restart the host, invoke `get_capabilities({})`, and verify the expected
   `adapterVersion` and `toolsVisible`.
 - Run the repository checks before publishing:
