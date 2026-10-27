@@ -14,17 +14,16 @@ PLUGIN_ROOT="${CODEX_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pw
 cat <<'EOF'
 [dysflow-plugin v2.31.0] Loading canonical workflow.
 
-8-step loop:
-  1. get_capabilities -> adapterVersion + humanCompilePending + toolsVisible
-  2. doctor          -> known issues
-  3. detect check_id for the mutating tool
-  4. determine confirmation policy (requires_confirmation)
-  5. plan first (apply: false)
-  6. ask_user if confirmation needed
-  7. commit (apply: true) + confirmedRequiresConfirmation: true
-  8. verify_code -> source<->binary drift
+First calls:
+  1. bootstrap({cwd}) -- the only mandatory first call; humanCompilePending is a reminder, never a block (HR-1)
+  2. schema({view:"index"}), then describe_tool for the tool you will call (HR-5)
+  3. writes: plan (apply: false), then commit (apply: true)
+  4. destructive tools: implements_check + confirmedRequiresConfirmation: true after the human approves (HR-2)
+  5. verify_code after a sync; gate on actionableOk (HR-15)
 
-NEVER: dryRun: true, kill MSACCESS, write to production, claim TDD-green without compile.
+TDD (HR-1): RED runs without a compile; the human compiles once before GREEN.
+NEVER: dryRun: true, kill MSACCESS by name, write to production.
+Full hard rules: skills/dysflow-arnes/SKILL.md
 EOF
 
 if command -v dysflow >/dev/null 2>&1; then

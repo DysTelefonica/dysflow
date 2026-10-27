@@ -30,45 +30,61 @@ import type { Plugin } from "@opencode-ai/plugin"
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Canonical instructions injected into the agent's system prompt. */
-const DYSFLOW_PROTOCOL = `## Dysflow Canonical Workflow — MUST READ
+const DYSFLOW_PROTOCOL = `## Dysflow operating rules — MUST READ
 
-You are operating on a Microsoft Access / VBA project via the dysflow MCP. The runtime gives you primitives; this section gives you the workflow. Full rules: skills/dysflow-arnes/SKILL.md (facts: skills/dysflow-usage/SKILL.md).
+You are operating on a Microsoft Access / VBA project via the dysflow MCP. The rules below are copied verbatim from the canonical arnés in skills/dysflow-arnes/SKILL.md; test/docs/plugin-protocol-arnes-alignment-1947.test.ts keeps them identical. Tool names, flags and error codes: skills/dysflow-usage/SKILL.md.
 
-### Hard rules (NEVER violate)
+# dysflow — operating rules
 
-- **HR-1 — The HUMAN compiles.** Never call \`apply: true\` on \`test_vba\`/\`run_vba\` while \`humanCompilePending: true\`. Required loop: write source -> \`import_modules({moduleNames:[...], apply:false})\` -> ASK user to compile manually (Debug ▸ Compile) -> WAIT for "ya está" -> THEN \`test_vba\`.
-- **HR-2 — NEVER kill MSACCESS.EXE generically.** Use ONLY dysflow-owned cleanup: \`list_access_operations\` -> \`access_force_cleanup_orphaned\` -> \`cleanup_access_operation\`.
-- **HR-3 — NEVER write to production backend.** \`m_TestingMode=True\` is the only path for test data.
-- **HR-4 — Unified confirmation policy.** For mutating tools with \`implements_check\`: \`requires_confirmation: true\` requires \`confirmedRequiresConfirmation: true\` after explicit ask_user. \`requires_confirmation: false\` rejects the override (\`CONFIRMATION_NOT_NEEDED\`).
-- **HR-5 — \`apply: false\` is the plan signal.** Never \`dryRun: true\` (legacy, hard-removed in v2.31.0).
-- **HR-6 — Pre-flight BEFORE every write.** get_capabilities -> confirm writes + adapterVersion + humanCompilePending + toolsVisible.
-- **HR-9 — Worktrees.** \`git worktree add\` does NOT copy .dysflow/. Hooks auto-bootstrap; if missing, run \`dysflow setup --cwd <path> --apply --access-path <path>\`.
+Load \`dysflow-usage\` first for tool names, flags and error codes. Call
+\`bootstrap({})\` before any static diagnosis or config change. The live runtime
+wins over any document; if they disagree, follow the runtime and report the drift.
+Bootstrap first is the only mandatory pre-call step: a closed gate answers with a
+typed error. Rule numbers are stable; HR-4 is retired.
+
+- **HR-1 — The human compiles once, before GREEN.** Run the RED test without asking for a compile; a RED counts only when it fails on the expected assertion, never on a compile error or a procedure that was not found. After the implementation is imported, ask the human to compile in Access once and wait for confirmation before the GREEN run. Dysflow never compiles the user's binary; the only exception is the temporary sandbox copy \`test_vba\` compiles before running tests. \`humanCompilePending\` is a reminder: no tool refuses a call because of it. Do not trust \`humanCompilePending:false\` when its scope is \`no-project-in-scope\`.
+- **HR-2 — Confirm destructive operations.** Pass \`implements_check\` and \`confirmedRequiresConfirmation:true\` only after the human approves the risk. Never kill \`MSACCESS.EXE\` by name; clean up through \`list_access_operations\` and the dysflow cleanup tools.
+- **HR-3 — Never write to a production backend.** Test data goes only through \`m_TestingMode=True\`. If the sandbox is unreachable, report "TESTS BLOCKED" and do not touch data.
+- **HR-5 — The runtime is the source of truth.** Re-read \`bootstrap\`, \`schema({view:"index"})\` and the needed \`describe_tool\` block before a non-trivial sequence; expand \`get_capabilities({view:"compact"})\` only for the fields you need. Never memorize names, defaults or codes.
+- **HR-6 — Tests live in \`tests/*.json\`.** Never add test names to \`.dysflow/project.json\` as a fix. The allowlist gates only when \`capabilities.procedures.strictMode\` is true; ask the human before changing it.
+- **HR-7 — Verify liveness before asserting.** Check \`list_access_operations\` before claiming a process exists or blocks a write. Never invent process details.
+- **HR-8 — Serialize writes.** One write call, then audit, then the next. Batch related work through list arguments in one call.
+- **HR-9 — Select the worktree per call.** Pass \`cwd\`; never restart the MCP or edit configs to switch worktrees.
+- **HR-10 — Bootstrap a missing config first.** When \`projectConfig.status\` is \`missing\`, run \`setup_project\` as a plan, review it, then apply with an explicit \`projectId\`.
+- **HR-11 — Ask on ambiguity.** When \`resolve_project\` returns \`ambiguous\`, ask the human to pick one \`availableProjects\` entry; never guess. The recovery trio is one-shot.
+- **HR-12 — Let metadata route discovery.** Use \`tools/list\`, \`annotations\` and \`describe_tool\`; the full schema decides parameters and errors.
+- **HR-13 — Parse envelopes defensively.** Require \`schemaVersion: "dysflow.result/v1"\`, parse a string once, and prefer \`structuredContent\` first; use \`content[0].text\` only when it contains the complete payload. Never audit a bounded summary as the contract.
+- **HR-14 — Empty \`.form.txt\` bindings are not a bug.** The unattended form assigns them in \`Form_Open\`/\`Form_Load\` of the \`.cls\`; trace it through \`map_form_behavior\`, never by reading the \`.form.txt\`.
+- **HR-15 — Gate \`verify_code\` on \`actionableOk\`.** Read \`recommendedAction\`. The aggregate counts never identify modules: use one \`diagnostic:true\` call and read \`actionableDifferent[]\` / \`nonActionableDifferent[]\`. One form can produce entries for \`.cls\` and \`.form.txt\`, classified separately.
+- **HR-16 — Keep the gate order.** Write gate, then procedure gate. A lower gate's refusal is never the cause of a higher one. The human compile is a team convention, not a runtime gate (HR-1).
+- **HR-17 — Reconcile with fresh evidence.** Compare \`.form.txt\` with \`.form.txt\` and \`.cls\` with \`.cls\`, never database hashes. \`manual_merge\` never picks a winner.
+dysflow harness v2.0.0 · requires dysflow MCP >= 4.4 · Apache-2.0
+
+### First calls
+
+1. \`bootstrap({cwd})\` — the only mandatory first call. \`humanCompilePending\` in its answer is a reminder, never a block (HR-1).
+2. \`schema({view:"index"})\`, then \`describe_tool\` for the one tool you will call (HR-5, HR-12).
+3. Writes: plan with \`apply: false\`, then commit with \`apply: true\`, one write at a time (HR-8). A destructive tool also needs \`implements_check\` + \`confirmedRequiresConfirmation: true\` after the human approves (HR-2).
+4. After a sync, \`verify_code\` and gate on \`actionableOk\` (HR-15).
+
+### TDD loop (HR-1)
+
+RED: run \`test_vba\` without asking for a compile; it must fail on the expected assertion. Import the implementation, ask the human to compile in Access once, wait for confirmation, then run \`test_vba\` for GREEN. \`test_vba\` compiles only its temporary sandbox copy, never the user's binary.
 
 ### Anti-patterns
 
 - \`dryRun: true\` (removed) — use \`apply: false\`.
 - \`confirm: true\` / \`confirmOverwriteSource: true\` / \`confirmPid: <pid>\` (removed) — use \`confirmedRequiresConfirmation: true\` with \`implements_check: '<check_id>'\`.
-- Claiming "TDD-green" without BOTH user-confirmed compile AND all-green \`test_vba\`.
-
-### 8-step canonical loop
-
-1. \`get_capabilities({})\` -> capture adapterVersion + toolsVisible + humanCompilePending.
-2. \`doctor({})\` or \`diagnose({})\` -> surface known issues + check_id -> requires_confirmation.
-3. Detect \`implements_check\` for the mutating tool (DOCTOR_CHECK_METADATA).
-4. Determine confirmation policy: \`requires_confirmation: true|false\`.
-5. Plan first: \`apply: false\`.
-6. If \`requires_confirmation: true\`: \`ask_user\` -> capture explicit ack.
-7. Commit: \`apply: true\` + (if needed) \`confirmedRequiresConfirmation: true\`.
-8. \`verify_code({})\` -> check source <-> binary drift.
+- Asking for a compile before the RED run, or treating \`humanCompilePending: true\` as a reason not to call a tool.
 
 ### Recovery (error.code -> action)
 
-- \`CONFIRMATION_REQUIRED\` -> re-call with \`confirmedRequiresConfirmation: true\` after ask_user.
+- \`CONFIRMATION_REQUIRED\` -> ask the human; re-call with \`confirmedRequiresConfirmation: true\` only after approval (HR-2).
 - \`CONFIRMATION_NOT_NEEDED\` -> drop the override.
-- \`MCP_INPUT_INVALID\` -> read \`error.rejectedFlag\` + \`error.toolCommitFlag\`.
-- \`MCP_PROCEDURE_NOT_ALLOWED\` -> add procedure to .dysflow/project.json#allowedProcedures OR plan only.
-- \`EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION\` -> set \`implements_check: 'export_overwrites_source_precheck'\` + \`confirmedRequiresConfirmation: true\`.
-- \`CONFIG_MISSING_ACCESS_PATH\` -> \`dysflow setup --cwd <path> --apply --access-path <path>\`.
+- \`MCP_INPUT_INVALID\` -> read \`error.rejectedFlag\`, \`error.missingParam\` and \`error.toolCommitFlag\`.
+- \`MCP_PROCEDURE_NOT_ALLOWED\` -> reachable only under \`capabilities.procedures.strictMode\`; surface \`error.allowedProcedures\` and ask the human before changing the allowlist (HR-6).
+- \`EXPORT_OVERWRITES_SOURCE_REQUIRES_CONFIRMATION\` -> pass an explicit \`destinationRoot\`, or after human approval set \`implements_check: 'export_overwrites_source_precheck'\` + \`confirmedRequiresConfirmation: true\`.
+- \`CONFIG_MISSING_ACCESS_PATH\` -> run \`setup_project\` as a plan, review it, then apply with an explicit \`projectId\` (HR-10).
 
 ### Skills companion
 
@@ -217,14 +233,14 @@ export const Dysflow: Plugin = async (ctx) => {
         )
       }
 
-      // Remind the agent to call get_capabilities + state on resume so
-      // it has fresh context before continuing.
+      // Remind the agent to re-bootstrap on resume so it has fresh
+      // context before continuing (arnés: bootstrap first is the only
+      // mandatory pre-call step).
       output.context.push(
         `${DYSFLOW_PROTOCOL_MARKER} FIRST ACTION on resume:\n` +
-          `1. Call \`get_capabilities({})\` to confirm adapterVersion + toolsVisible + humanCompilePending.\n` +
-          `2. Call \`doctor({})\` to surface drift before any write.\n` +
-          `3. If cwd is a worktree without .dysflow/, run \`dysflow setup --cwd ${ctx.directory} --apply --access-path <path>\`.\n` +
-          `4. Then resume your 8-step canonical loop.`,
+          `1. Call \`bootstrap({cwd})\`; \`humanCompilePending\` is a reminder, never a block (HR-1).\n` +
+          `2. If cwd is a worktree without .dysflow/, run \`dysflow setup --cwd ${ctx.directory} --apply --access-path <path>\`.\n` +
+          `3. Then resume under the rules in skills/dysflow-arnes/SKILL.md.`,
       )
     },
   }

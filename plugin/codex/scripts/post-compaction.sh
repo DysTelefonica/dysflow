@@ -10,7 +10,8 @@ set -euo pipefail
 cat <<'EOF'
 [dysflow-plugin v2.31.0] Re-establishing context after compaction.
 
-Reminders: 8-step loop; NEVER dryRun/kill MSACCESS/write-prod; apply:false for plan.
+Reminders: bootstrap first; RED runs without a compile, the human compiles once before GREEN (HR-1);
+NEVER dryRun/kill MSACCESS/write-prod; apply:false for plan. Rules: skills/dysflow-arnes/SKILL.md
 EOF
 
 if command -v dysflow >/dev/null 2>&1; then

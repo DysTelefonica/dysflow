@@ -291,7 +291,9 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
     "Apply a granular binary-to-source export when sync_binary orchestration is too broad.",
   ],
   validate_manifest: ["Validate tests.vba.json procedure references before invoking test_vba."],
-  test_vba: ["Execute the validated VBA test manifest after the human-compile gate is clear."],
+  test_vba: [
+    "Execute the validated VBA test manifest; RED runs without a compile, GREEN after the human compiles once.",
+  ],
   query_execute: ["Execute the preferred unified read or write SQL contract."],
   query_sql: ["Keep an existing read-only query_sql integration working while it migrates."],
   exec_sql: ["Keep an existing write SQL exec_sql integration working while it migrates."],
