@@ -60,7 +60,7 @@ $ErrorActionPreference = 'Stop'
 $DEFAULT_EXEMPT = @(
     'access-query',                  # deprecated since 2026-07-06; superseded by dysflow MCP query_execute
     'access-vba-sync',               # deprecated; decomposed into per-workflow vba-* skills
-    'access-vba-impact',             # deprecated; replaced by vba-source-impact + vba-blast-radius
+    'access-vba-impact',             # deprecated; replaced by vba-source-impact
     'access-vba-test-runner',        # deprecated; replaced by vba-run-tests
     'vba-refactor-planner'           # deprecated; replaced by direct use of vba-* per-workflow
 )

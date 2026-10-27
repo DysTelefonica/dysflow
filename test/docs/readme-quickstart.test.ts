@@ -68,7 +68,7 @@ describe("README AI-agent quickstart (Round-12 #974)", () => {
     const section = extractSection(readme, "Quickstart (AI agent)");
     // At least two canonical skills must be linked by name
     const skillRefs = section.match(
-      /`?(access-vba-tdd|vba-binary-drift|dysflow-arnes|dysflow-usage|access-form-ui-builder|vba-binary-sync)`?/g,
+      /`?(access-vba-tdd|vba-binary-drift|dysflow-arnes|dysflow-usage|access-form-ui-builder|vba-workflow)`?/g,
     );
     expect(
       new Set(skillRefs ?? []).size,

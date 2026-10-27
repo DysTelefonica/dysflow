@@ -32,7 +32,7 @@
 ## Failure modes
 
 - Wildcard que matchea >100 nodos → no expande, devuelve `wildcard_match_count`.
-- Codegraph index stale → warning + sugerir `vba-binary-sync`.
+- Codegraph index stale → warning + sugerir `vba-workflow`.
 - Refs circulares (A → B → A) → `cycle_detected: true`.
 - Referencias `CallByName` late-bound → solo detectables por grep manual de strings (warning `LATE_BOUND_RISK`).
 

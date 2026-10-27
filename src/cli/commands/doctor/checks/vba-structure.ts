@@ -73,7 +73,7 @@ export function runVbaStructureChecks(cwd: string): DoctorCategoryCheck[] {
             .slice(0, MAX_LISTED_EXAMPLES)
             .join(
               ", ",
-            )}${missingVbName.length > MAX_LISTED_EXAMPLES ? ", …" : ""}) — see the vba-form-metadata-repair guidance`,
+            )}${missingVbName.length > MAX_LISTED_EXAMPLES ? ", …" : ""}) — re-import with import_modules, which restores a missing VB_Name, or see the vba-form-repair skill`,
           severity: "warning",
           ...doctorCheckMetadata("attribute_vb_name"),
         },

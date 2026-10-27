@@ -28,7 +28,7 @@ Reporte del impacto en el SOURCE TREE de cambiar un símbolo, leído directament
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
 
 ## Hard Rules
 
@@ -42,7 +42,7 @@ HR-4. Advisory: no bloquea ni fuerza el cambio; no emite juicios cualitativos.
 | Situación | Acción |
 | --- | --- |
 | Wildcard matchea >100 nodos | No expandir; devolver `wildcard_match_count` y pedir target más específico |
-| Index de codegraph stale (>1h sin sync tras cambios) | Warning + sugerir `vba-binary-sync` antes de evaluar |
+| Index de codegraph stale (>1h sin sync tras cambios) | Warning + sugerir `vba-workflow` antes de evaluar |
 | Refs circulares (A → B → A) | `cycle_detected: true`; el orquestador decide |
 | Handler `X_*` presente en .cls sin control X en el grafo | Reportar como handler huérfano (candidato para `vba-form-repair`) |
 

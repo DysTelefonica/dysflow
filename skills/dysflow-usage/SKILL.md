@@ -12,7 +12,7 @@ metadata:
   managed_by: "`dysflow install` / `dysflow update` ship this skill with the runtime; this user-owned mirror is the read-side surface and stays here for offline reference."
   scope:
     in_scope: "tool names, parameters, flags, defaults, error codes, context resolution, response envelope facts"
-    out_of_scope: "the rules an agent must follow (dysflow-arnes); workflow loops (vba-binary-sync, vba-run-tests, access-vba-tdd-*); CodeGraph (codegraph-usage)"
+    out_of_scope: "the rules an agent must follow (dysflow-arnes); workflow loops (vba-workflow, vba-run-tests, access-vba-tdd-*); CodeGraph (codegraph-usage)"
   changelog: "CHANGELOG.md (in this skill directory)"
 ---
 

@@ -46,6 +46,6 @@ if (typeof snap === 'string') {
 
 Do NOT use when:
 
-- The question is workflow-level ("how do I sync binaries", "what's the test loop"). Use the workflow skill (`vba-binary-sync`, `vba-run-tests`, etc.) — they point here for tool/flag/error tables.
+- The question is workflow-level ("how do I sync binaries", "what's the test loop"). Use the workflow skill (`vba-workflow`, `vba-run-tests`, etc.) — they point here for tool/flag/error tables.
 - The question is about `codegraph-vba`. Use `codegraph-vba` skill if installed, or the meta-skill `dysflow-codegraph-update`.
 - The question is only about CLI installation or shell setup. For pure-MCP project bootstrap, use `setup_project`; for config migration, use `migrate_project_config`.

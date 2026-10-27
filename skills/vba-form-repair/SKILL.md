@@ -27,7 +27,7 @@ Workflow de diagnóstico y reparación de forms Access: inspeccionar → decidir
 
 ## División de la verdad
 
-dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-binary-sync` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
+dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo de source (árbol exportado). Si difieren, hay drift: ejecutar `vba-workflow` antes de confiar en cualquier análisis. `find_references symbol=X scope=all` es la sonda de drift por símbolo.
 
 ## Hard Rules
 
@@ -47,8 +47,8 @@ dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo
 | Handler `X_Click` en `.cls` sin control X | Decidir: añadir control, renombrar handler, o borrar código muerto — decisión humana con evidencia |
 | Estructura corrupta / secciones desordenadas / fix multi-control | `form_serialize` → editar IR → `form_deserialize` (write-gated) |
 | RecordSource/RowSource apunta a tabla/query inexistente | Verificar con `list_objects`/`get_schema`; fix de la propiedad + validar edge en codegraph |
-| Solo problemas de código (lógica de eventos) | Flujo normal de módulos: editar `.cls` → gate de `vba-binary-sync` |
-| Drift binario vs source detectado durante el diagnóstico | Parar → `vba-binary-sync` → re-diagnosticar |
+| Solo problemas de código (lógica de eventos) | Flujo normal de módulos: editar `.cls` → gate de `vba-workflow` |
+| Drift binario vs source detectado durante el diagnóstico | Parar → `vba-workflow` → re-diagnosticar |
 
 ## Execution Steps
 
@@ -94,7 +94,7 @@ dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo
 ## References
 
 - `references/diagnosis-playbook.md` — síntomas frecuentes con su diagnóstico y vía de fix, y notas sobre el write-gate.
-- Skills relacionados: `vba-control-rename-safe` (renames dentro de una reparación), `vba-binary-sync` (drift), `vba-source-impact` (impacto de tocar el form).
+- Skills relacionados: `vba-control-rename-safe` (renames dentro de una reparación), `vba-workflow` (drift), `vba-source-impact` (impacto de tocar el form).
 
 ## Anti-patterns
 
@@ -105,4 +105,4 @@ dysflow es la verdad del binario (.accdb real); codegraph es la verdad del grafo
 | Llamar `form_deserialize` sin un `compare_form` planificado para verificar el resultado | Planificar la verificación primero; deserializar sin gate de comparación es write-gate violation (HR-2) |
 | Auto-aplicar fixes estructurales cuando el diagnóstico sugiere primitivas | Respetar la decisión de la Decision Gates: `form_move_control` / `form_rename_control` / `form_add_control` para fixes puntuales; IR+deserialize solo para estructura corrupta o fixes multi-control |
 | Saltarse el gate de humano-compila (`Debug ▸ Compile`) tras tocar el `.cls` | Tratar `humano compila` como hard gate; el binario puede compilar localmente y romperse al cruzar referencias, y solo el humano lo detecta |
-| Corregir un form cuando hay drift binario vs source detectado durante el diagnóstico | Parar, ejecutar `vba-binary-sync`, re-diagnosticar desde cero; aplicar fixes sobre un binario driftado amplifica la corrupción |
+| Corregir un form cuando hay drift binario vs source detectado durante el diagnóstico | Parar, ejecutar `vba-workflow`, re-diagnosticar desde cero; aplicar fixes sobre un binario driftado amplifica la corrupción |

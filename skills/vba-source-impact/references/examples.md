@@ -59,7 +59,7 @@ Failing tests (RED) that `vba-source-impact` MUST satisfy before production.
 
 **Expected**:
 - Output incluye `index_stale: true` con last_sync timestamp
-- `warnings: [{ "reason_code": "INDEX_STALE", "recommendation": "run vba-binary-sync before evaluating" }]`
+- `warnings: [{ "reason_code": "INDEX_STALE", "recommendation": "run vba-workflow before evaluating" }]`
 
 **Pass criteria**: warning explícito sin romper el flow.
 

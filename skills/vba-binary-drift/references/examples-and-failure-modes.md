@@ -20,7 +20,7 @@
 - Source modificado en `Form_X.cls`, binario no recompilado → `drift: true`, `recompile_needed: true`.
 - Zombies presentes (3 procesos MSACCESS.EXE lockeando el .accdb) → `zombie_msaccess_present: 3` (NO los mata, solo reporta).
 - Binario lockado por proceso activo → hard-fail con acción sugerida (`access_force_cleanup_orphaned` con `pid`, `implements_check:"orphans_msaccess"` y confirmación explícita).
-- Sonda por símbolo: `find_references symbol=X scope=all` reporta 5 refs en binario y 3 en source → `symbol_drift.divergent` lista los 2 faltantes; recomendar `vba-binary-sync`.
+- Sonda por símbolo: `find_references symbol=X scope=all` reporta 5 refs en binario y 3 en source → `symbol_drift.divergent` lista los 2 faltantes; recomendar `vba-workflow`.
 
 ## Failure modes
 
