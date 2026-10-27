@@ -4012,6 +4012,10 @@ function Import-VbaModule {
             } catch { Write-Debug "Diagnostics: $_" }
 
             $script:ImportCurrentPhase = "import"
+            # Issue #1868 — every outcome of the import below (plain failure,
+            # transient retry recovered or failed, restore failure) must leave no
+            # errors.txt next to the database; the finally removes any leftover.
+            try {
             try {
                 $AccessApplication.LoadFromText($objectType, $objectName, $tmpAnsi)
             } catch {
@@ -4125,6 +4129,11 @@ function Import-VbaModule {
                     throw ("LoadFromText falló para '{0}'. Detalle de errors.txt: {1}" -f $objectName, ($detail.Trim()))
                 }
                 throw
+                }
+            }
+            } finally {
+                if ($importErrorsPath) {
+                    $null = Read-AndRemoveImportErrorsFile -Path $importErrorsPath
                 }
             }
 

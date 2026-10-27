@@ -123,11 +123,15 @@ Describe 'Import-VbaModule LoadFromText transient recovery (#1634)' {
             }) | Out-Null
             $call = $script:LoadCalls.Count
             if ($script:LoadFailures.ContainsKey($call)) {
+                # Like Access, a failed LoadFromText leaves errors.txt next to the database.
+                [IO.File]::WriteAllText((Join-Path $script:DbRoot 'errors.txt'), [string]$script:LoadFailures[$call], [Text.Encoding]::GetEncoding(1252))
                 throw [string]$script:LoadFailures[$call]
             }
         }
+        $script:DbRoot = Join-Path $script:SourceRoot 'db'
+        [IO.Directory]::CreateDirectory($script:DbRoot) | Out-Null
         $script:AccessApp | Add-Member ScriptMethod CurrentDb {
-            [pscustomobject]@{ Name = 'C:\fake\db.accdb' }
+            [pscustomobject]@{ Name = (Join-Path $script:DbRoot 'db.accdb') }
         }
         $script:VbProject = [pscustomobject]@{}
     }
@@ -151,6 +155,42 @@ Describe 'Import-VbaModule LoadFromText transient recovery (#1634)' {
         $result.Verbose.transientRecovery.evidence.member | Should -Be LoadFromText
         $result.Verbose.transientRecovery.evidence.snapshotAvailable | Should -BeTrue
         $result.Verbose.transientRecovery.evidence.exceptionChain[0].hresultHex | Should -Match '^0x[0-9A-F]{8}$'
+    }
+
+    It 'leaves no errors.txt behind when the retry recovers (#1868)' {
+        $script:LoadFailures[1] = 'Canceló la operación anterior.'
+
+        Invoke-Issue1634Import | Out-Null
+
+        (Test-Path -LiteralPath (Join-Path $script:DbRoot 'errors.txt')) | Should -BeFalse
+    }
+
+    It 'leaves no errors.txt behind when the retry fails (#1868)' {
+        $script:LoadFailures = @{
+            1 = 'Canceló la operación anterior.'
+            3 = 'Error en la línea 931. El valor no es adecuado para esta propiedad.'
+        }
+
+        { Invoke-Issue1634Import } | Should -Throw '*Error en la línea 931*'
+
+        (Test-Path -LiteralPath (Join-Path $script:DbRoot 'errors.txt')) | Should -BeFalse
+    }
+
+    It 'leaves no errors.txt behind when snapshot restoration fails before retry (#1868)' {
+        $script:LoadFailures = @{ 1 = 'Canceló la operación anterior.' }
+        $script:SaveFailures = @{ 2 = 'SaveAsText verification unavailable.' }
+
+        { Invoke-Issue1634Import } | Should -Throw '*before retry*'
+
+        (Test-Path -LiteralPath (Join-Path $script:DbRoot 'errors.txt')) | Should -BeFalse
+    }
+
+    It 'leaves no errors.txt behind after a plain parser failure (#1868)' {
+        $script:LoadFailures = @{ 1 = 'Error en la línea 931. El valor no es adecuado para esta propiedad.' }
+
+        { Invoke-Issue1634Import } | Should -Throw '*Error en la línea 931*'
+
+        (Test-Path -LiteralPath (Join-Path $script:DbRoot 'errors.txt')) | Should -BeFalse
     }
 
     It 'does not retry an unknown LoadFromText parser failure' {

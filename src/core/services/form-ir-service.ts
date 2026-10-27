@@ -27,6 +27,9 @@ import type {
 import {
   KNOWN_ADDABLE_PROPERTY_NAMES,
   KNOWN_FORM_PROPERTY_TYPES,
+  QUOTED_TEXT_PROPERTY_NAMES,
+  RAW_NUMBER_PROPERTY_NAMES,
+  RAW_TOGGLE_PROPERTY_NAMES,
   runtimeKindOf,
   validateFormPropertyValue,
 } from "./form-ir-property-types.js";
@@ -598,28 +601,120 @@ function quoteName(name: string): string {
   return `"${name}"`;
 }
 
-/**
- * Issue #1868 — numeric, boolean, enum and colour properties take their
- * value as a raw token; text properties stay quoted even when the text looks
- * numeric (Caption "7400").
- */
-function preservesTokens(key: string): boolean {
-  return expectedTypeOf(key) !== "string";
+function isQuotedLiteral(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
+}
+
+function isNumericToken(value: string): boolean {
+  return /^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|&h[0-9a-f]+)$/i.test(value.trim());
+}
+
+function isNotDefaultToken(value: string): boolean {
+  return /^notdefault$/i.test(value.trim());
+}
+
+function isRawToken(value: string): boolean {
+  return isNumericToken(value) || /^(?:notdefault|true|false)$/i.test(value.trim());
 }
 
 function normalizeMutationValue(value: string | number | boolean, preserveTokens = false): string {
   if (typeof value === "boolean") return value ? " NotDefault" : "0";
   if (typeof value === "number") return String(value);
 
-  const trimmed = value.trim();
-  const isQuotedLiteral = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
-  const isNumericToken = /^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|&h[0-9a-f]+)$/i.test(
-    trimmed,
-  );
-  const isBooleanToken = /^(?:notdefault|true|false)$/i.test(trimmed);
-
-  if (isQuotedLiteral || (preserveTokens && (isNumericToken || isBooleanToken))) return value;
+  if (isQuotedLiteral(value) || (preserveTokens && isRawToken(value))) return value;
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+/**
+ * Issue #1868 — how a property's value is written: as a raw `number`
+ * (twips, integers, enums, colours), a raw `toggle` (`NotDefault` or a
+ * number), or quoted `text`. The type tables decide first; a property they
+ * do not list takes the shape of the value the control already stores.
+ * `undefined` means no source can tell.
+ */
+function valueShapeOf(
+  node: FormNode,
+  key: string,
+): "number" | "toggle" | "text" | "date" | undefined {
+  const known = KNOWN_FORM_PROPERTY_TYPES.get(key);
+  if (known === "date") return "date";
+  if (known === "string" || QUOTED_TEXT_PROPERTY_NAMES.has(key)) return "text";
+  if (known === "boolean" || RAW_TOGGLE_PROPERTY_NAMES.has(key)) return "toggle";
+  if (known !== undefined || RAW_NUMBER_PROPERTY_NAMES.has(key)) return "number";
+  const existing = node.entries.find(
+    (entry): entry is ScalarEntry => entry.kind === "scalar" && entry.key === key,
+  );
+  if (existing === undefined) return undefined;
+  if (isQuotedLiteral(existing.value)) return "text";
+  return isNotDefaultToken(existing.value) ? "toggle" : "number";
+}
+
+/**
+ * Issue #1868 — serialize a caller value by the type of its property, so a
+ * numeric property is never written as quoted text (`Width ="7400"`) and a
+ * value Access would reject never reaches the file. Throws
+ * FORM_PROPERTY_VALUE_INVALID when the value does not fit the type, or when
+ * a numeric-looking string targets a property whose type is unknown.
+ */
+function serializeTypedValue(
+  node: FormNode,
+  controlName: string,
+  key: string,
+  value: string | number | boolean,
+): string {
+  const shape = valueShapeOf(node, key);
+  const wholeTwips = isWholeNumberProperty(key);
+  const reject = (expectedType: string, hint: string): never => {
+    throw new FormMutationError(
+      "FORM_PROPERTY_VALUE_INVALID",
+      `Value ${JSON.stringify(value)} for property "${key}" on control "${controlName}" cannot be written: ${hint}`,
+      {
+        controlName,
+        property: key,
+        expectedType,
+        actualType: runtimeKindOf(value),
+      },
+    );
+  };
+
+  if (typeof value === "number" && wholeTwips && !Number.isInteger(value)) {
+    reject(expectedTypeOf(key), "the property takes a whole number.");
+  }
+  if (typeof value !== "string") return normalizeMutationValue(value);
+
+  // A bare true/false is not a SaveAsText value: LoadFromText rejects it
+  // ("Esperado: Valor"), and an enum rejects NotDefault as unsuitable.
+  if (shape === "toggle") {
+    if (isNotDefaultToken(value)) return normalizeMutationValue(true);
+    if (!isNumericToken(value)) {
+      reject(expectedTypeOf(key), "the property takes NotDefault or a number.");
+    }
+    return value.trim();
+  }
+  if (shape === "number") {
+    if (!isNumericToken(value)) {
+      reject(expectedTypeOf(key), "the property takes a number.");
+    }
+    if (wholeTwips && !/^[+-]?\d+$/.test(value.trim())) {
+      reject(expectedTypeOf(key), "the property takes a whole number.");
+    }
+    return value.trim();
+  }
+  if (shape === "text") return normalizeMutationValue(value);
+  if (shape === "date") return normalizeMutationValue(value, true);
+  if (!isQuotedLiteral(value) && isRawToken(value)) {
+    reject(
+      "unknown",
+      `the property type is unknown and the control does not carry it yet, so the value could be a number or text. Wrap text in double quotes ('"${value}"'); a numeric value for this property can only be written once the control carries it.`,
+    );
+  }
+  return normalizeMutationValue(value);
+}
+
+function isWholeNumberProperty(key: string): boolean {
+  const known = KNOWN_FORM_PROPERTY_TYPES.get(key);
+  return known === "twip" || known === "integer";
 }
 
 function findNameEntry(node: FormNode): ScalarEntry | undefined {
@@ -919,16 +1014,25 @@ export function addControl(ir: FormIR, input: AddControlInput): FormMutationResu
 
   const properties = input.control.properties ?? {};
   const geometryDefaults = { Left: 0, Top: 0, Width: 1440, Height: 300 } as const;
-  const entries: PropertyEntry[] = [{ kind: "scalar", key: "Name", value: quoteName(name) }];
+  const control: FormNode = {
+    blockType: type,
+    entries: [{ kind: "scalar", key: "Name", value: quoteName(name) }],
+    children: [],
+  };
+  const push = (key: string, value: string | number | boolean) =>
+    control.entries.push({
+      kind: "scalar",
+      key,
+      value: serializeTypedValue(control, name, key, value),
+    });
   for (const [key, defaultValue] of Object.entries(geometryDefaults)) {
-    const value = properties[key] ?? defaultValue;
-    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
+    push(key, properties[key] ?? defaultValue);
   }
   for (const [key, value] of Object.entries(properties)) {
     if (key === "Name" || Object.hasOwn(geometryDefaults, key)) continue;
-    entries.push({ kind: "scalar", key, value: normalizeMutationValue(value, true) });
+    push(key, value);
   }
-  target.children.push({ blockType: type, entries, children: [] });
+  target.children.push(control);
   return mutationResult(ir, next, name);
 }
 
@@ -1061,7 +1165,7 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
   upsertScalar(
     control,
     input.property,
-    normalizeMutationValue(input.value, preservesTokens(input.property)),
+    serializeTypedValue(control, input.controlName, input.property, input.value),
   );
   return mutationResult(ir, next, input.controlName, {
     controlKnown: true,
@@ -1163,7 +1267,7 @@ export function setProperties(ir: FormIR, input: SetPropertiesInput): FormMutati
         `Property "${key}" is an opaque blob and cannot be replaced with a scalar value.`,
       );
     }
-    upsertScalar(control, key, normalizeMutationValue(value, preservesTokens(key)));
+    upsertScalar(control, key, serializeTypedValue(control, controlName, key, value));
   }
   // Touch stripped keys to ensure they aren't tree-shaken by the
   // mutation-side bookkeeping — they never made it into `next` so this
@@ -1275,7 +1379,7 @@ export function duplicateControl(ir: FormIR, input: DuplicateControlInput): Form
           `Override property "${key}" is an opaque blob on the source control.`,
         );
       }
-      upsertScalar(clone, key, normalizeMutationValue(value));
+      upsertScalar(clone, key, serializeTypedValue(clone, newName, key, value));
     }
   }
 
