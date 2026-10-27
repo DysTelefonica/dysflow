@@ -2435,6 +2435,57 @@ function Invoke-TestSandboxCompile {
     return & $failure "The VBA project does not compile (Application.IsCompiled is False after acCmdCompileAndSaveAllModules). No test was run. Fix the compile error in Access (Debug > Compile), then rerun test_vba."
 }
 
+# #1945 - VBE.ActiveVBProject can be Nothing for the database Access just
+# opened. Every module action dereferences the session's VbProject, so a $null
+# here reached the first -VbProject parameter as a raw binding error. Fall back
+# to the VBProjects entry whose FileName is this database (never guess among
+# other projects such as add-ins); otherwise fail before anything is changed.
+function Resolve-AccessVbProject {
+    [CmdletBinding()]
+    Param(
+        $Vbe,
+        [Parameter(Mandatory = $true)][string]$AccessPath
+    )
+
+    if ($null -ne $Vbe) {
+        $active = $null
+        try { $active = $Vbe.ActiveVBProject } catch { Write-Debug "Diagnostics: $_" }
+        if ($null -ne $active) { return $active }
+
+        $target = [System.IO.Path]::GetFullPath($AccessPath)
+        $projects = $null
+        $count = 0
+        try { $projects = $Vbe.VBProjects; $count = [int]$projects.Count } catch { Write-Debug "Diagnostics: $_" }
+        for ($i = 1; $i -le $count; $i++) {
+            try {
+                $candidate = $projects.Item($i)
+                $fileName = [string]$candidate.FileName
+                if ($fileName -and [string]::Equals([System.IO.Path]::GetFullPath($fileName), $target, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    return $candidate
+                }
+            } catch { Write-Debug "Diagnostics: $_" }
+        }
+    }
+
+    throw ("VBA_PROJECT_UNAVAILABLE: Access opened '{0}' but exposed no VBA project for it (VBE.ActiveVBProject is empty and no VBProjects entry matches the file). Nothing was changed." -f $AccessPath)
+}
+
+# #1945 - typed envelopes for refusals raised before any module is touched.
+# Returns $null for a message this classifier does not own.
+function Get-ClassifiedManagerError {
+    [CmdletBinding()]
+    Param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
+
+    if ($Message -match '^VBA_PROJECT_UNAVAILABLE:') {
+        return [ordered]@{
+            code = 'VBA_PROJECT_UNAVAILABLE'
+            message = $Message
+            remediation = 'Access opened the database without a VBA project, so no module was read or changed; it is safe to retry. Run list_access_operations to reconcile a leftover Access operation on this file (access_force_cleanup_orphaned lists orphaned Access processes), then retry the same call. If it persists, check that the file is an editable .accdb/.mdb (an .accde/.mde has no editable VBA project) and open it once in Access to confirm the VBA project loads.'
+        }
+    }
+    return $null
+}
+
 function Open-AccessDatabase {
     [CmdletBinding()]
     Param(
@@ -2527,7 +2578,7 @@ function Open-AccessDatabase {
         Write-DysflowOperationMarker -Status "running" -AccessPid $accessPid
 
         $vbe = $access.VBE
-        $vbProject = $vbe.ActiveVBProject
+        $vbProject = Resolve-AccessVbProject -Vbe $vbe -AccessPath $AccessPath
 
         return [pscustomobject]@{
             AccessApplication = $access
@@ -6218,7 +6269,10 @@ try {
         # Access on machine X / user Y"). Falls back to the legacy
         # VBA_MANAGER_FAILED envelope when the pattern does not match.
         $caughtMessage = if ($_.Exception) { [string]$_.Exception.Message } else { [string]$_ }
-        if (Test-IsAccessDatabaseLockedError -Message $caughtMessage) {
+        $classifiedError = Get-ClassifiedManagerError -Message $caughtMessage
+        if ($classifiedError) {
+            Write-DysflowResult -Result ([ordered]@{ ok = $false; error = $classifiedError }) -Depth 6
+        } elseif (Test-IsAccessDatabaseLockedError -Message $caughtMessage) {
             $locked = Get-AccessDatabaseLockedOwner -Message $caughtMessage
             $remediation = "Close the interactive Access session that holds the lock"
             if ($locked.machine -or $locked.user) {

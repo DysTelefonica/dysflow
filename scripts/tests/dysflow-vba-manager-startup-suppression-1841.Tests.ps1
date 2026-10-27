@@ -10,7 +10,7 @@ BeforeAll {
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($managerPath, [ref]$null, [ref]$errors)
     if ($errors.Count) { throw $errors[0] }
-    foreach ($name in @('Open-AccessDatabase', 'Disable-StartupFeatures', 'Restore-StartupFeatures',
+    foreach ($name in @('Open-AccessDatabase', 'Resolve-AccessVbProject', 'Disable-StartupFeatures', 'Restore-StartupFeatures',
             'Open-DaoDatabaseForMaintenance')) {
         $definition = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
         if (-not $definition) { throw "missing $name" }

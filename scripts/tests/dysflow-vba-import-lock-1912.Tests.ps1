@@ -101,6 +101,7 @@ Describe "Open-AccessDatabase -RequireExclusive - refuses before opening Access 
     BeforeAll {
         . ([scriptblock]::Create((Import-LibFunction 'Test-AccessDatabaseExclusiveAvailable')))
         . ([scriptblock]::Create((Import-ManagerFunction 'Open-AccessDatabase')))
+        . ([scriptblock]::Create((Import-ManagerFunction 'Resolve-AccessVbProject')))
         function script:Close-TargetAccessDbIfOpen { param([string]$AccessPath) $script:CloseReturn }
         function script:Get-AllowBypassKeyState { param([string]$AccessPath, [string]$Password) $script:Opened.Add('dao') }
         function script:Enable-AllowBypassKey { param([string]$AccessPath, [string]$Password) $true }
