@@ -1,9 +1,97 @@
 # Changelog
 
-## [Unreleased]
+## [v4.5.2] - 2026-10-27
 
-### Changed
+### Changes
 
+- docs(skills): point bundled skills at existing skills instead of retired ones (#1964)
+- fix(access-com): refuse real Access and real process kills in offline Pester runs (#1948, #1958)
+- fix(query): read list_links and export_queries read-only so the frontend stays byte-identical (#1944)
+- fix(verify): treat folders nested under forms/ and reports/ as document folders (#1962)
+- fix(verify): store each verify-base observation as its own file so the newest wins a same-key race (#1939)
+- fix(import): resolve the database's own VBA project and refuse cleanly when Access has none (#1945)
+- fix(release): stamp and verify the Claude Code and Codex plugin manifest versions (#1965)
+- fix(plugin): name only existing skills and derive the protocol marker from its content (#1957)
+- style(test): sort the context-budget helper imports (#1950)
+- fix(access-com): let Access exit on its own after Quit before force-killing it (#1918)
+- fix(ci): measure the MCP context budget independent of the checkout path (#1950)
+- fix(verify): block every name of an ambiguous form document (#1938)
+- ci: gate the MCP context budget in CI and accept the #1912 growth (#1950)
+- fix(plugin): inject the current arnés rules instead of retired ones (#1947)
+- fix(run_vba): pass every Application.Run argument as [ref] through one shared marshaler (#1940)
+- fix(schema): read linked get_schema columns from the source database (#1943)
+- fix(query): target backend resolves to the backend for query_execute and query_sql (#1942)
+- fix(verify): one name per form document, case-insensitive guards, block opposite-direction modules (#1938)
+- ci: give the Access E2E battery 120 minutes
+- fix(import): bound and track the dry-run classification export (#1908)
+- test(e2e): send the design-plan Width as a numeric string (#1941)
+- docs(mcp): describe test_vba's sandbox compile in its tool description (#1911)
+- fix(forms): route design-plan values through the typed form serializer (#1941)
+- fix(verify): key a form's layout and code-behind as one module and block conflicted modules (#1938)
+- feat(test-vba): compile the sandbox copy before running tests, never the user's binary (#1911)
+- test(e2e): Access round-trip for every form write tool (#1868)
+- fix(access-com): record the owned Access PID before OpenCurrentDatabase (#1911)
+- fix(vba-sync): reap the Access a run recorded when it outlives the run (#1911)
+- fix(test-vba): close and restore the sandbox copy, then remove it (#1911)
+- fix(e2e): judge a zombie-check child by its creation time, not its PID (#1899)
+- fix(verify): never auto-apply a base-resolved direction; invalidate the base on writes (#1890)
+- fix(import): no ok without a save, roll back lock-failed batches (#1912)
+- docs(verify): split the verify base paragraph to the length gate (#1890)
+- fix(verify): let the verify base only break a bothChanged tie (#1890)
+- feat(verify): record the verify base at each successful import/export (#1890)
+- feat(verify): resolve verify_code direction against a last-synced base (#1890)
+- docs: clarify the historical suite names and the removed CI gates
+- docs(import): record the named save and the exclusive-access refusal in the import contract (#1912)
+- docs: split the manual Access E2E paragraphs to the length gate
+- ci: add a manual-only Access E2E workflow
+- fix(import): never report ok for a module Access could not save (#1912)
+- fix(import): name the exclusive-access lock instead of the Access parser (#1912)
+- fix(vba-sync): stage transactional writes beside the binary
+- docs(skills): import orchestration contract and Tag metadata, verified against source (#1859)
+- docs(skills): compile reminder, red without compile, retire HR-4, test_vba sandbox copy (#1858)
+- test(vba-sync): show the transactional failure envelope instead of a bare false
+- test: root transactional adapter test on the binary's filesystem
+- fix(forms): type the properties of an added control like every other form write (#1868)
+- docs(skills): note that form toggles take NotDefault or a number (#1868)
+- fix(forms): refuse true/false and NotDefault where LoadFromText rejects them (#1868)
+- docs(skills): describe the string-only value contract of form_set_properties (#1868)
+- fix(forms): type common raw-token properties a control does not carry yet (#1868)
+- docs(skills): point access-form-ui-builder at the advertised form tools (#1868)
+- fix(forms): remove errors.txt after every LoadFromText outcome, including the transient retry (#1868)
+- fix(forms): keep LayoutCachedWidth and LayoutCachedHeight in step when align or distribute moves a control (#1868)
+- fix(forms): write untyped properties by their stored shape and reject values that do not fit (#1868)
+- ci: reduce PR/main CI to one cheap Linux job; Access E2E only at release
+- fix(mcp): forward the configured backendPath to generate_erd (#1913)
+- style(test): sort imports in the #1920 delete_module contract test
+- test(vba-sync): give spawn-cwd fixtures real folders after the #1914 existence check
+- fix(lint): skip continuation lines in bare-function-call-with-parens (#1915)
+- fix(vba-sync): name a missing exportPath instead of POWERSHELL_SPAWN_FAILED (#1914)
+- fix(mcp): shape delete_module apply result to its contract (#1920)
+- fix(query): resolve query_sql from cwd like query_execute and name accessPath in CONFIG_MISSING_ACCESS_PATH (#1921)
+- fix(access): survive an Access that died, and a launch that races a crashed one (#1917)
+- docs(quality-gates): split the #1918 crash-evidence paragraph to the length gate
+- diag(access): forward the COM close trace to the PowerShell scripts and collect its crash evidence (#1918)
+- diag(access): optional COM shutdown trace, enabled by DYSFLOW_TRACE_COM_CLOSE in the battery (#1918)
+- test(e2e): declare the record exports the descendant-identity test imports (#1899)
+- fix(e2e): the zombie verdict reads a fresh process table when the child PID is gone (#1899)
+- fix(e2e): import zombieVerdict and sample liveness with the check's predicate (#1899)
+- fix(e2e): the zombie verdict waits for a child that is still exiting (#1899)
+- fix(e2e): a live PID is the zombie-check child only if its image is the call's wrapper (#1899)
+- fix(e2e): never retry the non-idempotent create action of the Issue 1817 edit (#1898)
+- docs(release): separate the report source sentence (#1894)
+- docs(release): split the first semantic-audit paragraph (#1894)
+- docs(release): split long paragraphs in the semantic-audit section (#1894)
+- docs(release): document the semantic-audit evidence release-prepare requires (#1894)
+- diag(e2e): record taskkill exit and the instant the child stops answering on a failing zombie-check (#1899)
+- fix(export): skip rewriting a form whose only difference is the Checksum line (#1902)
+- fix(e2e): zombie dump keeps the owner chain and never truncates suspects (#1899)
+- chore(e2e): describe zombie process dump as permanent attribution (#1899)
+- diag(e2e): dump MSACCESS parent and command line on zombie failure (#1899)
+- style(e2e): format Access edit timeout test and runner with biome (#1898)
+- fix(e2e): declare types for the Issue 1817 edit runner (#1898)
+- fix(e2e): configurable Access edit timeout with bounded retry on spawn timeout (#1898)
+- test(e2e): move Access edit timeout test to unit-run quality gates (#1898)
+- test(e2e): red test for Access edit timeout and bounded retry (#1898)
 - ci: CI is one cheap hosted Linux job, `CI` (`.github/workflows/ci.yml`: `pnpm lint`, `pnpm build`, `pnpm test`), on every pull request and every push to `main`; it is the only required check on `main`
 - ci: the release workflow keeps its own lint/build/test (`quality-authority`) and the Access E2E battery (`e2e-validation`, `pnpm test:e2e:mcp:release`) before publication; the CI-receipt skip and `force_full_validation` input are gone
 - ci: removed the Windows PR smoke job (Pester plus the Access-free Windows integration subset), the `main-integrity` provenance and dependency-audit job (high-severity `pnpm audit` on main pushes), the documentation-quality workflow, the nightly Access E2E workflow (scheduled battery plus real-Access Vitest suite) and the receipt-skip verification workflow (weekly re-check of the release gate sequence); CodeQL runs weekly and on demand, not on pull requests
