@@ -34,10 +34,10 @@ export const FORM_ROUND_TRIP_PLAN_OPERATIONS = Object.freeze([
   {
     kind: "set-property",
     target: "PECAL",
-    // The plan path validates twips strictly and refuses the string "7500"
-    // (FORM_MUTATION_INVALID), unlike form_set_properties; send a number.
+    // A numeric string, as agents send it: the plan path shares
+    // form_set_properties' typed serializer since #1941.
     intent: "issue #1868: a numeric width written raw",
-    params: { property: "Width", value: 7500 },
+    params: { property: "Width", value: "7500" },
   },
   {
     kind: "move-control",

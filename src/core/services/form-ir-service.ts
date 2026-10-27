@@ -1051,8 +1051,18 @@ export function moveControl(ir: FormIR, input: MoveControlInput): FormMutationRe
       `Control "${input.controlName}" was not found.`,
     );
   }
-  if (input.left !== undefined) upsertScalar(control, "Left", String(input.left));
-  if (input.top !== undefined) upsertScalar(control, "Top", String(input.top));
+  // Coordinates go through the same typed serializer as setProperties, so a
+  // numeric string ("800") is written raw and a non-twip value is refused.
+  if (input.left !== undefined) {
+    upsertScalar(
+      control,
+      "Left",
+      serializeTypedValue(control, input.controlName, "Left", input.left),
+    );
+  }
+  if (input.top !== undefined) {
+    upsertScalar(control, "Top", serializeTypedValue(control, input.controlName, "Top", input.top));
+  }
   return mutationResult(ir, next, input.controlName);
 }
 
@@ -1137,8 +1147,11 @@ export function setProperty(ir: FormIR, input: SetPropertyInput): FormMutationRe
   // property's expected type. Mismatches throw FORM_PROPERTY_VALUE_INVALID
   // with a structured `details` block listing expectedType / actualType so
   // the caller can coerce (e.g. wrap as `"value"`, true/false, finite
-  // number, &HBBGGRR& hex).
-  const validation = validateFormPropertyValue(input.property, input.value);
+  // number, &HBBGGRR& hex). A string is validated by serializeTypedValue
+  // below — the same check setProperties applies — because MCP callers can
+  // only pass strings, so a numeric string ("7500") must reach a twip.
+  const validation =
+    typeof input.value === "string" ? true : validateFormPropertyValue(input.property, input.value);
   if (validation === null) {
     throw new FormMutationError(
       "FORM_PROPERTY_VALUE_INVALID",

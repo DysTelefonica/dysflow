@@ -11,7 +11,7 @@ import type {
   FormUiDesignPlan,
   ReferencePatternInput,
 } from "../../core/models/form-ui-builder.js";
-import { parseFormTxt } from "../../core/services/form-ir-service.js";
+import { FormMutationError, parseFormTxt } from "../../core/services/form-ir-service.js";
 import { analyzeFormUi } from "../../core/services/form-ui-analysis-service.js";
 import { buildFormUiBehaviorMap } from "../../core/services/form-ui-behavior-map-service.js";
 import {
@@ -283,6 +283,15 @@ async function applyPlan(args: {
   try {
     folded = applyFormUiDesignOperations(ir, plan.operations);
   } catch (err) {
+    // Keep the primitive's typed code (e.g. FORM_PROPERTY_VALUE_INVALID) and
+    // details, as form_set_properties does, instead of flattening it.
+    if (err instanceof FormMutationError) {
+      return failureResult(
+        createDysflowError(err.code, err.message, {
+          ...(err.details !== undefined ? { details: err.details } : {}),
+        }),
+      );
+    }
     return failureResult(
       createDysflowError("FORM_MUTATION_INVALID", err instanceof Error ? err.message : String(err)),
     );

@@ -244,8 +244,8 @@ function dispatchOperation(ir: FormIR, operation: FormUiDesignOperation): FormMu
     case "move-control":
       return moveControl(ir, {
         controlName: operation.target,
-        left: optionalNumber(params.left),
-        top: optionalNumber(params.top),
+        left: optionalCoordinate(params.left),
+        top: optionalCoordinate(params.top),
       });
     case "rename-control":
       return renameControl(ir, {
@@ -272,8 +272,10 @@ function requiredString(value: unknown): string {
 const optionalString = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 
-function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" ? value : undefined;
+// A string coordinate is forwarded, not dropped: moveControl validates it
+// through the typed serializer and refuses one that is not a twip.
+function optionalCoordinate(value: unknown): number | string | undefined {
+  return typeof value === "number" || typeof value === "string" ? value : undefined;
 }
 
 function requiredMutationValue(value: unknown): string | number | boolean {

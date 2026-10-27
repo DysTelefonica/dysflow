@@ -70,8 +70,8 @@ export type AddControlInput = {
 
 export type MoveControlInput = {
   controlName: string;
-  left?: number;
-  top?: number;
+  left?: number | string;
+  top?: number | string;
 };
 
 export type RenameControlInput = {
