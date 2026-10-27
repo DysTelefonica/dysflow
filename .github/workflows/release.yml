@@ -297,6 +297,10 @@ jobs:
           ROOT_VERSION="$(node -p 'require("./package.json").version')"
           test "$PI_VERSION" = "${GITHUB_REF_NAME#v}"
           test "$PI_VERSION" = "$ROOT_VERSION"
+          # #1965: the Claude Code and Codex plugin manifests carry the same version.
+          for MANIFEST in plugin/claude-code/.claude-plugin/plugin.json plugin/codex/.codex-plugin/codex.json; do
+            test "$(node -p "require('./$MANIFEST').version")" = "$ROOT_VERSION"
+          done
 
       - name: Download exact-SHA build artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
