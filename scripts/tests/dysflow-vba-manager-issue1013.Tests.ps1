@@ -187,15 +187,20 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
         $ast = [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null
         )
-        $fnAst = $ast.FindAll(
-            { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-              $args[0].Name -eq 'Invoke-RunTestsAction' },
-            $true
-        ) | Select-Object -First 1
-        if (-not $fnAst) {
-            throw "Invoke-RunTestsAction not found in $($script:VbaManagerPath)"
+        # #1911: the sandbox outlives Invoke-RunTestsAction once Access opened it; the
+        # script's top-level close (Complete-AccessSessionClose) removes it after Access
+        # released it, so the run is exercised together with that close.
+        foreach ($fnName in @('Invoke-RunTestsAction', 'Complete-AccessSessionClose')) {
+            $fnAst = $ast.FindAll(
+                { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $args[0].Name -eq $fnName },
+                $true
+            ) | Select-Object -First 1
+            if (-not $fnAst) {
+                throw "$fnName not found in $($script:VbaManagerPath)"
+            }
+            Invoke-Expression $fnAst.Extent.Text
         }
-        Invoke-Expression $fnAst.Extent.Text
     }
 
     BeforeEach {
@@ -245,6 +250,11 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
             param([string]$SandboxPath)
             $script:RemoveSandboxCalls += [pscustomobject]@{ SandboxPath = $SandboxPath }
         }
+
+        function script:Close-AccessDatabase {
+            param($Session, [string]$AccessPath, [string]$Password, $KillPidAction, $LockFileAction)
+            return $null
+        }
     }
 
     AfterEach {
@@ -283,7 +293,11 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
             )
             $session = $null
 
-            $null = Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson "" -ProceduresJsonFile $tmpJson -AccessPath $script:SourcePath -Json
+            try {
+                $null = Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson "" -ProceduresJsonFile $tmpJson -AccessPath $script:SourcePath -Json
+            } finally {
+                $null = Complete-AccessSessionClose -Session $session -AccessPath $script:SourcePath -Password ""
+            }
 
             $script:RemoveSandboxCalls.Count | Should -BeGreaterOrEqual 1
             $script:RemoveSandboxCalls[-1].SandboxPath | Should -Be $script:SandboxPath
@@ -304,6 +318,7 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
 
             { Invoke-RunTestsAction -Session ([ref]$session) -ProceduresJson "" -ProceduresJsonFile $tmpJson -AccessPath $script:SourcePath -Json } |
                 Should -Throw "Batch boom"
+            $null = Complete-AccessSessionClose -Session $session -AccessPath $script:SourcePath -Password ""
 
             $script:RemoveSandboxCalls.Count | Should -BeGreaterOrEqual 1
             $script:RemoveSandboxCalls[-1].SandboxPath | Should -Be $script:SandboxPath

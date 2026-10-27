@@ -2300,8 +2300,25 @@ function Remove-TestSandbox {
     )
     if ([string]::IsNullOrWhiteSpace($SandboxPath)) { return }
     try {
-        if (Test-Path -LiteralPath $SandboxPath) {
-            Remove-Item -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue
+        # #1911: Access leaves its lock file next to the copy; remove it too, or the
+        # per-call directory below is never empty and leaks. A handle released by a
+        # just-closed Access can lag briefly, so retry within a short bound.
+        $ext = [System.IO.Path]::GetExtension($SandboxPath)
+        $lockPath = $null
+        if ([string]::Equals($ext, ".accdb", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $lockPath = [System.IO.Path]::ChangeExtension($SandboxPath, ".laccdb")
+        } elseif ([string]::Equals($ext, ".mdb", [System.StringComparison]::OrdinalIgnoreCase)) {
+            $lockPath = [System.IO.Path]::ChangeExtension($SandboxPath, ".ldb")
+        }
+        $targets = @($SandboxPath, $lockPath) | Where-Object { $_ }
+        for ($attempt = 0; $attempt -lt 10; $attempt++) {
+            foreach ($target in $targets) {
+                if (Test-Path -LiteralPath $target) {
+                    Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+                }
+            }
+            if (-not @($targets | Where-Object { Test-Path -LiteralPath $_ }).Count) { break }
+            Start-Sleep -Milliseconds 200
         }
         # Remove the per-call parent dir we created in Get-TestSandboxPath
         # when it is now empty. Best-effort; never throws.
@@ -2573,10 +2590,20 @@ function Complete-AccessSessionClose {
 
     $closeResult = $null
     if ($Session) {
-        $closeArgs = @{ Session = $Session; AccessPath = $AccessPath; Password = $Password }
+        # #1911: close and restore the database the session actually opened. test_vba opens
+        # a sandbox copy, so the source .accdb must not be the target of the close.
+        $closePath = $AccessPath
+        if ($Session.PSObject.Properties['DatabasePath'] -and $Session.DatabasePath) {
+            $closePath = [string]$Session.DatabasePath
+        }
+        $closeArgs = @{ Session = $Session; AccessPath = $closePath; Password = $Password }
         if ($KillPidAction)  { $closeArgs['KillPidAction']  = $KillPidAction }
         if ($LockFileAction) { $closeArgs['LockFileAction'] = $LockFileAction }
         try { $closeResult = Close-AccessDatabase @closeArgs } catch { Write-Debug "Diagnostics: $_" }
+        # #1911: the sandbox can only be deleted once Access released it.
+        if ($Session.PSObject.Properties['SandboxPath'] -and $Session.SandboxPath) {
+            Remove-TestSandbox -SandboxPath ([string]$Session.SandboxPath)
+        }
     }
 
     $pending = $script:PendingDysflowResult
@@ -5895,12 +5922,17 @@ function Invoke-RunTestsAction {
     # a temporary imported module produces against the same binary.
     #
     # The copy is opened in place of the source; Open-AccessDatabase
-    # therefore points at the sandbox path. The sandbox is removed in the
-    # finally block regardless of batch outcome so a throw from
-    # Invoke-AccessProcedureBatch never leaks the temp file.
+    # therefore points at the sandbox path. #1911: once Access is open the
+    # session owns the copy — the top-level close (Complete-AccessSessionClose)
+    # closes and restores the copy, not the source, and removes it after Access
+    # released it. Only when Access never opened is the copy removed here.
     $sandboxPath = Get-TestSandboxPath -AccessPath $AccessPath
+    $sandboxOwnedBySession = $false
     try {
         $Session.Value = Open-AccessDatabase -AccessPath $sandboxPath -Password $Password -AllowStartupExecution:$AllowStartupExecution
+        $Session.Value | Add-Member -NotePropertyName DatabasePath -NotePropertyValue $sandboxPath -Force
+        $Session.Value | Add-Member -NotePropertyName SandboxPath -NotePropertyValue $sandboxPath -Force
+        $sandboxOwnedBySession = $true
         $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
         if ($Json) {
             # The extra envelope layer needs one additional serialization depth
@@ -5908,7 +5940,7 @@ function Invoke-RunTestsAction {
             Write-DysflowResult -Result ([pscustomobject]@{ tests = @($batchResults) }) -Depth 7
         }
     } finally {
-        Remove-TestSandbox -SandboxPath $sandboxPath
+        if (-not $sandboxOwnedBySession) { Remove-TestSandbox -SandboxPath $sandboxPath }
     }
 }
 
