@@ -732,7 +732,11 @@ type VbaTestFailureDetail = {
   durationMs: number | undefined;
   payload: unknown;
   cause?: {
-    code: "PROCEDURE_NOT_CALLABLE" | "VBA_RUNTIME_ERROR" | "ATOM_OUTPUT_UNPARSABLE";
+    code:
+      | "PROCEDURE_NOT_CALLABLE"
+      | "VBA_RUNTIME_ERROR"
+      | "RUN_ARGUMENT_MARSHALING_FAILED"
+      | "ATOM_OUTPUT_UNPARSABLE";
     retryable: boolean;
     remediation: string;
   };

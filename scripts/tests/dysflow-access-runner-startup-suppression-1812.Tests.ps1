@@ -16,6 +16,9 @@ BeforeAll {
         $text = $definition.Extent.Text.Replace('$db.Properties("StartupForm")', '$db.Properties.Item("StartupForm")')
         Invoke-Expression ($text -replace "^function\s+$name", "function script:$name")
     }
+    # The runner dot-sources the shared Application.Run marshaling (#1940); it
+    # defines functions only and never creates a COM object.
+    . (Join-Path (Split-Path -Parent $runnerPath) 'lib/dysflow-access-run.ps1')
     $main = @($ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.TryStatementAst] })[-1]
     $script:RunnerMain = [scriptblock]::Create(($main.Extent.Text -replace 'exit \$script:exitCode', '$null = $script:exitCode'))
     if (-not ('Startup1812.Database' -as [type])) {
@@ -85,7 +88,10 @@ namespace Startup1812 {
         $script:OpenCount++
         $script:SuppressedAtOpen = @($script:FakeDb.Scripts.Documents | Where-Object Name -eq AutoExec).Count -eq 0 -and
             @($script:FakeDb.Properties | Where-Object Name -eq StartupForm).Count -eq 0
-        return [pscustomobject]@{ AccessApplication = [pscustomobject]@{ Run = { $script:BusinessCount++; return 'done' } }; OwnedPid = $null }
+        # Run is a method on Access.Application; the vba operation calls it as one (#1940).
+        $app = [pscustomobject]@{}
+        $app | Add-Member -MemberType ScriptMethod -Name Run -Value { $script:BusinessCount++; return 'done' }
+        return [pscustomobject]@{ AccessApplication = $app; OwnedPid = $null }
     }
     function script:Close-CanonicalAccess { param($Session, $DbPath, $RotCloseAction) $script:CleanupCount++ }
     function script:Write-AccessProcessMarker { param($Before, $AccessDbPath) }

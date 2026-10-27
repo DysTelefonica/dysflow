@@ -121,12 +121,25 @@ MUST branch on the exact code returned:
 | `PROCEDURE_NOT_FOUND` | Service preflight (`vba-service.ts::checkProcedureExists`) — procedure is NOT declared in the project's VBA source. | Read `error.details.{procedure, moduleName, scannedModules}`. Verify the spelling, run `import_modules({ moduleNames: [...] })` to seed the source tree, recompile in Access VBE. |
 | `PROCEDURE_NOT_CALLABLE` | Service reclassifier (`vba-service.ts::reclassifyRunnerFailure`) — procedure IS in the binary's `VBComponents` but Access refused to invoke it. | Read `error.remediation`. It is decided by the preflight outcome, not by the shape of the name: when the prefix was stripped, qualification is ruled out and stale p-code is the cause — recompile in Access VBE (Debug → Compile). When a qualifier was supplied that does not name a module of this project's source, the remediation names it and asks whether it is a referenced database whose reference resolves. Neither is the `PROCEDURE_NOT_FOUND` fix (which needs an import). |
 | `VBA_RUNTIME_ERROR` | Service reclassifier — the procedure WAS invoked, it ran, and it raised. | Read `error.details.vbaMessage` for the error VBA emitted and fix the procedure or the state it depends on. Recompiling does not apply: the procedure is callable and running. |
+| `RUN_ARGUMENT_MARSHALING_FAILED` | Service reclassifier — `Access.Application.Run` refused an `argsJson` value before the procedure was reached (#1940). | Read `error.message`: it names the argument's 1-based `argsJson` position. Check that value's JSON type against the VBA signature. Recompiling does not apply. |
+
+### Argument marshaling
+
+Access's type library declares `Application.Run(Procedure, Arg1..Arg30)` with every `Arg` as an `[in,out]` reference, so PowerShell refuses a plain value for any of them.
+
+The runner therefore passes every `argsJson` value by reference through `scripts/lib/dysflow-access-run.ps1`, the same helper `test_vba` uses.
+
+`ByVal` parameters receive their values normally; only `ByRef` parameters report a value back. Up to 30 arguments are accepted.
+
+If binding still fails, the runner writes `RUN_ARGUMENT_MARSHALING_FAILED: ...` naming the argument. The service returns that code instead of `RUNNER_FAILED`.
+
+This check runs before the patterns below, because the procedure was never reached.
 
 ### Reclassifier patterns
 
 The reclassifier discriminates on the INNER Access message, never on the PowerShell wrapper around it.
 
-The VBA dispatch in `scripts/dysflow-access-runner.ps1` calls `$access.Run.Invoke(...)` without a `try`/`catch`.
+The VBA dispatch in `scripts/dysflow-access-runner.ps1` rethrows every exception from `Application.Run` except a binding failure.
 
 A VBA `Err.Raise` inside the invoked procedure therefore escapes to the script's global catch and reaches the service wrapped as:
 
