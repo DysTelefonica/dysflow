@@ -151,7 +151,7 @@ function classificationOf(data: VerifyData): string | undefined {
 }
 
 describe("issue 1890 — verify_code direction from the last-synced base snapshot", () => {
-  it("a value changed only in the source on a module with a base is sourceNewer (import_to_binary)", async () => {
+  it("a value changed only in the source on a module with a base is sourceNewer, confirmed via manual_merge", async () => {
     const { adapter, sourceFile } = fixture();
     // verify_code saw both sides agree: that state becomes the base.
     await verify(adapter);
@@ -160,7 +160,8 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     const data = await verify(adapter);
 
     expect(classificationOf(data)).toBe("sourceNewer");
-    expect(data.recommendedAction).toBe("import_to_binary");
+    // The inferred direction needs confirmation, like a conflict.
+    expect(data.recommendedAction).toBe("manual_merge");
     expect(data.summaryStructured.actionable).toMatchObject({ sourceNewer: 1, bothChanged: 0 });
     // An inferred direction is reported, never bulk-applied.
     expect(data.actionableDifferent[0]).toMatchObject({ resolvedBy: "base" });
@@ -169,7 +170,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     expect(data.baseResolved).toEqual(["Probe"]);
   });
 
-  it("the mirror case is binaryNewer (export_to_src)", async () => {
+  it("the mirror case is binaryNewer, confirmed via manual_merge", async () => {
     const { adapter, binaryFile } = fixture();
     await verify(adapter);
     writeFileSync(binaryFile, moduleText(2));
@@ -177,7 +178,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     const data = await verify(adapter);
 
     expect(classificationOf(data)).toBe("binaryNewer");
-    expect(data.recommendedAction).toBe("export_to_src");
+    expect(data.recommendedAction).toBe("manual_merge");
     expect(data.actionableDifferent[0]).toMatchObject({ resolvedBy: "base" });
     expect(data.bulkExportable).toEqual([]);
     expect(data.bulkImportable).toEqual([]);
@@ -259,7 +260,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     expect(data.actionableDifferent).toEqual([
       expect.objectContaining({ moduleName: "frmProbe", classification: "sourceNewer" }),
     ]);
-    expect(data.recommendedAction).toBe("import_to_binary");
+    expect(data.recommendedAction).toBe("manual_merge");
   });
 
   it("an export records no base and invalidates the one it found", async () => {
@@ -507,7 +508,7 @@ describe("issue 1890 — a base-resolved direction is never auto-applied", () =>
 
     const data = await verify(adapter);
     expect(probeEntry(data)).toMatchObject({ classification: "binaryNewer", resolvedBy: "base" });
-    expect(data.recommendedAction).toBe("export_to_src");
+    expect(data.recommendedAction).toBe("manual_merge");
     expect(data.bulkExportable).toEqual([]);
     expect(data.baseResolved).toEqual(["Probe"]);
 

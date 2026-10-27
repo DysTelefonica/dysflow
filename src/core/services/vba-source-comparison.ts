@@ -1145,7 +1145,7 @@ export async function compareVbaSourceTrees(
           hasFunctionalDifferences,
           actionableOk: !hasFunctionalDifferences,
           ...aggregateRecommendation(
-            semanticSummary,
+            countBaseResolvedAsConflicts(semanticSummary, actionableDifferent),
             missingInSource.length,
             missingInBinary.length,
             hasFunctionalDifferences,
@@ -1174,6 +1174,24 @@ export async function compareVbaSourceTrees(
         }
       : {}),
   };
+}
+
+/**
+ * Issue #1890 — a direction inferred from the last-synced base needs the same
+ * confirmation as a conflict, so the top-level recommendation counts it as
+ * `bothChanged` (as sync_binary does). The reported summary keeps its counts.
+ */
+function countBaseResolvedAsConflicts(
+  summary: Record<string, number>,
+  actionableDifferent: readonly VbaSourceComparisonEntry[],
+): Record<string, number> {
+  const counted = { ...summary };
+  for (const entry of actionableDifferent) {
+    if (entry.resolvedBy !== "base" || entry.classification === undefined) continue;
+    counted[entry.classification] = Math.max(0, (counted[entry.classification] ?? 0) - 1);
+    counted.bothChanged = (counted.bothChanged ?? 0) + 1;
+  }
+  return counted;
 }
 
 /**
@@ -1248,6 +1266,11 @@ function aggregateRecommendation(
  * import or export moves the whole module. It is listed in `baseResolved`
  * instead, so no consumer bulk-applies an inferred direction without
  * confirmation.
+ *
+ * Likewise a module with a `bothChanged` file is in neither list, even when
+ * another of its files has a clear direction: importing a form also loads its
+ * code-behind `.cls`, so a `.form.txt` that is `sourceNewer` must not carry a
+ * conflicted `.cls` into the binary.
  */
 function deriveBulkLists(
   actionableDifferent: readonly VbaSourceComparisonEntry[],
@@ -1264,11 +1287,14 @@ function deriveBulkLists(
   const importSet = new Set<string>();
   const exportSet = new Set<string>();
   const baseResolvedSet = new Set<string>();
+  const conflictedSet = new Set<string>();
   for (const e of actionableDifferent) {
     if (e.resolvedBy === "base") baseResolvedSet.add(e.moduleName);
+    if (e.classification === "bothChanged") conflictedSet.add(e.moduleName);
   }
+  const blocked = (name: string) => baseResolvedSet.has(name) || conflictedSet.has(name);
   for (const e of actionableDifferent) {
-    if (baseResolvedSet.has(e.moduleName)) continue;
+    if (blocked(e.moduleName)) continue;
     if (e.classification === "sourceNewer") {
       importSet.add(e.moduleName);
     } else if (e.classification === "binaryNewer") {
@@ -1278,8 +1304,8 @@ function deriveBulkLists(
   }
   for (const e of missingInBinary) importSet.add(e.moduleName);
   for (const e of missingInSource) exportSet.add(e.moduleName);
-  const bulkImportable = [...importSet].filter((name) => !baseResolvedSet.has(name)).sort();
-  const bulkExportable = [...exportSet].filter((name) => !baseResolvedSet.has(name)).sort();
+  const bulkImportable = [...importSet].filter((name) => !blocked(name)).sort();
+  const bulkExportable = [...exportSet].filter((name) => !blocked(name)).sort();
   const baseResolved = [...baseResolvedSet].sort();
   return {
     bulkImportable,
@@ -1329,11 +1355,26 @@ export async function collectVbaSourceFiles(
       if (!entry.isFile()) continue;
       const fileType = vbaSourceFileType(entry.name);
       if (fileType === undefined) continue;
-      const moduleName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
-      if (moduleFilter.size > 0 && !moduleFilter.has(moduleName.toLowerCase())) continue;
+      const documentPrefix = documentPrefixForFile(directory, fileType);
+      const vbaName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
+      // A form/report document is two files named alike (`frmX.form.txt`,
+      // `frmX.cls`) while the `.cls` says `VB_Name = "Form_frmX"`. Both files
+      // carry the file name as the module name, so bulk lists and sync plans
+      // see one module, and pair on the prefix-free name.
+      const moduleName = documentPrefix === undefined ? vbaName : moduleNameFromVbaFile(entry.name);
+      const pairingName =
+        documentPrefix === undefined ? moduleName : stripDocumentPrefix(moduleName, documentPrefix);
+      if (
+        moduleFilter.size > 0 &&
+        ![moduleName, vbaName, pairingName, `${documentPrefix ?? ""}${pairingName}`].some((name) =>
+          moduleFilter.has(name.toLowerCase()),
+        )
+      ) {
+        continue;
+      }
       const identityKey = buildArtifactIdentityKey(
         familyForFileType(fileType),
-        moduleName,
+        pairingName,
         representationForFileType(fileType),
       );
       files.push({
@@ -1348,6 +1389,32 @@ export async function collectVbaSourceFiles(
 
   await visit(root);
   return files;
+}
+
+/**
+ * The Access object prefix of a form/report document file, or `undefined` for
+ * any other file. Mirrors the export layout: document modules (`.cls` code-behind
+ * and `.form.txt`/`.report.txt` layout) live under `forms/` or `reports/`. A
+ * standard module or class elsewhere keeps its `VB_Name`, even one that starts
+ * with `Form_`.
+ */
+function documentPrefixForFile(
+  directory: string,
+  fileType: string,
+): "Form_" | "Report_" | undefined {
+  if (fileType !== "cls" && fileType !== "form.txt" && fileType !== "report.txt") {
+    return undefined;
+  }
+  const folder = basename(directory).toLowerCase();
+  if (folder === "forms" && fileType !== "report.txt") return "Form_";
+  if (folder === "reports" && fileType !== "form.txt") return "Report_";
+  return undefined;
+}
+
+function stripDocumentPrefix(name: string, prefix: string): string {
+  return name.toLowerCase().startsWith(prefix.toLowerCase()) && name.length > prefix.length
+    ? name.slice(prefix.length)
+    : name;
 }
 
 function vbaSourceFileType(fileName: string): string | undefined {

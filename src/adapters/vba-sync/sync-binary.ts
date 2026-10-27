@@ -299,7 +299,14 @@ function filterSummaryToModuleNames(
 ): SyncVerifySummary {
   if (!enabled || moduleNames === undefined || moduleNames.length === 0) return summary;
 
-  const selected = new Set(moduleNames.map((name) => name.toLowerCase()));
+  // A form/report is reported under its file name (`frmX`) and may be requested
+  // by its Access document name (`Form_frmX`); accept either.
+  const selected = new Set(
+    moduleNames.flatMap((name) => [
+      name.toLowerCase(),
+      name.replace(/^(Form_|Report_)/i, "").toLowerCase(),
+    ]),
+  );
   const inScope = (entry: { moduleName: string }) => selected.has(entry.moduleName.toLowerCase());
   const missingInBinary = summary.missingInBinary.filter(inScope);
   const missingInSource = summary.missingInSource.filter(inScope);
@@ -407,6 +414,15 @@ export function buildSyncBinaryPlan(args: {
   const bothChangedEntries = summary.bothChangedEntries ?? [];
   const acceptsConflictDirection =
     acceptBothChanged && (direction === "src-to-binary" || direction === "binary-to-src");
+  // The same holds for a module with a conflicted file: importing a form also
+  // loads its code-behind `.cls`, so a `sourceNewer` `.form.txt` must not carry
+  // a conflicted `.cls` into the binary unless the caller accepted the conflict.
+  if (!acceptsConflictDirection) {
+    for (const entry of bothChangedEntries) {
+      importSet.delete(entry.moduleName);
+      exportSet.delete(entry.moduleName);
+    }
+  }
   if (acceptsConflictDirection) {
     const target = direction === "src-to-binary" ? importSet : exportSet;
     for (const entry of bothChangedEntries) {
