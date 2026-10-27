@@ -1,5 +1,12 @@
 # Changelog
 
+## [v4.5.3] - 2026-10-27
+
+### Changes
+
+- test(e2e): normalize the form round-trip fixture before its baseline verify (#1868)
+
+
 ## [v4.5.2] - 2026-10-27
 
 ### Changes

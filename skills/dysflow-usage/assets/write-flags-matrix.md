@@ -1,6 +1,6 @@
 # Dysflow MCP Write-Flag Matrix
 
-> **Source of truth**: candidate-runtime `bootstrap`, full capabilities, schema index/full, and selective `describe_tool` captures verified for the v4.5.2 release on 2026-10-27. The runtime is authoritative; this file is the human-readable mirror.
+> **Source of truth**: candidate-runtime `bootstrap`, full capabilities, schema index/full, and selective `describe_tool` captures verified for the v4.5.3 release on 2026-10-27. The runtime is authoritative; this file is the human-readable mirror.
 >
 > **Companion to** `dysflow-usage/SKILL.md` §2 Hard Rules (HR-2), §3 Decision Gates (resolve `apply:true` vs `apply:false`), §6 Anti-patterns.
 >
