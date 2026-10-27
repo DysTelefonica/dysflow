@@ -58,26 +58,42 @@ function New-ReleaseChangelogSection {
         [string[]]$CommitSubjects = @()
     )
 
+    # One change can reach main as two commits with the same subject (a merged
+    # branch replaying a commit, #1973); keep the first occurrence only.
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $notes = @(
         $CommitSubjects |
             Where-Object { $_ -and $_ -notmatch '^Merge pull request\b' } |
             ForEach-Object {
                 "- $($_.Trim() -replace ' - ', ' — ')"
-            }
+            } |
+            Where-Object { $seen.Add($_) }
     )
     if ($notes.Count -eq 0) {
         $notes = @("- No user-visible changes were detected; verify the previous tag.")
     }
-    $noteLines = $notes -join [Environment]::NewLine
+    $noteLines = $notes -join "`n"
 
-    return @"
-## [$Tag] - $Date
+    return "## [$Tag] - $Date`n`n### Changes`n`n$noteLines`n`n"
+}
 
-### Changes
+function Get-ReleaseCommitSubjects {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)]
+        [string]$LogRange
+    )
 
-$noteLines
-
-"@
+    # PowerShell decodes native-command output with [Console]::OutputEncoding,
+    # which is the OEM code page (for example 850) on many Windows consoles.
+    # Ask git for UTF-8, decode it as UTF-8, then restore the console (#1973).
+    $consoleEncodingBefore = [Console]::OutputEncoding
+    [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+    try {
+        return @(git log $LogRange --no-merges --encoding=UTF-8 --pretty=format:"%s" 2>$null)
+    } finally {
+        [Console]::OutputEncoding = $consoleEncodingBefore
+    }
 }
 
 function Test-ReleaseChangelogQuality {
@@ -497,14 +513,16 @@ foreach ($skillPath in $skillPaths) {
     Update-SkillDysflowVersionStamp -Path $skillPath -Version $next
 }
 
-$commits = git log $logRange --no-merges --pretty=format:"%s" 2>$null
+$commits = Get-ReleaseCommitSubjects -LogRange $logRange
 $changelogNewSection = New-ReleaseChangelogSection `
     -Tag $tag `
     -Date $date `
     -CommitSubjects $commits
 
+# The CHANGELOG is UTF-8 without BOM, whatever the PowerShell edition defaults to.
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
 if (Test-Path $changelogPath) {
-    $existing = Get-Content $changelogPath -Raw
+    $existing = [IO.File]::ReadAllText($changelogPath, $utf8NoBom)
     $marker = "# Changelog"
     $idx = $existing.IndexOf($marker)
     if ($idx -lt 0) {
@@ -513,9 +531,9 @@ if (Test-Path $changelogPath) {
     $insertAt = $idx + $marker.Length
     $before = $existing.Substring(0, $insertAt)
     $after = $existing.Substring($insertAt)
-    Set-Content $changelogPath -Value ($before + "`n`n" + $changelogNewSection + $after) -NoNewline
+    [IO.File]::WriteAllText($changelogPath, $before + "`n`n" + $changelogNewSection + $after, $utf8NoBom)
 } else {
-    Set-Content $changelogPath -Value ("# Changelog`n`n" + $changelogNewSection) -NoNewline
+    [IO.File]::WriteAllText($changelogPath, "# Changelog`n`n" + $changelogNewSection, $utf8NoBom)
 }
 
 # Validate the exact file that would be committed. A malformed generated entry

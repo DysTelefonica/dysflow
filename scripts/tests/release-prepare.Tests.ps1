@@ -42,6 +42,7 @@ BeforeAll {
     }
 
     Import-ReleaseFunction "New-ReleaseChangelogSection"
+    Import-ReleaseFunction "Get-ReleaseCommitSubjects"
     Import-ReleaseFunction "Test-ReleaseChangelogQuality"
     Import-ReleaseFunction "Assert-ReleaseChangelogQuality"
     Import-ReleaseFunction "Update-ReleaseVersionStamp"
@@ -142,6 +143,22 @@ Describe "release changelog generation" {
 
         ($section -split "\r?\n" | Where-Object { $_ -match "^- " }).Count | Should -Be 1
         $section | Should -Not -Match "Merge pull request"
+    }
+
+    It "de-duplicates an identical subject replayed by a merged branch (#1973)" {
+        $section = New-ReleaseChangelogSection `
+            -Tag "v99.1.0" `
+            -Date "2026-07-27" `
+            -CommitSubjects @(
+                "fix(release): same change twice (#1950)",
+                "fix(release): another change (#1951)",
+                "fix(release): same change twice (#1950)"
+            )
+
+        @($section -split "\r?\n" | Where-Object { $_ -match "^- " }) | Should -Be @(
+            "- fix(release): same change twice (#1950)",
+            "- fix(release): another change (#1951)"
+        )
     }
 
     It "normalizes an inline bullet separator so one subject cannot collapse the entry" {
@@ -295,13 +312,17 @@ Describe "release safety behavior" {
         $script:ghAvailable = $true
         $script:ciResult = "success"
         $script:includeMatchingRun = $true
+        $script:logSource = $null
         Mock git {
             $call = $args -join " "
             $script:gitCalls.Add($call)
             if ($call -eq "status --porcelain") { return $script:dirty }
             if ($call -eq 'rev-list --count origin/main..HEAD') { return $script:ahead }
             if ($call -eq "describe --tags --abbrev=0") { return "v4.0.5" }
-            if ($call -match "^log ") { return "fix(release): safe fixture (#1203)" }
+            if ($call -match "^log ") {
+                if ($script:logSource) { return & $script:logSource }
+                return "fix(release): safe fixture (#1203)"
+            }
             if ($call -eq "rev-parse HEAD") { return $script:candidateHead }
             if ($call -eq "rev-parse origin/main") { return $script:candidateHead }
             if ($call -match "rev-parse --verify refs/tags/") { return $null }
@@ -348,6 +369,36 @@ Describe "release safety behavior" {
 
         @($script:gitCalls | Where-Object { $_ -match "^(push|tag)\b" }) | Should -BeNullOrEmpty
         @($script:gitCalls | Where-Object { $_ -match "^commit\b" }) | Should -HaveCount 1
+    }
+
+    It "keeps non-ASCII commit subjects intact under an OEM console code page (#1973)" {
+        # A real native process emits the UTF-8 bytes of the subjects, so PowerShell
+        # decodes them with the console encoding in effect at the git call.
+        $subjects = "fix(plugin): inject the current arn$([char]0x00E9)s rules (#1947)`n" +
+            "docs(release): a$([char]0x00F1)o note (#1973)`n"
+        $subjectsPath = Join-Path $TestDrive "subjects.txt"
+        [IO.File]::WriteAllBytes($subjectsPath, [Text.UTF8Encoding]::new($false).GetBytes($subjects))
+        $script:logSource = { & cmd.exe /d /c type $subjectsPath }.GetNewClosure()
+
+        $consoleEncodingBefore = [Console]::OutputEncoding
+        [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(850)
+        Push-Location $script:fixtureRoot
+        try {
+            Invoke-ReleasePrepare -Bump patch -SemanticAuditEvidencePath (Join-Path $script:fixtureRoot "semantic-audit.json") -CiMaxWaitSeconds 1 -CiPollSeconds 1
+            [Console]::OutputEncoding.CodePage | Should -Be 850 -Because "the console encoding is restored after the git call"
+        } finally {
+            Pop-Location
+            [Console]::OutputEncoding = $consoleEncodingBefore
+        }
+
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $script:fixtureRoot "CHANGELOG.md"))
+        $bytes[0..2] | Should -Not -Be @(0xEF, 0xBB, 0xBF) -Because "the CHANGELOG is written without a BOM"
+        $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+        $start = $text.IndexOf("## [v4.0.6]")
+        $section = $text.Substring($start, $text.IndexOf("`n## [", $start) - $start)
+        $section | Should -BeLikeExactly "*- fix(plugin): inject the current arn$([char]0x00E9)s rules (#1947)*"
+        $section | Should -BeLikeExactly "*- docs(release): a$([char]0x00F1)o note (#1973)*"
+        $section | Should -Not -Match "`r" -Because "the generated section uses LF line endings"
     }
 
     It "updates and stages every release-owned version stamp with package and changelog" {
