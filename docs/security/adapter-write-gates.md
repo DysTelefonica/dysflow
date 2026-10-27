@@ -120,7 +120,9 @@ project declares `capabilities.procedures.strictMode: true`:
 
 The rationale: a stdio MCP server is launched by a trusted parent process. The operator who wires `dysflow mcp` into their client is the same operator who controls what runs.
 
-That operator's real per-deployment control is the WRITE gate — `writesProcess.enabled`, `capabilities.allowWrites`, and `writeExecutionPolicy` — plus `humanCompilePending` for stale p-code.
+That operator's real per-deployment control is the WRITE gate — `writesProcess.enabled`, `capabilities.allowWrites`, and `writeExecutionPolicy` — plus the `humanCompilePending` reminder.
+
+That reminder flags stale p-code and refuses no call.
 
 A second allowlist the operator had to extend for every production procedure and every newly written test cost operational effort.
 
@@ -138,7 +140,9 @@ The case worth an operator's attention:
 
 with the default (no `strictMode`), any procedure the write gate permits can run through stdio `run_vba` and any manifest-selected test through stdio `test_vba`.
 
-The write, sandbox, manifest, and human-compile gates remain intact, and on stdio there is no remote vector because the client is the trust boundary.
+The write, sandbox, and manifest gates remain intact, and on stdio there is no remote vector because the client is the trust boundary.
+
+The human compile is a reminder, not a gate: `humanCompilePending` refuses no call.
 
 For projects that want a narrower surface — CI, fleet automation, a shared non-interactive runner:
 

@@ -24,14 +24,15 @@
 
 `apply:false` remains the non-mutating planning path and needs no second confirmation. Do not add this gate to reversible bulk sync, registry cleanup, or human-compile-gated VBA execution.
 
-## Skipping the human-compile gate
+## Human-compile workflow mistakes
 
 | Symptom | Fix |
 |---|---|
 | Calling `compile_vba` directly | NEVER. Compile lives outside dysflow's surface. HR-1 of `dysflow-arnes`. |
-| Passing `compile:true` on `import_modules` / `import_all` | Remove the flag. Route through the HR-1 human-compile loop: write source -> `import_modules({apply:false})` -> ask the human to Debug -> Compile VBA Project -> wait for "ya esta" -> THEN `test_vba`. |
-| Calling `test_vba` while `humanCompilePending === true` | STOP. Ask the human, wait for "ya esta", then call. |
-| Treating `test_vba` / `run_vba` "all green" as TDD-green without both user-confirmed compile AND all-green test result | Surface both gates; HR-7 of `dysflow-arnes`. |
+| Passing `compile:true` on `import_modules` / `import_all` | Remove the flag. Route through the HR-1 loop: import the test -> RED `test_vba` with no compile -> import the implementation -> ask the human to Debug -> Compile VBA Project once -> wait for "ya esta" -> GREEN `test_vba`. |
+| Asking for a compile before a RED run, or reading `humanCompilePending === true` as a block | Run the RED test without a compile. `humanCompilePending` only adds `humanCompileReminder` to results; no tool refuses a call because of it. Ask for the compile once, before GREEN (HR-1 of `dysflow-arnes`). |
+| Counting a RED that failed on a compile error or a procedure that was not found | Not a RED. A RED counts only when it fails on the expected assertion. Fix the source or the import, then rerun. |
+| Treating `test_vba` / `run_vba` "all green" as TDD-green without both user-confirmed compile AND all-green test result | Report both: a GREEN counts only after the human confirmed the compile. Exception: a RED run needs no compile confirmation (HR-1 of `dysflow-arnes`). |
 
 ## Caching runtime state across sessions
 
@@ -108,7 +109,7 @@
 | Calling `run_vba` and getting `PROCEDURE_NOT_FOUND` after a successful plan with the same `procedureName` | Force manual recompile in Access VBE (Debug -> Compile). The binary's compiled p-code is stale; do NOT chase a phantom import issue. AP of `dysflow-usage` §6. |
 | Reading every `PROCEDURE_NOT_CALLABLE` as stale p-code and recompiling again | Read `error.remediation` first. dysflow derives it from the source preflight (#1787) and will tell you when the qualifier, not the p-code, is the suspect. Recompiling cannot fix an unresolvable qualifier, and that loop does not terminate. |
 | Calling `run_vba` and getting `RUNNER_FAILED` whose message matches `Excepcion al llamar a "Run"` | The reclassifier at `src/core/services/vba-service.ts::reclassifyRunnerFailure` missed it. File a dysflow bug with the payload + runner log. |
-| Claiming "TDD-green" without BOTH user-confirmed compile AND all-green `test_vba` result | Surface both gates; HR-1 / HR-7 of `dysflow-arnes`. |
+| Claiming "TDD-green" without BOTH user-confirmed compile AND all-green `test_vba` result | Report both; HR-1 of `dysflow-arnes`. The compile confirmation applies to GREEN only: a RED run needs none, and it counts when it fails on the expected assertion. |
 
 ## Project-config migration mistakes
 

@@ -32,7 +32,7 @@ Clone an existing Access form into a new form name. The runtime writes the clone
 
 - Don't pass source or target paths outside `destinationRoot`.
 - Don't generate `.form.txt` and `.cls` separately and re-import; the tool owns the guarded clone transaction.
-- Don't forget the human-compile step. New code → run Debug > Compile before `test_vba`.
+- Don't forget the human-compile step. New code → the human runs Debug > Compile before the GREEN `test_vba`.
 - Don't hand-edit the `CodeBehindForm` section in the generated `.form.txt` — code lives in `.cls`, period (the global AGENTS.md encode this; the runtime overwrites the section on every import).
 
 ## Result shape (what the agent reads back)

@@ -4,11 +4,16 @@
 
 ## What it does
 
-Execute the validated VBA test manifest after the human-compile gate is clear.
+Execute the validated VBA test manifest on a temporary copy of the frontend.
 
 ## When to use
 
-- Execute the validated VBA test manifest after the human-compile gate is clear.
+- Run a RED test right after importing it, with no compile. It counts only when it fails on the expected assertion.
+- Run the GREEN test after the human has compiled the imported implementation once (HR-1 of `dysflow-arnes`). `humanCompilePending` only adds a `humanCompileReminder`; it never refuses this call.
+
+## Sandbox copy
+
+The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and opens the copy (`Get-TestSandboxPath`, issue #1013). Paths relative to the `.accdb`, such as `src\` and `tests\`, do not exist during the run. `run_vba` opens the real binary. Details: `../../references/test-runs.md`.
 
 ## Required flags
 

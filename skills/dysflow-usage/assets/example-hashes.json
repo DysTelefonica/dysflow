@@ -41,7 +41,7 @@
   },
   "composition_patterns": {
     "path": "assets/examples/composition-patterns.md",
-    "sha256": "310ce0a9e3f01299d8446a4660af4ace35d9d7b32d9a1ff1e82485131e7f81fc",
+    "sha256": "3197aa15d1276e87a08baf41c9950d0c5337c65607c5da6fa9e8293f0e7c5a72",
     "needs_human_content": false
   },
   "copy_form_ui_pattern": {
@@ -51,7 +51,7 @@
   },
   "create_form_from_template": {
     "path": "assets/examples/create-form-from-template.md",
-    "sha256": "187b87663e3366c56124923d38a888b67ce7f36a09761768d924e69a98427efb",
+    "sha256": "358822ee44a86e399e0092e2d8cddb16b21f4e55cfdd56f038d8307f71d1e907",
     "needs_human_content": false
   },
   "describe_tool": {
@@ -131,7 +131,7 @@
   },
   "import_modules": {
     "path": "assets/examples/import-modules.md",
-    "sha256": "23db3547321ff58a5f3654096be8117b1d3e819aea6625cfd1b504d47a187be6",
+    "sha256": "4a092435a7fdac61bc60b277fbd080575cc4af9f7f24d698a487cdb464979846",
     "needs_human_content": false
   },
   "link_tables": {
@@ -171,7 +171,7 @@
   },
   "preflight_checklist": {
     "path": "assets/examples/preflight-checklist.md",
-    "sha256": "832fd21bbebf38cee8293c49124cd06b8307978c3266ce37dc78482814f1c667",
+    "sha256": "636e0427eca6913f67d93be309d7a67739315aecd9fc218417256ce5519e3701",
     "needs_human_content": false
   },
   "query_execute": {
@@ -201,7 +201,7 @@
   },
   "run_vba": {
     "path": "assets/examples/run-vba.md",
-    "sha256": "e5cf02ed51156692e861217c2cd8b6f8baacdd7c8bd10cc6ce57f8a1b66df7ea",
+    "sha256": "aa8b6106a15d6c4c33bdcb3593f88a3d633232165f9f205d27d1068c2a893907",
     "needs_human_content": false
   },
   "schema": {
@@ -226,7 +226,7 @@
   },
   "test_vba": {
     "path": "assets/examples/test-vba.md",
-    "sha256": "37d6720fab11c92bcacec9ff95c7674b4b5a90690901689a4f6bc40f923a5350",
+    "sha256": "4d2b3ef0e114ffecf0ed787354f1edc022b2593f80cbc5422c8027f81ac6ba15",
     "needs_human_content": false
   },
   "validate_manifest": {

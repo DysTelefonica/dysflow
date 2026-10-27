@@ -59,7 +59,7 @@ next step needs.
 
 | Step | Call | Use it for |
 |---|---|---|
-| 1 | `bootstrap({})` | identity, write gates, advertised surface, workflow routing, `humanCompilePending` |
+| 1 | `bootstrap({})` | identity, write gates, advertised surface, workflow routing, `humanCompilePending` (a reminder, never a block) |
 | 2 | `schema({ view: "index", phase, toolName })` | every callable tool, `advertised` flag, phases |
 | 3 | `describe_tool({ name, sections })` | parameters and result contract of one tool |
 | 4 | `get_capabilities({ view: "compact" \| "full", include })` | per-tool commit flags, `effectiveDryRunDefault`, `projectConfig` |
@@ -78,7 +78,9 @@ Details and every field: `references/bootstrap-and-capabilities.md`.
 | Response envelope and `structuredContent` | `references/transport-and-envelopes.md` |
 | `verify_code` fields and the committed ERD | `references/schema-and-verify.md` |
 | Form UI tools and source and binary sync | `references/form-ui-and-sync.md` |
+| Import order, retries, saves and exit codes; `Tag` values | `references/form-ui-and-sync.md` |
 | Facts to confirm before a call | `references/call-checks.md` |
+| What `test_vba` opens, and what `humanCompilePending` means | `references/test-runs.md` |
 | A typed error code | `references/error-codes.md` |
 | Functionality-by-functionality friction | `references/agent-friction-map.md` |
 | Footguns with a canonical example | `assets/anti-patterns.md` |

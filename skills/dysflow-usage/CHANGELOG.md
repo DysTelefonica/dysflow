@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Document the import orchestration contract in `references/form-ui-and-sync.md` and its codes (`VBA_IMPORT_FAILED`, `VB_NAME_MISMATCH`, `VBA_IMPORT_PHASE_FAILED`) in `references/error-codes.md`, verified against the source. Record as stale the team-skills partial claims on exit codes `2`/`>2`, `RunCommand(280)` after a new module, the save-failure signal, and runner markers in `Tag` (#1859).
+- State that `humanCompilePending` is a reminder that refuses no call, and that a clean `verify_code`, not a compile, clears it. RED runs without a compile; the human compiles once before GREEN. Document that `test_vba` runs on a `%TEMP%` copy of the frontend while `run_vba` opens the real binary (`references/test-runs.md`). HR-4 of `dysflow-arnes` (pre-flight before every write) is retired; the other rule numbers are unchanged (#1858).
 - Split the skill into a consultation source (`SKILL.md`, facts and tables) and `references/` pages. The always-on rules moved to `dysflow-arnes` (#1871); `dysflow-protocol` is retired to a redirect stub.
 - Document the project-context order and the parameter matrix in `references/context-resolution.md` (#1867).
 - Document external `query_execute` reads and their write-mode rejection boundary.

@@ -13,18 +13,21 @@ fails, do not improvise inside it — follow the linked references.
 ## 1 — TDD loop: edit a module, prove it works
 
 ```text
-(1) Edit disk source on .bas / .cls / .form.txt.
-(2) import_modules({moduleNames:["<module>"], apply:true})
-(3) ASK the user to compile in Access (Debug > Compile).
-(4) User confirms with "ya está".
-(5) test_vba(proceduresJson:"[{\"procedure\":\"Test_<module>_Foo\"}]")
-(6) If RED, read error.details.failures[] — don't paraphrase the summary.
+(1) Write the test on disk and import_modules({moduleNames:["<test module>"], apply:true}).
+(2) RED: test_vba(proceduresJson:"[{\"procedure\":\"Test_<module>_Foo\"}]") with no compile.
+    Read error.details.failures[]; the RED counts only on the expected assertion.
+(3) Write the implementation and import_modules({moduleNames:["<module>"], apply:true}).
+(4) ASK the user to compile in Access (Debug > Compile) once.
+(5) User confirms with "ya está".
+(6) GREEN: the same test_vba call.
 ```
 
 Failure modes and recovery:
 
-- `humanCompilePending:true` after (5) → return to (3). Do not re-run
-  `test_vba` without a fresh compile; the runtime will trap it.
+- RED fails on a compile error or a procedure that was not found → not a
+  RED. Fix the source or the import and rerun (2).
+- `humanCompilePending:true` refuses nothing; the runtime only adds
+  `humanCompileReminder`. Do not run GREEN before the user confirms (5).
 - `ACCESS_DATABASE_LOCKED` → follow Recipe 3 to clear the lock, then
   resume at (2).
 - `MCP_PROCEDURE_NOT_ALLOWED` → declare the procedure in the `capabilities` block of

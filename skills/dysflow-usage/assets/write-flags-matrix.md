@@ -41,7 +41,7 @@
 
 | Tool | Default behavior | Legacy aliases | Risk class | Notes |
 |---|---|---|---|---|
-| `test_vba` | `plan` | `[]` | `critical-write` | Executes the validated test manifest. **Block on `humanCompilePending === true`** before invoking (HR-1 of `dysflow-arnes`). `apply:true` commits and runs; `apply:false` is the documented opt-out when `capabilities.procedures.strictMode: true` is set and `allowedProcedures` is empty. Without `strictMode` the procedure gate refuses nothing. |
+| `test_vba` | `plan` | `[]` | `critical-write` | Executes the validated test manifest on a temporary copy of the frontend (see `references/test-runs.md`). `humanCompilePending` only adds a reminder and never refuses the call; RED runs without a compile, GREEN after the human compiles once (HR-1 of `dysflow-arnes`). `apply:true` commits and runs; `apply:false` is the documented opt-out when `capabilities.procedures.strictMode: true` is set and `allowedProcedures` is empty. Without `strictMode` the procedure gate refuses nothing. |
 
 > **`test_vba` filter shape (#1442, #1833):** `filter` accepts a string (substring match on name, procedure or tags) or an object `{tag: "issue-82"}` (tags only). The inputSchema advertises both shapes as `anyOf` and `describe_tool` reports `type: "union"`; `parseTestFilter` rejects every other object with `MCP_INPUT_INVALID`. There is no separate `testFilter` input.
 
@@ -95,7 +95,7 @@
 | `relink_directory` | `plan` | `[]` | `destructive-write` | Re-link a directory. |
 | `cleanup_access_operation` | `noop` | `[]` | `conditional-write` | `preferred` tool. Retire one Dysflow-owned operation through ownership-safe cleanup. `force:true` requires explicit human confirmation regardless of mode. |
 | `query_execute` | `plan` | `[]` | `read-write` | `preferred` tool. **`mode:"read"|"write"` is REQUIRED** — `apply:true` alone never picks a write path (HR-3 of `dysflow-usage`). |
-| `run_vba` | `plan` | `[]` | `critical-write` | Invoke a public VBA procedure. Plan/apply must agree on `procedureName`. If apply fails with `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE`, force a manual VBE recompile (HR-7 of `dysflow-arnes`). |
+| `run_vba` | `plan` | `[]` | `critical-write` | Invoke a public VBA procedure. Plan/apply must agree on `procedureName`. If apply fails with `PROCEDURE_NOT_FOUND` / `PROCEDURE_NOT_CALLABLE`, force a manual VBE recompile (HR-1 of `dysflow-arnes`). Unlike `test_vba`, `run_vba` opens the real binary. |
 
 ### Project bootstrap & lifecycle
 
@@ -140,7 +140,7 @@ Decision rule per `dysflow-usage` §3 Decision Gates:
 The per-call write-gate is AUTHORITATIVE and is never bypassed, independent of mode:
 
 - `writesProject.allowWrites === false` -> stop, regardless of mode (see `MCP_WRITES_DISABLED` / `CAPABILITIES_DISALLOW_WRITE`).
-- `humanCompilePending === true` before `test_vba` / `run_vba` -> stop, ask the human.
+- `humanCompilePending === true` is NOT a gate: it adds `humanCompileReminder` to results and refuses nothing. Ask the human to compile once before a GREEN run (HR-1 of `dysflow-arnes`).
 - `cleanup_access_operation({force:true})` -> require explicit human confirmation.
 - `access_force_cleanup_orphaned({pid:positive})` -> require `implements_check:"orphans_msaccess"` + `confirmedRequiresConfirmation:true`. No `allowWrites` needed (#1862); the ownership guards still decide.
 

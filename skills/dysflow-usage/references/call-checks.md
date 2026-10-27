@@ -1,15 +1,15 @@
 # Checks before a call
 
-Facts to confirm before a dysflow call. The pre-flight rule is HR-4 in `dysflow-arnes`.
+Facts worth confirming before a dysflow call. They are not a mandatory pre-flight: `bootstrap` first is the only required step, and a closed gate answers with a typed error (`MCP_WRITES_DISABLED`, `CAPABILITIES_DISALLOW_WRITE`). The former pre-flight rule, HR-4 of `dysflow-arnes`, is retired (#1858).
 
 ## Self-check before any dysflow call
 
-Run these in your head before every call. One fail = stop and resolve.
+Use these to avoid a wasted call. When a call fails, read the typed error first.
 
 1. `adapterVersion` is current (from the latest `bootstrap`, expanded through `get_capabilities` only as needed).
 2. The per-tool effective dry-run default (`effectiveDryRunDefault[toolName]`) matches your intent. Default behavior depends on the active policy — see `assets/examples/get-capabilities.md` for the truth table. Read `canonicalCommitFlag` and pass explicit canonical intent when committing.
 3. Writes are enabled for write-class calls (`writesProcess.enabled` and `writesProject.allowWrites` both `true`).
-4. `humanCompilePending:false` before any `test_vba` / `run_vba` call.
+4. **RED needs no compile; GREEN does.** Run a RED `test_vba` without asking for a compile. It counts only when it fails on the expected assertion, not on a compile error or a procedure that was not found. Ask the human to compile once, after the implementation is imported and before the GREEN run (HR-1 of `dysflow-arnes`). `humanCompilePending` only reminds; it never refuses `test_vba` or `run_vba`.
 5. `toolInventory` matches the claim you cite: `advertised` for `tools/list`, `callable` for schema/dispatch. `toolsVisible` is legacy and context-dependent (`bootstrap` = advertised; `get_capabilities` = callable).
 6. For `query_execute` — `mode: "read" | "write"` is REQUIRED (issue #1164). `apply: true` alone does NOT pick a write path; it only commits. Omitting `mode` returns `MCP_INPUT_INVALID` with `error.missingParam: "mode"` and exact remediation. `missingParam` is distinct from rejected write flags: it does not include `rejectedFlag` or `toolCommitFlag`. See `assets/examples/query-execute.md`.
 7. **Legacy `accessPath` in `.dysflow/project.json`** — the runtime joins `frontendFile` to the worktree that physically owns the config (contract introduced in #1092, shipped in v2.23.1). If your config still carries an absolute legacy `accessPath`, migrate it with a one-line replacement:
