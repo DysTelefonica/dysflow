@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -7,6 +7,16 @@ import {
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
   ISSUE_713_REQUIRED_TOOLS,
 } from "./_helpers/advertised-tool-count.mjs";
+import {
+  buildRejectedDeserializeArgs,
+  controlProperty,
+  FORM_ROUND_TRIP_CLONE_MODULE,
+  FORM_ROUND_TRIP_MODULE,
+  FORM_ROUND_TRIP_PLAN_OPERATIONS,
+  FORM_ROUND_TRIP_SCENARIOS,
+  hasControl,
+  summarizeFormVerify,
+} from "./_helpers/form-access-round-trip.mjs";
 import {
   getDescendantWalkDiagnostics,
   isPidOrDescendantAlive,
@@ -295,6 +305,17 @@ if (!resumeRoot) {
 // ambiguous; individual scenarios add only the one explicit override they test.
 const ctx = { projectId };
 const backendTarget = { accessPath, backendPath, databasePath: backendPath };
+// Issue #1868 — a failed apply or revert of the form Access round-trip leaves
+// the sandbox binary in an unknown state; every later scenario depends on it.
+const FORM_ROUND_TRIP_SAFETY_STEPS = [
+  ...FORM_ROUND_TRIP_SCENARIOS.map((scenario) => `${scenario.tool}:access-round-trip`),
+  "create_form_from_template:access-round-trip",
+]
+  .flatMap((label) => [`forms/${label}:apply`, `forms/${label}:revert`, `forms/${label}:verify-reverted`])
+  .concat([
+    "forms/form_deserialize:access-round-trip-rejected:rollback",
+    "forms/form_deserialize:access-round-trip-rejected:verify-binary-unchanged",
+  ]);
 const implicitlyMutatingSteps = new Set([
   "query/import_queries",
   "vba-sync/test_vba",
@@ -318,6 +339,7 @@ const mutatingAssertionSteps = new Set([
   "forms/form_align_controls:round-trip",
   "forms/form_distribute_controls:round-trip",
   "forms/create_form_from_template:round-trip",
+  ...FORM_ROUND_TRIP_SAFETY_STEPS,
 ]);
 const resultRows = createResultRows();
 const { rows, appendUnchecked } = resultRows;
@@ -349,6 +371,7 @@ const runIdentity = await hashRunIdentity([
   fileURLToPath(import.meta.url),
   join(scriptDir, "_helpers", "mcp-e2e-resume.mjs"),
   join(scriptDir, "_helpers", "mcp-e2e-sandbox.mjs"),
+  join(scriptDir, "_helpers", "form-access-round-trip.mjs"),
   join(scriptDir, "_helpers", "mcp-e2e-record.mjs"),
   join(scriptDir, "_helpers", "mcp-harness.mjs"),
   join(scriptDir, "_helpers", "result-contract-validator.mjs"),
@@ -2832,6 +2855,307 @@ addResult({
   ms: 0,
   summary: clonePass ? clonePreservation.summary : "cloned form structure or preservation proof missing",
 });
+
+// Issue #1868 — form Access round-trip. The rows above prove what each tool
+// writes to disk; these prove Access accepts it. Every form write tool that
+// imports into Access is applied to the sandbox Form_FormPECAL (no other step
+// touches it), its own import gate loads the result into the sandbox binary,
+// and verify_code compares binary and source. The source is then restored
+// byte-for-byte, re-imported, and verify_code must be clean again before the
+// next tool runs. The scenarios, including the value-typed cases Access
+// rejected before #1928, live in _helpers/form-access-round-trip.mjs and are
+// replayed offline by test/quality-gates/mcp-e2e-form-access-round-trip-1868.test.ts.
+const formRoundTripPath = join(destinationRoot, "forms", `${FORM_ROUND_TRIP_MODULE}.form.txt`);
+const formRoundTripExportPath = join(sandboxPlan.sandbox.exportsRoot, "form-round-trip");
+// Access writes errors.txt next to the database when LoadFromText fails.
+const formRoundTripErrorsFiles = [
+  join(dirname(accessPath), "errors.txt"),
+  join(dirname(formRoundTripPath), "errors.txt"),
+];
+
+function addFormRoundTripResult(tool, pass, expected, summary) {
+  addResult({ area: "forms", tool, pass, expected, ms: 0, summary });
+  console.log(`${pass ? "PASS" : "FAIL"}\t${tool}\t0ms\t${summary}`);
+}
+
+async function verifyFormRoundTrip(moduleName) {
+  const result = await record(
+    "forms",
+    "verify_code:form-round-trip",
+    { ...ctx, moduleNames: [moduleName], diagnostic: true, timeoutMs: 180000 },
+    { timeoutMs: 180000 },
+  );
+  return summarizeFormVerify(payloadOf(result), moduleName);
+}
+
+async function importFormRoundTrip(tool) {
+  const result = await record(
+    "forms",
+    tool,
+    { ...ctx, moduleNames: [FORM_ROUND_TRIP_MODULE], apply: true, timeoutMs: 180000 },
+    { timeoutMs: 180000 },
+  );
+  const payload = payloadOf(result) ?? {};
+  const envelope = payload.result ?? payload;
+  const modules = Array.isArray(envelope?.modules) ? envelope.modules : [];
+  return {
+    pass: envelope?.ok === true && modules.length > 0 && modules.every((entry) => entry?.status === "ok"),
+    summary: `ok=${envelope?.ok}; modules=${modules.map((entry) => `${entry?.module}:${entry?.status}`).join(",")}`,
+  };
+}
+
+async function leftoverFormRoundTripErrorsFiles() {
+  const present = [];
+  for (const path of formRoundTripErrorsFiles) {
+    try {
+      await access(path);
+      present.push(path);
+    } catch {
+      // absent, as required
+    }
+  }
+  return present;
+}
+
+async function readExportedFormSource(root, fileName) {
+  let entries;
+  try {
+    entries = await readdir(root, { recursive: true });
+  } catch {
+    return undefined;
+  }
+  const match = entries.find((entry) => basename(String(entry)).toLowerCase() === fileName.toLowerCase());
+  return match === undefined ? undefined : readFile(join(root, String(match)), "utf8");
+}
+
+async function formRoundTripDesignPlan() {
+  const mapResult = await record("forms", "map_form_behavior:form-round-trip", {
+    ...ctx,
+    sourcePath: formRoundTripPath,
+  });
+  const planResult = await record("forms", "generate_form_design_plan:form-round-trip", {
+    behaviorMap: payloadOf(mapResult),
+    plan: { operations: FORM_ROUND_TRIP_PLAN_OPERATIONS },
+  });
+  return payloadOf(planResult);
+}
+
+async function revertFormRoundTrip(label, originalBytes) {
+  await writeFile(formRoundTripPath, originalBytes);
+  const reimport = await importFormRoundTrip("import_modules:form-round-trip-revert");
+  const restored = (await readFile(formRoundTripPath)).equals(originalBytes);
+  addFormRoundTripResult(
+    `${label}:revert`,
+    restored && reimport.pass,
+    "pre-apply source restored byte-for-byte and re-imported",
+    restored ? reimport.summary : "source bytes differ from the pre-apply snapshot",
+  );
+  const reverted = await verifyFormRoundTrip(FORM_ROUND_TRIP_MODULE);
+  addFormRoundTripResult(
+    `${label}:verify-reverted`,
+    reverted.clean,
+    "verify_code clean after the revert",
+    reverted.summary,
+  );
+}
+
+const formRoundTripBaselineImport = await importFormRoundTrip("import_modules:form-round-trip-baseline");
+const formRoundTripBaseline = await verifyFormRoundTrip(FORM_ROUND_TRIP_MODULE);
+const formRoundTripBaselinePass = formRoundTripBaselineImport.pass && formRoundTripBaseline.clean;
+addFormRoundTripResult(
+  "form-round-trip:baseline",
+  formRoundTripBaselinePass,
+  `${FORM_ROUND_TRIP_MODULE} imported and verify_code clean before any form write`,
+  `${formRoundTripBaselineImport.summary}; ${formRoundTripBaseline.summary}`,
+);
+
+// Without a clean baseline no drift below could be blamed on a tool; the
+// failed baseline row above already fails the battery.
+if (formRoundTripBaselinePass) {
+  for (const scenario of FORM_ROUND_TRIP_SCENARIOS) {
+    const label = `${scenario.tool}:access-round-trip`;
+    const originalBytes = await readFile(formRoundTripPath);
+    const plan = scenario.tool === "apply_form_design_plan" ? await formRoundTripDesignPlan() : undefined;
+    const applyResult = await record("forms", label, {
+      ...ctx,
+      sourcePath: formRoundTripPath,
+      ...scenario.buildArgs({ source: originalBytes.toString("utf8"), parseFormTxt, plan }),
+      apply: true,
+    });
+    const applyPayload = payloadOf(applyResult) ?? {};
+    const gatePassed = applyPayload.importGate === "passed" || applyPayload.loadFromTextGate === "passed";
+    const sourceCheck = scenario.expectSource(await readFile(formRoundTripPath, "utf8"));
+    addFormRoundTripResult(
+      `${label}:apply`,
+      gatePassed && sourceCheck.pass,
+      "Access import gate passed and the written source carries the typed values",
+      gatePassed ? sourceCheck.summary : `import gate not passed: ${normalize(applyResult.text)}`,
+    );
+
+    const applied = await verifyFormRoundTrip(FORM_ROUND_TRIP_MODULE);
+    addFormRoundTripResult(
+      `${label}:verify-applied`,
+      scenario.drift === "none" ? applied.clean : applied.clean || applied.layoutOnly,
+      scenario.drift === "none"
+        ? "verify_code clean: Access stored every written value as written"
+        : "verify_code drift limited to the defaults Access adds to the new control's layout",
+      applied.summary,
+    );
+
+    if (scenario.binaryValues !== undefined) {
+      const { control, properties } = scenario.binaryValues;
+      await rm(formRoundTripExportPath, { recursive: true, force: true });
+      await record("forms", "export_modules:form-round-trip", {
+        ...ctx,
+        moduleNames: [FORM_ROUND_TRIP_MODULE],
+        exportPath: formRoundTripExportPath,
+        apply: true,
+      });
+      const exported = await readExportedFormSource(
+        formRoundTripExportPath,
+        `${FORM_ROUND_TRIP_MODULE}.form.txt`,
+      );
+      const mismatches = Object.entries(properties)
+        .map(([key, raw]) => ({ key, raw, actual: controlProperty(exported, control, key) }))
+        .filter(({ raw, actual }) => actual !== raw)
+        .map(({ key, raw, actual }) => `${control}.${key}=${actual ?? "<absent>"} (want ${raw})`);
+      addFormRoundTripResult(
+        `${label}:binary-values`,
+        exported !== undefined && mismatches.length === 0,
+        `the binary exports ${control} with the values the tool wrote`,
+        exported === undefined
+          ? "exported form source not found"
+          : mismatches.length === 0
+            ? `${Object.keys(properties).join(",")} exported unquoted`
+            : mismatches.join("; "),
+      );
+    }
+
+    await revertFormRoundTrip(label, originalBytes);
+  }
+
+  // Forced failure: a quoted numeric Width, the value Access rejected before
+  // #1928. form_deserialize writes the IR verbatim, so Access itself must
+  // refuse it; the source, the binary, and the database folder must be left
+  // exactly as they were.
+  {
+    const label = "form_deserialize:access-round-trip-rejected";
+    const originalBytes = await readFile(formRoundTripPath);
+    const rejected = await record(
+      "forms",
+      label,
+      {
+        ...ctx,
+        sourcePath: formRoundTripPath,
+        ...buildRejectedDeserializeArgs({ source: originalBytes.toString("utf8"), parseFormTxt }),
+        apply: true,
+      },
+      { expected: "error" },
+    );
+    const rejectedError = mcpErrorFromResult(rejected);
+    const rejectedCode = rejectedError?.code ?? extractMcpErrorCode(rejected.text);
+    const sourceRestored = (await readFile(formRoundTripPath)).equals(originalBytes);
+    addFormRoundTripResult(
+      `${label}:rollback`,
+      rejectedCode === "FORM_IMPORT_GATE_FAILED" &&
+        rejectedError?.details?.sourceUnchanged === true &&
+        sourceRestored,
+      "Access rejects the quoted Width; FORM_IMPORT_GATE_FAILED restores the source",
+      `code=${rejectedCode}; sourceUnchanged=${rejectedError?.details?.sourceUnchanged}; bytesRestored=${sourceRestored}`,
+    );
+    const leftovers = await leftoverFormRoundTripErrorsFiles();
+    addFormRoundTripResult(
+      `${label}:no-errors-txt`,
+      leftovers.length === 0,
+      "no errors.txt left after the failed import",
+      leftovers.length === 0 ? "no errors.txt next to the database or the form source" : `left behind: ${leftovers.join(", ")}`,
+    );
+    const binary = await verifyFormRoundTrip(FORM_ROUND_TRIP_MODULE);
+    addFormRoundTripResult(
+      `${label}:verify-binary-unchanged`,
+      binary.clean,
+      "verify_code clean: the rejected import left the binary unchanged",
+      binary.summary,
+    );
+  }
+
+  // create_form_from_template writes a new form, so its revert is deletion.
+  // Access drops the form-level GUID of a newly named form and template
+  // cloning writes no .cls, so the clone may report its own drift; it must
+  // reach the binary and must not disturb any other module.
+  {
+    const label = "create_form_from_template:access-round-trip";
+    const cloneResult = await record("forms", "create_form_from_template:access-round-trip", {
+      ...ctx,
+      sourceForm: FORM_ROUND_TRIP_MODULE,
+      targetForm: FORM_ROUND_TRIP_CLONE_MODULE,
+      tokenMap: {},
+      overwrite: true,
+      apply: true,
+    });
+    const clone = payloadOf(cloneResult) ?? {};
+    const clonePath =
+      typeof clone.targetPath === "string"
+        ? clone.targetPath
+        : join(destinationRoot, "forms", `${FORM_ROUND_TRIP_CLONE_MODULE}.form.txt`);
+    const cloneSource = await readFile(clonePath, "utf8").catch(() => "");
+    const cloneControls = ["PECAL", "DESCRIPCION", "Etiqueta232", "Etiqueta240"];
+    addFormRoundTripResult(
+      `${label}:apply`,
+      clone.mode === "apply" &&
+        clone.importGate === "passed" &&
+        cloneControls.every((name) => hasControl(cloneSource, name)),
+      "clone imported through the Access gate with every Detalle control",
+      `mode=${clone.mode}; importGate=${clone.importGate}; targetPath=${basename(clonePath)}`,
+    );
+    const cloned = await verifyFormRoundTrip(FORM_ROUND_TRIP_CLONE_MODULE);
+    addFormRoundTripResult(
+      `${label}:verify-applied`,
+      cloned.missingInBinary.length === 0 && cloned.foreign.length === 0,
+      "verify_code finds the clone in the binary and reports no other module",
+      cloned.summary,
+    );
+    const deleteResult = await record(
+      "forms",
+      "delete_module:form-round-trip-clone",
+      {
+        ...ctx,
+        moduleName: FORM_ROUND_TRIP_CLONE_MODULE,
+        apply: true,
+        implements_check: "delete_module_precheck",
+        confirmedRequiresConfirmation: true,
+        timeoutMs: 180000,
+      },
+      { timeoutMs: 180000 },
+    );
+    const deletedNames = payloadOf(deleteResult)?.deleted;
+    await rm(clonePath, { force: true });
+    await rm(clonePath.replace(/\.form\.txt$/i, ".cls"), { force: true });
+    const cloneDeleted =
+      Array.isArray(deletedNames) &&
+      deletedNames.some((name) => String(name).toLowerCase() === FORM_ROUND_TRIP_CLONE_MODULE.toLowerCase());
+    addFormRoundTripResult(
+      `${label}:revert`,
+      cloneDeleted,
+      "clone deleted from the binary and its source removed",
+      `deleted=${JSON.stringify(deletedNames)}`,
+    );
+    const goneResult = await record(
+      "forms",
+      "verify_code:form-round-trip-clone-removed",
+      { ...ctx, moduleNames: [FORM_ROUND_TRIP_CLONE_MODULE], diagnostic: true, timeoutMs: 180000 },
+      { expected: "error", timeoutMs: 180000 },
+    );
+    const goneCode = mcpErrorFromResult(goneResult)?.code ?? extractMcpErrorCode(goneResult.text);
+    addFormRoundTripResult(
+      `${label}:verify-reverted`,
+      goneCode === "MODULE_NOT_FOUND",
+      "verify_code finds the clone on neither side",
+      `code=${goneCode}`,
+    );
+  }
+}
+// Issue #1868 — end of form Access round-trip.
 
 await record("legacy", "run_vba", { procedureName: "DysflowMcpE2EMissingProcedure", argsJson: "[]", apply: true }, { expected: "error" });
 await record("legacy", "cleanup_access_operation", { operationId: "missing-operation", accessPath, force: false }, { expected: "error" });

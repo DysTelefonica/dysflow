@@ -81,6 +81,14 @@ writes). Areas currently covered:
   and aggregation, privacy sentinels, and telemetry opt-out byte identity.
 - **form-ui** — `analyze_form_ui`, `map_form_behavior`, `generate_form_design_plan`,
   `apply_form_design_plan`, `copy_form_ui_pattern`, `verify_form_ui`.
+- **forms (Access round-trip, #1868)** — every form write tool that imports into Access is applied
+  to the sandbox `Form_FormPECAL`. `verify_code` then compares binary and source, the source is
+  restored byte-for-byte and re-imported, and `verify_code` must be clean again. The cases include
+  numeric values passed as strings, half-twip align/distribute moves, and a quoted `Width` that
+  Access must reject without leaving `errors.txt`. Scenarios live in
+  `_helpers/form-access-round-trip.mjs`. The offline pin
+  `test/quality-gates/mcp-e2e-form-access-round-trip-1868.test.ts` replays them through the
+  production adapter and fails when a new form write tool has no scenario.
 
 Baseline (v1.14.0): 91 passed / 0 failed. Anything below that is a regression or a harness/contract
 drift — investigate before merging.
