@@ -548,7 +548,7 @@ Write-Host "Release commit $headSha prepared locally for $tag." -ForegroundColor
 Write-Host "main is protected, so this script does not push it. Deliver with:" -ForegroundColor Cyan
 Write-Host "  1. git switch -c release/$tag; git push -u origin release/$tag"
 Write-Host "  2. gh pr create --base main --fill --title $tag"
-Write-Host "  3. Wait for the five required checks, then merge the pull request."
+Write-Host "  3. Wait for the required CI check, then merge the pull request."
 Write-Host "  4. git switch main; git pull --ff-only"
 Write-Host "  5. pwsh -File scripts/release-prepare.ps1 -Resume -Version $next"
 Write-Host ""

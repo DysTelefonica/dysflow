@@ -24,7 +24,7 @@ two phases because `main` is protected.
   5. Creates the `chore(release): prepare vX.Y.Z` commit and **stops**. It does
      not push `main`: branch protection rejects a direct push. The script prints
      the pull-request delivery steps (branch, `gh pr create`, wait for the
-     required checks, merge, then return to `main`).
+     required `CI` check, merge, then return to `main`).
 
 **Phase 2 — resume (`-Resume -Version X.Y.Z`), after that pull request merges.**
 The script:
@@ -203,6 +203,10 @@ It runs `pnpm test:e2e:mcp:release` against a safe, run-scoped build and blocks
 publication on failure.
 
 Agents must not run it locally as a pre-tag gate.
+
+Every pull request and every push to `main` runs only the cheap `CI` job
+(`pnpm lint`, `pnpm build`, `pnpm test`); the Access E2E battery runs only on
+the release tag.
 
 ### Cheap e2e-suite contract tests (run in <100ms total, in CI)
 

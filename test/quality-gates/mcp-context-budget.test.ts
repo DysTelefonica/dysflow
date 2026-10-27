@@ -51,22 +51,6 @@ describe("MCP context budget helpers", () => {
       }),
     ).toEqual({ tools: [{ name: "large_tool" }] });
   });
-
-  it("wires the built-runtime shrink-only command into the single CI leg", async () => {
-    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-    const workflow = await readFile(".github/workflows/ci.yml", "utf8");
-    expect(packageJson.scripts?.["mcp:context-budget"]).toBe(
-      "node scripts/mcp-context-budget.mjs --baseline scripts/baselines/mcp-context-budget.json",
-    );
-    const budgetStep =
-      /name: MCP context budget \(shrink-only\)([\s\S]*?)(?=\n\s*- name:|\n\s{0,4}\S)/.exec(
-        workflow,
-      )?.[1];
-    expect(budgetStep).toContain("run: pnpm mcp:context-budget");
-    expect(budgetStep).not.toMatch(/^\s*if:/m);
-  });
 });
 
 /**

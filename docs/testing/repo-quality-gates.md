@@ -2,16 +2,6 @@
 
 Owner: repo-engineering-hardening
 
-## Dependency audit evidence
-
-The `main-integrity` job reports dependency audit evidence as `clean`,
-`vulnerable`, or `unavailable`. High/critical advisories fail every main push.
-Registry, protocol, malformed-response, and network failures are retried at
-most three times and then fail the job. Pull requests do not repeat this audit;
-their merge receives the exact-main-SHA audit before release automation may
-continue. The job summary records the sanitized registry source, freshness,
-attempts, and policy. `unavailable` is NEVER evidence that dependencies are clean.
-
 ## Current gates
 
 - `pnpm test` — Vitest unit suite (fast, no Access/PowerShell).
@@ -34,109 +24,47 @@ attempts, and policy. `unavailable` is NEVER evidence that dependencies are clea
   - `pnpm format` / `pnpm format:check` — auto-format / verify formatting.
 - `pnpm coverage` — Vitest coverage for `src/**/*.ts`.
 
-## Pull-request and main-push authority
+## CI and release authority
 
-The full Windows quality and integration suites run against GitHub's synthetic
-pull-request merge ref, so they verify the proposed change integrated with its
-current base rather than the feature branch alone. Validated PR merges do not
-repeat the full quality suite on the resulting `main` push. The lightweight
-`main-integrity` job verifies the associated PR's merge, base, head, and green
-CI identities, runs the fail-closed dependency audit, and preserves the exact
-main-SHA `CI` conclusion consumed by release automation.
-
-Direct, ambiguous, or API-unverifiable pushes remain fail-closed: they run the
-complete Windows quality suite on `main`. Documentation-only pull requests keep
-their existing path classification and omit code quality and integration jobs;
-the same merged PR still receives the lightweight main integrity signal.
-
-## Access E2E cadence and runner split
-
-The full MCP battery runs from `main` every day at 02:17 UTC in
-`.github/workflows/nightly-access-e2e.yml`. A nightly cadence bounds regression
-detection to 24 hours without serializing every pull request behind the single
-`dysflow-e2e` runner. The workflow queues overlapping nightlies rather than
-cancelling an active Access operation.
-
-A maintainer can also start the same battery with `workflow_dispatch`, for
-example to prove a fix against real Access on `main` before tagging.
-
-The same run also collects the crash evidence of that run (#1918).
-
-Every COM session teardown appends its step order and its owned PID to
-`%RUNNER_TEMP%\dysflow-com-close-trace.log`.
-
-`scripts/collect-access-crash-events.ps1` exports the Application log entries
-(event id 1000) of the crashed processes as normalized lines, with a UTC
-timestamp and a decimal PID.
-
-Both files are uploaded as the `access-com-crash-evidence-<run id>` artifact,
-so a teardown trace and the crash of the same process join on that PID.
-
-The trace is off unless `DYSFLOW_TRACE_COM_CLOSE` names a file, so every other
-run and every other runtime is unaffected.
-
-The job stays restricted to `refs/heads/main`, so pull-request and fork code
-never reaches the self-hosted runner of this public repository.
+Every pull request and every push to `main` runs one job, `CI`, in
+`.github/workflows/ci.yml` on a hosted Linux runner: `pnpm lint`,
+`pnpm build`, and `pnpm test`. `CI` is the single required status check on
+`main`. No Windows, Access, or documentation-quality job runs per change.
 
 Pull requests prove adapter-level contracts through the in-process MCP protocol
 E2E tests listed in `UNIT_E2E_TESTS` (`test/e2e-suite-authority.ts`), which run
-in the quality suite on every change.
+inside `pnpm test`.
 
-The tag-only release gate in `.github/workflows/release.yml` remains mandatory
-and unchanged.
+The Access E2E battery runs only when a release tag is pushed.
+`.github/workflows/release.yml` repeats lint, build, and test in its
+`quality-authority` job and runs `pnpm test:e2e:mcp:release` in its
+`e2e-validation` job on the self-hosted `dysflow-e2e` runner. The GitHub Release
+is published only after both succeed.
 
-Both workflows use the self-hosted Access runner, pre-staged fixture copies,
-`ACCESS_VBA_PASSWORD`, and a repository-local `test-runtime`. Neither workflow
-may fall back to the production runtime.
+That job uses pre-staged fixture copies, `ACCESS_VBA_PASSWORD`, and a
+repository-local `test-runtime`; it never falls back to the production runtime.
+Configure `DYSFLOW_FIXTURES_SOURCE` with the runner-owned fixture directory
+outside every Git checkout (currently `C:\actions-runner\_fixtures\dysflow`).
 
-The runner owns the test-only fixture directory outside every Git checkout and
-worktree.
+CodeQL runs weekly and on `workflow_dispatch` (`.github/workflows/codeql.yml`),
+not on pull requests.
 
-Configure `DYSFLOW_FIXTURES_SOURCE` with that location. The current runner uses
-`C:\actions-runner\_fixtures\dysflow`.
+## Manual Access suites
 
-Both Access workflows reject an unset source or missing fixture before product
-tests start.
+`test/e2e-suite-authority.ts` classifies every E2E/integration Vitest file
+exactly once; `test/quality-gates/e2e-suite-authority.test.ts` pins that.
 
-The issue #1503 audit classified the 30 previously unselected files as follows:
+- `UNIT_E2E_TESTS` — in-process tests included in `pnpm test`.
+- `PR_SMOKE_TESTS` — Windows smoke tests without real Access.
+- `NIGHTLY_ACCESS_TESTS` — real-Access tests; run only this subset with
+  `vitest run -c vitest.nightly-access.config.ts`.
+- `E2E_EXEMPTIONS` — the manual template-clone benchmark, which needs a
+  gitignored fixture.
 
-| Classification | Count | Evidence boundary |
-|---|---:|---|
-| Real Access / self-hosted | 17 | Access COM or DAO, `E2E_testing/*.accdb`, and password gates in the test files |
-| Hosted Windows | 10 | In-memory MCP transports, pure filesystem/form transforms, or owned PowerShell child processes |
-| Already in unit CI | 2 | Explicit `vitest.config.ts` includes for result-writer and temp-sweep contracts |
-| No hosted signal | 1 | Every template-clone atom requires the gitignored `bench-cache` fixture |
+`pnpm test:integration` runs both Windows subsets on a Windows host.
 
-The hosted subset is pinned by
-`test/quality-gates/ci-workflow.test.ts` and runs in the existing
-`windows-integration-smoke` job:
-
-Smoke applicability comes from changed paths in `scripts/check-documentation-quality.mjs`,
-including both rename endpoints.
-
-Documentation, `skills/`, and `.team-skills.yaml` alone skip smoke. Source or
-script changes require it regardless of branch name.
-
-The classifier emits `windows_smoke_required`; the job condition and final CI
-aggregate consume that same output. Applicable smoke that fails or is skipped
-cannot pass the aggregate (#1832).
-
-- `test/e2e/get-capabilities-write-policy-propagation.e2e.test.ts`
-- `test/e2e/mcp-catalog-dryrun.e2e.test.ts`
-- `test/e2e/mcp-harness-watchdog.e2e.test.ts`
-- `test/e2e/mcp-input-validation.e2e.test.ts`
-- `test/e2e/mcp-orphan-cleanup.e2e.test.ts`
-- `test/e2e/mcp-query-validation.e2e.test.ts`
-- `test/e2e/runtime-guard-mcp-integration.e2e.test.ts`
-- `test/integration/form-ir-mutation-preservation.test.ts`
-- `test/integration/mcp-harness-process-tree.test.ts`
-- `test/integration/vba-manager-sentinel-trap.test.ts`
-
-`test/integration/dysflow-result-writer-contract.test.ts` and
-`test/integration/global-setup-temp-sweep.test.ts` stay in the unit suite.
-
-The benchmark-only `test/integration/form-template-clone-bench.test.ts` stays
-out of hosted CI until it has a deterministic committed or downloaded fixture.
+No workflow schedules the Windows or real-Access suites. Run them by hand when
+a change touches Access COM, PowerShell, or form import paths.
 
 ## Coverage thresholds
 
@@ -153,11 +81,11 @@ Thresholds are set at measured baseline minus a safety margin (ADR-6). Current f
 | functions  | 85%     |
 | lines      | 84%     |
 
-> **CI is the authoritative gate.** Vitest uses two independent concurrency controls:
-> `maxWorkers: 1` serializes test execution for Windows spawn stability, while
+> **Coverage runs locally (`pnpm coverage`), not in CI.** Vitest uses two independent concurrency
+> controls: `maxWorkers: 1` serializes test execution for Windows spawn stability, while
 > `coverage.processingConcurrency: 1` serializes V8 coverage-result processing so the result does
-> not depend on host CPU availability. The authoritative coverage measurement runs on the same
-> Windows platform that hosts Microsoft Access and PowerShell in production.
+> not depend on host CPU availability. Measure on Windows, the platform that hosts Microsoft
+> Access and PowerShell in production.
 
 The branch floor keeps its historical 80% value. Port-level coverage for the telemetry-evidence
 CLI raises the deterministic Windows measurement from 80.55% to 80.97%.
@@ -165,7 +93,7 @@ CLI raises the deterministic Windows measurement from 80.55% to 80.97%.
 That leaves approximately 0.9 percentage points of measured margin; it does not claim
 headroom comparable to the deliberately broader floors on the other metrics.
 
-> Raise thresholds only after sustained coverage improvements and CI validation.
+> Raise thresholds only after sustained coverage improvements.
 
 ## PowerShell test quality rule
 
@@ -195,10 +123,6 @@ reorganization) and violate the [testing philosophy](./testing-philosophy.md) no
 
 **Gate**: run `pnpm test:ps1` when Pester coverage for PowerShell contracts changes.
 
-The Windows smoke workflow selects Pester **5.7.1** explicitly for installation
-and import. A different preinstalled version does not satisfy the requirement.
+No workflow runs Pester; run `pnpm test:ps1` locally with Pester **5.7.1**.
 
-The step reports the loaded version before running `scripts/tests` (#1835).
-
-Call out skipped Pester execution with an explicit reason, such as no `pwsh` in the CI
-environment for that run.
+Call out skipped Pester execution with an explicit reason, such as no `pwsh` on the host.

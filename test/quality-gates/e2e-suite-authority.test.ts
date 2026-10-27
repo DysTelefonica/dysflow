@@ -14,12 +14,6 @@ function discoveredTests(directory: string): string[] {
     .map((entry) => join(directory, entry).replaceAll("\\", "/"));
 }
 
-function workflowTestPaths(workflow: string): string[] {
-  return [...workflow.matchAll(/(test\/(?:e2e|integration)\/\S+\.test\.ts)\b/g)].map(
-    (match) => match[1] ?? "",
-  );
-}
-
 const discovered = [...discoveredTests("test/e2e"), ...discoveredTests("test/integration")];
 const classified = [
   ...UNIT_E2E_TESTS,
@@ -47,20 +41,8 @@ describe("#1547 E2E suite execution authority", () => {
     expect(config).toContain("...UNIT_E2E_TESTS");
   });
 
-  it("runs exactly the PR-smoke classification in hosted Windows CI", () => {
-    const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
-    expect([...new Set(workflowTestPaths(workflow))].sort()).toEqual([...PR_SMOKE_TESTS].sort());
-  });
-
-  it("wires nightly Access tests without weakening the release battery", () => {
+  it("wires nightly Access tests into their manual config", () => {
     const nightlyConfig = readFileSync("vitest.nightly-access.config.ts", "utf8");
-    const nightlyWorkflow = readFileSync(".github/workflows/nightly-access-e2e.yml", "utf8");
-    const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
-
     expect(nightlyConfig).toContain("...NIGHTLY_ACCESS_TESTS");
-    expect(nightlyWorkflow).toContain("vitest.nightly-access.config.ts");
-    expect(nightlyWorkflow).toContain("DYSFLOW_RUN_ACCESS_RELINK_APPLY: '1'");
-    expect(nightlyWorkflow).toMatch(/DYSFLOW_ACCESS_TEST_ROOT:\s*\$\{\{ runner\.temp \}\}/);
-    expect(releaseWorkflow).toContain("pnpm test:e2e:mcp:release");
   });
 });

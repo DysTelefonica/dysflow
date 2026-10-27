@@ -84,7 +84,7 @@ Commands:
 
 A doc that describes behavior which no longer exists is worse than no doc, because an agent will act on it.
 
-The CI gate validates **shape**: headings, paragraph length, links, naming. It leaves **semantic accuracy to human review**.
+The local docs check (`scripts/check-documentation-quality.mjs`) validates **shape**: headings, paragraph length, links, naming. It leaves **semantic accuracy to human review**.
 
 Nothing else catches a stale claim — see [documentation quality gates](./docs/testing/documentation-quality-gates.md). That is what this section is for.
 
@@ -495,7 +495,7 @@ El compilador, los tests y la compuerta de runtime en `bootstrap({})` ya cubren 
 
 ### Excepción: releases (branch protection en `main`)
 
-`main` tiene branch protection activa con `enforce_admins: true` y cinco status checks requeridos antes de aceptar cualquier push: `Quality gates (26)`, `Analyze (javascript-typescript)`, `Classify changes`, `Documentation quality`, `CodeQL`. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
+`main` tiene branch protection activa con `enforce_admins: true` y un único status check requerido antes de aceptar cualquier push: `CI` (`.github/workflows/ci.yml`: `pnpm lint`, `pnpm build`, `pnpm test` en Linux). El E2E de Access solo corre al publicar el tag. Solo `ardelperal` figura en `restrictions`, pero ese bypass no esquiva los checks: el push directo a `main` queda rechazado con `GH006: Protected branch update failed for refs/heads/main`.
 
 Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica a releases**. El patrón real, comprobado en v4.4.5 (PR #1759, run `35466013339`):
 
@@ -503,7 +503,7 @@ Por eso el paso 1 del Procedimiento ("commit directo contra `main`") **no aplica
 2. `git push origin vX.Y.Z` con el tag — esto dispara `.github/workflows/release.yml` y crea el GitHub Release independientemente del estado de `main`.
 3. Esperar el job `Build & Release Artifacts` (28 s en v4.4.5). Si los 4 jobs del release (`Build release artifact`, `Exact-SHA quality authority`, `E2E validation (Windows self-hosted)`, `Build & Release Artifacts`) pasan, el release queda publicado con sus assets firmados (`dysflow-vX.Y.Z.tar.gz`, `SHA256SUMS`, `SHA256SUMS.sig`).
 4. Crear rama efímera desde el commit del tag (p.ej. `release-vX.Y.Z`), pushearla y abrir PR contra `main`.
-5. Esperar los 5 checks del branch protection en el PR (el cuello de botella en v4.4.5 fue `Quality gates (26)` a 5 m 28 s; los demás en segundos).
+5. Esperar el check `CI` del branch protection en el PR.
 6. Mergear el PR → `main` queda sincronizado con el commit del release.
 7. Limpiar el worktree temporal (`git worktree remove --force`) y la rama local; **no borrar la rama remota** (ver regla sobre preservación de ramas).
 

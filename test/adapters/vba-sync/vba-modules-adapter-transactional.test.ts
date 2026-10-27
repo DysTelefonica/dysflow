@@ -34,14 +34,19 @@ async function sha256Of(path: string): Promise<string> {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-function makeAdapter(executor: VbaManagerExecutor): {
+// The project root must share a filesystem with the test binary: the
+// transactional commit is an atomic rename(2), which fails with EXDEV across
+// devices (e.g. a relative "C:/repo" on Linux vs a binary under /tmp).
+function makeAdapter(
+  executor: VbaManagerExecutor,
+  projectRoot: string,
+): {
   adapter: VbaModulesAdapter;
   stagingRoot: string;
   projectRoot: string;
   binaryPath: string;
 } {
-  const projectRoot = "C:/repo";
-  const binaryPath = "C:/repo/App.accdb";
+  const binaryPath = join(projectRoot, "App.accdb");
   const stagingRoot = join(projectRoot, ".dysflow", "runtime", "transactional");
   const orchestrator: VbaModulesOrchestrator = {
     scriptPath: "scripts/dysflow-vba-manager.ps1",
@@ -158,7 +163,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
         timedOut: false,
       };
     };
-    const { adapter, binaryPath } = makeAdapter(executor);
+    const { adapter, binaryPath } = makeAdapter(executor, workdir);
 
     const result = await adapter.execute("import_modules", {
       accessPath: realBinaryPath,
@@ -167,7 +172,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       transactional: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     // The executor was redirected to a staging path (NOT the original).
     expect(executorAccessPath).not.toBe(binaryPath);
@@ -198,7 +204,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
         timedOut: false,
       };
     };
-    const { adapter } = makeAdapter(executor);
+    const { adapter } = makeAdapter(executor, workdir);
 
     const result = await adapter.execute("import_modules", {
       accessPath: realBinaryPath,
@@ -228,7 +234,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
         timedOut: false,
       };
     };
-    const { adapter } = makeAdapter(executor);
+    const { adapter } = makeAdapter(executor, workdir);
 
     const result = await adapter.execute("import_modules", {
       accessPath: realBinaryPath,
@@ -236,7 +242,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       apply: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     expect(result.metadata?.transactional).toBeUndefined();
     const afterContent = await readFile(realBinaryPath);
@@ -257,7 +264,7 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
         timedOut: false,
       };
     };
-    const { adapter } = makeAdapter(executor);
+    const { adapter } = makeAdapter(executor, workdir);
 
     const result = await adapter.execute("export_modules", {
       accessPath: realBinaryPath,
@@ -266,7 +273,8 @@ describe("VbaModulesAdapter — transactional mode wiring (#975)", () => {
       transactional: true,
     });
 
-    expect(result.ok).toBe(true);
+    // Show the failure envelope, not just `false`, when the transaction is refused.
+    expect(result).toMatchObject({ ok: true });
     if (!result.ok) throw new Error("expected success");
     expect(result.metadata?.transactional?.originalSha256).toBe(originalSha);
     const afterContent = await readFile(realBinaryPath);
