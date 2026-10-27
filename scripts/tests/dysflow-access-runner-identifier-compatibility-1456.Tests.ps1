@@ -12,6 +12,7 @@ BeforeAll {
         'Format-AccessIdentifier',
         'Format-SqlLiteral',
         'Convert-RecordsetRows',
+        'Get-TableDefFieldSchema',
         'Get-TableSchema',
         'Invoke-GetSchemaAction',
         'Invoke-CountRowsAction',

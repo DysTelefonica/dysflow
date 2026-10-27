@@ -724,6 +724,8 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - Parameters: `accessPath`, `backendPath`, `target` (optional)
 * **`get_schema`**: Retrieve column types, sizes, and properties for a table. Read the committed ERD (`docs/erd/ERD.md`, see `generate_erd`) first; it already carries every table, field, type, size, required flag, key and relation. Use `get_schema` only for a property the ERD lacks.
   - Parameters: `tableName` (string, optional), explicit path aliases, and `target="frontend" | "backend" | "auto"`. With `projectId`/`contextId`, `auto` probes backend then frontend by table identity and fails on ambiguity instead of guessing.
+  - Every call reads the database live; there is no schema cache. The result carries `schemaSource` (#1943): `table-definition` for a local table and `linked-source` for an Access link, which is read from the source database (`sourceDatabase`, `sourceTableName`) because a link's own field list is a snapshot that goes stale until the link is refreshed.
+  - `schemaSource.kind = "link-metadata"` with `live: false` means the source could not be opened (or the link is not an Access link): the columns are that cached snapshot, `linkLastUpdated` gives its age, and `warning` names the refresh path (`relink_tables`, or `databasePath` on the source).
 * **`count_rows`**: Get row count for a table or SQL query.
   - Parameters: `tableName` (string, optional), `sql`/`query` (string, optional), `accessPath` (optional), `target` (optional)
 * **`distinct_values`**: List distinct values of a column.
