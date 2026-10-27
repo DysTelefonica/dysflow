@@ -125,8 +125,10 @@ jobs:
     # functional completion, cleanup and the release receipt remain mandatory.
     runs-on: dysflow-e2e
     # The full battery plus the four real Access idempotence journeys exceeded
-    # 30 minutes in v4.4.13; retain every assertion and allow completion headroom.
-    timeout-minutes: 60
+    # 30 minutes in v4.4.13, and run 40395781420 (2026-10-27) was still running
+    # its last scenarios when the 60-minute limit cancelled it. Retain every
+    # assertion and allow completion headroom.
+    timeout-minutes: 120
 
     permissions:
       contents: read
