@@ -2399,7 +2399,10 @@ function Open-AccessDatabase {
         # Visible/UserControl=$false (BEFORE OpenCurrentDatabase, see #730),
         # hWnd layer-1 (pre-open), OpenCurrentDatabase, hWnd layer-2 (post-open retry),
         # WMI diff layer-3 (fallback, bounded, never overwrites a stronger layer).
-        $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password
+        # #1911: the marker gets the PID before OpenCurrentDatabase, which can block on a
+        # modal dialog; a run killed during the open can then reap exactly its own Access.
+        $canonical = Open-CanonicalAccess -DbPath $AccessPath -Password $Password `
+            -OwnedPidAction { param([int]$AccessPid) Write-DysflowOperationMarker -Status "running" -AccessPid $AccessPid }
         # #1917: set to $true once the edit is saved, so the close can tolerate a
         # 0x800706BA Quit of an Access that already died with the edit persisted.
         $canonical | Add-Member -NotePropertyName EditSaved -NotePropertyValue $false -Force
