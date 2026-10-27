@@ -299,8 +299,14 @@ function filterSummaryToModuleNames(
 ): SyncVerifySummary {
   if (!enabled || moduleNames === undefined || moduleNames.length === 0) return summary;
 
-  const selected = new Set(moduleNames.map((name) => name.toLowerCase()));
-  const inScope = (entry: { moduleName: string }) => selected.has(entry.moduleName.toLowerCase());
+  // A form/report is reported under one of its file names (`frmX`,
+  // `Form_Clientes`) and may be requested with or without the Access
+  // `Form_`/`Report_` prefix; compare both sides without it. The pre-verify was
+  // already focused on the requested names, so this never widens the scope to
+  // an unrelated standard module.
+  const unprefixed = (name: string) => name.replace(/^(Form_|Report_)/i, "").toLowerCase();
+  const selected = new Set(moduleNames.map(unprefixed));
+  const inScope = (entry: { moduleName: string }) => selected.has(unprefixed(entry.moduleName));
   const missingInBinary = summary.missingInBinary.filter(inScope);
   const missingInSource = summary.missingInSource.filter(inScope);
   const sourceNewerEntries = (summary.sourceNewerEntries ?? []).filter(inScope);
@@ -377,44 +383,67 @@ export function buildSyncBinaryPlan(args: {
   acceptBothChanged?: boolean;
 }): SyncBinaryPlan {
   const { summary, direction, scope, acceptBothChanged = false } = args;
-  const importSet = new Set<string>();
-  const exportSet = new Set<string>();
+  // Module names are case-insensitive, as in VBA: every set is keyed by the
+  // case-folded name and keeps the reported name as its value.
+  const keyOf = (entry: { moduleName: string }) => entry.moduleName.toLowerCase();
+  const importSet = new Map<string, string>();
+  const exportSet = new Map<string, string>();
+  const add = (target: Map<string, string>, entry: { moduleName: string }) =>
+    target.set(keyOf(entry), entry.moduleName);
   const skipped: SyncBinarySkippedEntry[] = [];
 
+  const wantsImport = [...summary.missingInBinary, ...(summary.sourceNewerEntries ?? [])];
+  const wantsExport = [...summary.missingInSource, ...(summary.binaryNewerEntries ?? [])];
   // Direction:'src-to-binary' OR 'both' -> toImport = missingInBinary + sourceNewer
   // Named semantic entries come from the adapter's actionableDifferent
   // projection, while missing modules retain their dedicated lists.
   if (direction === "src-to-binary" || direction === "both") {
-    for (const entry of summary.missingInBinary) importSet.add(entry.moduleName);
-    for (const entry of summary.sourceNewerEntries ?? []) importSet.add(entry.moduleName);
+    for (const entry of wantsImport) add(importSet, entry);
   }
   if (direction === "binary-to-src" || direction === "both") {
-    for (const entry of summary.missingInSource) exportSet.add(entry.moduleName);
-    for (const entry of summary.binaryNewerEntries ?? []) exportSet.add(entry.moduleName);
+    for (const entry of wantsExport) add(exportSet, entry);
   }
 
   // Issue #1890 — a module whose direction was inferred from the last-synced
   // base is never applied automatically, not even through another of its files:
   // an import or export moves the whole module.
   const baseResolved = new Map(
-    (summary.baseResolvedEntries ?? []).map((entry) => [entry.moduleName, entry]),
+    (summary.baseResolvedEntries ?? []).map((entry) => [keyOf(entry), entry]),
   );
-  for (const name of baseResolved.keys()) {
-    importSet.delete(name);
-    exportSet.delete(name);
+  for (const key of baseResolved.keys()) {
+    importSet.delete(key);
+    exportSet.delete(key);
   }
 
-  const bothChangedEntries = summary.bothChangedEntries ?? [];
+  // A module whose files point in opposite directions (a `sourceNewer`
+  // `.form.txt` with a `binaryNewer` `.cls`) is a conflict: importing it loads
+  // the stale source `.cls` over the binary's newer code, and exporting it then
+  // writes that stale code back, so the edit is lost on both sides.
+  const exportKeys = new Set(wantsExport.map(keyOf));
+  const listedConflicts = new Set((summary.bothChangedEntries ?? []).map(keyOf));
+  const bothChangedEntries = [
+    ...(summary.bothChangedEntries ?? []),
+    ...wantsImport.filter(
+      (entry, index) =>
+        exportKeys.has(keyOf(entry)) &&
+        !listedConflicts.has(keyOf(entry)) &&
+        !baseResolved.has(keyOf(entry)) &&
+        wantsImport.findIndex((other) => keyOf(other) === keyOf(entry)) === index,
+    ),
+  ];
   const acceptsConflictDirection =
     acceptBothChanged && (direction === "src-to-binary" || direction === "binary-to-src");
+  // The same holds for a module with a conflicted file: importing a form also
+  // loads its code-behind `.cls`, so a `sourceNewer` `.form.txt` must not carry
+  // a conflicted `.cls` into the binary unless the caller accepted the conflict.
   if (acceptsConflictDirection) {
     const target = direction === "src-to-binary" ? importSet : exportSet;
-    for (const entry of bothChangedEntries) {
-      target.add(entry.moduleName);
-    }
+    for (const entry of bothChangedEntries) add(target, entry);
   } else {
     for (const entry of bothChangedEntries) {
-      const inferred = baseResolved.get(entry.moduleName);
+      importSet.delete(keyOf(entry));
+      exportSet.delete(keyOf(entry));
+      const inferred = baseResolved.get(keyOf(entry));
       if (inferred !== undefined) {
         skipped.push({
           moduleName: entry.moduleName,
@@ -428,8 +457,8 @@ export function buildSyncBinaryPlan(args: {
     }
   }
 
-  const toImport = [...importSet].sort();
-  const toExport = [...exportSet].sort();
+  const toImport = [...importSet.values()].sort();
+  const toExport = [...exportSet.values()].sort();
   // totalActionable is the union of dispatched lists (the actionable counts
   // a caller can act on in a single sync run).
   const totalActionable = toImport.length + toExport.length;

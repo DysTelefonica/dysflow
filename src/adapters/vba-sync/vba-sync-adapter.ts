@@ -1382,12 +1382,13 @@ function stripSyncBinaryOwnParams(params: Record<string, unknown>): Record<strin
 function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
   const result = (value ?? {}) as {
     ok?: boolean;
-    missingInBinary?: ReadonlyArray<{ moduleName: string }>;
-    missingInSource?: ReadonlyArray<{ moduleName: string }>;
+    missingInBinary?: ReadonlyArray<{ moduleName: string; ambiguousDocument?: boolean }>;
+    missingInSource?: ReadonlyArray<{ moduleName: string; ambiguousDocument?: boolean }>;
     actionableDifferent?: ReadonlyArray<{
       moduleName: string;
       classification?: string;
       resolvedBy?: string;
+      ambiguousDocument?: boolean;
     }>;
     nonActionableDifferent?: ReadonlyArray<unknown>;
     hasFunctionalDifferences?: boolean;
@@ -1446,10 +1447,28 @@ function projectVerifyToSyncSummary(value: unknown): SyncVerifySummary {
         ? ("import_to_binary" as const)
         : ("export_to_src" as const),
   }));
-  const bothChangedEntries = dedupeByModuleName([
+  // A form with two files of one kind on one side (a stale `Form_X.cls` next to
+  // `X.cls`) is a conflict under every name it carries: importing either name
+  // could load the stale file over the binary.
+  const conflicted = dedupeByModuleName([
     ...actionableEntries.filter((entry) => entry.classification === "bothChanged"),
     ...baseResolved,
-  ]).map((entry) => ({ moduleName: entry.moduleName }));
+  ]);
+  const conflictedKeys = new Set(conflicted.map((entry) => entry.moduleName.toLowerCase()));
+  const ambiguous = dedupeByModuleName(
+    [
+      ...allActionableEntries,
+      ...(result.missingInBinary ?? []),
+      ...(result.missingInSource ?? []),
+    ].filter(
+      (entry) =>
+        entry.ambiguousDocument === true && !conflictedKeys.has(entry.moduleName.toLowerCase()),
+    ),
+  );
+  actionable.bothChanged += ambiguous.length;
+  const bothChangedEntries = [...conflicted, ...ambiguous].map((entry) => ({
+    moduleName: entry.moduleName,
+  }));
   return {
     ok: result.ok === true,
     missingInBinary,

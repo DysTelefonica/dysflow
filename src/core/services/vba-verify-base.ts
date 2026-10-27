@@ -100,6 +100,16 @@ export function verifyBaseModuleKey(moduleName: string, fileType: string): strin
   return `${moduleName.toLowerCase()}\0${fileType.toLowerCase()}`;
 }
 
+/**
+ * Scope a write invalidates. A form is written under its file name (`frmX`) or
+ * its Access document name (`Form_frmX`), and its entries may carry either, so
+ * both fold to the prefix-free name. Folding a standard module that really is
+ * named `Form_X` onto `X` only over-invalidates, which is always safe.
+ */
+function invalidationScopeKey(moduleName: string): string {
+  return moduleName.toLowerCase().replace(/^(form_|report_)/, "");
+}
+
 export function hashCanonicalVbaText(text: string, fileType: string): string {
   return createHash("sha256").update(canonicalizeVbaText(text, fileType), "utf8").digest("hex");
 }
@@ -121,7 +131,7 @@ function validEntries(
     if (invalidation.moduleName === null) {
       all = Math.max(all, time);
     } else {
-      const key = invalidation.moduleName.toLowerCase();
+      const key = invalidationScopeKey(invalidation.moduleName);
       byModule.set(key, Math.max(byModule.get(key) ?? Number.NEGATIVE_INFINITY, time));
     }
   }
@@ -129,7 +139,7 @@ function validEntries(
   for (const entry of listed.entries) {
     if (entry.sourceRoot !== sourceRoot || entry.canon !== VERIFY_BASE_CANON) continue;
     const observed = Date.parse(entry.observedAt);
-    const cutoff = Math.max(all, byModule.get(entry.moduleName.toLowerCase()) ?? all);
+    const cutoff = Math.max(all, byModule.get(invalidationScopeKey(entry.moduleName)) ?? all);
     if (Number.isNaN(observed) || observed <= cutoff) continue;
     const key = verifyBaseModuleKey(entry.moduleName, entry.fileType);
     const current = valid.get(key);

@@ -58,6 +58,14 @@ export type VbaSourceComparisonFile = {
    in the collector map and surface a `DUPLICATE_IDENTITY_KEY` completeness reason.
    */
   identityKey: string;
+  /**
+   * Form/report document files only: the case-folded Access component name
+   * (`form_<form>`), whatever the file is called. Every file of one document
+   * shares it.
+   */
+  documentKey?: string;
+  /** True when one side holds two files of one kind for this document. */
+  ambiguousDocument?: boolean;
 };
 
 export type VbaSourceComparisonEntry = {
@@ -65,6 +73,13 @@ export type VbaSourceComparisonEntry = {
   fileType: string;
   sourcePath?: string;
   binaryPath?: string;
+  /**
+   * Set when one side holds two files of one kind (two `.cls`, or two layout
+   * files) for the same form/report, e.g. a stale `Form_X.cls` next to `X.cls`.
+   * Every file of that document is then a conflict: never bulk-synced or
+   * planned by sync_binary without `acceptBothChanged`.
+   */
+  ambiguousDocument?: true;
   // Additive semantic fields (populated in semantic mode for entries that land
   // in `actionableDifferent` or `nonActionableDifferent`). Strict-mode and
   // missing-* entries leave these undefined.
@@ -874,12 +889,15 @@ export async function compareVbaSourceTrees(
   } = {},
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
-  const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
-  const binaryFiles = await collectVbaSourceFiles(binaryExportRoot, moduleFilter, fileSystem);
   // Completeness reasons raised by the collector (e.g. DUPLICATE_IDENTITY_KEY).
   // Merged into the returned `warnings[]` so callers see them alongside any
   // export-phase warnings from the runner.
   const collectorWarnings: ExportWarning[] = [];
+  const [sourceFiles, binaryFiles] = unifyDocumentIdentities(
+    await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem),
+    await collectVbaSourceFiles(binaryExportRoot, moduleFilter, fileSystem),
+    collectorWarnings,
+  );
   const sourceByKey = buildFileIndex(sourceFiles, collectorWarnings);
   const binaryByKey = buildFileIndex(binaryFiles, collectorWarnings);
   const matched: VbaSourceComparisonEntry[] = [];
@@ -1145,7 +1163,10 @@ export async function compareVbaSourceTrees(
           hasFunctionalDifferences,
           actionableOk: !hasFunctionalDifferences,
           ...aggregateRecommendation(
-            semanticSummary,
+            countUnconfirmedAsConflicts(semanticSummary, actionableDifferent, [
+              ...missingInSource,
+              ...missingInBinary,
+            ]),
             missingInSource.length,
             missingInBinary.length,
             hasFunctionalDifferences,
@@ -1174,6 +1195,33 @@ export async function compareVbaSourceTrees(
         }
       : {}),
   };
+}
+
+/**
+ * Issue #1890 — a direction inferred from the last-synced base needs the same
+ * confirmation as a conflict, so the top-level recommendation counts it as
+ * `bothChanged` (as sync_binary does). So does any file of a document with two
+ * files of one kind (`ambiguousDocument`). The reported summary keeps its counts.
+ */
+function countUnconfirmedAsConflicts(
+  summary: Record<string, number>,
+  actionableDifferent: readonly VbaSourceComparisonEntry[],
+  missing: readonly VbaSourceComparisonEntry[],
+): Record<string, number> {
+  const counted = { ...summary };
+  for (const entry of actionableDifferent) {
+    const unconfirmed = entry.resolvedBy === "base" || entry.ambiguousDocument === true;
+    if (!unconfirmed || entry.classification === undefined) continue;
+    if (entry.classification === "bothChanged") continue;
+    counted[entry.classification] = Math.max(0, (counted[entry.classification] ?? 0) - 1);
+    counted.bothChanged = (counted.bothChanged ?? 0) + 1;
+  }
+  // A document with two files of one kind is a conflict even when its files
+  // are only missing on one side.
+  if (missing.some((entry) => entry.ambiguousDocument === true)) {
+    counted.bothChanged = (counted.bothChanged ?? 0) + 1;
+  }
+  return counted;
 }
 
 /**
@@ -1248,6 +1296,16 @@ function aggregateRecommendation(
  * import or export moves the whole module. It is listed in `baseResolved`
  * instead, so no consumer bulk-applies an inferred direction without
  * confirmation.
+ *
+ * Likewise a module with a `bothChanged` file is in neither list, even when
+ * another of its files has a clear direction: importing a form also loads its
+ * code-behind `.cls`, so a `.form.txt` that is `sourceNewer` must not carry a
+ * conflicted `.cls` into the binary. A module whose files point in opposite
+ * directions (a `sourceNewer` `.form.txt` with a `binaryNewer` `.cls`) is a
+ * conflict too: importing then exporting it would lose the newer code on both
+ * sides. Every file of a document with two files of one kind on one side
+ * (`ambiguousDocument`) is a conflict as well. Module names are compared
+ * case-insensitively, as VBA does.
  */
 function deriveBulkLists(
   actionableDifferent: readonly VbaSourceComparisonEntry[],
@@ -1261,26 +1319,36 @@ function deriveBulkLists(
   baseResolved: string[];
   baseResolvedCount: number;
 } {
-  const importSet = new Set<string>();
-  const exportSet = new Set<string>();
-  const baseResolvedSet = new Set<string>();
-  for (const e of actionableDifferent) {
-    if (e.resolvedBy === "base") baseResolvedSet.add(e.moduleName);
-  }
-  for (const e of actionableDifferent) {
-    if (baseResolvedSet.has(e.moduleName)) continue;
-    if (e.classification === "sourceNewer") {
-      importSet.add(e.moduleName);
-    } else if (e.classification === "binaryNewer") {
-      exportSet.add(e.moduleName);
+  // Keyed by the case-folded name; the value is the reported name.
+  const importSet = new Map<string, string>();
+  const exportSet = new Map<string, string>();
+  const baseResolvedSet = new Map<string, string>();
+  const conflictedSet = new Set<string>();
+  const keyOf = (e: VbaSourceComparisonEntry) => e.moduleName.toLowerCase();
+  for (const e of [...actionableDifferent, ...missingInBinary, ...missingInSource]) {
+    if (e.resolvedBy === "base") baseResolvedSet.set(keyOf(e), e.moduleName);
+    if (e.classification === "bothChanged" || e.ambiguousDocument === true) {
+      conflictedSet.add(keyOf(e));
     }
-    // bothChanged: silently skipped — same module appears in neither list
   }
-  for (const e of missingInBinary) importSet.add(e.moduleName);
-  for (const e of missingInSource) exportSet.add(e.moduleName);
-  const bulkImportable = [...importSet].filter((name) => !baseResolvedSet.has(name)).sort();
-  const bulkExportable = [...exportSet].filter((name) => !baseResolvedSet.has(name)).sort();
-  const baseResolved = [...baseResolvedSet].sort();
+  for (const e of actionableDifferent) {
+    if (e.classification === "sourceNewer") {
+      importSet.set(keyOf(e), e.moduleName);
+    } else if (e.classification === "binaryNewer") {
+      exportSet.set(keyOf(e), e.moduleName);
+    }
+  }
+  for (const e of missingInBinary) importSet.set(keyOf(e), e.moduleName);
+  for (const e of missingInSource) exportSet.set(keyOf(e), e.moduleName);
+  for (const key of importSet.keys()) if (exportSet.has(key)) conflictedSet.add(key);
+  const allowed = (entries: Map<string, string>) =>
+    [...entries]
+      .filter(([key]) => !baseResolvedSet.has(key) && !conflictedSet.has(key))
+      .map(([, name]) => name)
+      .sort();
+  const bulkImportable = allowed(importSet);
+  const bulkExportable = allowed(exportSet);
+  const baseResolved = [...baseResolvedSet.values()].sort();
   return {
     bulkImportable,
     bulkImportableCount: bulkImportable.length,
@@ -1329,11 +1397,33 @@ export async function collectVbaSourceFiles(
       if (!entry.isFile()) continue;
       const fileType = vbaSourceFileType(entry.name);
       if (fileType === undefined) continue;
-      const moduleName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
-      if (moduleFilter.size > 0 && !moduleFilter.has(moduleName.toLowerCase())) continue;
+      const documentPrefix = documentPrefixForFile(directory, fileType);
+      const vbaName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
+      // A form/report document is two files named alike (`frmX.form.txt`,
+      // `frmX.cls`) while the `.cls` says `VB_Name = "Form_frmX"`. Both files
+      // carry the file name as the module name, so bulk lists and sync plans
+      // see one module, and pair on the prefix-free name.
+      const moduleName = documentPrefix === undefined ? vbaName : moduleNameFromVbaFile(entry.name);
+      // Documents pair on their Access component name (`Form_<form>`), which a
+      // standard module or class can never share with them.
+      const pairingName =
+        documentPrefix === undefined
+          ? moduleName
+          : `${documentPrefix}${stripDocumentPrefix(moduleName, documentPrefix)}`;
+      if (
+        moduleFilter.size > 0 &&
+        ![
+          moduleName,
+          vbaName,
+          pairingName,
+          documentPrefix === undefined ? moduleName : pairingName.slice(documentPrefix.length),
+        ].some((name) => moduleFilter.has(name.toLowerCase()))
+      ) {
+        continue;
+      }
       const identityKey = buildArtifactIdentityKey(
         familyForFileType(fileType),
-        moduleName,
+        pairingName,
         representationForFileType(fileType),
       );
       files.push({
@@ -1342,12 +1432,119 @@ export async function collectVbaSourceFiles(
         path,
         relativePath: relative(root, path).replace(/\\/g, "/"),
         identityKey,
+        ...(documentPrefix === undefined ? {} : { documentKey: pairingName.toLowerCase() }),
       });
     }
   }
 
   await visit(root);
   return files;
+}
+
+/**
+ * Gives every file of one form/report document a single reported module name,
+ * so the bulk lists, the conflict guards and sync_binary see one module even
+ * when its files are named differently (`Clientes.form.txt` next to
+ * `Form_Clientes.cls`, or `FORM_CLIENTES.cls`).
+ *
+ * The name is the stem of the first file found in this order: the source
+ * layout (`.form.txt`/`.report.txt`), the source `.cls`, the binary layout,
+ * the binary `.cls`. Import resolves that name to every file of the document,
+ * and export rewrites the source files in place under it.
+ *
+ * Two Access documents literally named `X` and `Form_X` fold to the same key.
+ * Folding them would compare only one of them, so for such a key every file
+ * on both sides pairs on its exact file stem instead, and a
+ * `DUPLICATE_IDENTITY_KEY` warning names the ambiguity.
+ */
+function unifyDocumentIdentities(
+  sourceFiles: VbaSourceComparisonFile[],
+  binaryFiles: VbaSourceComparisonFile[],
+  warnings: ExportWarning[],
+): [VbaSourceComparisonFile[], VbaSourceComparisonFile[]] {
+  const ambiguous = new Set<string>();
+  for (const files of [sourceFiles, binaryFiles]) {
+    const seen = new Set<string>();
+    for (const file of files) {
+      if (file.documentKey === undefined) continue;
+      if (seen.has(file.identityKey)) ambiguous.add(file.documentKey);
+      seen.add(file.identityKey);
+    }
+  }
+  for (const key of [...ambiguous].sort()) {
+    const listed = [sourceFiles, binaryFiles].flatMap((files, side) =>
+      files
+        .filter((file) => file.documentKey === key)
+        .map((file) => `${side === 0 ? "source" : "binary"}:${file.relativePath}`),
+    );
+    warnings.push({
+      module: "__collector__",
+      error: "DUPLICATE_IDENTITY_KEY",
+      message: `More than one file of the same kind resolves to the Access component '${key}' (${listed.sort().join(", ")}). Every file of it is treated as a conflict and is never synced automatically; delete the stale file.`,
+    });
+  }
+
+  const rank = (file: VbaSourceComparisonFile, side: number) =>
+    side * 2 + (file.fileType === "cls" ? 1 : 0);
+  const chosen = new Map<string, { name: string; rank: number }>();
+  [sourceFiles, binaryFiles].forEach((files, side) => {
+    for (const file of files) {
+      if (file.documentKey === undefined || ambiguous.has(file.documentKey)) continue;
+      const candidate = { name: file.moduleName, rank: rank(file, side) };
+      const current = chosen.get(file.documentKey);
+      if (
+        current === undefined ||
+        candidate.rank < current.rank ||
+        (candidate.rank === current.rank && candidate.name < current.name)
+      ) {
+        chosen.set(file.documentKey, candidate);
+      }
+    }
+  });
+
+  const rename = (file: VbaSourceComparisonFile): VbaSourceComparisonFile => {
+    if (file.documentKey === undefined) return file;
+    if (!ambiguous.has(file.documentKey)) {
+      return { ...file, moduleName: chosen.get(file.documentKey)?.name ?? file.moduleName };
+    }
+    return {
+      ...file,
+      ambiguousDocument: true,
+      identityKey: buildArtifactIdentityKey(
+        familyForFileType(file.fileType),
+        // Not a valid VBA name, so it never meets a standard module or class.
+        `document:${file.moduleName}`,
+        representationForFileType(file.fileType),
+      ),
+    };
+  };
+  return [sourceFiles.map(rename), binaryFiles.map(rename)];
+}
+
+/**
+ * The Access object prefix of a form/report document file, or `undefined` for
+ * any other file. Mirrors the export layout: document modules (`.cls` code-behind
+ * and `.form.txt`/`.report.txt` layout) live under `forms/` or `reports/`. A
+ * standard module or class elsewhere keeps its `VB_Name`, even one that starts
+ * with `Form_`.
+ */
+function documentPrefixForFile(
+  directory: string,
+  fileType: string,
+): "Form_" | "Report_" | undefined {
+  if (fileType !== "cls" && fileType !== "form.txt" && fileType !== "report.txt") {
+    return undefined;
+  }
+  const folder = basename(directory).toLowerCase();
+  if (folder === "forms" && fileType !== "report.txt") return "Form_";
+  if (folder === "reports" && fileType !== "form.txt") return "Report_";
+  return undefined;
+}
+
+function stripDocumentPrefix(name: string, prefix: string): string {
+  return name.toLowerCase().startsWith(prefix.toLowerCase()) && name.length > prefix.length
+    ? name.slice(prefix.length)
+    : name;
 }
 
 function vbaSourceFileType(fileName: string): string | undefined {
@@ -1499,6 +1696,9 @@ function toComparisonEntry(
     fileType: file?.fileType ?? "",
     sourcePath: sourceFile?.relativePath,
     binaryPath: binaryFile?.relativePath,
+    ...(sourceFile?.ambiguousDocument === true || binaryFile?.ambiguousDocument === true
+      ? { ambiguousDocument: true as const }
+      : {}),
   };
 }
 

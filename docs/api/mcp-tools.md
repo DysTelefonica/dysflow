@@ -657,7 +657,7 @@ A changed value (`Width =2000` in the source, `Width =1500` in the binary) is on
 A third state breaks that tie: the state both sides last provably agreed on.
 
 - A base is recorded only when a `verify_code` run reads both sides and sees identical normalized text for an artifact. That run's start time dates the entry.
-- Every `import_modules`, `import_all`, `delete_module`, `export_modules` or `export_all` call that writes invalidates the base of the modules it names, or of every module when it names none. Form-design writes that import a form do the same. An entry observed at or before an invalidation of its module is ignored, so a write landing late never restores a stale base.
+- Every `import_modules`, `import_all`, `delete_module`, `export_modules` or `export_all` call that writes invalidates the base of the modules it names, or of every module when it names none. A form named `frmX` or `Form_frmX` invalidates both its files. Form-design writes that import a form do the same. An entry observed at or before an invalidation of its module is ignored, so a write landing late never restores a stale base.
 - The base is a SHA-256 of each artifact's normalized text, the same non-functional folds the classifier applies. Serialization noise such as `Checksum` never makes a side look changed.
 - It is keyed by the target binary path, the source root, the module name and the file type. A rename, another `accessPath` or another source root never reuses it.
 - The base only breaks a `bothChanged` tie. When exactly one side still matches the base, the other side changed: `sourceNewer` (`import_to_binary`) or `binaryNewer` (`export_to_src`).
@@ -667,6 +667,7 @@ A third state breaks that tie: the state both sides last provably agreed on.
 
 - The entry carries `resolvedBy: "base"` on `actionableDifferent[]` and `diffs[]`, and its `reason` asks for confirmation.
 - Its module is in neither `bulkImportable[]` nor `bulkExportable[]`, because an import or export moves the whole module. It is listed in `baseResolved[]` (with `baseResolvedCount`) instead, also in the compact response.
+- The top-level `recommendedAction` counts it as `bothChanged`, so a comparison whose only differences are base-resolved recommends `manual_merge`. The per-entry `recommendation` still names the inferred direction.
 - `sync_binary` plans it exactly like `bothChanged`: see that tool below.
 
 The base is local, unversioned state in `<project>/.dysflow/runtime/verify-base/`, which is gitignored. It is written only when a `.dysflow/` folder exists in the project root.
@@ -682,6 +683,12 @@ A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt
 - The classifier strips everything from the `CodeBehindForm` marker onward and compares a `.form.txt` for its **UI/layout only**.
 - A real form change (control/property/layout) stays actionable, while code-behind churn in the `.form.txt` is non-actionable — the `.cls` owns it.
 - Casing and encoding normalization never collapse a genuine content change: identifier casing is folded only outside string literals/comments, so any runtime-visible difference still surfaces as functional.
+- The `.form.txt` and the `.cls` of one form are **one module**, reported under ONE `moduleName`. This applies to `.cls`, `.form.txt` and `.report.txt` files directly under `forms/` or `reports/`; they pair on their Access component name (`Form_<form>` / `Report_<report>`), so `frmX.form.txt`, `Form_frmX.cls` and `FORM_FRMX.cls` are the same form. A module elsewhere keeps its `VB_Name`, even one starting with `Form_`, and never pairs with a form.
+- The reported name is the file stem of the first file found in this order: the source layout file, the source `.cls`, the binary layout file, the binary `.cls`. Import resolves that name to every file of the form, and export rewrites the source files in place under it (`frmX` for `frmX.form.txt`, `Form_Clientes` for the `export_all` layout).
+- `verify_code` and `sync_binary` `moduleNames` accept the name with or without the `Form_`/`Report_` prefix.
+- When one side holds more than one file of the same kind for one component (two `.cls`, or two layout files), for example a stale `Form_X.cls` left next to `X.cls`, or two Access forms literally named `X` and `Form_X`, the files are compared by exact file name and each entry carries `ambiguousDocument: true`. Every name in that group is a conflict: it is in neither bulk list, `recommendedAction` is `manual_merge`, and `sync_binary` does not plan it unless `acceptBothChanged: true` is passed with a one-way `direction`. A `DUPLICATE_IDENTITY_KEY` warning lists every file of the group so the stale one can be deleted.
+- Files in a nested folder (`forms/sub/`) are not document files and keep their `VB_Name`; dysflow's export never nests them.
+- A module with a `bothChanged` file, or whose files point in opposite directions (a newer source `.form.txt` with a newer binary `.cls`), is in neither `bulkImportable[]` nor `bulkExportable[]`, and `sync_binary` does not plan it unless `acceptBothChanged: true` is passed with a one-way `direction`. Importing a form also loads its `.cls`, so a newer `.form.txt` must not carry a conflicted or stale `.cls` into the binary. Module names are compared case-insensitively.
 
 The result adds:
 
