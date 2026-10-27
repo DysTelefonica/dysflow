@@ -1,5 +1,5 @@
 /**
- * Records the last-synced base snapshot after a successful import/export (#1890).
+ * Records the last-synced base snapshot after a successful export (#1890).
  * Kept apart from `vba-verify-base.ts` so the comparison service can depend on
  * the base logic without an import cycle through the source collector.
  */
@@ -14,24 +14,22 @@ import {
   type VerifyBaseRecord,
   type VerifyBaseStorePort,
   type VerifyBaseTarget,
-  type VerifyBaseWriteKind,
   verifyBasePathKey,
 } from "./vba-verify-base.js";
 
 /**
- * Records the base for the modules a write just synced. Best-effort: any failure
- * becomes a warning diagnostic and never fails the write that triggered it.
+ * Records the base for the modules an export just wrote. Best-effort: any failure
+ * becomes a warning diagnostic and never fails the export that triggered it.
  */
 export async function recordVerifyBase(input: {
   store: VerifyBaseStorePort;
   fileSystem: ComparisonFileSystemPort;
   target: VerifyBaseTarget;
-  kind: VerifyBaseWriteKind;
   sourceRoot: string;
   moduleNames: readonly string[];
   now?: () => Date;
 }): Promise<Diagnostic[]> {
-  const { store, fileSystem, target, kind, moduleNames } = input;
+  const { store, fileSystem, target, moduleNames } = input;
   if (moduleNames.length === 0) return [];
   try {
     if (!(await store.available(target))) return [];
@@ -57,10 +55,7 @@ export async function recordVerifyBase(input: {
       stored !== undefined && stored.accessPath === accessPath
         ? stored
         : { accessPath, entries: [] };
-    await store.save(
-      target,
-      applyVerifyBaseWrite(current, { kind, sourceRoot, moduleNames, entries }),
-    );
+    await store.save(target, applyVerifyBaseWrite(current, { sourceRoot, moduleNames, entries }));
     return [];
   } catch (error) {
     return [

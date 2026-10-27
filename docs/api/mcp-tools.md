@@ -624,25 +624,27 @@ Each differing module is assigned one `classification`:
 | `continuationOnly` | Only VBA line-continuation reflow differs (`<spaces>_<EOL>` joining the next physical line). Source splitting an expression across two physical lines and binary keeping it on one is non-functional under the VBA grammar | No |
 | `statementBoundaryOnly` | Only colon-separated vs newline-separated statement boundaries differ (e.g. `Dim a: Dim b` vs two physical lines). The classifier preserves `:=`, date literals, and string-literal colons so the rewrite is always safe | No |
 | `nonActionableMixed` | Two or more distinct non-actionable families contributed to equalize the texts (e.g. case in an identifier PLUS case in a comment). The single-family detectors above remain the preferred path for single-family diffs; this bucket is the catch-all for compound diffs | No |
-| `sourceNewer` | Functional lines unique to disk source, or the binary still matches the last-synced base | Yes → `import_to_binary` |
-| `binaryNewer` | Functional lines unique to the Access binary, or the source still matches the last-synced base | Yes → `export_to_src` |
+| `sourceNewer` | Functional lines unique to disk source, or a `bothChanged` tie where the binary still matches the last-synced base | Yes → `import_to_binary` |
+| `binaryNewer` | Functional lines unique to the Access binary, or a `bothChanged` tie where the source still matches the last-synced base | Yes → `export_to_src` |
 | `bothChanged` | Both sides have unique functional lines and no base names one side as unchanged | Yes → `manual_merge` |
 
 **Direction from the last-synced base (#1890).**
 
 A changed value (`Width =2000` in the source, `Width =1500` in the binary) is one unique line on each side. Two texts alone report it as `bothChanged`.
 
-A third state resolves the direction: the state both sides last agreed on.
+A third state breaks that tie: the state both sides last provably agreed on.
 
-- Each successful `import_modules`, `import_all`, `export_modules` or `export_all` records a base for the modules it reported as synced. Only per-module `status:"ok"` imports and the export's `exported[]` list count; a failed batch records nothing.
+- A base is recorded only from evidence that both sides held the same content. A successful `export_modules` or `export_all` records the modules in its `exported[]` list, because the export wrote the source from the binary. A `verify_code` run records every artifact whose two sides have identical normalized text.
+- Imports record nothing. The source says what was sent, not what the binary kept, and a `Code`-mode import skips the `.form.txt`/`.report.txt`.
 - The base is a SHA-256 of each artifact's normalized text, the same non-functional folds the classifier applies. Serialization noise such as `Checksum` never makes a side look changed.
 - It is keyed by the target binary path, the source root, the module name and the file type. A rename, another `accessPath` or another source root never reuses it.
-- `verify_code` refines only an actionable difference. When exactly one side still matches the base, the other side changed: `sourceNewer` (`import_to_binary`) or `binaryNewer` (`export_to_src`). The entry `reason` says so.
+- The base only breaks a `bothChanged` tie. When exactly one side still matches the base, the other side changed: `sourceNewer` (`import_to_binary`) or `binaryNewer` (`export_to_src`). The entry `reason` says so.
+- A two-text `sourceNewer` or `binaryNewer` is never overridden, so a wrong base can never point a sync at the side that holds unsynced work.
 - Both sides differing from the base stays `bothChanged` (`manual_merge`). Without a base, the result is the two-text verdict.
 
 The base is local, unversioned state in `<project>/.dysflow/runtime/verify-base/`, which is gitignored. It is written only when a `.dysflow/` folder exists in the project root.
 
-A failed base write never fails the import or export; it adds a `verify-base` warning diagnostic. Deleting the folder only falls back to the two-text direction.
+A failed base write never fails `verify_code` or the export; it adds a `verify-base` warning diagnostic. `verify_code` never writes Access or source files; the base is its only write. Deleting the folder only falls back to the two-text direction.
 
 A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt`.**
 

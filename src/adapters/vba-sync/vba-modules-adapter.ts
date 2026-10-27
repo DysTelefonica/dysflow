@@ -824,11 +824,7 @@ export class VbaModulesAdapter {
       const moduleNames = stringArray(params.moduleNames);
       const hasSourceDir = typeof params.sourceDir === "string" && params.sourceDir.length > 0;
       if (moduleNames.length === 0 && hasSourceDir) {
-        const bulk = await this.runBulkImportByDirectory(params);
-        if (!bulk.ok || !isRecord(bulk.data) || bulk.data.willModifyAccess !== true) return bulk;
-        return this.recordVerifyBaseAfterWrite("import_modules", params, bulk, {
-          sourceRoot: stringValue(bulk.data.sourceDir),
-        });
+        return this.runBulkImportByDirectory(params);
       }
     }
 
@@ -990,7 +986,6 @@ export class VbaModulesAdapter {
 
     if (toolName === "export_all" && truthy(params.prune)) {
       return this.recordVerifyBaseAfterWrite(
-        toolName,
         effectiveParams,
         await this.exportAllWithPrune(effectiveParams, resolvedExportTarget),
       );
@@ -1065,15 +1060,15 @@ export class VbaModulesAdapter {
       }
     }
 
-    // Issue #1890 — the modules this write synced now agree on both sides;
-    // record them as the base verify_code resolves direction against.
+    // Issue #1890 — an export writes the source FROM the binary, so the files
+    // it wrote provably match the binary: record them as the last-synced base.
+    // Imports record nothing: the source text says what was sent, not what the
+    // binary kept (#1912), and a Code-mode import skips the layout files.
     if (
-      toolName === "import_modules" ||
-      toolName === "import_all" ||
-      ((toolName === "export_modules" || toolName === "export_all") &&
-        effectiveExportReadOnly !== true)
+      (toolName === "export_modules" || toolName === "export_all") &&
+      effectiveExportReadOnly !== true
     ) {
-      importResult = await this.recordVerifyBaseAfterWrite(toolName, effectiveParams, importResult);
+      importResult = await this.recordVerifyBaseAfterWrite(effectiveParams, importResult);
     }
 
     // PR-1 (issue #762, v1.20.0) — record the save-only persistence into the
@@ -1682,21 +1677,16 @@ export class VbaModulesAdapter {
 
   /**
    * Issue #1890 — record the last-synced base for the modules a successful
-   * import/export reported as synced. Only per-module `ok` entries count; a
-   * failed result records nothing. Best-effort: a store failure is appended as
-   * a warning and never changes the outcome of the write.
+   * export listed in `exported[]`. A failed result records nothing.
+   * Best-effort: a store failure is appended as a warning and never changes the
+   * outcome of the export.
    */
   private async recordVerifyBaseAfterWrite(
-    toolName: string,
     params: Record<string, unknown>,
     result: OperationResult<unknown>,
-    options: { sourceRoot?: string } = {},
   ): Promise<OperationResult<unknown>> {
     if (!result.ok) return result;
-    const isExport = toolName === "export_modules" || toolName === "export_all";
-    const moduleNames = isExport
-      ? exportedModuleNames(result.data)
-      : importedOkModuleNames(result.data);
+    const moduleNames = exportedModuleNames(result.data);
     if (moduleNames.length === 0) return result;
     let diagnostics: Diagnostic[];
     try {
@@ -1706,8 +1696,7 @@ export class VbaModulesAdapter {
         store: this.verifyBaseStore,
         fileSystem: this.fileSystem,
         target: { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
-        kind: isExport ? "export" : "import",
-        sourceRoot: options.sourceRoot ?? target.data.destinationRoot,
+        sourceRoot: target.data.destinationRoot,
         moduleNames,
       });
     } catch (error) {
@@ -2172,30 +2161,9 @@ export class VbaModulesAdapter {
 }
 
 /**
- * Issue #1890 — names of the modules an import reported as `status:"ok"`. The
- * runner payload is `{ ok, modules }` (wrapped under `result` by the runner
- * bridge) or the bulk `{ modules }` shape; PowerShell may collapse a one-entry
- * list to a bare object, so both forms are accepted.
+ * Issue #1890 — the export payload lists only the modules it wrote. PowerShell
+ * may collapse a one-entry list to a bare string, so both forms are accepted.
  */
-function importedOkModuleNames(data: unknown): string[] {
-  const payload = isRecord(data) && data.result !== undefined ? data.result : data;
-  if (isRecord(payload) && payload.ok === false) return [];
-  const list = Array.isArray(payload)
-    ? payload
-    : isRecord(payload)
-      ? payload.modules !== undefined
-        ? asList(payload.modules)
-        : payload.module !== undefined
-          ? [payload]
-          : []
-      : [];
-  return list
-    .filter(isRecord)
-    .filter((entry) => entry.status === "ok" && typeof entry.module === "string")
-    .map((entry) => String(entry.module));
-}
-
-/** Issue #1890 — the export payload lists only the modules it wrote. */
 function exportedModuleNames(data: unknown): string[] {
   if (!isRecord(data)) return [];
   return asList(data.exported).filter(

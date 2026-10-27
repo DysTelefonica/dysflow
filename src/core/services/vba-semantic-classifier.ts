@@ -24,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-10-27.r9-verify-base-direction";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-09-14.r8-verify-code-v2-categories";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -897,7 +897,9 @@ function normalizeKnownOptionalDefaultArguments(text: string): string {
  * (the VB_Name keep rule, raw-byte mojibake repair, the comment strip). A base is
  * recorded from one side only, so this applies the same non-functional folds the
  * functional diff uses, with every pair-dependent choice taken conservatively:
- * VB_Name is kept, comments are kept verbatim, mojibake repair uses no bytes.
+ * VB_Name is kept, comments are kept verbatim, and mojibake repair is skipped.
+ * Without raw bytes the repair rewrites string-literal content too (`"aÃ±o"`
+ * becomes `"año"`), which would fold more than the pair classifier does.
  *
  * Every fold here is one the classifier already treats as non-functional, so two
  * texts with equal canonical forms never differ functionally. The converse does
@@ -911,11 +913,8 @@ export function canonicalizeVbaText(text: string, fileType: string): string {
     fileType,
   );
   canonical = applyStructuralStrips(canonical, fileType, true);
-  if (!stripped.includes("�")) {
-    const repaired = repairMojibake(canonical);
-    if (!repaired.includes("�")) canonical = repaired;
-    canonical = neutralizeLossyEncoding(canonical);
-  }
+  // Lossy neutralization only touches text outside string literals and comments.
+  if (!stripped.includes("�")) canonical = neutralizeLossyEncoding(canonical);
   canonical = normalizeVbaCase(canonical, fileType);
   canonical = normalizeKnownOptionalDefaultArguments(canonical);
   canonical = foldInterTokenWhitespace(canonical);

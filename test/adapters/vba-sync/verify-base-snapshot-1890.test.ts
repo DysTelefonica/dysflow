@@ -40,7 +40,15 @@ const okImportReply: ImportReply = (moduleNames) => ({
 });
 
 function fixture(
-  options: { projectDir?: boolean; accessName?: string; importReply?: ImportReply } = {},
+  options: {
+    projectDir?: boolean;
+    accessName?: string;
+    importReply?: ImportReply;
+    /** false: the import reports ok but the binary keeps its old content (#1912). */
+    importPersists?: boolean;
+    /** true: a one-entry `exported` list arrives as a bare string, as PowerShell emits it. */
+    collapseExported?: boolean;
+  } = {},
 ) {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), "issue-1890-port-")));
   roots.push(root);
@@ -73,13 +81,23 @@ function fixture(
           if (names.length > 0 && !names.includes(moduleOf(file))) continue;
           cpSync(join(binary, file), join(target, file));
         }
-        payload = { ok: true, exported: names.length > 0 ? names : ["Probe"], warnings: [] };
+        const exported = names.length > 0 ? names : ["Probe"];
+        payload = {
+          ok: true,
+          exported:
+            options.collapseExported === true && exported.length === 1 ? exported[0] : exported,
+          warnings: [],
+        };
       } else if (request.action === "Import") {
         const names = request.moduleNames ?? [];
         payload = importReply(names);
-        if ((payload as { ok?: unknown }).ok !== false) {
+        // Like the real runner, Code mode imports only `.bas`/`.cls`.
+        const codeOnly = request.extra?.importMode === "Code";
+        if ((payload as { ok?: unknown }).ok !== false && options.importPersists !== false) {
           for (const file of readdirSync(source)) {
-            if (names.includes(moduleOf(file))) cpSync(join(source, file), join(binary, file));
+            if (!names.includes(moduleOf(file))) continue;
+            if (codeOnly && !/\.(bas|cls)$/.test(file)) continue;
+            cpSync(join(source, file), join(binary, file));
           }
         }
       } else throw new Error(`Unexpected action: ${request.action}`);
@@ -128,7 +146,8 @@ function classificationOf(data: VerifyData): string | undefined {
 describe("issue 1890 — verify_code direction from the last-synced base snapshot", () => {
   it("a value changed only in the source on a module with a base is sourceNewer (import_to_binary)", async () => {
     const { adapter, sourceFile } = fixture();
-    await importProbe(adapter);
+    // verify_code saw both sides agree: that state becomes the base.
+    await verify(adapter);
     writeFileSync(sourceFile, moduleText(2));
 
     const data = await verify(adapter);
@@ -155,7 +174,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("both sides changed from the base is bothChanged", async () => {
     const { adapter, sourceFile, binaryFile } = fixture();
-    await importProbe(adapter);
+    await verify(adapter);
     writeFileSync(sourceFile, moduleText(2));
     writeFileSync(binaryFile, moduleText(3));
 
@@ -182,7 +201,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     // (keyword casing, a cosmetic attribute). It still matches the base under
     // the classifier's normalization, so the source is the side that changed.
     const { adapter, sourceFile, binaryFile } = fixture();
-    await importProbe(adapter);
+    await verify(adapter);
     writeFileSync(
       binaryFile,
       moduleText(1, "Attribute VB_Exposed = False\n").replace("Option Explicit", "OPTION EXPLICIT"),
@@ -216,11 +235,8 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     const binaryForm = join(root, "binary", "modules", "frmProbe.form.txt");
     writeFileSync(sourceForm, form(1500, 1));
     writeFileSync(binaryForm, form(1500, 1));
-    const imported = await adapter.execute("import_modules", {
-      moduleNames: ["frmProbe"],
-      apply: true,
-    });
-    expect(imported.ok, JSON.stringify(imported)).toBe(true);
+    const agreed = await adapter.execute("verify_code", { moduleNames: ["frmProbe"] });
+    expect(agreed.ok, JSON.stringify(agreed)).toBe(true);
     writeFileSync(sourceForm, form(2000, 1));
     writeFileSync(binaryForm, form(1500, 987654));
 
@@ -234,14 +250,23 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
     expect(data.recommendedAction).toBe("import_to_binary");
   });
 
-  it("accepts a single-module import result that PowerShell collapsed to an object", async () => {
-    const { adapter, sourceFile } = fixture({
-      importReply: ([module]) => ({ ok: true, modules: { module, status: "ok" } }),
-    });
-    await importProbe(adapter);
-    writeFileSync(sourceFile, moduleText(2));
+  it("accepts a single-module export result that PowerShell collapsed to a string", async () => {
+    const { adapter, binaryFile } = fixture({ collapseExported: true });
+    await exportProbe(adapter);
+    writeFileSync(binaryFile, moduleText(2));
 
-    expect(classificationOf(await verify(adapter))).toBe("sourceNewer");
+    expect(classificationOf(await verify(adapter))).toBe("binaryNewer");
+  });
+
+  it("a successful import records no base", async () => {
+    const { adapter, sourceFile } = fixture();
+    writeFileSync(sourceFile, moduleText(2));
+    await importProbe(adapter);
+    writeFileSync(sourceFile, moduleText(3));
+
+    // The import persisted 2 into the binary, but only verify or export may
+    // record a base, so this is the two-text verdict.
+    expect(classificationOf(await verify(adapter))).toBe("bothChanged");
   });
 
   it("records no base when the import batch failed", async () => {
@@ -264,7 +289,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("a base recorded for one binary is never reused for another", async () => {
     const first = fixture();
-    await importProbe(first.adapter);
+    await exportProbe(first.adapter);
     const baseDir = join(first.root, ".dysflow", "runtime", "verify-base");
     expect(readdirSync(baseDir)).toHaveLength(1);
 
@@ -298,7 +323,7 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("keeps the base as local runtime state under .dysflow/runtime", async () => {
     const { root, adapter } = fixture();
-    await importProbe(adapter);
+    await exportProbe(adapter);
     const baseDir = join(root, ".dysflow", "runtime", "verify-base");
     const [file] = readdirSync(baseDir);
     const stored = readFileSync(join(baseDir, String(file)), "utf8");
@@ -309,25 +334,103 @@ describe("issue 1890 — verify_code direction from the last-synced base snapsho
 
   it("writes nothing when the project has no .dysflow folder", async () => {
     const { root, adapter, sourceFile } = fixture({ projectDir: false });
-    await importProbe(adapter);
+    await exportProbe(adapter);
+    await verify(adapter);
     expect(existsSync(join(root, ".dysflow", "runtime", "verify-base"))).toBe(false);
     writeFileSync(sourceFile, moduleText(2));
 
     expect(classificationOf(await verify(adapter))).toBe("bothChanged");
   });
 
-  it("a base write failure never fails the import and is surfaced as a warning", async () => {
+  it("a base write failure never fails the export and is surfaced as a warning", async () => {
     const { root, adapter } = fixture();
     // A file where the store expects its folder makes every write fail.
     mkdirSync(join(root, ".dysflow", "runtime"), { recursive: true });
     writeFileSync(join(root, ".dysflow", "runtime", "verify-base"), "not a folder");
 
-    const result = await importProbe(adapter);
+    const result = await exportProbe(adapter);
 
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ level: "warning", source: "verify-base" }),
       ]),
     );
+    // verify_code records agreement too; that write fails the same way.
+    const verified = await adapter.execute("verify_code", { moduleNames: ["Probe"] });
+    expect(verified.ok).toBe(true);
+    expect(verified.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: "warning", source: "verify-base" }),
+      ]),
+    );
+  });
+});
+
+// Verifier regressions: the base must never turn a lost write into a
+// direction that overwrites unsynced work.
+describe("issue 1890 — a base never points a sync at unsynced work", () => {
+  const layout = (width: number) =>
+    [
+      "Version =21",
+      "Begin Form",
+      "    AutoResize = NotDefault",
+      "    Begin Section",
+      "        Begin TextBox",
+      '            Name ="txtProbe"',
+      `            Width =${width}`,
+      "        End",
+      "    End",
+      "End",
+      "",
+    ].join("\r\n");
+  const codeBehind = 'Attribute VB_Name = "frmProbe"\nOption Compare Database\nOption Explicit\n';
+
+  async function verifyModule(adapter: VbaSyncAdapter, moduleName: string): Promise<VerifyData> {
+    const result = await adapter.execute("verify_code", { moduleNames: [moduleName] });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    return result.data as VerifyData;
+  }
+
+  it("C1: a Code-mode import records no base for the .form.txt it did not import", async () => {
+    const { root, adapter } = fixture();
+    const sides = [join(root, "source", "modules"), join(root, "binary", "modules")];
+    for (const dir of sides) writeFileSync(join(dir, "frmProbe.cls"), codeBehind);
+    writeFileSync(join(sides[0] as string, "frmProbe.form.txt"), layout(2000));
+    writeFileSync(join(sides[1] as string, "frmProbe.form.txt"), layout(1500));
+
+    const imported = await adapter.execute("import_modules", {
+      moduleNames: ["frmProbe"],
+      importMode: "Code",
+      apply: true,
+    });
+    expect(imported.ok, JSON.stringify(imported)).toBe(true);
+    const data = await verifyModule(adapter, "frmProbe");
+
+    expect(data.actionableDifferent).toEqual([
+      expect.objectContaining({ moduleName: "frmProbe", classification: "bothChanged" }),
+    ]);
+    expect(data.bulkExportable).toEqual([]);
+  });
+
+  it("C2: an import that reports ok but does not persist keeps a new Sub sourceNewer", async () => {
+    const { adapter, sourceFile } = fixture({ importPersists: false });
+    writeFileSync(sourceFile, moduleText(1, "Public Sub NewWork()\nEnd Sub\n"));
+    await importProbe(adapter);
+
+    const data = await verify(adapter);
+
+    expect(classificationOf(data)).toBe("sourceNewer");
+    expect(data.bulkExportable).toEqual([]);
+  });
+
+  it("C2: an import that reports ok but does not persist never makes a value change binaryNewer", async () => {
+    const { adapter, sourceFile } = fixture({ importPersists: false });
+    writeFileSync(sourceFile, moduleText(2));
+    await importProbe(adapter);
+
+    const data = await verify(adapter);
+
+    expect(classificationOf(data)).not.toBe("binaryNewer");
+    expect(data.bulkExportable).toEqual([]);
   });
 });

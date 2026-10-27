@@ -73,7 +73,7 @@ switch.
 - `bulkExportable[]` — module names ready for `export_modules.moduleNames` when the Access binary is newer.
 - `moduleCounts` and `summaryUnits` — diagnostic-only unit breakdowns.
 - `actionableDifferent[]` and `nonActionableDifferent[]` — diagnostic-only classified evidence. `bothChanged` means conflict/manual merge; non-actionable entries explain noise and must not trigger a sync.
-- Direction uses the last-synced base when one exists (#1890). Each successful `import_modules` / `export_modules` records it in the gitignored `.dysflow/runtime/verify-base/`. A changed value on one side only is then `sourceNewer` or `binaryNewer` instead of `bothChanged`, and the entry `reason` names the side that still matches the base. Without a base, the two-text verdict applies. A `verify-base` warning on an import/export means the base was not updated; the write itself succeeded.
+- A last-synced base only breaks a `bothChanged` tie (#1890). It is recorded in the gitignored `.dysflow/runtime/verify-base/` by a successful `export_modules` / `export_all` and by a `verify_code` run that sees both sides agree; imports record nothing. When one side still matches the base, a changed value is `sourceNewer` or `binaryNewer` instead of `bothChanged`, and the entry `reason` names the unchanged side. A two-text `sourceNewer` / `binaryNewer` is never overridden. A `verify-base` warning means the base was not updated; the call itself succeeded.
 - `dysflowVersion` — runtime version. Cross-check via `get_capabilities`.
 
 `summaryByCategory` and `nonActionableByCategory` are aggregate counts. They do

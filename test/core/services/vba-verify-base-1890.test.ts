@@ -36,10 +36,16 @@ describe("resolveDirectionAgainstBase", () => {
     });
   });
 
-  it("overrides a line-count verdict that points the wrong way", () => {
-    // The binary deleted a line: the pair alone says the source has more.
+  it("never overrides a two-text sourceNewer, even when the source matches the base", () => {
+    // A false base (a lost import, a restored backup) must not turn new source
+    // work into an export that deletes it.
     const source = `${code(1)}Public Sub Extra()\nEnd Sub\n`;
-    expect(directionOf(source, code(1), source).classification).toBe("binaryNewer");
+    expect(directionOf(source, code(1), source).classification).toBe("sourceNewer");
+  });
+
+  it("never overrides a two-text binaryNewer, even when the binary matches the base", () => {
+    const binary = `${code(1)}Public Sub Extra()\nEnd Sub\n`;
+    expect(directionOf(code(1), binary, binary).classification).toBe("binaryNewer");
   });
 
   it("never turns a non-actionable verdict into an actionable one", () => {
@@ -50,6 +56,15 @@ describe("resolveDirectionAgainstBase", () => {
 
   it("keeps bothChanged when neither side matches the base", () => {
     expect(directionOf(code(2), code(3), code(1)).classification).toBe("bothChanged");
+  });
+});
+
+describe("hashCanonicalVbaText", () => {
+  it("keeps string-literal content: a mojibake-only literal change is a different hash", () => {
+    const literal = (text: string) => `${code(1)}Const T = "${text}"\n`;
+    expect(hashCanonicalVbaText(literal("año"), "bas")).not.toBe(
+      hashCanonicalVbaText(literal("aÃ±o"), "bas"),
+    );
   });
 });
 
@@ -71,24 +86,10 @@ describe("applyVerifyBaseWrite", () => {
     ],
   };
 
-  it("an import replaces the module's base for every source root", () => {
+  it("an export replaces only the exported source root's base, case-insensitively", () => {
     const next = applyVerifyBaseWrite(record, {
-      kind: "import",
       sourceRoot: "/a",
       moduleNames: ["probe"],
-      entries: [entry("/a", "Probe", "new")],
-    });
-    expect(next.entries.map((e) => `${e.sourceRoot}:${e.moduleName}:${e.hash}`).sort()).toEqual([
-      "/a:Other:o",
-      "/a:Probe:new",
-    ]);
-  });
-
-  it("an export replaces only the exported source root's base", () => {
-    const next = applyVerifyBaseWrite(record, {
-      kind: "export",
-      sourceRoot: "/a",
-      moduleNames: ["Probe"],
       entries: [entry("/a", "Probe", "new")],
     });
     expect(next.entries.map((e) => `${e.sourceRoot}:${e.moduleName}:${e.hash}`).sort()).toEqual([

@@ -33,7 +33,9 @@ import {
 import {
   hashCanonicalVbaText,
   loadVerifyBaseLookup,
+  recordVerifyBaseAgreement,
   resolveDirectionAgainstBase,
+  type VerifyBaseAgreement,
   type VerifyBaseLookup,
   type VerifyBaseStorePort,
   verifyBaseModuleKey,
@@ -532,6 +534,12 @@ export async function compareSourceAgainstBinary(
           )
         : { diagnostics: [] };
     preflightDiagnostics.push(...base.diagnostics);
+    const agreed: VerifyBaseAgreement[] | undefined =
+      comparisonMode === "semantic" &&
+      target.data.accessPath !== undefined &&
+      ctx.verifyBaseStore !== undefined
+        ? []
+        : undefined;
     const compareTimeoutMs = phaseTimeoutBeforeDeadline(deadlineMs);
     const comparison = await withPhaseTimeout(
       compareVbaSourceTrees(
@@ -541,7 +549,7 @@ export async function compareSourceAgainstBinary(
         truthy(params.diff),
         fileSystem,
         comparisonMode,
-        base.lookup,
+        { lookup: base.lookup, agreed },
       ),
       compareTimeoutMs,
       createVerifyCodePhaseTimeoutError({
@@ -585,6 +593,16 @@ export async function compareSourceAgainstBinary(
           ),
         );
       }
+    }
+    if (agreed !== undefined && agreed.length > 0 && target.data.accessPath !== undefined) {
+      preflightDiagnostics.push(
+        ...(await recordVerifyBaseAgreement(
+          ctx.verifyBaseStore,
+          { accessPath: target.data.accessPath, projectRoot: target.data.projectRoot },
+          sourceRoot,
+          agreed,
+        )),
+      );
     }
     return finalize(
       successResult(
@@ -830,7 +848,12 @@ export async function compareVbaSourceTrees(
   includeDiffs: boolean,
   fileSystem: ComparisonFileSystemPort,
   mode: VbaComparisonMode = "semantic",
-  baseLookup?: VerifyBaseLookup,
+  base: {
+    /** Base hashes for this source root; breaks `bothChanged` ties. */
+    lookup?: VerifyBaseLookup;
+    /** Receives every pair whose two sides have identical canonical hashes. */
+    agreed?: VerifyBaseAgreement[];
+  } = {},
 ): Promise<Omit<VbaVerifyResult, "operation">> {
   const moduleFilter = new Set(moduleNames.map((name) => name.toLowerCase()));
   const sourceFiles = await collectVbaSourceFiles(sourceRoot, moduleFilter, fileSystem);
@@ -887,6 +910,22 @@ export async function compareVbaSourceTrees(
     }
 
     // --- Semantic mode: classify each differing pair ---
+    // Issue #1890 — both sides observed agreeing is the strongest evidence for
+    // a last-synced base: record it, keyed by the canonical hash.
+    const agreedHash =
+      base.agreed === undefined ? undefined : hashCanonicalVbaText(sourceText, sourceFile.fileType);
+    if (
+      agreedHash !== undefined &&
+      (sourceText === binaryText ||
+        agreedHash === hashCanonicalVbaText(binaryText, sourceFile.fileType))
+    ) {
+      base.agreed?.push({
+        moduleName: sourceFile.moduleName,
+        fileType: sourceFile.fileType,
+        hash: agreedHash,
+      });
+    }
+
     // Fast path: raw equality (no need to classify)
     if (sourceText === binaryText) {
       matched.push(entry);
@@ -911,11 +950,12 @@ export async function compareVbaSourceTrees(
     });
     // Issue #1890 — a changed value is one unique line per side, so the pair
     // alone says `bothChanged`. The last-synced base names the side that moved.
-    const baseHash = baseLookup?.get(
+    // Only that tie is resolved; a one-sided verdict is never overridden.
+    const baseHash = base.lookup?.get(
       verifyBaseModuleKey(sourceFile.moduleName, sourceFile.fileType),
     );
     const classification =
-      baseHash === undefined || !pairClassification.actionable
+      baseHash === undefined || pairClassification.classification !== "bothChanged"
         ? pairClassification
         : resolveDirectionAgainstBase(pairClassification, {
             base: baseHash,
