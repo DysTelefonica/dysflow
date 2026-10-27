@@ -259,7 +259,17 @@ $env:DYSFLOW_E2E_PRESERVE_SANDBOX = "1"
 
 # Deterministic sandbox parent (the harness always creates a fresh child under it).
 $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
+
+# Start even when foreign headless MSACCESS.EXE processes are alive (recorded as a warning, #1974).
+$env:DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS = "1"
 ```
+
+Before the first scenario, the `preflight/foreign-access-check` row lists every headless
+`MSACCESS.EXE` this run does not own, with PID, start time and command line (#1974).
+
+- The battery refuses to start unless `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS=1`.
+- The harness never kills them. Verify ownership with `list_access_operations`.
+- Remove each one with `access_force_cleanup_orphaned` and `confirmPid`.
 
 If the harness aborts before any tool call, the message names the resolution code
 (`MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE`, or

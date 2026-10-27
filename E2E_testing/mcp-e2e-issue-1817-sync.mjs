@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { runAccessEdit } from "./_helpers/issue-1817-edit-runner.mjs";
+import { removePartialFixtureDatabase, runAccessEdit } from "./_helpers/issue-1817-edit-runner.mjs";
 import { runMcpSession } from "./_helpers/mcp-harness.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -19,17 +20,29 @@ const artifacts = [
 ];
 
 function edit(root, action, marker) {
-  // The edit only sets a fixed value, so a retry after a spawn timeout is safe (#1898).
+  // The value-setting edits are idempotent, so a retry after a spawn timeout is safe (#1898).
   const result = runAccessEdit({
     spawn: spawnSync,
     env: process.env,
     action,
+    // #1974: a hung Access start during create leaves a partial database; remove it (inside
+    // the marked fixture only) so the create can be retried once.
+    resetCreate: () => removePartialFixtureDatabase({
+      root,
+      tmpDir: realpathSync.native(tmpdir()),
+      exists: existsSync,
+      remove: (path) => rmSync(path, { force: true }),
+    }),
     args: [
       "-NoProfile", "-NonInteractive", "-File", editor,
       "-Root", root, "-Action", action, "-Marker", marker,
     ],
   });
-  assert.equal(result.status, 0, `External Access edit failed: ${result.stderr || result.error}`);
+  assert.equal(
+    result.status,
+    0,
+    `External Access edit failed: ${result.diagnosis ?? (result.stderr || result.error)}`,
+  );
   assert.match(result.stdout, /ISSUE_1817_EDIT_SAVED/);
 }
 
