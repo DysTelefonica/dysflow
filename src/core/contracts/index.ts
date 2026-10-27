@@ -390,9 +390,29 @@ export {
 } from "./result-writer.js";
 
 /**
+ * #1912 — Access cannot save VBA changes while another process holds the
+ * database open. The remediation names that lock and the dysflow recovery
+ * tools; it never suggests killing MSACCESS.EXE by name.
+ */
+export const ACCESS_DATABASE_LOCKED_REMEDIATION =
+  "Another process holds the Access database open, so Access has no exclusive access and cannot save VBA changes. Run list_access_operations to reconcile a tracked Access operation and access_force_cleanup_orphaned to list orphaned Access processes; release the lock holder only after verifying its pid, then retry.";
+
+/**
+ * #1912 — a module of a partially failed import was imported but its save
+ * did not complete, so it is reported as an error instead of `ok`.
+ */
+export const VBA_IMPORT_SAVE_FAILED_REMEDIATION =
+  "The module was imported but its save did not complete, so the change may not be in the database. Fix the other failing modules of the batch, then import this module again.";
+
+/** Codes whose same call is expected to succeed once the reported condition clears. */
+const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set(["ACCESS_DATABASE_LOCKED"]);
+
+/**
  * Creates a normalized Dysflow error for failed operation results.
  */
 const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
+  ACCESS_DATABASE_LOCKED: ACCESS_DATABASE_LOCKED_REMEDIATION,
+  VBA_IMPORT_SAVE_FAILED: VBA_IMPORT_SAVE_FAILED_REMEDIATION,
   FORM_CONTROL_NOT_FOUND:
     "Run dysflow.form_list_controls to enumerate existing controls in the form.",
   FORM_IMPORT_GATE_FAILED:
@@ -442,7 +462,7 @@ export function createDysflowError(
   return {
     code,
     message,
-    retryable: options.retryable ?? false,
+    retryable: options.retryable ?? CANONICAL_RETRYABLE_CODES.has(code),
     ...(options.details ? { details: options.details } : {}),
     ...(options.allowedProcedures ? { allowedProcedures: options.allowedProcedures } : {}),
     remediation,

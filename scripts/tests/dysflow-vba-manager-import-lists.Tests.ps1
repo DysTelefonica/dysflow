@@ -81,6 +81,11 @@ Describe "Invoke-ImportAction — per-module structured reporting (consumer requ
             param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
             return [ordered]@{ code = "ACCESS_DATABASE_LOCKED"; message = $Message; machine = $null; user = $null }
         }
+        # #1912 - successful modules of a partially failed batch are saved by
+        # name before the failure completes; stub the Access save as succeeding.
+        function script:Save-VbaProjectModules {
+            param($AccessApplication, $VbProject, [string[]]$ModuleNames)
+        }
         function script:Import-VbaModule {
             param($VbProject, [string]$ModuleName, [string]$ModulesPath, $AccessApplication, [string]$ImportMode)
             $script:ImportCalls.Add([pscustomobject]@{
@@ -536,10 +541,10 @@ Describe "Invoke-ImportAction — ModifiedDocumentNames surface for re-imported 
         }
 
         It "skips ModifiedDocumentNames when Import-VbaModule does NOT signal ReimportedDocument (plain module re-import, no form/report)" {
-            # A plain .bas/.cls re-import (NOT a form): Import-VbaModule should not
-            # set ReimportedDocument; the gate must stay closed for this case so we
-            # avoid an unnecessary Save-VbaProjectModules call on every .bas
-            # round-trip (the existing per-component save path handles it).
+            # A plain .bas/.cls re-import (NOT a form): Import-VbaModule does not
+            # set ReimportedDocument, so it is not a modified document. Since
+            # #1912 it is still saved by name (modifiedComponentName); that
+            # contract is pinned in dysflow-vba-import-lock-1912.Tests.ps1.
             $script:BeforeExists = "ModFoo"
             $script:ImportResult = [pscustomobject]@{
                 CreatedNewComponent  = $false
@@ -550,9 +555,7 @@ Describe "Invoke-ImportAction — ModifiedDocumentNames surface for re-imported 
             $result = Invoke-ImportAction -Session $script:FakeSession -NormalizedModules @("ModFoo") -ModulesPath "C:\fake" -ImportMode "Auto"
 
             @($result.ModifiedDocumentNames).Count | Should -Be 0 `
-                -Because "plain module re-imports are not documents; ModifiedDocumentNames must stay empty to avoid an unnecessary Save-VbaProjectModules call on every .bas round-trip"
-            $shouldSave = (@($result.CreatedComponentNames).Count -gt 0) -or (@($result.ModifiedDocumentNames).Count -gt 0)
-            $shouldSave | Should -Be $false
+                -Because "plain module re-imports are not documents; they are saved by name, not through the document save-all path"
         }
     }
 

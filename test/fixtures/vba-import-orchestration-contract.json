@@ -5,10 +5,11 @@
     "Caller order is preserved in the final modules array.",
     "A multi-module import retries only failed modules after a pass that made progress.",
     "A single-module failure is terminal after one pass.",
-    "New components and re-imported forms or reports trigger save-only persistence with RunCommand(280).",
+    "New components and modified existing modules are saved by name; re-imported forms or reports trigger save-only persistence with RunCommand(280).",
     "Post-import save failure is a warning and does not replace a fully successful module result.",
     "No compile command runs; the human compiles in Access after source import.",
-    "Terminal module failures keep the VBA_IMPORT_FAILED top-level code and typed per-module errors."
+    "Terminal module failures keep the VBA_IMPORT_FAILED top-level code and typed per-module errors.",
+    "A terminal partial failure saves its successful modules before completing; no module is ok without a save (#1912)."
   ],
   "cases": [
     {
@@ -29,13 +30,14 @@
             "module": "ModA",
             "ok": true,
             "durationMs": 7,
+            "modifiedComponentName": "ModA",
             "fallbackUsed": false,
             "fallbackReason": null
           }
         ]
       ],
       "expectedPassRequests": [["ModA"]],
-      "expectedSaveRequests": [],
+      "expectedSaveRequests": [["ModA"]],
       "expectedExitCode": 0,
       "expectedResult": [
         {
@@ -133,6 +135,7 @@
             "module": "Dependency",
             "ok": true,
             "durationMs": 6,
+            "modifiedComponentName": "Dependency",
             "fallbackUsed": false,
             "fallbackReason": null
           }
@@ -142,13 +145,14 @@
             "module": "DependsOnLater",
             "ok": true,
             "durationMs": 4,
+            "modifiedComponentName": "DependsOnLater",
             "fallbackUsed": false,
             "fallbackReason": null
           }
         ]
       ],
       "expectedPassRequests": [["DependsOnLater", "Dependency"], ["DependsOnLater"]],
-      "expectedSaveRequests": [],
+      "expectedSaveRequests": [["Dependency", "DependsOnLater"]],
       "expectedExitCode": 0,
       "expectedResult": [
         {
@@ -346,6 +350,92 @@
           "fallbackReason": null
         }
       ]
+    },
+    {
+      "id": "partial-failure-saves-successful-modules",
+      "targets": ["Broken", "Healthy"],
+      "passes": [
+        [
+          {
+            "module": "Broken",
+            "ok": false,
+            "durationMs": 3,
+            "phase": "import",
+            "message": "Expected: end of statement",
+            "rollbackAttempted": true,
+            "rollbackApplied": true,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          },
+          {
+            "module": "Healthy",
+            "ok": true,
+            "durationMs": 5,
+            "modifiedComponentName": "Healthy",
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ],
+        [
+          {
+            "module": "Broken",
+            "ok": false,
+            "durationMs": 3,
+            "phase": "import",
+            "message": "Expected: end of statement",
+            "rollbackAttempted": true,
+            "rollbackApplied": true,
+            "rollbackError": null,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      ],
+      "expectedPassRequests": [["Broken", "Healthy"], ["Broken"]],
+      "expectedSaveRequests": [["Healthy"]],
+      "expectedExitCode": 1,
+      "expectedResult": {
+        "ok": false,
+        "error": {
+          "code": "VBA_IMPORT_FAILED",
+          "message": "Import no pudo completar algunos modulos tras 2 pasada(s): Broken: Expected: end of statement"
+        },
+        "modules": [
+          {
+            "module": "Broken",
+            "status": "error",
+            "phase": "import",
+            "error": {
+              "code": "VBA_IMPORT_PHASE_FAILED",
+              "message": "Expected: end of statement",
+              "data": null,
+              "remediation": "The Access parser rejected the module source. See references/error-codes.md#vba_import_phase_failed for diagnostic decoding.",
+              "machine": null,
+              "user": null,
+              "rollbackAttempted": true,
+              "rollbackApplied": true,
+              "rollbackError": null,
+              "fallbackUsed": false,
+              "fallbackReason": null
+            },
+            "durationMs": 3,
+            "rollbackApplied": true,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          },
+          {
+            "module": "Healthy",
+            "status": "ok",
+            "phase": null,
+            "error": null,
+            "durationMs": 5,
+            "rollbackApplied": false,
+            "fallbackUsed": false,
+            "fallbackReason": null
+          }
+        ]
+      }
     }
   ]
 }

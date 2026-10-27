@@ -59,7 +59,7 @@ function fakePort(testCase: FixtureCase): {
 describe("VBA import orchestration legacy contract (#1463)", () => {
   it("pins a versioned behavior matrix before the adapter logic moves", () => {
     expect(fixture.schemaVersion).toBe("dysflow.vba-import-orchestration-contract/v1");
-    expect(fixture.invariants).toHaveLength(7);
+    expect(fixture.invariants).toHaveLength(8);
     expect(fixture.cases.map((testCase) => testCase.id)).toEqual([
       "explicit-empty-plan",
       "existing-module-success",
@@ -69,6 +69,7 @@ describe("VBA import orchestration legacy contract (#1463)", () => {
       "typed-terminal-failure-with-rollback",
       "multi-module-no-progress-is-terminal",
       "save-warning-keeps-success",
+      "partial-failure-saves-successful-modules",
     ]);
   });
 
