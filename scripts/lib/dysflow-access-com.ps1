@@ -16,6 +16,8 @@
     Get-MsAccessProcessesBounded — WMI query in a background job with timeout guard
     Get-MsAccessProcesses        — Thin alias over Get-MsAccessProcessesBounded
     Stop-AccessPidAndWait        — Kill an owned Access PID and wait until it exits
+    Test-DysflowPesterGuardActive — #1948/#1958: true while an offline Pester run is in progress
+    Assert-DysflowPesterGuard    — #1948/#1958: refuse real Access creation / process kills under Pester
     Test-ComHResult              — #1917: match a COM error (or a wrapped one) against an HRESULT
     Test-AccessProcessAlive      — #1917: read-only liveness probe of an Access PID
     Open-CanonicalAccess         — Canonical COM open: spawn Access.Application + 3-layer PID ladder
@@ -177,6 +179,42 @@ function Get-MsAccessProcesses {
 }
 
 # ---------------------------------------------------------------------------
+# Offline Pester guard (#1948, #1958)
+# ---------------------------------------------------------------------------
+
+# True while an offline Pester run is in progress: Pester is loaded in this session or the
+# run entry point set DYSFLOW_PESTER_GUARD=1 (inherited by child processes). Production
+# runs in a fresh pwsh with neither. DYSFLOW_PESTER_ALLOW_REAL_ACCESS=1 is the explicit
+# opt-in for an integration run that really drives Access.
+function Test-DysflowPesterGuardActive {
+    if ($env:DYSFLOW_PESTER_ALLOW_REAL_ACCESS -eq '1') { return $false }
+    if ($env:DYSFLOW_PESTER_GUARD -eq '1') { return $true }
+    return [bool](Get-Module -Name Pester)
+}
+
+# Throws DYSFLOW_PESTER_GUARD when a real side effect would run under the guard. With
+# -CommandName, only the REAL command is refused: a test override or Pester mock of that
+# command (Function/Alias) resolves first and is allowed. The warning keeps the refusal
+# visible even when a caller swallows the exception.
+function Assert-DysflowPesterGuard {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$Remedy,
+        [string]$CommandName
+    )
+    if (-not (Test-DysflowPesterGuardActive)) { return }
+    if ($CommandName) {
+        $command = Get-Command -Name $CommandName -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $command -and $command.CommandType -notin @('Cmdlet', 'Application')) { return }
+    }
+    $message = "DYSFLOW_PESTER_GUARD: $Operation is forbidden in offline Pester tests; $Remedy " +
+        "(set DYSFLOW_PESTER_ALLOW_REAL_ACCESS=1 only for an integration run that really drives Access)."
+    Write-Warning $message
+    throw $message
+}
+
+# ---------------------------------------------------------------------------
 # Synchronous Access PID termination
 # ---------------------------------------------------------------------------
 
@@ -199,6 +237,9 @@ function Stop-AccessPidAndWait {
         [switch]$UseTaskkillLastResort = $true
     )
 
+    # #1958: outside the try blocks below so the refusal is never swallowed.
+    $killRemedy = "override Stop-Process/Get-Process after dot-sourcing the library, or inject -KillPidAction"
+    Assert-DysflowPesterGuard -Operation "a real Stop-Process on PID $AccessPid" -Remedy $killRemedy -CommandName 'Stop-Process'
     try { Stop-Process -Id $AccessPid -Force -ErrorAction SilentlyContinue } catch { Write-Debug "Diagnostics: $_" }
     $elapsed = 0
     while ($elapsed -lt $TimeoutMs) {
@@ -217,6 +258,8 @@ function Stop-AccessPidAndWait {
         $stillAlive = $null
         try { $stillAlive = Get-Process -Id $AccessPid -ErrorAction SilentlyContinue } catch { $stillAlive = $null }
         if ($stillAlive) {
+            Assert-DysflowPesterGuard -Operation "a real taskkill /F /PID $AccessPid" `
+                -Remedy "override Start-Process, or pass -UseTaskkillLastResort:`$false" -CommandName 'Start-Process'
             try {
                 Start-Process -FilePath "taskkill" -ArgumentList "/F", "/PID", $AccessPid -NoNewWindow -Wait:$false -ErrorAction SilentlyContinue
             } catch { Write-Debug "Diagnostics: $_" }
@@ -643,7 +686,11 @@ function Open-CanonicalAccess {
         [bool]$SetAutomationSecurityLow = $true,
         # --- Injectable seams (testing only; production callers omit these) ---
         # Spawns the COM object.  Default: New-Object -ComObject Access.Application
-        [scriptblock]$ComSpawnAction    = { if ($env:DYSFLOW_MOCK_COM -eq '1') { Get-MockAccessApplication } else { New-Object -ComObject "Access.Application" } },
+        [scriptblock]$ComSpawnAction    = {
+            if ($env:DYSFLOW_MOCK_COM -eq '1') { return Get-MockAccessApplication }
+            Assert-DysflowPesterGuard -Operation "real Access.Application creation" -Remedy "inject -ComSpawnAction or set DYSFLOW_MOCK_COM=1"
+            New-Object -ComObject "Access.Application"
+        },
         # Resolves an hWnd ([IntPtr]) to a PID ([int]).  Default: Get-ProcessIdFromHwnd
         [scriptblock]$HwndToPidAction   = { param([IntPtr]$Hwnd) Get-ProcessIdFromHwnd -Hwnd $Hwnd },
         # Returns the current list of MSACCESS processes.  Default: Get-MsAccessProcessesBounded

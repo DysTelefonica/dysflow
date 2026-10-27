@@ -223,9 +223,19 @@ Describe "Stop-AccessPidAndWait (shared module) — behavioral" {
                 param($Id, $ErrorAction)
                 return [PSCustomObject]@{ Id = $Id }
             }
+            # #1958: the exhausted poll reaches the taskkill last resort; stub it so no real
+            # taskkill runs, and record that the kill was requested.
+            $script:StartProcessCalls = [System.Collections.Generic.List[hashtable]]::new()
+            function script:Start-Process {
+                param($FilePath, $ArgumentList, [switch]$NoNewWindow, $Wait, $ErrorAction)
+                $script:StartProcessCalls.Add(@{ FilePath = $FilePath; ArgumentList = $ArgumentList })
+            }
             # Use a very short timeout to keep the test fast.
             $result = Stop-AccessPidAndWait -AccessPid 7777 -TimeoutMs 300
             $result | Should -Be $false
+            @($script:StartProcessCalls | Where-Object {
+                $_.FilePath -eq "taskkill" -and $_.ArgumentList -contains 7777
+            }).Count | Should -Be 1
         }
     }
 
