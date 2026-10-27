@@ -480,6 +480,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
         validateStrictContext: (params, target) => this.validateStrictContext(params, target),
         runPreflightCleanup: (target) => this.runPreflightCleanup(target),
         executor: this.executor,
+        runTrackedVbaManager: (toolName, request, target) =>
+          this.runTrackedVbaManager(toolName, request, target),
         executeMappedTool: (toolName, params, mapping) =>
           this.executeMappedTool(toolName, params, mapping),
       },
@@ -982,6 +984,50 @@ export class VbaSyncAdapter implements VbaSyncPort {
     projectRoot?: string;
   }): Promise<AccessOperationPreflightCleanupResult> {
     return this.operationsAdapter.runPreflightCleanup(target);
+  }
+
+  /**
+   * Issue #1908 — run one runner request as a tracked Access operation scoped
+   * to `request.accessPath`, which may be a snapshot rather than the configured
+   * binary. The record makes the run visible to list_access_operations and owns
+   * the Access PID from the marker; a timeout or failure reaps that PID before
+   * the result returns, because cleanup keyed on any other path cannot match it.
+   */
+  private async runTrackedVbaManager(
+    toolName: string,
+    request: VbaManagerExecutionRequest,
+    target: Pick<DysflowConfig, "projectRoot" | "accessDbPath"> & { destinationRoot: string },
+  ): Promise<VbaManagerExecutionResult> {
+    const scope = { ...target, accessPath: request.accessPath };
+    const trackedOperation = await this.startTrackedOperation(
+      toolName,
+      request.action,
+      request,
+      scope,
+    );
+    const trackedRequest = trackedOperation
+      ? {
+          ...request,
+          operationId: trackedOperation.operationId,
+          operationFile: trackedOperation.operationFile,
+        }
+      : request;
+    await this.transitionToRunning(trackedOperation);
+    let result: VbaManagerExecutionResult;
+    try {
+      result = await this.executor(trackedRequest);
+    } catch (error) {
+      await this.finishTrackedOperation(trackedOperation, { status: "failed" });
+      await reapOrphanedAccessOnTimeout(() => this.runPreflightCleanup(scope));
+      throw error;
+    }
+    await this.finishTrackedOperation(trackedOperation, {
+      status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
+    });
+    if (result.timedOut || (result.exitCode !== 0 && result.spawnError === undefined)) {
+      await reapOrphanedAccessOnTimeout(() => this.runPreflightCleanup(scope));
+    }
+    return result;
   }
 
   private async startTrackedOperation(
