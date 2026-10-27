@@ -11,6 +11,25 @@ const DEFAULT_FIXTURE = "scripts/fixtures/mcp-context-budget";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const PROTOCOL_VERSION = "2025-03-26";
 
+/**
+ * Replace every occurrence of the given host roots in a raw JSON-RPC frame with
+ * a fixed `<repo>` marker (#1950). Payloads such as `get_capabilities` echo the
+ * absolute checkout path, so without this the budget would depend on where the
+ * repository lives and a baseline written on one machine could never match CI.
+ * Both the JSON-escaped form (Windows backslashes doubled) and the raw form are
+ * replaced.
+ */
+export function neutralizeHostPaths(frameText, roots) {
+  let text = frameText;
+  for (const root of roots) {
+    if (!root) continue;
+    for (const form of new Set([JSON.stringify(root).slice(1, -1), root])) {
+      text = text.split(form).join("<repo>");
+    }
+  }
+  return text;
+}
+
 export function canonicalJson(value) {
   return JSON.stringify(sortJson(value));
 }
@@ -72,7 +91,7 @@ export async function measureContextBudget({
     env: childEnv,
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const client = createJsonRpcClient(child, timeoutMs);
+  const client = createJsonRpcClient(child, timeoutMs, [fixture, cwd]); // longest root first
   try {
     await client.request("initialize", {
       protocolVersion: PROTOCOL_VERSION,
@@ -399,7 +418,7 @@ function compareStrings(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function createJsonRpcClient(child, timeoutMs) {
+function createJsonRpcClient(child, timeoutMs, hostRoots = []) {
   let buffer = Buffer.alloc(0);
   const frames = [];
   let closed = false;
@@ -412,7 +431,8 @@ function createJsonRpcClient(child, timeoutMs) {
       const frame = buffer.subarray(0, end + 1);
       buffer = buffer.subarray(end + 1);
       try {
-        frames.push({ wireBytes: frame.length, parsed: JSON.parse(frame.toString("utf8")) });
+        const text = neutralizeHostPaths(frame.toString("utf8"), hostRoots);
+        frames.push({ wireBytes: Buffer.byteLength(text, "utf8"), parsed: JSON.parse(text) });
       } catch {
         throw new Error(`MCP stdio emitted invalid JSON: ${frame.toString("utf8")}`);
       }

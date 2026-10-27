@@ -5,10 +5,23 @@ import {
   compareBudget,
   extractPayload,
   measureLogicalBytes,
+  neutralizeHostPaths,
   summarizeContributors,
 } from "../../scripts/mcp-context-budget.mjs";
 
 describe("MCP context budget helpers", () => {
+  it("measures the same surface the same way wherever the repository is checked out (#1950)", () => {
+    const frameAt = (root: string) =>
+      `${JSON.stringify({ result: { projectRoot: root, note: `${root}/x` } })}\n`;
+    const windowsRoot = String.raw`C:\repos\codigo\dysflow-1950`;
+    const windows = neutralizeHostPaths(frameAt(windowsRoot), [windowsRoot]);
+    const linux = neutralizeHostPaths(frameAt("/home/runner/work/dysflow/dysflow"), [
+      "/home/runner/work/dysflow/dysflow",
+    ]);
+    expect(windows).toBe(linux);
+    expect(windows).not.toContain("dysflow-1950");
+  });
+
   it("canonicalizes object key order and measures UTF-8 logical bytes", () => {
     expect(canonicalJson({ z: 1, a: "á" })).toBe('{"a":"á","z":1}');
     expect(measureLogicalBytes({ z: 1, a: "á" })).toBe(

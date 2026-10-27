@@ -10,6 +10,7 @@ export type BudgetViolation = {
   current: number;
 };
 
+export function neutralizeHostPaths(frameText: string, roots: readonly string[]): string;
 export function canonicalJson(value: unknown): string;
 export function measureLogicalBytes(value: unknown): number;
 export function extractPayload(result: unknown): unknown;
