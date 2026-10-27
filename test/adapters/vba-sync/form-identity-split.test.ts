@@ -531,3 +531,66 @@ describe("recommendedAction treats a base-resolved direction as needing confirma
     },
   );
 });
+
+// Issue #1962 — a form whose files sit in a nested folder under forms/ is still
+// one document: a conflict on its .cls blocks the layout, whose embedded
+// CodeBehindForm would otherwise overwrite the binary's code-behind.
+describe("a form in a nested forms/ folder is one module identity", () => {
+  const nested = (root: string, side: string) => join(root, side, "modules", "forms", "sub");
+  const frmY = (value: number) => codeBehind(value).replace("Form_frmX", "Form_frmY");
+
+  function nestedConflict() {
+    const fx = fixture();
+    for (const side of ["source", "binary"]) mkdirSync(nested(fx.root, side), { recursive: true });
+    writeFileSync(join(nested(fx.root, "source"), "Form_frmY.cls"), frmY(1));
+    writeFileSync(join(nested(fx.root, "binary"), "Form_frmY.cls"), frmY(9));
+    writeFileSync(join(nested(fx.root, "source"), "frmY.form.txt"), layout(true));
+    writeFileSync(join(nested(fx.root, "binary"), "frmY.form.txt"), layout(false));
+    return fx;
+  }
+
+  it("P8: a bothChanged .cls blocks a sourceNewer layout in forms/sub/", async () => {
+    const { root, adapter, calls } = nestedConflict();
+
+    const data = await verify(adapter);
+    expect(new Set(data.actionableDifferent.map((entry) => entry.moduleName))).toEqual(
+      new Set(["frmY"]),
+    );
+    expect(data.bulkImportable).toEqual([]);
+    expect(data.recommendedAction).toBe("manual_merge");
+
+    const result = await adapter.execute("sync_binary", { apply: true });
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+    expect((result.data as { plan: { toImport: string[] } }).plan.toImport).toEqual([]);
+    expect(calls.filter((call) => call.action === "Import")).toEqual([]);
+    expect(readFileSync(join(nested(root, "binary"), "Form_frmY.cls"), "utf8")).toBe(frmY(9));
+
+    const accepted = await adapter.execute("sync_binary", {
+      dryRun: true,
+      direction: "src-to-binary",
+      acceptBothChanged: true,
+    });
+    if (!accepted.ok) throw new Error(JSON.stringify(accepted.error));
+    expect((accepted.data as { plan: { toImport: string[] } }).plan.toImport).toEqual(["frmY"]);
+  });
+
+  it("a class in a nested folder outside forms/ keeps its own name", async () => {
+    const { root, adapter } = fixture();
+    const text = (value: number) => moduleText(value).replace('"Probe"', '"Form_Helper"');
+    for (const side of ["source", "binary"]) {
+      const dir = join(root, side, "modules", "classes", "sub");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "Form_Helper.cls"),
+        side === "source" ? `${text(1)}Public Sub Added()\nEnd Sub\n` : text(1),
+      );
+    }
+
+    const data = await verify(adapter);
+
+    expect(data.actionableDifferent).toEqual([
+      expect.objectContaining({ moduleName: "Form_Helper", classification: "sourceNewer" }),
+    ]);
+    expect(data.bulkImportable).toEqual(["Form_Helper"]);
+  });
+});

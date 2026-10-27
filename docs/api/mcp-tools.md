@@ -672,6 +672,10 @@ A third state breaks that tie: the state both sides last provably agreed on.
 
 The base is local, unversioned state in `<project>/.dysflow/runtime/verify-base/`, which is gitignored. It is written only when a `.dysflow/` folder exists in the project root.
 
+Each observation and each invalidation is stored as its own new file, and older observations of the same artifact are pruned.
+
+Two writers racing on one artifact therefore never overwrite each other. Whatever order their files land in, the newest observation wins when the base is read (#1939).
+
 A failed base write never fails `verify_code` or the write that triggered it; it adds a `verify-base` warning diagnostic.
 
 `verify_code` never writes Access or source files; the base is its only write. Deleting the folder only falls back to the two-text direction.
@@ -683,11 +687,11 @@ A form's **code-behind is verified through its `forms/*.cls`, not its `.form.txt
 - The classifier strips everything from the `CodeBehindForm` marker onward and compares a `.form.txt` for its **UI/layout only**.
 - A real form change (control/property/layout) stays actionable, while code-behind churn in the `.form.txt` is non-actionable — the `.cls` owns it.
 - Casing and encoding normalization never collapse a genuine content change: identifier casing is folded only outside string literals/comments, so any runtime-visible difference still surfaces as functional.
-- The `.form.txt` and the `.cls` of one form are **one module**, reported under ONE `moduleName`. This applies to `.cls`, `.form.txt` and `.report.txt` files directly under `forms/` or `reports/`; they pair on their Access component name (`Form_<form>` / `Report_<report>`), so `frmX.form.txt`, `Form_frmX.cls` and `FORM_FRMX.cls` are the same form. A module elsewhere keeps its `VB_Name`, even one starting with `Form_`, and never pairs with a form.
+- The `.form.txt` and the `.cls` of one form are **one module**, reported under ONE `moduleName`. This applies to `.cls`, `.form.txt` and `.report.txt` files under `forms/` or `reports/`, at any depth; they pair on their Access component name (`Form_<form>` / `Report_<report>`), so `frmX.form.txt`, `Form_frmX.cls` and `FORM_FRMX.cls` are the same form. A module elsewhere keeps its `VB_Name`, even one starting with `Form_`, and never pairs with a form.
 - The reported name is the file stem of the first file found in this order: the source layout file, the source `.cls`, the binary layout file, the binary `.cls`. Import resolves that name to every file of the form, and export rewrites the source files in place under it (`frmX` for `frmX.form.txt`, `Form_Clientes` for the `export_all` layout).
 - `verify_code` and `sync_binary` `moduleNames` accept the name with or without the `Form_`/`Report_` prefix.
 - When one side holds more than one file of the same kind for one component (two `.cls`, or two layout files), for example a stale `Form_X.cls` left next to `X.cls`, or two Access forms literally named `X` and `Form_X`, the files are compared by exact file name and each entry carries `ambiguousDocument: true`. Every name in that group is a conflict: it is in neither bulk list, `recommendedAction` is `manual_merge`, and `sync_binary` does not plan it unless `acceptBothChanged: true` is passed with a one-way `direction`. A `DUPLICATE_IDENTITY_KEY` warning lists every file of the group so the stale one can be deleted.
-- Files in a nested folder (`forms/sub/`) are not document files and keep their `VB_Name`; dysflow's export never nests them.
+- A folder nested below `forms/` or `reports/` (`forms/sub/`) is a document folder too, so a conflict on any file of a nested form blocks the whole form (#1962). dysflow's export never nests them; a nested folder elsewhere (`classes/sub/`) keeps each file's `VB_Name`.
 - A module with a `bothChanged` file, or whose files point in opposite directions (a newer source `.form.txt` with a newer binary `.cls`), is in neither `bulkImportable[]` nor `bulkExportable[]`, and `sync_binary` does not plan it unless `acceptBothChanged: true` is passed with a one-way `direction`. Importing a form also loads its `.cls`, so a newer `.form.txt` must not carry a conflicted or stale `.cls` into the binary. Module names are compared case-insensitively.
 
 The result adds:

@@ -1397,7 +1397,7 @@ export async function collectVbaSourceFiles(
       if (!entry.isFile()) continue;
       const fileType = vbaSourceFileType(entry.name);
       if (fileType === undefined) continue;
-      const documentPrefix = documentPrefixForFile(directory, fileType);
+      const documentPrefix = documentPrefixForFile(root, directory, fileType);
       const vbaName = await resolveVbaModuleName(fileSystem, path, fileType, entry.name);
       // A form/report document is two files named alike (`frmX.form.txt`,
       // `frmX.cls`) while the `.cls` says `VB_Name = "Form_frmX"`. Both files
@@ -1525,17 +1525,28 @@ function unifyDocumentIdentities(
  * The Access object prefix of a form/report document file, or `undefined` for
  * any other file. Mirrors the export layout: document modules (`.cls` code-behind
  * and `.form.txt`/`.report.txt` layout) live under `forms/` or `reports/`. A
+ * folder nested below one of them (`forms/sub/`) counts as that document folder
+ * too (#1962): dysflow never exports one, but a hand-made layout must still keep
+ * a form's files under one identity so a conflict on any of them blocks it. A
  * standard module or class elsewhere keeps its `VB_Name`, even one that starts
  * with `Form_`.
  */
 function documentPrefixForFile(
+  root: string,
   directory: string,
   fileType: string,
 ): "Form_" | "Report_" | undefined {
   if (fileType !== "cls" && fileType !== "form.txt" && fileType !== "report.txt") {
     return undefined;
   }
-  const folder = basename(directory).toLowerCase();
+  const below = relative(root, directory)
+    .split(/[\\/]/)
+    .map((segment) => segment.toLowerCase());
+  // The nearest `forms`/`reports` ancestor decides; the source root itself
+  // counts when it is the document folder.
+  const folder =
+    below.reverse().find((segment) => segment === "forms" || segment === "reports") ??
+    basename(directory).toLowerCase();
   if (folder === "forms" && fileType !== "report.txt") return "Form_";
   if (folder === "reports" && fileType !== "form.txt") return "Report_";
   return undefined;
