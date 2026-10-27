@@ -2982,14 +2982,32 @@ async function revertFormRoundTrip(label, originalBytes) {
   );
 }
 
+// The committed fixture predates Access's current serialization: its .cls has no
+// Attribute VB_Name header and its .form.txt is a legacy export, so a plain import
+// leaves verify_code reporting real, correctly classified differences (run
+// 40519155504). The baseline therefore normalizes the fixture first: import it,
+// export it back so the source is Access's own serialization, then require
+// verify_code to be clean. Every scenario below starts from that state.
 const formRoundTripBaselineImport = await importFormRoundTrip("import_modules:form-round-trip-baseline");
+const formRoundTripNormalize = await record(
+  "forms",
+  "export_modules:form-round-trip-normalize",
+  { ...ctx, moduleNames: [FORM_ROUND_TRIP_MODULE], destinationRoot, apply: true, timeoutMs: 180000 },
+  { timeoutMs: 180000 },
+);
+const formRoundTripNormalizePayload = payloadOf(formRoundTripNormalize) ?? {};
+const formRoundTripNormalized =
+  formRoundTripNormalize.isError !== true &&
+  formRoundTripNormalizePayload.ok !== false &&
+  JSON.stringify(formRoundTripNormalizePayload).includes(FORM_ROUND_TRIP_MODULE);
 const formRoundTripBaseline = await verifyFormRoundTrip(FORM_ROUND_TRIP_MODULE);
-const formRoundTripBaselinePass = formRoundTripBaselineImport.pass && formRoundTripBaseline.clean;
+const formRoundTripBaselinePass =
+  formRoundTripBaselineImport.pass && formRoundTripNormalized && formRoundTripBaseline.clean;
 addFormRoundTripResult(
   "form-round-trip:baseline",
   formRoundTripBaselinePass,
-  `${FORM_ROUND_TRIP_MODULE} imported and verify_code clean before any form write`,
-  `${formRoundTripBaselineImport.summary}; ${formRoundTripBaseline.summary}`,
+  `${FORM_ROUND_TRIP_MODULE} imported, re-exported to Access's own serialization, and verify_code clean before any form write`,
+  `${formRoundTripBaselineImport.summary}; normalized=${formRoundTripNormalized}; ${formRoundTripBaseline.summary}`,
 );
 
 // Without a clean baseline no drift below could be blamed on a tool; the
