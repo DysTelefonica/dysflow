@@ -74,6 +74,77 @@ const REMEDIATION =
   `To run anyway, set ${ALLOW_FOREIGN_ACCESS_ENV}=1 (recorded as a warning).`;
 
 /**
+ * Every MSACCESS.EXE alive right now. A probe failure is reported, never read as "none alive".
+ * @param {{ probe?: () => string }} [input]
+ */
+export function snapshotAccessProcesses({ probe = probeAccessProcesses } = {}) {
+  try {
+    return { available: true, processes: parseAccessProcessTable(probe()), reason: null };
+  } catch (error) {
+    return {
+      available: false,
+      processes: [],
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// A PID can be reused, so a process is the same one only when its start time matches too.
+function processIdentity(process) {
+  return `${process.pid}@${process.creationMs ?? "unknown"}`;
+}
+
+const LEAK_REMEDIATION =
+  "Remediation: confirm each PID is not owned by a running dysflow operation (list_access_operations) " +
+  "and is headless, then remove it with dysflow access_force_cleanup_orphaned { confirmPid: <pid> }. " +
+  "Never kill MSACCESS.EXE by name; this harness never kills it either.";
+
+/**
+ * Global leak verdict (#1978): headless MSACCESS.EXE alive at the end that were not alive at the
+ * start snapshot. Processes alive before the run are the preflight's concern, never a leak; a
+ * new interactive session is a human's window, listed but not counted. Pure.
+ * @param {{ start: ReturnType<typeof snapshotAccessProcesses>, end: ReturnType<typeof snapshotAccessProcesses> }} input
+ */
+export function computeAccessLeak({ start, end }) {
+  if (!start?.available || !end?.available) {
+    const reason = !start?.available
+      ? `start snapshot unavailable: ${start?.reason ?? "not taken"}`
+      : `end snapshot unavailable: ${end.reason}`;
+    return {
+      verified: false,
+      startCount: start?.available ? start.processes.length : null,
+      endCount: end?.available ? end.processes.length : null,
+      leakDelta: 0,
+      leaked: [],
+      newInteractive: [],
+      summary: `WARNING: global MSACCESS.EXE leak check unverified for this run (${reason}).`,
+    };
+  }
+  const alive = new Set(start.processes.map(processIdentity));
+  const fresh = end.processes.filter((p) => !alive.has(processIdentity(p)));
+  const leaked = fresh.filter((p) => isHeadless(p.commandLine));
+  const newInteractive = fresh.filter((p) => !isHeadless(p.commandLine));
+  const counts = `start=${start.processes.length} end=${end.processes.length} leakDelta=${leaked.length}`;
+  const interactiveNote =
+    newInteractive.length > 0
+      ? ` Interactive Access sessions opened during the run, not counted: ${newInteractive.map(describeProcess).join("; ")}.`
+      : "";
+  return {
+    verified: true,
+    startCount: start.processes.length,
+    endCount: end.processes.length,
+    leakDelta: leaked.length,
+    leaked,
+    newInteractive,
+    summary:
+      leaked.length > 0
+        ? `${leaked.length} headless MSACCESS.EXE alive at the end were not alive before the first ` +
+          `scenario (${counts}): ${leaked.map(describeProcess).join("; ")}.${interactiveNote} ${LEAK_REMEDIATION}`
+        : `No headless MSACCESS.EXE left behind by the battery (${counts}).${interactiveNote}`,
+  };
+}
+
+/**
  * Typed preflight verdict. Processes whose parent is this run are not foreign.
  * @param {{ probe?: () => string, ownPid?: number, env?: Record<string, string | undefined> }} [input]
  */
@@ -82,22 +153,22 @@ export function runAccessPreflight({
   ownPid = process.pid,
   env = process.env,
 } = {}) {
-  let processes;
-  try {
-    processes = parseAccessProcessTable(probe());
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+  // #1978: this read is also the start snapshot of the global leak check.
+  const snapshot = snapshotAccessProcesses({ probe });
+  if (!snapshot.available) {
     return {
       kind: "access-preflight",
       status: "probe-unavailable",
       pass: true,
       foreignHeadless: [],
       foreignInteractive: [],
+      snapshot,
       summary:
-        `WARNING: foreign Access preflight could not read the process table (${reason}); ` +
+        `WARNING: foreign Access preflight could not read the process table (${snapshot.reason}); ` +
         "pre-existing MSACCESS.EXE processes are unverified for this run.",
     };
   }
+  const processes = snapshot.processes;
   const foreign = processes.filter((p) => p.parentPid !== ownPid);
   const foreignHeadless = foreign.filter((p) => isHeadless(p.commandLine));
   const foreignInteractive = foreign.filter((p) => !isHeadless(p.commandLine));
@@ -113,6 +184,7 @@ export function runAccessPreflight({
       pass: true,
       foreignHeadless,
       foreignInteractive,
+      snapshot,
       summary: `No foreign headless MSACCESS.EXE before the first scenario.${interactiveNote}`,
     };
   }
@@ -124,6 +196,7 @@ export function runAccessPreflight({
     pass: allowed,
     foreignHeadless,
     foreignInteractive,
+    snapshot,
     summary: allowed
       ? `WARNING: ${foreignHeadless.length} foreign headless MSACCESS.EXE alive before the first scenario ` +
         `(${ALLOW_FOREIGN_ACCESS_ENV}=1, battery continues): ${listed}.${interactiveNote} ${REMEDIATION}`

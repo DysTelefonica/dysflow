@@ -2,7 +2,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { runAccessPreflight } from "./_helpers/access-preflight.mjs";
+import {
+  computeAccessLeak,
+  runAccessPreflight,
+  snapshotAccessProcesses,
+} from "./_helpers/access-preflight.mjs";
 import {
   EXPECTED_ADVERTISED_TOOL_COUNT,
   EXPECTED_ADVERTISED_TOOL_COUNT_LABEL,
@@ -3657,22 +3661,22 @@ async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
 // materializes), poll our own child PIDs. Other Dysflow consumers'
 // MSACCESS.EXE instances on the host are out of scope.
 //
-// We ALSO sample the global MSACCESS.EXE count before and after the
-// battery. If it grows by more than 1, the e2e leaked a process that
-// escaped the suiteOwnPids watch list (e.g. a PS script that spawned
-// MSACCESS.EXE outside the harness child process). Cheap global check
-// — no extra run, no extra tools, just `(Get-Process -Name MSACCESS
-// -ErrorAction SilentlyContinue).Count` at start and end.
+// We ALSO compare the MSACCESS.EXE process table before and after the
+// battery (#1978). The start snapshot is the #1974 preflight's own read,
+// taken before the first scenario; the end snapshot is taken after the
+// lingering check below. Every headless MSACCESS.EXE alive at the end that
+// was not alive at the start escaped the suiteOwnPids watch list (e.g. a
+// PS script that spawned MSACCESS.EXE outside the harness child process).
+// Processes alive before the run are excluded; the harness never kills any.
 const PRUDENT_ZOMBIE_DELAY_MS = 1000;
 const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
 const LINGERING_OWN_PID_POLL_MS = 100;
 let hasLingeringAccess = false;
 let finalZombieMs = 0;
 let finalZombie;
+const globalMsAccessAtStart = accessPreflight.snapshot;
 let globalMsAccessLeak = 0;
-const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCESS_COUNT ?? ""}`) || (() => {
-  try { return Number(`${spawnSync("powershell.exe", ["-NoProfile", "-Command", "(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count"], { encoding: "utf8" }).stdout?.trim()}`) || 0; } catch { return 0; }
-})();
+let globalMsAccessLeakCheck;
 
 {
   console.error(`prudentDelayMs=${PRUDENT_ZOMBIE_DELAY_MS} (waiting before final lingering-access check on suite-owned PIDs)`);
@@ -3681,29 +3685,12 @@ const globalMsAccessCountAtStart = Number(`${process.env.DYSFLOW_E2E_PRE_MSACCES
   hasLingeringAccess = finalZombie.found;
   finalZombieMs = finalZombie.elapsed;
 
-  // Global MSACCESS.EXE count comparison: cheap, runs once per battery.
-  // The suite intentionally leaves the global count out of scope for
-  // in-suite checks (other consumers may legitimately run MSACCESS.EXE).
-  // For the battery's own leak detection, we only flag a DELTA from start
-  // to end-of-battery — not the absolute count. A delta of 0 is the
-  // happy path; a delta > 0 means WE leaked a process that escaped
-  // suiteOwnPids (e.g. PS spawned MSACCESS.EXE outside the harness).
-  try {
-    const postOut = spawnSync(
-      "powershell.exe",
-      ["-NoProfile", "-Command", "(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count"],
-      { encoding: "utf8" },
-    ).stdout?.trim() ?? "";
-    const postCount = Number(postOut) || 0;
-    globalMsAccessLeak = Math.max(0, postCount - globalMsAccessCountAtStart);
-  } catch {
-    globalMsAccessLeak = 0;
-  }
-  console.error(
-    `globalMsAccessCount: start=${globalMsAccessCountAtStart} ` +
-      `end=${globalMsAccessCountAtStart + globalMsAccessLeak} ` +
-      `leakDelta=${globalMsAccessLeak}`,
-  );
+  globalMsAccessLeakCheck = computeAccessLeak({
+    start: globalMsAccessAtStart,
+    end: snapshotAccessProcesses(),
+  });
+  globalMsAccessLeak = globalMsAccessLeakCheck.leakDelta;
+  console.error(`globalMsAccessCount: ${globalMsAccessLeakCheck.summary}`);
 }
 // #1690 — an empty descendant list means "nothing leaked" ONLY when the walk
 // could actually read the process table. Say so once, right where the zombie
@@ -3735,9 +3722,9 @@ appendUnchecked({
       return `Suite-owned MSACCESS.EXE pids=${(finalZombie?.pids || []).join(",")} still alive after final recheck!`;
     }
     if (globalMsAccessLeak > 0) {
-      return `Global MSACCESS.EXE grew by ${globalMsAccessLeak} during the battery (start=${globalMsAccessCountAtStart}, end=${globalMsAccessCountAtStart + globalMsAccessLeak}); a process escaped the suiteOwnPids watch list.`;
+      return `Global MSACCESS.EXE leak: globalMsAccessLeak=${globalMsAccessLeak}; a process escaped the suiteOwnPids watch list. ${globalMsAccessLeakCheck.summary}`;
     }
-    return "No suite-owned MSACCESS.EXE lingering; no global MSACCESS.EXE leak.";
+    return `No suite-owned MSACCESS.EXE lingering. ${globalMsAccessLeakCheck.summary}`;
   })(),
   ...((hasLingeringAccess || globalMsAccessLeak > 0)
     ? { failureClass: "safety-critical" }

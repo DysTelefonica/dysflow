@@ -11,13 +11,13 @@
 //
 // The fix has two cheap layers:
 //
-//   1. (preferred) Sample the global MSACCESS.EXE count BEFORE the
-//      battery starts and AFTER it ends. If the count grew, the
-//      battery leaked a process that escaped the watch list — fail
-//      the lingering-access-check row.
+//   1. (preferred) Snapshot the global MSACCESS.EXE table BEFORE the
+//      first scenario (the #1974 preflight read) and AFTER the battery.
+//      A headless PID alive at the end and not at the start escaped
+//      the watch list — fail the lingering-access-check row (#1978).
 //
 //   2. Cheap tests in this file assert the production code carries
-//      the global-count sampling AND that the pass condition combines
+//      the global snapshot comparison AND that the pass condition combines
 //      the suite-owned check with the global count.
 //
 // Without these tests, a future refactor that reverts the fix (or
@@ -42,26 +42,26 @@ function readSource(): string {
 describe("mcp-e2e.mjs — global MSACCESS.EXE leak guard (#fix-msaccess-global-zombie-leak)", () => {
   const src = readSource();
 
-  it("samples MSACCESS.EXE count at battery start AND battery end (not just suite-owned)", () => {
-    // The fix uses `(Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count`
-    // for both samples. The cheap test asserts both samples exist.
-    const matches =
-      src.match(/\(Get-Process\s+-Name\s+MSACCESS\s+-ErrorAction\s+SilentlyContinue\)\.Count/g) ??
-      [];
-    // Need at least 2 (the start sample + the end sample). Each sample
-    // is exactly one count call. The cheap pin accepts 2 or more.
-    expect(
-      matches.length,
-      `expected at least 2 (Get-Process -Name MSACCESS -ErrorAction SilentlyContinue).Count samples in mcp-e2e.mjs; found ${matches.length}. The global-count-before-and-after pin requires both the start sample and the post-battery sample. Without both, MSACCESS.EXE leaks outside suiteOwnPids are not caught.`,
-    ).toBeGreaterThanOrEqual(2);
+  it("takes the start snapshot before the first scenario, not after the battery (#1978)", () => {
+    // The start snapshot is the #1974 preflight's own process-table read. Before #1978 the
+    // "start" count was sampled after `runBattery` returned, so leakDelta compared two
+    // after-run counts and never fired. Pin the order: preflight, then battery, then the
+    // leak computation against the preflight snapshot.
+    const preflightAt = src.indexOf("const accessPreflight = runAccessPreflight(");
+    const batteryAt = src.indexOf("await runBattery();");
+    const startAt = src.indexOf("const globalMsAccessAtStart = accessPreflight.snapshot;");
+    expect(preflightAt, "preflight read not found").toBeGreaterThan(-1);
+    expect(batteryAt, "runBattery call not found").toBeGreaterThan(-1);
+    expect(startAt, "start snapshot must come from the preflight").toBeGreaterThan(-1);
+    expect(preflightAt).toBeLessThan(batteryAt);
+    expect(src).toMatch(
+      /computeAccessLeak\(\{\s*start:\s*globalMsAccessAtStart,\s*end:\s*snapshotAccessProcesses\(\)/,
+    );
+    expect(src).not.toMatch(/DYSFLOW_E2E_PRE_MSACCESS_COUNT/);
   });
 
-  it("tracks a global MSACCESS.EXE delta across the battery", () => {
-    // The fix records the start count in a `globalMsAccessCountAtStart`
-    // variable and compares it against the post-battery count. The
-    // delta must be computed and exposed.
-    expect(src).toMatch(/globalMsAccessCountAtStart/);
-    expect(src).toMatch(/globalMsAccessLeak/);
+  it("tracks a global MSACCESS.EXE leak across the battery", () => {
+    expect(src).toMatch(/globalMsAccessLeak\s*=\s*globalMsAccessLeakCheck\.leakDelta/);
   });
 
   it("lingering-access-check row passes ONLY when BOTH suite-owned AND global delta are zero", () => {
