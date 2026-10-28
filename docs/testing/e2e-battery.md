@@ -164,9 +164,6 @@ $env:DYSFLOW_E2E_PRESERVE_SANDBOX = "1"
 # Raíz determinista para el sandbox (el harness crea un hijo bajo ella).
 $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
 
-# Fijar el conteo global de MSACCESS.EXE al inicio (en CI o cuando ya hay Access ajenos).
-$env:DYSFLOW_E2E_PRE_MSACCESS_COUNT = "0"
-
 # Timeout de la edición externa de Access del escenario Issue 1817 (default 60000 ms).
 # Sólo se reintenta un ETIMEDOUT, como máximo dos intentos (#1898). Un `create` que expira
 # borra la base parcial (solo dentro de la fixture marcada bajo %TEMP%) y se reintenta una vez;
@@ -187,6 +184,24 @@ Antes del primer escenario, la fila `preflight/foreign-access-check` registra lo
 - Elimínelos con `access_force_cleanup_orphaned` y `confirmPid`.
 
 La lógica vive en `E2E_testing/_helpers/access-preflight.mjs`.
+
+### Zombie check
+
+La fila final `zombies/lingering-access-check` falla si queda vivo un PID propio de la suite
+o si la batería deja un `MSACCESS.EXE` headless que no existía al empezar (#1978).
+
+- La foto de inicio es la misma lectura del preflight, antes del primer escenario.
+- La foto final se toma tras la comprobación de PIDs propios.
+- Un proceso es el mismo solo si coinciden PID y hora de inicio; un PID reutilizado cuenta como nuevo.
+- Los procesos vivos antes de la ejecución nunca cuentan como fuga; de ellos se ocupa el preflight.
+- Una sesión interactiva abierta durante la ejecución se lista, pero no cuenta.
+- El resumen da `start`, `end` y `leakDelta`, y por cada PID fugado su hora de inicio y su línea de comandos.
+- Si alguna foto no se pudo leer, la fila lo registra como `unverified`; no lo da por limpio.
+- El harness nunca mata procesos: verifique con `list_access_operations` y elimine con
+  `access_force_cleanup_orphaned` y `confirmPid`. Nunca mate `MSACCESS.EXE` por nombre.
+
+`DYSFLOW_E2E_PRE_MSACCESS_COUNT` se eliminó en #1978: nada la fijaba, y un conteo no puede
+distinguir un proceso ajeno de una fuga. La foto del preflight la sustituye.
 
 Si el harness aborta antes de la primera herramienta, el mensaje nombra el código de
 resolución: `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE` o
@@ -315,7 +330,7 @@ pesado descubriría 5–15 minutos después.
 | `mcp-e2e-subprocess-preflight.test.ts` | REFUSE-START con subprocess real (no fakes): un spawn externo deja un nieto, la siguiente herramienta aborta. | <1 s |
 | `mcp-e2e-grandchild-zombie.test.ts` | H5 descendant walk: el walker detecta nietos vía `wmic` cuando el padre ya cerró. | <1 s |
 | `mcp-e2e-final-lingering-check.test.ts` | H6 retardo prudente de 1 s antes del primer poll (issue #574). | <2 s |
-| `mcp-e2e-global-zombie-pin.test.ts` | Delta global de `MSACCESS.EXE` start vs end; atrapa fugas fuera del watchlist. | <2 s |
+| `mcp-e2e-global-zombie-pin.test.ts` | La foto de inicio de `MSACCESS.EXE` sale del preflight, antes de `runBattery` (#1978); atrapa fugas fuera del watchlist. | <2 s |
 | feat-759-no-compile (v1.19.0) — `mcp-e2e-compile-vba-mojibake-pin.test.ts` was deleted. The mojibake pin is no longer relevant: compile_vba is gone, so the harness no longer asserts a structured compile failure against the fixture. | — |
 | `resolve-mcp-e2e-command.test.ts` + `-esm` | `resolveMcpE2eCommand`: prioridad `DYSFLOW_E2E_COMMAND → test-runtime → production (rechazado) → none`. Inyecta `fs` fake; el `-esm` valida el comportamiento con ESM subprocess real. | <1 s |
 
