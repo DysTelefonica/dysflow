@@ -1,5 +1,11 @@
 # Changelog
 
+## [v4.5.5] - 2026-10-28
+
+### Changes
+
+- fix(e2e): take the Access leak start snapshot before the battery (#1978)
+
 ## [v4.5.4] - 2026-10-27
 
 v4.5.3 was tagged but its GitHub Release was not published: its end-to-end battery stopped at the form round-trip export, whose export folder did not exist (refused by the #1914 check). The fix is #1980. v4.5.4 is the first published release of the v4.5.2 and v4.5.3 content.
