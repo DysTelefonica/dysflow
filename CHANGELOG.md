@@ -2,10 +2,11 @@
 
 ## [v4.5.7] - 2026-11-05
 
-v4.5.6 was tagged but its GitHub Release was not published: its exact-SHA quality authority failed because the #1990 Pester test declared a `Write-DysflowResult` stub that the DYSFLOW_RESULT writer contract scan took for a production result writer. v4.5.7 is the first published release of the v4.5.5 and v4.5.6 content.
+v4.5.6 was tagged but its GitHub Release was not published: its exact-SHA quality authority failed because the #1990 Pester test declared a `Write-DysflowResult` stub that the DYSFLOW_RESULT writer contract scan took for a production result writer, and its end-to-end battery leaked two headless MSACCESS.EXE started by the Issue 1817 E2E editor helper after a spawn timeout. v4.5.7 is the first published release of the v4.5.5 and v4.5.6 content.
 
 ### Changes
 
+- test(e2e): the Issue 1817 editor helper records its Access PID, waits for it after Quit and kills only that PID, and the runner reaps a timed-out attempt's Access before retrying
 - test(test_vba): declare the #1990 Write-DysflowResult stub through function: so the result-writer contract scan ignores it
 
 ## [v4.5.6] - 2026-11-05

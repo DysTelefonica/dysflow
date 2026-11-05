@@ -8,6 +8,10 @@
 // `create` is not idempotent, so it is retried only when the caller supplies
 // `resetCreate` to remove the partial fixture database first (#1974). A create
 // that still times out carries a `diagnosis` naming the hung start.
+//
+// A spawn timeout kills only powershell.exe. The MSACCESS.EXE it started is a DCOM child
+// that survives it, so `reapTimedOut` runs after every timed-out attempt to stop that
+// attempt's Access before the retry (run 42047588497 leaked two of them).
 
 import { win32 } from "node:path";
 
@@ -62,6 +66,7 @@ export function runAccessEdit({
   attempts = DEFAULT_EDIT_ATTEMPTS,
   action,
   resetCreate,
+  reapTimedOut = () => {},
   now = Date.now,
 }) {
   const timeout = resolveEditTimeoutMs(env);
@@ -74,6 +79,7 @@ export function runAccessEdit({
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     result = spawn(command, args, { encoding: "utf8", windowsHide: true, timeout });
     if (result.error?.code !== "ETIMEDOUT") return result;
+    reapTimedOut();
     if (!isCreate) continue;
     let note;
     if (attempt < maxAttempts) {

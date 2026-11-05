@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -19,6 +19,22 @@ const artifacts = [
   `classes/${klass}.cls`,
 ];
 
+// Stops the Access a timed-out editor run left behind. The editor records its own Access PID
+// in the fixture; only that PID is killed, and only while it is still an MSACCESS.EXE.
+function reapTimedOutEditorAccess(root) {
+  const pidFile = join(root, ".issue-1817-access.pid");
+  if (!existsSync(pidFile)) return;
+  const pid = Number.parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+  rmSync(pidFile, { force: true });
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  const listed = spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+    encoding: "utf8", windowsHide: true,
+  });
+  if (!/^"MSACCESS\.EXE"/im.test(listed.stdout ?? "")) return;
+  const killed = spawnSync("taskkill", ["/PID", String(pid), "/F"], { encoding: "utf8", windowsHide: true });
+  console.log(`REAP issue-1817 editor Access pid=${pid} status=${killed.status}`);
+}
+
 function edit(root, action, marker) {
   // The value-setting edits are idempotent, so a retry after a spawn timeout is safe (#1898).
   const result = runAccessEdit({
@@ -27,6 +43,7 @@ function edit(root, action, marker) {
     action,
     // #1974: a hung Access start during create leaves a partial database; remove it (inside
     // the marked fixture only) so the create can be retried once.
+    reapTimedOut: () => reapTimedOutEditorAccess(root),
     resetCreate: () => removePartialFixtureDatabase({
       root,
       tmpDir: realpathSync.native(tmpdir()),

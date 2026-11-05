@@ -23,6 +23,8 @@ export interface RunAccessEditOptions {
   action?: string;
   /** Removes the partial fixture database so a timed-out `create` can be retried once (#1974). */
   resetCreate?: () => void;
+  /** Stops the Access a timed-out attempt left behind; runs after every spawn timeout. */
+  reapTimedOut?: () => void;
   now?: () => number;
 }
 
