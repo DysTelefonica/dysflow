@@ -181,13 +181,14 @@ Public dispatch regression coverage lives in
 `test/adapters/mcp/cleanup-inspection-1830.test.ts`.
 
 ### `access_force_cleanup_orphaned`
-List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
+List orphaned headless `MSACCESS.EXE` processes and leftover `pwsh.exe` workers that per-process evidence ties to the project's `accessPath`, plus unattributed headless COM-launched Access in `unattributed[]`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `pid` (number, optional): When omitted or `null`, the tool lists candidates only and needs no `allowWrites`. When a listed positive PID is given, the tool retires that one process without `allowWrites` (#1862) once `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` are passed. It still refuses non-headless, wrong-path, non-MSACCESS, or Dysflow-owned processes, and a process that names an Access database outside the project.
-* **Attribution (#1991)**: the listing returns `{ orphans, totalCount, unattributed }`. An orphan's `accessPath` comes from evidence about that process, never from the caller's project: either its command line names the project's `accessPath`, or a finished Dysflow operation of this project (`timed_out`, `failed`, `cleanup_pending`, ...) recorded its PID with the same start time. A COM-launched `MSACCESS.EXE -Embedding` names no database, so without such a record it is reported in `unattributed[]` with `accessPath: null`. It may be another session's live run.
-  - A PID recorded by a live operation (`starting`, `running`, `running_untracked`) is never listed and a retire refuses it with `ORPHAN_CLEANUP_REGISTRY_OWNED`.
-  - A retire of a PID without that evidence fails closed with `ORPHAN_CLEANUP_PATH_UNVERIFIED`. The `-Embedding` profile alone no longer proves ownership; that relaxation (#1016) was withdrawn.
+* **Attribution (#1991)**: the listing returns `{ orphans, totalCount, unattributed }`. An orphan's `accessPath` comes from evidence about that process, never from the caller's project: either its command line names the project's `accessPath`, or a finished Dysflow operation of this project (`timed_out`, `failed`, `cleanup_pending`, ...) recorded its PID with the same start time. A start time unknown on either side, the record's or the live process's, is no evidence, because Windows reuses PIDs. A COM-launched `MSACCESS.EXE -Embedding` names no database, so without such a record it is reported in `unattributed[]` with `accessPath: null`. It may be another session's live run.
+  - A PID recorded by a live operation (`starting`, `running`, `running_untracked`) is never listed and a retire refuses it with `ORPHAN_CLEANUP_REGISTRY_OWNED`. This covers the operation's `pwsh.exe` worker as well as its Access PID.
+  - A `pwsh.exe` worker is listed only when the most recent record of this project that tracked it is finished and its start time does not show a recycled PID.
+  - A retire of an `MSACCESS.EXE` PID without that evidence fails closed with `ORPHAN_CLEANUP_PATH_UNVERIFIED`, including one whose record or live process has no start time. The `-Embedding` profile alone no longer proves ownership; that relaxation (#1016) was withdrawn.
 
 ### `bootstrap`
 Minimal first-call read-only surface. Returns adapter version, write-gate state,

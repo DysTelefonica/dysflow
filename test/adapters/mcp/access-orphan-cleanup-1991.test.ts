@@ -61,10 +61,15 @@ function record(
 }
 
 async function scenario(p2Record: AccessOperationRecord) {
-  const processes = [comChild(P1), comChild(P2), comChild(P3)];
+  return harness(
+    [comChild(P1), comChild(P2), comChild(P3)],
+    [record("op-p1-timed-out", "timed_out", P1), p2Record],
+  );
+}
+
+async function harness(processes: OsProcessInfo[], records: readonly AccessOperationRecord[]) {
   const registry = createInMemoryAccessOperationRegistry();
-  await registry.create(record("op-p1-timed-out", "timed_out", P1));
-  await registry.create(p2Record);
+  for (const entry of records) await registry.create(entry);
   const killed: number[] = [];
   const scanner: ProcessScanner = { listProcesses: async () => processes };
   const inspector: ProcessInspector = {
@@ -178,5 +183,77 @@ describe("access_force_cleanup_orphaned live-operation guard (#1991)", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/ORPHAN_CLEANUP_REGISTRY_OWNED/);
     expect(killed).toEqual([]);
+  });
+});
+
+// Issue #1991 follow-up — a record without a start time cannot tell the
+// process it recorded from whatever process Windows later gave the same PID.
+describe("access_force_cleanup_orphaned with an unknown start time (#1991)", () => {
+  it("refuses a recycled PID whose finished record has no start time", async () => {
+    // P1's timed_out record could not resolve the start time; the PID now
+    // belongs to another project's live -Embedding run.
+    const leftover = { ...record("op-p1-timed-out", "timed_out", P1), processStartTime: null };
+    const { tool, killed } = await harness([comChild(P1)], [leftover]);
+
+    const listing = await tool.handler({ pid: null });
+    const payload = JSON.parse(listing.content[0]?.text ?? "{}") as Listing;
+    expect(payload.orphans).toEqual([]);
+    expect((payload.unattributed ?? []).map((entry) => entry.pid)).toEqual([P1]);
+
+    const result = await tool.handler({ pid: P1, ...CONFIRMATION });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/ORPHAN_CLEANUP_PATH_UNVERIFIED/);
+    expect(killed).toEqual([]);
+  });
+
+  it("refuses a PID whose live start time is unavailable", async () => {
+    const live = { ...comChild(P1), startTime: undefined };
+    const { tool, killed } = await harness([live], [record("op-p1-timed-out", "timed_out", P1)]);
+
+    const result = await tool.handler({ pid: P1, ...CONFIRMATION });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/ORPHAN_CLEANUP_PATH_UNVERIFIED/);
+    expect(killed).toEqual([]);
+  });
+});
+
+const W = 44_004;
+
+function pwshWorker(pid: number): OsProcessInfo {
+  return {
+    pid,
+    name: "pwsh.exe",
+    startTime: STARTED,
+    commandLine: "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File dysflow-access-runner.ps1",
+    mainWindowHandle: 0,
+  };
+}
+
+describe("access_force_cleanup_orphaned PowerShell workers (#1991)", () => {
+  it("never lists or kills the worker of a live operation", async () => {
+    const live = { ...record("op-p2-live", "running", P2), powershellWorkerPid: W };
+    const { tool, killed } = await harness([comChild(P2), pwshWorker(W)], [live]);
+
+    const listing = await tool.handler({ pid: null });
+    const payload = JSON.parse(listing.content[0]?.text ?? "{}") as Listing;
+    expect(payload.orphans.map((entry) => entry.pid)).not.toContain(W);
+
+    const result = await tool.handler({ pid: W, ...CONFIRMATION });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/ORPHAN_CLEANUP_REGISTRY_OWNED/);
+    expect(killed).toEqual([]);
+  });
+
+  it("lists and kills the leftover worker of a finished operation", async () => {
+    const finished = { ...record("op-p1-timed-out", "timed_out", P1), powershellWorkerPid: W };
+    const { tool, killed } = await harness([pwshWorker(W)], [finished]);
+
+    const listing = await tool.handler({ pid: null });
+    const payload = JSON.parse(listing.content[0]?.text ?? "{}") as Listing;
+    expect(payload.orphans).toEqual([expect.objectContaining({ pid: W, accessPath: ACCESS_PATH })]);
+
+    const result = await tool.handler({ pid: W, ...CONFIRMATION });
+    expect(result.isError, result.content[0]?.text).toBe(false);
+    expect(killed).toEqual([W]);
   });
 });

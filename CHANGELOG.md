@@ -4,7 +4,7 @@
 
 ### Changes
 
-- fix(orphans): attribute each orphan candidate from per-process evidence and refuse live or unattributed PIDs (#1991)
+- fix(orphans): attribute each orphan candidate from per-process evidence and refuse live or unattributed PIDs, including a PID whose record or process has no start time and the pwsh.exe worker of a live operation (#1991)
 - fix(forms): resolve the lint_form_code source root from cwd like lint_module (#1992)
 
 ## [v4.5.5] - 2026-10-28

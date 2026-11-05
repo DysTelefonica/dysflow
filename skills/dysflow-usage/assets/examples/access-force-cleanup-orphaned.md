@@ -22,7 +22,7 @@ Safely identify (and optionally kill) `MSACCESS.EXE` processes that hold the pro
 }
 ```
 
-Response: `orphans[]` lists only the `MSACCESS.EXE` processes whose own evidence ties them to this path: a command line that names it, or a finished dysflow operation of this project (for example `timed_out`) that recorded the PID. `unattributed[]` lists headless COM-launched Access that nothing ties to a database; their `accessPath` is `null`, they may be another session's live run, and they are never kill candidates. A PID recorded by a live operation (`starting` / `running`) is never listed.
+Response: `orphans[]` lists only the `MSACCESS.EXE` processes whose own evidence ties them to this path: a command line that names it, or a finished dysflow operation of this project (for example `timed_out`) that recorded the PID with the same start time. A record or process without a start time is no evidence. `orphans[]` also lists the leftover `pwsh.exe` worker of a finished operation. `unattributed[]` lists headless COM-launched Access that nothing ties to a database; their `accessPath` is `null`, they may be another session's live run, and they are never kill candidates. A PID recorded by a live operation (`starting` / `running`), its Access process or its `pwsh.exe` worker, is never listed.
 
 ## Step 2 — kill a specific PID (gated)
 
