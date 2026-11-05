@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "runtime": {
-    "version": "4.5.1",
-    "commit": "317046fb72367745074b6542e4c358c40a6bc9ba",
+    "version": "4.5.7",
+    "commit": "15c1b86891175deb392744f7dd64bda4c2982646",
     "runtimePath": "dist/cli/index.js"
   },
   "toolCount": 71,
@@ -16,16 +16,16 @@
       "wireBytes": 3758
     },
     "getCapabilities": {
-      "logicalBytes": 61860,
-      "wireBytes": 62734
+      "logicalBytes": 61835,
+      "wireBytes": 62709
     },
     "getCapabilitiesCompact": {
       "logicalBytes": 49218,
       "wireBytes": 49922
     },
     "schemaFull": {
-      "logicalBytes": 828099,
-      "wireBytes": 828551
+      "logicalBytes": 828529,
+      "wireBytes": 828981
     },
     "schemaCompact": {
       "logicalBytes": 120033,
@@ -36,8 +36,8 @@
       "wireBytes": 12189
     },
     "describeTool": {
-      "logicalBytes": 744962,
-      "wireBytes": 2083889
+      "logicalBytes": 745392,
+      "wireBytes": 2085323
     },
     "describeToolSelected": {
       "logicalBytes": 180713,
@@ -205,104 +205,104 @@
       {
         "name": "import_modules",
         "logicalBytes": 26250,
-        "share": 0.035237
+        "share": 0.035216
       },
       {
         "name": "sync_binary",
         "logicalBytes": 26016,
-        "share": 0.034923
+        "share": 0.034902
       },
       {
         "name": "export_modules",
         "logicalBytes": 24152,
-        "share": 0.03242
+        "share": 0.032402
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 17960,
-        "share": 0.024109
+        "share": 0.024095
       },
       {
         "name": "export_all",
         "logicalBytes": 17943,
-        "share": 0.024086
+        "share": 0.024072
       },
       {
         "name": "verify_code",
         "logicalBytes": 17066,
-        "share": 0.022909
+        "share": 0.022895
       },
       {
         "name": "lint_module",
         "logicalBytes": 16897,
-        "share": 0.022682
+        "share": 0.022669
       },
       {
         "name": "test_vba",
         "logicalBytes": 16275,
-        "share": 0.021847
+        "share": 0.021834
       },
       {
         "name": "import_all",
         "logicalBytes": 15905,
-        "share": 0.02135
+        "share": 0.021338
       },
       {
         "name": "form_distribute_controls",
         "logicalBytes": 15462,
-        "share": 0.020755
+        "share": 0.020743
       }
     ],
     "schemaFull": [
       {
         "name": "sync_binary",
         "logicalBytes": 19033,
-        "share": 0.022988
+        "share": 0.022976
       },
       {
         "name": "import_modules",
         "logicalBytes": 18745,
-        "share": 0.02264
+        "share": 0.022628
       },
       {
         "name": "export_modules",
         "logicalBytes": 17490,
-        "share": 0.021124
+        "share": 0.021113
       },
       {
         "name": "apply_form_design_plan",
         "logicalBytes": 14073,
-        "share": 0.016997
+        "share": 0.016988
       },
       {
         "name": "form_set_property",
         "logicalBytes": 13395,
-        "share": 0.016178
+        "share": 0.01617
       },
       {
         "name": "export_all",
         "logicalBytes": 13137,
-        "share": 0.015867
+        "share": 0.015858
       },
       {
         "name": "form_duplicate_control",
         "logicalBytes": 13061,
-        "share": 0.015775
+        "share": 0.015767
       },
       {
         "name": "relink_directory",
         "logicalBytes": 12977,
-        "share": 0.015673
+        "share": 0.015665
       },
       {
         "name": "verify_code",
         "logicalBytes": 12934,
-        "share": 0.015621
+        "share": 0.015613
       },
       {
         "name": "create_form_from_template",
         "logicalBytes": 12642,
-        "share": 0.015269
+        "share": 0.015261
       }
     ],
     "schemaCompact": [
@@ -419,8 +419,8 @@
   },
   "baseline": {
     "generatedFrom": {
-      "version": "4.5.1",
-      "commit": "317046fb72367745074b6542e4c358c40a6bc9ba",
+      "version": "4.5.7",
+      "commit": "15c1b86891175deb392744f7dd64bda4c2982646",
       "runtimePath": "dist/cli/index.js"
     }
   }
