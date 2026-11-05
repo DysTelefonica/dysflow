@@ -1,9 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [v4.5.6] - 2026-11-05
+
+v4.5.5 was tagged but its GitHub Release was not published: its end-to-end battery ended with three leaked headless MSACCESS.EXE, because the owned Access PID was never attributed (hWndAccessApp is a method on the real COM object) and a headless Access that ignored Quit stayed alive. v4.5.6 is the first published release of the v4.5.5 content.
 
 ### Changes
 
+- fix(access-com): attribute the owned Access PID through hWndAccessApp() and stop it when the open fails before a session is returned
 - fix(orphans): attribute each orphan candidate from per-process evidence and refuse live or unattributed PIDs, including a PID whose record or process has no start time and the pwsh.exe worker of a live operation (#1991)
 - fix(forms): resolve the lint_form_code source root from cwd like lint_module (#1992)
 - feat(test_vba): report per-test progress in list_access_operations and as MCP progress notifications, keep finished results when a run times out or is cancelled, and read the Windows PowerShell operation marker despite its byte-order mark, so a running record shows its Access PID (#1990)
