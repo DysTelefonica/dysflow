@@ -6,6 +6,8 @@
 
 - feat(test_vba): add the detached test-run core — run store under `.dysflow/runtime/test-runs/`, per-accessPath lock refusing with `TEST_RUN_ALREADY_ACTIVE`, crash derivation, retention of the last 20 runs and the internal `dysflow test-run` runner that replays `test_vba` through the MCP pipeline (#1993)
 - feat(test_vba): `test_vba({ apply: true, detach: true })` starts the run in its own process and returns `{ operationId, testsPlanned, status: "running" }` at once; the new read-only `get_test_run({ operationId, wait? })` returns its status, progress and, once it ends, the synchronous `test_vba` result; a synchronous apply is refused with `TEST_RUN_ALREADY_ACTIVE` only while a detached run holds the database (#1993)
+- fix(test_vba): a detached run's final progress is counted from its stored result; a detached start is refused with `TEST_RUN_ALREADY_ACTIVE` (`runKind: "synchronous"`) while a synchronous `test_vba` drives the database; an asynchronous runner spawn error crashes the run and frees the database at once; an unreadable detached lock no longer blocks a synchronous run; `get_test_run` returns an unresolved `projectId`'s own error and answers `TEST_RUN_NOT_FOUND` (`removedWhileWaiting`) for a run pruned while waiting; HTTP `POST /vba/test` answers `409 TEST_RUN_ALREADY_ACTIVE` while a detached run holds the database and keeps rejecting `detach` (MCP-only) (#1993)
+- docs(dysflow-usage): the write-flag matrix names the runtime count of write-class tools (43), anchored by `test/docs/add-a-tool-checklist-1493.test.ts` (#1993)
 
 ## [v4.5.7] - 2026-11-05
 

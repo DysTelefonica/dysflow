@@ -182,6 +182,45 @@ export function terminalStatusForResult(result: unknown): "passed" | "failed" {
 }
 
 /**
+ * The progress a finished run reports: the counts of its stored result, so
+ * the final progress never lags it (the last #1990 notification may not have
+ * arrived). An all-green result counts `tests[]`; a `VBA_TESTS_FAILED`
+ * result counts `error.details.results[]` and `failedCount`. A result that
+ * counts no tests (a configuration error, say) keeps the received progress.
+ * `currentTest` is always `null`: nothing runs any more.
+ */
+export function finalProgressForResult(current: TestRunProgress, result: unknown): TestRunProgress {
+  const counted = countResultTests(result);
+  if (counted === undefined) return { ...current, currentTest: null };
+  return {
+    completed: counted.passed + counted.failed,
+    planned: Math.max(current.planned, counted.passed + counted.failed),
+    currentTest: null,
+    passed: counted.passed,
+    failed: counted.failed,
+  };
+}
+
+function countResultTests(result: unknown): { passed: number; failed: number } | undefined {
+  if (!isRecord(result)) return undefined;
+  const content = isRecord(result.structuredContent) ? result.structuredContent : result;
+  const error = content.error;
+  if (isRecord(error)) {
+    if (error.code !== "VBA_TESTS_FAILED" || !isRecord(error.details)) return undefined;
+    const results = error.details.results;
+    if (!Array.isArray(results)) return undefined;
+    const failed =
+      typeof error.details.failedCount === "number"
+        ? error.details.failedCount
+        : results.filter((test) => isRecord(test) && test.ok === false).length;
+    return { passed: Math.max(0, results.length - failed), failed };
+  }
+  if (!Array.isArray(content.tests)) return undefined;
+  const failed = content.tests.filter((test) => isRecord(test) && test.ok === false).length;
+  return { passed: content.tests.length - failed, failed };
+}
+
+/**
  * The tracked Access operation a `test_vba` result names, when it names one:
  * the response envelope carries it as `operation.operationId`.
  */

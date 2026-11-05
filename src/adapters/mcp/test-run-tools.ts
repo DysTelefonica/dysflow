@@ -56,6 +56,10 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
   const createStore = options.createStore ?? createNodeTestRunStore;
   const polling = options.polling ?? realPolling;
 
+  // An explicit projectId that does not resolve is the caller's real error:
+  // it is returned, never swallowed into a cwd lookup that would answer
+  // TEST_RUN_NOT_FOUND. Without a projectId, a missing project config falls
+  // back to the cwd (or its override).
   const resolveProjectRoot = async (
     input: unknown,
   ): Promise<
@@ -64,6 +68,9 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
     const context = await options.accessContextResolver(input);
     if (context.ok && context.data.projectRoot.length > 0) {
       return { ok: true, root: context.data.projectRoot };
+    }
+    if (!context.ok && isRecord(input) && typeof input.projectId === "string") {
+      return { ok: false, error: translateCoreResultToMcpContent(context) };
     }
     const cwd = resolveCwdOverride(input, options.cwd);
     return cwd.ok ? { ok: true, root: cwd.cwd } : { ok: false, error: cwd.error };
@@ -106,7 +113,26 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
         const remaining = deadline - polling.now();
         if (remaining <= 0) break;
         await polling.sleep(Math.min(TEST_RUN_WAIT_POLL_MS, remaining));
-        view = (await store.readTestRun(params.operationId)) ?? view;
+        const next = await store.readTestRun(params.operationId);
+        // A run pruned while waiting is gone: answer that, never a stale view.
+        if (next === undefined) {
+          return translateCoreResultToMcpContent(
+            failureResult(
+              createDysflowError(
+                TEST_RUN_NOT_FOUND,
+                `Test run '${params.operationId}' was removed under ${root.root} while waiting for it.`,
+                {
+                  details: {
+                    operationId: params.operationId,
+                    projectRoot: root.root,
+                    removedWhileWaiting: true,
+                  },
+                },
+              ),
+            ),
+          );
+        }
+        view = next;
       }
       return translateCoreResultToMcpContent(successResult(toTestRunResult(view)));
     },

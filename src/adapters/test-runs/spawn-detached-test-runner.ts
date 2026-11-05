@@ -29,6 +29,12 @@ export type SpawnDetachedTestRunnerOptions = {
   cwd?: string;
   /** Defaults to Node's `child_process.spawn`; injected by tests. */
   spawnProcess?: typeof spawn;
+  /**
+   * Called when the child reports `error` after this function returned (for
+   * example ENOENT once the PID was assigned), so the caller can end the run
+   * instead of waiting for the no-runner crash window.
+   */
+  onError?: (err: unknown) => void;
 };
 
 /**
@@ -59,9 +65,13 @@ export function spawnDetachedTestRunner(
         stdio: ["ignore", logFd, logFd],
       },
     );
-    // A failed spawn is reported through the missing PID below; an unhandled
-    // `error` event would otherwise crash the caller.
-    child.on("error", (err) => logSwallowedIoError("spawn-detached-test-runner:spawn", err));
+    // A failed spawn is reported through the missing PID below, or through
+    // `onError` when it fails later; an unhandled `error` event would
+    // otherwise crash the caller.
+    child.on("error", (err) => {
+      logSwallowedIoError("spawn-detached-test-runner:spawn", err);
+      options.onError?.(err);
+    });
     child.unref();
     if (child.pid === undefined) {
       throw new Error("The detached test runner did not start (no PID was assigned).");

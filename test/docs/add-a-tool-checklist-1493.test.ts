@@ -108,3 +108,28 @@ describe("#1493 add-a-tool registration points", () => {
     expect(doc).toContain("test/adapters/mcp/tool-surface-1492.test.ts");
   });
 });
+
+// #1993 — adding a tool also changes the write-flag matrix headings, which
+// count tools by access class: derive both counts from the live contracts so a
+// new tool without revised headings fails here (R2-readonly-count-drift).
+describe("#1993 write-flag matrix tool counts", () => {
+  const matrix = readFileSync("skills/dysflow-usage/assets/write-flags-matrix.md", "utf8");
+  const contracts = Object.values(MCP_TOOL_CONTRACTS);
+  const readOnly = contracts.filter((contract) => contract.access === "read-only").length;
+  const writeClass = contracts.length - readOnly;
+  const headingCount = (pattern: RegExp): number | undefined => {
+    const match = pattern.exec(matrix);
+    return match?.[1] === undefined ? undefined : Number(match[1]);
+  };
+
+  it("names the runtime count of read-only tools", () => {
+    expect(headingCount(/^## Read-only tools \((\d+) tools\)/m)).toBe(readOnly);
+  });
+
+  it("names the runtime count of write-class tools", () => {
+    expect(headingCount(/^## Per-write-class-tool matrix \((\d+) tools\)/m)).toBe(writeClass);
+    expect(headingCount(/`get_capabilities\.writeClassToolsPermitted` \((\d+) in total\)/)).toBe(
+      writeClass,
+    );
+  });
+});

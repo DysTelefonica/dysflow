@@ -462,6 +462,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       this.env,
       this.accessPassword,
       options.detachedTestRuns,
+      options.operationRegistry,
     );
 
     // Sub-adapters instantiation delegating orchestrator context

@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callToolInProcess } from "../../src/adapters/mcp/in-process-tool-call";
+import type { McpAccessContextResolver } from "../../src/adapters/mcp/result-translation";
 import { createDysflowMcpTools } from "../../src/adapters/mcp/tools";
 import { nodeTestRunFileSystem } from "../../src/adapters/test-runs/node-test-run-file-system";
 import {
@@ -65,7 +66,18 @@ export function runnerStdout(outcomes: readonly boolean[]): string {
   })}`;
 }
 
-export type SpawnCall = { runDir: string; env: Record<string, string | undefined> };
+export type SpawnCall = {
+  runDir: string;
+  env: Record<string, string | undefined>;
+  /** The launcher's handler for an asynchronous spawn failure. */
+  onError: (err: unknown) => void;
+};
+
+export type SpawnRunner = (
+  runDir: string,
+  env: Record<string, string | undefined>,
+  onError: (err: unknown) => void,
+) => number;
 
 export class DetachedRunHarness {
   readonly root: string;
@@ -74,6 +86,8 @@ export class DetachedRunHarness {
   readonly spawns: SpawnCall[] = [];
   /** Set to make the next detached spawn throw. */
   spawnFailure: Error | undefined;
+  /** Set to replace the fake spawn, for example with the real spawn over a fake child. */
+  spawnRunner: SpawnRunner | undefined;
 
   constructor() {
     this.root = mkdtempSync(join(tmpdir(), "dysflow-1993-detach-"));
@@ -101,6 +115,8 @@ export class DetachedRunHarness {
       env?: Record<string, string | undefined>;
       operationRegistry?: AccessOperationRegistry;
       accessPassword?: string;
+      /** Replaces the project's run store, for example with one whose reads fail. */
+      store?: () => TestRunStore;
     } = {},
   ): VbaSyncAdapter {
     return new VbaSyncAdapter({
@@ -123,10 +139,11 @@ export class DetachedRunHarness {
       env: options.env ?? {},
       ...(options.accessPassword === undefined ? {} : { accessPassword: options.accessPassword }),
       detachedTestRuns: {
-        createStore: () => this.store(),
-        spawnRunner: (runDir, env) => {
+        createStore: options.store ?? (() => this.store()),
+        spawnRunner: (runDir, env, onError) => {
+          if (this.spawnRunner !== undefined) return this.spawnRunner(runDir, env, onError);
           if (this.spawnFailure !== undefined) throw this.spawnFailure;
-          this.spawns.push({ runDir, env: { ...env } });
+          this.spawns.push({ runDir, env: { ...env }, onError });
           return RUNNER_PID;
         },
       },
@@ -136,6 +153,7 @@ export class DetachedRunHarness {
   tools(
     adapter: VbaSyncAdapter,
     testRunPolling?: { sleep: (ms: number) => Promise<void>; now: () => number },
+    accessContextResolver?: McpAccessContextResolver,
   ) {
     return createDysflowMcpTools({
       services: {
@@ -149,6 +167,7 @@ export class DetachedRunHarness {
       cwd: this.root,
       testRunStore: () => this.store(),
       ...(testRunPolling === undefined ? {} : { testRunPolling }),
+      ...(accessContextResolver === undefined ? {} : { accessContextResolver }),
     });
   }
 

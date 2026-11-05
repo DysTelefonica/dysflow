@@ -1,6 +1,7 @@
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import {
   applyTestVbaNotification,
+  finalProgressForResult,
   innerAccessOperationId,
   type TestRunStatus,
   terminalStatusForResult,
@@ -31,7 +32,8 @@ export type DetachedTestRunOutcome = {
  * Records the runner's own identity, holds the accessPath lock for the whole
  * run, mirrors every progress notification into `state.json`, then stores the
  * tool result in `result.json` before marking the run terminal: a reader that
- * sees a terminal status always finds the result. The lock is released however
+ * sees a terminal status always finds the result, and its final progress is
+ * counted from that result. The lock is released however
  * the run ends.
  */
 export async function runDetachedTestRun(options: {
@@ -107,7 +109,7 @@ export async function runDetachedTestRun(options: {
       ...state,
       status,
       accessOperationId: innerAccessOperationId(result) ?? state.accessOperationId,
-      progress: { ...state.progress, currentTest: null },
+      progress: finalProgressForResult(state.progress, result),
       finishedAt: new Date().toISOString(),
     }));
     return { operationId, status, exitCode: status === "passed" ? 0 : 1 };

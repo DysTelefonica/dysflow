@@ -157,10 +157,14 @@ Security contract:
 | Rule | Result |
 |------|--------|
 | Writes disabled | `403 HTTP_WRITES_DISABLED` |
-| No `allowedProcedures` and no `dryRun:true` | `400 MCP_INPUT_INVALID` |
+| No `allowedProcedures` and no `dryRun:true` | `400 MCP_ALLOWLIST_NOT_CONFIGURED` |
 | Procedure not in `allowedProcedures` | `403 PROCEDURE_NOT_ALLOWED` |
 | `dryRun:true` with no allowlist | Allowed as an explicit planning escape hatch |
 | Target overrides such as `accessPath`, `projectId`, or `testsPath` | `400 HTTP_INVALID_INPUT` |
+| `detach` (detached runs are MCP-only) | `400 HTTP_INVALID_INPUT` |
+| A detached MCP `test_vba` run holds the same database | `409 TEST_RUN_ALREADY_ACTIVE` |
+
+Detached runs (`test_vba` with `detach:true`, read back with `get_test_run`) exist only on the MCP surface. The HTTP route always runs synchronously, and it shares the per-database rule: while a detached run drives the database, the route answers `409 TEST_RUN_ALREADY_ACTIVE` with the active run in `error.details.activeOperationId`. Proof: `test/adapters/http/http-test-vba-detach-1993.test.ts`.
 
 The endpoint is bound to the server startup project config. It intentionally rejects per-request target and manifest-path overrides so one project's allowlist cannot authorize test execution against another Access database or arbitrary local file path.
 

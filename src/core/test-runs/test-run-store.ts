@@ -338,6 +338,11 @@ export class TestRunStore {
     return pruned;
   }
 
+  /** `true` while `identity` still names a running process (not a recycled PID). */
+  async isProcessAlive(identity: TestRunProcessIdentity): Promise<boolean> {
+    return this.isSameProcessAlive(identity);
+  }
+
   /** This process's identity as the OS reports it. */
   async identify(pid: number): Promise<TestRunProcessIdentity> {
     const probe = await this.processProbe.inspect(pid);
@@ -434,9 +439,33 @@ function alreadyActiveError(held: TestRunLockRecord): DysflowError {
     `A detached test run (${held.operationId}) is already running against ${held.accessPath}. Tests run one Access at a time.`,
     {
       details: {
+        runKind: "detached",
         activeOperationId: held.operationId,
         accessPath: held.accessPath,
         runnerPid: held.pid,
+      },
+    },
+  );
+}
+
+/**
+ * The refusal a detached start gets while a synchronous `test_vba` (a live
+ * tracked operation of the registry) drives the same database (#1993 S2).
+ */
+export function synchronousTestRunActiveError(active: {
+  operationId: string;
+  accessPath: string;
+  accessPid: number | null;
+}): DysflowError {
+  return createDysflowError(
+    TEST_RUN_ALREADY_ACTIVE,
+    `A synchronous test_vba run (${active.operationId}) is already running against ${active.accessPath}. Tests run one Access at a time.`,
+    {
+      details: {
+        runKind: "synchronous",
+        activeOperationId: active.operationId,
+        accessPath: active.accessPath,
+        accessPid: active.accessPid,
       },
     },
   );

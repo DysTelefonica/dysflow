@@ -32,8 +32,10 @@ Evidence: T0 map (no per-accessPath lock on the vba-sync path; `completed` regis
 - T0 Map the current test_vba execution path, registry, marker and process lifecycle (explore) — done
 - T1 Design note (process model, lock, result file, statuses, crash detection) — done (approved, L3)
 - T2 Detached runner process + result persistence + per-accessPath lock (S1, S2, S4, S7) — done (b452a286)
-- T3 `test_vba` detach flag + `get_test_run` tool, contracts, registries (S1, S3, S6) — pending
-- T4 Docs: test-runs.md, mcp-tools.md, examples, CHANGELOG (S5) — pending
+- T3 `test_vba` detach flag + `get_test_run` tool, contracts, registries (S1, S3, S6) — done (9026ef77; RDD review approved, 12 advisory findings)
+- T4 Docs: test-runs.md, mcp-tools.md, examples, CHANGELOG (S5) — done (in 9026ef77)
+- T3b Hardening batch 1: final counts from the result, HTTP refuses detach, T3 review warnings (async spawn error, two-directional guard, guard I/O, projectId error, stale view, matrix count) — done (commit after T3b)
+- T3c Hardening batch 2, T2 review warnings (df58f715 review approved, 15 advisory findings): job-object survival of the detached runner, null start time pins the lock, explicit password dropped, runner forces writes, stale-takeover race, exclusive-create fallback race, prune failure blocks the accessPath, missing request leaves running, in-process start failure, runner options subset, lock key vs driven binary — pending
 - T5 Verification: full pnpm test, test:ps1, mcp:context-budget, real-Access smoke (all) — pending
 
 ## Log

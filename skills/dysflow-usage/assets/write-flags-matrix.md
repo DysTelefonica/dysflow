@@ -17,7 +17,7 @@
 | `commitFlag` | same as `canonicalCommitFlag` for the dispatch seam | The actual property the dispatch reads. Always pass `apply` explicitly. |
 | `_meta["dysflow/workflow"].status` | `"preferred"` / `"specialized"` / `"legacy"` | `preferred` tools are the recommended set; `specialized` are fine for niche cases; `legacy` (`query_sql`, `exec_sql`) prefer the `preferred` alternative. |
 
-## Per-write-class-tool matrix (44 tools)
+## Per-write-class-tool matrix (43 tools)
 
 > The dispatch reads `apply` (canonical) and accepts `diff` as a plan alias **only** on the two `export_*` tools. Every row below commits via `apply:true`.
 
@@ -108,7 +108,7 @@
 | `clean_stale_markers` | `plan` | `[]` | `routine-dev-write` | Marker-file maintenance for the dispatch seam. |
 | `setup_project` | `plan` | `[]` | `conditional-write` | Bootstrap a missing per-worktree project config. Plan + apply form a 2-call sequence. `projectId` is REQUIRED and the trio `projectId` + `projectChoiceReason` + `recoveryToken` is the ambiguity-recovery contract. |
 
-> The 4 write-class tools listed here are the ones with `access` of `conditional-write` or `destructive-write` AND that participate in workflow orchestration. They are not exhaustive; see `get_capabilities.writeClassToolsPermitted` (44 in total) for the runtime-mandated list.
+> The 4 write-class tools listed here are the ones with `access` of `conditional-write` or `destructive-write` AND that participate in workflow orchestration. They are not exhaustive; see `get_capabilities.writeClassToolsPermitted` (43 in total) for the runtime-mandated list.
 
 ## Read-only tools (52 tools) — only listed for completeness
 

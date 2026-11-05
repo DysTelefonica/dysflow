@@ -5,16 +5,23 @@
  * the real run store over a temporary project. Only Access (the PowerShell
  * executor), the detached spawn and process liveness are faked.
  */
+import type { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { spawnDetachedTestRunner } from "../../../src/adapters/test-runs/index";
+import { nodeTestRunFileSystem } from "../../../src/adapters/test-runs/node-test-run-file-system";
 import type { VbaManagerExecutor } from "../../../src/adapters/vba-sync/vba-sync-adapter";
+import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/access-operation-registry";
+import { resolveTestRunsRoot, TestRunStore } from "../../../src/core/test-runs/test-run-store";
 import {
   callTool,
   DetachedRunHarness,
   exited,
   PLAN,
   PROCEDURES_JSON,
+  RUNNER_PID,
   runnerStdout,
 } from "../../_helpers/detached-test-runs-1993";
 
@@ -43,6 +50,34 @@ function countingExecutor(outcomes: readonly boolean[] = [true, true]) {
 
 /** An Access run that never ends: a detached start must not wait for it. */
 const neverEnding: VbaManagerExecutor = () => new Promise(() => undefined);
+
+/** An Access run that holds until `release()` is called. */
+function heldExecutor() {
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started: () => void = () => undefined;
+  const running = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const executor: VbaManagerExecutor = async () => {
+    started();
+    await released;
+    return exited(runnerStdout([true, true]));
+  };
+  return { executor, running, release };
+}
+
+/** Re-read `read` until `done` holds, at most ~2 s. */
+async function eventually<T>(read: () => Promise<T>, done: (value: T) => boolean): Promise<T> {
+  let value = await read();
+  for (let attempt = 0; attempt < 200 && !done(value); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    value = await read();
+  }
+  return value;
+}
 
 describe("test_vba detach:true (#1993 D1)", () => {
   it("returns an operationId at once and leaves the run to the spawned runner", async () => {
@@ -143,6 +178,93 @@ describe("test_vba detach:true (#1993 D1)", () => {
     expect(result.structuredContent?.error?.code).toBe("TEST_RUN_SPAWN_FAILED");
     await expect(harness.store().getActiveDetachedRun(harness.accessPath)).resolves.toBeUndefined();
   });
+
+  it("marks the run crashed and releases the database when the spawn fails asynchronously", async () => {
+    // The real spawn over a child that got a PID, then reports 'error' (ENOENT).
+    const child = Object.assign(new EventEmitter(), { pid: RUNNER_PID, unref: () => undefined });
+    harness.spawnRunner = (runDir, env, onError) =>
+      spawnDetachedTestRunner(runDir, env as NodeJS.ProcessEnv, {
+        entryPoint: "missing-cli.js",
+        spawnProcess: (() => child) as unknown as typeof spawn,
+        onError,
+      });
+    const tools = harness.tools(harness.adapter(neverEnding));
+    const started = await callTool(tools, "test_vba", DETACH);
+    expect(started.isError).toBe(false);
+    const operationId = String(started.structuredContent?.operationId);
+
+    child.emit("error", Object.assign(new Error("spawn node ENOENT"), { code: "ENOENT" }));
+
+    const view = await eventually(
+      () => callTool(tools, "get_test_run", { operationId }),
+      (current) => current.structuredContent?.status !== "running",
+    );
+    expect(view.structuredContent).toMatchObject({
+      status: "crashed",
+      error: { code: "TEST_RUN_SPAWN_FAILED", message: expect.stringContaining("ENOENT") },
+    });
+    await expect(harness.store().getActiveDetachedRun(harness.accessPath)).resolves.toBeUndefined();
+  });
+
+  it("does not crash a run whose runner already started when a late 'error' arrives", async () => {
+    const tools = harness.tools(harness.adapter(neverEnding));
+    const started = await callTool(tools, "test_vba", DETACH);
+    const operationId = String(started.structuredContent?.operationId);
+    await harness.store().updateState(operationId, (state) => ({
+      ...state,
+      runner: { pid: RUNNER_PID, startTime: null },
+    }));
+
+    harness.spawns[0]?.onError(new Error("late kill failure"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const view = await callTool(tools, "get_test_run", { operationId });
+    expect(view.structuredContent?.status).toBe("running");
+  });
+
+  it("is refused with TEST_RUN_ALREADY_ACTIVE while a synchronous test_vba drives the database", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    const held = heldExecutor();
+    const tools = harness.tools(harness.adapter(held.executor, { operationRegistry: registry }));
+    const synchronous = callTool(tools, "test_vba", APPLY);
+    await held.running;
+    const [record] = await registry.listRecent();
+
+    const detached = await callTool(tools, "test_vba", DETACH);
+
+    expect(detached.isError).toBe(true);
+    expect(detached.structuredContent?.error?.code).toBe("TEST_RUN_ALREADY_ACTIVE");
+    expect(detached.structuredContent?.error?.details).toMatchObject({
+      runKind: "synchronous",
+      activeOperationId: record?.operationId,
+    });
+    expect(harness.spawns).toEqual([]);
+    expect(existsSync(join(harness.root, ".dysflow", "runtime", "test-runs"))).toBe(false);
+
+    held.release();
+    expect((await synchronous).isError).toBe(false);
+  });
+
+  it("starts once the synchronous run's record is no longer live", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    // A record left `running` by a server that died: its Access PID is gone.
+    await registry.create({
+      operationId: "dysflow-sync-orphan",
+      action: "vba",
+      accessPath: harness.accessPath,
+      accessPid: 9_999,
+      processStartTime: null,
+      status: "running",
+      metadata: { toolName: "test_vba" },
+      updatedAt: new Date().toISOString(),
+    });
+    const tools = harness.tools(harness.adapter(neverEnding, { operationRegistry: registry }));
+
+    const detached = await callTool(tools, "test_vba", DETACH);
+
+    expect(detached.isError).toBe(false);
+    expect(harness.spawns).toHaveLength(1);
+  });
 });
 
 describe("synchronous test_vba around a detached run (#1993 Q1, S6)", () => {
@@ -171,6 +293,27 @@ describe("synchronous test_vba around a detached run (#1993 Q1, S6)", () => {
       detached.structuredContent?.operationId,
     );
     expect(calls).toEqual([]);
+  });
+
+  it("still runs when the detached-run guard cannot read its lock (S6)", async () => {
+    const { executor, calls } = countingExecutor();
+    const unreadable = new TestRunStore({
+      runsRoot: resolveTestRunsRoot(harness.root),
+      fileSystem: {
+        ...nodeTestRunFileSystem,
+        readText: async () => {
+          throw Object.assign(new Error("EPERM: operation not permitted"), { code: "EPERM" });
+        },
+      },
+      processProbe: harness.processes,
+    });
+    const tools = harness.tools(harness.adapter(executor, { store: () => unreadable }));
+
+    const result = await callTool(tools, "test_vba", APPLY);
+
+    expect(result.isError).toBe(false);
+    expect(result.structuredContent).toMatchObject({ mode: "apply", passed: 2, failed: 0 });
+    expect(calls).toHaveLength(1);
   });
 
   it("runs again once the detached run's runner is gone", async () => {

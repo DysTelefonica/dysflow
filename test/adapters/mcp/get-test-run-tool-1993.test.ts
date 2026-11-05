@@ -6,9 +6,10 @@
  * the real MCP tool. Only Access (the PowerShell executor), the detached
  * spawn, process liveness and, for long-polling, time are faked.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { resolveMcpAccessContextForInput } from "../../../src/adapters/mcp/stdio";
 import type {
   VbaManagerExecutionRequest,
   VbaManagerExecutor,
@@ -53,6 +54,13 @@ async function startDetached(): Promise<{ operationId: string; spawn: SpawnCall 
 
 function readerTools(polling?: { sleep: (ms: number) => Promise<void>; now: () => number }) {
   return harness.tools(harness.adapter(neverEnding), polling);
+}
+
+/** A reader whose access context resolves projectId as the stdio server does. */
+function projectAwareReader() {
+  return harness.tools(harness.adapter(neverEnding), undefined, (input) =>
+    resolveMcpAccessContextForInput(input, undefined, { cwd: harness.root }),
+  );
 }
 
 /** Write the Run-Tests marker after `completed` tests, as the #1990 poller reads it. */
@@ -268,6 +276,49 @@ describe("get_test_run (#1993 D4)", () => {
     expect(view.structuredContent).toMatchObject({
       crash: { reason: expect.stringContaining("3000") },
     });
+  });
+
+  it("answers TEST_RUN_NOT_FOUND when the run is pruned while it waits, never a stale view", async () => {
+    const { operationId, spawn } = await startDetached();
+    let clock = 0;
+    const reader = readerTools({
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+        await rm(spawn.runDir, { recursive: true, force: true });
+      },
+    });
+
+    const view = await callTool(reader, "get_test_run", { operationId, wait: 5 });
+
+    expect(view.isError).toBe(true);
+    expect(view.structuredContent?.error?.code).toBe("TEST_RUN_NOT_FOUND");
+    expect(view.structuredContent?.error?.details).toMatchObject({
+      operationId,
+      removedWhileWaiting: true,
+    });
+  });
+
+  it("returns the project error when projectId does not resolve, not TEST_RUN_NOT_FOUND", async () => {
+    const { operationId } = await startDetached();
+
+    const view = await callTool(projectAwareReader(), "get_test_run", {
+      operationId,
+      projectId: "no-such-project",
+    });
+
+    expect(view.isError).toBe(true);
+    expect(view.structuredContent?.error?.code).toBe("CONFIG_PROJECT_NOT_REGISTERED");
+    expect(JSON.stringify(view.structuredContent?.error)).toContain("no-such-project");
+  });
+
+  it("still reads the run from cwd when no projectId is passed and no project config exists", async () => {
+    const { operationId } = await startDetached();
+
+    const view = await callTool(projectAwareReader(), "get_test_run", { operationId });
+
+    expect(view.isError).toBe(false);
+    expect(view.structuredContent?.status).toBe("running");
   });
 
   it("answers an unknown operationId with TEST_RUN_NOT_FOUND", async () => {
