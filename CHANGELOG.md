@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.5.7] - 2026-11-05
+
+v4.5.6 was tagged but its GitHub Release was not published: its exact-SHA quality authority failed because the #1990 Pester test declared a `Write-DysflowResult` stub that the DYSFLOW_RESULT writer contract scan took for a production result writer. v4.5.7 is the first published release of the v4.5.5 and v4.5.6 content.
+
+### Changes
+
+- test(test_vba): declare the #1990 Write-DysflowResult stub through function: so the result-writer contract scan ignores it
+
 ## [v4.5.6] - 2026-11-05
 
 v4.5.5 was tagged but its GitHub Release was not published: its end-to-end battery ended with three leaked headless MSACCESS.EXE, because the owned Access PID was never attributed (hWndAccessApp is a method on the real COM object) and a headless Access that ignored Quit stayed alive. v4.5.6 is the first published release of the v4.5.5 content.
