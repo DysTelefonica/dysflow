@@ -40,8 +40,9 @@ A unit test covers the shared path. Each tool is not yet exercised end to end.
 | `lint_module` | `module` | `destinationRoot`, `accessPath` | Works after `resolve_project` without `cwd` (#1867, session seam; not yet run end to end) |
 | `verify_code` | none | all | `cwd` only is enough |
 | `import_modules` (plan) | `moduleNames` | all | `cwd` + `moduleNames` |
+| `lint_form_code` | `formName` or `moduleNames` | `destinationRoot` | Works with `cwd` + `moduleNames`; `destinationRoot`, `sourceRoot` and `projectId` stay overrides (#1992) |
 
-The other rows of the #1867 evidence table (`lint_form_code`, `analyze_form_ui`, `validate_manifest`, `export_modules`) are not yet checked.
+The other rows of the #1867 evidence table (`analyze_form_ui`, `validate_manifest`, `export_modules`) are not yet checked.
 
 That check is the open part of #1867.
 

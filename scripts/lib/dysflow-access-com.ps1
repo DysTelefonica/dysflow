@@ -13,6 +13,8 @@
     Exported helpers
     ----------------
     Get-ProcessIdFromHwnd        — Win32 GetWindowThreadProcessId wrapper
+    Resolve-AccessPidFromHwnd    — hWnd to PID, accepted only when the owner is MSACCESS
+    Get-AccessApplicationHwnd    — reads hWndAccessApp() (a method on real COM)
     Get-MsAccessProcessesBounded — WMI query in a background job with timeout guard
     Get-MsAccessProcesses        — Thin alias over Get-MsAccessProcessesBounded
     Stop-AccessPidAndWait        — Kill an owned Access PID and wait until it exits
@@ -95,7 +97,9 @@ function Set-DysflowThreadCulture {
 # Resolve a window handle to the PID of the owning process via the Win32
 # GetWindowThreadProcessId API.  The Add-Type call is guarded by a PSTypeName
 # check so dot-sourcing from two scripts in the same PowerShell session does
-# not trigger a duplicate-type redefinition error.
+# not trigger a duplicate-type redefinition error. -MemberDefinition is wrapped
+# inside a generated class, so it takes members only: no `using` lines and no
+# nested class, which is why every type name is fully qualified.
 function Get-ProcessIdFromHwnd {
     [CmdletBinding()]
     Param(
@@ -109,21 +113,52 @@ function Get-ProcessIdFromHwnd {
     if ($env:DYSFLOW_MOCK_COM -ne '1' -and -not ($IsWindows -eq $false)) {
         if (-not ([System.Management.Automation.PSTypeName]"Win32.NativeMethods").Type) {
             Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public static class NativeMethods {
-  [DllImport("user32.dll")]
-  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-}
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint lpdwProcessId);
 "@
         }
 
-        [uint32]$pid = 0
-        [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$pid) | Out-Null
-        return [int]$pid
+        # Not $pid: $PID is a read-only automatic variable.
+        [uint32]$windowPid = 0
+        [Win32.NativeMethods]::GetWindowThreadProcessId($Hwnd, [ref]$windowPid) | Out-Null
+        return [int]$windowPid
     }
 
     return 0
+}
+
+# Resolve the window handle of Access.Application to its PID, accepting it only when
+# the owner is an MSACCESS process. The PID can later be force-killed, so a handle that
+# resolves to another program (or to nothing) is reported as 0 (unattributed).
+# -HwndPidLookup and -ProcessLookup are testing seams.
+function Resolve-AccessPidFromHwnd {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][IntPtr]$Hwnd,
+        [scriptblock]$HwndPidLookup = { param([IntPtr]$Hwnd) Get-ProcessIdFromHwnd -Hwnd $Hwnd },
+        [scriptblock]$ProcessLookup = { param([int]$AccessPid) Get-Process -Id $AccessPid -ErrorAction SilentlyContinue }
+    )
+
+    $windowPid = 0
+    try { $windowPid = [int](& $HwndPidLookup $Hwnd) } catch { Write-Debug "Resolve-AccessPidFromHwnd: $_"; return 0 }
+    if ($windowPid -le 0) { return 0 }
+
+    # The mock COM fixture has no real process behind its PID.
+    if ($env:DYSFLOW_MOCK_COM -eq '1' -and -not $PSBoundParameters.ContainsKey('ProcessLookup')) { return $windowPid }
+
+    $process = $null
+    try { $process = & $ProcessLookup $windowPid } catch { $process = $null }
+    if ($null -eq $process -or [string]$process.ProcessName -ne 'MSACCESS') { return 0 }
+    return $windowPid
+}
+
+# A real Access.Application exposes hWndAccessApp as a METHOD; reading it as a property
+# throws. Returns [IntPtr]::Zero when the handle cannot be read.
+function Get-AccessApplicationHwnd {
+    [CmdletBinding()]
+    Param([Parameter(Mandatory = $true)]$AccessApplication)
+    try { return [IntPtr]$AccessApplication.hWndAccessApp() } catch { Write-Debug "Get-AccessApplicationHwnd: $_" }
+    return [IntPtr]::Zero
 }
 
 # ---------------------------------------------------------------------------
@@ -641,12 +676,19 @@ function Wait-AccessInstancesBeyondSnapshotExit {
     Spawn Access.Application and capture the owned PID via a 3-layer ladder.
 
 .DESCRIPTION
-    Layer 1: hWndAccessApp before OpenCurrentDatabase.
-    Layer 2: hWndAccessApp retry after OpenCurrentDatabase (if layer 1 empty).
+    Layer 1: hWndAccessApp() right after the spawn, before anything else can throw.
+    Layer 2: hWndAccessApp() retry after OpenCurrentDatabase (if layer 1 empty).
+    hWndAccessApp is a METHOD on the real COM object. The default -HwndToPidAction accepts
+    the resolved PID only when that process is MSACCESS (Resolve-AccessPidFromHwnd).
     Layer 3: bounded WMI diff of pre/post MSACCESS processes (only if layers 1+2 empty;
              if >1 new processes appear the diff is ambiguous → OwnedPid=$null, never guesses).
 
     A stronger layer's result is never overwritten by a weaker one.
+
+    Any throw after a successful spawn and before the session is returned (AutomationSecurity,
+    headless assignment, OpenCurrentDatabase) restores AutomationSecurity, quits Access,
+    releases the COM object and, when a PID was attributed, waits for it to exit and then
+    kills that PID only. The original error is rethrown unchanged.
 
     If -SetAutomationSecurityLow is $true (default), AutomationSecurity is set to 1
     (msoAutomationSecurityLow) and the original value is captured for restoration in
@@ -657,7 +699,7 @@ function Wait-AccessInstancesBeyondSnapshotExit {
 
     Injectable seams (for testing):
     -ComSpawnAction      — creates and returns the COM object (default: New-Object -ComObject Access.Application)
-    -HwndToPidAction     — resolves an hWnd to a PID (default: Get-ProcessIdFromHwnd)
+    -HwndToPidAction     — resolves an hWnd to a PID (default: Resolve-AccessPidFromHwnd)
     -WmiSnapshotAction   — returns the current list of MSACCESS processes (default: Get-MsAccessProcessesBounded)
     -SpawnRetryTimeoutMs — bound of the wait before the single 0x80080005 launch retry (default: 5000)
     -SpawnRetryPollMs    — poll interval of that wait (default: 250)
@@ -691,8 +733,8 @@ function Open-CanonicalAccess {
             Assert-DysflowPesterGuard -Operation "real Access.Application creation" -Remedy "inject -ComSpawnAction or set DYSFLOW_MOCK_COM=1"
             New-Object -ComObject "Access.Application"
         },
-        # Resolves an hWnd ([IntPtr]) to a PID ([int]).  Default: Get-ProcessIdFromHwnd
-        [scriptblock]$HwndToPidAction   = { param([IntPtr]$Hwnd) Get-ProcessIdFromHwnd -Hwnd $Hwnd },
+        # Resolves an hWnd ([IntPtr]) to an MSACCESS PID ([int]), 0 otherwise.  Default: Resolve-AccessPidFromHwnd
+        [scriptblock]$HwndToPidAction   = { param([IntPtr]$Hwnd) Resolve-AccessPidFromHwnd -Hwnd $Hwnd },
         # Returns the current list of MSACCESS processes.  Default: Get-MsAccessProcessesBounded
         [scriptblock]$WmiSnapshotAction = { Get-MsAccessProcessesBounded },
         # #1917: bound and poll interval of the wait before the single 0x80080005 retry.
@@ -740,114 +782,154 @@ function Open-CanonicalAccess {
         }
     }
 
-    # --- capture OriginalAutomationSecurity and optionally set to Low -----
-    $originalAutomationSecurity = [int]$access.AutomationSecurity
-    if ($SetAutomationSecurityLow) {
-        $access.AutomationSecurity = 1  # msoAutomationSecurityLow
-    }
-
-    # #730 — force headless BEFORE any OpenCurrentDatabase call so the splash /
-    # window never paints. Surface a typed DYSFLOW_HEADLESS_LAUNCH_FAILED error
-    # when the COM assignment fails so a silent regression does not regress to
-    # "MSACCESS window appeared on the operator's desktop".
-    try {
-        $access.UserControl = $false
-        $access.Visible     = $false
-    } catch {
-        throw "DYSFLOW_HEADLESS_LAUNCH_FAILED: cannot force Access.Application to headless (Visible/UserControl assignment failed); original error: $_"
-    }
-
-    # --- layer 1: hWnd before OpenCurrentDatabase -------------------------
+    # Everything below runs on a live Access. Any throw before the session is returned
+    # (AutomationSecurity, headless assignment, OpenCurrentDatabase) leaves the caller
+    # without a handle to close, so the finally block quits it and stops the attributed
+    # PID. It is a finally, not a catch: $PSCmdlet.ThrowTerminatingError is not caught by
+    # this function's own catch, and the original error must reach the caller unchanged.
     $ownedPid = $null
-    $hwnd1 = [IntPtr]0
-    try { $hwnd1 = [IntPtr]$access.hWndAccessApp } catch {}
-    if ($hwnd1 -ne [IntPtr]0) {
-        $pid1 = & $HwndToPidAction $hwnd1
-        if ($pid1 -gt 0) { $ownedPid = $pid1 }
-    }
-    if ($null -ne $ownedPid -and $null -ne $OwnedPidAction) {
-        try { & $OwnedPidAction $ownedPid } catch { Write-Debug "Open-CanonicalAccess: OwnedPidAction threw: $_" }
-    }
-
-    # --- open database (unless caller skips it) ---------------------------
-    if ($OpenDatabase) {
-        try {
-            $access.OpenCurrentDatabase($DbPath, $false, $Password)
-        } catch {
-            $openError = $_
-            Write-Debug "Open-CanonicalAccess: OpenCurrentDatabase failed: $openError"
-
-            try {
-                if ($SetAutomationSecurityLow) {
-                    $access.AutomationSecurity = $originalAutomationSecurity
-                }
-            } catch { Write-Debug "Open-CanonicalAccess: AutomationSecurity restore after failed open threw: $_" }
-
-            Write-ComCloseTrace -Step "OpenFailedQuit" -OwnedPid $ownedPid
-            try { $access.Quit(2) } catch { Write-Debug "Open-CanonicalAccess: Quit after failed open threw: $_" }
-            try {
-                if ($null -ne $access -and $env:DYSFLOW_MOCK_COM -ne '1') {
-                    [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($access)
-                }
-            } catch { Write-Debug "Open-CanonicalAccess: FinalReleaseComObject after failed open threw: $_" }
-            try {
-                [System.GC]::Collect()
-                [System.GC]::WaitForPendingFinalizers()
-            } catch { Write-Debug "Open-CanonicalAccess: GC after failed open threw: $_" }
-
-            $message = "OpenCurrentDatabase failed for '$DbPath': $($openError.Exception.Message)"
-            $exception = [System.InvalidOperationException]::new($message, $openError.Exception)
-            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
-                $exception,
-                "DYSFLOW_OPEN_CURRENT_DATABASE_FAILED",
-                [System.Management.Automation.ErrorCategory]::OpenError,
-                $DbPath
-            )
-            $PSCmdlet.ThrowTerminatingError($errorRecord)
+    $originalAutomationSecurity = $null
+    $sessionReturned = $false
+    try {
+        # --- layer 1: hWnd right after the spawn ---------------------------
+        # Resolved first, so the cleanup below can stop this Access if a later step throws.
+        $hwnd1 = Get-AccessApplicationHwnd -AccessApplication $access
+        if ($hwnd1 -ne [IntPtr]::Zero) {
+            $pid1 = 0
+            try { $pid1 = [int](& $HwndToPidAction $hwnd1) } catch { Write-Debug "Open-CanonicalAccess: HwndToPidAction threw: $_" }
+            if ($pid1 -gt 0) { $ownedPid = $pid1 }
+        }
+        if ($null -ne $ownedPid -and $null -ne $OwnedPidAction) {
+            try { & $OwnedPidAction $ownedPid } catch { Write-Debug "Open-CanonicalAccess: OwnedPidAction threw: $_" }
         }
 
-        # --- layer 2: hWnd retry after open (only if layer 1 was empty) ----
-        if ($null -eq $ownedPid) {
-            $hwnd2 = [IntPtr]0
-            try { $hwnd2 = [IntPtr]$access.hWndAccessApp } catch {}
-            if ($hwnd2 -ne [IntPtr]0) {
-                $pid2 = & $HwndToPidAction $hwnd2
-                if ($pid2 -gt 0) { $ownedPid = $pid2 }
+        # --- capture OriginalAutomationSecurity and optionally set to Low -----
+        $originalAutomationSecurity = [int]$access.AutomationSecurity
+        if ($SetAutomationSecurityLow) {
+            $access.AutomationSecurity = 1  # msoAutomationSecurityLow
+        }
+
+        # #730 — force headless BEFORE any OpenCurrentDatabase call so the splash /
+        # window never paints. Surface a typed DYSFLOW_HEADLESS_LAUNCH_FAILED error
+        # when the COM assignment fails so a silent regression does not regress to
+        # "MSACCESS window appeared on the operator's desktop".
+        try {
+            $access.UserControl = $false
+            $access.Visible     = $false
+        } catch {
+            throw "DYSFLOW_HEADLESS_LAUNCH_FAILED: cannot force Access.Application to headless (Visible/UserControl assignment failed); original error: $_"
+        }
+
+        # --- open database (unless caller skips it) ---------------------------
+        if ($OpenDatabase) {
+            $openError = $null
+            try {
+                $access.OpenCurrentDatabase($DbPath, $false, $Password)
+            } catch {
+                $openError = $_
+            }
+            if ($null -ne $openError) {
+                Write-Debug "Open-CanonicalAccess: OpenCurrentDatabase failed: $openError"
+                $message = "OpenCurrentDatabase failed for '$DbPath': $($openError.Exception.Message)"
+                $exception = [System.InvalidOperationException]::new($message, $openError.Exception)
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $exception,
+                    "DYSFLOW_OPEN_CURRENT_DATABASE_FAILED",
+                    [System.Management.Automation.ErrorCategory]::OpenError,
+                    $DbPath
+                )
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
+            }
+
+            # --- layer 2: hWnd retry after open (only if layer 1 was empty) ----
+            if ($null -eq $ownedPid) {
+                $hwnd2 = Get-AccessApplicationHwnd -AccessApplication $access
+                if ($hwnd2 -ne [IntPtr]::Zero) {
+                    $pid2 = 0
+                    try { $pid2 = [int](& $HwndToPidAction $hwnd2) } catch { Write-Debug "Open-CanonicalAccess: HwndToPidAction threw: $_" }
+                    if ($pid2 -gt 0) { $ownedPid = $pid2 }
+                }
             }
         }
-    }
 
-    # --- layer 3: bounded WMI diff (only if layers 1+2 both empty) -------
-    if ($null -eq $ownedPid) {
-        $postOpenProcs = @(& $WmiSnapshotAction)
-        $newPids = @($postOpenProcs |
-            Where-Object { $_.ProcessId -notin $preOpenPids } |
-            Select-Object -ExpandProperty ProcessId)
+        # --- layer 3: bounded WMI diff (only if layers 1+2 both empty) -------
+        if ($null -eq $ownedPid) {
+            $postOpenProcs = @(& $WmiSnapshotAction)
+            $newPids = @($postOpenProcs |
+                Where-Object { $_.ProcessId -notin $preOpenPids } |
+                Select-Object -ExpandProperty ProcessId)
 
-        if ($newPids.Count -eq 1) {
-            $ownedPid = $newPids[0]
-        } elseif ($newPids.Count -gt 1) {
-            # Ambiguous: >1 new processes appeared — do not guess.
-            Write-Warning ("Open-CanonicalAccess: diff found {0} new MSACCESS processes; attribution ambiguous. OwnedPid=$null." -f $newPids.Count)
+            if ($newPids.Count -eq 1) {
+                $ownedPid = $newPids[0]
+            } elseif ($newPids.Count -gt 1) {
+                # Ambiguous: >1 new processes appeared — do not guess.
+                Write-Warning ("Open-CanonicalAccess: diff found {0} new MSACCESS processes; attribution ambiguous. OwnedPid=$null." -f $newPids.Count)
+            }
+            # Count -eq 0: no new processes found, OwnedPid stays $null.
         }
-        # Count -eq 0: no new processes found, OwnedPid stays $null.
+
+        $pidAttributed = ($null -ne $ownedPid)
+
+        # DatabaseOpened (issue #571): true when the function reached a successful
+        # OpenCurrentDatabase. false when -OpenDatabase:$false was used. A failed
+        # open never reaches this return — it throws DYSFLOW_OPEN_CURRENT_DATABASE_FAILED.
+        # Callers use this flag to distinguish "COM app spawned" from "DB opened".
+        $databaseOpened = [bool]$OpenDatabase
+
+        $session = [PSCustomObject]@{
+            AccessApplication          = $access
+            OwnedPid                   = $ownedPid
+            OriginalAutomationSecurity = $originalAutomationSecurity
+            PidAttributed              = $pidAttributed
+            DatabaseOpened             = $databaseOpened
+        }
+        $sessionReturned = $true
+        return $session
+    } finally {
+        if (-not $sessionReturned) {
+            Stop-CanonicalAccessAfterFailedOpen -AccessApplication $access -OwnedPid $ownedPid `
+                -OriginalAutomationSecurity $originalAutomationSecurity -RestoreAutomationSecurity $SetAutomationSecurityLow
+        }
     }
+}
 
-    $pidAttributed = ($null -ne $ownedPid)
+# Tear down an Access that Open-CanonicalAccess spawned but could not hand to its caller.
+# Best effort throughout: it runs while the original error is propagating and must never
+# replace it. An attributed PID gets the same treatment as in Close-CanonicalAccess: a
+# bounded wait for its own exit after Quit(2), then a kill of that PID only.
+function Stop-CanonicalAccessAfterFailedOpen {
+    [CmdletBinding()]
+    Param(
+        $AccessApplication,
+        $OwnedPid,
+        $OriginalAutomationSecurity,
+        [bool]$RestoreAutomationSecurity = $true
+    )
 
-    # DatabaseOpened (issue #571): true when the function reached a successful
-    # OpenCurrentDatabase. false when -OpenDatabase:$false was used. A failed
-    # open never reaches this return — it throws DYSFLOW_OPEN_CURRENT_DATABASE_FAILED.
-    # Callers use this flag to distinguish "COM app spawned" from "DB opened".
-    $databaseOpened = [bool]$OpenDatabase
+    try {
+        if ($RestoreAutomationSecurity -and $null -ne $OriginalAutomationSecurity) {
+            $AccessApplication.AutomationSecurity = $OriginalAutomationSecurity
+        }
+    } catch { Write-Debug "Open-CanonicalAccess: AutomationSecurity restore after failed open threw: $_" }
 
-    return [PSCustomObject]@{
-        AccessApplication          = $access
-        OwnedPid                   = $ownedPid
-        OriginalAutomationSecurity = $originalAutomationSecurity
-        PidAttributed              = $pidAttributed
-        DatabaseOpened             = $databaseOpened
-    }
+    Write-ComCloseTrace -Step "OpenFailedQuit" -OwnedPid $OwnedPid
+    try { $AccessApplication.Quit(2) } catch { Write-Debug "Open-CanonicalAccess: Quit after failed open threw: $_" }
+    try {
+        if ($null -ne $AccessApplication -and $env:DYSFLOW_MOCK_COM -ne '1') {
+            [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($AccessApplication)
+        }
+    } catch { Write-Debug "Open-CanonicalAccess: FinalReleaseComObject after failed open threw: $_" }
+    try {
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+    } catch { Write-Debug "Open-CanonicalAccess: GC after failed open threw: $_" }
+
+    if ($null -eq $OwnedPid) { return }
+    $exited = $false
+    try { $exited = [bool](Wait-AccessPidExit -AccessPid $OwnedPid -TimeoutMs 5000) } catch { Write-Debug "Open-CanonicalAccess: exit wait after failed open threw: $_" }
+    if ($exited) { return }
+    Write-ComCloseTrace -Step "OpenFailedKillOwnedPid" -OwnedPid $OwnedPid
+    try { $null = Stop-AccessPidAndWait -AccessPid $OwnedPid -TimeoutMs 20000 } catch { Write-Debug "Open-CanonicalAccess: kill after failed open threw: $_" }
 }
 
 <#

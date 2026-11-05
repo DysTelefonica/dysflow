@@ -113,6 +113,7 @@ describe("F23 — test_vba allowlist end-to-end (regression: must NOT emit MCP_A
         proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 

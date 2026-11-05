@@ -9,24 +9,15 @@ import { InMemoryAccessOperationRegistry } from "../../../src/core/operations/ac
 import { AccessOrphanCleanupService } from "../../../src/core/operations/access-orphan-cleanup";
 
 /**
- * Issue #1016 Part C — `access_force_cleanup_orphaned({confirmPid})`
- * rejects dysflow-spawned `-Embedding` MSACCESS instances with
- * ORPHAN_CLEANUP_PATH_MISMATCH even when the user has explicitly confirmed
- * the PID. The fix MUST accept the user-confirmed PID when:
- *   - the PID is alive (already verified)
- *   - the process is MSACCESS.EXE (already verified)
- *   - the process is headless (already verified)
- *   - the user has explicitly confirmed the PID via confirmPid (the new gate)
- *   - the process command line is either:
- *       * absent (Get-Process fallback), OR
- *       * an embedding/automation marker (`-Embedding`, `/automation`,
- *         `/Embedding <pid>`), OR
- *       * not a per-instance Access path (i.e. dysflow-spawned COM child)
+ * Issue #1016 Part C accepted a user-confirmed headless `-Embedding` /
+ * `/automation` MSACCESS with no .accdb on its command line, on the COM-child
+ * profile alone. Issue #1991 reverses that: another session's live test run
+ * has exactly the same profile, so the kill now needs per-process evidence
+ * (a command line naming this accessPath, or a finished dysflow operation of
+ * this project that recorded the PID). The profile alone is refused with
+ * ORPHAN_CLEANUP_PATH_UNVERIFIED; a recorded leftover is still killable.
  *
- * When ALL of those hold, the runtime trusts the explicit user confirmation
- * instead of failing with ORPHAN_CLEANUP_PATH_MISMATCH.
- *
- * Safety property preserved:
+ * Safety properties preserved:
  *   - non-headless / wrong-process / recycled-PID refusals still fire.
  *   - Registry-owned PIDs are still refused.
  */
@@ -62,9 +53,43 @@ function embeddingMsAccess(pid: number, commandLine?: string): OsProcessInfo {
   };
 }
 
-describe("AccessOrphanCleanupService — #1016 Part C accepts user-confirmed -Embedding PIDs", () => {
-  it("kills a user-confirmed MSACCESS held in -Embedding mode with no .accdb on the command line", async () => {
+describe("AccessOrphanCleanupService — user-confirmed -Embedding PIDs need per-process evidence (#1016, #1991)", () => {
+  it("refuses a user-confirmed -Embedding MSACCESS that no operation of this project recorded", async () => {
     const registry = new InMemoryAccessOperationRegistry();
+    const { killer, killed } = makeKiller();
+    const proc = embeddingMsAccess(16224, "MSACCESS.EXE -Embedding");
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([proc]),
+      processInspector: makeInspector(proc),
+      processKiller: killer,
+    });
+
+    const result = await svc.cleanupOrphan({
+      confirmPid: 16224,
+      accessPath: ACCESS_PATH,
+      projectRoot: PROJECT_ROOT,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_UNVERIFIED");
+    expect(killed).toEqual([]);
+  });
+
+  it("kills a user-confirmed -Embedding MSACCESS that a timed_out operation of this project recorded", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create({
+      operationId: "op-timed-out-16224",
+      action: "vba",
+      accessPath: ACCESS_PATH,
+      projectRootAbs: PROJECT_ROOT,
+      accessPid: 16224,
+      processStartTime: "2026-07-20T13:05:56.000Z",
+      status: "timed_out",
+      metadata: {},
+      updatedAt: "2026-07-20T13:10:00.000Z",
+    });
     const { killer, killed } = makeKiller();
     const proc = embeddingMsAccess(16224, "MSACCESS.EXE -Embedding");
     const svc = new AccessOrphanCleanupService({
@@ -82,11 +107,11 @@ describe("AccessOrphanCleanupService — #1016 Part C accepts user-confirmed -Em
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data.killed).toContain(16224);
-    expect(killed).toContain(16224);
+    expect(result.data.killed).toEqual([16224]);
+    expect(killed).toEqual([16224]);
   });
 
-  it("kills a user-confirmed MSACCESS held in /automation mode (legacy flag)", async () => {
+  it("refuses a user-confirmed /automation MSACCESS (legacy flag) that no operation recorded", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     const { killer, killed } = makeKiller();
     const proc = embeddingMsAccess(26424, "MSACCESS.EXE /automation");
@@ -103,19 +128,15 @@ describe("AccessOrphanCleanupService — #1016 Part C accepts user-confirmed -Em
       projectRoot: PROJECT_ROOT,
     });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.killed).toContain(26424);
-    expect(killed).toContain(26424);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("ORPHAN_CLEANUP_PATH_UNVERIFIED");
+    expect(killed).toEqual([]);
   });
 
   it("STILL refuses a user-confirmed MSACCESS with no command line at all (no proof)", async () => {
-    // Issue #1016 Part C relaxes the path-match for the COM child profile
-    // (-Embedding / /automation) but does NOT change the conservative refusal
-    // for a headless MSACCESS with no command line at all — there is no
-    // positive signal that the process is one of ours vs. an unattributed
-    // operator-launched Access instance. This preserves the existing
-    // ORPHAN_CLEANUP_PATH_UNVERIFIED safety net.
+    // A headless MSACCESS with no command line and no record carries no
+    // evidence at all — the ORPHAN_CLEANUP_PATH_UNVERIFIED safety net.
     const registry = new InMemoryAccessOperationRegistry();
     const { killer, killed } = makeKiller();
     const proc = embeddingMsAccess(27668, undefined);

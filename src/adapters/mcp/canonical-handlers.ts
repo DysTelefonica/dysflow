@@ -430,12 +430,28 @@ export async function handleMcpAccessOrphanCleanup(
   if (isMcpToolResult(request)) return request;
 
   if (request.confirmPid === undefined) {
-    const listing = await services.orphanCleanupService.listOrphans(request);
+    // Issue #1991 — `orphans` holds only processes whose own evidence ties
+    // them to this project's accessPath; `unattributed` reports the headless
+    // COM-launched Access that nothing ties to a database (accessPath null).
+    const service = services.orphanCleanupService;
+    if (service.listCandidates !== undefined) {
+      const listing = await service.listCandidates(request);
+      if (!listing.ok) return translateCoreResultToMcpContent(listing);
+      return translateCoreResultToMcpContent(
+        successResult({
+          orphans: listing.data.orphans,
+          totalCount: listing.data.orphans.length,
+          unattributed: listing.data.unattributed,
+        }),
+      );
+    }
+    const listing = await service.listOrphans(request);
     if (!listing.ok) return translateCoreResultToMcpContent(listing);
     return translateCoreResultToMcpContent(
       successResult({
         orphans: listing.data,
         totalCount: listing.data.length,
+        unattributed: [],
       }),
     );
   }

@@ -586,6 +586,7 @@ function workerRecord(
   pid: number,
   projectRoot: string,
   workerPid: number | null,
+  status: AccessOperationRecord["status"] = "timed_out",
 ): AccessOperationRecord {
   return {
     operationId: `op-worker-${pid}`,
@@ -595,7 +596,7 @@ function workerRecord(
     accessPid: pid,
     powershellWorkerPid: workerPid,
     processStartTime: "2026-05-28T10:00:00.000Z",
-    status: "running",
+    status,
     metadata: {},
     updatedAt: "2026-05-28T10:00:00.000Z",
   };
@@ -613,9 +614,9 @@ function headlessPwshWorker(overrides: Partial<OsProcessInfo> = {}): OsProcessIn
 }
 
 describe("AccessOrphanCleanupService — pwsh worker listOrphans", () => {
-  it("returns pwsh workers from registry records that are still alive", async () => {
+  it("returns still-alive pwsh workers of finished registry records", async () => {
     const registry = new InMemoryAccessOperationRegistry();
-    // Register a running operation with a worker PID
+    // A timed_out operation left its worker PID behind
     await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
 
     const worker = headlessPwshWorker({ pid: 8888 });
@@ -712,7 +713,29 @@ describe("AccessOrphanCleanupService — pwsh worker listOrphans", () => {
     }
   });
 
-  it("excludes pwsh workers from non-running registry records", async () => {
+  it("excludes pwsh workers of a live operation (#1991)", async () => {
+    const registry = new InMemoryAccessOperationRegistry();
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888, "running"));
+
+    const worker = headlessPwshWorker({ pid: 8888 });
+    const { killer } = makeKiller();
+
+    const svc = new AccessOrphanCleanupService({
+      registry,
+      processScanner: makeScanner([worker]),
+      processInspector: makeInspector(worker),
+      processKiller: killer,
+    });
+
+    const result = await svc.listOrphans({ accessPath: ACCESS_PATH, projectRoot: PROJECT_ROOT });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.filter((c) => c.kind === "powershell-worker")).toEqual([]);
+    }
+  });
+
+  it("excludes pwsh workers whose record was purged as cleaned", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     // Create a record with status "cleaned" — should not produce orphan candidates
     const rec = await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
@@ -742,7 +765,7 @@ describe("AccessOrphanCleanupService — pwsh worker listOrphans", () => {
 
   it("includes both MSACCESS orphans and pwsh worker orphans in one result", async () => {
     const registry = new InMemoryAccessOperationRegistry();
-    // Running op with worker — worker should appear as orphan
+    // Finished op with worker — worker should appear as orphan
     await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
 
     const accessProc = headlessMsAccess({ pid: 9999 });
@@ -774,9 +797,8 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
   it("kills a confirmed pwsh worker PID and writes synthetic record", async () => {
     const registry = new InMemoryAccessOperationRegistry();
     // #T16 fix: positive ownership proof is required for pwsh workers. The
-    // runner would have tracked the worker here while alive. The record is
-    // still in the registry because cleanup is in progress (cleanupOrphan
-    // races with the runner's terminal update).
+    // runner tracked the worker while alive; the operation then timed out
+    // and left the worker behind.
     await registry.create({
       operationId: "op-100",
       action: "run",
@@ -785,7 +807,7 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
       accessPid: 100,
       powershellWorkerPid: 8888,
       processStartTime: "2026-05-28T10:00:00.000Z",
-      status: "running",
+      status: "timed_out",
       metadata: {},
       updatedAt: "2026-05-28T10:00:00.000Z",
     });
@@ -815,13 +837,8 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
   });
 
   it("rejects a pwsh worker PID that is owned by a running operation", async () => {
-    // #T16 fix: this scenario (PID is the accessPid of a running record AND a
-    // pwsh process) cannot occur via listOrphans — the orphan-scan dedups
-    // against running accessPids. The previous "REGISTRY_OWNED" gate blocked
-    // legitimate pwsh orphans (status=running records the runner never got
-    // around to mark cleaned). The post-fix gate is positive ownership proof
-    // (find the historical record + compare startTime). Here the historical
-    // record's startTime matches the live process so cleanup proceeds.
+    // Issue #1991 — a PID a live operation records is never killed, whatever
+    // process now holds it.
     const registry = new InMemoryAccessOperationRegistry();
     // PID 8888 is the accessPid of a running record — should be refused
     await registry.create(runningRecord(8888, PROJECT_ROOT));
@@ -841,20 +858,18 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
       confirmPid: 8888,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.killed).toContain(8888);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
     }
-    expect(killed).toContain(8888);
+    expect(killed).toEqual([]);
   });
 
   it("rejects a pwsh worker PID that is the powershellWorkerPid of a running operation", async () => {
-    // #T16 fix: same rationale as above — the previous "REGISTRY_OWNED" gate
-    // was over-broad. With positive ownership proof in place, the live
-    // process's startTime matches the recorded worker (both seeded with the
-    // default worker fixture) and cleanup proceeds.
+    // Issue #1991 — the worker of a live operation still drives its Access
+    // session; killing it would abort the run.
     const registry = new InMemoryAccessOperationRegistry();
-    await registry.create(workerRecord(100, PROJECT_ROOT, 8888));
+    await registry.create(workerRecord(100, PROJECT_ROOT, 8888, "running"));
     const worker = headlessPwshWorker({ pid: 8888 });
     const { killer, killed } = makeKiller();
 
@@ -871,11 +886,11 @@ describe("AccessOrphanCleanupService — pwsh worker cleanupOrphan", () => {
       confirmPid: 8888,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.killed).toContain(8888);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("ORPHAN_CLEANUP_REGISTRY_OWNED");
     }
-    expect(killed).toContain(8888);
+    expect(killed).toEqual([]);
   });
 
   it("accepts a pwsh worker PID whose process is gone", async () => {

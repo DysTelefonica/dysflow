@@ -154,6 +154,22 @@ Run diagnostics on the MCP connection, Access installation, and configuration.
 Retrieve active and completed Access operation handles managed by Dysflow.
 * **Parameters**: None.
 
+While a tracked run is in flight, Dysflow re-reads its operation marker
+(`<projectRoot>/.dysflow/runtime/markers/<operationId>.json`) about once a
+second. The record moves to `status: "running"` with the runner's `accessPid`
+as soon as Access opens, and `updatedAt` follows each marker change (#1990).
+
+A `test_vba` record also carries `metadata.testProgress`:
+`{ total, completed, passed, failed, currentTest, results[] }`. Each
+`results[]` entry is `{ procedure, ok, durationMs?, error? }` for a finished
+test, `error` capped at 500 characters. `currentTest` is `null` once the plan
+finished.
+
+A run that times out or is cancelled keeps `metadata.testProgress` on its
+`timed_out` / `failed` record, so the tests it already finished stay readable
+here. A `completed` record is purged from the persistent registry as before;
+its results are in the `test_vba` response.
+
 ### `cleanup_access_operation`
 Inspect a tracked operation or safely clean up eligible `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
@@ -181,10 +197,14 @@ Public dispatch regression coverage lives in
 `test/adapters/mcp/cleanup-inspection-1830.test.ts`.
 
 ### `access_force_cleanup_orphaned`
-List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPath`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
+List orphaned headless `MSACCESS.EXE` processes and leftover `pwsh.exe` workers that per-process evidence ties to the project's `accessPath`, plus unattributed headless COM-launched Access in `unattributed[]`, or kill exactly one verified orphan only when `confirmPid` is explicitly provided.
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `pid` (number, optional): When omitted or `null`, the tool lists candidates only and needs no `allowWrites`. When a listed positive PID is given, the tool retires that one process without `allowWrites` (#1862) once `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` are passed. It still refuses non-headless, wrong-path, non-MSACCESS, or Dysflow-owned processes, and a process that names an Access database outside the project.
+* **Attribution (#1991)**: the listing returns `{ orphans, totalCount, unattributed }`. An orphan's `accessPath` comes from evidence about that process, never from the caller's project: either its command line names the project's `accessPath`, or a finished Dysflow operation of this project (`timed_out`, `failed`, `cleanup_pending`, ...) recorded its PID with the same start time. A start time unknown on either side, the record's or the live process's, is no evidence, because Windows reuses PIDs. A COM-launched `MSACCESS.EXE -Embedding` names no database, so without such a record it is reported in `unattributed[]` with `accessPath: null`. It may be another session's live run.
+  - A PID recorded by a live operation (`starting`, `running`, `running_untracked`) is never listed and a retire refuses it with `ORPHAN_CLEANUP_REGISTRY_OWNED`. This covers the operation's `pwsh.exe` worker as well as its Access PID.
+  - A `pwsh.exe` worker is listed only when the most recent record of this project that tracked it is finished and its start time does not show a recycled PID.
+  - A retire of an `MSACCESS.EXE` PID without that evidence fails closed with `ORPHAN_CLEANUP_PATH_UNVERIFIED`, including one whose record or live process has no start time. The `-Embedding` profile alone no longer proves ownership; that relaxation (#1016) was withdrawn.
 
 ### `bootstrap`
 Minimal first-call read-only surface. Returns adapter version, write-gate state,
@@ -578,6 +598,8 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
   - An atom whose output opens as a JSON object (`{"` or `{}`) but does not parse fails on its own with `cause.code: "ATOM_OUTPUT_UNPARSABLE"` (`retryable: false`). Its failure entry names the procedure, carries the parser message in `error`, and adds `outputExcerpt`: at most 240 characters of the raw output around the failing position. Every other atom of the run is still reported in `failures[]` and `results[]`. A plain non-JSON return value such as `"OK"` or a braced GUID keeps passing (#1850).
   - `error.details` is redacted leaf by leaf: paths, secrets and connect-string passwords are stripped from each string, and a string holding JSON, such as `returnValue`, stays valid JSON and is kept byte-for-byte unless redaction changed it. Text read from files in an atom's output can no longer turn the call into a generic `MCP_TOOL_ERROR` (#1850).
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
+  - Progress (#1990): when the request carries `_meta.progressToken`, `test_vba` sends one `notifications/progress` per finished test, with `progress` counting from 1, `total` set to the plan size and `message` set to `"<procedure> passed"` or `"<procedure> failed"`. A client that resets its request timeout on progress keeps a long run alive. The same per-test progress is on the operation record in `list_access_operations` (`metadata.testProgress`).
+  - Cancellation (#1990): cancelling the request (`notifications/cancelled`, which an MCP client sends on its own request timeout) stops the run, because it only touches the temporary sandbox copy. The result is `VBA_MANAGER_ABORTED`. Both `VBA_MANAGER_ABORTED` and `VBA_MANAGER_TIMEOUT` carry `error.details.testProgress` with the tests that already finished, and the operation record keeps the same block.
 * **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
@@ -815,7 +837,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
 * **`compare_form`**: Compare two version-controlled `.form.txt` files and return a structured drift report (added/removed controls, changed properties, layout-bound changes), each classified as actionable or noise against the FORM_NOISE_KEYS floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap). Works offline — Access is not required. Read-only.
   - Parameters: `sourcePath`/`path` (string, left `.form.txt` file), `targetPath` (string, right `.form.txt` file). The legacy `target` path alias remains accepted for compatibility, but is deprecated; role-shaped values (`frontend`, `backend`, `auto`) are rejected with guidance to use `targetPath`.
 * **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
-  - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional)
+  - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional overrides; without them the source root comes from `projectId` or from the project at `cwd`, #1992)
 * **`form_add_control`**: Add one control to a version-controlled `.form.txt` through FormIR. Defaults to dry-run; `apply:true` writes the source and requires the `import_modules` LoadFromText gate to pass.
   - Parameters: `sourcePath`, `controlName`, `controlType`, `properties` (optional), `targetSectionName` (optional), `dryRun`, `apply`
 * **`form_move_control`**: Move one existing control by updating `Left` and/or `Top` only. Coordinates are whole twips; a fractional value fails with `FORM_PROPERTY_VALUE_INVALID`. Defaults to dry-run; `apply:true` writes and validates through the import_modules/LoadFromText gate.

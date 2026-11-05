@@ -50,11 +50,13 @@ function script:New-E2EFakeAccessApp {
         [int]$hWndAccessApp = 0
     )
     $fake = [PSCustomObject]@{
-        hWndAccessApp      = $hWndAccessApp
+        HwndValue          = $hWndAccessApp
         AutomationSecurity = 3   # msoAutomationSecurityByUI
         Visible            = $true
         UserControl        = $true
     }
+    # hWndAccessApp is a method on the real COM object, not a property.
+    $fake | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]$this.HwndValue }
     $fake | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
         param($Path, $Exclusive, $Password)
     }

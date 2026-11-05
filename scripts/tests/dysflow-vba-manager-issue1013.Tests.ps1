@@ -190,7 +190,7 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
         # #1911: the sandbox outlives Invoke-RunTestsAction once Access opened it; the
         # script's top-level close (Complete-AccessSessionClose) removes it after Access
         # released it, so the run is exercised together with that close.
-        foreach ($fnName in @('Invoke-RunTestsAction', 'Complete-AccessSessionClose')) {
+        foreach ($fnName in @('Invoke-RunTestsAction', 'Complete-AccessSessionClose', 'Write-DysflowOperationMarker', 'New-TestRunProgress')) {
             $fnAst = $ast.FindAll(
                 { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                   $args[0].Name -eq $fnName },
@@ -231,7 +231,7 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
         }
 
         function script:Invoke-AccessProcedureBatch {
-            param($AccessApplication, $VbProject, [object[]]$Procedures)
+            param($AccessApplication, $VbProject, [object[]]$Procedures, [scriptblock]$OnProcedureCompleted)
             $script:BatchCalled = $true
             $script:BatchProcedures = @($Procedures)
             return , @($script:BatchResult)
@@ -317,7 +317,7 @@ Describe "Invoke-RunTestsAction — sandbox integration (issue #1013 RED)" {
         try {
             '[{"procedure":"Test_Foo"}]' | Set-Content -Path $tmpJson -Encoding UTF8 -NoNewline
             function script:Invoke-AccessProcedureBatch {
-                param($AccessApplication, $VbProject, [object[]]$Procedures)
+                param($AccessApplication, $VbProject, [object[]]$Procedures, [scriptblock]$OnProcedureCompleted)
                 throw "Batch boom"
             }
             $session = $null

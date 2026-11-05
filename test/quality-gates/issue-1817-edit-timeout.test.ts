@@ -60,6 +60,31 @@ describe("issue #1898: Access edit timeout and bounded retry", () => {
     expect(calls.every((c) => c.timeout === DEFAULT_EDIT_TIMEOUT_MS)).toBe(true);
   });
 
+  it("reaps the timed-out attempt's Access before each retry and after the last timeout", () => {
+    // A spawn timeout kills only powershell.exe; the DCOM-launched MSACCESS.EXE it started
+    // survives as an orphan that fails the release leak gate (run 42047588497).
+    const order: string[] = [];
+    const { spawn } = fakeSpawn([timedOut, timedOut]);
+    const spawnTracked = (command: string, args: string[], options: { timeout: number }) => {
+      order.push("spawn");
+      return spawn(command, args, options);
+    };
+    runAccessEdit({
+      spawn: spawnTracked,
+      args: [],
+      env: {},
+      reapTimedOut: () => order.push("reap"),
+    });
+    expect(order).toEqual(["spawn", "reap", "spawn", "reap"]);
+  });
+
+  it("does not reap after an attempt that finished", () => {
+    const reaped: number[] = [];
+    const { spawn } = fakeSpawn([saved]);
+    runAccessEdit({ spawn, args: [], env: {}, reapTimedOut: () => reaped.push(1) });
+    expect(reaped).toEqual([]);
+  });
+
   it("never retries the create action without a way to remove the partial database", () => {
     const { spawn, calls } = fakeSpawn([timedOut, saved]);
     const result = runAccessEdit({ spawn, args: [], env: {}, action: "create" });

@@ -44,7 +44,10 @@ import type { VbaFormsOrchestrator } from "./vba-forms-types.js";
 // ---------------------------------------------------------------------------
 
 export type LintFormCodeInput = {
-  /** Either destinationRoot OR sourceRoot must resolve to a directory of forms/ and reports/. */
+  /**
+   * Overrides for the directory of forms/ and reports/. Without them the root
+   * comes from projectId, or from the call context (`cwd`) (#1992).
+   */
   destinationRoot?: string;
   sourceRoot?: string;
   /** Single-form lint. Mutually exclusive with `moduleNames`. */
@@ -109,12 +112,31 @@ export class VbaFormsLintAdapter {
       projectRoot = targetData.projectRoot;
     }
 
+    // Issue #1992 — with no explicit root, take the project's destinationRoot
+    // from the call context (`cwd`, or the session's resolved project) through
+    // the same execution-target resolver `lint_module` and the #1867 form
+    // readers use. destinationRoot / sourceRoot / projectId stay overrides.
+    let contextFailure: string | undefined;
+    if (destinationRoot === undefined && input.sourceRoot === undefined && orchestrator) {
+      const target = await orchestrator.resolveExecutionTarget(
+        projectRoot === undefined ? {} : { projectRoot },
+      );
+      if (target.ok) {
+        const targetData = target.data as { destinationRoot: string; projectRoot?: string };
+        destinationRoot = targetData.destinationRoot;
+        projectRoot = targetData.projectRoot;
+      } else {
+        contextFailure = `${target.error.code}: ${target.error.message}`;
+      }
+    }
+
     const sourceRoot = destinationRoot ?? input.sourceRoot;
     if (!sourceRoot) {
       return failureResult(
         createDysflowError(
           "MCP_INPUT_INVALID",
-          "destinationRoot, sourceRoot, or projectId is required (path that contains forms/ and/or reports/).",
+          "cwd inside a configured project, destinationRoot, sourceRoot, or projectId is required (no source root resolved; path that contains forms/ and/or reports/).",
+          contextFailure === undefined ? {} : { details: { contextFailure } },
         ),
       );
     }

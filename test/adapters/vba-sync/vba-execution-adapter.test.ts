@@ -112,6 +112,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: ["fixture", 1] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -145,6 +146,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_X", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -200,6 +202,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_Import", args: ["a"] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -271,6 +274,7 @@ describe("VbaExecutionAdapter", () => {
         ]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -703,6 +707,7 @@ describe("VbaExecutionAdapter", () => {
           proceduresJson: JSON.stringify([{ procedure: "Test_Sanitized", args: [] }]),
         }),
         expect.any(Object),
+        expect.anything(),
       );
       vi.clearAllMocks();
     }
@@ -746,6 +751,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_Shorthand", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -768,6 +774,7 @@ describe("VbaExecutionAdapter", () => {
         ]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -802,6 +809,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_FromManifest", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1335,6 +1343,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_FromAbsolutePath", args: ["abs"] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1387,6 +1396,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_FromDestinationRoot", args: ["dest"] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1485,6 +1495,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_RunAll", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1594,6 +1605,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_A", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1635,6 +1647,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_Allowed", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1672,6 +1685,7 @@ describe("VbaExecutionAdapter", () => {
         proceduresJson: JSON.stringify([{ procedure: "Test_Allowed", args: [] }]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 
@@ -1762,6 +1776,7 @@ describe("VbaExecutionAdapter", () => {
         ]),
       }),
       expect.any(Object),
+      expect.anything(),
     );
   });
 

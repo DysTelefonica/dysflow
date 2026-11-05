@@ -3293,6 +3293,12 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
         $fnAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Invoke-RunTestsAction' }, $true) | Select-Object -First 1
         if (-not $fnAst) { throw "Invoke-RunTestsAction not found in $($script:VbaManagerPath)" }
         Invoke-Expression $fnAst.Extent.Text
+        # Issue #1990 - Run-Tests publishes per-test progress through these two.
+        foreach ($fnName in @('Write-DysflowOperationMarker', 'New-TestRunProgress')) {
+            $helperAst = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq $fnName }, $true) | Select-Object -First 1
+            if (-not $helperAst) { throw "$fnName not found in $($script:VbaManagerPath)" }
+            Invoke-Expression $helperAst.Extent.Text
+        }
     }
 
     BeforeEach {
@@ -3309,7 +3315,7 @@ Describe "Invoke-RunTestsAction — behavioral (decompose S6)" {
         }
 
         function script:Invoke-AccessProcedureBatch {
-            param($AccessApplication, $VbProject, [object[]]$Procedures)
+            param($AccessApplication, $VbProject, [object[]]$Procedures, [scriptblock]$OnProcedureCompleted)
             $script:BatchCalled = $true
             $script:BatchProcedures = @($Procedures)
             return , @($script:BatchResult)
@@ -3854,6 +3860,11 @@ Describe "Write-DysflowOperationMarker — ISO millisecond format behavioral (is
         Set-Variable -Name Action          -Value "Export"               -Scope Script
         Set-Variable -Name AccessPath      -Value "C:\test\mydb.accdb"   -Scope Script
         Set-Variable -Name DestinationRoot -Value "C:\test\dest"         -Scope Script
+        # Issue #1990 - the marker remembers the PID and progress an earlier write of the
+        # same run recorded; each test is a fresh run.
+        Set-Variable -Name DysflowMarkerAccessPid        -Value $null -Scope Script
+        Set-Variable -Name DysflowMarkerProcessStartTime -Value $null -Scope Script
+        Set-Variable -Name DysflowMarkerProgress         -Value $null -Scope Script
 
         # Stub Write-Status (called on error path)
         function script:Write-Status { param([string]$Message, $Color) }

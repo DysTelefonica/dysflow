@@ -12,9 +12,28 @@ if (-not $rootPath.StartsWith($tempPath, [StringComparison]::OrdinalIgnoreCase) 
 }
 if ($Marker -notmatch '^[A-Z0-9_]+$') { throw 'Invalid fixture marker.' }
 $database = Join-Path $rootPath 'Fixture.accdb'
+# The PID of this run's Access, for the runner to stop it if a spawn timeout kills this
+# script first (a DCOM-launched MSACCESS.EXE outlives its PowerShell caller).
+$pidFile = Join-Path $rootPath '.issue-1817-access.pid'
+$accessPid = 0
 $application = $null
 try {
     $application = New-Object -ComObject Access.Application
+    try {
+        if (-not ([System.Management.Automation.PSTypeName]'Issue1817.NativeMethods').Type) {
+            Add-Type -Namespace Issue1817 -Name NativeMethods -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint lpdwProcessId);
+'@
+        }
+        [uint32]$windowPid = 0
+        [void][Issue1817.NativeMethods]::GetWindowThreadProcessId([IntPtr]$application.hWndAccessApp(), [ref]$windowPid)
+        $owner = Get-Process -Id ([int]$windowPid) -ErrorAction SilentlyContinue
+        if ($null -ne $owner -and $owner.ProcessName -eq 'MSACCESS') {
+            $accessPid = [int]$windowPid
+            Set-Content -LiteralPath $pidFile -Value $accessPid -Encoding ascii
+        }
+    } catch { Write-Warning "Could not attribute the Access PID: $_" }
     $application.Visible = $false
     $application.AutomationSecurity = 3
     if ($Action -eq 'create') {
@@ -81,9 +100,18 @@ try {
     Write-Output 'ISSUE_1817_EDIT_SAVED'
 } finally {
     if ($null -ne $application) {
-        $application.Quit(2)
+        try { $application.Quit(2) } catch { Write-Warning "Quit failed: $_" }
         [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($application)
     }
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
+    # Same close as dysflow's Close-CanonicalAccess: a bounded wait for this run's own
+    # Access to exit, then a kill of that PID only.
+    if ($accessPid -gt 0) {
+        $owned = Get-Process -Id $accessPid -ErrorAction SilentlyContinue
+        if ($null -ne $owned -and -not $owned.WaitForExit(10000)) {
+            Stop-Process -Id $accessPid -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }

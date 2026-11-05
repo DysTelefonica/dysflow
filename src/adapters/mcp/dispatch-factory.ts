@@ -172,7 +172,7 @@ export function createDispatchTool(
     inputSchema: schema,
     resultContract: resultContractForDispatchTool(name),
     hidden: isHiddenStubTool(name) ? true : undefined,
-    handler: async (input) => {
+    handler: async (input, context) => {
       // F13 — strip the v1.18-and-earlier `compile` / `rollbackOnCompileFail`
       // params from import_modules/import_all inputs BEFORE schema
       // validation. See the `stripDeprecatedCompileParams` doc comment for
@@ -457,7 +457,16 @@ export function createDispatchTool(
             const serviceInput =
               name === "verify_code" ? verifyCodeServiceInput(normalizedInput) : normalizedInput;
             try {
-              coreResult = await services.vbaSyncToolService.execute(name, serviceInput);
+              // Issue #1990 — test_vba reports one progress notification per
+              // finished test and is cancellable: it runs against a temporary
+              // sandbox copy, never the configured binary.
+              coreResult =
+                name === "test_vba"
+                  ? await services.vbaSyncToolService.execute(name, serviceInput, {
+                      onProgress: context?.sendProgress,
+                      signal: context?.signal,
+                    })
+                  : await services.vbaSyncToolService.execute(name, serviceInput);
             } catch (caught) {
               const err = caught instanceof Error ? caught : new Error(String(caught));
               return internalError({ error: err });

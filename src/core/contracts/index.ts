@@ -115,8 +115,23 @@ export type OperationMetadata = {
  * that core does not import adapter-layer type definitions.
  * Concrete implementations (e.g. VbaSyncAdapter) live in src/adapters/.
  */
+/**
+ * Issue #1990 — per-call options a transport adapter may hand a VBA sync tool.
+ * `onProgress` receives one call per finished unit of work (for `test_vba`,
+ * one per test); `signal` cancels the run. Both are optional and ignored by
+ * tools that do not report progress or are not interruptible.
+ */
+export type VbaSyncExecutionOptions = {
+  onProgress?: AccessRunnerProgressCallback;
+  signal?: AbortSignal;
+};
+
 export type VbaSyncPort = {
-  execute(toolName: string, input: unknown): Promise<OperationResult<unknown>>;
+  execute(
+    toolName: string,
+    input: unknown,
+    options?: VbaSyncExecutionOptions,
+  ): Promise<OperationResult<unknown>>;
 };
 
 export type AccessProcessOwnership = {

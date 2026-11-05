@@ -65,8 +65,9 @@ Describe "Open-CanonicalAccess failed-open trace (#1918)" {
             AutomationSecurity = 3
             Visible            = $true
             UserControl        = $true
-            hWndAccessApp      = [IntPtr]::new(1234)
         }
+        # hWndAccessApp is a method on the real COM object, not a property.
+        $failed | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]::new(1234) }
         $failed | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
             param($Path, $Exclusive, $Password) throw "DYSFLOW_TEST_OPEN_FAILURE"
         }
@@ -80,6 +81,8 @@ Describe "Open-CanonicalAccess failed-open trace (#1918)" {
     }
 
     It "records the failed-open Quit with the owned PID, so a crash on that path is distinguishable" {
+        # The owned PID is already gone after Quit, so the failed-open cleanup kills nothing.
+        Mock Get-Process { $null }
         {
             Open-CanonicalAccess -DbPath "C:\data\does-not-exist.accdb" `
                 -ComSpawnAction { $script:FailedAccess } `

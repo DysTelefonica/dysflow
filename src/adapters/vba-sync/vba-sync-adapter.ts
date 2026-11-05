@@ -9,6 +9,7 @@ import {
   failureResult,
   type OperationResult,
   successResult,
+  type VbaSyncExecutionOptions,
   type VbaSyncPort,
 } from "../../core/contracts/index.js";
 import type {
@@ -31,6 +32,11 @@ import {
   reapRunOwnedAccess,
 } from "../../core/operations/run-owned-access-reap.js";
 import { extractResultPayload, RESULT_MARKER } from "../../core/runner/ps-result-channel.js";
+import {
+  parseTestVbaProgress,
+  pendingTestVbaNotifications,
+  type TestVbaProgress,
+} from "../../core/services/test-vba-progress.js";
 import type {
   VbaSourceComparisonEntry,
   VbaSourceComparisonFile,
@@ -63,7 +69,7 @@ import {
   type SyncBinarySuccessResult,
   type SyncVerifySummary,
 } from "./sync-binary.js";
-import { VbaExecutionAdapter } from "./vba-execution-adapter.js";
+import { type MappedToolExecutionOptions, VbaExecutionAdapter } from "./vba-execution-adapter.js";
 import { VbaFormsAdapter } from "./vba-forms-adapter.js";
 import { VbaModulesAdapter } from "./vba-modules-adapter.js";
 import type { VbaOperationsCleanupService } from "./vba-operations-adapter.js";
@@ -130,7 +136,12 @@ type TrackedVbaManagerOperation = {
 type VbaManagerOperationMarker = {
   accessPid?: number;
   processStartTime?: string;
+  /** Issue #1990 — raw per-test progress block written by Run-Tests. */
+  progress?: unknown;
 };
+
+/** Issue #1990 — how often a running operation's marker is re-read. */
+const DEFAULT_MARKER_POLL_INTERVAL_MS = 1_000;
 
 export type VbaManagerExecutor = (
   request: VbaManagerExecutionRequest,
@@ -155,6 +166,12 @@ export type VbaSyncAdapterOptions = {
    * inspector/killer on win32 and to no reap elsewhere; tests inject fakes.
    */
   runOwnedAccessProcesses?: { processInspector: ProcessInspector; processKiller: ProcessKiller };
+  /**
+   * Issue #1990 — interval at which a running operation's marker is re-read,
+   * so the registry shows the Access PID and per-test progress while the run
+   * is still in flight. Defaults to one second; tests pass a short interval.
+   */
+  markerPollIntervalMs?: number;
   /**
    * `allowedProcedures` is forwarded to `VbaExecutionAdapter` as the test_vba
    * whitelist. It is enforced only under `procedureStrictMode`; within strict
@@ -408,6 +425,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private readonly operationsAdapter: VbaOperationsAdapter;
   private readonly operationRegistry?: AccessOperationRegistry;
   private readonly runOwnedAccessProcesses?: VbaSyncAdapterOptions["runOwnedAccessProcesses"];
+  private readonly markerPollIntervalMs: number;
   private readonly executionAdapter: VbaExecutionAdapter;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
@@ -426,6 +444,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.operationRegistry = options.operationRegistry;
     this.runOwnedAccessProcesses = options.runOwnedAccessProcesses;
+    this.markerPollIntervalMs = options.markerPollIntervalMs ?? DEFAULT_MARKER_POLL_INTERVAL_MS;
     this.allowedProcedures = options.allowedProcedures;
 
     // Sub-adapters instantiation delegating orchestrator context
@@ -438,8 +457,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.executionAdapter = new VbaExecutionAdapter(
       {
         cwd: this.cwd,
-        executeMappedTool: (toolName, params, mapping) =>
-          this.executeMappedTool(toolName, params, mapping),
+        executeMappedTool: (toolName, params, mapping, executionOptions) =>
+          this.executeMappedTool(toolName, params, mapping, executionOptions),
         // #1823 — test_vba resolves each plan name against the SAME source
         // tree the run targets (per-call destinationRoot honored), exactly as
         // run_vba's preflight does.
@@ -532,7 +551,11 @@ export class VbaSyncAdapter implements VbaSyncPort {
     return { ...result, diagnostics: [...result.diagnostics, ...diagnostics] };
   }
 
-  async execute(toolName: string, input: unknown): Promise<OperationResult<unknown>> {
+  async execute(
+    toolName: string,
+    input: unknown,
+    options?: VbaSyncExecutionOptions,
+  ): Promise<OperationResult<unknown>> {
     const params = isRecord(input) ? input : {};
 
     // Issue #809 - `sync_binary` is the workflow that composes verify_code +
@@ -549,7 +572,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
       return this.operationsAdapter.execute(toolName, params);
     }
     if (VbaExecutionAdapter.handles(toolName)) {
-      return this.executionAdapter.execute(toolName, params);
+      return this.executionAdapter.execute(toolName, params, options);
     }
     if (VbaFormsAdapter.handles(toolName)) {
       return this.formsAdapter.execute(toolName, params);
@@ -679,6 +702,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
     toolName: string,
     params: Record<string, unknown>,
     mapping: DirectMapping,
+    executionOptions?: MappedToolExecutionOptions,
   ): Promise<OperationResult<unknown>> {
     const target = await this.resolveExecutionTarget(params);
     if (!target.ok) return target;
@@ -728,6 +752,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
         password === undefined
           ? undefined
           : { DYSFLOW_ACCESS_PASSWORD: password, ACCESS_VBA_PASSWORD: password },
+      ...(executionOptions?.signal === undefined ? {} : { signal: executionOptions.signal }),
     };
     const extraValidation = validateVbaManagerExtra(request.extra);
     if (!extraValidation.ok) return extraValidation;
@@ -766,6 +791,11 @@ export class VbaSyncAdapter implements VbaSyncPort {
     // call below will still stamp the terminal status with whatever PID is
     // eventually recorded.
     await this.transitionToRunning(trackedOperation);
+    // Issue #1990 — the marker is written while the run is in flight (the
+    // Access PID once it opens; Run-Tests' progress after each test), so it
+    // is re-read on an interval until the run ends.
+    const progress = new TrackedOperationProgress(executionOptions);
+    const stopWatching = this.watchOperationMarker(trackedOperation, progress);
     let result: VbaManagerExecutionResult;
     try {
       result = await this.executor(trackedRequest);
@@ -784,7 +814,8 @@ export class VbaSyncAdapter implements VbaSyncPort {
         };
       }
     } catch (error) {
-      await this.finishTrackedOperation(trackedOperation, { status: "failed" });
+      await stopWatching();
+      await this.finishTrackedOperation(trackedOperation, { status: "failed" }, progress);
       try {
         await reapOrphanedAccessOnTimeout(() => this.runPreflightCleanup(target.data));
       } catch {
@@ -792,9 +823,21 @@ export class VbaSyncAdapter implements VbaSyncPort {
       }
       throw error;
     }
-    const ownedAccessReap = await this.finishTrackedOperation(trackedOperation, {
-      status: result.timedOut ? "timed_out" : result.exitCode === 0 ? "completed" : "failed",
-    });
+    await stopWatching();
+    const ownedAccessReap = await this.finishTrackedOperation(
+      trackedOperation,
+      {
+        status: result.timedOut
+          ? "timed_out"
+          : result.exitCode === 0 && result.aborted !== true
+            ? "completed"
+            : "failed",
+      },
+      progress,
+    );
+    // Issue #1990 — a run cut short keeps what it already finished: the
+    // registry record holds it, and the failure envelope carries it too.
+    const partialProgress = progress.latest === undefined ? {} : { testProgress: progress.latest };
     // Issue #1016 Part A — on a non-timeout failure for a binary-mutating
     // tool, the runner's `finally` block tried to kill the spawned MSACCESS
     // but the kill can fail silently (`Stop-AccessPidAndWait` returning
@@ -844,6 +887,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
           details: {
             toolName,
             durationMs: result.durationMs,
+            ...partialProgress,
           },
         }),
         { diagnostics: preflightDiagnostics, durationMs: result.durationMs },
@@ -935,6 +979,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
               // that prefer the typed view over parsing `cleanupWarnings`.
               lingeringProcesses,
               lingeringLockFiles,
+              ...partialProgress,
             },
           },
         ),
@@ -1120,20 +1165,32 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private async finishTrackedOperation(
     operation: TrackedVbaManagerOperation | undefined,
     update: { status: AccessOperationRecord["status"] },
+    progress?: TrackedOperationProgress,
   ): Promise<RunOwnedAccessReapResult | undefined> {
     if (operation === undefined || this.operationRegistry === undefined) return undefined;
     const marker = await readVbaManagerOperationMarker(operation.operationFile);
+    // Issue #1990 — the last marker may hold tests the poll had not seen yet.
+    progress?.observe(marker.progress);
     const reap = await this.reapRunOwnedAccess(marker);
     const accessSurvived = reap?.outcome === "kill_failed" || reap?.outcome === "refused";
     const status =
       accessSurvived && update.status === "completed" ? "cleanup_pending" : update.status;
+    const recordsReap = reap !== undefined && reap.outcome !== "not_recorded";
+    const testProgress = progress?.latest;
+    const metadata =
+      recordsReap || testProgress !== undefined
+        ? {
+            ...((await this.operationRegistry.get(operation.operationId))?.metadata ??
+              operation.record.metadata),
+            ...(testProgress === undefined ? {} : { testProgress }),
+            ...(recordsReap ? { runOwnedAccessReap: reap } : {}),
+          }
+        : undefined;
     await this.operationRegistry.update(operation.operationId, {
       accessPid: marker.accessPid ?? operation.record.accessPid,
       processStartTime: marker.processStartTime ?? operation.record.processStartTime,
       status,
-      ...(reap !== undefined && reap.outcome !== "not_recorded"
-        ? { metadata: { ...operation.record.metadata, runOwnedAccessReap: reap } }
-        : {}),
+      ...(metadata === undefined ? {} : { metadata }),
       updatedAt: new Date().toISOString(),
     });
     await rm(operation.operationFile, { force: true }).catch(() => undefined);
@@ -1182,6 +1239,60 @@ export class VbaSyncAdapter implements VbaSyncPort {
    * final status with whatever PID was discovered by then. Swallows
    * errors so a failed transition never breaks the underlying executor.
    */
+  /**
+   * Issue #1990 — re-read the run's marker every `markerPollIntervalMs` while
+   * the runner is in flight. A new Access PID or new test progress advances
+   * the registry record to `running` with a fresh `updatedAt` and
+   * `metadata.testProgress`; new finished tests are reported to the caller's
+   * progress callback. The returned stop function waits for an in-flight read,
+   * so no poll can land after the terminal update.
+   */
+  private watchOperationMarker(
+    operation: TrackedVbaManagerOperation | undefined,
+    progress: TrackedOperationProgress,
+  ): () => Promise<void> {
+    const registry = this.operationRegistry;
+    if (operation === undefined || registry === undefined) return async () => undefined;
+    let stopped = false;
+    let timer: NodeJS.Timeout | undefined;
+    let inFlight: Promise<void> = Promise.resolve();
+    let recordedPid: number | undefined;
+    const poll = async (): Promise<void> => {
+      const marker = await readVbaManagerOperationMarker(operation.operationFile);
+      const progressChanged = progress.observe(marker.progress);
+      const pidChanged = marker.accessPid !== undefined && marker.accessPid !== recordedPid;
+      if (stopped || (!progressChanged && !pidChanged)) return;
+      recordedPid = marker.accessPid ?? recordedPid;
+      const testProgress = progress.latest;
+      await registry.update(operation.operationId, {
+        ...(marker.accessPid === undefined
+          ? {}
+          : { accessPid: marker.accessPid, processStartTime: marker.processStartTime ?? null }),
+        status: "running",
+        ...(testProgress === undefined
+          ? {}
+          : { metadata: { ...operation.record.metadata, testProgress } }),
+        updatedAt: new Date().toISOString(),
+      });
+    };
+    const schedule = (): void => {
+      timer = setTimeout(() => {
+        inFlight = poll()
+          .catch((err: unknown) => logSwallowedIoError("vba-sync-adapter:marker-poll", err))
+          .finally(() => {
+            if (!stopped) schedule();
+          });
+      }, this.markerPollIntervalMs);
+      timer.unref?.();
+    };
+    schedule();
+    return async () => {
+      stopped = true;
+      if (timer !== undefined) clearTimeout(timer);
+      await inFlight;
+    };
+  }
+
   private async transitionToRunning(
     operation: TrackedVbaManagerOperation | undefined,
   ): Promise<void> {
@@ -1795,14 +1906,51 @@ async function readVbaManagerOperationMarker(
   });
   if (raw === undefined) return {};
   try {
-    const parsed = JSON.parse(raw) as unknown;
+    // Issue #1990 — Windows PowerShell 5.1 writes `Set-Content -Encoding UTF8`
+    // with a byte-order mark, which JSON.parse rejects. Unstripped, every
+    // marker the packaged runner wrote parsed as empty and its PID was lost.
+    const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as unknown;
     if (!isRecord(parsed)) return {};
     const accessPid = typeof parsed.accessPid === "number" ? parsed.accessPid : undefined;
     const processStartTime = stringValue(parsed.processStartTime);
-    return { accessPid, processStartTime };
+    return { accessPid, processStartTime, progress: parsed.progress };
   } catch (err) {
     logSwallowedIoError("vba-sync-adapter:operation-marker-parse", err);
     return {};
+  }
+}
+
+/**
+ * Issue #1990 — the latest per-test progress of one tracked run, and how many
+ * finished tests were already reported to the caller's progress callback.
+ */
+class TrackedOperationProgress {
+  latest: TestVbaProgress | undefined;
+  private notified = 0;
+
+  constructor(private readonly options: MappedToolExecutionOptions | undefined) {}
+
+  /** Record a marker's progress block; `true` when it differs from the last one. */
+  observe(raw: unknown): boolean {
+    const next = parseTestVbaProgress(raw, this.options?.testProcedureNames);
+    if (next === undefined) return false;
+    const previous = this.latest;
+    this.latest = next;
+    const onProgress = this.options?.onProgress;
+    for (const notification of pendingTestVbaNotifications(next, this.notified)) {
+      try {
+        onProgress?.(notification.progress, notification.total, notification.message);
+      } catch (err) {
+        logSwallowedIoError("vba-sync-adapter:progress-callback", err);
+      }
+    }
+    this.notified = Math.max(this.notified, next.results.length);
+    return (
+      previous === undefined ||
+      previous.completed !== next.completed ||
+      previous.results.length !== next.results.length ||
+      previous.currentTest !== next.currentTest
+    );
   }
 }
 

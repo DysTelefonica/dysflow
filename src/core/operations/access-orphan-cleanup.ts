@@ -5,30 +5,33 @@ import {
   successResult,
 } from "../contracts/index.js";
 import { normalizePathForMatching, pathMatchesAccessPath } from "../utils/index.js";
-import type {
-  OsProcessInfo,
-  ProcessInspector,
-  ProcessKiller,
-  ProcessScanner,
+import {
+  type OsProcessInfo,
+  type ProcessInspector,
+  type ProcessKiller,
+  type ProcessScanner,
+  sameProcessStartTime,
 } from "./access-operation-cleanup.js";
 import type {
   AccessOperationRecord,
   AccessOperationRegistry,
 } from "./access-operation-registry.js";
 
-// #861 — registry states in which dysflow is no longer actively driving the
-// process (so a still-alive MSACCESS for one of these is a leftover), but which
-// are not the in-flight ("running"/"starting") or already-retired ("cleaned")
-// states. Used to surface dysflow-spawned COM zombies from our own records.
-const TERMINAL_ORPHAN_STATUSES: ReadonlySet<string> = new Set([
-  "failed",
-  "timed_out",
-  "completed",
-  "cleanup_pending",
+// Issue #1991 — registry states in which an operation is still driving its
+// process. A PID recorded by one of them is never an orphan, whatever project
+// root the record carries: the registry file is already per project, so a
+// missing or differently spelled root must not let a live run slip through.
+// Every other state (failed, timed_out, cleanup_pending, ...) means dysflow no
+// longer drives the process, so a still-alive PID it recorded is a leftover
+// (#861).
+const LIVE_OPERATION_STATUSES: ReadonlySet<string> = new Set([
+  "starting",
+  "running",
+  "running_untracked",
 ]);
 
-function isTerminalOrphanStatus(status: string): boolean {
-  return TERMINAL_ORPHAN_STATUSES.has(status);
+function isLiveOperationStatus(status: string): boolean {
+  return LIVE_OPERATION_STATUSES.has(status);
 }
 
 /**
@@ -43,15 +46,11 @@ function isTerminalOrphanStatus(status: string): boolean {
  * `pathMatchesAccessPath(liveProcess.commandLine, accessPath)` always
  * returns false for it.
  *
- * When the user has explicitly named the PID via `confirmPid`, the COM-child
- * marker is the second-best proof that the live process is one of ours:
- * the headless + MSACCESS.EXE + `-Embedding`/`/automation` triad is only
- * produced by an automation host (dysflow is the documented automation
- * host on the bench). An absent command line is NOT a sufficient signal —
- * it could be a user-launched interactive MSACCESS that the operator
- * hasn't waited to populate (the historical ORPHAN_CLEANUP_PATH_UNVERIFIED
- * safety net) — so we still refuse in that case unless the registry
- * provides positive proof.
+ * Issue #1991 — the profile is NOT proof of ownership. Every automation host
+ * produces it, including another session's live test run, so it only decides
+ * whether an unattributed process is reported in the listing's
+ * `unattributed` section. A kill still needs a command line naming this
+ * accessPath or a dysflow record of this project (see attributeAccessProcess).
  *
  * Match is case-insensitive (PowerShell's WMI column is not stable across
  * OS versions, and `wmic` historically lowercases).
@@ -80,6 +79,111 @@ export type AccessOrphanCandidate = {
   ageSeconds?: number;
   mainWindowHandle?: number;
 };
+
+/**
+ * Issue #1991 — a headless COM-launched MSACCESS that no evidence ties to a
+ * database: its command line names none and no dysflow operation of this
+ * project recorded its PID. It may be another session's live run, so it is
+ * reported with an unknown `accessPath` and is never a kill candidate.
+ */
+export type AccessUnattributedProcess = {
+  pid: number;
+  accessPath: null;
+  kind: "access";
+  startTime?: string;
+  ageSeconds?: number;
+  mainWindowHandle?: number;
+};
+
+export type AccessOrphanListing = {
+  orphans: AccessOrphanCandidate[];
+  unattributed: AccessUnattributedProcess[];
+};
+
+/**
+ * Issue #1991 — what the runtime knows about which database an MSACCESS
+ * process holds. Only per-process evidence counts: a command line that names
+ * the database, or a non-live dysflow operation of this project that recorded
+ * the PID with the same start time. A start time unknown on either side
+ * proves nothing, because Windows reuses PIDs: the process is then `unknown`.
+ * The caller's resolved project path is never evidence.
+ */
+export type AccessProcessAttribution =
+  | { kind: "command-line"; accessPath: string }
+  | { kind: "operation-record"; accessPath: string; record: AccessOperationRecord }
+  | { kind: "pid-recycled"; record: AccessOperationRecord }
+  | { kind: "other-database"; evidence: string }
+  | { kind: "unknown" };
+
+function mostRecentRecordForPid(
+  records: readonly AccessOperationRecord[],
+  pid: number,
+  projectRoot: string,
+): AccessOperationRecord | null {
+  const normalizedProjectRoot = normalizePathForMatching(projectRoot);
+  let latest: AccessOperationRecord | null = null;
+  for (const record of records) {
+    if (record.accessPid !== pid) continue;
+    if (normalizePathForMatching(record.projectRootAbs ?? "") !== normalizedProjectRoot) continue;
+    if (
+      latest === null ||
+      (Date.parse(record.updatedAt ?? "") || 0) > (Date.parse(latest.updatedAt ?? "") || 0)
+    ) {
+      latest = record;
+    }
+  }
+  return latest;
+}
+
+/** True when a live (starting/running) operation records this PID. */
+export function isPidOwnedByLiveOperation(
+  records: readonly AccessOperationRecord[],
+  pid: number,
+): boolean {
+  return records.some(
+    (record) =>
+      isLiveOperationStatus(record.status) &&
+      (record.accessPid === pid || record.powershellWorkerPid === pid),
+  );
+}
+
+export function attributeAccessProcess(
+  proc: OsProcessInfo,
+  records: readonly AccessOperationRecord[],
+  request: AccessOrphanCleanupRequest,
+): AccessProcessAttribution {
+  const commandLine = proc.commandLine;
+  if (commandLine !== undefined && pathMatchesAccessPath(commandLine, request.accessPath)) {
+    return { kind: "command-line", accessPath: request.accessPath };
+  }
+  if (commandLine !== undefined && ACCESS_DATABASE_ON_COMMAND_LINE.test(commandLine)) {
+    return { kind: "other-database", evidence: commandLine };
+  }
+
+  const record = mostRecentRecordForPid(records, proc.pid, request.projectRoot);
+  if (record === null || isLiveOperationStatus(record.status)) {
+    return { kind: "unknown" };
+  }
+  if (
+    normalizePathForMatching(record.accessPath ?? "") !==
+    normalizePathForMatching(request.accessPath)
+  ) {
+    return {
+      kind: "other-database",
+      evidence: `operation ${record.operationId} recorded ${record.accessPath}`,
+    };
+  }
+  // A record is evidence only for the process it saw. Without both start
+  // times the live process may be whatever got the recycled PID, for example
+  // another session's live -Embedding run, so fail closed.
+  if (!record.processStartTime || proc.startTime === undefined) {
+    return { kind: "unknown" };
+  }
+  if (!sameProcessStartTime(record.processStartTime, proc.startTime)) {
+    return { kind: "pid-recycled", record };
+  }
+  return { kind: "operation-record", accessPath: record.accessPath, record };
+}
 
 export type AccessOrphanCleanupRequest = {
   accessPath: string;
@@ -122,6 +226,20 @@ export class AccessOrphanCleanupService {
   async listOrphans(
     request: AccessOrphanCleanupRequest,
   ): Promise<OperationResult<AccessOrphanCandidate[]>> {
+    const listing = await this.listCandidates(request);
+    if (!listing.ok) return listing;
+    return successResult(listing.data.orphans);
+  }
+
+  /**
+   * Issue #1991 — every listed orphan carries the accessPath its own evidence
+   * proves (see {@link attributeAccessProcess}); a headless COM child nothing
+   * ties to a database is reported separately as `unattributed`, and a PID a
+   * live operation records is never listed at all.
+   */
+  async listCandidates(
+    request: AccessOrphanCleanupRequest,
+  ): Promise<OperationResult<AccessOrphanListing>> {
     let processes: OsProcessInfo[];
     try {
       processes = await this.options.processScanner.listProcesses();
@@ -141,91 +259,69 @@ export class AccessOrphanCleanupService {
       registryRecords = [];
     }
 
-    const ownedPids = new Set<number>();
-    for (const record of registryRecords) {
-      if (
-        record.status === "running" &&
-        record.accessPid !== null &&
-        normalizePathForMatching(record.projectRootAbs ?? "") ===
-          normalizePathForMatching(request.projectRoot)
-      ) {
-        ownedPids.add(record.accessPid);
-      }
-    }
-
     const candidates: AccessOrphanCandidate[] = [];
+    const unattributed: AccessUnattributedProcess[] = [];
     for (const proc of processes) {
       if (proc.name.toUpperCase() !== "MSACCESS.EXE") continue;
-      if (ownedPids.has(proc.pid)) continue;
-      if (proc.mainWindowHandle !== 0) continue;
-      if (proc.commandLine === undefined) continue;
-      if (!pathMatchesAccessPath(proc.commandLine, request.accessPath)) continue;
+      if (isPidOwnedByLiveOperation(registryRecords, proc.pid)) continue;
+      // Skip a proven-visible interactive window. Only a dysflow record (#861)
+      // tolerates an unknown handle; a command-line match needs a proven 0.
+      if (typeof proc.mainWindowHandle === "number" && proc.mainWindowHandle !== 0) continue;
 
-      candidates.push({
+      const attribution = attributeAccessProcess(proc, registryRecords, request);
+      const entry = {
         pid: proc.pid,
-        accessPath: request.accessPath,
-        kind: "access",
+        kind: "access" as const,
         startTime: proc.startTime,
         ageSeconds: this.ageSeconds(proc.startTime),
         mainWindowHandle: proc.mainWindowHandle,
-      });
-    }
-
-    // #1255 / T18 — COM-launched Access instances do not carry an .accdb
-    // path in their command line. The old path-only pass silently dropped
-    // untracked `MSACCESS.EXE -Embedding` zombies, which made the recovery
-    // tool report zero candidates even though live headless processes
-    // remained. Surface every unowned headless COM child. Cleanup remains
-    // safe: this listing is read-only and the write path still requires one
-    // exact PID plus the MCP typed confirmation gate.
-    const pathListed = new Set(candidates.map((candidate) => candidate.pid));
-    for (const proc of processes) {
-      if (proc.name.toUpperCase() !== "MSACCESS.EXE") continue;
-      if (ownedPids.has(proc.pid)) continue;
-      if (pathListed.has(proc.pid)) continue;
-      if (proc.mainWindowHandle !== 0) continue;
-      if (!looksLikeDysflowComChild(proc)) continue;
-
-      pathListed.add(proc.pid);
-      candidates.push({
-        pid: proc.pid,
-        accessPath: request.accessPath,
-        kind: "access",
-        startTime: proc.startTime,
-        ageSeconds: this.ageSeconds(proc.startTime),
-        mainWindowHandle: proc.mainWindowHandle,
-      });
+      };
+      if (attribution.kind === "operation-record") {
+        candidates.push({ ...entry, accessPath: attribution.accessPath });
+      } else if (attribution.kind === "command-line") {
+        if (proc.mainWindowHandle === 0)
+          candidates.push({ ...entry, accessPath: attribution.accessPath });
+      } else if (
+        attribution.kind === "unknown" &&
+        proc.mainWindowHandle === 0 &&
+        looksLikeDysflowComChild(proc)
+      ) {
+        unattributed.push({ ...entry, accessPath: null });
+      }
     }
 
     // #735: scan for orphaned PowerShell workers. A pwsh worker is a
     // process spawned by the runner that holds the Access session alive. When
     // the worker gets stuck it prevents cleanup because the existing orphan
     // detection only covers MSACCESS.EXE. Workers are tracked in the registry
-    // via `powershellWorkerPid`; we surface any still-alive worker that is NOT
-    // owned by a running operation's accessPid or powershellWorkerPid.
+    // via `powershellWorkerPid`.
+    //
+    // Issue #1991 — a worker is listed exactly when cleanupOrphan would kill
+    // it: no live operation records the PID, the most recent record of this
+    // project that tracked it is finished, and the start times do not prove a
+    // recycled PID. The worker of a live operation is never an orphan.
     const workerPids = new Set<number>();
     for (const record of registryRecords) {
-      if (record.status !== "running") continue;
-      if (
-        normalizePathForMatching(record.projectRootAbs ?? "") !==
-        normalizePathForMatching(request.projectRoot)
-      )
-        continue;
-      if (record.powershellWorkerPid == null) continue;
-      // Skip if this worker PID is already the accessPid of a running record
-      if (ownedPids.has(record.powershellWorkerPid)) continue;
-      // Skip if another running record already owns this worker PID
-      if (workerPids.has(record.powershellWorkerPid)) continue;
+      const workerPid = record.powershellWorkerPid;
+      if (workerPid == null || workerPids.has(workerPid)) continue;
+      if (isPidOwnedByLiveOperation(registryRecords, workerPid)) continue;
+      const tracked = mostRecentTrackedRecordForPid(
+        registryRecords,
+        workerPid,
+        request.projectRoot,
+      );
+      if (tracked === null) continue;
 
       const workerProc = processes.find(
-        (p) => p.pid === record.powershellWorkerPid && p.name.toUpperCase() === "PWSH.EXE",
+        (p) => p.pid === workerPid && p.name.toUpperCase() === "PWSH.EXE",
       );
       if (workerProc === undefined) continue;
+      if (isRecycledWorkerPid(tracked, workerProc)) continue;
 
-      workerPids.add(record.powershellWorkerPid);
+      workerPids.add(workerPid);
       candidates.push({
-        pid: record.powershellWorkerPid,
-        accessPath: request.accessPath,
+        pid: workerPid,
+        accessPath: tracked.accessPath,
         kind: "powershell-worker",
         startTime: workerProc.startTime,
         ageSeconds: this.ageSeconds(workerProc.startTime),
@@ -233,43 +329,7 @@ export class AccessOrphanCleanupService {
       });
     }
 
-    // #861: dysflow spawns MSACCESS via COM automation, so its command line
-    // carries NO .accdb path — the command-line pass above can never match it.
-    // When one of our operations fails, its record moves to a terminal state
-    // but the process may stay alive holding the lock. Surface those from OUR
-    // OWN records: a terminal record whose accessPid is still a live headless
-    // MSACCESS proving the same project + accessPath. The record is the proof of
-    // ownership, so no caller-supplied command-line path match is required.
-    const alreadyListed = new Set<number>(candidates.map((c) => c.pid));
-    const normalizedRequestPath = normalizePathForMatching(request.accessPath);
-    const normalizedRequestRoot = normalizePathForMatching(request.projectRoot);
-    for (const record of registryRecords) {
-      if (record.accessPid == null) continue;
-      if (ownedPids.has(record.accessPid)) continue;
-      if (alreadyListed.has(record.accessPid)) continue;
-      if (!isTerminalOrphanStatus(record.status)) continue;
-      if (normalizePathForMatching(record.projectRootAbs ?? "") !== normalizedRequestRoot) continue;
-      if (normalizePathForMatching(record.accessPath ?? "") !== normalizedRequestPath) continue;
-
-      const proc = processes.find(
-        (p) => p.pid === record.accessPid && p.name.toUpperCase() === "MSACCESS.EXE",
-      );
-      if (proc === undefined) continue;
-      // Skip a proven-visible interactive window; a 0 or unknown handle stays.
-      if (typeof proc.mainWindowHandle === "number" && proc.mainWindowHandle !== 0) continue;
-
-      alreadyListed.add(record.accessPid);
-      candidates.push({
-        pid: record.accessPid,
-        accessPath: request.accessPath,
-        kind: "access",
-        startTime: proc.startTime,
-        ageSeconds: this.ageSeconds(proc.startTime),
-        mainWindowHandle: proc.mainWindowHandle,
-      });
-    }
-
-    return successResult(candidates);
+    return successResult({ orphans: candidates, unattributed });
   }
 
   async cleanupOrphan(
@@ -317,9 +377,10 @@ export class AccessOrphanCleanupService {
       );
     }
 
-    // MSACCESS-specific safety checks: headless, command-line path match.
-    // pwsh workers are always headless background processes; the path match is
-    // verified through registry ownership below instead.
+    // MSACCESS-specific safety checks: headless, not owned by a live
+    // operation, and positive evidence that it holds this project's
+    // accessPath. pwsh workers are always headless background processes; their
+    // ownership is verified through the registry below instead.
     if (isMsAccess) {
       if (liveProcess.mainWindowHandle !== 0) {
         const handle =
@@ -334,103 +395,61 @@ export class AccessOrphanCleanupService {
         );
       }
 
-      const pathProven =
-        liveProcess.commandLine !== undefined &&
-        pathMatchesAccessPath(liveProcess.commandLine, accessPath);
-
-      if (!pathProven) {
-        // #861 — a dysflow-spawned (COM-automation) MSACCESS has no .accdb path
-        // on its command line, so pathMatchesAccessPath can never prove identity.
-        // Fall back to OUR OWN records: a record tracking this PID for the same
-        // project + accessPath proves dysflow created it. Guard against Windows
-        // PID recycling by comparing the recorded start time.
-        const tracked = await this.findMostRecentTrackedRecordForPid(confirmPid, projectRoot);
-        if (!tracked.ok) return failureResult(tracked.error);
-        const record = tracked.record;
-        const registryProven =
-          record !== null &&
-          normalizePathForMatching(record.accessPath ?? "") ===
-            normalizePathForMatching(accessPath);
-
-        if (!registryProven) {
-          // Issue #1016 Part C — relax the path-match requirement when the
-          // caller has explicitly confirmed the PID via `confirmPid` AND the
-          // process matches the dysflow-spawned COM child profile: headless
-          // (already verified above), MSACCESS.EXE (already verified), with
-          // either no command line at all (Get-Process fallback), an
-          // `-Embedding` / `/automation` / `/Embedding <pid>` flag, or no
-          // .accdb path on its command line (the dysflow COM child never
-          // carries one). The user has explicitly taken responsibility for
-          // the kill; refusing them with PATH_MISMATCH when they have named
-          // the exact PID leaves the bench unrecoverable via MCP.
-          //
-          // Safety properties preserved:
-          //   - Non-headless refusals still fire (verified above).
-          //   - Registry-owned PIDs (a different operation owns this PID right
-          //     now) still refuse via the ORPHAN_CLEANUP_REGISTRY_OWNED gate
-          //     below.
-          //   - The PIN-recycled / path-mismatch safety net for any non-COM
-          //     MSACCESS stays in place (registryProven === false triggers
-          //     this branch; the COM-child profile gates the relaxation).
-          if (looksLikeDysflowComChild(liveProcess)) {
-            // Accept the kill — user-confirmed + headless MSACCESS.EXE that
-            // is NOT carrying a per-instance .accdb path on its command
-            // line. The registry fallback would also accept this PID if the
-            // record survived the registry cleanup, but at this point the
-            // record may have been retired (the in-memory registry purges
-            // `cleaned` records, and a stale runner can lose the marker).
-            // Letting the explicit confirmPid through is the same safety
-            // level as the registryProven branch: the user named the PID
-            // and the process matches our COM-child profile.
-          } else if (liveProcess.commandLine === undefined) {
-            return failureResult(
-              createDysflowError(
-                "ORPHAN_CLEANUP_PATH_UNVERIFIED",
-                `Refused to kill PID ${confirmPid}: command line is unavailable, so it cannot be proven to hold ${accessPath}.`,
-              ),
-            );
-          } else {
-            return failureResult(
-              createDysflowError(
-                "ORPHAN_CLEANUP_PATH_MISMATCH",
-                `PID ${confirmPid} is holding ${liveProcess.commandLine}, not ${accessPath}.`,
-              ),
-            );
-          }
-        }
-
-        if (
-          registryProven &&
-          record !== null &&
-          record.processStartTime !== undefined &&
-          record.processStartTime !== null &&
-          liveProcess.startTime !== undefined &&
-          record.processStartTime !== liveProcess.startTime
-        ) {
-          return failureResult(
-            createDysflowError(
-              "ORPHAN_CLEANUP_PID_RECYCLED",
-              `Refused to kill PID ${confirmPid}: the live process started at ${liveProcess.startTime ?? "unknown"} but the recorded operation ${record.operationId} started at ${record.processStartTime}. The PID was likely recycled by Windows.`,
-            ),
-          );
-        }
+      let registryRecords: AccessOperationRecord[];
+      try {
+        registryRecords = await this.options.registry.listRecent({ limit: 1000 });
+      } catch (error) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_REGISTRY_READ_FAILED",
+            `Failed to verify registry ownership for PID ${confirmPid}: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
       }
-    }
 
-    // MSACCESS path uses "currently owned" as the kill-prevention gate (with
-    // path-match proving identity). The pwsh worker path instead needs
-    // POSITIVE ownership proof — a running record alone is not enough
-    // because Windows may have recycled the PID to a different pwsh after
-    // our worker exited. See the dedicated pwsh branch below.
-
-    if (isMsAccess) {
-      const ownershipResult = await this.isOwnedRunningPid(confirmPid, projectRoot);
-      if (!ownershipResult.ok) return failureResult(ownershipResult.error);
-      if (ownershipResult.owned) {
+      if (isPidOwnedByLiveOperation(registryRecords, confirmPid)) {
         return failureResult(
           createDysflowError(
             "ORPHAN_CLEANUP_REGISTRY_OWNED",
             `Refused to kill PID ${confirmPid}: it is currently owned by a running Dysflow Access operation.`,
+          ),
+        );
+      }
+
+      // Issue #1991 — fail closed. The kill needs per-process evidence: the
+      // command line names this accessPath, or a non-live dysflow operation of
+      // this project recorded the PID (#861, a COM child never names its
+      // database). The COM-child profile alone (#1016 Part C) is not proof: a
+      // live test run of another session has exactly the same profile.
+      const attribution = attributeAccessProcess(liveProcess, registryRecords, {
+        accessPath,
+        projectRoot,
+      });
+      if (attribution.kind === "pid-recycled") {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PID_RECYCLED",
+            `Refused to kill PID ${confirmPid}: the live process started at ${liveProcess.startTime ?? "unknown"} but the recorded operation ${attribution.record.operationId} started at ${attribution.record.processStartTime}. The PID was likely recycled by Windows.`,
+          ),
+        );
+      }
+      if (attribution.kind === "other-database") {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PATH_MISMATCH",
+            `PID ${confirmPid} is holding ${attribution.evidence}, not ${accessPath}.`,
+          ),
+        );
+      }
+      if (attribution.kind === "unknown") {
+        const evidence =
+          liveProcess.commandLine === undefined
+            ? "its command line is unavailable"
+            : "its command line names no database";
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_PATH_UNVERIFIED",
+            `Refused to kill PID ${confirmPid}: ${evidence} and no finished Dysflow operation of this project recorded it, so it cannot be proven to hold ${accessPath}.`,
           ),
         );
       }
@@ -447,6 +466,16 @@ export class AccessOrphanCleanupService {
       // process's identity against it.
       const trackedRecord = await this.findMostRecentTrackedRecordForPid(confirmPid, projectRoot);
       if (!trackedRecord.ok) return failureResult(trackedRecord.error);
+      // Issue #1991 — the worker of a live operation is still driving its
+      // Access session; killing it would abort that run.
+      if (isPidOwnedByLiveOperation(trackedRecord.records, confirmPid)) {
+        return failureResult(
+          createDysflowError(
+            "ORPHAN_CLEANUP_REGISTRY_OWNED",
+            `Refused to kill PID ${confirmPid}: it is the PowerShell worker of a running Dysflow Access operation.`,
+          ),
+        );
+      }
       if (trackedRecord.record === null) {
         return failureResult(
           createDysflowError(
@@ -455,12 +484,7 @@ export class AccessOrphanCleanupService {
           ),
         );
       }
-      if (
-        trackedRecord.record.processStartTime !== undefined &&
-        trackedRecord.record.processStartTime !== null &&
-        liveProcess.startTime !== undefined &&
-        trackedRecord.record.processStartTime !== liveProcess.startTime
-      ) {
+      if (isRecycledWorkerPid(trackedRecord.record, liveProcess)) {
         return failureResult(
           createDysflowError(
             "ORPHAN_CLEANUP_PID_RECYCLED",
@@ -522,35 +546,6 @@ export class AccessOrphanCleanupService {
     });
   }
 
-  private async isOwnedRunningPid(
-    pid: number,
-    projectRoot: string,
-  ): Promise<
-    { ok: true; owned: boolean } | { ok: false; error: ReturnType<typeof createDysflowError> }
-  > {
-    let registryRecords: AccessOperationRecord[];
-    try {
-      registryRecords = await this.options.registry.listRecent({ limit: 1000 });
-    } catch (error) {
-      return {
-        ok: false,
-        error: createDysflowError(
-          "ORPHAN_CLEANUP_REGISTRY_READ_FAILED",
-          `Failed to verify registry ownership for PID ${pid}: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      };
-    }
-
-    const normalizedProjectRoot = normalizePathForMatching(projectRoot);
-    const owned = registryRecords.some(
-      (record) =>
-        record.status === "running" &&
-        (record.accessPid === pid || record.powershellWorkerPid === pid) &&
-        normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
-    );
-    return { ok: true, owned };
-  }
-
   // Positive ownership proof for #T16: locate the most recent record (any
   // status, not just `running`) that ever tracked this PID for this project.
   // Returns null when there is no historical record at all — the caller
@@ -562,7 +557,7 @@ export class AccessOrphanCleanupService {
     pid: number,
     projectRoot: string,
   ): Promise<
-    | { ok: true; record: AccessOperationRecord | null }
+    | { ok: true; record: AccessOperationRecord | null; records: AccessOperationRecord[] }
     | { ok: false; error: ReturnType<typeof createDysflowError> }
   > {
     let registryRecords: AccessOperationRecord[];
@@ -578,19 +573,40 @@ export class AccessOrphanCleanupService {
       };
     }
 
-    const normalizedProjectRoot = normalizePathForMatching(projectRoot);
-    const candidates = registryRecords.filter(
-      (record) =>
-        (record.accessPid === pid || record.powershellWorkerPid === pid) &&
-        normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
-    );
-    if (candidates.length === 0) return { ok: true, record: null };
-
-    const sorted = [...candidates].sort((a, b) => {
-      const aUpdated = Date.parse(a.updatedAt ?? "") || 0;
-      const bUpdated = Date.parse(b.updatedAt ?? "") || 0;
-      return bUpdated - aUpdated;
-    });
-    return { ok: true, record: sorted[0] ?? null };
+    return {
+      ok: true,
+      record: mostRecentTrackedRecordForPid(registryRecords, pid, projectRoot),
+      records: registryRecords,
+    };
   }
+}
+
+function mostRecentTrackedRecordForPid(
+  records: readonly AccessOperationRecord[],
+  pid: number,
+  projectRoot: string,
+): AccessOperationRecord | null {
+  const normalizedProjectRoot = normalizePathForMatching(projectRoot);
+  const candidates = records.filter(
+    (record) =>
+      (record.accessPid === pid || record.powershellWorkerPid === pid) &&
+      normalizePathForMatching(record.projectRootAbs ?? "") === normalizedProjectRoot,
+  );
+  const sorted = [...candidates].sort((a, b) => {
+    const aUpdated = Date.parse(a.updatedAt ?? "") || 0;
+    const bUpdated = Date.parse(b.updatedAt ?? "") || 0;
+    return bUpdated - aUpdated;
+  });
+  return sorted[0] ?? null;
+}
+
+// #T16 — the live pwsh started at a different time than the record says, so
+// Windows recycled the PID after our worker exited.
+function isRecycledWorkerPid(record: AccessOperationRecord, proc: OsProcessInfo): boolean {
+  return (
+    record.processStartTime !== undefined &&
+    record.processStartTime !== null &&
+    proc.startTime !== undefined &&
+    record.processStartTime !== proc.startTime
+  );
 }

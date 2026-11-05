@@ -1,5 +1,31 @@
 # Changelog
 
+## [v4.5.7] - 2026-11-05
+
+v4.5.6 was tagged but its GitHub Release was not published: its exact-SHA quality authority failed because the #1990 Pester test declared a `Write-DysflowResult` stub that the DYSFLOW_RESULT writer contract scan took for a production result writer, and its end-to-end battery leaked two headless MSACCESS.EXE started by the Issue 1817 E2E editor helper after a spawn timeout. v4.5.7 is the first published release of the v4.5.5 and v4.5.6 content.
+
+### Changes
+
+- test(e2e): the Issue 1817 editor helper records its Access PID, waits for it after Quit and kills only that PID, and the runner reaps a timed-out attempt's Access before retrying
+- test(test_vba): declare the #1990 Write-DysflowResult stub through function: so the result-writer contract scan ignores it
+
+## [v4.5.6] - 2026-11-05
+
+v4.5.5 was tagged but its GitHub Release was not published: its end-to-end battery ended with three leaked headless MSACCESS.EXE, because the owned Access PID was never attributed (hWndAccessApp is a method on the real COM object) and a headless Access that ignored Quit stayed alive. v4.5.6 is the first published release of the v4.5.5 content.
+
+### Changes
+
+- fix(access-com): attribute the owned Access PID through hWndAccessApp() and stop it when the open fails before a session is returned
+- fix(orphans): attribute each orphan candidate from per-process evidence and refuse live or unattributed PIDs, including a PID whose record or process has no start time and the pwsh.exe worker of a live operation (#1991)
+- fix(forms): resolve the lint_form_code source root from cwd like lint_module (#1992)
+- feat(test_vba): report per-test progress in list_access_operations and as MCP progress notifications, keep finished results when a run times out or is cancelled, and read the Windows PowerShell operation marker despite its byte-order mark, so a running record shows its Access PID (#1990)
+
+## [v4.5.5] - 2026-10-28
+
+### Changes
+
+- fix(e2e): take the Access leak start snapshot before the battery (#1978)
+
 ## [v4.5.4] - 2026-10-27
 
 v4.5.3 was tagged but its GitHub Release was not published: its end-to-end battery stopped at the form round-trip export, whose export folder did not exist (refused by the #1914 check). The fix is #1980. v4.5.4 is the first published release of the v4.5.2 and v4.5.3 content.

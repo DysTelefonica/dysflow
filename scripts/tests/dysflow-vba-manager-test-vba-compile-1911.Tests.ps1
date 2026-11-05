@@ -29,7 +29,8 @@ BeforeAll {
         (Resolve-Path $script:VbaManagerPath).Path, [ref]$null, [ref]$null)
     foreach ($fnName in @('Write-DysflowResult', 'Close-AccessDatabase', 'Complete-AccessSessionClose',
                           'Invoke-RunTestsAction', 'Get-TestSandboxPath', 'Remove-TestSandbox',
-                          'Assert-TestSandboxCompileTarget', 'Invoke-TestSandboxCompile')) {
+                          'Assert-TestSandboxCompileTarget', 'Invoke-TestSandboxCompile',
+                          'Write-DysflowOperationMarker', 'New-TestRunProgress')) {
         $fnAst = $script:ManagerAst.FindAll(
             { $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq $fnName },
             $true
@@ -47,7 +48,7 @@ BeforeAll {
         return New-FakeAccessSession -OwnedPid 4242 -ProjectPath $projectPath
     }
     function Invoke-AccessProcedureBatch {
-        param($AccessApplication, $VbProject, [object[]]$Procedures)
+        param($AccessApplication, $VbProject, [object[]]$Procedures, [scriptblock]$OnProcedureCompleted)
         $script:Observed.BatchCalls++
         return , @([pscustomobject]@{ ok = $true; procedure = "Test_Foo"; returnValue = 1 })
     }

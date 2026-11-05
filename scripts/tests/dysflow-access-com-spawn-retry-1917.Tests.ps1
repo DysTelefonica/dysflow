@@ -26,8 +26,9 @@ BeforeAll {
             AutomationSecurity = 3
             Visible            = $true
             UserControl        = $true
-            hWndAccessApp      = [IntPtr]::new(1234)
         }
+        # hWndAccessApp is a method on the real COM object, not a property.
+        $app | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]::new(1234) }
         $app | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value { param($Path, $Exclusive, $Password) }
         $app | Add-Member -MemberType ScriptMethod -Name Quit -Value { param($opt) }
         return $app
