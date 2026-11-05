@@ -77,7 +77,7 @@ export type SpawnRunner = (
   runDir: string,
   env: Record<string, string | undefined>,
   onError: (err: unknown) => void,
-) => number;
+) => number | Promise<number>;
 
 export class DetachedRunHarness {
   readonly root: string;
@@ -117,6 +117,8 @@ export class DetachedRunHarness {
       accessPassword?: string;
       /** Replaces the project's run store, for example with one whose reads fail. */
       store?: () => TestRunStore;
+      /** The MCP session write switch the server would record for the runner. */
+      sessionWritesEnabled?: boolean;
     } = {},
   ): VbaSyncAdapter {
     return new VbaSyncAdapter({
@@ -140,6 +142,9 @@ export class DetachedRunHarness {
       ...(options.accessPassword === undefined ? {} : { accessPassword: options.accessPassword }),
       detachedTestRuns: {
         createStore: options.store ?? (() => this.store()),
+        ...(options.sessionWritesEnabled === undefined
+          ? {}
+          : { sessionWritesEnabled: options.sessionWritesEnabled }),
         spawnRunner: (runDir, env, onError) => {
           if (this.spawnRunner !== undefined) return this.spawnRunner(runDir, env, onError);
           if (this.spawnFailure !== undefined) throw this.spawnFailure;
@@ -154,6 +159,8 @@ export class DetachedRunHarness {
     adapter: VbaSyncAdapter,
     testRunPolling?: { sleep: (ms: number) => Promise<void>; now: () => number },
     accessContextResolver?: McpAccessContextResolver,
+    /** Replaces the run store `get_test_run` reads, for example with one whose reads fail. */
+    readerStore?: () => TestRunStore,
   ) {
     return createDysflowMcpTools({
       services: {
@@ -165,7 +172,7 @@ export class DetachedRunHarness {
       writes: true,
       writeExecutionPolicy: "developer",
       cwd: this.root,
-      testRunStore: () => this.store(),
+      testRunStore: readerStore ?? (() => this.store()),
       ...(testRunPolling === undefined ? {} : { testRunPolling }),
       ...(accessContextResolver === undefined ? {} : { accessContextResolver }),
     });

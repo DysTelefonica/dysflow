@@ -8,6 +8,7 @@ import {
 import {
   type AccessOperationRecord,
   type AccessOperationRegistry,
+  DEFAULT_STARTING_STALE_MS,
   isInterruptedStartingRecord,
 } from "../../core/operations/access-operation-registry.js";
 import { canonicalizeAccessLockIdentity } from "../../core/runner/cross-process-lock.js";
@@ -28,13 +29,19 @@ export type SpawnTestRunner = (
   runDir: string,
   env: Record<string, string | undefined>,
   onError: (err: unknown) => void,
-) => number;
+) => number | Promise<number>;
 
 /** Injectable I/O of the detached `test_vba` route; tests fake the spawn and the probe. */
 export type DetachedTestRunSeams = {
   /** The run store of one project; defaults to the production store. */
   createStore?: (projectRoot: string) => TestRunStore;
   spawnRunner?: SpawnTestRunner;
+  /**
+   * The MCP session write switch of the server, recorded in the request so
+   * the runner serves its replay with the same switch instead of forcing it.
+   * Absent, the runner replays with it off and the project config decides.
+   */
+  sessionWritesEnabled?: boolean;
 };
 
 export type DetachedTestRunTarget = { accessPath: string; projectRoot: string };
@@ -51,7 +58,9 @@ export type DetachedTestRunTarget = { accessPath: string; projectRoot: string };
  * while a synchronous `test_vba` drives it (a live tracked `test_vba`
  * operation in the registry), so two Access never run on one database (S2).
  * A spawn that fails after returning a PID crashes the run and frees the lock
- * at once, instead of waiting for the no-runner crash window.
+ * at once, instead of waiting for the no-runner crash window. A spawn that
+ * throws and also reports `error` ends the run once: the throw is the
+ * failure the caller gets, and the late `error` finds the run already over.
  *
  * `refuseWhileActive` is the synchronous guard: while a detached run holds the
  * database, a synchronous run is refused, except the call the run's own runner
@@ -62,6 +71,7 @@ export type DetachedTestRunTarget = { accessPath: string; projectRoot: string };
 export class DetachedTestRunLauncher {
   private readonly createStore: (projectRoot: string) => TestRunStore;
   private readonly spawnRunner: SpawnTestRunner;
+  private readonly sessionWritesEnabled: boolean;
 
   constructor(
     private readonly env: Record<string, string | undefined>,
@@ -72,8 +82,9 @@ export class DetachedTestRunLauncher {
     this.createStore = seams.createStore ?? createNodeTestRunStore;
     this.spawnRunner =
       seams.spawnRunner ??
-      ((runDir, env, onError) =>
-        spawnDetachedTestRunner(runDir, env as NodeJS.ProcessEnv, { onError }));
+      (async (runDir, env, onError) =>
+        (await spawnDetachedTestRunner(runDir, env as NodeJS.ProcessEnv, { onError })).pid);
+    this.sessionWritesEnabled = seams.sessionWritesEnabled === true;
   }
 
   async start(
@@ -98,6 +109,7 @@ export class DetachedTestRunLauncher {
       input: syncInput,
       accessPath: target.accessPath,
       plannedTests,
+      writesEnabled: this.sessionWritesEnabled,
     });
     if (!prepared.ok) return failureResult(prepared.error);
 
@@ -109,13 +121,24 @@ export class DetachedTestRunLauncher {
         ? {}
         : { DYSFLOW_ACCESS_PASSWORD: this.accessPassword }),
     };
-    try {
-      this.spawnRunner(runDir, env, (err) => {
-        this.abandonUnstartedRun(store, operationId, err).catch((abandonErr: unknown) =>
+    // A late `error` waits until the spawn call settled: when the call threw,
+    // its failure already ended the run and the late `error` is dropped.
+    let settleSpawn: (threw: boolean) => void = () => undefined;
+    const spawnSettled = new Promise<boolean>((resolve) => {
+      settleSpawn = resolve;
+    });
+    const onLateError = (err: unknown) => {
+      spawnSettled
+        .then((threw) => (threw ? undefined : this.abandonUnstartedRun(store, operationId, err)))
+        .catch((abandonErr: unknown) =>
           logSwallowedIoError("detached-test-run-launcher:async-spawn-error", abandonErr),
         );
-      });
+    };
+    try {
+      await this.spawnRunner(runDir, env, onLateError);
+      settleSpawn(false);
     } catch (err) {
+      settleSpawn(true);
       const message = spawnFailureMessage(err);
       await store.abandonRun(operationId, { code: TEST_RUN_SPAWN_FAILED, message });
       return failureResult(
@@ -170,9 +193,11 @@ export class DetachedTestRunLauncher {
   /**
    * The synchronous `test_vba` driving `accessPath` now, read from the
    * operation registry: a `starting`/`running` `test_vba` record that is not
-   * an interrupted start and whose recorded Access process is still alive. A
-   * registry that cannot be read is logged and reads as none; the detached
-   * lock stays the guard.
+   * an interrupted start and whose recorded Access process is still alive.
+   * A record that never recorded an Access PID cannot be probed, so it counts
+   * only while it is fresh: one that has not moved for the registry's start
+   * window was left behind by a server that died. A registry that cannot be
+   * read is logged and reads as none; the detached lock stays the guard.
    */
   private async activeSynchronousRun(
     store: TestRunStore,
@@ -194,16 +219,21 @@ export class DetachedTestRunLauncher {
       if (canonicalizeAccessLockIdentity(record.accessPath) !== target) continue;
       if (isInterruptedStartingRecord(record, nowMs)) continue;
       const pid = record.accessPid;
-      if (
-        pid !== null &&
-        !(await store.isProcessAlive({ pid, startTime: record.processStartTime }))
-      ) {
+      if (pid === null) {
+        if (!isFreshRecord(record, nowMs)) continue;
+      } else if (!(await store.isProcessAlive({ pid, startTime: record.processStartTime }))) {
         continue;
       }
       return record;
     }
     return undefined;
   }
+}
+
+/** A record updated within the registry's start window; an unparseable time is not fresh. */
+function isFreshRecord(record: AccessOperationRecord, nowMs: number): boolean {
+  const updatedMs = Date.parse(record.updatedAt);
+  return !Number.isNaN(updatedMs) && nowMs - updatedMs < DEFAULT_STARTING_STALE_MS;
 }
 
 function spawnFailureMessage(err: unknown): string {

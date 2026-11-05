@@ -94,7 +94,8 @@ export const nodeTestRunFileSystem: TestRunFileSystemPort = {
   async createExclusive(path, text) {
     // `link` publishes a fully written file under its final name atomically and
     // fails with EEXIST when the name is taken, unlike a `wx` write that a
-    // reader can observe while it is still empty.
+    // reader can observe while it is still empty. The store tolerates that
+    // window: a lock it cannot parse yet is waited on, never taken over at once.
     const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporary, text, "utf8");
     try {
@@ -139,6 +140,16 @@ export const nodeTestRunFileSystem: TestRunFileSystemPort = {
     try {
       const entries = await readdir(path, { withFileTypes: true });
       return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    } catch (err) {
+      if (isMissing(err)) return [];
+      throw err;
+    }
+  },
+
+  async listFiles(path) {
+    try {
+      const entries = await readdir(path, { withFileTypes: true });
+      return entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
     } catch (err) {
       if (isMissing(err)) return [];
       throw err;

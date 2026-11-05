@@ -25,6 +25,8 @@ export interface TestRunFileSystemPort {
   removeTree(path: string): Promise<void>;
   /** Names of the directories directly under `path`; empty when it does not exist. */
   listDirectories(path: string): Promise<string[]>;
+  /** Names of the files directly under `path`; empty when it does not exist. */
+  listFiles(path: string): Promise<string[]>;
 }
 
 export type ProcessProbeResult = { alive: false } | { alive: true; startTime: string | null };

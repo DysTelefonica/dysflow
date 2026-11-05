@@ -45,6 +45,13 @@ export type TestRunRequest = {
   toolName: "test_vba";
   /** The `test_vba` input the runner replays, with every secret removed. */
   input: Record<string, unknown>;
+  /**
+   * The MCP session write switch of the server that accepted the run. The
+   * runner serves its replay with the same switch, so the project's write
+   * posture is decided exactly as it was for the detached start. A request
+   * without it replays with writes off (the project config alone decides).
+   */
+  writesEnabled: boolean;
   /** The binary the run drives; the per-accessPath lock is keyed by it. */
   accessPath: string;
   /** Plan procedure names in order; `currentTest` is read from it. */
@@ -54,6 +61,13 @@ export type TestRunRequest = {
 
 export type TestRunError = { code: string; message: string };
 
+/**
+ * How the runner was started: `wmi` creates it through WMI `Win32_Process.Create`,
+ * outside any Job Object of the MCP host, so closing the host does not kill it;
+ * `spawn` is the Node detached spawn, used when WMI is not available.
+ */
+export type TestRunLaunchMethod = "wmi" | "spawn";
+
 export type TestRunState = {
   operationId: string;
   status: TestRunStatus;
@@ -62,6 +76,8 @@ export type TestRunState = {
   launcher: TestRunProcessIdentity | null;
   /** The detached runner process, once it started. */
   runner: TestRunProcessIdentity | null;
+  /** How the runner was started, recorded by the runner itself. */
+  launchMethod?: TestRunLaunchMethod | null;
   /** The inner tracked Access operation, when the result names it. */
   accessOperationId: string | null;
   progress: TestRunProgress;
@@ -114,6 +130,35 @@ export type ActiveDetachedRun = {
  * accessPath lock it holds, and refuses every other synchronous run.
  */
 export const TEST_RUN_OPERATION_ID_ENV = "DYSFLOW_TEST_RUN_OPERATION_ID";
+
+/** The environment variable naming the {@link TestRunLaunchMethod} that started the runner. */
+export const TEST_RUN_LAUNCH_METHOD_ENV = "DYSFLOW_TEST_RUN_LAUNCH";
+
+export function parseTestRunLaunchMethod(value: unknown): TestRunLaunchMethod | null {
+  return value === "wmi" || value === "spawn" ? value : null;
+}
+
+/** `state.error.code` of a run whose `request.json` is missing or unreadable. */
+export const TEST_RUN_REQUEST_UNREADABLE = "TEST_RUN_REQUEST_UNREADABLE";
+
+/** `state.error.code` of a run whose runner could not call `test_vba` at all. */
+export const TEST_RUN_INVOCATION_FAILED = "TEST_RUN_INVOCATION_FAILED";
+
+/**
+ * `get_test_run` error of a run whose directory exists but whose state could
+ * not be read (a file held open by the runner, an antivirus scan). Retryable.
+ */
+export const TEST_RUN_READ_FAILED = "TEST_RUN_READ_FAILED";
+
+/** How often a running runner refreshes `state.json` `updatedAt`. */
+export const TEST_RUN_HEARTBEAT_INTERVAL_MS = 15_000;
+
+/**
+ * How long a run may go without a heartbeat while its runner's identity
+ * cannot be verified (the OS did not report a start time) before the runner
+ * is presumed gone and its PID possibly recycled.
+ */
+export const TEST_RUN_HEARTBEAT_STALE_MS = 60_000;
 
 /** Longest `get_test_run` long-poll, so a 60 s client timeout is never hit (#1993 D4). */
 export const TEST_RUN_MAX_WAIT_SECONDS = 50;
@@ -275,6 +320,7 @@ export function parseTestRunRequest(value: unknown): TestRunRequest | undefined 
   if (!isRecord(value.input)) return undefined;
   return {
     ...(value as unknown as TestRunRequest),
+    writesEnabled: value.writesEnabled === true,
     plannedTests: Array.isArray(value.plannedTests)
       ? value.plannedTests.filter((name): name is string => typeof name === "string")
       : [],

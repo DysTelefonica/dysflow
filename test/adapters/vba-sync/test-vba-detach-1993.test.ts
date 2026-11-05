@@ -182,12 +182,15 @@ describe("test_vba detach:true (#1993 D1)", () => {
   it("marks the run crashed and releases the database when the spawn fails asynchronously", async () => {
     // The real spawn over a child that got a PID, then reports 'error' (ENOENT).
     const child = Object.assign(new EventEmitter(), { pid: RUNNER_PID, unref: () => undefined });
-    harness.spawnRunner = (runDir, env, onError) =>
-      spawnDetachedTestRunner(runDir, env as NodeJS.ProcessEnv, {
-        entryPoint: "missing-cli.js",
-        spawnProcess: (() => child) as unknown as typeof spawn,
-        onError,
-      });
+    harness.spawnRunner = async (runDir, env, onError) =>
+      (
+        await spawnDetachedTestRunner(runDir, env as NodeJS.ProcessEnv, {
+          entryPoint: "missing-cli.js",
+          spawnProcess: (() => child) as unknown as typeof spawn,
+          platform: "linux",
+          onError,
+        })
+      ).pid;
     const tools = harness.tools(harness.adapter(neverEnding));
     const started = await callTool(tools, "test_vba", DETACH);
     expect(started.isError).toBe(false);

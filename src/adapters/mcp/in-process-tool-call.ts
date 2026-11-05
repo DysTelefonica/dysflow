@@ -15,6 +15,9 @@ const NO_CLIENT_TIMEOUT_MS = 2_147_483_647;
  * envelope. The resolved value is therefore the tool result exactly as a
  * synchronous MCP caller receives it, and `onProgress` receives the same
  * progress notifications that caller would.
+ *
+ * A server that cannot start rejects the call with its start error, instead
+ * of leaving the client waiting for an initialize answer that never comes.
  */
 export async function callToolInProcess(
   tools: DysflowMcpTool[],
@@ -26,9 +29,8 @@ export async function callToolInProcess(
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const serverStarted = startWithSdkServer(tools, serverTransport, serverOptions);
   const client = new Client({ name: "dysflow-test-runner", version: "1.0.0" }, {});
-  await client.connect(clientTransport);
   try {
-    await serverStarted;
+    await Promise.all([serverStarted, client.connect(clientTransport)]);
     return await client.callTool({ name, arguments: args }, undefined, {
       timeout: NO_CLIENT_TIMEOUT_MS,
       ...(onProgress === undefined

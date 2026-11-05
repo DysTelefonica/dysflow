@@ -161,12 +161,14 @@ export async function createStdioToolRuntime(
   // surface sets it; every per-input resolver reads it as the fallback cwd.
   const sessionProjectRoot = createSessionProjectRoot();
   const sessionOptions = { sessionCwd: sessionProjectRoot.get };
+  const writesEnabled = options?.writesEnabled ?? true;
   const services = createDynamicServices(
     configResult.ok ? configResult.data : undefined,
     configResult.ok ? undefined : configResult.error,
-    sessionOptions,
+    // Issue #1993 — a detached test_vba records this switch, so its runner
+    // serves the replay with the same one instead of forcing writes on.
+    { ...sessionOptions, sessionWritesEnabled: writesEnabled },
   );
-  const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
   // Issue #1492 — resolve the effective tool surface.
   // Precedence: CLI override > project config > default "core".
@@ -720,7 +722,12 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
 // full SDK server.
 export function createConfiguredServices(
   config: DysflowConfig,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    /** Issue #1993 — the MCP session write switch a detached test run records for its runner. */
+    sessionWritesEnabled?: boolean;
+  } = {},
 ): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry({
     ...config,
@@ -814,6 +821,9 @@ export function createConfiguredServices(
       // (no `.codegraph/` index, CLI missing, parse error) is built into
       // the factory — never throws.
       codeGraphVbaInvoker: createDefaultCodeGraphVbaInvoker(),
+      ...(options.sessionWritesEnabled === undefined
+        ? {}
+        : { detachedTestRuns: { sessionWritesEnabled: options.sessionWritesEnabled } }),
     }),
   };
 }
@@ -823,6 +833,8 @@ export function createDynamicServices(
   startupError?: DysflowError,
   options: ResolveConfigOptions & {
     serviceFactory?: (config: DysflowConfig) => DysflowMcpServices;
+    /** Issue #1993 — forwarded to {@link createConfiguredServices}. */
+    sessionWritesEnabled?: boolean;
   } = {},
 ): DysflowMcpServices {
   const serviceCache = new Map<string, DysflowMcpServices>();

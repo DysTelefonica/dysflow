@@ -34,8 +34,8 @@ Evidence: T0 map (no per-accessPath lock on the vba-sync path; `completed` regis
 - T2 Detached runner process + result persistence + per-accessPath lock (S1, S2, S4, S7) — done (b452a286)
 - T3 `test_vba` detach flag + `get_test_run` tool, contracts, registries (S1, S3, S6) — done (9026ef77; RDD review approved, 12 advisory findings)
 - T4 Docs: test-runs.md, mcp-tools.md, examples, CHANGELOG (S5) — done (in 9026ef77)
-- T3b Hardening batch 1: final counts from the result, HTTP refuses detach, T3 review warnings (async spawn error, two-directional guard, guard I/O, projectId error, stale view, matrix count) — done (commit after T3b)
-- T3c Hardening batch 2, T2 review warnings (df58f715 review approved, 15 advisory findings): job-object survival of the detached runner, null start time pins the lock, explicit password dropped, runner forces writes, stale-takeover race, exclusive-create fallback race, prune failure blocks the accessPath, missing request leaves running, in-process start failure, runner options subset, lock key vs driven binary — pending
+- T3b Hardening batch 1: final counts from the result, HTTP refuses detach, T3 review warnings (async spawn error, two-directional guard, guard I/O, projectId error, stale view, matrix count) — done (620ee457; RDD review approved, 6 advisory findings, 3 forwarded to T3c)
+- T3c Hardening batch 2, T2 review warnings (df58f715 review approved, 15 advisory findings): job-object survival of the detached runner, null start time pins the lock, explicit password dropped, runner forces writes, stale-takeover race, exclusive-create fallback race, prune failure blocks the accessPath, missing request leaves running, in-process start failure, runner options subset, lock key vs driven binary; plus from the T3b review: null-PID sync record pins detached starts, double abandon, transient read reported as not found — done (T3c commit)
 - T5 Verification: full pnpm test, test:ps1, mcp:context-budget, real-Access smoke (all) — pending
 
 ## Log

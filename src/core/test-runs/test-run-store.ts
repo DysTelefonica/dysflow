@@ -8,8 +8,10 @@ import {
 import { sameProcessStartTime } from "../operations/access-operation-cleanup.js";
 import { createAccessOperationId } from "../operations/access-operation-registry.js";
 import { canonicalizeAccessLockIdentity } from "../runner/cross-process-lock.js";
+import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import {
   type ActiveDetachedRun,
+  finalProgressForResult,
   initialTestRunProgress,
   isValidTestRunOperationId,
   logTail,
@@ -18,6 +20,7 @@ import {
   parseTestRunState,
   stripTestRunSecrets,
   TERMINAL_TEST_RUN_STATUSES,
+  TEST_RUN_HEARTBEAT_STALE_MS,
   TEST_RUN_LOG_TAIL_BYTES,
   TEST_RUN_RETENTION,
   TEST_RUN_START_GRACE_MS,
@@ -27,6 +30,7 @@ import {
   type TestRunRequest,
   type TestRunState,
   type TestRunView,
+  terminalStatusForResult,
 } from "./test-run-model.js";
 import type { RunnerProcessProbe, TestRunFileSystemPort } from "./test-run-ports.js";
 
@@ -52,12 +56,15 @@ export type TestRunStoreOptions = {
   createOperationId?: () => string;
   retention?: number;
   startGraceMs?: number;
+  heartbeatStaleMs?: number;
 };
 
 export type PrepareTestRunInput = {
   input: Record<string, unknown>;
   accessPath: string;
   plannedTests: readonly string[];
+  /** The launching server's MCP session write switch; recorded for the runner. */
+  writesEnabled?: boolean;
 };
 
 export type PrepareTestRunResult =
@@ -68,8 +75,33 @@ export type TestRunLockAcquisition =
   | { ok: true; record: TestRunLockRecord }
   | { ok: false; error: DysflowError; activeOperationId: string };
 
-/** How many times a stale lock is taken over before giving up to a racing acquirer. */
-const LOCK_ACQUIRE_ATTEMPTS = 4;
+/**
+ * Bound of one lock acquisition: every pass either wins, refuses, waits a
+ * moment for a lock another acquirer is still writing or taking over, or
+ * takes over a stale lock.
+ */
+const LOCK_ACQUIRE_ATTEMPTS = 40;
+
+/** The pause between two passes that wait on another acquirer. */
+const LOCK_RETRY_DELAY_MS = 25;
+
+/**
+ * Passes a lock may stay unparseable before it is judged garbage. The
+ * exclusive-create fallback (no hard links) creates the lock empty and fills
+ * it at once, so a lock it is writing parses within this budget.
+ */
+const LOCK_UNPARSEABLE_PASSES = 8;
+
+/** A takeover claim older than this was abandoned by a crashed acquirer. */
+const TAKEOVER_CLAIM_STALE_MS = 10_000;
+
+/** Generations of takeover claims tried on one stale lock before waiting it out. */
+const TAKEOVER_CLAIM_GENERATIONS = 8;
+
+/** Takeover claims older than this are removed when old runs are pruned. */
+const TAKEOVER_CLAIM_RETENTION_MS = 10 * 60_000;
+
+const TAKEOVER_CLAIM_PATTERN = /^access-[0-9a-f]{16}\.lock\.json\.takeover-[0-9a-f]{16}-\d+$/;
 
 /**
  * Issue #1993 — the detached test-run store: run directories, their state,
@@ -89,6 +121,7 @@ export class TestRunStore {
   private readonly createOperationId: () => string;
   private readonly retention: number;
   private readonly startGraceMs: number;
+  private readonly heartbeatStaleMs: number;
 
   constructor(options: TestRunStoreOptions) {
     this.runsRoot = options.runsRoot;
@@ -99,6 +132,7 @@ export class TestRunStore {
     this.createOperationId = options.createOperationId ?? createAccessOperationId;
     this.retention = Math.max(1, options.retention ?? TEST_RUN_RETENTION);
     this.startGraceMs = options.startGraceMs ?? TEST_RUN_START_GRACE_MS;
+    this.heartbeatStaleMs = options.heartbeatStaleMs ?? TEST_RUN_HEARTBEAT_STALE_MS;
   }
 
   runDirectory(operationId: string): string {
@@ -113,7 +147,8 @@ export class TestRunStore {
    * Create a run directory with its request and initial state, take the
    * accessPath lock for it on behalf of this (launcher) process, and prune
    * old runs. Refused with `TEST_RUN_ALREADY_ACTIVE` while another run holds
-   * the lock; the refused run leaves nothing on disk.
+   * the lock; the refused run leaves nothing on disk. Retention is
+   * housekeeping: a prune that fails is logged and never refuses the run.
    */
   async prepareRun(prepare: PrepareTestRunInput): Promise<PrepareTestRunResult> {
     const operationId = this.createOperationId();
@@ -128,6 +163,7 @@ export class TestRunStore {
       operationId,
       toolName: "test_vba",
       input: stripTestRunSecrets(prepare.input) as Record<string, unknown>,
+      writesEnabled: prepare.writesEnabled === true,
       accessPath: prepare.accessPath,
       plannedTests: [...prepare.plannedTests],
       createdAt: now,
@@ -155,7 +191,12 @@ export class TestRunStore {
       await this.fileSystem.removeTree(runDir);
       return { ok: false, error: lock.error };
     }
-    const prunedOperationIds = await this.pruneRuns(operationId);
+    let prunedOperationIds: string[] = [];
+    try {
+      prunedOperationIds = await this.pruneRuns(operationId);
+    } catch (err) {
+      logSwallowedIoError("test-run-store:prune", err);
+    }
     return { ok: true, operationId, runDir, prunedOperationIds };
   }
 
@@ -192,16 +233,28 @@ export class TestRunStore {
 
   /**
    * End a run that never reached its runner (for example a failed spawn):
-   * it reads as `crashed` with the reason, and its lock is released.
+   * it reads as `crashed` with the reason, and its lock is released. A run
+   * that already ended keeps its first terminal state.
    */
   async abandonRun(operationId: string, error: TestRunError): Promise<void> {
-    const state = await this.updateState(operationId, (current) => ({
-      ...current,
-      status: "crashed",
-      finishedAt: this.now(),
-      error,
-    }));
-    if (state !== undefined) await this.releaseLock(state.accessPath, operationId);
+    const current = await this.readState(operationId);
+    if (current === undefined) return;
+    if (!TERMINAL_TEST_RUN_STATUSES.has(current.status)) {
+      await this.writeJson(this.runFile(operationId, "state"), {
+        ...current,
+        status: "crashed",
+        finishedAt: this.now(),
+        error,
+        updatedAt: this.now(),
+      } satisfies TestRunState);
+    }
+    await this.releaseLock(current.accessPath, operationId);
+  }
+
+  /** `true` while the run's directory exists, whether or not its files can be read. */
+  async runExists(operationId: string): Promise<boolean> {
+    if (!isValidTestRunOperationId(operationId)) return false;
+    return (await this.fileSystem.listDirectories(this.runsRoot)).includes(operationId);
   }
 
   /** The run as a reader sees it, or `undefined` when no such run exists. */
@@ -233,6 +286,17 @@ export class TestRunStore {
     }
     const crashReason = await this.crashReason(state);
     if (crashReason === undefined) return view;
+    // The runner stored its result, then died before marking the run
+    // terminal: the result is the run's outcome, not a crash.
+    const result = await this.readResult(operationId);
+    if (result !== undefined) {
+      return {
+        ...view,
+        status: terminalStatusForResult(result),
+        progress: finalProgressForResult(state.progress, result),
+        result,
+      };
+    }
     return {
       ...view,
       status: "crashed",
@@ -262,7 +326,10 @@ export class TestRunStore {
    * Take the accessPath lock for `owner.operationId`. The run that already
    * holds it may re-take it under a new identity (the runner adopting the
    * launcher's lock). Another live run's lock refuses with
-   * `TEST_RUN_ALREADY_ACTIVE`; a stale one is taken over.
+   * `TEST_RUN_ALREADY_ACTIVE`; a stale one is taken over by exactly one of
+   * the acquirers that saw it (see {@link takeOverStaleLock}). A lock that
+   * does not parse yet is being written by another acquirer and is waited
+   * on; only one that stays unparseable is garbage to take over.
    */
   async acquireLock(
     accessPath: string,
@@ -278,19 +345,34 @@ export class TestRunStore {
     };
     const text = `${JSON.stringify(record, null, 2)}\n`;
     await this.fileSystem.mkdir(this.runsRoot);
+    let unparseable: { raw: string; passes: number } | undefined;
     for (let attempt = 0; attempt < LOCK_ACQUIRE_ATTEMPTS; attempt += 1) {
       if (await this.fileSystem.createExclusive(lockPath, text)) return { ok: true, record };
       const raw = await this.fileSystem.readText(lockPath);
       if (raw === null) continue;
       const held = parseTestRunLockRecord(parseJson(raw));
-      if (held?.operationId === owner.operationId) {
-        await this.fileSystem.writeAtomic(lockPath, text);
-        return { ok: true, record };
+      if (held === undefined) {
+        unparseable =
+          unparseable?.raw === raw ? { raw, passes: unparseable.passes + 1 } : { raw, passes: 1 };
+        if (unparseable.passes < LOCK_UNPARSEABLE_PASSES) {
+          await delay(LOCK_RETRY_DELAY_MS);
+          continue;
+        }
+      } else {
+        unparseable = undefined;
+        if (held.operationId === owner.operationId) {
+          await this.fileSystem.writeAtomic(lockPath, text);
+          return { ok: true, record };
+        }
+        if (await this.isLive(held)) {
+          return {
+            ok: false,
+            error: alreadyActiveError(held),
+            activeOperationId: held.operationId,
+          };
+        }
       }
-      if (held !== undefined && (await this.isLive(held))) {
-        return { ok: false, error: alreadyActiveError(held), activeOperationId: held.operationId };
-      }
-      await this.takeOverStaleLock(lockPath, raw);
+      if (!(await this.takeOverStaleLock(lockPath, raw))) await delay(LOCK_RETRY_DELAY_MS);
     }
     const held = parseTestRunLockRecord(await this.readJson(lockPath));
     const activeOperationId = held?.operationId ?? "unknown";
@@ -316,6 +398,7 @@ export class TestRunStore {
    * the older ones, never one that is still running. Returns the removed ids.
    */
   async pruneRuns(keepOperationId: string): Promise<string[]> {
+    await this.pruneTakeoverClaims();
     const names = (await this.fileSystem.listDirectories(this.runsRoot)).filter(
       isValidTestRunOperationId,
     );
@@ -357,20 +440,50 @@ export class TestRunStore {
     return join(this.runsRoot, `access-${hash}.lock.json`);
   }
 
+  /**
+   * A lock is live while its holder is the same process that took it and its
+   * run is still running. A holder whose identity cannot be verified (no OS
+   * start time) counts as live only while its run keeps a fresh heartbeat,
+   * so a recycled PID never pins the database.
+   */
   private async isLive(lock: TestRunLockRecord): Promise<boolean> {
-    if (!(await this.isSameProcessAlive({ pid: lock.pid, startTime: lock.startTime }))) {
-      return false;
-    }
+    const verdict = await this.processVerdict({ pid: lock.pid, startTime: lock.startTime });
+    if (verdict === "dead" || verdict === "recycled") return false;
+    const state = await this.readState(lock.operationId);
+    if (state === undefined) return false;
+    if (verdict === "unverified" && this.heartbeatIsStale(state)) return false;
     const view = await this.readTestRun(lock.operationId);
     return view?.status === "running";
   }
 
   /**
-   * Move a stale lock aside and remove it. When the file moved aside is no
-   * longer the stale lock that was observed (another acquirer replaced it in
-   * between), it is put back so that acquirer keeps its lock.
+   * Remove the stale lock `observed`, on behalf of exactly one acquirer.
+   *
+   * Every acquirer that saw the same stale lock competes for one takeover
+   * claim, an exclusive file named after the observed content; only its
+   * winner touches the lock, and the claim stays so a slow acquirer still
+   * holding the old observation never touches the lock that replaced it.
+   * The winner moves the lock aside and, should it no longer be the observed
+   * one, puts it back. A claim whose winner died is superseded by the next
+   * generation once it is old. `false` when another acquirer owns the
+   * takeover, so the caller waits a moment before looking again.
    */
-  private async takeOverStaleLock(lockPath: string, observed: string): Promise<void> {
+  private async takeOverStaleLock(lockPath: string, observed: string): Promise<boolean> {
+    const contentKey = createHash("sha256").update(observed).digest("hex").slice(0, 16);
+    const claim = `${JSON.stringify({ pid: this.selfPid, claimedAt: this.now() })}\n`;
+    for (let generation = 0; generation < TAKEOVER_CLAIM_GENERATIONS; generation += 1) {
+      const claimPath = `${lockPath}.takeover-${contentKey}-${generation}`;
+      if (await this.fileSystem.createExclusive(claimPath, claim)) {
+        await this.removeObservedLock(lockPath, observed);
+        return true;
+      }
+      if (!this.isAbandonedClaim(await this.fileSystem.readText(claimPath))) return false;
+    }
+    return false;
+  }
+
+  private async removeObservedLock(lockPath: string, observed: string): Promise<void> {
+    if ((await this.fileSystem.readText(lockPath)) !== observed) return;
     const tombstone = `${lockPath}.stale-${randomUUID()}`;
     if (!(await this.fileSystem.rename(lockPath, tombstone))) return;
     const moved = await this.fileSystem.readText(tombstone);
@@ -380,9 +493,40 @@ export class TestRunStore {
     await this.fileSystem.removeFile(tombstone);
   }
 
+  private isAbandonedClaim(raw: string | null): boolean {
+    // A claim that vanished or does not parse yet is still being made.
+    if (raw === null) return false;
+    const claim = parseJson(raw);
+    if (!isRecordLike(claim) || typeof claim.claimedAt !== "string") return false;
+    const claimedMs = Date.parse(claim.claimedAt);
+    return !Number.isNaN(claimedMs) && this.clock().getTime() - claimedMs > TAKEOVER_CLAIM_STALE_MS;
+  }
+
+  /** Remove takeover claims old enough that no acquirer can still be acting on them. */
+  private async pruneTakeoverClaims(): Promise<void> {
+    for (const name of await this.fileSystem.listFiles(this.runsRoot)) {
+      if (!TAKEOVER_CLAIM_PATTERN.test(name)) continue;
+      const path = join(this.runsRoot, name);
+      const claim = parseJson((await this.fileSystem.readText(path)) ?? "");
+      const claimedMs =
+        isRecordLike(claim) && typeof claim.claimedAt === "string"
+          ? Date.parse(claim.claimedAt)
+          : Number.NaN;
+      if (Number.isNaN(claimedMs)) continue;
+      if (this.clock().getTime() - claimedMs > TAKEOVER_CLAIM_RETENTION_MS) {
+        await this.fileSystem.removeFile(path);
+      }
+    }
+  }
+
   private async crashReason(state: TestRunState): Promise<string | undefined> {
     if (state.runner !== null) {
-      if (await this.isSameProcessAlive(state.runner)) return undefined;
+      const verdict = await this.processVerdict(state.runner);
+      if (verdict === "same") return undefined;
+      if (verdict === "unverified") {
+        if (!this.heartbeatIsStale(state)) return undefined;
+        return `The test runner process ${state.runner.pid} sent no heartbeat for over ${Math.round(this.heartbeatStaleMs / 1000)} s and its identity cannot be verified; the run ended without a result.`;
+      }
       return `The test runner process ${state.runner.pid} is no longer running; the run ended without a result.`;
     }
     const ageMs = this.clock().getTime() - Date.parse(state.createdAt);
@@ -392,10 +536,28 @@ export class TestRunStore {
 
   /** `false` when the PID is gone or now belongs to another process (its start time differs). */
   private async isSameProcessAlive(identity: TestRunProcessIdentity): Promise<boolean> {
+    const verdict = await this.processVerdict(identity);
+    return verdict === "same" || verdict === "unverified";
+  }
+
+  /**
+   * `same` when the PID still runs the recorded process, `recycled` when it
+   * runs another one, `dead` when it is gone, and `unverified` when it runs
+   * but either start time is unknown, so its identity cannot be checked.
+   */
+  private async processVerdict(
+    identity: TestRunProcessIdentity,
+  ): Promise<"same" | "recycled" | "dead" | "unverified"> {
     const probe = await this.processProbe.inspect(identity.pid);
-    if (!probe.alive) return false;
-    if (identity.startTime === null || probe.startTime === null) return true;
-    return sameProcessStartTime(identity.startTime, probe.startTime);
+    if (!probe.alive) return "dead";
+    if (identity.startTime === null || probe.startTime === null) return "unverified";
+    return sameProcessStartTime(identity.startTime, probe.startTime) ? "same" : "recycled";
+  }
+
+  private heartbeatIsStale(state: TestRunState): boolean {
+    const updatedMs = Date.parse(state.updatedAt);
+    if (Number.isNaN(updatedMs)) return true;
+    return this.clock().getTime() - updatedMs > this.heartbeatStaleMs;
   }
 
   private async readLogTail(operationId: string): Promise<string[]> {
@@ -426,6 +588,14 @@ function parseJson(raw: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** The refusal a run (detached or synchronous) gets while `held` drives its database. */

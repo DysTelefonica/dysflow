@@ -7,6 +7,7 @@ import {
 import {
   isValidTestRunOperationId,
   TEST_RUN_MAX_WAIT_SECONDS,
+  TEST_RUN_READ_FAILED,
   TEST_RUN_WAIT_POLL_MS,
   type TestRunView,
 } from "../../core/test-runs/test-run-model.js";
@@ -31,6 +32,43 @@ export type TestRunPolling = {
   now: () => number;
 };
 
+/**
+ * Reads of a run's state that may fail for a moment (the runner replacing
+ * `state.json`, an antivirus holding it) before the run is judged unreadable.
+ */
+const READ_ATTEMPTS = 3;
+const READ_RETRY_MS = 50;
+
+type RunRead =
+  | { kind: "found"; view: TestRunView }
+  | { kind: "gone" }
+  | { kind: "unreadable"; reason: string };
+
+/**
+ * Read a run, retrying a state that cannot be read for a moment. A run is
+ * `gone` only when its directory no longer exists; a directory whose state
+ * stays unreadable is `unreadable`, never reported as not found.
+ */
+async function readRun(
+  store: TestRunStore,
+  operationId: string,
+  polling: TestRunPolling,
+): Promise<RunRead> {
+  let reason = "state.json is missing or unreadable";
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const view = await store.readTestRun(operationId);
+      if (view !== undefined) return { kind: "found", view };
+      reason = "state.json is missing or unreadable";
+      if (!(await store.runExists(operationId))) return { kind: "gone" };
+    } catch (err) {
+      reason = err instanceof Error ? err.message : String(err);
+    }
+    if (attempt >= READ_ATTEMPTS) return { kind: "unreadable", reason };
+    await polling.sleep(READ_RETRY_MS);
+  }
+}
+
 const realPolling: TestRunPolling = {
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => Date.now(),
@@ -51,6 +89,11 @@ export type GetTestRunToolOptions = {
  * carries the stored synchronous `test_vba` result (`structuredContent`), so
  * the caller reads the same `passed`/`failed`/`tests[]` or `VBA_TESTS_FAILED`
  * details a synchronous call returns.
+ *
+ * A run whose directory is gone answers `TEST_RUN_NOT_FOUND`. A run whose
+ * state cannot be read for a moment is retried; one that stays unreadable
+ * answers the retryable `TEST_RUN_READ_FAILED`, and a long-poll keeps the
+ * last state it read and polls on.
  */
 export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcpTool {
   const createStore = options.createStore ?? createNodeTestRunStore;
@@ -96,8 +139,8 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
       if (!root.ok) return root.error;
 
       const store = createStore(root.root);
-      let view = await store.readTestRun(params.operationId);
-      if (view === undefined) {
+      const first = await readRun(store, params.operationId, polling);
+      if (first.kind === "gone") {
         return translateCoreResultToMcpContent(
           failureResult(
             createDysflowError(
@@ -108,14 +151,37 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
           ),
         );
       }
+      if (first.kind === "unreadable") {
+        return translateCoreResultToMcpContent(
+          failureResult(
+            createDysflowError(
+              TEST_RUN_READ_FAILED,
+              `Test run '${params.operationId}' exists under ${root.root}, but its state could not be read: ${first.reason}`,
+              {
+                retryable: true,
+                remediation:
+                  "Call get_test_run again in a moment: the run exists, and its state file is being replaced or is held open by another process.",
+                details: {
+                  operationId: params.operationId,
+                  projectRoot: root.root,
+                  retryable: true,
+                },
+              },
+            ),
+          ),
+        );
+      }
+      let view = first.view;
       const deadline = polling.now() + waitSeconds(params.wait) * 1_000;
       while (view.status === "running") {
         const remaining = deadline - polling.now();
         if (remaining <= 0) break;
         await polling.sleep(Math.min(TEST_RUN_WAIT_POLL_MS, remaining));
-        const next = await store.readTestRun(params.operationId);
+        const next = await readRun(store, params.operationId, polling);
+        // An unreadable moment keeps the last state read; the poll goes on.
+        if (next.kind === "unreadable") continue;
         // A run pruned while waiting is gone: answer that, never a stale view.
-        if (next === undefined) {
+        if (next.kind === "gone") {
           return translateCoreResultToMcpContent(
             failureResult(
               createDysflowError(
@@ -132,7 +198,7 @@ export function createGetTestRunTool(options: GetTestRunToolOptions): DysflowMcp
             ),
           );
         }
-        view = next;
+        view = next.view;
       }
       return translateCoreResultToMcpContent(successResult(toTestRunResult(view)));
     },
