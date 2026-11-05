@@ -143,10 +143,18 @@ export function resolveToolSurface(
   return override ?? config?.mcp?.toolSurface ?? "core";
 }
 
-export async function startMcpStdioAdapter(
+export type StdioServerOptions = NonNullable<Parameters<typeof startWithSdkServer>[2]>;
+
+/**
+ * The tools and server options of the stdio MCP server, built from the
+ * startup config exactly as `startMcpStdioAdapter` serves them. Issue #1993 —
+ * the detached test runner calls `test_vba` through this same tool set, so its
+ * stored result equals the synchronous one.
+ */
+export async function createStdioToolRuntime(
   config?: DysflowConfig,
   options?: { writesEnabled?: boolean; toolSurfaceOverride?: ToolSurface },
-): Promise<void> {
+): Promise<{ tools: DysflowMcpTool[]; serverOptions: StdioServerOptions }> {
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   // Issue #1867 — the project resolve_project fixes for this session. The tool
@@ -230,7 +238,7 @@ export async function startMcpStdioAdapter(
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
   const fallbackTelemetryCwd = startupConfig?.projectRoot ?? process.cwd();
-  await startWithSdkServer(tools, undefined, {
+  const serverOptions: StdioServerOptions = {
     resultValidationPolicy: "enforce",
     toolSurface,
     // Issue #1459 — the advertisement stream follows the same enable flag as
@@ -261,7 +269,16 @@ export async function startMcpStdioAdapter(
         };
       },
     }),
-  });
+  };
+  return { tools, serverOptions };
+}
+
+export async function startMcpStdioAdapter(
+  config?: DysflowConfig,
+  options?: { writesEnabled?: boolean; toolSurfaceOverride?: ToolSurface },
+): Promise<void> {
+  const { tools, serverOptions } = await createStdioToolRuntime(config, options);
+  await startWithSdkServer(tools, undefined, serverOptions);
 }
 
 /**

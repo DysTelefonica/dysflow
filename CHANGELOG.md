@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changes
+
+- feat(test_vba): add the detached test-run core — run store under `.dysflow/runtime/test-runs/`, per-accessPath lock refusing with `TEST_RUN_ALREADY_ACTIVE`, crash derivation, retention of the last 20 runs and the internal `dysflow test-run` runner that replays `test_vba` through the MCP pipeline (#1993)
+
 ## [v4.5.7] - 2026-11-05
 
 v4.5.6 was tagged but its GitHub Release was not published: its exact-SHA quality authority failed because the #1990 Pester test declared a `Write-DysflowResult` stub that the DYSFLOW_RESULT writer contract scan took for a production result writer, and its end-to-end battery leaked two headless MSACCESS.EXE started by the Issue 1817 E2E editor helper after a spawn timeout. v4.5.7 is the first published release of the v4.5.5 and v4.5.6 content.

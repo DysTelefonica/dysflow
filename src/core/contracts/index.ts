@@ -426,10 +426,21 @@ export const VBA_IMPORT_SAVE_FAILED_REMEDIATION =
 export const VBA_PROJECT_UNAVAILABLE_REMEDIATION =
   "Access opened the database without a VBA project, so no module was read or changed; it is safe to retry. Run list_access_operations to reconcile a leftover Access operation on this file (access_force_cleanup_orphaned lists orphaned Access processes), then retry the same call. If it persists, check that the file is an editable .accdb/.mdb (an .accde/.mde has no editable VBA project) and open it once in Access to confirm the VBA project loads.";
 
+/**
+ * #1993 — a detached `test_vba` run already drives this accessPath. Tests run
+ * one Access at a time, so the new run is refused, never queued or started in
+ * parallel. `details.activeOperationId` names the run holding the database.
+ */
+export const TEST_RUN_ALREADY_ACTIVE = "TEST_RUN_ALREADY_ACTIVE";
+
+export const TEST_RUN_ALREADY_ACTIVE_REMEDIATION =
+  "A detached test run is already running against this database (details.activeOperationId). Wait for it to finish and read its result, then retry; tests never run two Access sessions on the same database.";
+
 /** Codes whose same call is expected to succeed once the reported condition clears. */
 const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set([
   "ACCESS_DATABASE_LOCKED",
   "VBA_PROJECT_UNAVAILABLE",
+  TEST_RUN_ALREADY_ACTIVE,
 ]);
 
 /**
@@ -439,6 +450,7 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   ACCESS_DATABASE_LOCKED: ACCESS_DATABASE_LOCKED_REMEDIATION,
   VBA_IMPORT_SAVE_FAILED: VBA_IMPORT_SAVE_FAILED_REMEDIATION,
   VBA_PROJECT_UNAVAILABLE: VBA_PROJECT_UNAVAILABLE_REMEDIATION,
+  [TEST_RUN_ALREADY_ACTIVE]: TEST_RUN_ALREADY_ACTIVE_REMEDIATION,
   FORM_CONTROL_NOT_FOUND:
     "Run dysflow.form_list_controls to enumerate existing controls in the form.",
   FORM_IMPORT_GATE_FAILED:
