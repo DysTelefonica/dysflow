@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changes
+
+- fix(orphans): attribute each orphan candidate from per-process evidence and refuse live or unattributed PIDs (#1991)
+
 ## [v4.5.5] - 2026-10-28
 
 ### Changes

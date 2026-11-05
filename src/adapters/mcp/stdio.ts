@@ -933,6 +933,22 @@ export function createDynamicServices(
         }
         return res.services.orphanCleanupService.listOrphans(request);
       },
+      listCandidates: async (request) => {
+        const res = await resolveService(request);
+        if (!res.ok) return failureResult(res.error);
+        const service = res.services.orphanCleanupService;
+        if (service === undefined) {
+          return failureResult({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Orphan cleanup service is not available.",
+            retryable: false,
+          });
+        }
+        if (service.listCandidates !== undefined) return service.listCandidates(request);
+        const listing = await service.listOrphans(request);
+        if (!listing.ok) return listing;
+        return successResult({ orphans: listing.data, unattributed: [] });
+      },
       cleanupOrphan: async (request) => {
         const res = await resolveService(request);
         if (!res.ok) return failureResult(res.error);

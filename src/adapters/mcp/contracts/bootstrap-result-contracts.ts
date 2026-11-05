@@ -284,6 +284,18 @@ const orphanCandidate = z
   })
   .strict();
 
+// Issue #1991 — a headless COM-launched Access no evidence ties to a database.
+const unattributedAccessProcess = z
+  .object({
+    pid: z.number().int(),
+    accessPath: z.null(),
+    kind: z.literal("access"),
+    startTime: z.string().optional(),
+    ageSeconds: z.number().int().nonnegative().optional(),
+    mainWindowHandle: z.number().optional(),
+  })
+  .strict();
+
 const preferredToolWarning = z
   .object({
     code: z.enum(["PREFERRED_TOOL_AVAILABLE", "LEGACY_TOOL_AVAILABLE"]),
@@ -303,6 +315,7 @@ export const orphanCleanupResultContract = defineResultContract({
       .object({
         orphans: z.array(orphanCandidate),
         totalCount: z.number().int().nonnegative(),
+        unattributed: z.array(unattributedAccessProcess).optional(),
         warnings: z.array(preferredToolWarning).optional(),
       })
       .strict(),

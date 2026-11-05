@@ -185,6 +185,9 @@ List orphaned headless `MSACCESS.EXE` processes holding the project's `accessPat
 * **Parameters**:
   - `projectId` / `accessPath` (optional): Resolve the frontend database whose lock holders should be inspected.
   - `pid` (number, optional): When omitted or `null`, the tool lists candidates only and needs no `allowWrites`. When a listed positive PID is given, the tool retires that one process without `allowWrites` (#1862) once `implements_check:"orphans_msaccess"` and `confirmedRequiresConfirmation:true` are passed. It still refuses non-headless, wrong-path, non-MSACCESS, or Dysflow-owned processes, and a process that names an Access database outside the project.
+* **Attribution (#1991)**: the listing returns `{ orphans, totalCount, unattributed }`. An orphan's `accessPath` comes from evidence about that process, never from the caller's project: either its command line names the project's `accessPath`, or a finished Dysflow operation of this project (`timed_out`, `failed`, `cleanup_pending`, ...) recorded its PID with the same start time. A COM-launched `MSACCESS.EXE -Embedding` names no database, so without such a record it is reported in `unattributed[]` with `accessPath: null`. It may be another session's live run.
+  - A PID recorded by a live operation (`starting`, `running`, `running_untracked`) is never listed and a retire refuses it with `ORPHAN_CLEANUP_REGISTRY_OWNED`.
+  - A retire of a PID without that evidence fails closed with `ORPHAN_CLEANUP_PATH_UNVERIFIED`. The `-Embedding` profile alone no longer proves ownership; that relaxation (#1016) was withdrawn.
 
 ### `bootstrap`
 Minimal first-call read-only surface. Returns adapter version, write-gate state,

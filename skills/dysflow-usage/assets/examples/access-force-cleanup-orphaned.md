@@ -22,7 +22,7 @@ Safely identify (and optionally kill) `MSACCESS.EXE` processes that hold the pro
 }
 ```
 
-Response: array of orphan `MSACCESS.EXE` candidates that hold this path and are not in the registry.
+Response: `orphans[]` lists only the `MSACCESS.EXE` processes whose own evidence ties them to this path: a command line that names it, or a finished dysflow operation of this project (for example `timed_out`) that recorded the PID. `unattributed[]` lists headless COM-launched Access that nothing ties to a database; their `accessPath` is `null`, they may be another session's live run, and they are never kill candidates. A PID recorded by a live operation (`starting` / `running`) is never listed.
 
 ## Step 2 — kill a specific PID (gated)
 
@@ -39,11 +39,11 @@ Response: array of orphan `MSACCESS.EXE` candidates that hold this path and are 
 }
 ```
 
-The tool enforces: headless only; correct `accessPath`; not in registry. Refusal is a signal to leave that PID alone.
+The tool enforces: headless only; not owned by a live operation (`ORPHAN_CLEANUP_REGISTRY_OWNED`); per-process evidence that it holds this `accessPath`. A PID with no such evidence is refused with `ORPHAN_CLEANUP_PATH_UNVERIFIED`, including a bare `-Embedding` process. Refusal is a signal to leave that PID alone.
 
 ## Anti-patterns for this call
 
-- Don't pass a `pid` that didn't appear in step 1's listing. The tool's safety checks catch this; treat a refusal as authoritative.
+- Don't pass a `pid` that didn't appear in step 1's `orphans[]`. An `unattributed[]` PID is refused; treat a refusal as authoritative.
 - Don't pass `force:true` to `cleanup_access_operation` to "skip" registry checks. `force` is escalation, not opt-out.
 - Don't use `Get-Process -Name MSACCESS` as a basis for `pid`. That command cannot distinguish dysflow's spawn from a foreign one.
 - Don't assume step 1 alone clears locks. The candidate PID stays alive until you re-call with the confirmed `pid`.
@@ -51,7 +51,7 @@ The tool enforces: headless only; correct `accessPath`; not in registry. Refusal
 
 ## Result shape (what the agent reads back)
 
-- Step 1: `orphans[]` plus `totalCount`. Each orphan includes `{ pid, accessPath, kind, startTime, ageSeconds, mainWindowHandle }`.
+- Step 1: `orphans[]` plus `totalCount` (the number of orphans) and `unattributed[]`. Each orphan includes `{ pid, accessPath, kind, startTime, ageSeconds, mainWindowHandle }`; each unattributed entry has the same fields with `accessPath: null`.
 - Step 2: `killed[]`, `refused[]`, `errors[]`, and optional `syntheticOperationId`.
 
 ## Live verification

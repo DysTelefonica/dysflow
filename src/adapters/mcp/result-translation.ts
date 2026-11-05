@@ -13,6 +13,7 @@ import type {
 import type {
   AccessOrphanCandidate,
   AccessOrphanCleanupResult,
+  AccessOrphanListing,
 } from "../../core/operations/access-orphan-cleanup.js";
 import type { CleanStaleMarkersService } from "../../core/operations/clean-stale-markers-service.js";
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
@@ -388,6 +389,15 @@ export type DysflowMcpServices = {
       accessPath?: string;
       projectRoot?: string;
     }): Promise<OperationResult<AccessOrphanCandidate[]>>;
+    /**
+     * Issue #1991 — orphans plus the headless COM-launched Access processes no
+     * evidence ties to a database. Optional so a service that only lists
+     * orphans keeps working; the handler then reports no unattributed entries.
+     */
+    listCandidates?(request: {
+      accessPath: string;
+      projectRoot: string;
+    }): Promise<OperationResult<AccessOrphanListing>>;
     cleanupOrphan(request: {
       accessPath: string;
       projectRoot: string;

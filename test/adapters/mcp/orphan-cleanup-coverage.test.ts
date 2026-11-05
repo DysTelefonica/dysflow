@@ -24,7 +24,23 @@ function makeOrphan(pid: number): OsProcessInfo {
   };
 }
 
-function makeServices(processes: OsProcessInfo[]) {
+// Issue #1991 — a COM child names no database, so each orphan here is tied to
+// the project by the timed_out operation that recorded its PID.
+async function makeServices(processes: OsProcessInfo[]) {
+  const registry = createInMemoryAccessOperationRegistry();
+  for (const process of processes) {
+    await registry.create({
+      operationId: `op-timed-out-${process.pid}`,
+      action: "vba",
+      accessPath: ACCESS_PATH,
+      projectRootAbs: PROJECT_ROOT,
+      accessPid: process.pid,
+      processStartTime: process.startTime ?? null,
+      status: "timed_out",
+      metadata: {},
+      updatedAt: "2026-07-31T11:55:00.000Z",
+    });
+  }
   const killed: number[] = [];
   const scanner: ProcessScanner = { listProcesses: async () => processes };
   const inspector: ProcessInspector = {
@@ -36,7 +52,7 @@ function makeServices(processes: OsProcessInfo[]) {
     },
   };
   const orphanCleanupService = new AccessOrphanCleanupService({
-    registry: createInMemoryAccessOperationRegistry(),
+    registry,
     processScanner: scanner,
     processInspector: inspector,
     processKiller: killer,
@@ -46,9 +62,9 @@ function makeServices(processes: OsProcessInfo[]) {
 }
 
 describe("orphan cleanup tools enumerate all orphans", () => {
-  it("returns every unowned headless MSACCESS COM orphan with totalCount and age", async () => {
+  it("returns every unowned headless MSACCESS COM orphan its operation records tie to the project", async () => {
     const processes = [makeOrphan(20_824), makeOrphan(31_444)];
-    const { orphanCleanupService } = makeServices(processes);
+    const { orphanCleanupService } = await makeServices(processes);
     const tools = createDysflowMcpTools({
       services: {
         vbaService: { execute: async () => successResult({ returnValue: "ok" }) },
@@ -75,7 +91,7 @@ describe("orphan cleanup tools enumerate all orphans", () => {
 
   it("requires typed confirmation and cleans only the explicitly selected orphan PID", async () => {
     const processes = [makeOrphan(20_824), makeOrphan(31_444)];
-    const { orphanCleanupService, killed } = makeServices(processes);
+    const { orphanCleanupService, killed } = await makeServices(processes);
     const tools = createDysflowMcpTools({
       services: {
         vbaService: { execute: async () => successResult({ returnValue: "ok" }) },

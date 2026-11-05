@@ -18,6 +18,7 @@ This page exists so a reader — human or agent — does not invent them, reintr
 | Auth, login, OAuth, session, or tenant boundary | Not implemented. |
 | Git-clone or source-build update *fallback* | Not found. No failure ever falls back to a source build. The `main` channel builds from source only when an operator names it and sets `DYSFLOW_ALLOW_INSECURE_UPDATE=1`. |
 | Termination of `MSACCESS.EXE` by process name | Not implemented. |
+| Orphan retire of a bare `-Embedding` / `/automation` `MSACCESS.EXE` on its command-line profile alone (#1016) | Removed after v4.5.5 (#1991). Another session's live run has the same profile. `access_force_cleanup_orphaned` now needs a command line that names the project's `accessPath` or a finished Dysflow operation of this project that recorded the PID, and refuses anything else with `ORPHAN_CLEANUP_PATH_UNVERIFIED`. |
 
 ## What Exists Instead
 
