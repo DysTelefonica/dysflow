@@ -32,7 +32,7 @@ Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to e
 | Validate a test manifest | `validate_manifest({cwd, testsPath:"tests/tests.vba.json"})` |
 | Run the tests | `test_vba({cwd, testsPath:"tests/tests.vba.json"})` |
 | Lint a module before import | `lint_module({cwd, module:"<Module>"})` |
-| Lint form code | `lint_form_code({cwd, destinationRoot:"<worktree>/src", moduleNames:["<Form_Name>"]})` |
+| Lint form code | `lint_form_code({cwd, moduleNames:["<Form_Name>"]})` |
 | Inspect a form read-only | `analyze_form_ui({cwd, sourcePath:"<worktree>/src/forms/<Form_Name>.form.txt"})` |
 | Regenerate the schema diagram | `generate_erd({cwd})` |
 | Find the references to a symbol | `find_references({cwd, symbol:"<Name>", scope:"source"})` |
