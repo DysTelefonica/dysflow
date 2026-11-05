@@ -28,7 +28,6 @@ function Get-MockAccessApplication {
     $mockVbProject = [PSCustomObject]@{ }
 
     $mockAccess = [PSCustomObject]@{
-        hWndAccessApp              = [IntPtr]1234
         AutomationSecurity         = 1
         Visible                    = $false
         UserControl                = $false
@@ -37,6 +36,8 @@ function Get-MockAccessApplication {
         VbProject                  = $mockVbProject
     }
 
+    # A real Access.Application exposes hWndAccessApp as a method, not a property.
+    $mockAccess | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]1234 }
     $mockAccess | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
         param($dbPath, $exclusive, $password)
         Register-MockDatabaseOpen -Kind 'access' -DatabasePath ([string]$dbPath) -ReadOnly $false

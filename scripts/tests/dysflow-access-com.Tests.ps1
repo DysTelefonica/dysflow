@@ -372,7 +372,7 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
     # -----------------------------------------------------------------------
     # Helper: build a fake Access.Application COM double
     # -----------------------------------------------------------------------
-    # hWndAccessApp : value returned from .hWndAccessApp
+    # hWndAccessApp : value returned from .hWndAccessApp() (a method, like real COM)
     # openDbCalled  : reference array — element 0 set to $true when OpenCurrentDatabase is called
     function script:New-FakeAccessApp {
         param(
@@ -380,7 +380,7 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
             [ref]$openDbCalledRef   = ([ref]$null)
         )
         $fake = [PSCustomObject]@{
-            hWndAccessApp      = $hWndAccessApp
+            HwndValue          = $hWndAccessApp
             AutomationSecurity = 3   # msoAutomationSecurityByUI
             # #730 — the canonical open forces these to `$false` BEFORE OpenCurrentDatabase.
             # Initialize them to `$true` (the real COM default) so the test asserts the
@@ -389,6 +389,8 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
             UserControl        = $true
             _openDbCalledRef   = $openDbCalledRef
         }
+        # hWndAccessApp is a method on the real COM object, not a property.
+        $fake | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]$this.HwndValue }
         $fake | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
             param($Path, $Exclusive, $Password)
             if ($null -ne $this._openDbCalledRef -and $null -ne $this._openDbCalledRef.Value) {
@@ -810,8 +812,8 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
                 Visible            = $true
                 UserControl        = $true
                 AutomationSecurity = 3
-                hWndAccessApp      = 0
             }
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]::Zero }
             $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
                 param($Path, $Exclusive, $Password)
                 $openDbCalls.Add("called")
@@ -848,8 +850,8 @@ Describe "Open-CanonicalAccess / Close-CanonicalAccess (Slice 3) — port tests"
                 # OpenCurrentDatabase (which is invoked by the implementation) and
                 # verify the throw surfaces at the canonical-open level instead.
                 AutomationSecurity = 3
-                hWndAccessApp      = 0
             }
+            $fakeApp | Add-Member -MemberType ScriptMethod -Name hWndAccessApp -Value { [IntPtr]::Zero }
             $fakeApp | Add-Member -MemberType NoteProperty -Name Visible -Value $true
             $fakeApp | Add-Member -MemberType NoteProperty -Name UserControl -Value $true
             $fakeApp | Add-Member -MemberType ScriptMethod -Name OpenCurrentDatabase -Value {
