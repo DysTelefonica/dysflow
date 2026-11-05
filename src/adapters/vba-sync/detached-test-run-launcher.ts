@@ -22,14 +22,16 @@ import { logSwallowedIoError } from "../../core/utils/log-swallowed-io-error.js"
 import { createNodeTestRunStore, spawnDetachedTestRunner } from "../test-runs/index.js";
 
 /**
- * Start the hidden runner on a prepared run directory and return its PID.
+ * Start the hidden runner on a prepared run directory and return its PID, or
+ * `null` when the launch may or may not have created it (an ambiguous WMI
+ * launch): no second runner is started, and the run's records decide.
  * `onError` reports a spawn that fails after the PID was returned.
  */
 export type SpawnTestRunner = (
   runDir: string,
   env: Record<string, string | undefined>,
   onError: (err: unknown) => void,
-) => number | Promise<number>;
+) => number | null | Promise<number | null>;
 
 /** Injectable I/O of the detached `test_vba` route; tests fake the spawn and the probe. */
 export type DetachedTestRunSeams = {

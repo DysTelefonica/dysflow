@@ -148,6 +148,13 @@ type VbaManagerOperationMarker = {
 /** Issue #1990 — how often a running operation's marker is re-read. */
 const DEFAULT_MARKER_POLL_INTERVAL_MS = 1_000;
 
+/**
+ * Issue #1993 — the longest a live run's registry record goes without a fresh
+ * `updatedAt`, well under the registry's start window, so a run whose Access
+ * PID is not attributed yet still reads as live to a detached start.
+ */
+const REGISTRY_HEARTBEAT_MS = 30_000;
+
 export type VbaManagerExecutor = (
   request: VbaManagerExecutionRequest,
 ) => Promise<VbaManagerExecutionResult>;
@@ -1297,6 +1304,10 @@ export class VbaSyncAdapter implements VbaSyncPort {
    * `metadata.testProgress`; new finished tests are reported to the caller's
    * progress callback. The returned stop function waits for an in-flight read,
    * so no poll can land after the terminal update.
+   *
+   * Issue #1993 — when nothing changed for {@link REGISTRY_HEARTBEAT_MS}, the
+   * poll refreshes only the record's `updatedAt`, so a live run stays fresh
+   * through a long test even before its Access PID is known.
    */
   private watchOperationMarker(
     operation: TrackedVbaManagerOperation | undefined,
@@ -1308,11 +1319,19 @@ export class VbaSyncAdapter implements VbaSyncPort {
     let timer: NodeJS.Timeout | undefined;
     let inFlight: Promise<void> = Promise.resolve();
     let recordedPid: number | undefined;
+    let lastWriteMs = Date.now();
     const poll = async (): Promise<void> => {
       const marker = await readVbaManagerOperationMarker(operation.operationFile);
       const progressChanged = progress.observe(marker.progress);
       const pidChanged = marker.accessPid !== undefined && marker.accessPid !== recordedPid;
-      if (stopped || (!progressChanged && !pidChanged)) return;
+      if (stopped) return;
+      if (!progressChanged && !pidChanged) {
+        if (Date.now() - lastWriteMs < REGISTRY_HEARTBEAT_MS) return;
+        lastWriteMs = Date.now();
+        await registry.update(operation.operationId, { updatedAt: new Date().toISOString() });
+        return;
+      }
+      lastWriteMs = Date.now();
       recordedPid = marker.accessPid ?? recordedPid;
       const testProgress = progress.latest;
       await registry.update(operation.operationId, {

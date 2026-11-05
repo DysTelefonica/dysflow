@@ -39,6 +39,7 @@ export const TEST_RUN_FILES = {
   state: "state.json",
   result: "result.json",
   log: "runner.log",
+  runnerClaim: "runner-claim.json",
 } as const;
 
 /** `<projectRoot>/.dysflow/runtime/test-runs` — every run directory and lock lives here. */
@@ -220,6 +221,20 @@ export class TestRunStore {
     const next = { ...update(current), updatedAt: this.now() };
     await this.writeJson(this.runFile(operationId, "state"), next);
     return next;
+  }
+
+  /**
+   * Claim the run for the runner `identity`, once: the first runner started
+   * for a run creates its claim exclusively, and every other runner started
+   * for the same run (an ambiguous launch that did create one) is refused.
+   * `true` when `identity` holds the claim.
+   */
+  async claimRunner(operationId: string, identity: TestRunProcessIdentity): Promise<boolean> {
+    const path = this.runFile(operationId, "runnerClaim");
+    const text = `${JSON.stringify({ ...identity, claimedAt: this.now() }, null, 2)}\n`;
+    if (await this.fileSystem.createExclusive(path, text)) return true;
+    const held = await this.readJson(path);
+    return isRecordLike(held) && held.pid === identity.pid;
   }
 
   async writeResult(operationId: string, result: unknown): Promise<void> {

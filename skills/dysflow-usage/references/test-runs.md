@@ -31,7 +31,7 @@ A synchronous `test_vba` holds the MCP call until the last test ends. A plan tha
    { "mode": "apply", "detached": true, "operationId": "<id>", "status": "running", "testsPlanned": 12, "fetchWith": { "tool": "get_test_run", "operationId": "<id>" } }
    ```
 
-2. **Keep working.** The run does not depend on the MCP call, the client or the session: a client timeout, a reconnect or a new session does not stop it. On Windows the runner is created through WMI, outside the MCP host's Job Object, so even a host that kills its whole job on exit leaves it running; `state.json` `launchMethod` reads `wmi`, or `spawn` where WMI was not available.
+2. **Keep working.** The run does not depend on the MCP call, the client or the session: a client timeout, a reconnect or a new session does not stop it. On Windows the runner is created through WMI, outside the MCP host's Job Object, so even a host that kills its whole job on exit leaves it running; `state.json` `launchMethod` reads `wmi`, or `spawn` where WMI certainly created no runner. A launch whose outcome is unknown never starts a second runner: if no runner records itself, the run reads `crashed` once the start grace ends, and you start it again.
 3. **Fetch the result.** Call `get_test_run({cwd, operationId:"<id>", wait:45})`. It returns `status` (`running`, `passed`, `failed`, `cancelled` or `crashed`) and `progress` `{ completed, planned, currentTest, passed, failed }`. `wait` re-reads the run once a second until it ends, for at most 50 s, so repeat the call while `status` is `running`. Once the run ended, `result` is the `structuredContent` the synchronous `test_vba` returns: `passed`, `failed` and `tests[]`, or the `VBA_TESTS_FAILED` envelope with `error.details.failures[]`.
 
 Rules the runtime enforces:

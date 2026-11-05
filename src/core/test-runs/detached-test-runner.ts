@@ -3,6 +3,7 @@ import {
   applyTestVbaNotification,
   finalProgressForResult,
   innerAccessOperationId,
+  TERMINAL_TEST_RUN_STATUSES,
   TEST_RUN_HEARTBEAT_INTERVAL_MS,
   TEST_RUN_INVOCATION_FAILED,
   TEST_RUN_REQUEST_UNREADABLE,
@@ -34,6 +35,9 @@ export type DetachedTestRunOutcome = {
   exitCode: number;
 };
 
+/** Exit code of a runner that found its run owned by another runner and did nothing. */
+export const DUPLICATE_RUNNER_EXIT_CODE = 3;
+
 /**
  * Issue #1993 D2 — the body of the hidden `dysflow test-run` command.
  *
@@ -47,6 +51,11 @@ export type DetachedTestRunOutcome = {
  *
  * Every way the run ends leaves a terminal state and releases the lock: a
  * request that cannot be read, a refused lock, an invocation that throws.
+ *
+ * A run has one runner (#1993 S2): a runner that cannot claim its run, or
+ * whose `state.json` already names another runner or a finished run, exits
+ * with {@link DUPLICATE_RUNNER_EXIT_CODE} without touching Access, the state
+ * or the lock.
  */
 export async function runDetachedTestRun(options: {
   store: TestRunStore;
@@ -72,6 +81,15 @@ export async function runDetachedTestRun(options: {
     if (state === undefined) return { operationId, status: "crashed", exitCode: 2 };
     await store.releaseLock(state.accessPath, operationId);
     return { operationId, status: "failed", exitCode: 1 };
+  }
+  const owned = await store.claimRunner(operationId, runner);
+  const current = await store.readState(operationId);
+  if (!owned || (current !== undefined && ownedElsewhere(current, runner.pid))) {
+    return {
+      operationId,
+      status: current?.status ?? "running",
+      exitCode: DUPLICATE_RUNNER_EXIT_CODE,
+    };
   }
   const lock = await store.acquireLock(request.accessPath, { operationId, ...runner });
   if (!lock.ok) {
@@ -153,6 +171,12 @@ export async function runDetachedTestRun(options: {
     await stateWrites;
     await store.releaseLock(request.accessPath, operationId);
   }
+}
+
+/** The run already finished, or `state.json` names a runner other than `pid`. */
+function ownedElsewhere(state: TestRunState, pid: number): boolean {
+  if (TERMINAL_TEST_RUN_STATUSES.has(state.status)) return true;
+  return state.runner !== null && state.runner.pid !== pid;
 }
 
 function endWith(

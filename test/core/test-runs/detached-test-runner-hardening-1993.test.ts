@@ -150,3 +150,58 @@ describe("launch method (R3-job-object-survival)", () => {
     expect((await readState(operationId)).launchMethod).toBe("wmi");
   });
 });
+
+describe("one runner per run (#1993 S2, R3/R4-wmi-timeout-double-runner)", () => {
+  it("lets exactly one of two runners started for the same run drive test_vba", async () => {
+    const target = store();
+    const operationId = await prepare(target);
+    let invocations = 0;
+    let release: () => void = () => undefined;
+    const running = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const invoke = async () => {
+      invocations += 1;
+      await running;
+      return PASSED;
+    };
+
+    const first = runDetachedTestRun({ store: target, operationId, runnerPid: 200, invoke });
+    const second = runDetachedTestRun({ store: target, operationId, runnerPid: 300, invoke });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    release();
+    const outcomes = await Promise.all([first, second]);
+
+    expect(invocations).toBe(1);
+    expect(outcomes.filter((outcome) => outcome.exitCode === 3)).toHaveLength(1);
+    await expect(target.readTestRun(operationId)).resolves.toMatchObject({ status: "passed" });
+  });
+
+  it("exits without touching Access or the lock when state.json records another live runner", async () => {
+    const target = store();
+    const operationId = await prepare(target);
+    await target.updateState(operationId, (state) => ({
+      ...state,
+      runner: { pid: 200, startTime: STARTED },
+    }));
+    await target.acquireLock(ACCESS_PATH, { operationId, pid: 200, startTime: STARTED });
+    const lockBefore = await target.getActiveDetachedRun(ACCESS_PATH);
+    const stateBefore = await readState(operationId);
+    let invoked = false;
+
+    const outcome = await runDetachedTestRun({
+      store: target,
+      operationId,
+      runnerPid: 300,
+      invoke: async () => {
+        invoked = true;
+        return PASSED;
+      },
+    });
+
+    expect(invoked).toBe(false);
+    expect(outcome).toMatchObject({ operationId, status: "running", exitCode: 3 });
+    await expect(target.getActiveDetachedRun(ACCESS_PATH)).resolves.toEqual(lockBefore);
+    expect(await readState(operationId)).toEqual(stateBefore);
+  });
+});

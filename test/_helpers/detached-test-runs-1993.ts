@@ -77,7 +77,7 @@ export type SpawnRunner = (
   runDir: string,
   env: Record<string, string | undefined>,
   onError: (err: unknown) => void,
-) => number | Promise<number>;
+) => number | null | Promise<number | null>;
 
 export class DetachedRunHarness {
   readonly root: string;

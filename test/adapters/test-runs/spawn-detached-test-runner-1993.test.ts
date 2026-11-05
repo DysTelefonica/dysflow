@@ -18,6 +18,11 @@ import {
   resolveCliEntryPoint,
   spawnDetachedTestRunner,
 } from "../../../src/adapters/test-runs/index";
+import {
+  createPowerShellRunner,
+  resolveWindowsCmdPath,
+  resolveWindowsPowerShellPath,
+} from "../../../src/adapters/test-runs/spawn-detached-test-runner";
 import { resolveTestRunsRoot } from "../../../src/core/test-runs/test-run-store";
 
 let projectRoot: string;
@@ -250,5 +255,188 @@ describe("escaping the MCP host's Job Object on Windows (#1993 R3-job-object-sur
 
     expect(launch).toEqual({ pid: 4242, method: "spawn" });
     expect(powershell.calls).toEqual([]);
+  });
+});
+
+/** A bootstrap that answered with `stdout` (and possibly timed out) after reaching its stages. */
+function answeringPowerShell(answer: {
+  stdout: string;
+  exitCode?: number | null;
+  timedOut?: boolean;
+}) {
+  const calls: PowerShellCall[] = [];
+  const runPowerShell = async (args: readonly string[], stdin: string) => {
+    calls.push({ args, stdin });
+    return {
+      exitCode: answer.exitCode === undefined ? 0 : answer.exitCode,
+      stdout: answer.stdout,
+      stderr: "",
+      ...(answer.timedOut === undefined ? {} : { timedOut: answer.timedOut }),
+    };
+  };
+  return { runPowerShell, calls };
+}
+
+describe("an ambiguous WMI launch never starts a second runner (#1993 R3/R4-wmi-timeout-double-runner)", () => {
+  it("does not spawn when the bootstrap timed out after it may have created the runner", async () => {
+    const fake = fakeSpawn(4242);
+    // WMI already created the runner, but the bootstrap never reported it in time.
+    const powershell = answeringPowerShell({
+      stdout: "DYSFLOW_WMI_STAGE create\n",
+      exitCode: null,
+      timedOut: true,
+    });
+
+    const launch = await spawnDetachedTestRunner(
+      runDir,
+      {},
+      {
+        entryPoint: ENTRY,
+        spawnProcess: fake.spawnProcess,
+        platform: "win32",
+        runPowerShell: powershell.runPowerShell,
+        comSpec: COMSPEC,
+      },
+    );
+
+    expect(fake.calls).toEqual([]);
+    expect(launch).toMatchObject({ pid: null, method: "wmi", launchAmbiguous: true });
+    expect(launch.launchAmbiguous && launch.reason).toMatch(/did not answer/);
+  });
+
+  it("does not spawn when the bootstrap reached Win32_Process.Create but reported no result", async () => {
+    const fake = fakeSpawn(4242);
+    const powershell = answeringPowerShell({ stdout: "DYSFLOW_WMI_STAGE create\n", exitCode: 1 });
+
+    const launch = await spawnDetachedTestRunner(
+      runDir,
+      {},
+      {
+        entryPoint: ENTRY,
+        spawnProcess: fake.spawnProcess,
+        platform: "win32",
+        runPowerShell: powershell.runPowerShell,
+        comSpec: COMSPEC,
+      },
+    );
+
+    expect(fake.calls).toEqual([]);
+    expect(launch).toMatchObject({ pid: null, method: "wmi", launchAmbiguous: true });
+  });
+
+  it("still falls back when the bootstrap failed before it called Win32_Process.Create", async () => {
+    const fake = fakeSpawn(4242);
+    const powershell = answeringPowerShell({ stdout: "", exitCode: 1 });
+
+    const launch = await spawnDetachedTestRunner(
+      runDir,
+      {},
+      {
+        entryPoint: ENTRY,
+        spawnProcess: fake.spawnProcess,
+        platform: "win32",
+        runPowerShell: powershell.runPowerShell,
+        comSpec: COMSPEC,
+      },
+    );
+
+    expect(launch).toMatchObject({ pid: 4242, method: "spawn" });
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("announces the Create stage on stdout before calling Win32_Process.Create", async () => {
+    const powershell = fakePowerShell("DYSFLOW_WMI_CREATE 0 5150");
+
+    await spawnDetachedTestRunner(
+      runDir,
+      {},
+      {
+        entryPoint: ENTRY,
+        spawnProcess: fakeSpawn(4242).spawnProcess,
+        platform: "win32",
+        runPowerShell: powershell.runPowerShell,
+        comSpec: COMSPEC,
+      },
+    );
+
+    const script = decodeEncodedCommand(powershell.calls[0]?.args ?? []);
+    const stage = script.indexOf("DYSFLOW_WMI_STAGE create");
+    expect(stage).toBeGreaterThan(-1);
+    expect(stage).toBeLessThan(script.indexOf(".Create($commandLine"));
+  });
+});
+
+describe("Windows binaries by absolute path (#1993 R1-bare-powershell-lookup)", () => {
+  it("resolves powershell.exe and cmd.exe under %SystemRoot%, never through PATH", () => {
+    expect(resolveWindowsPowerShellPath({ SystemRoot: "D:\\Win" })).toBe(
+      "D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    );
+    expect(resolveWindowsCmdPath({ SystemRoot: "D:\\Win" })).toBe("D:\\Win\\System32\\cmd.exe");
+    expect(resolveWindowsPowerShellPath({ windir: "E:\\Windows" })).toBe(
+      "E:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    );
+    for (const env of [
+      {},
+      { SystemRoot: "Windows" },
+      { SystemRoot: "C:\\%PATH%" },
+      { SystemRoot: '"C:\\x"' },
+    ]) {
+      expect(resolveWindowsPowerShellPath(env)).toBe(
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      );
+      expect(resolveWindowsCmdPath(env)).toBe("C:\\Windows\\System32\\cmd.exe");
+    }
+  });
+
+  it("starts the WMI bootstrap through the absolute powershell.exe", async () => {
+    const commands: string[] = [];
+    const spawnProcess = ((command: string) => {
+      commands.push(command);
+      const handlers: Record<string, (value: unknown) => void> = {};
+      const stream = { setEncoding: () => stream, on: () => stream };
+      const child = {
+        stdout: {
+          setEncoding: () => ({
+            on: (_event: string, listener: (chunk: string) => void) => {
+              setImmediate(() => listener("DYSFLOW_WMI_CREATE 0 5150"));
+            },
+          }),
+        },
+        stderr: stream,
+        stdin: { on: () => undefined, end: () => setImmediate(() => handlers.close?.(0)) },
+        on: (event: string, listener: (value: unknown) => void) => {
+          handlers[event] = listener;
+        },
+        kill: () => undefined,
+      };
+      return child;
+    }) as unknown as typeof spawn;
+    const runPowerShell = createPowerShellRunner({
+      command: resolveWindowsPowerShellPath({ SystemRoot: "D:\\Win" }),
+      spawnProcess,
+    });
+
+    const answer = await runPowerShell(["-NoProfile"], "");
+
+    expect(commands).toEqual(["D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"]);
+    expect(answer.stdout).toContain("DYSFLOW_WMI_CREATE 0 5150");
+  });
+
+  it("wraps the runner in the absolute cmd.exe when no comSpec is given", async () => {
+    const powershell = fakePowerShell("DYSFLOW_WMI_CREATE 0 5150");
+
+    await spawnDetachedTestRunner(
+      runDir,
+      {},
+      {
+        entryPoint: ENTRY,
+        platform: "win32",
+        runPowerShell: powershell.runPowerShell,
+        systemEnv: { SystemRoot: "D:\\Win", ComSpec: "cmd.exe" },
+      },
+    );
+
+    const input = decodeBootstrapInput(powershell.calls[0]?.stdin ?? "");
+    expect(input.commandLine?.startsWith('"D:\\Win\\System32\\cmd.exe" ')).toBe(true);
   });
 });
