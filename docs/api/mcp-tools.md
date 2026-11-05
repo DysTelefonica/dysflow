@@ -363,6 +363,22 @@ It returns `valid`, separate `errors`/`warnings`, and a `summary`.
   - `modules` (object, optional): Key-value pair of module names to inline VBA source code.
   - `projectId`, `contextId`, `destinationRoot`, `projectRoot` (optional context/overrides)
 
+### `get_test_run`
+Read a detached `test_vba` run (#1993). Read-only.
+
+The tool reads only the run's own files under `<projectRoot>/.dysflow/runtime/test-runs/<operationId>/`. It never opens Access and never takes the operation registry lock, so it answers while the run is still driving Access.
+
+It returns `operationId`, `status` (`running`, `passed`, `failed`, `cancelled` or `crashed`), `progress` `{ completed, planned, currentTest, passed, failed }`, `runner`, `createdAt`, `updatedAt` and `finishedAt`.
+
+Once the run ended, `result` holds the `structuredContent` the synchronous `test_vba` returned for the same plan: `mode`, `passed`, `failed` and `tests[]` for a passing run, or the `VBA_TESTS_FAILED` error envelope with `error.details` `{ failedCount, failures[], results[] }` for a failing one.
+
+A run whose runner process died, or whose runner never recorded itself within 60 s, reads as `crashed` with `crash.reason` and `crash.logTail` (the end of `runner.log`). `cancelled` is reserved and not produced today; stop a detached run through the cleanup tools.
+* **Parameters**:
+  - `operationId` (string, **required**): the `operationId` that `test_vba` returned with `detach:true`.
+  - `wait` (number, optional): seconds to wait for the run to end, re-reading it once a second. Capped at 50 s, so a 60 s client timeout is never reached. Omit it to read once.
+  - `projectId` (optional): the project whose runs are read; defaults to the session project.
+* **Errors**: `TEST_RUN_NOT_FOUND` when the project has no such run (never started, or pruned: the last 20 runs are kept); `MCP_INPUT_INVALID` when `operationId` is not a run id.
+
 ### `lint_module`
 Lint one `.bas`/`.cls` VBA module before importing it into Access. Read-only.
 
@@ -585,7 +601,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
 * **`fix_encoding`**: Normalize leading UTF-8 BOM artifacts in source files and round-trip affected module encoding in the binary. It does not restore lossy mojibake characters.
   - Parameters: `location` (string, optional), `timeoutMs` (number, optional)
 * **`test_vba`**: Execute VBA unit tests.
-  - Parameters: `proceduresJson` (string, optional), `filter` (string or `{ tag }` object, optional), `testsPath` (string, optional), `apply` (boolean, optional), `timeoutMs` (number, optional)
+  - Parameters: `proceduresJson` (string, optional), `filter` (string or `{ tag }` object, optional), `testsPath` (string, optional), `apply` (boolean, optional), `detach` (boolean, optional), `timeoutMs` (number, optional)
   - `filter` accepts a string (`"smoke"` or `"smoke|regression"`, case-insensitive substring over name, procedure and tags) or an object `{ "tag": "smoke" }` (tags only). The inputSchema declares both shapes as `anyOf`; the `schema` and `describe_tool` parameter projections report `type: "union"` with the same `anyOf` alternatives. Any other object is rejected with `MCP_INPUT_INVALID`.
   - With writes disabled, `MCP_WRITES_DISABLED` recovery is `apply:false` (plan without executing); `test_vba` has no `dryRun` input.
   - `proceduresJson` is a JSON-encoded **string** that parses to an array of tests (or an object with a `tests` array). Each test is either a procedure-name string — shorthand for no args — or an object `{ "procedure": "Test_Name", "args": [...], "tags": [...] }` (`proc` is accepted as an alias for `procedure`). Both forms are equivalent: `"[\"Test_A\",\"Test_B\"]"` and `"[{\"procedure\":\"Test_A\",\"args\":[\"fixture\",1]}]"`. The same shapes apply to a `testsPath` manifest file.
@@ -600,6 +616,8 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
   - Progress (#1990): when the request carries `_meta.progressToken`, `test_vba` sends one `notifications/progress` per finished test, with `progress` counting from 1, `total` set to the plan size and `message` set to `"<procedure> passed"` or `"<procedure> failed"`. A client that resets its request timeout on progress keeps a long run alive. The same per-test progress is on the operation record in `list_access_operations` (`metadata.testProgress`).
   - Cancellation (#1990): cancelling the request (`notifications/cancelled`, which an MCP client sends on its own request timeout) stops the run, because it only touches the temporary sandbox copy. The result is `VBA_MANAGER_ABORTED`. Both `VBA_MANAGER_ABORTED` and `VBA_MANAGER_TIMEOUT` carry `error.details.testProgress` with the tests that already finished, and the operation record keeps the same block.
+  - Detached runs (#1993): `detach:true` with `apply:true` runs the same plan resolution, plan short-circuit and allowlist gate, so input errors still return at once. It then starts the run in its own process and returns `{ mode: "apply", detached: true, operationId, status: "running", testsPlanned, accessPath, fetchWith: { tool: "get_test_run", operationId } }` without waiting for Access. Read the progress and the final result with `get_test_run`. `detach:true` without `apply:true` stays a plan and adds `willDetach: true`.
+  - One Access per database (#1993): while a detached run holds an `accessPath`, a second detached run or a synchronous `test_vba` apply on that database is refused with the retryable `TEST_RUN_ALREADY_ACTIVE`, whose `error.details.activeOperationId` names the run. With no detached run active, the synchronous call behaves exactly as before. A failed runner start returns `TEST_RUN_SPAWN_FAILED` and releases the database.
 * **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.

@@ -34,6 +34,8 @@ export const MODERN_TOOL_NAMES = [
   // because `apply:true` rewrites `.dysflow/project.json`; the
   // default `{}` invocation is a pure read-class diff preview.
   "migrate_project_config",
+  // Issue #1993 D4 — read side of a detached test_vba run (reads disk only).
+  "get_test_run",
 ] as const;
 
 export type ModernDysflowMcpToolName = (typeof MODERN_TOOL_NAMES)[number];

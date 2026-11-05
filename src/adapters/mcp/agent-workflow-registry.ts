@@ -152,7 +152,7 @@ export const PREFERRED_AGENT_WORKFLOWS: readonly PreferredAgentWorkflow[] = [
   },
   {
     phase: "tests",
-    tools: ["validate_manifest", "test_vba"],
+    tools: ["validate_manifest", "test_vba", "get_test_run"],
   },
   {
     phase: "sql",
@@ -198,7 +198,7 @@ const BOOTSTRAP_TOOLS = new Set([
   "clear_worktree_cache",
   "migrate_project_config",
 ]);
-const TEST_TOOLS = new Set(["validate_manifest", "test_vba"]);
+const TEST_TOOLS = new Set(["validate_manifest", "test_vba", "get_test_run"]);
 const RECOVERY_TOOLS = new Set([
   "list_access_operations",
   "cleanup_access_operation",
@@ -293,6 +293,9 @@ const CURATED_PREFER_FOR: Readonly<Record<string, readonly string[]>> = {
   validate_manifest: ["Validate tests.vba.json procedure references before invoking test_vba."],
   test_vba: [
     "Execute the validated VBA test manifest; RED runs without a compile, GREEN after the human compiles once.",
+  ],
+  get_test_run: [
+    "Read a detached test_vba run's progress and, once it ends, its synchronous result.",
   ],
   query_execute: ["Execute the preferred unified read or write SQL contract."],
   query_sql: ["Keep an existing read-only query_sql integration working while it migrates."],

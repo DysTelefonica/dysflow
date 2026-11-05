@@ -286,6 +286,8 @@ describe("MCP tool registration over core services", () => {
       "register_worktree",
       "clear_worktree_cache",
       "migrate_project_config",
+      // Issue #1993 — read side of a detached test_vba run.
+      "get_test_run",
     ];
 
     expect(MODERN_TOOL_NAMES).toEqual(expectedNames);

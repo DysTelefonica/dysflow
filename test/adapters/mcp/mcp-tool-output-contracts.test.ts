@@ -79,6 +79,8 @@ const OUTPUT_CONTRACT_GROUPS = {
     // dispatch layer; same group as `clean_stale_markers` /
     // `resolve_project`.
     "migrate_project_config",
+    // #1993 — reads a detached test_vba run from `.dysflow/runtime/test-runs/`.
+    "get_test_run",
   ],
   modernServiceAliases: ["run_vba", "list_access_operations", "cleanup_access_operation"],
   vbaManagerDysflowResult: [

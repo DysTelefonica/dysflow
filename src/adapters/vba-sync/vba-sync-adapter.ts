@@ -59,6 +59,11 @@ import {
   type DestinationRootOrchestratorLike,
   withResolvedDestinationRoot,
 } from "./destination-root-override.js";
+import {
+  DetachedTestRunLauncher,
+  type DetachedTestRunSeams,
+  type DetachedTestRunTarget,
+} from "./detached-test-run-launcher.js";
 import { importOutputReportsModuleFailure } from "./import-output-inspection.js";
 import { enrichVbaSyncVerboseDiagnostics } from "./post-write-content-verify.js";
 import {
@@ -201,6 +206,12 @@ export type VbaSyncAdapterOptions = {
    * option; tests inject fakes.
    */
   codeGraphVbaInvoker?: CodeGraphVbaInvoker;
+  /**
+   * Issue #1993 — the run store and runner spawn of detached `test_vba` runs.
+   * Default to the production store under `<projectRoot>/.dysflow/runtime/`
+   * and the real detached spawn; tests fake the spawn and process liveness.
+   */
+  detachedTestRuns?: DetachedTestRunSeams;
 };
 
 const VBA_MANAGER_EXTRA_KEYS = new Set([
@@ -427,6 +438,7 @@ export class VbaSyncAdapter implements VbaSyncPort {
   private readonly runOwnedAccessProcesses?: VbaSyncAdapterOptions["runOwnedAccessProcesses"];
   private readonly markerPollIntervalMs: number;
   private readonly executionAdapter: VbaExecutionAdapter;
+  private readonly detachedTestRuns: DetachedTestRunLauncher;
   private readonly formsAdapter: VbaFormsAdapter;
   private readonly modulesAdapter: VbaModulesAdapter;
   /** Issue #1890 — the verify base store shared by every writer in this adapter. */
@@ -446,6 +458,11 @@ export class VbaSyncAdapter implements VbaSyncPort {
     this.runOwnedAccessProcesses = options.runOwnedAccessProcesses;
     this.markerPollIntervalMs = options.markerPollIntervalMs ?? DEFAULT_MARKER_POLL_INTERVAL_MS;
     this.allowedProcedures = options.allowedProcedures;
+    this.detachedTestRuns = new DetachedTestRunLauncher(
+      this.env,
+      this.accessPassword,
+      options.detachedTestRuns,
+    );
 
     // Sub-adapters instantiation delegating orchestrator context
     this.operationsAdapter = new VbaOperationsAdapter({
@@ -465,6 +482,19 @@ export class VbaSyncAdapter implements VbaSyncPort {
         resolveSourceResolver: async (params) => {
           const target = await this.resolveExecutionTarget(params);
           return target.ok ? createNodeVbaSourceResolver(target.data.destinationRoot) : undefined;
+        },
+        // #1993 — detached runs and the synchronous guard target the same
+        // database and project the synchronous run resolves.
+        startDetachedTestRun: async (params, plannedTests) => {
+          const target = await this.resolveDetachedTestRunTarget(params);
+          if (!target.ok) return target;
+          return this.detachedTestRuns.start(target.data, params, plannedTests);
+        },
+        refuseWhileDetachedRunActive: async (params) => {
+          const target = await this.resolveDetachedTestRunTarget(params);
+          // An unresolvable target is reported by the synchronous run itself.
+          if (!target.ok) return undefined;
+          return this.detachedTestRuns.refuseWhileActive(target.data);
         },
       },
       options.allowedProcedures, // PR1b: forward allowlist for the test_vba gate
@@ -696,6 +726,26 @@ export class VbaSyncAdapter implements VbaSyncPort {
     }
     const verifyData = verifyResult.data as VbaVerifyResult;
     return { ok: true, summary: projectVerifyToSyncSummary(verifyData) };
+  }
+
+  /** Issue #1993 — the database and project a `test_vba` run drives, as the synchronous path resolves them. */
+  private async resolveDetachedTestRunTarget(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<DetachedTestRunTarget>> {
+    const target = await this.resolveExecutionTarget(params);
+    if (!target.ok) return target;
+    const strict = this.validateStrictContext(params, target.data);
+    if (!strict.ok) return strict;
+    const accessPath = target.data.accessPath;
+    if (accessPath === undefined) {
+      return failureResult(
+        createDysflowError(
+          "CONFIG_MISSING_ACCESS_PATH",
+          "test_vba needs an Access database: pass accessPath or projectId, or configure the project's frontend.",
+        ),
+      );
+    }
+    return successResult({ accessPath, projectRoot: target.data.projectRoot ?? this.cwd });
   }
 
   private async executeMappedTool(

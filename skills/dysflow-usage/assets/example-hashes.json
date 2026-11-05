@@ -226,7 +226,7 @@
   },
   "test_vba": {
     "path": "assets/examples/test-vba.md",
-    "sha256": "750170be2df9e1cdff8f2bf0e5db0fe58a76ad6938ceb947074353b75d1bddef",
+    "sha256": "92b84768b95f4dbb7f097f832df22b30d8cd438730ad1240be01181afde683be",
     "needs_human_content": false
   },
   "validate_manifest": {
@@ -254,6 +254,7 @@
     "sha256": "e7b699f749c05852af1a1efdf338d217c296a8405f6fcc90521d1d279cdd80a4",
     "needs_human_content": false
   },
+  "get_test_run": { "path": "assets/examples/get-test-run.md", "sha256": "45ffd7f107acd14722ecda2ddc66b892b9d6bbfea8e48d5886b667f6be3e25eb", "needs_human_content": false },
   "catalog_add_control": { "path": "assets/examples/catalog-add-control.md", "sha256": "c387ffac087a3d91b40fb87be8293f1e79188de0d2d5763e38b4afd268de4511", "needs_human_content": true },
   "clean_stale_markers": { "path": "assets/examples/clean-stale-markers.md", "sha256": "e2635c2bf0d5576aea2a2703713ecdd4eb7ca1b15dc095c35157bc10beb6f42b", "needs_human_content": true },
   "compare_backends": { "path": "assets/examples/compare-backends.md", "sha256": "f718b627924a554f5c8d3458c21b7f6f96a09ce0479331e77c82f025f6f74881", "needs_human_content": true },

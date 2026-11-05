@@ -76,6 +76,22 @@ export interface VbaSyncOrchestrator {
    * verbatim, which is the pre-#1823 behavior.
    */
   resolveSourceResolver?(params: Record<string, unknown>): Promise<VbaSourceResolver | undefined>;
+  /**
+   * #1993 D1 — start the plan as a detached run and return at once. Called
+   * only after the plan resolved, the dry-run short-circuit and the allowlist
+   * gate, so input errors never reach it.
+   */
+  startDetachedTestRun?(
+    params: Record<string, unknown>,
+    plannedTests: readonly string[],
+  ): Promise<OperationResult<unknown>>;
+  /**
+   * #1993 Q1 — the refusal of a synchronous run while a detached run holds
+   * the target database, or `undefined` when the run may proceed.
+   */
+  refuseWhileDetachedRunActive?(
+    params: Record<string, unknown>,
+  ): Promise<OperationResult<unknown> | undefined>;
 }
 
 export class VbaExecutionAdapter {
@@ -184,6 +200,7 @@ export class VbaExecutionAdapter {
         dryRun: true,
         willExecute: false,
         willModifyAccess: false,
+        ...(params.detach === true ? { willDetach: true } : {}),
         plan: {
           procedureName: resolvedProcedureNames,
           proceduresCount: resolvedProcedureNames.length,
@@ -203,6 +220,24 @@ export class VbaExecutionAdapter {
     // later refuse — an unwanted side effect on the live binary.
     const gateError = await this.ensureTestProceduresAllowed(params, resolvedProcedureNames);
     if (gateError !== undefined) return gateError;
+
+    // #1993 D1 — a detached run leaves here: its runner replays this same
+    // call synchronously in its own process.
+    if (params.detach === true) {
+      if (this.orchestrator.startDetachedTestRun === undefined) {
+        return failureResult(
+          createDysflowError(
+            "TOOL_NOT_IMPLEMENTED",
+            "test_vba detach is not available on this service; run it without detach.",
+          ),
+        );
+      }
+      return this.orchestrator.startDetachedTestRun(params, resolvedProcedureNames);
+    }
+    // #1993 Q1 — one Access per database: a detached run holding it refuses
+    // a synchronous run. With no detached run the path below is unchanged.
+    const busy = await this.orchestrator.refuseWhileDetachedRunActive?.(params);
+    if (busy !== undefined) return busy;
 
     // #1823 — hand Access names it can resolve, through the same seam
     // run_vba uses (#1787). The plan above, the dry-run echo and the

@@ -192,6 +192,8 @@ export const COMMIT_FLAG_REGISTRY: Readonly<Record<string, CommitFlagMetadata>> 
   // entries with filters + pagination + ordering. Same family as
   // `schema` / `doctor` / `resolve_project`.
   logs: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
+  // Issue #1993 D4 — read-only fetch of a detached test_vba run.
+  get_test_run: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   lint_form_code: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   analyze_form_ui: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },
   map_form_behavior: { commitFlag: "apply", noWriteAlias: null, defaultBehavior: "noop" },

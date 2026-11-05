@@ -288,6 +288,13 @@ const modernContracts: Record<ModernDysflowMcpToolName, McpToolContract> = {
     writeGate: "none",
     summary: "Read-only MCP contract.",
   },
+  // Issue #1993 D4 — reads a detached test_vba run from its own files under
+  // `.dysflow/runtime/test-runs/`; never opens Access, never takes a lock.
+  get_test_run: {
+    access: "read-only",
+    writeGate: "none",
+    summary: "Read-only MCP contract.",
+  },
   setup_project: {
     access: "conditional-write",
     writeGate: "conditional",

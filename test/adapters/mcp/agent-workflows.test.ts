@@ -166,6 +166,7 @@ describe("preferred agent workflows and specialized wrappers (#1080)", () => {
     expect(workflows.find((workflow) => workflow.phase === "tests")?.tools).toEqual([
       "validate_manifest",
       "test_vba",
+      "get_test_run",
     ]);
     expect(workflows.find((workflow) => workflow.phase === "sql")?.tools).toEqual([
       "query_execute",

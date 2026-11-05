@@ -170,6 +170,33 @@ export const lintModuleResultContract = defineResultContract({
     .passthrough(),
 });
 
+const testRunCount = z.number().int().nonnegative();
+
+/** Issue #1993 D4 — a detached test_vba run as `get_test_run` reads it. */
+export const getTestRunResultContract = defineResultContract({
+  description:
+    "Detached test_vba run status and progress; once it ended, the stored synchronous test_vba result.",
+  schema: z
+    .object({
+      operationId: z.string(),
+      status: z.enum(["running", "passed", "failed", "cancelled", "crashed"]),
+      progress: z
+        .object({
+          completed: testRunCount,
+          planned: testRunCount,
+          currentTest: z.string().nullable(),
+          passed: testRunCount,
+          failed: testRunCount,
+        })
+        .passthrough(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+      finishedAt: z.string().nullable(),
+      result: z.unknown().optional(),
+    })
+    .passthrough(),
+});
+
 /**
  * Canonical ownership map for bespoke modern analysis handlers. Coverage derives
  * from MODERN_ANALYSIS_TOOL_NAMES; consumers must not maintain another name list.

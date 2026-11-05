@@ -86,6 +86,7 @@ import {
   DOCTOR_SCHEMA,
   FIND_REFERENCES_SCHEMA,
   GET_PROCEDURE_SCHEMA,
+  GET_TEST_RUN_SCHEMA,
   LINT_MODULE_SCHEMA,
   LIST_PROCEDURES_SCHEMA,
   ORPHAN_CLEANUP_SCHEMA,
@@ -418,6 +419,7 @@ const TOOL_CROSS_REFERENCES: Record<string, readonly string[]> = {
   // of `.dysflow/runtime/`. Pairs with `get_capabilities` (live state)
   // and `schema` (static contract catalog).
   logs: ["#973"],
+  get_test_run: ["#1993"],
   list_access_operations: ["#777"],
   cleanup_access_operation: ["#659", "#777"],
   run_vba: ["#621", "#659"],
@@ -565,6 +567,7 @@ const MODERN_TOOL_INPUT_SCHEMAS: Record<string, JsonObjectSchema> = {
   setup_project: SETUP_PROJECT_SCHEMA,
   register_worktree: REGISTER_WORKTREE_SCHEMA,
   clear_worktree_cache: CLEAR_WORKTREE_CACHE_SCHEMA,
+  get_test_run: GET_TEST_RUN_SCHEMA,
 };
 
 /**

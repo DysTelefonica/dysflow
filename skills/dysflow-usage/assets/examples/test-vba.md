@@ -38,6 +38,7 @@ The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and open
     - `diff`
     - `implements_check`
     - `confirmedRequiresConfirmation`
+    - `detach`
     - `timeoutMs`
     - `cwd`
     - `projectChoiceReason`
@@ -51,6 +52,7 @@ The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and open
 - `proceduresJson`
 - `filter` — one parameter, two shapes (#1442, #1833). A string (`"smoke"` or `"smoke|regression"`) matches name, procedure or tags by case-insensitive substring; an object `{ "tag": "issue-82" }` matches tags only. The live schema advertises both as `anyOf`, and `describe_tool` reports `type: "union"`.
 - `timeoutMs`
+- `detach` — with `apply:true`, start the run in its own process and return `{ operationId, testsPlanned, status: "running" }` at once (#1993). Read it with `get_test_run`. Without `apply:true` it stays a plan with `willDetach: true`.
 
 ## Call shape
 
@@ -62,6 +64,21 @@ The runner copies the `.accdb` to `%TEMP%\dysflow-test-sandbox-<guid>\` and open
   }
 }
 ```
+
+A long run, detached (#1993): start it, keep working, then fetch the result.
+
+```json
+{
+  "tool": "test_vba",
+  "arguments": {
+    "testsPath": "tests/tests.vba.json",
+    "apply": true,
+    "detach": true
+  }
+}
+```
+
+It returns `{ "mode": "apply", "detached": true, "operationId": "<id>", "status": "running", "testsPlanned": 12, "fetchWith": { "tool": "get_test_run", "operationId": "<id>" } }`. While that run holds the database, another detached run or a synchronous apply on it gets `TEST_RUN_ALREADY_ACTIVE` with `error.details.activeOperationId`.
 
 ## Result shape (always schemaVersion: "dysflow.result/v1")
 
@@ -86,6 +103,8 @@ On failure, `env.error.code` is one of the codes below; `error.remediation` and 
 | `PROJECT_ID_MISMATCH` | Caller-supplied projectId does not match the configured id. | see `references/error-codes.md` |
 | `MCP_WRITES_DISABLED` | Process-level writes are disabled. | see `references/error-codes.md` |
 | `MCP_INPUT_INVALID` | Input does not satisfy the tool's schema. | see `references/error-codes.md` |
+| `TEST_RUN_ALREADY_ACTIVE` | A detached run already drives this database. | see `references/error-codes.md` |
+| `TEST_RUN_SPAWN_FAILED` | The detached runner did not start; nothing ran. | see `references/error-codes.md` |
 
 
 ## Cross-reference
@@ -94,6 +113,7 @@ On failure, `env.error.code` is one of the codes below; `error.remediation` and 
 - Full error taxonomy: `../../references/error-codes.md` (relative to the skill bundle).
 - Write-flag semantics: `../write-flags-matrix.md`.
 - Anti-patterns: `../anti-patterns.md`.
+- Detached runs: `../../references/test-runs.md` and `get-test-run.md`.
 - Live schema: `schema({view:"full"})` or `describe_tool({name:'test_vba'})`.
 
 ## TODO before production use

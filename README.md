@@ -24,7 +24,7 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
-**71 visible MCP tools by default · 94 callable · Windows / Node 26**
+**72 visible MCP tools by default · 95 callable · Windows / Node 26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
 
@@ -69,7 +69,7 @@ After that pull request merges, resume the prepared version with
 | --- | --- |
 | A local automation runtime for Microsoft Access (`.accdb`/`.mdb`) focused on safety and ownership | `src/adapters/vba-sync/`, `src/core/runtime/` |
 | A core-first platform with thin protocol adapters | `src/core/`, with `src/adapters/mcp/` and `src/adapters/http/` |
-| A platform with 94 callable MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
+| A platform with 95 callable MCP tools covering VBA, SQL, schema, forms, and project-config resolution | [MCP tool reference](./docs/api/mcp-tools.md) |
 | An AI-assisted form UI surface, from layout rendering to binding validation | `src/adapters/vba-sync/vba-forms-ai-tools.ts` |
 
 ### It is not

@@ -31,6 +31,7 @@ Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to e
 | Export a module to a folder outside the project | `export_modules({cwd, moduleNames:["<Module>"], exportPath:"<folder>", mutateBinary:false, apply:true})` |
 | Validate a test manifest | `validate_manifest({cwd, testsPath:"tests/tests.vba.json"})` |
 | Run the tests | `test_vba({cwd, testsPath:"tests/tests.vba.json"})` |
+| Run a long test plan without blocking | `test_vba({cwd, testsPath:"tests/tests.vba.json", apply:true, detach:true})`; keep working, then `get_test_run({cwd, operationId:"<id>", wait:45})` until `status` is not `running` |
 | Lint a module before import | `lint_module({cwd, module:"<Module>"})` |
 | Lint form code | `lint_form_code({cwd, moduleNames:["<Form_Name>"]})` |
 | Inspect a form read-only | `analyze_form_ui({cwd, sourcePath:"<worktree>/src/forms/<Form_Name>.form.txt"})` |
@@ -80,7 +81,7 @@ Details and every field: `references/bootstrap-and-capabilities.md`.
 | Form UI tools and source and binary sync | `references/form-ui-and-sync.md` |
 | Import order, retries, saves and exit codes; `Tag` values | `references/form-ui-and-sync.md` |
 | Facts to confirm before a call | `references/call-checks.md` |
-| What `test_vba` opens, and what `humanCompilePending` means | `references/test-runs.md` |
+| What `test_vba` opens, detached runs, and what `humanCompilePending` means | `references/test-runs.md` |
 | A typed error code | `references/error-codes.md` |
 | Functionality-by-functionality friction | `references/agent-friction-map.md` |
 | Footguns with a canonical example | `assets/anti-patterns.md` |

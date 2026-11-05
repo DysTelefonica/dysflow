@@ -77,7 +77,7 @@ describe("bootstrap MCP tool (#1484)", () => {
 
     expect(payload.preferredAgentWorkflows).toEqual({
       tools: { count: payload.toolsVisible },
-      tests: ["validate_manifest", "test_vba"],
+      tests: ["validate_manifest", "test_vba", "get_test_run"],
     });
   });
 

@@ -38,6 +38,8 @@ const UNCOVERED_BY_DESIGN: Readonly<Record<string, string>> = Object.freeze({
   bootstrap: "shipped in #1484 after the battery was last extended",
   diagnose: "diagnostic surface; scenario pending",
   clean_stale_markers: "recovery surface; scenario pending",
+  get_test_run:
+    "#1993 T5 adds the real-Access detached-run scenario; in-process coverage lives in test/adapters/mcp/get-test-run-tool-1993.test.ts",
 });
 
 const REPO_ROOT = process.cwd();

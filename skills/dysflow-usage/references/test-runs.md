@@ -1,6 +1,6 @@
 # Test runs
 
-What `test_vba` and `run_vba` open, and what the compile reminder means.
+What `test_vba` and `run_vba` open, how to run a long plan without blocking, and what the compile reminder means.
 
 ## `test_vba` runs on a copy
 
@@ -20,6 +20,26 @@ Before it runs any test, `test_vba` compiles the sandbox copy: `RunCommand(126)`
 - `run_vba`, imports and exports never compile.
 
 A compile error still fails the RED rule of HR-1: a RED counts only when it fails on the expected assertion.
+
+## Long runs: start detached, keep working, fetch the result
+
+A synchronous `test_vba` holds the MCP call until the last test ends. A plan that runs longer than the client's request timeout (often 60 s) needs another shape; an ad-hoc stdio client that keeps the call open is no longer needed (issue #1993).
+
+1. **Start detached.** Call `test_vba({cwd, testsPath, apply:true, detach:true})`. It resolves the plan, applies the plan short-circuit and the allowlist gate exactly like the synchronous call, so a bad manifest still fails at once. It then starts the run in its own process and returns within a second or two:
+
+   ```json
+   { "mode": "apply", "detached": true, "operationId": "<id>", "status": "running", "testsPlanned": 12, "fetchWith": { "tool": "get_test_run", "operationId": "<id>" } }
+   ```
+
+2. **Keep working.** The run does not depend on the MCP call, the client or the session: a client timeout, a reconnect or a new session does not stop it.
+3. **Fetch the result.** Call `get_test_run({cwd, operationId:"<id>", wait:45})`. It returns `status` (`running`, `passed`, `failed`, `cancelled` or `crashed`) and `progress` `{ completed, planned, currentTest, passed, failed }`. `wait` re-reads the run once a second until it ends, for at most 50 s, so repeat the call while `status` is `running`. Once the run ended, `result` is the `structuredContent` the synchronous `test_vba` returns: `passed`, `failed` and `tests[]`, or the `VBA_TESTS_FAILED` envelope with `error.details.failures[]`.
+
+Rules the runtime enforces:
+
+- **One Access per database.** While a detached run holds an `accessPath`, a second detached run or a synchronous `test_vba` apply on that database is refused with `TEST_RUN_ALREADY_ACTIVE`; `error.details.activeOperationId` names the run. Wait for it and read its result. With no detached run active, the synchronous call is unchanged.
+- **Crashes are reported, not hidden.** A run whose runner process died without a result reads as `crashed`, with `crash.reason` and `crash.logTail` from `runner.log`. `cancelled` is reserved; stop a detached run through the cleanup tools (`list_access_operations`, then `cleanup_access_operation`), never by killing `MSACCESS.EXE` by name (HR-2 of `dysflow-arnes`).
+- **Where it lives.** `<projectRoot>/.dysflow/runtime/test-runs/<operationId>/` holds `request.json` (never a password), `state.json`, `result.json` and `runner.log`. The last 20 runs are kept; `get_test_run` on a pruned run returns `TEST_RUN_NOT_FOUND`.
+- **Same sandbox, same compile.** The detached runner calls the same `test_vba`, so everything above about the sandbox copy and its compile holds. HR-1 is unchanged: a RED counts only on the expected assertion.
 
 ## `run_vba` opens the real binary
 

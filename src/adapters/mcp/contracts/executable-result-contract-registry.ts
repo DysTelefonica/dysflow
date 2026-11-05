@@ -7,6 +7,7 @@ import {
 } from "./dispatch-result-contracts.js";
 import {
   doctorResultContract,
+  getTestRunResultContract,
   queryExecuteResultContract,
   remainingResultContractForTool,
 } from "./remaining-result-contracts.js";
@@ -25,6 +26,7 @@ export function executableResultContractForTool(
   if (bootstrap !== undefined) return bootstrap;
   if (name === "query_execute") return queryExecuteResultContract;
   if (name === "doctor") return doctorResultContract;
+  if (name === "get_test_run") return getTestRunResultContract;
   if ((ALIAS_TOOL_NAMES as ReadonlySet<string>).has(name)) {
     return resultContractForToolAlias(name as AliasToolName).contract;
   }

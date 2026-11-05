@@ -436,6 +436,18 @@ export const TEST_RUN_ALREADY_ACTIVE = "TEST_RUN_ALREADY_ACTIVE";
 export const TEST_RUN_ALREADY_ACTIVE_REMEDIATION =
   "A detached test run is already running against this database (details.activeOperationId). Wait for it to finish and read its result, then retry; tests never run two Access sessions on the same database.";
 
+/** #1993 — `get_test_run` names a run this project has no record of (never started, or pruned). */
+export const TEST_RUN_NOT_FOUND = "TEST_RUN_NOT_FOUND";
+
+export const TEST_RUN_NOT_FOUND_REMEDIATION =
+  "Pass the operationId test_vba returned with detach:true, against the same project (projectId or cwd). Only the last 20 runs of a project are kept.";
+
+/** #1993 — the detached test runner process could not be started; nothing ran. */
+export const TEST_RUN_SPAWN_FAILED = "TEST_RUN_SPAWN_FAILED";
+
+export const TEST_RUN_SPAWN_FAILED_REMEDIATION =
+  "The detached test runner did not start, so no test ran and the database was released. Retry, or run test_vba without detach.";
+
 /** Codes whose same call is expected to succeed once the reported condition clears. */
 const CANONICAL_RETRYABLE_CODES: ReadonlySet<string> = new Set([
   "ACCESS_DATABASE_LOCKED",
@@ -451,6 +463,8 @@ const CANONICAL_ERROR_REMEDIATION: Readonly<Record<string, string>> = {
   VBA_IMPORT_SAVE_FAILED: VBA_IMPORT_SAVE_FAILED_REMEDIATION,
   VBA_PROJECT_UNAVAILABLE: VBA_PROJECT_UNAVAILABLE_REMEDIATION,
   [TEST_RUN_ALREADY_ACTIVE]: TEST_RUN_ALREADY_ACTIVE_REMEDIATION,
+  [TEST_RUN_NOT_FOUND]: TEST_RUN_NOT_FOUND_REMEDIATION,
+  [TEST_RUN_SPAWN_FAILED]: TEST_RUN_SPAWN_FAILED_REMEDIATION,
   FORM_CONTROL_NOT_FOUND:
     "Run dysflow.form_list_controls to enumerate existing controls in the form.",
   FORM_IMPORT_GATE_FAILED:

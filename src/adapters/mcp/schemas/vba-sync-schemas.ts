@@ -586,6 +586,12 @@ export const VBA_SYNC_TOOL_SCHEMAS: Record<VbaSyncToolName, JsonObjectSchema> = 
       // The dispatch boundary accepts either form; the validator's
       // apply/dryRun contradiction check (F8 #1057) fires when BOTH are
       // present and agree (both true or both false).
+      // Issue #1993 D1 — run in a detached process; fetch with get_test_run.
+      detach: {
+        type: "boolean",
+        description:
+          "With apply:true, start the run in its own process and return { operationId, testsPlanned, status:'running' } at once; read the result with get_test_run. Without apply it stays a plan.",
+      },
       timeoutMs: SCHEMA_PROPS.timeoutMs,
     },
   },

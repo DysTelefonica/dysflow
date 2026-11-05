@@ -43,6 +43,8 @@
 |---|---|---|---|---|
 | `test_vba` | `plan` | `[]` | `critical-write` | Executes the validated test manifest on a temporary copy of the frontend (see `references/test-runs.md`). `humanCompilePending` only adds a reminder and never refuses the call; RED runs without a compile, GREEN after the human compiles once (HR-1 of `dysflow-arnes`). `apply:true` commits and runs; `apply:false` is the documented opt-out when `capabilities.procedures.strictMode: true` is set and `allowedProcedures` is empty. Without `strictMode` the procedure gate refuses nothing. |
 
+> **`test_vba` detach (#1993):** `detach:true` with `apply:true` starts the run in its own process and returns `{ operationId, testsPlanned, status: "running" }` at once; `get_test_run` reads it. `detach:true` without `apply:true` stays a plan (`willDetach: true`). While a detached run holds an `accessPath`, another detached run or a synchronous apply on it is refused with `TEST_RUN_ALREADY_ACTIVE`.
+
 > **`test_vba` filter shape (#1442, #1833):** `filter` accepts a string (substring match on name, procedure or tags) or an object `{tag: "issue-82"}` (tags only). The inputSchema advertises both shapes as `anyOf` and `describe_tool` reports `type: "union"`; `parseTestFilter` rejects every other object with `MCP_INPUT_INVALID`. There is no separate `testFilter` input.
 
 ### forms (12 tools)
@@ -108,7 +110,7 @@
 
 > The 4 write-class tools listed here are the ones with `access` of `conditional-write` or `destructive-write` AND that participate in workflow orchestration. They are not exhaustive; see `get_capabilities.writeClassToolsPermitted` (44 in total) for the runtime-mandated list.
 
-## Read-only tools (50 tools) — only listed for completeness
+## Read-only tools (52 tools) — only listed for completeness
 
 These never commit. `apply` is a no-op for them. Pattern:
 
@@ -121,6 +123,7 @@ These never commit. `apply` is a no-op for them. Pattern:
 | `register_worktree` | Pre-warm a sibling worktree context. |
 | `clear_worktree_cache` | Force rescan. |
 | `validate_manifest` | `preferred` tool. Pre-flight for `test_vba`. |
+| `get_test_run` | `preferred` tool. Reads a detached `test_vba` run; `wait` long-polls up to 50 s (#1993). |
 | `state` | Inspect operation, marker, lock, counter state during recovery. |
 | `logs` | `preferred` tool. Filtered operation timeline after `diagnose` flags a failure. |
 | `diagnose` | `preferred` tool. Start recovery with one aggregated health snapshot. |

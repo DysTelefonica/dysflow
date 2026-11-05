@@ -41,7 +41,8 @@ const services: DysflowMcpServices = {
 
 const allTools = createDysflowMcpTools({ services });
 const HIDDEN_FORM_TOOL = "form_set_property";
-const CORE_TOOL_COUNT = 71;
+// #1993 — get_test_run joins the core surface through the tests phase.
+const CORE_TOOL_COUNT = 72;
 const PREFERRED_FORM_WRITE_TOOLS = [
   "apply_form_design_plan",
   "form_align_controls",

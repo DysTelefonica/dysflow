@@ -77,6 +77,8 @@ const MODERN_TOOL_RISK: Readonly<Record<string, ToolRisk>> = {
   // Access, never spawns PowerShell, never mutates state. Same risk
   // family as `schema` / `diagnose` / `logs` / `resolve_project`.
   state: "read-only",
+  // Issue #1993 D4 — reads a detached test run's files; never mutates state.
+  get_test_run: "read-only",
   // Issue #1177 — `migrate_project_config` rewrites
   // `.dysflow/project.json` on apply. The default empty call is a pure
   // read-class diff preview; `apply: true` is a routine dev-write on

@@ -107,6 +107,20 @@ export type ActiveDetachedRun = {
   acquiredAt: string;
 };
 
+/**
+ * The environment variable naming the run a detached runner process executes.
+ * The launcher sets it in the runner's environment; the synchronous
+ * `test_vba` guard (#1993 Q1) lets that run's own in-process call through the
+ * accessPath lock it holds, and refuses every other synchronous run.
+ */
+export const TEST_RUN_OPERATION_ID_ENV = "DYSFLOW_TEST_RUN_OPERATION_ID";
+
+/** Longest `get_test_run` long-poll, so a 60 s client timeout is never hit (#1993 D4). */
+export const TEST_RUN_MAX_WAIT_SECONDS = 50;
+
+/** Interval at which `get_test_run` re-reads a run while it waits. */
+export const TEST_RUN_WAIT_POLL_MS = 1_000;
+
 /** Run directories kept per project; older ones are pruned when a run starts (#1993 D6). */
 export const TEST_RUN_RETENTION = 20;
 

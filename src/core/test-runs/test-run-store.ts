@@ -423,6 +423,11 @@ function parseJson(raw: string): unknown {
   }
 }
 
+/** The refusal a run (detached or synchronous) gets while `held` drives its database. */
+export function testRunAlreadyActiveError(held: ActiveDetachedRun): DysflowError {
+  return alreadyActiveError(held);
+}
+
 function alreadyActiveError(held: TestRunLockRecord): DysflowError {
   return createDysflowError(
     TEST_RUN_ALREADY_ACTIVE,

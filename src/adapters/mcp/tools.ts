@@ -7,6 +7,7 @@ import { resolveAccessOperationRegistry } from "../../core/operations/access-ope
 import type { AccessDiagnosticsRequest } from "../../core/runner/access-runner.js";
 import type { WriteExecutionPolicy } from "../../core/runtime/write-execution-policy.js";
 import type { VbaModuleLintRule } from "../../core/services/vba-module-lint-service.js";
+import type { TestRunStore } from "../../core/test-runs/test-run-store.js";
 import type { ToolSurface } from "./agent-workflow-registry.js";
 import { createBootstrapTool } from "./bootstrap-tool.js";
 import {
@@ -40,6 +41,7 @@ import { createDescribeToolTool, createSchemaTool } from "./schema-tool.js";
 import type { SessionProjectRoot } from "./session-project-root.js";
 import { createSetupProjectTool } from "./setup-project-tool.js";
 import { createStateTool } from "./state-tool.js";
+import { createGetTestRunTool, type TestRunPolling } from "./test-run-tools.js";
 import { createWorktreeCacheTools } from "./worktree-cache-tools.js";
 import { withWorktreeCwdSchema } from "./worktree-cwd.js";
 
@@ -179,6 +181,10 @@ export type CreateDysflowMcpToolsOptions = {
   // Issue #1492 — advertised tool surface (default "core"). The bootstrap
   // tool reports it; the stdio tools/list handler applies the matching filter.
   toolSurface?: ToolSurface;
+  /** Issue #1993 — the detached test-run store `get_test_run` reads; defaults to the production one. */
+  testRunStore?: (projectRoot: string) => TestRunStore;
+  /** Issue #1993 — time for the `get_test_run` long-poll; tests drive it without waiting. */
+  testRunPolling?: TestRunPolling;
 };
 
 export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): DysflowMcpTool[] {
@@ -202,6 +208,8 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     cwd = process.cwd(),
     worktreeCache: worktreeCacheInput,
     toolSurface = "core" as ToolSurface,
+    testRunStore,
+    testRunPolling,
   } = options;
   const rawProjectConfigResolver =
     projectConfigResolver ??
@@ -458,6 +466,14 @@ export function createDysflowMcpTools(options: CreateDysflowMcpToolsOptions): Dy
     // never spawns PowerShell, never mutates state. Pairs with
     // get_capabilities (live state) and schema (static contract catalog).
     createLogsTool({ cwd }),
+    // Issue #1993 D4 — read side of a detached test_vba run. Reads only the
+    // run's own files; never opens Access, never takes the registry lock.
+    createGetTestRunTool({
+      cwd,
+      accessContextResolver,
+      ...(testRunStore === undefined ? {} : { createStore: testRunStore }),
+      ...(testRunPolling === undefined ? {} : { polling: testRunPolling }),
+    }),
     // Issue #1312 — bootstrap is intentionally registered before the
     // existing-config write-ready wrapper. The wrapper exempts this tool
     // below because requiring an existing config would deadlock bootstrap.

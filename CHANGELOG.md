@@ -5,6 +5,7 @@
 ### Changes
 
 - feat(test_vba): add the detached test-run core — run store under `.dysflow/runtime/test-runs/`, per-accessPath lock refusing with `TEST_RUN_ALREADY_ACTIVE`, crash derivation, retention of the last 20 runs and the internal `dysflow test-run` runner that replays `test_vba` through the MCP pipeline (#1993)
+- feat(test_vba): `test_vba({ apply: true, detach: true })` starts the run in its own process and returns `{ operationId, testsPlanned, status: "running" }` at once; the new read-only `get_test_run({ operationId, wait? })` returns its status, progress and, once it ends, the synchronous `test_vba` result; a synchronous apply is refused with `TEST_RUN_ALREADY_ACTIVE` only while a detached run holds the database (#1993)
 
 ## [v4.5.7] - 2026-11-05
 
