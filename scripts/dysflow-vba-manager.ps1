@@ -220,7 +220,11 @@ function Write-DysflowOperationMarker {
     Param(
         [string]$Status = "running",
         [AllowNull()]
-        [object]$AccessPid = $null
+        [object]$AccessPid = $null,
+        # Issue #1990 - per-test progress of Run-Tests. A progress write omits
+        # -AccessPid; the PID recorded by an earlier write is kept.
+        [AllowNull()]
+        [object]$Progress = $null
     )
 
     if ([string]::IsNullOrWhiteSpace($OperationFile)) { return }
@@ -229,13 +233,24 @@ function Write-DysflowOperationMarker {
         if ($dir -and -not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
         }
+        if (-not $AccessPid -and $script:DysflowMarkerAccessPid) {
+            $AccessPid = $script:DysflowMarkerAccessPid
+        }
         $startTime = $null
-        if ($AccessPid) {
+        if ($AccessPid -and $AccessPid -eq $script:DysflowMarkerAccessPid) {
+            $startTime = $script:DysflowMarkerProcessStartTime
+        } elseif ($AccessPid) {
             try {
                 $p = Get-Process -Id $AccessPid -ErrorAction Stop
                 $startTime = $p.StartTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
             } catch { Write-Debug "Diagnostics: $_" }
+            $script:DysflowMarkerAccessPid = [int]$AccessPid
+            $script:DysflowMarkerProcessStartTime = $startTime
         }
+        if ($null -eq $Progress -and $null -ne $script:DysflowMarkerProgress) {
+            $Progress = $script:DysflowMarkerProgress
+        }
+        $script:DysflowMarkerProgress = $Progress
         $record = [pscustomobject]@{
             operationId      = $OperationId
             action           = $Action
@@ -245,6 +260,9 @@ function Write-DysflowOperationMarker {
             processStartTime = $startTime
             status           = $Status
             updatedAt        = (Get-Date).ToUniversalTime().ToString("o")
+        }
+        if ($null -ne $Progress) {
+            $record | Add-Member -NotePropertyName progress -NotePropertyValue $Progress -Force
         }
         $record | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $OperationFile -Encoding UTF8
     } catch {
@@ -5291,7 +5309,10 @@ function Invoke-AccessProcedureBatch {
     Param(
         [Parameter(Mandatory = $true)]$AccessApplication,
         [Parameter(Mandatory = $true)][object[]]$Procedures,
-        $VbProject = $null
+        $VbProject = $null,
+        # Issue #1990 - invoked after each procedure with the results so far and
+        # the plan, so the caller can publish per-test progress while the batch runs.
+        [scriptblock]$OnProcedureCompleted = $null
     )
     $list = [System.Collections.Generic.List[object]]::new()
     for ($i = 0; $i -lt $Procedures.Count; $i++) {
@@ -5308,8 +5329,43 @@ function Invoke-AccessProcedureBatch {
             $r | Add-Member -NotePropertyName durationMs -NotePropertyValue ([int64]$sw.ElapsedMilliseconds) -Force
         } catch { Write-Debug "Diagnostics: $_" }
         $list.Add($r)
+        if ($null -ne $OnProcedureCompleted) {
+            try { & $OnProcedureCompleted @($list) $Procedures } catch { Write-Debug "Diagnostics: $_" }
+        }
     }
     return , @($list)
+}
+
+function New-TestRunProgress {
+    <#
+    .SYNOPSIS
+        Issue #1990 - the per-test progress block Run-Tests writes to its
+        operation marker: counts, the test running now and a compact result
+        (procedure, ok, durationMs, error) for every finished test.
+    #>
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Results,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Procedures
+    )
+    $compact = @($Results | ForEach-Object {
+        $entry = [ordered]@{ procedure = [string]$_.procedure; ok = [bool]$_.ok }
+        if ($null -ne $_.PSObject.Properties.Item('durationMs')) { $entry.durationMs = [int64]$_.durationMs }
+        if ($null -ne $_.PSObject.Properties.Item('error') -and $null -ne $_.error) { $entry.error = [string]$_.error }
+        [pscustomobject]$entry
+    })
+    $passed = @($compact | Where-Object { $_.ok }).Count
+    $completed = $compact.Count
+    $current = $null
+    if ($completed -lt $Procedures.Count) { $current = [string]$Procedures[$completed].procedure }
+    return [pscustomobject][ordered]@{
+        total       = $Procedures.Count
+        completed   = $completed
+        passed      = $passed
+        failed      = $completed - $passed
+        currentTest = $current
+        results     = $compact
+    }
 }
 
 function Invoke-ExportAction {
@@ -5970,7 +6026,15 @@ function Invoke-RunTestsAction {
             Write-DysflowResult -Result $compileResult -Depth 6
             throw ("VBA_COMPILE_ERROR: " + $compileResult.error.message)
         }
-        $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedures
+        # Issue #1990 - publish progress to the operation marker before the first
+        # test and after each one, so the caller sees the run advance.
+        $procedureList = @($procedures)
+        Write-DysflowOperationMarker -Status "running" -Progress (New-TestRunProgress -Results @() -Procedures $procedureList)
+        $publishProgress = {
+            param($resultsSoFar, $plan)
+            Write-DysflowOperationMarker -Status "running" -Progress (New-TestRunProgress -Results @($resultsSoFar) -Procedures @($plan))
+        }
+        $batchResults = Invoke-AccessProcedureBatch -AccessApplication $Session.Value.AccessApplication -VbProject $Session.Value.VbProject -Procedures $procedureList -OnProcedureCompleted $publishProgress
         if ($Json) {
             # The extra envelope layer needs one additional serialization depth
             # so nested per-test payloads retain the same fidelity as before.

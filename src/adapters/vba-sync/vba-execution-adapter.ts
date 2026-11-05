@@ -4,6 +4,7 @@ import {
   failureResult,
   type OperationResult,
   successResult,
+  type VbaSyncExecutionOptions,
 } from "../../core/contracts/index.js";
 import { detectUnparsableAtomOutput } from "../../core/services/vba-atom-output.js";
 import { parseArgsJson } from "../../core/services/vba-import-plan.js";
@@ -51,11 +52,21 @@ const EXECUTION_MAPPINGS = {
   ),
 };
 
+/**
+ * Issue #1990 — the caller's progress/cancellation options plus the plan's
+ * requested procedure names, so per-test progress reports the caller's names
+ * (#1823) rather than the names Access received.
+ */
+export type MappedToolExecutionOptions = VbaSyncExecutionOptions & {
+  testProcedureNames?: readonly string[];
+};
+
 export interface VbaSyncOrchestrator {
   executeMappedTool(
     toolName: string,
     params: Record<string, unknown>,
     mapping: DirectMapping,
+    options?: MappedToolExecutionOptions,
   ): Promise<OperationResult<unknown>>;
   cwd: string;
   /**
@@ -92,13 +103,14 @@ export class VbaExecutionAdapter {
   async execute(
     toolName: string,
     params: Record<string, unknown>,
+    options?: VbaSyncExecutionOptions,
   ): Promise<OperationResult<unknown>> {
     if (toolName === "run_vba") {
       // Just map it using normal flow. If run_vba is handled manually, this acts as fallback.
       return this.orchestrator.executeMappedTool(toolName, params, EXECUTION_MAPPINGS.run_vba);
     }
     if (toolName === "test_vba") {
-      return this.executeTestVba(params);
+      return this.executeTestVba(params, options);
     }
     return failureResult(
       createDysflowError(
@@ -108,7 +120,10 @@ export class VbaExecutionAdapter {
     );
   }
 
-  private async executeTestVba(params: Record<string, unknown>): Promise<OperationResult<unknown>> {
+  private async executeTestVba(
+    params: Record<string, unknown>,
+    options?: VbaSyncExecutionOptions,
+  ): Promise<OperationResult<unknown>> {
     // Resolve the plan (either direct `proceduresJson` or resolved from
     // `procedureName+argsJson` / `testsPath`). Capture both the canonical
     // JSON string (passed through to the runner) and the procedure names
@@ -203,6 +218,7 @@ export class VbaExecutionAdapter {
           proceduresJson: rewriteInvokedProcedureNames(resolvedProceduresJson, invocations),
         },
         EXECUTION_MAPPINGS.test_vba,
+        { ...options, testProcedureNames: resolvedProcedureNames },
       ),
       invocations,
     );

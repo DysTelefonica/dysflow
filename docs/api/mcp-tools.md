@@ -154,6 +154,22 @@ Run diagnostics on the MCP connection, Access installation, and configuration.
 Retrieve active and completed Access operation handles managed by Dysflow.
 * **Parameters**: None.
 
+While a tracked run is in flight, Dysflow re-reads its operation marker
+(`<projectRoot>/.dysflow/runtime/markers/<operationId>.json`) about once a
+second. The record moves to `status: "running"` with the runner's `accessPid`
+as soon as Access opens, and `updatedAt` follows each marker change (#1990).
+
+A `test_vba` record also carries `metadata.testProgress`:
+`{ total, completed, passed, failed, currentTest, results[] }`. Each
+`results[]` entry is `{ procedure, ok, durationMs?, error? }` for a finished
+test, `error` capped at 500 characters. `currentTest` is `null` once the plan
+finished.
+
+A run that times out or is cancelled keeps `metadata.testProgress` on its
+`timed_out` / `failed` record, so the tests it already finished stay readable
+here. A `completed` record is purged from the persistent registry as before;
+its results are in the `test_vba` response.
+
 ### `cleanup_access_operation`
 Inspect a tracked operation or safely clean up eligible `MSACCESS.EXE` processes owned by Dysflow.
 * **Parameters**:
@@ -582,6 +598,8 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
   - An atom whose output opens as a JSON object (`{"` or `{}`) but does not parse fails on its own with `cause.code: "ATOM_OUTPUT_UNPARSABLE"` (`retryable: false`). Its failure entry names the procedure, carries the parser message in `error`, and adds `outputExcerpt`: at most 240 characters of the raw output around the failing position. Every other atom of the run is still reported in `failures[]` and `results[]`. A plain non-JSON return value such as `"OK"` or a braced GUID keeps passing (#1850).
   - `error.details` is redacted leaf by leaf: paths, secrets and connect-string passwords are stripped from each string, and a string holding JSON, such as `returnValue`, stays valid JSON and is kept byte-for-byte unless redaction changed it. Text read from files in an atom's output can no longer turn the call into a generic `MCP_TOOL_ERROR` (#1850).
   - Limitation: when a single procedure is an aggregate entry point (e.g. a VBA `RunAll`), Dysflow can only identify the inner failures if `RunAll` itself returns them in its JSON payload (`ok: false` plus `error`/`logs`). Dysflow does not parse VBA assertion output on its own.
+  - Progress (#1990): when the request carries `_meta.progressToken`, `test_vba` sends one `notifications/progress` per finished test, with `progress` counting from 1, `total` set to the plan size and `message` set to `"<procedure> passed"` or `"<procedure> failed"`. A client that resets its request timeout on progress keeps a long run alive. The same per-test progress is on the operation record in `list_access_operations` (`metadata.testProgress`).
+  - Cancellation (#1990): cancelling the request (`notifications/cancelled`, which an MCP client sends on its own request timeout) stops the run, because it only touches the temporary sandbox copy. The result is `VBA_MANAGER_ABORTED`. Both `VBA_MANAGER_ABORTED` and `VBA_MANAGER_TIMEOUT` carry `error.details.testProgress` with the tests that already finished, and the operation record keeps the same block.
 * **`validate_manifest`**: Pre-validate a VBA test manifest before `test_vba`.
   - Parameters: `testsPath`/`path` (string, optional), `manifest` (object or array, optional), `modules` (object, optional), `destinationRoot`/`projectRoot` (optional)
   - Relative `testsPath` values resolve from the project root, matching `test_vba` manifest resolution.
