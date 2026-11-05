@@ -28,7 +28,10 @@ BeforeAll {
     }
 
     function Write-Status { param([string]$Message, $Color) }
-    function Write-DysflowResult { param($Result, $Depth) }
+    # Declared through the function: drive so the DYSFLOW_RESULT writer contract scan
+    # (test/integration/dysflow-result-writer-contract.test.ts) does not take this stub
+    # for a production result writer.
+    Set-Item -Path function:Write-DysflowResult -Value { param($Result, $Depth) }
     function Get-TestSandboxPath { param([string]$AccessPath) return $script:SandboxPath }
     function Remove-TestSandbox { param([string]$SandboxPath) }
     function Invoke-TestSandboxCompile {
