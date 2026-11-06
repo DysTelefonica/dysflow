@@ -20,10 +20,27 @@
  * finds the right next step without consulting the docs.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { VbaManagerExecutor } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import { VbaSyncAdapter } from "../../../src/adapters/vba-sync/vba-sync-adapter";
 import type { AccessOperationPreflightCleanup } from "../../../src/core/operations/access-operation-preflight";
+
+// An empty working directory: the destination root falls back to the adapter
+// cwd, and the pre-import gates walk it. The process cwd is the whole
+// repository tree (.git, node_modules), which made the import case take
+// tens of seconds.
+let cwd: string;
+
+beforeAll(async () => {
+  cwd = await mkdtemp(join(tmpdir(), "dysflow-757-timeout-"));
+});
+
+afterAll(async () => {
+  await rm(cwd, { recursive: true, force: true });
+});
 
 function buildAdapterWithCleanup(
   preflightCleanup: AccessOperationPreflightCleanup,
@@ -41,6 +58,7 @@ function buildAdapterWithCleanup(
     preflightCleanup,
     timeoutMs,
     accessPath: "C:/db/front.accdb",
+    cwd,
     env: {},
   });
 }
@@ -148,12 +166,16 @@ describe("VbaSyncAdapter — VBA_MANAGER_TIMEOUT envelope (#757 C3)", () => {
     // When the caller passes apply:true, wasApply:true on the
     // timeout envelope tells the consumer "a partial commit is on
     // the binary".
+    const startedAt = Date.now();
     const result = await service.execute("import_modules", {
       accessPath: "C:/db/front.accdb",
       projectRoot: "C:/repo",
       moduleNames: ["Module_Foo"],
       apply: true,
     });
+    // The pre-import gates walk the destination root; it must be the empty
+    // test cwd, never the process cwd (the whole repository tree).
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected timeout failure");
