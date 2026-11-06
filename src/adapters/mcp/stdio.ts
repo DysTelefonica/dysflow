@@ -1084,10 +1084,12 @@ export function createDynamicServices(
       },
     },
     vbaSyncToolService: {
-      execute: async (toolName, input) => {
+      // Issue #1993 T5 — `options` carries test_vba's progress callback and
+      // cancel signal (#1990); dropping it here silenced both in production.
+      execute: async (toolName, input, executionOptions) => {
         const res = await resolveService(input);
         if (res.ok && res.services.vbaSyncToolService !== undefined) {
-          return res.services.vbaSyncToolService.execute(toolName, input);
+          return res.services.vbaSyncToolService.execute(toolName, input, executionOptions);
         }
         const fallbackService = createUnavailableVbaSyncToolService(
           res.ok
@@ -1095,7 +1097,7 @@ export function createDynamicServices(
             : res.error,
           options,
         );
-        return fallbackService.execute(toolName, input);
+        return fallbackService.execute(toolName, input, executionOptions);
       },
     },
   };
@@ -1214,11 +1216,11 @@ function createUnavailableVbaSyncToolService(
     env: options.env ?? process.env,
   });
   return {
-    execute: async (toolName, input) => {
+    execute: async (toolName, input, executionOptions) => {
       const params = isRecord(input) ? input : {};
       const isSafeImportDryRun =
         (toolName === "import_all" || toolName === "import_modules") && truthy(params.dryRun);
-      if (isSafeImportDryRun) return fallback.execute(toolName, input);
+      if (isSafeImportDryRun) return fallback.execute(toolName, input, executionOptions);
       return failureResult(error);
     },
   };

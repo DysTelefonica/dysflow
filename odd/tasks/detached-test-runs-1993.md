@@ -37,7 +37,7 @@ Evidence: T0 map (no per-accessPath lock on the vba-sync path; `completed` regis
 - T3b Hardening batch 1: final counts from the result, HTTP refuses detach, T3 review warnings (async spawn error, two-directional guard, guard I/O, projectId error, stale view, matrix count) — done (620ee457; RDD review approved, 6 advisory findings, 3 forwarded to T3c)
 - T3c Hardening batch 2, T2 review warnings (df58f715 review approved, 15 advisory findings): job-object survival of the detached runner, null start time pins the lock, explicit password dropped, runner forces writes, stale-takeover race, exclusive-create fallback race, prune failure blocks the accessPath, missing request leaves running, in-process start failure, runner options subset, lock key vs driven binary; plus from the T3b review: null-PID sync record pins detached starts, double abandon, transient read reported as not found — done (375ded54; RDD review approved, 7 advisory findings)
 - T3d Hardening batch 3 (T3c review): ambiguous WMI launch never double-spawns, one runner per run (exclusive claim), absolute PowerShell/cmd paths, synchronous registry heartbeat every 30 s — done (commit below)
-- T5 Verification: full pnpm test, test:ps1, mcp:context-budget, real-Access smoke (all) — pending
+- T5 Real-Access smoke (release fixture, 4 tests): S1 1.7-1.9 s start via wmi, S2 refusals + one Access per run, S3 0-diff vs sync, S4 survives a killed server, S6, S7 pass; found and fixed the stdio wrapper dropping {onProgress, signal} (v4.5.7 #1990 regression) — done (commit below)
 
 ## Log
 
