@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [v4.5.8] - 2026-11-06
+
+Detached `test_vba` runs (#1993): start a run with `detach: true`, keep working, and fetch the result later with the new `get_test_run`. Also fixes the v4.5.7 #1990 progress and cancellation, which did not reach the run through the stdio server.
 
 ### Changes
 
