@@ -15,10 +15,10 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T2: #2000 Pi typed errors — S1-S4, delegated independent parallel writer, merged PR #2004 (aac2b74e + 12fa011c; merge83a85d33), CI green and issue closed; Risk item2.
 - T3: #2001 large semantic diff counts — S1-S4, inline, merged PR #2005 (f6813b27; mergefc8b4612), CI green and issue closed; missing VB_Name stays actionable.
 - T4: #2002 legacy CodeBehind — S1-S4, inline, merged PR #2003 (9ffa2d6e; merge e58c106f), issue closed.
-- T5: #1918 startup-crash investigation — S1-S4, blocked by unknown-owned headless Access at 14:15 UTC; no probe launched; causal evidence still required.
-- T6: #1993 existing implementation and failed release — S1-S4, inline reconciliation complete; existing 7014-line feature preserved, focused107 tests/build/context-budget PASS; size exception explicitly authorized by owner; feature-only PR preparation in progress.
+- T5: #1918 startup-crash investigation — S1-S4, quiet window now available; one real rawCOM no-DB probe passed, controlled canonical/blank-DB contrast running; causal evidence still required.
+- T6: #1993 existing implementation and failed release — S1-S4, merged PR #2007 with scoped owner-authorized size exception; preserved original commits, exact-head CIgreen; merge c880e557, issue closed.
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
-- T8: Refresh queue and publish one final release — S1-S4, pending #1993 delivery and #1918 quiet-window investigation; no tag or release created.
+- T8: Refresh queue and publish one final release — S1-S4, pending #1918 causal investigation and canonical release gates; no tag or release created.
 
 ## Log
 
@@ -46,3 +46,7 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 
 - L19 (owner): "Autorizo" in response to the scoped size-exception question for #1993. This authorizes the 7014-authored-line feature delivery, not release with unresolved issues, not killing other Access processes, and not broad future size waivers.
 - L20: Created feat/detached-test-runs-1993 at53ac0fc1 from preserved integration. Only queue-tracking document removed from that delivery; all other source bytes identical to previously verified integrated tree. Exact feature diff remains84files,6871additions+143deletions. Existing source commits preserved.
+
+- L21 (owner): "dale"; "sigue". Continue the original queue; no additional kill/production/remote-operation authorization inferred.
+- L22: PR#2007 (feature-only7014lines) opened with type:feature and size:exception, exacthead53ac0fc1 CIpassed, mergedc880e557 and #1993closed. Nativecleanup of its own hoisted-dependency worktree succeeded; localfeaturebranch deleted, remote preserved. Queuebranch retained its tracker when merging origin/main's historical tracker deletion.
+- L23: At17:35UTC preflight found noAccess. RealSTArawCOM probe ownedPID2932 (creation18:10:16.2252991UTC) survived120.789s, Quit(2) returned, FinalRelease/GC completed, ownedprocess exited, and exactPID+creation Application1000 query found0crashes. NoDB opened/securitychanged/forcedkill. This nonrepro does not resolve #1918. ScratchTEMP/tmp.XxlTP1FF5j retains stages.jsonl.
