@@ -22,7 +22,7 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
 - T8: Refresh queue and publish one final release — S1-S4, pending #1918 causal investigation and canonical release gates; no tag or release created.
 
-- T9: Isolate manual/release test-runtime installation — S1/S5, inline, in progress; existing exclude filter and private marker, no new CLI options; Risk item5; narrow workflow/test/doc surface.
+- T9: Isolate manual/release test-runtime installation — S1/S5, inline, locally verified commit70b7da44;284tests + independent containment/restore probes PASS; newissue human form confirmations and manual-run consent pending; Risk item5.
 
 ## Log
 
@@ -59,3 +59,8 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - L25: Do not interpret canonical OwnedPidKilled=true as proof of termination: current helper sets it on observed naturalexit too; suppression killstubs were never invoked in theseprobes. Historicalrelease42059432207 metadata returnedno retainedartifacts. Read-only safety audit of manualworkflow installer isolation pending before any runner dispatch; no remotejob started.
 
 - L26: Freshsource audit confirms both Access workflows run install with only runtime-dir/no-tui; this still discovers global skill/pointertargets and writes the machine marker. Existing --exclude opencode,claude,codex,cursor,pi plus DYSFLOW_RUNTIME_MARKER_PATH suffice, including explicit external Pi agentdirs. Preparing bounded safety correction locally before remoteexecution; no unsafeinstall orworkflowdispatch performed. Public newissue publication remains subject to required form confirmations; no new tracker created yet.
+
+- L27: T9 observed meaningfulRED:4cases/44assertions showed profile/pointerwrites and fakeglobalmarkerredirect at successfulinstall, CIset/unset. InitialmalformedCursorfixture failure was corrected and not counted asRED. Candidate70b7da44 (128additions/5deletions,4files) adds existing adapterexclusions and job-private marker toboth workflows; normalinstaller sourceunchanged. Full21file284testsPASS, finalfocused4/Biome/testtypesPASS, full lintPASSwith3existingwarnings.
+- L28: Independentfresharchive verifier70b7da44 re-ran21files284testsPASS, reproducedbaseline4/44failures, and executed exact READMEtry/finally restoration4/4(previousmarkerdefined/unset,installersuccess/throw). NoAccess/jobs/production writes; actualmachine marker hashunchanged. VerifierTEMP/tmp.1RGV5vyFq8 retains baseline/candidate dependencyjunctions to activeisolationcheckout:neverrecursivefollow.
+- L29: Completedopen+closedduplicate search for test-runtime(54results), reviewed related1771/475/574infull; no equivalentworkflowinstallcontainmenttracker. Prepared privacy-scanned bug_report.yml-conforming draft in TEMP/dysflow-workflow-issue-2075e0c56c8845e39d839a598bdaaec2/issue-body.md, hash1C5956FE14EF213151E68EE749EFAFF3CBEDB1B38F2CA573630287CD75D43C98. Two required first-person pre-submissioncheckboxes leftUNSET pendingexplicit humanaffirmation; noissueorPRcreated, no sourcepush.
+- L30: #1993postmerge mainCI atc880e557passed. Onlypublishedopenissue remains1918; releaseunchangedv4.5.7. Standalone4ownedAccessinstancesallcompletedwithoutcrash orsurvivors, notcausalresolution. Nextneededproof ismanualrunner workload aftersafeisolationfix; no remoteexecution permission inferred from earlier sizeexception. No manualjobdispatched.
