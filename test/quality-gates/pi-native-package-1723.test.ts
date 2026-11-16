@@ -132,7 +132,139 @@ describe("Dysflow Pi-native package (#1723)", () => {
     expect(calls).toEqual([{ name: "bootstrap", args: {} }]);
   });
 
-  it("throws only a bounded error through Pi's public tool-error path", async () => {
+  it("preserves bounded typed diagnostics through Pi's public tool-error path (#2000)", async () => {
+    const failures = Array.from({ length: 20 }, (_, index) => ({
+      procedure: `Test_${index}`,
+      error: "expected [today] obtained []",
+    }));
+    const tool = createDysflowNativeTool({
+      callTool: async () => ({
+        content: [{ type: "text", text: "fallback must not replace the envelope" }],
+        structuredContent: {
+          schemaVersion: "dysflow.result/v1",
+          isError: true,
+          ok: false,
+          error: {
+            code: "VBA_TESTS_FAILED",
+            message: "20 VBA tests failed password=supersecret C:/private/frontend.accdb",
+            remediation: "Fix the assertion and rerun test_vba.",
+            details: { failures, rawSecret: "must-not-leak" },
+          },
+        },
+        isError: true,
+      }),
+    });
+    const error = await tool.execute("call-error", { tool: "test_vba" }).catch((value) => value);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain("VBA_TESTS_FAILED");
+    expect(error.message).toContain("20 VBA tests failed");
+    expect(error.message).toContain("Fix the assertion and rerun test_vba.");
+    expect(error.message).toContain("Test_0");
+    expect(error.message).toContain("expected [today] obtained []");
+    expect(error.message).not.toContain("Test_19");
+    expect(error.message).not.toContain("supersecret");
+    expect(error.message).not.toContain("C:/private");
+    expect(error.message).not.toContain("must-not-leak");
+    expect(error.message.length).toBeLessThan(8_000);
+    const result = { content: [{ type: "text", text: error.message }] };
+    expect(renderDysflowResultText("test_vba", result, { isError: true })).toBe(
+      "↳ ✗ Dysflow failed · VBA_TESTS_FAILED",
+    );
+  });
+
+  it("recovers a text-only typed envelope and identifies the rejected parameter (#2000)", async () => {
+    const envelope = {
+      schemaVersion: "dysflow.result/v1",
+      ok: false,
+      error: {
+        code: "MCP_INPUT_INVALID",
+        message: "Invalid input",
+        remediation: "Pass destinationRoot.",
+        missingParam: "destinationRoot",
+      },
+    };
+    const tool = createDysflowNativeTool({
+      callTool: async () => ({
+        isError: true,
+        content: [{ type: "text", text: JSON.stringify(envelope) }],
+      }),
+    });
+    await expect(tool.execute("call-input", { tool: "test_vba" })).rejects.toThrow(
+      /MCP_INPUT_INVALID.*destinationRoot/,
+    );
+    expect(
+      renderDysflowResultText("test_vba", {
+        details: { mcpResult: { structuredContent: envelope } },
+      }),
+    ).toBe("↳ ✗ Dysflow failed · MCP_INPUT_INVALID");
+  });
+
+  it.each([
+    ["bearer header", "Authorization: Bearer SYNTHETIC_BEARER_SECRET", "SYNTHETIC_BEARER_SECRET"],
+    ["JSON credential", '{"token":"SYNTHETIC_JSON_SECRET"}', "SYNTHETIC_JSON_SECRET"],
+    ["POSIX path", "/opt/company-private/frontend.accdb", "company-private"],
+    [
+      "spaced Windows path",
+      "C:\\Users\\Jane Doe\\PrivateProject\\frontend.accdb",
+      "PrivateProject",
+    ],
+  ])(
+    "redacts %s from public typed errors and assertion details (#2000)",
+    async (_, sensitive, sentinel) => {
+      const message = `Cannot use ${sensitive}; expected [today] obtained [].`;
+      const tool = createDysflowNativeTool({
+        callTool: async () => ({
+          isError: true,
+          content: [{ type: "text", text: "fallback" }],
+          structuredContent: {
+            schemaVersion: "dysflow.result/v1",
+            ok: false,
+            error: {
+              code: "VBA_TESTS_FAILED",
+              message,
+              remediation: "Fix Test_X and rerun test_vba.",
+              details: { failures: [{ procedure: "Test_X", error: message }] },
+            },
+          },
+        }),
+      });
+      const failure = await tool
+        .execute("private-error", { tool: "test_vba" })
+        .catch((error) => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure.message).not.toContain(sentinel);
+      expect(failure.message).not.toContain("Doe\\PrivateProject");
+      const envelope = JSON.parse(failure.message);
+      expect(envelope.error.message).toContain("expected [today] obtained []");
+      expect(envelope.error.details.failures[0].error).toContain("expected [today] obtained []");
+      expect(envelope.error.details.failures[0].procedure).toBe("Test_X");
+      expect(envelope.error.remediation).toBe("Fix Test_X and rerun test_vba.");
+      expect(failure.message.length).toBeLessThan(8_000);
+      expect(
+        renderDysflowResultText(
+          "test_vba",
+          { content: [{ type: "text", text: failure.message }] },
+          { isError: true },
+        ),
+      ).toBe("↳ ✗ Dysflow failed · VBA_TESTS_FAILED");
+    },
+  );
+
+  it("keeps successful facade content and details unchanged (#2000)", async () => {
+    const result = { content: [{ type: "text", text: "ok" }], structuredContent: { ok: true } };
+    const tool = createDysflowNativeTool({ callTool: async () => result });
+    await expect(tool.execute("call-success", { tool: "bootstrap" })).resolves.toEqual({
+      content: result.content,
+      details: { mcpResult: result },
+    });
+    expect(
+      renderDysflowResultText("test_vba", {
+        content: [{ type: "text", text: '{"ok":true,"passed":3}' }],
+      }),
+    ).toBe("↳ ✓ done");
+  });
+
+  it("keeps untyped backend failures private", async () => {
     const tool = createDysflowNativeTool({
       callTool: async () => ({
         content: [

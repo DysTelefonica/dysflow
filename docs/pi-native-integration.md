@@ -164,7 +164,9 @@ Collapsed calls show one bounded status line. They never include arguments, secr
 
 Successful structured MCP content appears only when the result is expanded.
 
-MCP failures use Pi's public thrown-error path with a bounded `Dysflow operation failed.` message, so arbitrary backend error text never enters Pi's tool result.
+MCP failures use Pi's public thrown-error path. A validated `dysflow.result/v1` failure preserves the error code, message, remediation, rejected or missing parameter, and up to ten failing VBA procedures with their assertions in a JSON envelope capped at 8,000 characters. Diagnostic strings are length-limited; credential assignments and absolute paths are redacted. Other backend payload fields are not copied.
+
+Collapsed failure cards show only the validated error code, never diagnostic text. Untyped failures retain the generic `Dysflow operation failed.` message. Successful results are unchanged. The implementation is in `plugin/pi/native-tool.ts` and `plugin/pi/dysflow-tool-chrome.ts`.
 
 The package uses Pi's public extension and TUI APIs; it does not use private Pi APIs.
 
