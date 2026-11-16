@@ -1,5 +1,33 @@
 # Changelog
 
+## [v4.5.9] - 2026-11-16
+
+### Changes
+
+- fix(ci): isolate Access test-runtime profile and marker writes
+- docs: keep queue tracking outside detached-run delivery
+- docs(odd): retain final verification and delivery blockers
+- docs(odd): record installer implementation commit
+- fix(install): stage frozen dependency graphs before runtime promotion (#1999)
+- docs(odd): record merged fixes and installer compatibility proof
+- docs(odd): record queue fixes and remaining evidence
+- fix(verify): count ordered common edges before LCS budget (#2001)
+- docs(odd): record Pi error verification evidence
+- fix(pi): preserve bounded redacted error diagnostics (#2000)
+- docs(odd): track the pending release queue
+- fix(verify): recognize legacy bare code-behind markers (#2002)
+- fix(toolchain): align Biome schema with pinned CLI
+- chore(deps-dev): bump @biomejs/biome from 2.5.15 to 2.6.7
+- chore(deps): bump pnpm/action-setup from 6.1.0 to 6.1.1
+- chore(deps): bump github/codeql-action/init from 4.39.0 to 4.39.3
+- chore(deps): bump softprops/action-gh-release from 3.0.3 to 3.0.4
+- chore(deps): bump github/codeql-action/analyze from 4.39.0 to 4.39.3
+- chore(deps): bump @modelcontextprotocol/sdk from 1.32.1 to 1.32.2
+- chore(deps-dev): bump vite from 8.3.3 to 8.3.5
+- chore(deps-dev): bump typebox from 1.4.2 to 1.4.3
+
+
+
 ## [v4.5.8] - 2026-11-06
 
 Detached `test_vba` runs (#1993): start a run with `detach: true`, keep working, and fetch the result later with the new `get_test_run`. Also fixes the v4.5.7 #1990 progress and cancellation, which did not reach the run through the stdio server.
