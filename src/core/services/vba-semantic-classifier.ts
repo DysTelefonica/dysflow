@@ -24,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-09-14.r8-verify-code-v2-categories";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-11-16.r9-legacy-codebehind";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -847,7 +847,7 @@ function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boo
 }
 
 /**
- * Removes the `CodeBehindForm` / `CodeBehindReport` section (and everything after
+ * Removes the `CodeBehindForm` / `CodeBehindReport` / legacy `CodeBehind` section (and everything after
  * it) from a form/report serialization document, leaving only the UI/layout
  * definition.
  *
@@ -869,8 +869,8 @@ function applyStructuralStrips(wsNorm: string, fileType: string, keepVbName: boo
 export function stripCodeBehindSection(text: string, fileType: string): string {
   if (!FORM_FILE_TYPES.has(fileType)) return text;
   const lines = text.split("\n");
-  const markerIndex = lines.findIndex(
-    (line) => line.trim() === "CodeBehindForm" || line.trim() === "CodeBehindReport",
+  const markerIndex = lines.findIndex((line) =>
+    /^(?:CodeBehindForm|CodeBehindReport|CodeBehind)$/.test(line.trim()),
   );
   if (markerIndex === -1) return text;
   return lines.slice(0, markerIndex).join("\n");
