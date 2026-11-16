@@ -66,7 +66,7 @@ After that, `dysflow --version` → `4.5.7` and `dysflow mcp` answers `initializ
 
 ## Tasks
 
-- T1: S1-S2, delegated, verified; reason: independent installer and Pi units launched together; parent owns git; commit pending.
+- T1: S1-S2, delegated, verified; reason: independent installer and Pi units launched together; parent owns git; implementation commit f35360fe.
 
 ## Log
 
