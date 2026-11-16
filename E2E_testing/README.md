@@ -176,7 +176,9 @@ try {
     $env:DYSFLOW_RUNTIME_MARKER_PATH = $markerBefore
 }
 
-# 3. Run the harness. Auto-uses test-runtime/bin/dysflow.cmd.
+# 3. Run the harness. Release mode rebuilds and reinstalls test-runtime itself,
+#    with all profile adapters excluded and a private marker under test-runtime.
+#    It never relies on this shell's temporary marker or the earlier install.
 pnpm test:e2e:mcp:release
 ```
 

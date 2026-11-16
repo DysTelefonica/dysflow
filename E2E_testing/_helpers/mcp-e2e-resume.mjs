@@ -105,13 +105,21 @@ export async function prepareReleaseRuntime(
       "Release-gate E2E refuses DYSFLOW_E2E_COMMAND; repository test-runtime is required",
     );
   }
+  // A release battery rebuilds its runtime even after workflow setup. Contain
+  // this nested install too, including an inherited machine-marker override.
+  const childEnv = {
+    ...env,
+    DYSFLOW_RUNTIME_MARKER_PATH: join(repoRoot, "test-runtime", ".e2e-runtime-marker"),
+  };
+  const childOptions = { cwd: repoRoot, stdio: "inherit", env: childEnv, windowsHide: true };
   if (process.platform === "win32") {
-    execute(env.ComSpec ?? process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "pnpm build"], {
-      cwd: repoRoot,
-      stdio: "inherit",
-    });
+    execute(
+      env.ComSpec ?? process.env.ComSpec ?? "cmd.exe",
+      ["/d", "/s", "/c", "pnpm build"],
+      childOptions,
+    );
   } else {
-    execute("pnpm", ["build"], { cwd: repoRoot, stdio: "inherit" });
+    execute("pnpm", ["build"], childOptions);
   }
   execute(
     process.execPath,
@@ -121,8 +129,10 @@ export async function prepareReleaseRuntime(
       "--runtime-dir",
       join(repoRoot, "test-runtime"),
       "--no-tui",
+      "--exclude",
+      "opencode,claude,codex,cursor,pi",
     ],
-    { cwd: repoRoot, stdio: "inherit" },
+    childOptions,
   );
   await assertReleaseRuntimeIdentity(repoRoot);
 }

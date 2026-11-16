@@ -14,6 +14,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+// @ts-expect-error -- the plain ESM harness is exercised through its process port.
+import { prepareReleaseRuntime } from "../../E2E_testing/_helpers/mcp-e2e-resume.mjs";
 
 // These tests run a real `pnpm install --prod` for the runtime (extractor.ts has a
 // 120 s budget for it). The global 15 s test budget fails them on a loaded runner, so
@@ -185,14 +187,22 @@ async function seedBundledSkills(packageRoot: string): Promise<void> {
 
 describe("Access workflow runtime installation isolation", () => {
   it.each(
-    ["release.yml", "access-e2e-manual.yml"].flatMap((workflow) =>
+    ["release.yml", "access-e2e-manual.yml", "nested-release"].flatMap((workflow) =>
       [true, false].map((ci) => ({ workflow, ci })),
     ),
   )("preserves host profiles and marker for $workflow (CI=$ci)", async ({ workflow, ci }) => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-workflow-isolation-"));
     try {
       const lines = (
-        await readFile(join(process.cwd(), ".github", "workflows", workflow), "utf8")
+        await readFile(
+          join(
+            process.cwd(),
+            ".github",
+            "workflows",
+            workflow === "nested-release" ? "release.yml" : workflow,
+          ),
+          "utf8",
+        )
       ).split(/\r?\n/);
       const runIndex = lines.findIndex((line) =>
         /^\s*(?:run:\s*)?node dist\/cli\/index\.js install\b/.test(line),
@@ -209,7 +219,7 @@ describe("Access workflow runtime installation isolation", () => {
         .find((line) => /^\s*DYSFLOW_RUNTIME_MARKER_PATH:/.test(line));
       const machineRoot = join(root, "machine");
       const machineMarker = join(machineRoot, "dysflow", ".dysflow-marker");
-      const marker =
+      let marker =
         markerLine === undefined
           ? machineMarker
           : markerLine
@@ -221,13 +231,13 @@ describe("Access workflow runtime installation isolation", () => {
         resolve(marker).startsWith(`${resolve(root)}/`) ||
           resolve(marker).startsWith(`${resolve(root)}\\`),
       ).toBe(true);
-      const args = (lines[runIndex] ?? "")
+      let args = (lines[runIndex] ?? "")
         .replace(/^\s*(?:run:\s*)?node dist\/cli\/index\.js install\s*/, "")
         .trim()
         .split(/\s+/);
       const runtimeIndex = args.indexOf("--runtime-dir") + 1;
       expect(runtimeIndex).toBeGreaterThan(0);
-      const runtimeDir = resolve(root, (args[runtimeIndex] ?? "").replaceAll("\\", "/"));
+      let runtimeDir = resolve(root, (args[runtimeIndex] ?? "").replaceAll("\\", "/"));
       args[runtimeIndex] = runtimeDir;
       const home = join(root, "host-home");
       const pi = join(root, "external-pi");
@@ -255,16 +265,35 @@ describe("Access workflow runtime installation isolation", () => {
       const previousMarker = `1\n${join(root, "previous-runtime")}\n`;
       await writeFile(machineMarker, previousMarker);
       const packageRoot = await createPackageRoot(root, "0.1.0", "ISOLATED_RUNTIME");
+      let env = {
+        USERPROFILE: home,
+        HOME: home,
+        ProgramData: machineRoot,
+        PI_CODING_AGENT_DIR: pi,
+        DYSFLOW_RUNTIME_MARKER_PATH: marker,
+        ...(ci ? { CI: "true" } : {}),
+      };
+      if (workflow === "nested-release") {
+        const runtimeApp = join(packageRoot, "test-runtime", "app");
+        await mkdir(runtimeApp, { recursive: true });
+        await cp(join(packageRoot, "dist"), join(runtimeApp, "dist"), { recursive: true });
+        await cp(join(packageRoot, "package.json"), join(runtimeApp, "package.json"));
+        const inheritedEnv = { ...env, DYSFLOW_RUNTIME_MARKER_PATH: machineMarker };
+        await prepareReleaseRuntime(packageRoot, {
+          env: inheritedEnv,
+          execute: (_command: string, childArgs: string[], options: { env?: typeof env }) => {
+            if (!childArgs.includes("install")) return;
+            args = childArgs.slice(2);
+            env = options.env ?? inheritedEnv;
+          },
+        });
+        expect(inheritedEnv.DYSFLOW_RUNTIME_MARKER_PATH).toBe(machineMarker);
+        runtimeDir = args[args.indexOf("--runtime-dir") + 1] ?? "";
+        marker = env.DYSFLOW_RUNTIME_MARKER_PATH;
+      }
       const result = await handleInstallCommand(args, {
         packageRoot,
-        env: {
-          USERPROFILE: home,
-          HOME: home,
-          ProgramData: machineRoot,
-          PI_CODING_AGENT_DIR: pi,
-          DYSFLOW_RUNTIME_MARKER_PATH: marker,
-          ...(ci ? { CI: "true" } : {}),
-        },
+        env,
         piPackageCommandRunner: simulatedPiPackageRunner,
       });
       expect(result.exitCode, result.stderr).toBe(0);
