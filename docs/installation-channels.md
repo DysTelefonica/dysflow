@@ -27,6 +27,12 @@ The flag does not mean the same thing on both commands. Read this before assumin
 
 An operator who wants the latest published build wants `dysflow update`. That command fetches on every channel.
 
+Every channel prepares fresh runtime and Pi-facade dependencies before replacing
+the installed app. A dependency-install failure leaves the previous app and its
+channel/version record intact; retry the reported install or update command after
+resolving the dependency error. The shared implementation is
+`src/cli/commands/install/extractor.ts`; channel verification gates are unchanged.
+
 ## Channel resolution order
 
 Dysflow resolves the active channel from the first source that supplies one:

@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runCommand } from "./command-runner.js";
 import { fileExists } from "./file-utils.js";
@@ -135,6 +135,7 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
     ) {
       copiedFiles.push(runtimePaths.packageJsonDest);
     }
+    await preparePnpmWorkspace(packageRoot, runtimePaths.appDir);
     // Install production dependencies so runtime deps (e.g. @modelcontextprotocol/sdk)
     // are available without requiring the full source node_modules to be copied.
     // When the lockfile is present we pass --frozen-lockfile to fail closed if
@@ -142,7 +143,7 @@ async function copyRuntime(runtimePaths: RuntimePaths, packageRoot: string): Pro
     // A runtime refresh must relink the complete production graph. Plain
     // `pnpm install` may trust a stale node_modules layout left by an older
     // runtime and keep broken transitive links (for example AJV -> fast-uri).
-    const installArgs = ["install", "--ignore-scripts", "--prod", "--force"];
+    const installArgs = productionInstallArgs(true);
     if (lockfileAvailable) {
       installArgs.push("--frozen-lockfile");
     }
@@ -195,12 +196,47 @@ async function installPiFacade(runtimePaths: RuntimePaths): Promise<string[]> {
       );
     }
   }
-  const installArgs = ["install", "--ignore-scripts", "--prod", "--force"];
+  await preparePnpmWorkspace(runtimePaths.piFacadeSource, runtimePaths.piFacadeDest);
+  const installArgs = productionInstallArgs(false);
   if (await fileExists(path.join(runtimePaths.piFacadeSource, "pnpm-lock.yaml"))) {
     installArgs.push("--frozen-lockfile");
   }
   await runCommand("pnpm", installArgs, runtimePaths.piFacadeDest, { timeoutMs: 120_000 });
   return copiedFiles;
+}
+
+async function preparePnpmWorkspace(sourceRoot: string, destinationRoot: string): Promise<void> {
+  const source = path.join(sourceRoot, "pnpm-workspace.yaml");
+  const destination = path.join(destinationRoot, "pnpm-workspace.yaml");
+  if (await fileExists(source)) {
+    await copyIfDifferent(source, destination, { force: true });
+    return;
+  }
+  const manifest = JSON.parse(
+    await readFile(path.join(destinationRoot, "package.json"), "utf8"),
+  ) as { pnpm?: { overrides?: Record<string, string> } };
+  // pnpm 12 no longer reads package.json's pnpm.overrides. Derive its config
+  // from the same signed package bytes; never relax the frozen-lockfile check.
+  // Even an empty config keeps Pi isolated from the parent runtime's overrides.
+  await writeFile(
+    destination,
+    `${JSON.stringify({ overrides: manifest.pnpm?.overrides }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function productionInstallArgs(autoInstallPeers: boolean): string[] {
+  // Match the signed lockfiles rather than the host pnpm major's defaults.
+  // A fresh hoisted graph also avoids inheriting MSYS-style dependency links.
+  return [
+    "install",
+    "--ignore-scripts",
+    "--prod",
+    "--force",
+    `--config.auto-install-peers=${autoInstallPeers}`,
+    "--config.exclude-links-from-lockfile=false",
+    "--config.node-linker=hoisted",
+  ];
 }
 
 async function copyDocs(runtimePaths: RuntimePaths, packageRoot: string): Promise<string[]> {
@@ -329,11 +365,52 @@ export async function installRuntime(
   // copyRuntime creates or replaces any destination byte. A partial release
   // archive is not installable and must never leave a half-updated runtime.
   await assertBundledSkillsAvailable(packageRoot);
-  const copiedFiles = [
-    ...(await copyRuntime(runtimePaths, packageRoot)),
-    ...(await copyDocs(runtimePaths, packageRoot)),
-  ];
-  await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
-  await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);
-  return { copiedFiles };
+  await mkdir(runtimePaths.runtimeDir, { recursive: true });
+  const stagingDir = await mkdtemp(path.join(runtimePaths.runtimeDir, ".dysflow-install-"));
+  const stagedPaths = resolveRuntimePaths(stagingDir, packageRoot);
+  const backupApp = path.join(stagingDir, "previous-app");
+  let backedUp = false;
+  let promoted = false;
+  let preserveBackup = false;
+  try {
+    // Prepare both dependency graphs without touching the installed app or state.
+    const stagedFiles = await copyRuntime(stagedPaths, packageRoot);
+    if (await fileExists(runtimePaths.appDir)) {
+      await rename(runtimePaths.appDir, backupApp);
+      backedUp = true;
+    }
+    await rename(stagedPaths.appDir, runtimePaths.appDir);
+    promoted = true;
+    const copiedFiles = [
+      ...stagedFiles.map((file) =>
+        path.join(runtimePaths.appDir, path.relative(stagedPaths.appDir, file)),
+      ),
+      ...(await copyDocs(runtimePaths, packageRoot)),
+    ];
+    await mkdir(runtimePaths.binDir, { recursive: true });
+    await writeRuntimeLaunchers(runtimePaths.binDir, runtimePaths.runtimeDir);
+    await writeRuntimeMarker(getSystemMarkerPath(env), runtimePaths.runtimeDir);
+    return { copiedFiles };
+  } catch (error) {
+    if (backedUp || promoted) {
+      try {
+        if (promoted) await rm(runtimePaths.appDir, { recursive: true, force: true });
+        if (backedUp) await rename(backupApp, runtimePaths.appDir);
+      } catch (rollbackError) {
+        preserveBackup = true;
+        throw new Error(
+          `Runtime recovery failed; previous app retained at ${backupApp}. Restore it to ${runtimePaths.appDir} before retrying: ${String(rollbackError)}`,
+          { cause: error },
+        );
+      }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Runtime installation failed. Installed app unchanged. Retry dysflow install or dysflow update. ${message}`,
+      { cause: error },
+    );
+  } finally {
+    // Cleanup must not turn a completed promotion into a reported failed install.
+    if (!preserveBackup) await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+  }
 }

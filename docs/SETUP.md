@@ -40,6 +40,21 @@ dysflow install --agents codex,opencode,claude,pi --no-tui
 Use `--agent-all` instead when every supported integration should be installed.
 Omit `--no-tui` to complete the same selection interactively.
 
+### Dependency installation and recovery
+
+The installer prepares a fresh app and production dependencies before replacing
+the installed app. A dependency failure keeps the previous app and install-state
+record unchanged. Fix the reported dependency error, then retry `dysflow install`
+or `dysflow update`; do not repair the managed `node_modules` by hand.
+
+Both dependency installs explicitly select a hoisted linker and the lockfile's
+peer settings, rather than inheriting pnpm defaults. The runtime enables peer
+installation; the Pi facade disables it because Pi supplies its peers.
+For pnpm 12, the installer derives a staged workspace configuration from the
+package's existing override pins; a supplied workspace configuration is preserved.
+The facade has a separate workspace so the runtime's overrides cannot leak into it.
+See `src/cli/commands/install/extractor.ts` for the shared install/update path.
+
 > The canonical option is `--agents` (plural), and the Claude identifier is
 > `claude`. `--agent claude-code` is not a supported installer form.
 
