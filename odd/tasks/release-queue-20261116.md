@@ -16,9 +16,9 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T3: #2001 large semantic diff counts — S1-S4, inline, merged PR #2005 (f6813b27; mergefc8b4612), CI green and issue closed; missing VB_Name stays actionable.
 - T4: #2002 legacy CodeBehind — S1-S4, inline, merged PR #2003 (9ffa2d6e; merge e58c106f), issue closed.
 - T5: #1918 startup-crash investigation — S1-S4, blocked by unknown-owned headless Access at 14:15 UTC; no probe launched; causal evidence still required.
-- T6: #1993 existing implementation and failed release — S1-S4, inline reconciliation complete; existing 7014-line feature preserved, focused107 tests/build/context-budget PASS; delivery-size decision pending.
+- T6: #1993 existing implementation and failed release — S1-S4, inline reconciliation complete; existing 7014-line feature preserved, focused107 tests/build/context-budget PASS; size exception explicitly authorized by owner; feature-only PR preparation in progress.
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
-- T8: Refresh queue and publish one final release — S1-S4, blocked until #1993 delivery decision and #1918 quiet-window investigation are resolved; no tag or release created.
+- T8: Refresh queue and publish one final release — S1-S4, pending #1993 delivery and #1918 quiet-window investigation; no tag or release created.
 
 ## Log
 
@@ -43,3 +43,6 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - L16: One bounded slicingpass found existing store/lock/liveness behavior coupled (initial438 implementation+283 tests), and launch behavior357 implementation+442 tests. An ordinary <=400line slice cannot be certified without re-authoring reviewed behavior. Existing purefeature diff excludes queue log:6871 additions+143deletions=7014authoredlines. No aggregatefeature PR opened without explicit size decision; previousRDDapproval is not a sizewaiver.
 - L17: Nativegit worktree removals unregistered all five retired issue/dependency trees but could not fully remove their directories (Directory not empty / Invalid argument). Recursive cleanup was denied; no alternate deletion used. Retired localbranches removed; remote refs preserved. Residual folders: installer-1999,pi-errors-2000,legacy-codebehind-2002,large-diff-2001,biome-1986 under HOME/Projects/dysflow-worktrees. Original shared main and its8 preexistingcommits untouched. Existing provider candidate-view worktrees untouched.
 - L18: Retained verifier scratch under TEMP:tmp.AmkFqugZRe,tmp.gvrxlaakRQ,tmp.EvnJQD0Dkq,tmp.uJHjjsoA9z,tmp.5i91TBOQZm. Last has test-runtime/node_modules junction into activequeuecheckout; never recursively follow it. Installer guardlogs under dysflow-install-check-QEDcmC,dysflow-installer-final-kN5Ud0; markerincident backup retained. Shared marker finalSHA A4CAABE31BB701C2686677F3AC97EA7451B022E0BD729D855D72231060E3C6A3 unchanged.
+
+- L19 (owner): "Autorizo" in response to the scoped size-exception question for #1993. This authorizes the 7014-authored-line feature delivery, not release with unresolved issues, not killing other Access processes, and not broad future size waivers.
+- L20: Created feat/detached-test-runs-1993 at53ac0fc1 from preserved integration. Only queue-tracking document removed from that delivery; all other source bytes identical to previously verified integrated tree. Exact feature diff remains84files,6871additions+143deletions. Existing source commits preserved.
